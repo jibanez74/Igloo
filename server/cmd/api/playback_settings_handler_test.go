@@ -106,6 +106,9 @@ func TestGetPlaybackSettings_ReturnsDefaultsForNewUser(t *testing.T) {
 	if settings.IsAdmin {
 		t.Fatal("expected is_admin false for regular user")
 	}
+	if settings.HardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
+		t.Fatalf("expected default hardware device cpu, got %q", settings.HardwareAccelerationDevice)
+	}
 	if len(settings.Profiles) == 0 {
 		t.Fatal("expected non-empty profile catalog")
 	}
@@ -437,85 +440,50 @@ func TestUpdatePlaybackSettings_NullClearsBothColumns(t *testing.T) {
 	}
 }
 
-func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
+func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 	app := setupPlaybackHTTPTestApp(t)
 	defer app.DB.Close()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	handler := mountPlaybackRouter(app, admin.ID)
 
-	r := chi.NewRouter()
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			app.SessionManager.Put(req.Context(), cookieUserID, admin.ID)
-			next.ServeHTTP(w, req)
-		})
-	})
-	r.Group(func(r chi.Router) {
-		r.Use(app.IsAuth)
-		r.Get("/api/settings/playback", app.GetPlaybackSettings)
-		r.With(app.RequireAdmin).Put("/api/settings/general", app.UpdateGeneralSettings)
-	})
-	handler := app.SessionManager.LoadAndSave(r)
-
-	staticDir := t.TempDir()
-	transcodeDir := t.TempDir()
-
-	marshalBody := func(t *testing.T, serverUploadMbps any) string {
+	performPut := func(t *testing.T, body string) {
 		t.Helper()
-		b, err := json.Marshal(map[string]any{
-			"tmdb_key":                     "tmdb-key",
-			"jellyfin_api_key":             "jellyfin-api-key",
-			"spotify_client_id":            "spotify-id",
-			"spotify_client_secret":        "spotify-secret",
-			"hardware_acceleration_device": "nvidia",
-			"enable_watcher":               true,
-			"download_images":              true,
-			"static_dir":                   staticDir,
-			"transcode_dir":                transcodeDir,
-			"server_upload_mbps":           serverUploadMbps,
-		})
-		if err != nil {
-			t.Fatalf("marshal general settings body: %v", err)
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("put playback: expected 200, got %d: %s", w.Code, w.Body.String())
 		}
-		return string(b)
+	}
+	performGet := func(t *testing.T) playbackSettingsResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("get playback: expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		return decodePlaybackResponse(t, w.Body.Bytes())
 	}
 
-	setReq := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(marshalBody(t, 50)))
-	setReq.Header.Set("Content-Type", "application/json")
-	setW := httptest.NewRecorder()
-	handler.ServeHTTP(setW, setReq)
-	if setW.Code != http.StatusOK {
-		t.Fatalf("set general: expected 200, got %d: %s", setW.Code, setW.Body.String())
-	}
-
-	getReq := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
-	getW := httptest.NewRecorder()
-	handler.ServeHTTP(getW, getReq)
-	if getW.Code != http.StatusOK {
-		t.Fatalf("get playback: expected 200, got %d: %s", getW.Code, getW.Body.String())
-	}
-	settings := decodePlaybackResponse(t, getW.Body.Bytes())
+	performPut(t, `{"server_upload_mbps": 50, "hardware_acceleration_device": "nvidia"}`)
+	settings := performGet(t)
 	if settings.ServerUploadMbps == nil || *settings.ServerUploadMbps != 50 {
 		t.Fatalf("expected server_upload_mbps 50 after admin set, got %+v", settings.ServerUploadMbps)
 	}
-
-	clearReq := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(marshalBody(t, nil)))
-	clearReq.Header.Set("Content-Type", "application/json")
-	clearW := httptest.NewRecorder()
-	handler.ServeHTTP(clearW, clearReq)
-	if clearW.Code != http.StatusOK {
-		t.Fatalf("clear general: expected 200, got %d: %s", clearW.Code, clearW.Body.String())
+	if settings.HardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
+		t.Fatalf("expected hardware device nvidia after admin set, got %q", settings.HardwareAccelerationDevice)
 	}
 
-	getReq2 := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
-	getW2 := httptest.NewRecorder()
-	handler.ServeHTTP(getW2, getReq2)
-	if getW2.Code != http.StatusOK {
-		t.Fatalf("get playback after clear: expected 200, got %d: %s", getW2.Code, getW2.Body.String())
-	}
-	settings2 := decodePlaybackResponse(t, getW2.Body.Bytes())
+	performPut(t, `{"server_upload_mbps": null}`)
+	settings2 := performGet(t)
 	if settings2.ServerUploadMbps != nil {
 		t.Fatalf("expected server_upload_mbps nil after admin clear, got %+v", *settings2.ServerUploadMbps)
+	}
+	if settings2.HardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
+		t.Fatalf("expected hardware device to stay nvidia when field omitted, got %q", settings2.HardwareAccelerationDevice)
 	}
 }
 
@@ -598,9 +566,12 @@ func TestUpdatePlaybackSettings_RegularUserCannotUpdateServerUploadCap(t *testin
 	app := setupPlaybackHTTPTestApp(t)
 	defer app.DB.Close()
 
-	settings, err := app.Queries.UpdatePlaybackServerUploadMbps(context.Background(), helpers.NullFloat64(22))
+	settings, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
+		ServerUploadMbps:           helpers.NullFloat64(22),
+		HardwareAccelerationDevice: helpers.NullString(helpers.HARDWARE_ACCELERATION_DEVICE_CPU),
+	})
 	if err != nil {
-		t.Fatalf("seed server upload: %v", err)
+		t.Fatalf("seed server settings: %v", err)
 	}
 	app.Settings = &settings
 
@@ -657,9 +628,12 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 			app := setupPlaybackHTTPTestApp(t)
 			defer app.DB.Close()
 
-			settings, err := app.Queries.UpdatePlaybackServerUploadMbps(context.Background(), helpers.NullFloat64(25))
+			settings, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
+				ServerUploadMbps:           helpers.NullFloat64(25),
+				HardwareAccelerationDevice: helpers.NullString(helpers.HARDWARE_ACCELERATION_DEVICE_CPU),
+			})
 			if err != nil {
-				t.Fatalf("seed server upload: %v", err)
+				t.Fatalf("seed server settings: %v", err)
 			}
 			app.Settings = &settings
 
@@ -687,6 +661,83 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 				t.Fatalf("expected stored server_upload_mbps %v, got %v", tc.wantStored, gotSettings.ServerUploadMbps.Float64)
 			}
 		})
+	}
+}
+
+func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
+	app := setupPlaybackHTTPTestApp(t)
+	defer app.DB.Close()
+
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	handler := mountPlaybackRouter(app, admin.ID)
+
+	body := `{"hardware_acceleration_device": "apple"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if !settings.HardwareAccelerationDevice.Valid || settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
+		t.Fatalf("expected stored hardware device apple, got valid=%v %q", settings.HardwareAccelerationDevice.Valid, settings.HardwareAccelerationDevice.String)
+	}
+	if app.Settings == nil || app.Settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
+		t.Fatalf("expected app.Settings hardware device apple, got %+v", app.Settings)
+	}
+}
+
+func TestUpdatePlaybackSettings_RegularUserCannotUpdateHardwareDevice(t *testing.T) {
+	app := setupPlaybackHTTPTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Regular", "regular@example.com", false)
+	handler := mountPlaybackRouter(app, user.ID)
+
+	body := `{"hardware_acceleration_device": "nvidia"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if settings.HardwareAccelerationDevice.Valid && settings.HardwareAccelerationDevice.String == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
+		t.Fatal("expected hardware device unchanged for regular user")
+	}
+}
+
+func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
+	app := setupPlaybackHTTPTestApp(t)
+	defer app.DB.Close()
+
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	handler := mountPlaybackRouter(app, admin.ID)
+
+	for _, body := range []string{
+		`{"hardware_acceleration_device": "unsupported"}`,
+		`{"hardware_acceleration_device": null}`,
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s expected 400, got %d: %s", body, w.Code, w.Body.String())
+		}
 	}
 }
 

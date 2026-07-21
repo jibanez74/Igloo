@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -60,10 +60,7 @@ import {
 } from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
 import type { AuthUser } from "@/types";
-import {
-  lightInputClassName,
-  lightInputPeerHoverClassName,
-} from "@/lib/input-styles";
+import { lightInputClassName } from "@/lib/input-styles";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
@@ -160,101 +157,54 @@ function AccountSettings() {
     setErrors(current => ({ ...current, [field]: undefined }));
   };
 
-  // Name update mutation with optimistic updates
+  // Name update mutation
   const updateNameMutation = useMutation({
     mutationFn: (newName: string) => updateUserName(newName),
-    onMutate: async newName => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
-
-      // Snapshot the previous value
-      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
-
-      // Optimistically update the cache
-      queryClient.setQueryData<typeof userData>([AUTH_USER_KEY], old => {
-        if (!old || old.error || !old.data?.user) return old;
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            user: {
-              ...old.data.user,
-              name: newName,
-            },
-          },
-        };
-      });
-
-      // Return context with the snapshotted value
-      return { previousData };
-    },
-    onError: (err, _newName, context) => {
-      // Rollback to the previous value on error
-      if (context?.previousData) {
-        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
-      }
+    onError: err => {
       showActionFailed(
         "update name",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: async res => {
       if (res.error) {
         setErrors(current => ({
           ...current,
           name: res.message || "Failed to update name.",
         }));
         showActionFailed("update name", res.message);
-        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("name");
         showSuccess("Name updated successfully");
-        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        queryClient.setQueryData([AUTH_USER_KEY], res);
+        await queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
 
-  // Email update mutation with optimistic updates
+  // Email update mutation
   const updateEmailMutation = useMutation({
     mutationFn: (newEmail: string) => updateUserEmail(newEmail),
-    onMutate: async newEmail => {
-      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
-      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
-
-      queryClient.setQueryData<typeof userData>([AUTH_USER_KEY], old => {
-        if (!old || old.error || !old.data?.user) return old;
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            user: { ...old.data.user, email: newEmail },
-          },
-        };
-      });
-
-      return { previousData };
-    },
-    onError: (err, _newEmail, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
-      }
+    onError: err => {
       showActionFailed(
         "update email",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: async res => {
       if (res.error) {
         setErrors(current => ({
           ...current,
           email: res.message || "Failed to update email.",
         }));
         showActionFailed("update email", res.message);
-        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("email");
         showSuccess("Email updated successfully");
-        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        queryClient.setQueryData([AUTH_USER_KEY], res);
+        await queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
@@ -381,17 +331,29 @@ function AccountSettings() {
     },
   });
 
-  const handleUpdateName = () => {
+  const handleSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) return;
+
+    const trimmedEmail = emailValue.trim();
     const trimmedName = nameValue.trim();
-    if (!user || !trimmedName) {
+
+    if (!trimmedEmail) {
+      showFieldError("email", "Email is required.", emailId);
+      return;
+    }
+    if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
+      showFieldError(
+        "email",
+        `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`,
+        emailId,
+      );
+      return;
+    }
+    if (!trimmedName) {
       showFieldError("name", "Name is required.", nameId);
       return;
     }
-
-    if (trimmedName === user.name) {
-      return;
-    }
-
     if (codePointLength(trimmedName) > USER_NAME_MAX_LENGTH) {
       showFieldError(
         "name",
@@ -401,32 +363,18 @@ function AccountSettings() {
       return;
     }
 
-    clearError("name");
-    updateNameMutation.mutate(trimmedName);
-  };
-
-  const handleUpdateEmail = () => {
-    const trimmedEmail = emailValue.trim();
-    if (!user || !trimmedEmail) {
-      showFieldError("email", "Email is required.", emailId);
-      return;
+    if (trimmedEmail !== user.email) {
+      clearError("email");
+      try {
+        await updateEmailMutation.mutateAsync(trimmedEmail);
+      } catch {
+        // The mutation reports its own error; a valid name change can still save.
+      }
     }
-
-    if (trimmedEmail === user.email) {
-      return;
+    if (trimmedName !== user.name) {
+      clearError("name");
+      updateNameMutation.mutate(trimmedName);
     }
-
-    if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
-      showFieldError(
-        "email",
-        `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`,
-        emailId,
-      );
-      return;
-    }
-
-    clearError("email");
-    updateEmailMutation.mutate(trimmedEmail);
   };
 
   const handleUpdatePassword = (event: FormEvent<HTMLFormElement>) => {
@@ -593,13 +541,13 @@ function AccountSettings() {
           title="Profile Information"
           description="Manage your account information and preferences"
         />
-        <CardContent className="max-w-2xl space-y-6">
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor={emailId} className="text-muted-foreground">
-              Email
-            </Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
+        <CardContent className="max-w-2xl">
+          <form onSubmit={handleSaveProfile} noValidate className="space-y-6">
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor={emailId} className="text-muted-foreground">
+                Email
+              </Label>
               <Input
                 id={emailId}
                 type="email"
@@ -609,7 +557,7 @@ function AccountSettings() {
                   clearError("email");
                 }}
                 placeholder="Enter your email"
-                className={`sm:flex-1 ${lightInputClassName}`}
+                className={lightInputClassName}
                 aria-label="Your email address"
                 required
                 maxLength={USER_EMAIL_MAX_LENGTH}
@@ -617,32 +565,18 @@ function AccountSettings() {
                 aria-invalid={!!errors.email || undefined}
                 aria-describedby={describedBy(errors.email && emailErrorId)}
               />
-              <Button
-                type="button"
-                onClick={handleUpdateEmail}
-                disabled={
-                  updateEmailMutation.isPending ||
-                  emailValue.trim() === user.email
-                }
-                variant="accent"
-                className="w-full sm:w-auto"
-              >
-                {updateEmailMutation.isPending ? "Saving..." : "Save"}
-              </Button>
+              {errors.email && (
+                <p id={emailErrorId} className="text-xs text-destructive" role="alert">
+                  {errors.email}
+                </p>
+              )}
             </div>
-            {errors.email && (
-              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
-                {errors.email}
-              </p>
-            )}
-          </div>
 
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor={nameId} className="text-muted-foreground">
-              Name
-            </Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            {/* Name */}
+            <div className="space-y-2">
+              <Label htmlFor={nameId} className="text-muted-foreground">
+                Name
+              </Label>
               <Input
                 id={nameId}
                 type="text"
@@ -652,7 +586,7 @@ function AccountSettings() {
                   clearError("name");
                 }}
                 placeholder="Enter your name"
-                className={`sm:flex-1 ${lightInputClassName}`}
+                className={lightInputClassName}
                 aria-label="Your display name"
                 aria-invalid={!!errors.name || undefined}
                 aria-describedby={describedBy(
@@ -660,28 +594,32 @@ function AccountSettings() {
                   errors.name && nameErrorId,
                 )}
               />
-              <Button
-                type="button"
-                onClick={handleUpdateName}
-                disabled={
-                  updateNameMutation.isPending ||
-                  nameValue.trim() === user.name
-                }
-                variant="accent"
-                className="w-full sm:w-auto"
-              >
-                {updateNameMutation.isPending ? "Saving..." : "Save"}
-              </Button>
-            </div>
-            <p id={nameDescriptionId} className="text-xs text-muted-foreground">
-              Your display name (max {USER_NAME_MAX_LENGTH} characters)
-            </p>
-            {errors.name && (
-              <p id={nameErrorId} className="text-xs text-destructive" role="alert">
-                {errors.name}
+              <p id={nameDescriptionId} className="text-xs text-muted-foreground">
+                Your display name (max {USER_NAME_MAX_LENGTH} characters)
               </p>
-            )}
-          </div>
+              {errors.name && (
+                <p id={nameErrorId} className="text-xs text-destructive" role="alert">
+                  {errors.name}
+                </p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={
+                updateEmailMutation.isPending ||
+                updateNameMutation.isPending ||
+                (emailValue.trim() === user.email &&
+                  nameValue.trim() === user.name)
+              }
+              variant="accent"
+              className="w-full sm:w-auto"
+            >
+              {updateEmailMutation.isPending || updateNameMutation.isPending
+                ? "Saving..."
+                : "Save profile"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
@@ -740,12 +678,12 @@ function AccountSettings() {
                 <label
                   htmlFor={avatarUploadId}
                   className={cn(
+                    buttonVariants({ variant: "outline" }),
                     MOTION_MICRO_COLORS_CLASS,
-                    "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm peer-focus-visible:border-ring/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/20",
-                    lightInputClassName,
+                    "h-9 flex-1 peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50",
                     uploadAvatarMutation.isPending
                       ? "cursor-not-allowed opacity-70"
-                      : cn("cursor-pointer", lightInputPeerHoverClassName),
+                      : "cursor-pointer",
                   )}
                   aria-disabled={uploadAvatarMutation.isPending}
                   aria-busy={uploadAvatarMutation.isPending}
@@ -971,7 +909,10 @@ function AccountSettings() {
       {/* Devices */}
       <DevicesCard />
 
-      {/* Danger Zone */}
+      {/* Danger Zone — hidden for admins: the server rejects admin
+          self-deletion, so there is no action to offer. */}
+      {!user.is_admin && (
+      <>
       <Card className="border-destructive/50 bg-destructive/10">
         <CardHeader>
           <CardTitle asChild className="flex items-center gap-2 text-destructive">
@@ -991,16 +932,10 @@ function AccountSettings() {
               Once you delete your account, there is no going back. Please be
               certain.
             </p>
-            {user.is_admin && (
-              <p className="text-sm font-medium text-primary">
-                Note: Admin accounts cannot be deleted.
-              </p>
-            )}
           </div>
           <Button
             ref={deleteAccountButtonRef}
             onClick={() => handleDeleteDialogOpenChange(true)}
-            disabled={user.is_admin}
             variant="destructive"
             className="w-full sm:w-auto"
             aria-label="Delete account"
@@ -1083,6 +1018,8 @@ function AccountSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 }

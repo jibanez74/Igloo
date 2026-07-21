@@ -4,9 +4,6 @@ import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
-  Apple,
-  CircuitBoard,
-  Cpu,
   Download,
   Eye,
   EyeOff,
@@ -14,19 +11,11 @@ import {
   Gauge,
   HardDrive,
   KeyRound,
-  MonitorCog,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
@@ -38,12 +27,8 @@ import {
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
-  PLAYBACK_SETTINGS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_INPUT_CLASS,
-  SETTINGS_SELECT_CONTENT_CLASS,
-  SETTINGS_SELECT_ITEM_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
@@ -57,20 +42,12 @@ import type {
   ApiResponseType,
   GeneralSettingsResponseType,
   GeneralSettingsType,
-  HardwareAccelerationDevice,
   UpdateGeneralSettingsRequest,
 } from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/settings/")({
   component: GeneralSettings,
 });
-
-type HardwareOption = {
-  value: HardwareAccelerationDevice;
-  label: string;
-  description: string;
-  icon: ReactNode;
-};
 
 type SecretField =
   | "tmdb_key"
@@ -83,33 +60,6 @@ type BaseURLField = "immich_base_url" | "jellyfin_base_url";
 
 type GeneralSettingsQueryData = ApiResponseType<GeneralSettingsResponseType>;
 
-const HARDWARE_OPTIONS: HardwareOption[] = [
-  {
-    value: "cpu",
-    label: "CPU",
-    description: "Use software encoding on the host CPU.",
-    icon: <Cpu className="size-4 text-muted-foreground" aria-hidden="true" />,
-  },
-  {
-    value: "apple",
-    label: "Apple VideoToolbox",
-    description: "Use Apple hardware acceleration on supported Macs.",
-    icon: <Apple className="size-4 text-muted-foreground" aria-hidden="true" />,
-  },
-  {
-    value: "nvidia",
-    label: "NVIDIA NVENC",
-    description: "Use NVIDIA GPU acceleration when available.",
-    icon: <CircuitBoard className="size-4 text-muted-foreground" aria-hidden="true" />,
-  },
-  {
-    value: "intel",
-    label: "Intel Quick Sync",
-    description: "Use Intel GPU acceleration when available.",
-    icon: <MonitorCog className="size-4 text-muted-foreground" aria-hidden="true" />,
-  },
-];
-
 function formFromSettings(
   settings: GeneralSettingsType,
 ): UpdateGeneralSettingsRequest {
@@ -121,12 +71,10 @@ function formFromSettings(
     jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
-    hardware_acceleration_device: settings.hardware_acceleration_device,
     enable_watcher: settings.enable_watcher,
     download_images: settings.download_images,
     static_dir: settings.static_dir,
     transcode_dir: settings.transcode_dir,
-    server_upload_mbps: settings.server_upload_mbps,
   };
 }
 
@@ -143,20 +91,11 @@ function formsMatchSettings(
     form.jellyfin_api_key === settingsForm.jellyfin_api_key &&
     form.spotify_client_id === settingsForm.spotify_client_id &&
     form.spotify_client_secret === settingsForm.spotify_client_secret &&
-    form.hardware_acceleration_device ===
-      settingsForm.hardware_acceleration_device &&
     form.enable_watcher === settingsForm.enable_watcher &&
     form.download_images === settingsForm.download_images &&
     form.static_dir === settingsForm.static_dir &&
-    form.transcode_dir === settingsForm.transcode_dir &&
-    form.server_upload_mbps === settingsForm.server_upload_mbps
+    form.transcode_dir === settingsForm.transcode_dir
   );
-}
-
-function isHardwareAccelerationDevice(
-  value: string,
-): value is HardwareAccelerationDevice {
-  return HARDWARE_OPTIONS.some(option => option.value === value);
 }
 
 function isOptionalHTTPBaseURL(value: string) {
@@ -221,7 +160,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const immichApiKeyId = useId();
   const spotifyClientIdId = useId();
   const spotifyClientSecretId = useId();
-  const hardwareDeviceId = useId();
   const staticDirId = useId();
   const transcodeDirId = useId();
   const enableWatcherId = useId();
@@ -280,13 +218,10 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 spotify_client_secret: optionalSetting(
                   nextSettings.spotify_client_secret,
                 ),
-                hardware_acceleration_device:
-                  nextSettings.hardware_acceleration_device,
                 enable_watcher: nextSettings.enable_watcher,
                 download_images: nextSettings.download_images,
                 static_dir: nextSettings.static_dir,
                 transcode_dir: nextSettings.transcode_dir,
-                server_upload_mbps: nextSettings.server_upload_mbps,
               },
             },
           };
@@ -315,7 +250,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         },
       );
       queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
-      queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
 
       if (res.data.restart_required) {
         showSuccess(
@@ -356,16 +290,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   ) => {
     startTransition(() => {
       setForm(current => ({ ...current, [field]: value }));
-    });
-  };
-
-  const handleHardwareChange = (value: string) => {
-    if (!isHardwareAccelerationDevice(value)) return;
-    startTransition(() => {
-      setForm(current => ({
-        ...current,
-        hardware_acceleration_device: value,
-      }));
     });
   };
 
@@ -489,56 +413,33 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
         <SettingsCardHeader
-          icon={MonitorCog}
-          title="Playback Runtime"
-          description="Choose the hardware acceleration mode used for new transcodes."
+          icon={HardDrive}
+          title="Local Storage"
+          description="Configure application-owned storage outside media libraries."
         />
-        <CardContent>
-          <div className="grid gap-2">
-            <Label htmlFor={hardwareDeviceId}>Hardware acceleration</Label>
-            {/*
-              Radix renders a visually-hidden aria-hidden <select name> here for
-              native form integration; it's never submitted (this form is
-              JS-controlled). Chrome's Issues panel flags it "no label" — a
-              false-positive on an aria-hidden field, not fixable without ejecting
-              Radix. Keep the name so the field stays identified.
-            */}
-            <Select
-              name="hardware_acceleration_device"
-              value={form.hardware_acceleration_device}
-              onValueChange={handleHardwareChange}
-              disabled={updateMutation.isPending}
-            >
-              <SelectTrigger
-                id={hardwareDeviceId}
-                className={SETTINGS_SELECT_TRIGGER_CLASS}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                {HARDWARE_OPTIONS.map(option => (
-                  <SelectItem
-                    key={option.value}
-                    value={option.value}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    <span className="flex items-center gap-2">
-                      {option.icon}
-                      {option.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              {
-                HARDWARE_OPTIONS.find(
-                  option =>
-                    option.value === form.hardware_acceleration_device,
-                )?.description
-              }
-            </p>
-          </div>
+        <CardContent className="grid gap-5 @2xl:grid-cols-2">
+          <PathInput
+            id={staticDirId}
+            name="static_dir"
+            label="Static directory"
+            value={form.static_dir}
+            onChange={value => handleTextChange("static_dir", value)}
+            disabled={updateMutation.isPending}
+            icon={<FolderCog className="size-4" aria-hidden="true" />}
+            required
+            invalid={validationField === "static_dir"}
+          />
+          <PathInput
+            id={transcodeDirId}
+            name="transcode_dir"
+            label="Transcode directory"
+            value={form.transcode_dir}
+            onChange={value => handleTextChange("transcode_dir", value)}
+            disabled={updateMutation.isPending}
+            icon={<HardDrive className="size-4" aria-hidden="true" />}
+            required
+            invalid={validationField === "transcode_dir"}
+          />
         </CardContent>
       </Card>
 
@@ -621,40 +522,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               disabled={updateMutation.isPending}
             />
           </ServiceSection>
-        </CardContent>
-      </Card>
-
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={HardDrive}
-          title="Local Storage"
-          description="Configure application-owned storage outside media libraries."
-        />
-        <CardContent className="grid gap-5 @2xl:grid-cols-2">
-          <PathInput
-            id={staticDirId}
-            name="static_dir"
-            label="Static directory"
-            value={form.static_dir}
-            onChange={value => handleTextChange("static_dir", value)}
-            disabled={updateMutation.isPending}
-            icon={<FolderCog className="size-4" aria-hidden="true" />}
-            required
-            invalid={validationField === "static_dir"}
-          />
-          <PathInput
-            id={transcodeDirId}
-            name="transcode_dir"
-            label="Transcode directory"
-            value={form.transcode_dir}
-            onChange={value => handleTextChange("transcode_dir", value)}
-            disabled={updateMutation.isPending}
-            icon={<HardDrive className="size-4" aria-hidden="true" />}
-            required
-            invalid={validationField === "transcode_dir"}
-          />
         </CardContent>
       </Card>
 

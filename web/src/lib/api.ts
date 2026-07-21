@@ -195,13 +195,13 @@ export const revokeDevice = (id: number) =>
 // ============================================================================
 
 export const updateUserName = (name: string) =>
-  apiRequest("/api/user/name", {
+  apiRequest<{ user: AuthUser }>("/api/user/name", {
     method: "PUT",
     body: { name },
   });
 
 export const updateUserEmail = (email: string) =>
-  apiRequest("/api/user/email", {
+  apiRequest<{ user: AuthUser }>("/api/user/email", {
     method: "PUT",
     body: { email },
   });

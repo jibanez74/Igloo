@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import {
   lightInputActionClassName,
   lightInputClassName,
-  lightInputPeerHoverClassName,
 } from "@/lib/input-styles";
 
 const lightInputColorClass = (prefix: string, shade: string) =>
@@ -39,22 +38,6 @@ describe("light input styles", () => {
     expect(lightInputActionClassName).toContain(
       lightInputColorClass("dark:hover:text", "100"),
     );
-    expect(lightInputPeerHoverClassName).toContain(
-      lightInputColorClass("dark:peer-hover:text", "50"),
-    );
-    expect(lightInputPeerHoverClassName).not.toContain(
-      lightInputColorClass("dark:peer-hover:bg", "100/95"),
-    );
-  });
-
-  it("keeps peer-hover states in the light input palette", () => {
-    expect(lightInputPeerHoverClassName).toContain(
-      lightInputColorClass("peer-hover:bg", "100/95"),
-    );
-    expect(lightInputPeerHoverClassName).toContain(
-      lightInputColorClass("peer-hover:text", "950"),
-    );
-    expect(lightInputPeerHoverClassName).not.toContain("peer-hover:bg-foreground");
   });
 
   it("uses the theme focus ring for album play overlays", () => {

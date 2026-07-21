@@ -2940,7 +2940,8 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Update playback preferences and admin server bandwidth",
+        "summary": "Update playback preferences and admin server settings",
+        "description": "Per-user playback preferences. The server_upload_mbps and hardware_acceleration_device fields are global settings and admin-only; requests from non-admins that include them return 403.",
         "operationId": "updatePlaybackSettings",
         "requestBody": {
           "$ref": "#/components/requestBodies/UpdatePlaybackSettingsRequest"
@@ -6452,12 +6453,10 @@
           "jellyfin_api_key",
           "spotify_client_id",
           "spotify_client_secret",
-          "hardware_acceleration_device",
           "enable_watcher",
           "download_images",
           "static_dir",
-          "transcode_dir",
-          "server_upload_mbps"
+          "transcode_dir"
         ],
         "properties": {
           "tmdb_key": {
@@ -6504,9 +6503,6 @@
               "null"
             ]
           },
-          "hardware_acceleration_device": {
-            "$ref": "#/components/schemas/HardwareAccelerationDevice"
-          },
           "enable_watcher": {
             "type": "boolean"
           },
@@ -6518,12 +6514,6 @@
           },
           "transcode_dir": {
             "type": "string"
-          },
-          "server_upload_mbps": {
-            "type": [
-              "number",
-              "null"
-            ]
           },
           "restart_required": {
             "type": "boolean"
@@ -6541,12 +6531,10 @@
           "jellyfin_api_key",
           "spotify_client_id",
           "spotify_client_secret",
-          "hardware_acceleration_device",
           "enable_watcher",
           "download_images",
           "static_dir",
-          "transcode_dir",
-          "server_upload_mbps"
+          "transcode_dir"
         ],
         "properties": {
           "tmdb_key": {
@@ -6572,9 +6560,6 @@
           "spotify_client_secret": {
             "type": "string"
           },
-          "hardware_acceleration_device": {
-            "$ref": "#/components/schemas/HardwareAccelerationDevice"
-          },
           "enable_watcher": {
             "type": "boolean"
           },
@@ -6586,14 +6571,6 @@
           },
           "transcode_dir": {
             "type": "string"
-          },
-          "server_upload_mbps": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "exclusiveMinimum": 0,
-            "exclusiveMaximum": 100000
           }
         },
         "additionalProperties": false
@@ -6687,6 +6664,7 @@
           "preferred_profile",
           "download_mbps",
           "server_upload_mbps",
+          "hardware_acceleration_device",
           "is_admin",
           "preferred_audio_language",
           "preferred_subtitle_language"
@@ -6715,6 +6693,9 @@
               "number",
               "null"
             ]
+          },
+          "hardware_acceleration_device": {
+            "$ref": "#/components/schemas/HardwareAccelerationDevice"
           },
           "is_admin": {
             "type": "boolean"
@@ -6774,6 +6755,10 @@
             "description": "Admin-only server upload bandwidth cap in Mbps.",
             "exclusiveMinimum": 0,
             "exclusiveMaximum": 100000
+          },
+          "hardware_acceleration_device": {
+            "$ref": "#/components/schemas/HardwareAccelerationDevice",
+            "description": "Admin-only hardware acceleration device used for new transcodes."
           }
         },
         "additionalProperties": false

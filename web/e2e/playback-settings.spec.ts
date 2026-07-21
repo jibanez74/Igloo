@@ -23,11 +23,14 @@ type PlaybackProfile = {
   video_mbps: number;
 };
 
+type HardwareAccelerationDevice = "cpu" | "apple" | "nvidia" | "intel";
+
 type PlaybackSettings = {
   profiles: PlaybackProfile[];
   preferred_profile: string | null;
   download_mbps: number | null;
   server_upload_mbps: number | null;
+  hardware_acceleration_device: HardwareAccelerationDevice;
   is_admin: boolean;
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;
@@ -43,6 +46,7 @@ type UpdatePlaybackSettingsRequest = {
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;
   server_upload_mbps?: number | null;
+  hardware_acceleration_device?: HardwareAccelerationDevice;
 };
 
 type AdminUser = {
@@ -120,6 +124,7 @@ async function restorePlaybackSettings(
         preferred_audio_language: settings.preferred_audio_language,
         preferred_subtitle_language: settings.preferred_subtitle_language,
         server_upload_mbps: settings.server_upload_mbps,
+        hardware_acceleration_device: settings.hardware_acceleration_device,
       } satisfies UpdatePlaybackSettingsRequest,
       failOnStatusCode: false,
     },
@@ -273,7 +278,13 @@ test.describe("Playback settings", () => {
         waitUntil: "networkidle",
       });
       await expect(
-        page.getByRole("heading", { name: "Playback Settings" }),
+        page.getByRole("heading", { name: "Streaming & bandwidth" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Stream defaults" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Transcoding" }),
       ).toBeVisible();
       await expect(page.getByRole("tab", { name: "Playback" })).toBeVisible();
 
@@ -304,6 +315,10 @@ test.describe("Playback settings", () => {
         page,
         page.getByRole("combobox", { name: "Subtitle language" }),
       );
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("combobox", { name: "Hardware acceleration" }),
+      );
       await expectTabMovesFocus(page, page.getByRole("button", { name: "Reset" }));
       await expectTabMovesFocus(
         page,
@@ -313,6 +328,11 @@ test.describe("Playback settings", () => {
       await downloadInput.fill("100");
       await serverInput.fill("5");
       await expect(page.getByText("Recommended: 1080p · 4 Mbps")).toBeVisible();
+
+      await page
+        .getByRole("combobox", { name: "Hardware acceleration" })
+        .click();
+      await page.getByRole("option", { name: "NVIDIA NVENC" }).click();
 
       await page.setViewportSize({ width: 360, height: 800 });
       await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
@@ -339,11 +359,13 @@ test.describe("Playback settings", () => {
       );
       expect(capturedPutBody.download_mbps).toBe(100);
       expect(capturedPutBody.server_upload_mbps).toBe(5);
+      expect(capturedPutBody.hardware_acceleration_device).toBe("nvidia");
 
       await expect(page.getByText("Playback settings saved")).toBeVisible();
       const savedSettings = await fetchPlaybackSettings(page, env);
       expect(savedSettings.download_mbps).toBe(100);
       expect(savedSettings.server_upload_mbps).toBe(5);
+      expect(savedSettings.hardware_acceleration_device).toBe("nvidia");
     } finally {
       await restorePlaybackSettings(page, env, baselineSettings);
     }
@@ -440,6 +462,12 @@ test.describe("Playback settings", () => {
         }),
       ).toHaveCount(0);
       await expect(
+        page.getByRole("heading", { name: "Transcoding" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("combobox", { name: "Hardware acceleration" }),
+      ).toHaveCount(0);
+      await expect(
         page.getByText(
           "Set by the server administrator. Affects your recommendation",
         ),
@@ -485,6 +513,21 @@ test.describe("Playback settings", () => {
         },
       );
       expect(maliciousResponse.status()).toBe(403);
+
+      const maliciousHardwareResponse = await page.context().request.put(
+        apiURL(env, "/api/settings/playback"),
+        {
+          data: {
+            preferred_profile: null,
+            download_mbps: 35,
+            preferred_audio_language: null,
+            preferred_subtitle_language: null,
+            hardware_acceleration_device: "nvidia",
+          } satisfies UpdatePlaybackSettingsRequest,
+          failOnStatusCode: false,
+        },
+      );
+      expect(maliciousHardwareResponse.status()).toBe(403);
     } finally {
       await logout(page, env);
       await login(page, env);

@@ -20,12 +20,10 @@ export type GeneralSettingsType = {
   jellyfin_api_key: string | null;
   spotify_client_id: string | null;
   spotify_client_secret: string | null;
-  hardware_acceleration_device: HardwareAccelerationDevice;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
   transcode_dir: string;
-  server_upload_mbps: number | null;
   restart_required?: boolean;
 };
 
@@ -37,12 +35,10 @@ export type UpdateGeneralSettingsRequest = {
   jellyfin_api_key: string;
   spotify_client_id: string;
   spotify_client_secret: string;
-  hardware_acceleration_device: HardwareAccelerationDevice;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
   transcode_dir: string;
-  server_upload_mbps: number | null;
 };
 
 export type GeneralSettingsResponseType = {
@@ -66,6 +62,7 @@ export type PlaybackSettingsType = {
   preferred_profile: string | null;
   download_mbps: number | null;
   server_upload_mbps: number | null;
+  hardware_acceleration_device: HardwareAccelerationDevice;
   is_admin: boolean;
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;
@@ -77,6 +74,7 @@ export type UpdatePlaybackSettingsRequest = {
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;
   server_upload_mbps?: number | null;
+  hardware_acceleration_device?: HardwareAccelerationDevice;
 };
 
 export type PlaybackSettingsResponseType = {

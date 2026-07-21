@@ -1,8 +1,15 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
-import type { FormEvent } from "react";
-import { Gauge, Languages, Play, Sliders, Subtitles, Wifi } from "lucide-react";
+import type { FormEvent, ReactNode } from "react";
+import {
+  Apple,
+  CircuitBoard,
+  Cpu,
+  Gauge,
+  MonitorCog,
+  Sliders,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +25,6 @@ import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
-  GENERAL_SETTINGS_KEY,
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
@@ -40,6 +46,7 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   ApiResponseType,
+  HardwareAccelerationDevice,
   PlaybackSettingsResponseType,
   PlaybackSettingsType,
   UpdatePlaybackSettingsRequest,
@@ -62,6 +69,46 @@ const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
   ([, a], [, b]) => a.localeCompare(b),
 );
 
+type HardwareOption = {
+  value: HardwareAccelerationDevice;
+  label: string;
+  description: string;
+  icon: ReactNode;
+};
+
+const HARDWARE_OPTIONS: HardwareOption[] = [
+  {
+    value: "cpu",
+    label: "CPU",
+    description: "Use software encoding on the host CPU.",
+    icon: <Cpu className="size-4 text-muted-foreground" aria-hidden="true" />,
+  },
+  {
+    value: "apple",
+    label: "Apple VideoToolbox",
+    description: "Use Apple hardware acceleration on supported Macs.",
+    icon: <Apple className="size-4 text-muted-foreground" aria-hidden="true" />,
+  },
+  {
+    value: "nvidia",
+    label: "NVIDIA NVENC",
+    description: "Use NVIDIA GPU acceleration when available.",
+    icon: <CircuitBoard className="size-4 text-muted-foreground" aria-hidden="true" />,
+  },
+  {
+    value: "intel",
+    label: "Intel Quick Sync",
+    description: "Use Intel GPU acceleration when available.",
+    icon: <MonitorCog className="size-4 text-muted-foreground" aria-hidden="true" />,
+  },
+];
+
+function isHardwareAccelerationDevice(
+  value: string,
+): value is HardwareAccelerationDevice {
+  return HARDWARE_OPTIONS.some(option => option.value === value);
+}
+
 function formFromSettings(
   settings: PlaybackSettingsType,
 ): UpdatePlaybackSettingsRequest {
@@ -74,6 +121,7 @@ function formFromSettings(
 
   if (settings.is_admin) {
     form.server_upload_mbps = settings.server_upload_mbps;
+    form.hardware_acceleration_device = settings.hardware_acceleration_device;
   }
 
   return form;
@@ -90,7 +138,9 @@ function formsMatchSettings(
     form.preferred_audio_language === settingsForm.preferred_audio_language &&
     form.preferred_subtitle_language ===
       settingsForm.preferred_subtitle_language &&
-    form.server_upload_mbps === settingsForm.server_upload_mbps
+    form.server_upload_mbps === settingsForm.server_upload_mbps &&
+    form.hardware_acceleration_device ===
+      settingsForm.hardware_acceleration_device
   );
 }
 
@@ -204,6 +254,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
   const recommendationId = useId();
   const recommendationTitleId = useId();
   const serverUploadMbpsId = useId();
+  const hardwareDeviceId = useId();
   const statusId = useId();
   const preferredAudioLanguageId = useId();
   const preferredSubtitleLanguageId = useId();
@@ -242,6 +293,10 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             nextSettings.server_upload_mbps !== undefined
               ? nextSettings.server_upload_mbps
               : currentSettings.server_upload_mbps;
+          const hardwareDevice =
+            nextSettings.hardware_acceleration_device !== undefined
+              ? nextSettings.hardware_acceleration_device
+              : currentSettings.hardware_acceleration_device;
 
           return {
             error: false,
@@ -251,13 +306,13 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                 ...currentSettings,
                 ...res.data.settings,
                 server_upload_mbps: serverUpload,
+                hardware_acceleration_device: hardwareDevice,
               },
             },
           };
         },
       );
       queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
-      queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
       showSuccess("Playback settings saved");
     },
     onError: () => {
@@ -331,6 +386,16 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     });
   };
 
+  const handleHardwareChange = (value: string) => {
+    if (!isHardwareAccelerationDevice(value)) return;
+    startTransition(() => {
+      setForm(current => ({
+        ...current,
+        hardware_acceleration_device: value,
+      }));
+    });
+  };
+
   const resetForm = () => {
     setForm(formFromSettings(syncedSettings));
     setValidationMessage("");
@@ -380,105 +445,110 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
         <SettingsCardHeader
-          icon={Play}
-          title="Playback Settings"
+          icon={Gauge}
+          title="Streaming & bandwidth"
           description="Tell Igloo about your connection so it can pick the right stream quality for you."
         />
-      </Card>
-
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Gauge}
-          title="Your network speed"
-          description="Used to recommend a stream profile for your viewing."
-        />
-        <CardContent>
-          <div className="grid max-w-md gap-2">
-            <Label htmlFor={downloadMbpsId}>Download speed (Mbps)</Label>
-            <Input
-              id={downloadMbpsId}
-              name="download_mbps"
-              type="number"
-              inputMode="decimal"
-              min={0.1}
-              step={0.1}
-              value={form.download_mbps ?? ""}
-              onChange={event => handleDownloadMbpsChange(event.target.value)}
-              disabled={updateMutation.isPending}
-              aria-invalid={downloadMbpsInvalid ? "true" : undefined}
-              aria-describedby={
-                downloadMbpsInvalid
-                  ? `${downloadMbpsId}-description ${statusId}`
-                  : `${downloadMbpsId}-description`
-              }
-              className={SETTINGS_INPUT_CLASS}
-            />
-            <p
-              id={`${downloadMbpsId}-description`}
-              className="text-sm text-muted-foreground"
-            >
-              Leave blank if unsure.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Wifi}
-          title="Server upload cap"
-          description="The home server's outbound bandwidth limit, applied when you stream from outside the home network."
-        />
-        <CardContent>
-          {settings.is_admin ? (
+        <CardContent className="divide-y divide-border/50">
+          <PlaybackSection
+            title="Your network speed"
+            description="Used to recommend a stream profile for your viewing."
+          >
             <div className="grid max-w-md gap-2">
-              <Label htmlFor={serverUploadMbpsId}>
-                Server upload bandwidth (Mbps)
-              </Label>
+              <Label htmlFor={downloadMbpsId}>Download speed (Mbps)</Label>
               <Input
-                id={serverUploadMbpsId}
-                name="server_upload_mbps"
+                id={downloadMbpsId}
+                name="download_mbps"
                 type="number"
                 inputMode="decimal"
                 min={0.1}
                 step={0.1}
-                value={form.server_upload_mbps ?? ""}
-                onChange={event =>
-                  handleServerUploadMbpsChange(event.target.value)
-                }
+                value={form.download_mbps ?? ""}
+                onChange={event => handleDownloadMbpsChange(event.target.value)}
                 disabled={updateMutation.isPending}
-                aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
+                aria-invalid={downloadMbpsInvalid ? "true" : undefined}
                 aria-describedby={
-                  serverUploadMbpsInvalid
-                    ? `${serverUploadMbpsId}-description ${statusId}`
-                    : `${serverUploadMbpsId}-description`
+                  downloadMbpsInvalid
+                    ? `${downloadMbpsId}-description ${statusId}`
+                    : `${downloadMbpsId}-description`
                 }
                 className={SETTINGS_INPUT_CLASS}
               />
               <p
-                id={`${serverUploadMbpsId}-description`}
+                id={`${downloadMbpsId}-description`}
                 className="text-sm text-muted-foreground"
               >
-                Leave blank if the server should be uncapped.
+                Leave blank if unsure.
               </p>
             </div>
-          ) : (
-            <>
-              <p className="text-sm text-foreground">
-                {settings.server_upload_mbps != null
-                  ? `${settings.server_upload_mbps} Mbps`
-                  : "Not set (uncapped)"}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Set by the server administrator. Affects your recommendation
-                when streaming from outside the home network.
-              </p>
-            </>
-          )}
+          </PlaybackSection>
+          <PlaybackSection
+            title="Server upload cap"
+            description="The home server's outbound bandwidth limit, applied when you stream from outside the home network."
+          >
+            {settings.is_admin ? (
+              <div className="grid max-w-md gap-2">
+                <Label htmlFor={serverUploadMbpsId}>
+                  Server upload bandwidth (Mbps)
+                </Label>
+                <Input
+                  id={serverUploadMbpsId}
+                  name="server_upload_mbps"
+                  type="number"
+                  inputMode="decimal"
+                  min={0.1}
+                  step={0.1}
+                  value={form.server_upload_mbps ?? ""}
+                  onChange={event =>
+                    handleServerUploadMbpsChange(event.target.value)
+                  }
+                  disabled={updateMutation.isPending}
+                  aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
+                  aria-describedby={
+                    serverUploadMbpsInvalid
+                      ? `${serverUploadMbpsId}-description ${statusId}`
+                      : `${serverUploadMbpsId}-description`
+                  }
+                  className={SETTINGS_INPUT_CLASS}
+                />
+                <p
+                  id={`${serverUploadMbpsId}-description`}
+                  className="text-sm text-muted-foreground"
+                >
+                  Leave blank if the server should be uncapped.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-foreground">
+                  {settings.server_upload_mbps != null
+                    ? `${settings.server_upload_mbps} Mbps`
+                    : "Not set (uncapped)"}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Set by the server administrator. Affects your recommendation
+                  when streaming from outside the home network.
+                </p>
+              </>
+            )}
+          </PlaybackSection>
+          <PlaybackSection
+            title="Recommended profile"
+            titleId={recommendationTitleId}
+            description="Calculated from your download speed and the server upload cap, with 20% headroom for audio and overhead."
+          >
+            <p
+              id={recommendationId}
+              role="region"
+              aria-labelledby={recommendationTitleId}
+              aria-live="polite"
+              className="text-sm text-foreground"
+            >
+              {recommendedProfile
+                ? `Recommended: ${recommendedProfile.label}`
+                : "Enter your download speed to see a recommendation."}
+            </p>
+          </PlaybackSection>
         </CardContent>
       </Card>
 
@@ -487,174 +557,196 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       >
         <SettingsCardHeader
           icon={Sliders}
-          titleId={recommendationTitleId}
-          title="Recommended profile"
-          description="Calculated from your download speed and the server upload cap, with 20% headroom for audio and overhead."
+          title="Stream defaults"
+          description="Defaults applied when you start a stream. You can still change each per video."
         />
-        <CardContent>
-          <p
-            id={recommendationId}
-            role="region"
-            aria-labelledby={recommendationTitleId}
-            aria-live="polite"
-            className="text-sm text-foreground"
+        <CardContent className="divide-y divide-border/50">
+          <PlaybackSection
+            title="Preferred profile"
+            description="The default profile when you start a stream."
           >
-            {recommendedProfile
-              ? `Recommended: ${recommendedProfile.label}`
-              : "Enter your download speed to see a recommendation."}
-          </p>
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={preferredProfileId}>Profile</Label>
+              {/*
+                Radix renders a visually-hidden aria-hidden <select name> for each
+                of these for native form integration; they're never submitted (this
+                form is JS-controlled). Chrome's Issues panel flags them "no label" —
+                a false-positive on aria-hidden fields, not fixable without ejecting
+                Radix. Keep the names so the fields stay identified.
+              */}
+              <Select
+                name="preferred_profile"
+                value={form.preferred_profile ?? NO_SELECTION_VALUE}
+                onValueChange={handleProfileChange}
+                disabled={updateMutation.isPending}
+              >
+                <SelectTrigger
+                  id={preferredProfileId}
+                  className={SETTINGS_SELECT_TRIGGER_CLASS}
+                >
+                  <SelectValue placeholder="Use recommended" />
+                </SelectTrigger>
+                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+                  <SelectItem
+                    value={NO_SELECTION_VALUE}
+                    className={SETTINGS_SELECT_ITEM_CLASS}
+                  >
+                    Use recommended
+                  </SelectItem>
+                  {settings.profiles.map(profile => (
+                    <SelectItem
+                      key={profile.id}
+                      value={profile.id}
+                      className={SETTINGS_SELECT_ITEM_CLASS}
+                    >
+                      {profile.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </PlaybackSection>
+          <PlaybackSection
+            title="Preferred audio language"
+            description="Igloo will pick the matching audio track when a movie has one."
+          >
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={preferredAudioLanguageId}>Audio language</Label>
+              <Select
+                name="preferred_audio_language"
+                value={form.preferred_audio_language ?? NO_SELECTION_VALUE}
+                onValueChange={handleAudioLanguageChange}
+                disabled={updateMutation.isPending}
+              >
+                <SelectTrigger
+                  id={preferredAudioLanguageId}
+                  className={SETTINGS_SELECT_TRIGGER_CLASS}
+                >
+                  <SelectValue placeholder="No preference" />
+                </SelectTrigger>
+                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+                  <SelectItem
+                    value={NO_SELECTION_VALUE}
+                    className={SETTINGS_SELECT_ITEM_CLASS}
+                  >
+                    No preference
+                  </SelectItem>
+                  {SORTED_LANGUAGE_ENTRIES.map(([code, name]) => (
+                    <SelectItem
+                      key={code}
+                      value={code}
+                      className={SETTINGS_SELECT_ITEM_CLASS}
+                    >
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </PlaybackSection>
+          <PlaybackSection
+            title="Preferred subtitles"
+            description="Pick a default subtitle language, or always start with subtitles off."
+          >
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={preferredSubtitleLanguageId}>
+                Subtitle language
+              </Label>
+              <Select
+                name="preferred_subtitle_language"
+                value={form.preferred_subtitle_language ?? NO_SELECTION_VALUE}
+                onValueChange={handleSubtitleLanguageChange}
+                disabled={updateMutation.isPending}
+              >
+                <SelectTrigger
+                  id={preferredSubtitleLanguageId}
+                  className={SETTINGS_SELECT_TRIGGER_CLASS}
+                >
+                  <SelectValue placeholder="No preference" />
+                </SelectTrigger>
+                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+                  <SelectItem
+                    value={NO_SELECTION_VALUE}
+                    className={SETTINGS_SELECT_ITEM_CLASS}
+                  >
+                    No preference
+                  </SelectItem>
+                  <SelectItem
+                    value={SUBTITLE_OFF_VALUE}
+                    className={SETTINGS_SELECT_ITEM_CLASS}
+                  >
+                    Always off
+                  </SelectItem>
+                  {SORTED_LANGUAGE_ENTRIES.map(([code, name]) => (
+                    <SelectItem
+                      key={code}
+                      value={code}
+                      className={SETTINGS_SELECT_ITEM_CLASS}
+                    >
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </PlaybackSection>
         </CardContent>
       </Card>
 
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Play}
-          title="Preferred profile"
-          description="The default profile when you start a stream. You can still pick a different one per video."
-        />
-        <CardContent>
-          <div className="grid max-w-md gap-2">
-            <Label htmlFor={preferredProfileId}>Profile</Label>
-            {/*
-              Radix renders a visually-hidden aria-hidden <select name> for each
-              of these for native form integration; they're never submitted (this
-              form is JS-controlled). Chrome's Issues panel flags them "no label" —
-              a false-positive on aria-hidden fields, not fixable without ejecting
-              Radix. Keep the names so the fields stay identified.
-            */}
-            <Select
-              name="preferred_profile"
-              value={form.preferred_profile ?? NO_SELECTION_VALUE}
-              onValueChange={handleProfileChange}
-              disabled={updateMutation.isPending}
-            >
-              <SelectTrigger
-                id={preferredProfileId}
-                className={SETTINGS_SELECT_TRIGGER_CLASS}
+      {settings.is_admin && (
+        <Card
+          className={cn(
+            SETTINGS_CARD_SURFACE_CLASS,
+            MOTION_SETTINGS_SURFACE_CLASS,
+          )}
+        >
+          <SettingsCardHeader
+            icon={MonitorCog}
+            title="Transcoding"
+            description="Choose the hardware acceleration mode used for new transcodes."
+          />
+          <CardContent>
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={hardwareDeviceId}>Hardware acceleration</Label>
+              <Select
+                name="hardware_acceleration_device"
+                value={form.hardware_acceleration_device}
+                onValueChange={handleHardwareChange}
+                disabled={updateMutation.isPending}
               >
-                <SelectValue placeholder="Use recommended" />
-              </SelectTrigger>
-              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                <SelectItem
-                  value={NO_SELECTION_VALUE}
-                  className={SETTINGS_SELECT_ITEM_CLASS}
+                <SelectTrigger
+                  id={hardwareDeviceId}
+                  className={SETTINGS_SELECT_TRIGGER_CLASS}
                 >
-                  Use recommended
-                </SelectItem>
-                {settings.profiles.map(profile => (
-                  <SelectItem
-                    key={profile.id}
-                    value={profile.id}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    {profile.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Languages}
-          title="Preferred audio language"
-          description="Igloo will pick the matching audio track when a movie has one. You can still change it per video."
-        />
-        <CardContent>
-          <div className="grid max-w-md gap-2">
-            <Label htmlFor={preferredAudioLanguageId}>Audio language</Label>
-            <Select
-              name="preferred_audio_language"
-              value={form.preferred_audio_language ?? NO_SELECTION_VALUE}
-              onValueChange={handleAudioLanguageChange}
-              disabled={updateMutation.isPending}
-            >
-              <SelectTrigger
-                id={preferredAudioLanguageId}
-                className={SETTINGS_SELECT_TRIGGER_CLASS}
-              >
-                <SelectValue placeholder="No preference" />
-              </SelectTrigger>
-              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                <SelectItem
-                  value={NO_SELECTION_VALUE}
-                  className={SETTINGS_SELECT_ITEM_CLASS}
-                >
-                  No preference
-                </SelectItem>
-                {SORTED_LANGUAGE_ENTRIES.map(([code, name]) => (
-                  <SelectItem
-                    key={code}
-                    value={code}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Subtitles}
-          title="Preferred subtitles"
-          description="Pick a default subtitle language, or always start with subtitles off."
-        />
-        <CardContent>
-          <div className="grid max-w-md gap-2">
-            <Label htmlFor={preferredSubtitleLanguageId}>
-              Subtitle language
-            </Label>
-            <Select
-              name="preferred_subtitle_language"
-              value={form.preferred_subtitle_language ?? NO_SELECTION_VALUE}
-              onValueChange={handleSubtitleLanguageChange}
-              disabled={updateMutation.isPending}
-            >
-              <SelectTrigger
-                id={preferredSubtitleLanguageId}
-                className={SETTINGS_SELECT_TRIGGER_CLASS}
-              >
-                <SelectValue placeholder="No preference" />
-              </SelectTrigger>
-              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                <SelectItem
-                  value={NO_SELECTION_VALUE}
-                  className={SETTINGS_SELECT_ITEM_CLASS}
-                >
-                  No preference
-                </SelectItem>
-                <SelectItem
-                  value={SUBTITLE_OFF_VALUE}
-                  className={SETTINGS_SELECT_ITEM_CLASS}
-                >
-                  Always off
-                </SelectItem>
-                {SORTED_LANGUAGE_ENTRIES.map(([code, name]) => (
-                  <SelectItem
-                    key={code}
-                    value={code}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
+                  {HARDWARE_OPTIONS.map(option => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      className={SETTINGS_SELECT_ITEM_CLASS}
+                    >
+                      <span className="flex items-center gap-2">
+                        {option.icon}
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {
+                  HARDWARE_OPTIONS.find(
+                    option =>
+                      option.value === form.hardware_acceleration_device,
+                  )?.description
+                }
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <SettingsSaveBar
         title="Playback settings"
@@ -669,5 +761,29 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         className={cn("bg-card/70", MOTION_SETTINGS_SURFACE_CLASS)}
       />
     </form>
+  );
+}
+
+type PlaybackSectionProps = {
+  title: string;
+  titleId?: string;
+  description: string;
+  children: ReactNode;
+};
+
+function PlaybackSection({
+  title,
+  titleId,
+  description,
+  children,
+}: PlaybackSectionProps) {
+  return (
+    <section className="py-5 first:pt-0 last:pb-0">
+      <h3 id={titleId} className="text-sm font-semibold text-foreground">
+        {title}
+      </h3>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <div className="mt-3">{children}</div>
+    </section>
   );
 }

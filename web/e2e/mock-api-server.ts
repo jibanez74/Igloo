@@ -41,12 +41,16 @@ type GeneralSettings = {
   jellyfin_api_key: string | null;
   spotify_client_id: string | null;
   spotify_client_secret: string | null;
-  hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
   transcode_dir: string;
+};
+
+// Global settings served by the playback endpoint; writes are admin-only.
+type ServerPlaybackSettings = {
   server_upload_mbps: number | null;
+  hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
 };
 
 type PlaybackPreferences = {
@@ -152,12 +156,15 @@ let generalSettings: GeneralSettings = {
   jellyfin_api_key: null,
   spotify_client_id: null,
   spotify_client_secret: null,
-  hardware_acceleration_device: "cpu",
   enable_watcher: true,
   download_images: true,
   static_dir: "/tmp/igloo/static",
   transcode_dir: "/tmp/igloo/transcodes",
+};
+
+let serverPlaybackSettings: ServerPlaybackSettings = {
   server_upload_mbps: null,
+  hardware_acceleration_device: "cpu",
 };
 
 const playbackProfiles = [
@@ -806,7 +813,9 @@ function playbackSettingsFor(user: User) {
     profiles: playbackProfiles,
     preferred_profile: prefs.preferred_profile,
     download_mbps: prefs.download_mbps,
-    server_upload_mbps: generalSettings.server_upload_mbps,
+    server_upload_mbps: serverPlaybackSettings.server_upload_mbps,
+    hardware_acceleration_device:
+      serverPlaybackSettings.hardware_acceleration_device,
     is_admin: user.is_admin,
     preferred_audio_language: prefs.preferred_audio_language,
     preferred_subtitle_language: prefs.preferred_subtitle_language,
@@ -1297,12 +1306,6 @@ async function handleSettingsRoutes(
         nullableStringField(body, "spotify_client_secret"),
         generalSettings.spotify_client_secret,
       ),
-      hardware_acceleration_device:
-        stringField(
-          body,
-          "hardware_acceleration_device",
-          generalSettings.hardware_acceleration_device,
-        ) as GeneralSettings["hardware_acceleration_device"],
       enable_watcher: booleanField(
         body,
         "enable_watcher",
@@ -1315,10 +1318,6 @@ async function handleSettingsRoutes(
       ),
       static_dir: stringField(body, "static_dir", generalSettings.static_dir),
       transcode_dir: stringField(body, "transcode_dir", generalSettings.transcode_dir),
-      server_upload_mbps: valueOrCurrent(
-        nullableNumberField(body, "server_upload_mbps"),
-        generalSettings.server_upload_mbps,
-      ),
     };
     sendSuccess(response, { settings: generalSettings, restart_required: false });
     return true;
@@ -1335,20 +1334,32 @@ async function handleSettingsRoutes(
       body,
       "server_upload_mbps",
     );
+    const hasHardwareDevice = Object.prototype.hasOwnProperty.call(
+      body,
+      "hardware_acceleration_device",
+    );
 
-    if (!user.is_admin && hasServerUpload) {
-      sendFailure(response, 403, "Server upload bandwidth is admin-only.");
+    if (!user.is_admin && (hasServerUpload || hasHardwareDevice)) {
+      sendFailure(response, 403, "Server playback settings are admin-only.");
       return true;
     }
 
     updatePlaybackPreferences(user, body);
-    if (user.is_admin && hasServerUpload) {
-      generalSettings = {
-        ...generalSettings,
-        server_upload_mbps: valueOrCurrent(
-          nullableNumberField(body, "server_upload_mbps"),
-          generalSettings.server_upload_mbps,
-        ),
+    if (user.is_admin && (hasServerUpload || hasHardwareDevice)) {
+      serverPlaybackSettings = {
+        server_upload_mbps: hasServerUpload
+          ? valueOrCurrent(
+              nullableNumberField(body, "server_upload_mbps"),
+              serverPlaybackSettings.server_upload_mbps,
+            )
+          : serverPlaybackSettings.server_upload_mbps,
+        hardware_acceleration_device: hasHardwareDevice
+          ? (stringField(
+              body,
+              "hardware_acceleration_device",
+              serverPlaybackSettings.hardware_acceleration_device,
+            ) as ServerPlaybackSettings["hardware_acceleration_device"])
+          : serverPlaybackSettings.hardware_acceleration_device,
       };
     }
 

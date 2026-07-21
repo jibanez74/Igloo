@@ -22,9 +22,10 @@ export function focusDialogRestoreTarget(
     return;
   }
 
-  const schedule =
-    window.requestAnimationFrame ??
-    ((callback: FrameRequestCallback) => window.setTimeout(callback, 0));
+  const schedule: (callback: FrameRequestCallback) => void =
+    typeof window.requestAnimationFrame === "function"
+      ? callback => window.requestAnimationFrame(callback)
+      : callback => window.setTimeout(callback, 0);
   schedule(focus);
 }
 

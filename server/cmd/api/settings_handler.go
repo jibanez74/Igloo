@@ -18,36 +18,32 @@ var (
 )
 
 type generalSettingsResponse struct {
-	TmdbKey                    *string  `json:"tmdb_key"`
-	ImmichBaseURL              *string  `json:"immich_base_url"`
-	ImmichApiKey               *string  `json:"immich_api_key"`
-	JellyfinBaseURL            *string  `json:"jellyfin_base_url"`
-	JellyfinApiKey             *string  `json:"jellyfin_api_key"`
-	SpotifyClientID            *string  `json:"spotify_client_id"`
-	SpotifyClientSecret        *string  `json:"spotify_client_secret"`
-	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
-	EnableWatcher              bool     `json:"enable_watcher"`
-	DownloadImages             bool     `json:"download_images"`
-	StaticDir                  string   `json:"static_dir"`
-	TranscodeDir               string   `json:"transcode_dir"`
-	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
-	RestartRequired            bool     `json:"restart_required,omitempty"`
+	TmdbKey             *string `json:"tmdb_key"`
+	ImmichBaseURL       *string `json:"immich_base_url"`
+	ImmichApiKey        *string `json:"immich_api_key"`
+	JellyfinBaseURL     *string `json:"jellyfin_base_url"`
+	JellyfinApiKey      *string `json:"jellyfin_api_key"`
+	SpotifyClientID     *string `json:"spotify_client_id"`
+	SpotifyClientSecret *string `json:"spotify_client_secret"`
+	EnableWatcher       bool    `json:"enable_watcher"`
+	DownloadImages      bool    `json:"download_images"`
+	StaticDir           string  `json:"static_dir"`
+	TranscodeDir        string  `json:"transcode_dir"`
+	RestartRequired     bool    `json:"restart_required,omitempty"`
 }
 
 type updateGeneralSettingsRequest struct {
-	TmdbKey                    string   `json:"tmdb_key"`
-	ImmichBaseURL              string   `json:"immich_base_url"`
-	ImmichApiKey               string   `json:"immich_api_key"`
-	JellyfinBaseURL            string   `json:"jellyfin_base_url"`
-	JellyfinApiKey             string   `json:"jellyfin_api_key"`
-	SpotifyClientID            string   `json:"spotify_client_id"`
-	SpotifyClientSecret        string   `json:"spotify_client_secret"`
-	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
-	EnableWatcher              bool     `json:"enable_watcher"`
-	DownloadImages             bool     `json:"download_images"`
-	StaticDir                  string   `json:"static_dir"`
-	TranscodeDir               string   `json:"transcode_dir"`
-	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
+	TmdbKey             string `json:"tmdb_key"`
+	ImmichBaseURL       string `json:"immich_base_url"`
+	ImmichApiKey        string `json:"immich_api_key"`
+	JellyfinBaseURL     string `json:"jellyfin_base_url"`
+	JellyfinApiKey      string `json:"jellyfin_api_key"`
+	SpotifyClientID     string `json:"spotify_client_id"`
+	SpotifyClientSecret string `json:"spotify_client_secret"`
+	EnableWatcher       bool   `json:"enable_watcher"`
+	DownloadImages      bool   `json:"download_images"`
+	StaticDir           string `json:"static_dir"`
+	TranscodeDir        string `json:"transcode_dir"`
 }
 
 type librarySettingsResponse struct {
@@ -63,26 +59,19 @@ type updateLibrarySettingsRequest struct {
 }
 
 func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool) generalSettingsResponse {
-	hardwareAccelerationDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
-	if settings.HardwareAccelerationDevice.Valid && settings.HardwareAccelerationDevice.String != "" {
-		hardwareAccelerationDevice = settings.HardwareAccelerationDevice.String
-	}
-
 	return generalSettingsResponse{
-		TmdbKey:                    helpers.StringPtrFromNull(settings.TmdbKey),
-		ImmichBaseURL:              helpers.StringPtrFromNull(settings.ImmichBaseUrl),
-		ImmichApiKey:               helpers.StringPtrFromNull(settings.ImmichApiKey),
-		JellyfinBaseURL:            helpers.StringPtrFromNull(settings.JellyfinBaseUrl),
-		JellyfinApiKey:             helpers.StringPtrFromNull(settings.JellyfinApiKey),
-		SpotifyClientID:            helpers.StringPtrFromNull(settings.SpotifyClientID),
-		SpotifyClientSecret:        helpers.StringPtrFromNull(settings.SpotifyClientSecret),
-		HardwareAccelerationDevice: hardwareAccelerationDevice,
-		EnableWatcher:              settings.EnableWatcher,
-		DownloadImages:             settings.DownloadImages,
-		StaticDir:                  settings.StaticDir,
-		TranscodeDir:               settings.TranscodeDir,
-		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
-		RestartRequired:            restartRequired,
+		TmdbKey:             helpers.StringPtrFromNull(settings.TmdbKey),
+		ImmichBaseURL:       helpers.StringPtrFromNull(settings.ImmichBaseUrl),
+		ImmichApiKey:        helpers.StringPtrFromNull(settings.ImmichApiKey),
+		JellyfinBaseURL:     helpers.StringPtrFromNull(settings.JellyfinBaseUrl),
+		JellyfinApiKey:      helpers.StringPtrFromNull(settings.JellyfinApiKey),
+		SpotifyClientID:     helpers.StringPtrFromNull(settings.SpotifyClientID),
+		SpotifyClientSecret: helpers.StringPtrFromNull(settings.SpotifyClientSecret),
+		EnableWatcher:       settings.EnableWatcher,
+		DownloadImages:      settings.DownloadImages,
+		StaticDir:           settings.StaticDir,
+		TranscodeDir:        settings.TranscodeDir,
+		RestartRequired:     restartRequired,
 	}
 }
 
@@ -91,18 +80,6 @@ func mapLibrarySettingsResponse(settings database.Setting) librarySettingsRespon
 		MoviesDir: helpers.StringPtrFromNull(settings.MoviesDir),
 		ShowsDir:  helpers.StringPtrFromNull(settings.ShowsDir),
 		MusicDir:  helpers.StringPtrFromNull(settings.MusicDir),
-	}
-}
-
-func validateHardwareAccelerationDevice(value string) bool {
-	switch value {
-	case helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-		helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
-		helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-		helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
-		return true
-	default:
-		return false
 	}
 }
 
@@ -171,14 +148,8 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	req.JellyfinApiKey = strings.TrimSpace(req.JellyfinApiKey)
 	req.SpotifyClientID = strings.TrimSpace(req.SpotifyClientID)
 	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
-	req.HardwareAccelerationDevice = strings.TrimSpace(req.HardwareAccelerationDevice)
 	req.StaticDir = strings.TrimSpace(req.StaticDir)
 	req.TranscodeDir = strings.TrimSpace(req.TranscodeDir)
-
-	if !validateHardwareAccelerationDevice(req.HardwareAccelerationDevice) {
-		helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
-		return
-	}
 
 	if !isOptionalHTTPBaseURL(req.JellyfinBaseURL) {
 		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
@@ -198,13 +169,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	if req.TranscodeDir == "" {
 		helpers.ErrorJSON(w, errors.New("transcode directory is required"), http.StatusBadRequest)
 		return
-	}
-
-	if req.ServerUploadMbps != nil {
-		if *req.ServerUploadMbps <= 0 || *req.ServerUploadMbps >= 100000 {
-			helpers.ErrorJSON(w, errors.New("server upload speed must be greater than 0 and less than 100000 Mbps"), http.StatusBadRequest)
-			return
-		}
 	}
 
 	_, err = helpers.GetOrCreateDir(req.StaticDir)
@@ -237,19 +201,17 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 	currentSettings := app.Settings
 	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
-		TmdbKey:                    helpers.NullString(req.TmdbKey),
-		ImmichBaseUrl:              helpers.NullString(req.ImmichBaseURL),
-		ImmichApiKey:               helpers.NullString(req.ImmichApiKey),
-		JellyfinBaseUrl:            helpers.NullString(req.JellyfinBaseURL),
-		JellyfinApiKey:             helpers.NullString(req.JellyfinApiKey),
-		SpotifyClientID:            helpers.NullString(req.SpotifyClientID),
-		SpotifyClientSecret:        helpers.NullString(req.SpotifyClientSecret),
-		HardwareAccelerationDevice: helpers.NullString(req.HardwareAccelerationDevice),
-		EnableWatcher:              req.EnableWatcher,
-		DownloadImages:             req.DownloadImages,
-		StaticDir:                  req.StaticDir,
-		TranscodeDir:               req.TranscodeDir,
-		ServerUploadMbps:           helpers.NullFloat64FromPtr(req.ServerUploadMbps),
+		TmdbKey:             helpers.NullString(req.TmdbKey),
+		ImmichBaseUrl:       helpers.NullString(req.ImmichBaseURL),
+		ImmichApiKey:        helpers.NullString(req.ImmichApiKey),
+		JellyfinBaseUrl:     helpers.NullString(req.JellyfinBaseURL),
+		JellyfinApiKey:      helpers.NullString(req.JellyfinApiKey),
+		SpotifyClientID:     helpers.NullString(req.SpotifyClientID),
+		SpotifyClientSecret: helpers.NullString(req.SpotifyClientSecret),
+		EnableWatcher:       req.EnableWatcher,
+		DownloadImages:      req.DownloadImages,
+		StaticDir:           req.StaticDir,
+		TranscodeDir:        req.TranscodeDir,
 	})
 	if err != nil {
 		app.Logger.Error("failed to update general settings", "error", err)
