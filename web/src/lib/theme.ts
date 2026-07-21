@@ -41,6 +41,13 @@ export function getStoredTheme(): Theme {
   }
 }
 
+let activeTheme = getStoredTheme();
+
+/** Returns the theme currently applied to this page session. */
+export function getActiveTheme(): Theme {
+  return activeTheme;
+}
+
 type ThemeListener = () => void;
 
 const listeners = new Set<ThemeListener>();
@@ -58,6 +65,7 @@ export function applyTheme(theme: Theme): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
   const meta = document.querySelector('meta[name="theme-color"]');
   meta?.setAttribute("content", THEME_COLORS[theme]);
+  activeTheme = theme;
   for (const listener of listeners) {
     listener();
   }
