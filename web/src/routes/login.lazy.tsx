@@ -4,7 +4,7 @@ import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
-import { getStoredTheme, subscribeTheme } from "@/lib/theme";
+import { getActiveTheme, subscribeTheme } from "@/lib/theme";
 import loginBgDark from "@/assets/images/login-bg-dark.webp";
 import loginBgLight from "@/assets/images/login-bg-light.webp";
 import {
@@ -46,7 +46,7 @@ function LoginPage() {
   const { queryClient } = Route.useRouteContext();
   // Pick the backdrop to match the active theme (tracks the `.dark` class the
   // anti-flash script sets pre-paint, so the first render is already correct).
-  const theme = useSyncExternalStore(subscribeTheme, getStoredTheme);
+  const theme = useSyncExternalStore(subscribeTheme, getActiveTheme);
   const loginBg = theme === "light" ? loginBgLight : loginBgDark;
 
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {

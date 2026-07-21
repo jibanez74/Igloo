@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOTION_DURATION_STANDARD_MS } from "@/lib/constants";
 import {
   applyTheme,
+  getActiveTheme,
   getStoredTheme,
   setTheme,
   THEME_COLORS,
@@ -15,6 +16,7 @@ describe("theme preference", () => {
     document.documentElement.className = "";
     document.head.innerHTML =
       '<meta name="theme-color" content="#000000" />';
+    applyTheme("dark");
   });
 
   afterEach(() => {
@@ -57,7 +59,30 @@ describe("theme preference", () => {
     setTheme("light");
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
     expect(getStoredTheme()).toBe("light");
+    expect(getActiveTheme()).toBe("light");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("retains the applied theme when persistence fails", () => {
+    localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementationOnce(() => {
+        throw new DOMException("Storage is unavailable", "QuotaExceededError");
+      });
+
+    setTheme("light");
+
+    expect(getStoredTheme()).toBe("dark");
+    expect(getActiveTheme()).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.getAttribute("content"),
+    ).toBe(THEME_COLORS.light);
+
+    setItem.mockRestore();
   });
 
   describe("theme switch cross-fade", () => {

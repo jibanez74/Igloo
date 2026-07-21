@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
-import { getStoredTheme, subscribeTheme } from "@/lib/theme";
+import { getActiveTheme, subscribeTheme } from "@/lib/theme";
 
 export function Toaster(props: ToasterProps) {
-  const theme = useSyncExternalStore(subscribeTheme, getStoredTheme);
+  const theme = useSyncExternalStore(subscribeTheme, getActiveTheme);
 
   return (
     <Sonner

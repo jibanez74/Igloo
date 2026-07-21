@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getStoredTheme, setTheme, subscribeTheme } from "@/lib/theme";
+import { getActiveTheme, setTheme, subscribeTheme } from "@/lib/theme";
 
 export default function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribeTheme, getStoredTheme);
+  const theme = useSyncExternalStore(subscribeTheme, getActiveTheme);
   const nextTheme = theme === "dark" ? "light" : "dark";
   const label =
     nextTheme === "light" ? "Switch to light theme" : "Switch to dark theme";

@@ -355,10 +355,12 @@ rendered from it by `scripts/generate-theme.ts` between
 
 `src/lib/theme.ts` needs no codegen — it imports the module directly and
 derives `THEME_COLORS` / `THEME_TEXT_COLORS` from the canvas tokens; it
-remains the runtime API: `getStoredTheme()` (defaults `"dark"`),
-`applyTheme()` (class + meta + listeners), `setTheme()` (persists),
-`subscribeTheme()` for `useSyncExternalStore` consumers (`ThemeToggle`,
-`sonner.tsx`).
+remains the runtime API: `getStoredTheme()` (boot-time persistence read,
+defaults `"dark"`), `getActiveTheme()` (the applied in-memory theme),
+`applyTheme()` (class + meta + active state + listeners), `setTheme()`
+(persists when possible and always applies), and `subscribeTheme()` for
+`useSyncExternalStore` consumers (`ThemeToggle`, `sonner.tsx`, and the login
+backdrop).
 
 `theme-drift.test.ts` re-renders each generated block and diffs it against
 the file, and checks every token's OKLCH value round-trips to its declared
@@ -514,7 +516,7 @@ require the full playback test pass.
 ### 3.6 Toasts & notifications
 
 - **Sonner wrapper** (`ui/sonner.tsx`): theme-synced via
-  `useSyncExternalStore(subscribeTheme, getStoredTheme)`; `richColors`,
+  `useSyncExternalStore(subscribeTheme, getActiveTheme)`; `richColors`,
   `closeButton`, top-right; toast surfaces tokenized with `!` overrides
   (`!bg-card`/`!bg-muted`, `!border-success/50`, `!border-destructive/50`).
   Fire success/failure through `lib/toast-helpers.ts`
