@@ -94,7 +94,8 @@ Rules:
   `text-slate-400`, `bg-emerald-900` are banned at ESLint error level. The
   sanctioned exceptions are `src/lib/input-styles.ts` and
   `src/routes/login.lazy.tsx` (the intentionally light "frosted glass" input
-  treatment that stays light-on-dark in both themes).
+  treatment that stays light-on-dark in both themes, plus the login backdrop's
+  theme-aware photo scrim and frosted-card edge — see the over-media note below).
 - `aurora` is identical in both themes and is deliberately **sparing**: rating
   badges and rare highlights, not a general accent.
 - Alpha is applied at the call site with the `/NN` modifier
@@ -103,7 +104,11 @@ Rules:
   sit on posters/backdrops use literal black/white — `bg-black/30`–`/40` dim
   overlays, `bg-linear-to-t from-black/90` scrims, `text-white` titles,
   `shadow-black/30`. These must not track the theme (a poster doesn't change
-  with the theme); keep them literal, don't hunt for tokens.
+  with the theme); keep them literal, don't hunt for tokens. The one exception
+  is the **login backdrop**, which swaps between a bright (`login-bg-light.webp`)
+  and dark (`login-bg-dark.webp`) photo by theme, so its frost/darkening scrim
+  gradient and frosted-card border in `login.lazy.tsx` are deliberately
+  `dark:`-variant, literal white/slate in light and `background`-token in dark.
 - One deliberate brand exception exists: the `SPOTIFY_BRAND_*` constants in
   `lib/constants.ts` (Spotify green, documented there, carried past the lint
   ban with inline `eslint-disable` comments).

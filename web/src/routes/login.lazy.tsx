@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
-import loginBg from "@/assets/images/login-bg.webp";
+import { getStoredTheme, subscribeTheme } from "@/lib/theme";
+import loginBgDark from "@/assets/images/login-bg-dark.webp";
+import loginBgLight from "@/assets/images/login-bg-light.webp";
 import {
   Card,
   CardContent,
@@ -42,6 +44,10 @@ function LoginPage() {
   const navigate = Route.useNavigate();
   const { redirect } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
+  // Pick the backdrop to match the active theme (tracks the `.dark` class the
+  // anti-flash script sets pre-paint, so the first render is already correct).
+  const theme = useSyncExternalStore(subscribeTheme, getStoredTheme);
+  const loginBg = theme === "light" ? loginBgLight : loginBgDark;
 
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -95,13 +101,25 @@ function LoginPage() {
         decoding="async"
         fetchPriority="high"
       />
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-background/70" />
+      {/*
+        Photographic scrim. Dark mode keeps its bottom-weighted darkening scrim;
+        light mode uses a cool "frost" lift so the bright photo stays vivid while
+        still giving the card enough contrast (a flat `bg-background/70` inverted
+        to a milky wash in light mode).
+      */}
+      <div
+        className={cn(
+          "absolute inset-0 bg-linear-to-b",
+          "from-white/25 via-slate-200/35 to-slate-400/60",
+          "dark:from-background/40 dark:via-background/65 dark:to-background/85",
+        )}
+      />
 
       <Card
         className={cn(
           MOTION_PAGE_ENTER_CLASS,
-          "z-10 w-full max-w-md border-border bg-card/80 shadow-xl backdrop-blur-sm",
+          "z-10 w-full max-w-md bg-card/85 shadow-2xl backdrop-blur-sm",
+          "border-white/60 dark:border-border",
         )}
       >
         <CardHeader className="pb-2 text-center">
