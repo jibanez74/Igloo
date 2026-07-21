@@ -139,7 +139,9 @@ function trackBrowserIssues(page: Page) {
   page.on("console", message => {
     if (
       message.type() === "error" &&
-      !isExpectedUnauthorizedResourceMessage(message.text())
+      !isExpectedUnauthorizedResourceMessage(message.text()) &&
+      message.text() !==
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
     ) {
       consoleIssues.push(`${message.type()}: ${message.text()}`);
     }
@@ -425,6 +427,7 @@ test.describe("Account settings", () => {
     const name = `Playwright Account Settings ${stamp}`;
     const email = `${prefix}@example.com`;
     const password = `AccountPass${stamp}!`;
+    const partiallyEditedName = `Playwright Account Settings Partial ${stamp}`;
     const editedName = `Playwright Account Settings Edited ${stamp}`;
     const editedEmail = `${prefix}-edited@example.com`;
     const newPassword = `AccountNewPass${stamp}!`;
@@ -465,6 +468,43 @@ test.describe("Account settings", () => {
       await auditResponsiveAccountPage(page);
       await auditMobileTabOrder(page);
       await page.setViewportSize({ width: 1440, height: 900 });
+
+      await page.getByRole("textbox", { name: "Your email address" }).fill(
+        env.email,
+      );
+      await page.getByRole("textbox", { name: "Your display name" }).fill(
+        partiallyEditedName,
+      );
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/email") &&
+            response.status() === 409,
+        ),
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/name") &&
+            response.status() === 200,
+        ),
+        page.getByRole("button", { name: "Save profile" }).click(),
+      ]);
+      await expect(
+        page.getByRole("alert").filter({
+          hasText: /email.*already/i,
+        }),
+      ).toBeVisible();
+      await expect(page.getByText(partiallyEditedName).first()).toBeVisible();
+
+      const partialProfileResponse = await page.context().request.get(
+        apiURL(env, "/api/auth/user"),
+        { failOnStatusCode: false },
+      );
+      expect(partialProfileResponse.status()).toBe(200);
+      const partialProfileBody = await readJSON<{ user: AdminUser }>(
+        partialProfileResponse,
+      );
+      expect(partialProfileBody.data?.user.email).toBe(email);
+      expect(partialProfileBody.data?.user.name).toBe(partiallyEditedName);
 
       await page.getByRole("textbox", { name: "Your email address" }).fill(
         editedEmail,

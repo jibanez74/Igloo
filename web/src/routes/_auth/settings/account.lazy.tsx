@@ -157,101 +157,54 @@ function AccountSettings() {
     setErrors(current => ({ ...current, [field]: undefined }));
   };
 
-  // Name update mutation with optimistic updates
+  // Name update mutation
   const updateNameMutation = useMutation({
     mutationFn: (newName: string) => updateUserName(newName),
-    onMutate: async newName => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
-
-      // Snapshot the previous value
-      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
-
-      // Optimistically update the cache
-      queryClient.setQueryData<typeof userData>([AUTH_USER_KEY], old => {
-        if (!old || old.error || !old.data?.user) return old;
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            user: {
-              ...old.data.user,
-              name: newName,
-            },
-          },
-        };
-      });
-
-      // Return context with the snapshotted value
-      return { previousData };
-    },
-    onError: (err, _newName, context) => {
-      // Rollback to the previous value on error
-      if (context?.previousData) {
-        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
-      }
+    onError: err => {
       showActionFailed(
         "update name",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: async res => {
       if (res.error) {
         setErrors(current => ({
           ...current,
           name: res.message || "Failed to update name.",
         }));
         showActionFailed("update name", res.message);
-        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("name");
         showSuccess("Name updated successfully");
-        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        queryClient.setQueryData([AUTH_USER_KEY], res);
+        await queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
 
-  // Email update mutation with optimistic updates
+  // Email update mutation
   const updateEmailMutation = useMutation({
     mutationFn: (newEmail: string) => updateUserEmail(newEmail),
-    onMutate: async newEmail => {
-      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
-      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
-
-      queryClient.setQueryData<typeof userData>([AUTH_USER_KEY], old => {
-        if (!old || old.error || !old.data?.user) return old;
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            user: { ...old.data.user, email: newEmail },
-          },
-        };
-      });
-
-      return { previousData };
-    },
-    onError: (err, _newEmail, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
-      }
+    onError: err => {
       showActionFailed(
         "update email",
         err instanceof Error ? err.message : "An error occurred",
       );
     },
-    onSuccess: res => {
+    onSuccess: async res => {
       if (res.error) {
         setErrors(current => ({
           ...current,
           email: res.message || "Failed to update email.",
         }));
         showActionFailed("update email", res.message);
-        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+        await queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         clearError("email");
         showSuccess("Email updated successfully");
-        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+        queryClient.setQueryData([AUTH_USER_KEY], res);
+        await queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
@@ -378,7 +331,7 @@ function AccountSettings() {
     },
   });
 
-  const handleSaveProfile = (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
 
@@ -412,7 +365,11 @@ function AccountSettings() {
 
     if (trimmedEmail !== user.email) {
       clearError("email");
-      updateEmailMutation.mutate(trimmedEmail);
+      try {
+        await updateEmailMutation.mutateAsync(trimmedEmail);
+      } catch {
+        // The mutation reports its own error; a valid name change can still save.
+      }
     }
     if (trimmedName !== user.name) {
       clearError("name");

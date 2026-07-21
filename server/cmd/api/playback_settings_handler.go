@@ -307,33 +307,34 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	}
 
 	var updated database.UpdateUserPlaybackPreferencesRow
+	var updateErr error
 	if serverUploadProvided || hardwareProvided {
-		tx, err := app.DB.BeginTx(r.Context(), nil)
-		if err != nil {
-			app.Logger.Error("failed to begin playback settings transaction", "error", err, "user_id", userID)
+		tx, txErr := app.DB.BeginTx(r.Context(), nil)
+		if txErr != nil {
+			app.Logger.Error("failed to begin playback settings transaction", "error", txErr, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 			return
 		}
 
 		qtx := app.Queries.WithTx(tx)
-		updated, err = qtx.UpdateUserPlaybackPreferences(r.Context(), updateParams)
-		if err != nil {
+		updated, txErr = qtx.UpdateUserPlaybackPreferences(r.Context(), updateParams)
+		if txErr != nil {
 			rollbackErr := tx.Rollback()
 			if rollbackErr != nil {
 				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
 			}
-			app.Logger.Error("failed to update playback preferences", "error", err, "user_id", userID)
+			app.Logger.Error("failed to update playback preferences", "error", txErr, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 			return
 		}
 
-		currentSettings, err := qtx.GetSettings(r.Context())
-		if err != nil {
+		currentSettings, txErr := qtx.GetSettings(r.Context())
+		if txErr != nil {
 			rollbackErr := tx.Rollback()
 			if rollbackErr != nil {
 				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
 			}
-			app.Logger.Error("failed to load settings for playback update", "error", err, "user_id", userID)
+			app.Logger.Error("failed to load settings for playback update", "error", txErr, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 			return
 		}
@@ -344,33 +345,33 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 			hardwareDevice = hardwareAccelerationDeviceOrDefault(&currentSettings)
 		}
 
-		updatedSettings, err := qtx.UpdatePlaybackServerSettings(r.Context(), database.UpdatePlaybackServerSettingsParams{
+		updatedSettings, txErr := qtx.UpdatePlaybackServerSettings(r.Context(), database.UpdatePlaybackServerSettingsParams{
 			ServerUploadMbps:           serverUpload,
 			HardwareAccelerationDevice: helpers.NullString(hardwareDevice),
 		})
-		if err != nil {
+		if txErr != nil {
 			rollbackErr := tx.Rollback()
 			if rollbackErr != nil {
 				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
 			}
-			app.Logger.Error("failed to update playback server settings", "error", err, "user_id", userID)
+			app.Logger.Error("failed to update playback server settings", "error", txErr, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 			return
 		}
 
-		err = tx.Commit()
-		if err != nil {
-			app.Logger.Error("failed to commit playback settings transaction", "error", err, "user_id", userID)
+		txErr = tx.Commit()
+		if txErr != nil {
+			app.Logger.Error("failed to commit playback settings transaction", "error", txErr, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 			return
 		}
 
 		app.Settings = &updatedSettings
 	} else {
-		updated, err = app.Queries.UpdateUserPlaybackPreferences(r.Context(), updateParams)
+		updated, updateErr = app.Queries.UpdateUserPlaybackPreferences(r.Context(), updateParams)
 	}
-	if err != nil {
-		app.Logger.Error("failed to update playback preferences", "error", err, "user_id", userID)
+	if updateErr != nil {
+		app.Logger.Error("failed to update playback preferences", "error", updateErr, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 		return
 	}
