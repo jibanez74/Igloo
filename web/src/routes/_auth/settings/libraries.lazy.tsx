@@ -72,7 +72,6 @@ type LibrarySectionConfig = {
   Icon: LucideIcon;
   iconClassName: string;
   iconBackgroundClassName: string;
-  scanButtonClassName: string;
   clearLabel: string;
 };
 
@@ -99,8 +98,6 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     Icon: Film,
     iconClassName: "text-primary",
     iconBackgroundClassName: "bg-primary/10",
-    scanButtonClassName:
-      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
     clearLabel: "Clear movies library path",
   },
   {
@@ -113,8 +110,6 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     Icon: Tv,
     iconClassName: "text-accent-teal",
     iconBackgroundClassName: "bg-accent-teal/10",
-    scanButtonClassName:
-      "bg-accent-teal text-accent-teal-foreground hover:bg-accent-teal/90 hover:text-accent-teal-foreground",
     clearLabel: "Clear TV shows library path",
   },
   {
@@ -127,8 +122,6 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     Icon: Music,
     iconClassName: "text-primary",
     iconBackgroundClassName: "bg-primary/10",
-    scanButtonClassName:
-      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
     clearLabel: "Clear music library path",
   },
 ];
@@ -524,6 +517,7 @@ function LibraryPathSection({
       {config.scan && hasSavedPath && (
         <Button
           type="button"
+          variant="outline"
           onClick={onScan}
           disabled={scanDisabled}
           aria-busy={scanPending}
@@ -532,10 +526,7 @@ function LibraryPathSection({
               ? `Scanning ${scanLabel(config.scan)} library, please wait`
               : `Scan ${scanLabel(config.scan)} library`
           }
-          className={cn(
-            "w-full disabled:opacity-50",
-            config.scanButtonClassName,
-          )}
+          className="w-full disabled:opacity-50"
         >
           {scanPending ? (
             <>

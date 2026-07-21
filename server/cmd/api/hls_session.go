@@ -564,12 +564,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
 
-	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
-	if app.Settings != nil &&
-		app.Settings.HardwareAccelerationDevice.Valid &&
-		app.Settings.HardwareAccelerationDevice.String != "" {
-		hwDevice = app.Settings.HardwareAccelerationDevice.String
-	}
+	hwDevice := hardwareAccelerationDeviceOrDefault(app.Settings)
 	ffmpegCaps := app.FFmpeg.Capabilities()
 	deviceDecision := ffmpeg.ResolveHLSDevice(hwDevice, ffmpegCaps)
 

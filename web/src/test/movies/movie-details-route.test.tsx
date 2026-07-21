@@ -85,6 +85,7 @@ function playbackSettings(): PlaybackSettingsType {
     preferred_profile: null,
     download_mbps: null,
     server_upload_mbps: null,
+    hardware_acceleration_device: "cpu",
     is_admin: false,
     preferred_audio_language: null,
     preferred_subtitle_language: null,

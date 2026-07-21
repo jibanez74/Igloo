@@ -34,12 +34,10 @@ SET
   jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
-  hardware_acceleration_device = ?,
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,
   transcode_dir = ?,
-  server_upload_mbps = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
   SELECT id
@@ -64,10 +62,11 @@ WHERE id = (
 )
 RETURNING *;
 
--- name: UpdatePlaybackServerUploadMbps :one
+-- name: UpdatePlaybackServerSettings :one
 UPDATE settings
 SET
   server_upload_mbps = ?,
+  hardware_acceleration_device = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
   SELECT id

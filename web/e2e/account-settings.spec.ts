@@ -34,6 +34,8 @@ type UsersData = {
   users: AdminUser[];
 };
 
+// "Save profile" is deliberately absent: it is disabled (untabbable) until a
+// profile field changes, and the save flow itself is asserted separately.
 const requiredAccountControlNames = [
   "Your email address",
   "Your display name",
@@ -467,29 +469,25 @@ test.describe("Account settings", () => {
       await page.getByRole("textbox", { name: "Your email address" }).fill(
         editedEmail,
       );
-      await Promise.all([
-        page.waitForResponse(
-          response =>
-            response.url().endsWith("/api/user/email") &&
-            response.status() === 200,
-        ),
-        page.getByRole("button", { name: "Save" }).first().click(),
-      ]);
-      await expect(
-        page.getByRole("textbox", { name: "Your email address" }),
-      ).toHaveValue(editedEmail);
-
       await page.getByRole("textbox", { name: "Your display name" }).fill(
         editedName,
       );
       await Promise.all([
         page.waitForResponse(
           response =>
+            response.url().endsWith("/api/user/email") &&
+            response.status() === 200,
+        ),
+        page.waitForResponse(
+          response =>
             response.url().endsWith("/api/user/name") &&
             response.status() === 200,
         ),
-        page.getByRole("button", { name: "Save" }).nth(1).click(),
+        page.getByRole("button", { name: "Save profile" }).click(),
       ]);
+      await expect(
+        page.getByRole("textbox", { name: "Your email address" }),
+      ).toHaveValue(editedEmail);
       await expect(page.getByText(editedName).first()).toBeVisible();
 
       const profileResponse = await page.context().request.get(
@@ -773,5 +771,25 @@ test.describe("Account settings", () => {
     } finally {
       await cleanupAuditUsers(request, env, prefix);
     }
+  });
+
+  test("hides the danger zone from admin accounts", async ({ page }) => {
+    const env = readE2EEnv();
+    const tracker = trackBrowserIssues(page);
+
+    await login(page.context().request, env);
+
+    await page.goto(apiURL(env, "/settings/account"), {
+      waitUntil: "networkidle",
+    });
+    await expect(page.getByText("Profile Information")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Danger Zone" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Delete account" }),
+    ).toHaveCount(0);
+
+    tracker.assertClean();
   });
 });

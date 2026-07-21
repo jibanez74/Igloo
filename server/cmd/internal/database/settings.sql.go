@@ -130,12 +130,10 @@ SET
   jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
-  hardware_acceleration_device = ?,
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,
   transcode_dir = ?,
-  server_upload_mbps = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
   SELECT id
@@ -147,19 +145,17 @@ RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jell
 `
 
 type UpdateGeneralSettingsParams struct {
-	TmdbKey                    sql.NullString  `json:"tmdb_key"`
-	ImmichBaseUrl              sql.NullString  `json:"immich_base_url"`
-	ImmichApiKey               sql.NullString  `json:"immich_api_key"`
-	JellyfinBaseUrl            sql.NullString  `json:"jellyfin_base_url"`
-	JellyfinApiKey             sql.NullString  `json:"jellyfin_api_key"`
-	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
-	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
-	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
-	EnableWatcher              bool            `json:"enable_watcher"`
-	DownloadImages             bool            `json:"download_images"`
-	StaticDir                  string          `json:"static_dir"`
-	TranscodeDir               string          `json:"transcode_dir"`
-	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
+	TmdbKey             sql.NullString `json:"tmdb_key"`
+	ImmichBaseUrl       sql.NullString `json:"immich_base_url"`
+	ImmichApiKey        sql.NullString `json:"immich_api_key"`
+	JellyfinBaseUrl     sql.NullString `json:"jellyfin_base_url"`
+	JellyfinApiKey      sql.NullString `json:"jellyfin_api_key"`
+	SpotifyClientID     sql.NullString `json:"spotify_client_id"`
+	SpotifyClientSecret sql.NullString `json:"spotify_client_secret"`
+	EnableWatcher       bool           `json:"enable_watcher"`
+	DownloadImages      bool           `json:"download_images"`
+	StaticDir           string         `json:"static_dir"`
+	TranscodeDir        string         `json:"transcode_dir"`
 }
 
 func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error) {
@@ -171,12 +167,10 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		arg.JellyfinApiKey,
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
-		arg.HardwareAccelerationDevice,
 		arg.EnableWatcher,
 		arg.DownloadImages,
 		arg.StaticDir,
 		arg.TranscodeDir,
-		arg.ServerUploadMbps,
 	)
 	var i Setting
 	err := row.Scan(
@@ -252,10 +246,11 @@ func (q *Queries) UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySe
 	return i, err
 }
 
-const updatePlaybackServerUploadMbps = `-- name: UpdatePlaybackServerUploadMbps :one
+const updatePlaybackServerSettings = `-- name: UpdatePlaybackServerSettings :one
 UPDATE settings
 SET
   server_upload_mbps = ?,
+  hardware_acceleration_device = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
   SELECT id
@@ -266,8 +261,13 @@ WHERE id = (
 RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir, created_at, updated_at
 `
 
-func (q *Queries) UpdatePlaybackServerUploadMbps(ctx context.Context, serverUploadMbps sql.NullFloat64) (Setting, error) {
-	row := q.queryRow(ctx, q.updatePlaybackServerUploadMbpsStmt, updatePlaybackServerUploadMbps, serverUploadMbps)
+type UpdatePlaybackServerSettingsParams struct {
+	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
+	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
+}
+
+func (q *Queries) UpdatePlaybackServerSettings(ctx context.Context, arg UpdatePlaybackServerSettingsParams) (Setting, error) {
+	row := q.queryRow(ctx, q.updatePlaybackServerSettingsStmt, updatePlaybackServerSettings, arg.ServerUploadMbps, arg.HardwareAccelerationDevice)
 	var i Setting
 	err := row.Scan(
 		&i.ID,

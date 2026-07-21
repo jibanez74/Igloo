@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,7 +38,7 @@ import {
   adminResetUserPassword,
 } from "@/lib/api";
 import { lightInputClassName } from "@/lib/input-styles";
-import { codePointLength, describedBy, getInitials } from "@/lib/utils";
+import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
@@ -319,7 +319,10 @@ function UsersSettings() {
                       {authResolved && user.id === currentUserId ? (
                         <Link
                           to="/settings/account"
-                          className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                          className={cn(
+                            buttonVariants({ variant: "ghost", size: "sm" }),
+                            "text-xs text-muted-foreground hover:text-primary",
+                          )}
                         >
                           Account settings
                         </Link>

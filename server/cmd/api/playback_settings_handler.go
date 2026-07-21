@@ -25,13 +25,14 @@ type playbackProfileResponse struct {
 }
 
 type playbackSettingsResponse struct {
-	Profiles                  []playbackProfileResponse `json:"profiles"`
-	PreferredProfile          *string                   `json:"preferred_profile"`
-	DownloadMbps              *float64                  `json:"download_mbps"`
-	ServerUploadMbps          *float64                  `json:"server_upload_mbps"`
-	IsAdmin                   bool                      `json:"is_admin"`
-	PreferredAudioLanguage    *string                   `json:"preferred_audio_language"`
-	PreferredSubtitleLanguage *string                   `json:"preferred_subtitle_language"`
+	Profiles                   []playbackProfileResponse `json:"profiles"`
+	PreferredProfile           *string                   `json:"preferred_profile"`
+	DownloadMbps               *float64                  `json:"download_mbps"`
+	ServerUploadMbps           *float64                  `json:"server_upload_mbps"`
+	HardwareAccelerationDevice string                    `json:"hardware_acceleration_device"`
+	IsAdmin                    bool                      `json:"is_admin"`
+	PreferredAudioLanguage     *string                   `json:"preferred_audio_language"`
+	PreferredSubtitleLanguage  *string                   `json:"preferred_subtitle_language"`
 }
 
 // PUT returns only user-editable playback preferences; the client refetches the full catalog.
@@ -40,6 +41,28 @@ type updatePlaybackSettingsResponse struct {
 	DownloadMbps              *float64 `json:"download_mbps"`
 	PreferredAudioLanguage    *string  `json:"preferred_audio_language"`
 	PreferredSubtitleLanguage *string  `json:"preferred_subtitle_language"`
+}
+
+func hardwareAccelerationDeviceOrDefault(settings *database.Setting) string {
+	if settings != nil &&
+		settings.HardwareAccelerationDevice.Valid &&
+		settings.HardwareAccelerationDevice.String != "" {
+		return settings.HardwareAccelerationDevice.String
+	}
+
+	return helpers.HARDWARE_ACCELERATION_DEVICE_CPU
+}
+
+func validateHardwareAccelerationDevice(value string) bool {
+	switch value {
+	case helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+		helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+		return true
+	default:
+		return false
+	}
 }
 
 // playbackProfileCatalog returns the transcode profiles exposed to clients.
@@ -114,13 +137,14 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 	}
 
 	res := playbackSettingsResponse{
-		Profiles:                  playbackProfileCatalog(),
-		PreferredProfile:          helpers.StringPtrFromNull(prefs.PreferredHlsProfile),
-		DownloadMbps:              helpers.Float64PtrFromNull(prefs.DownloadMbps),
-		ServerUploadMbps:          serverUpload,
-		IsAdmin:                   prefs.IsAdmin,
-		PreferredAudioLanguage:    helpers.StringPtrFromNull(prefs.PreferredAudioLanguage),
-		PreferredSubtitleLanguage: helpers.StringPtrFromNull(prefs.PreferredSubtitleLanguage),
+		Profiles:                   playbackProfileCatalog(),
+		PreferredProfile:           helpers.StringPtrFromNull(prefs.PreferredHlsProfile),
+		DownloadMbps:               helpers.Float64PtrFromNull(prefs.DownloadMbps),
+		ServerUploadMbps:           serverUpload,
+		HardwareAccelerationDevice: hardwareAccelerationDeviceOrDefault(app.Settings),
+		IsAdmin:                    prefs.IsAdmin,
+		PreferredAudioLanguage:     helpers.StringPtrFromNull(prefs.PreferredAudioLanguage),
+		PreferredSubtitleLanguage:  helpers.StringPtrFromNull(prefs.PreferredSubtitleLanguage),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -151,9 +175,13 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, ok := rawFields["server_upload_mbps"]; ok && !current.IsAdmin {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusForbidden)
-		return
+	if !current.IsAdmin {
+		for _, adminField := range []string{"server_upload_mbps", "hardware_acceleration_device"} {
+			if _, ok := rawFields[adminField]; ok {
+				helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusForbidden)
+				return
+			}
+		}
 	}
 
 	preferred := current.PreferredHlsProfile
@@ -252,6 +280,24 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	hardwareDevice := ""
+	hardwareProvided := false
+	if raw, ok := rawFields["hardware_acceleration_device"]; ok {
+		hardwareProvided = true
+
+		var val string
+		if err := json.Unmarshal(raw, &val); err != nil {
+			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			return
+		}
+		val = strings.TrimSpace(val)
+		if !validateHardwareAccelerationDevice(val) {
+			helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
+			return
+		}
+		hardwareDevice = val
+	}
+
 	updateParams := database.UpdateUserPlaybackPreferencesParams{
 		PreferredHlsProfile:       preferred,
 		DownloadMbps:              download,
@@ -261,7 +307,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	}
 
 	var updated database.UpdateUserPlaybackPreferencesRow
-	if serverUploadProvided {
+	if serverUploadProvided || hardwareProvided {
 		tx, err := app.DB.BeginTx(r.Context(), nil)
 		if err != nil {
 			app.Logger.Error("failed to begin playback settings transaction", "error", err, "user_id", userID)
@@ -281,13 +327,33 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		updatedSettings, err := qtx.UpdatePlaybackServerUploadMbps(r.Context(), serverUpload)
+		currentSettings, err := qtx.GetSettings(r.Context())
 		if err != nil {
 			rollbackErr := tx.Rollback()
 			if rollbackErr != nil {
 				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
 			}
-			app.Logger.Error("failed to update playback server upload speed", "error", err, "user_id", userID)
+			app.Logger.Error("failed to load settings for playback update", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+			return
+		}
+		if !serverUploadProvided {
+			serverUpload = currentSettings.ServerUploadMbps
+		}
+		if !hardwareProvided {
+			hardwareDevice = hardwareAccelerationDeviceOrDefault(&currentSettings)
+		}
+
+		updatedSettings, err := qtx.UpdatePlaybackServerSettings(r.Context(), database.UpdatePlaybackServerSettingsParams{
+			ServerUploadMbps:           serverUpload,
+			HardwareAccelerationDevice: helpers.NullString(hardwareDevice),
+		})
+		if err != nil {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil {
+				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
+			}
+			app.Logger.Error("failed to update playback server settings", "error", err, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 			return
 		}

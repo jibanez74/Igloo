@@ -510,8 +510,8 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateMusicianSpotifyThumbStmt, err = db.PrepareContext(ctx, updateMusicianSpotifyThumb); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMusicianSpotifyThumb: %w", err)
 	}
-	if q.updatePlaybackServerUploadMbpsStmt, err = db.PrepareContext(ctx, updatePlaybackServerUploadMbps); err != nil {
-		return nil, fmt.Errorf("error preparing query UpdatePlaybackServerUploadMbps: %w", err)
+	if q.updatePlaybackServerSettingsStmt, err = db.PrepareContext(ctx, updatePlaybackServerSettings); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdatePlaybackServerSettings: %w", err)
 	}
 	if q.updatePlaylistStmt, err = db.PrepareContext(ctx, updatePlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdatePlaylist: %w", err)
@@ -1397,9 +1397,9 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateMusicianSpotifyThumbStmt: %w", cerr)
 		}
 	}
-	if q.updatePlaybackServerUploadMbpsStmt != nil {
-		if cerr := q.updatePlaybackServerUploadMbpsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing updatePlaybackServerUploadMbpsStmt: %w", cerr)
+	if q.updatePlaybackServerSettingsStmt != nil {
+		if cerr := q.updatePlaybackServerSettingsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updatePlaybackServerSettingsStmt: %w", cerr)
 		}
 	}
 	if q.updatePlaylistStmt != nil {
@@ -1718,7 +1718,7 @@ type Queries struct {
 	updateMovieStmt                             *sql.Stmt
 	updateMoviePlaylistStmt                     *sql.Stmt
 	updateMusicianSpotifyThumbStmt              *sql.Stmt
-	updatePlaybackServerUploadMbpsStmt          *sql.Stmt
+	updatePlaybackServerSettingsStmt            *sql.Stmt
 	updatePlaylistStmt                          *sql.Stmt
 	updatePlaylistTimestampStmt                 *sql.Stmt
 	updateTrackPositionStmt                     *sql.Stmt
@@ -1910,7 +1910,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateMovieStmt:                             q.updateMovieStmt,
 		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,
 		updateMusicianSpotifyThumbStmt:              q.updateMusicianSpotifyThumbStmt,
-		updatePlaybackServerUploadMbpsStmt:          q.updatePlaybackServerUploadMbpsStmt,
+		updatePlaybackServerSettingsStmt:            q.updatePlaybackServerSettingsStmt,
 		updatePlaylistStmt:                          q.updatePlaylistStmt,
 		updatePlaylistTimestampStmt:                 q.updatePlaylistTimestampStmt,
 		updateTrackPositionStmt:                     q.updateTrackPositionStmt,

@@ -17,8 +17,6 @@ type ApiResponse<T> = {
   data?: T;
 };
 
-type HardwareAccelerationDevice = "cpu" | "apple" | "nvidia" | "intel";
-
 type GeneralSettings = {
   tmdb_key: string | null;
   immich_base_url: string | null;
@@ -27,12 +25,10 @@ type GeneralSettings = {
   jellyfin_api_key: string | null;
   spotify_client_id: string | null;
   spotify_client_secret: string | null;
-  hardware_acceleration_device: HardwareAccelerationDevice;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
   transcode_dir: string;
-  server_upload_mbps: number | null;
 };
 
 type GeneralSettingsData = {
@@ -47,12 +43,10 @@ type GeneralSettingsRequest = {
   jellyfin_api_key: string;
   spotify_client_id: string;
   spotify_client_secret: string;
-  hardware_acceleration_device: HardwareAccelerationDevice;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
   transcode_dir: string;
-  server_upload_mbps: number | null;
 };
 
 function requestFromSettings(settings: GeneralSettings): GeneralSettingsRequest {
@@ -64,12 +58,10 @@ function requestFromSettings(settings: GeneralSettings): GeneralSettingsRequest 
     jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
-    hardware_acceleration_device: settings.hardware_acceleration_device,
     enable_watcher: settings.enable_watcher,
     download_images: settings.download_images,
     static_dir: settings.static_dir,
     transcode_dir: settings.transcode_dir,
-    server_upload_mbps: settings.server_upload_mbps ?? null,
   };
 }
 

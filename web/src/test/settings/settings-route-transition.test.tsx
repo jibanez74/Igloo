@@ -60,12 +60,10 @@ function generalSettings() {
     jellyfin_api_key: null,
     spotify_client_id: null,
     spotify_client_secret: null,
-    hardware_acceleration_device: "cpu",
     enable_watcher: false,
     download_images: true,
     static_dir: "/var/lib/igloo/static",
     transcode_dir: "/var/lib/igloo/transcode",
-    server_upload_mbps: null,
   };
 }
 
@@ -88,6 +86,7 @@ function playbackSettings() {
     preferred_profile: null,
     download_mbps: null,
     server_upload_mbps: 20,
+    hardware_acceleration_device: "cpu",
     is_admin: true,
     preferred_audio_language: null,
     preferred_subtitle_language: null,
