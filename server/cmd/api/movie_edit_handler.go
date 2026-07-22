@@ -143,7 +143,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := helpers.ReadJSON(w, r, &payload, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

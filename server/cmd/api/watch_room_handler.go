@@ -304,7 +304,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 	var req createWatchRoomRequest
 	if err := helpers.ReadJSON(w, r, &req, maxWatchRoomRequestSize); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

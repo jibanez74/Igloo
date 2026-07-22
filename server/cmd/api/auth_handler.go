@@ -101,7 +101,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 	err := helpers.ReadJSON(w, r, &request, 0)
 	if err != nil {
 		app.Logger.Error("failed to parse request body in device login", "error", err)
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -156,9 +156,8 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 }
 
 func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 

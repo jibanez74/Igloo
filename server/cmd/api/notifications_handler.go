@@ -99,7 +99,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 
 	err := helpers.ReadJSON(w, r, &req, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

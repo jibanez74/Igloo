@@ -177,7 +177,7 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 
 	var req updateMovieWatchProgressRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -328,7 +328,7 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 
 	var req setMovieWatchedRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

@@ -49,15 +49,14 @@ type UpdateUserPinRequest struct {
 // a TV client can set the PIN on first sign-in, but changing or removing an
 // existing PIN requires the current PIN.
 func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req UpdateUserPinRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -161,15 +160,14 @@ type VerifyUserPinRequest struct {
 // an expected domain outcome, so both match and mismatch return 200 with
 // data.valid — 401 stays reserved for missing/revoked credentials.
 func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req VerifyUserPinRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

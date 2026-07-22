@@ -137,7 +137,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	var req updateGeneralSettingsRequest
 	err := helpers.ReadJSON(w, r, &req, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -252,7 +252,7 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 	var req updateLibrarySettingsRequest
 	err := helpers.ReadJSON(w, r, &req, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

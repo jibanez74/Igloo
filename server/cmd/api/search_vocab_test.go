@@ -103,7 +103,7 @@ func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
 	ctx := context.Background()
 
 	movieID := createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-	corrections, err := app.vocabCorrections(ctx, "movies_fts_vocab", "license")
+	corrections, err := testVocabCorrections(app, ctx, "movies_fts_vocab", "license")
 	if err != nil {
 		t.Fatalf("initial vocabCorrections failed: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update movie title: %v", err)
 	}
-	corrections, err = app.vocabCorrections(ctx, "movies_fts_vocab", "arival")
+	corrections, err = testVocabCorrections(app, ctx, "movies_fts_vocab", "arival")
 	if err != nil {
 		t.Fatalf("updated vocabCorrections failed: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete movie: %v", err)
 	}
-	corrections, err = app.vocabCorrections(ctx, "movies_fts_vocab", "arival")
+	corrections, err = testVocabCorrections(app, ctx, "movies_fts_vocab", "arival")
 	if err != nil {
 		t.Fatalf("deleted vocabCorrections failed: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
 	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
-	corrections, err := app.vocabCorrections(ctx, "tracks_search_fts_vocab", "adelle")
+	corrections, err := testVocabCorrections(app, ctx, "tracks_search_fts_vocab", "adelle")
 	if err != nil {
 		t.Fatalf("initial track vocabCorrections failed: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename musician: %v", err)
 	}
-	corrections, err = app.vocabCorrections(ctx, "tracks_search_fts_vocab", "siia")
+	corrections, err = testVocabCorrections(app, ctx, "tracks_search_fts_vocab", "siia")
 	if err != nil {
 		t.Fatalf("renamed track vocabCorrections failed: %v", err)
 	}

@@ -76,21 +76,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		Reload:          params.Reload,
 	})
 
-	session.ExitMu.Lock()
-	finalPlaylist := session.FinalPlaylist
-	session.ExitMu.Unlock()
-
-	var playlist string
-	if finalPlaylist != "" {
-		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix)
-	} else {
-		playlist = generateVODPlaylist(
-			sessionPlaylistDurationSec(session),
-			baseURL,
-			querySuffix,
-			session.CopyVideo,
-		)
-	}
+	playlist := buildHLSPlaylistBody(session, sessionPlaylistDurationSec(session), baseURL, querySuffix)
 
 	refreshed := app.RefreshHLSSessionTTL(key, session)
 	if !refreshed {
@@ -150,6 +136,22 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	serveReadyHLSSegment(w, r, session, filename)
+}
+
+func buildHLSPlaylistBody(session *HLSSession, durationSec float64, baseURL, querySuffix string) string {
+	session.ExitMu.Lock()
+	finalPlaylist := session.FinalPlaylist
+	session.ExitMu.Unlock()
+
+	if finalPlaylist != "" {
+		return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix)
+	}
+
+	return generateVODPlaylist(durationSec, baseURL, querySuffix, session.CopyVideo)
+}
+
+func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSession, filename string) {
 	filePath := filepath.Join(session.TempDir, filename)
 
 	deadline := time.Now().Add(hlsSegmentWait)
@@ -203,7 +205,8 @@ func validateHLSFilename(filename string) error {
 		return nil
 	}
 
-	if _, err := parseSegmentIndex(filename); err != nil {
+	_, err := parseSegmentIndex(filename)
+	if err != nil {
 		return err
 	}
 
@@ -289,7 +292,8 @@ func parseHLSParams(w http.ResponseWriter, r *http.Request) (hlsRequestParams, b
 	}
 	params.StartSec = startSec
 
-	if q := strings.TrimSpace(query.Get("audio_track")); q != "" {
+	q := strings.TrimSpace(query.Get("audio_track"))
+	if q != "" {
 		audioTrack, err := strconv.Atoi(q)
 		if err != nil || audioTrack < 0 {
 			helpers.ErrorJSON(w, errors.New("invalid audio_track"), http.StatusBadRequest)

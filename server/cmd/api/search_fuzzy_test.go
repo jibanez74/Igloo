@@ -6,6 +6,22 @@ import (
 	"testing"
 )
 
+func testVocabCorrections(app *Application, ctx context.Context, vocabTable, token string) ([]string, error) {
+	tokenLen := len([]rune(token))
+	maxDist := searchTypoMaxDist(tokenLen)
+	if maxDist == 0 {
+		return nil, nil
+	}
+
+	index, err := app.searchVocabIndex(ctx, vocabTable)
+	if err != nil {
+		return nil, err
+	}
+
+	corrections, _ := index.corrections(token, maxDist, searchVocabMaxVisited)
+	return corrections, nil
+}
+
 func TestSearchTokens(t *testing.T) {
 	tests := []struct {
 		name string
@@ -102,7 +118,7 @@ func TestVocabCorrections(t *testing.T) {
 
 	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
 
-	corrections, err := app.vocabCorrections(context.Background(), "movies_fts_vocab", "license")
+	corrections, err := testVocabCorrections(app, context.Background(), "movies_fts_vocab", "license")
 	if err != nil {
 		t.Fatalf("vocabCorrections failed: %v", err)
 	}
@@ -110,7 +126,7 @@ func TestVocabCorrections(t *testing.T) {
 		t.Fatalf("expected licence correction, got %#v", corrections)
 	}
 
-	corrections, err = app.vocabCorrections(context.Background(), "movies_fts_vocab", "to")
+	corrections, err = testVocabCorrections(app, context.Background(), "movies_fts_vocab", "to")
 	if err != nil {
 		t.Fatalf("vocabCorrections short token failed: %v", err)
 	}

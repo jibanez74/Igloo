@@ -31,13 +31,33 @@ SELECT
     INNER JOIN tracks AS t
       ON pt.track_id = t.id
     WHERE pt.playlist_id = p.id
-  ) AS total_duration
+  ) AS total_duration,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = sqlc.arg(requesting_user_id)
+  ) AS is_owner,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = sqlc.arg(requesting_user_id)
+      OR EXISTS (
+        SELECT 1
+        FROM playlist_collaborators AS edit_pc
+        WHERE edit_pc.playlist_id = p.id
+          AND edit_pc.user_id = sqlc.arg(requesting_user_id)
+          AND edit_pc.can_edit = true
+      )
+  ) AS can_edit
 FROM playlists AS p
-LEFT JOIN playlist_collaborators AS pc
-  ON p.id = pc.playlist_id
-WHERE (p.user_id = ? OR pc.user_id = ?)
+WHERE (
+    p.user_id = sqlc.arg(requesting_user_id)
+    OR EXISTS (
+      SELECT 1
+      FROM playlist_collaborators AS access_pc
+      WHERE access_pc.playlist_id = p.id
+        AND access_pc.user_id = sqlc.arg(requesting_user_id)
+    )
+  )
   AND p.content_type = 'track'
-GROUP BY p.id
 ORDER BY p.updated_at DESC;
 
 -- name: UpdatePlaylist :one
@@ -106,11 +126,31 @@ SELECT
     SELECT COUNT(*)
     FROM playlist_movies AS pm
     WHERE pm.playlist_id = p.id
-  ) AS movie_count
+  ) AS movie_count,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = sqlc.arg(requesting_user_id)
+  ) AS is_owner,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = sqlc.arg(requesting_user_id)
+      OR EXISTS (
+        SELECT 1
+        FROM playlist_collaborators AS edit_pc
+        WHERE edit_pc.playlist_id = p.id
+          AND edit_pc.user_id = sqlc.arg(requesting_user_id)
+          AND edit_pc.can_edit = true
+      )
+  ) AS can_edit
 FROM playlists AS p
-LEFT JOIN playlist_collaborators AS pc
-  ON p.id = pc.playlist_id
-WHERE (p.user_id = ? OR pc.user_id = ?)
+WHERE (
+    p.user_id = sqlc.arg(requesting_user_id)
+    OR EXISTS (
+      SELECT 1
+      FROM playlist_collaborators AS access_pc
+      WHERE access_pc.playlist_id = p.id
+        AND access_pc.user_id = sqlc.arg(requesting_user_id)
+    )
+  )
   AND p.content_type = 'movie'
-GROUP BY p.id
 ORDER BY p.updated_at DESC;

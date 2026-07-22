@@ -211,6 +211,70 @@ func TestSessionPlaylistDurationSec(t *testing.T) {
 	}
 }
 
+func TestBuildHLSPlaylistBody(t *testing.T) {
+	session := &HLSSession{DurationSec: 12, CopyVideo: false}
+	generated := buildHLSPlaylistBody(session, session.DurationSec, "/api/hls/", "?audio_track=0")
+	if !strings.Contains(generated, "segment_0.m4s?audio_track=0") {
+		t.Fatalf("generated playlist did not include rewritten segment URL: %s", generated)
+	}
+
+	session.FinalPlaylist = "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\nsegment_0.m4s\n"
+	finalized := buildHLSPlaylistBody(session, session.DurationSec, "/api/hls/", "?audio_track=1")
+	if !strings.Contains(finalized, "/api/hls/init.mp4?audio_track=1") {
+		t.Fatalf("final playlist did not rewrite init URL: %s", finalized)
+	}
+	if !strings.Contains(finalized, "/api/hls/segment_0.m4s?audio_track=1") {
+		t.Fatalf("final playlist did not rewrite segment URL: %s", finalized)
+	}
+}
+
+func TestServeReadyHLSSegment(t *testing.T) {
+	t.Run("serves completed segment with shared headers", func(t *testing.T) {
+		tempDir := t.TempDir()
+		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+		nextFilename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "1" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+		err := os.WriteFile(filepath.Join(tempDir, filename), []byte("segment payload"), 0o600)
+		if err != nil {
+			t.Fatalf("write segment: %v", err)
+		}
+		err = os.WriteFile(filepath.Join(tempDir, nextFilename), []byte("next segment"), 0o600)
+		if err != nil {
+			t.Fatalf("write next segment: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		w := httptest.NewRecorder()
+		serveReadyHLSSegment(w, req, &HLSSession{TempDir: tempDir}, filename)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+		}
+		if got := w.Header().Get("Content-Type"); got != hlsSegmentHTTPContentType {
+			t.Fatalf("Content-Type = %q, want %q", got, hlsSegmentHTTPContentType)
+		}
+		if got := w.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("Cache-Control = %q, want no-store", got)
+		}
+		if w.Body.String() != "segment payload" {
+			t.Fatalf("body = %q, want segment payload", w.Body.String())
+		}
+	})
+
+	t.Run("reports exited transcode before waiting", func(t *testing.T) {
+		session := &HLSSession{TempDir: t.TempDir(), Exited: true, ExitErr: fmt.Errorf("ffmpeg failed")}
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		w := httptest.NewRecorder()
+		serveReadyHLSSegment(w, req, session, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500: %s", w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "transcoding stopped") {
+			t.Fatalf("body = %q, want transcode failure", w.Body.String())
+		}
+	})
+}
+
 func TestFileReady(t *testing.T) {
 	dir := t.TempDir()
 
