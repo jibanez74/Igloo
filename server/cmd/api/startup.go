@@ -50,6 +50,9 @@ func (app *Application) InitDB() error {
 		return fmt.Errorf("failed to open database %s: %w", dbPath, err)
 	}
 
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	err = db.Ping()
 	if err != nil {
 		db.Close()

@@ -345,6 +345,11 @@ func TestInitDB(t *testing.T) {
 	if busyTimeout != 5000 {
 		t.Errorf("Expected busy_timeout 5000, got %d", busyTimeout)
 	}
+
+	stats := app.DB.Stats()
+	if stats.MaxOpenConnections != 1 {
+		t.Errorf("Expected max open connections 1, got %d", stats.MaxOpenConnections)
+	}
 }
 
 func TestInitDB_DefaultPath(t *testing.T) {

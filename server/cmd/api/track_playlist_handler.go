@@ -556,6 +556,18 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
+	app.getPlaylistCollaborators(w, r, app.mustBeTrackPlaylist)
+}
+
+func (app *Application) GetMoviePlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
+	app.getPlaylistCollaborators(w, r, app.mustBeMoviePlaylist)
+}
+
+func (app *Application) getPlaylistCollaborators(
+	w http.ResponseWriter,
+	r *http.Request,
+	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
+) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -584,7 +596,7 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	if !mustBePlaylistType(w, playlist) {
 		return
 	}
 
@@ -606,6 +618,18 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
+	app.addCollaborator(w, r, app.mustBeTrackPlaylist)
+}
+
+func (app *Application) AddMoviePlaylistCollaborator(w http.ResponseWriter, r *http.Request) {
+	app.addCollaborator(w, r, app.mustBeMoviePlaylist)
+}
+
+func (app *Application) addCollaborator(
+	w http.ResponseWriter,
+	r *http.Request,
+	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
+) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -634,7 +658,7 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	if !mustBePlaylistType(w, playlist) {
 		return
 	}
 
@@ -686,6 +710,18 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Request) {
+	app.removeCollaborator(w, r, app.mustBeTrackPlaylist)
+}
+
+func (app *Application) RemoveMoviePlaylistCollaborator(w http.ResponseWriter, r *http.Request) {
+	app.removeCollaborator(w, r, app.mustBeMoviePlaylist)
+}
+
+func (app *Application) removeCollaborator(
+	w http.ResponseWriter,
+	r *http.Request,
+	mustBePlaylistType func(http.ResponseWriter, database.Playlist) bool,
+) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -721,7 +757,7 @@ func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if !app.mustBeTrackPlaylist(w, playlist) {
+	if !mustBePlaylistType(w, playlist) {
 		return
 	}
 

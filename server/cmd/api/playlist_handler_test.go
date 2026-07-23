@@ -257,6 +257,9 @@ func playlistTestHandler(app *Application) http.Handler {
 		r.Get("/{id}/movies", app.GetMoviePlaylistMovies)
 		r.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)
 		r.Delete("/{id}/movies/{movieId}", app.RemoveMovieFromMoviePlaylist)
+		r.Get("/{id}/collaborators", app.GetMoviePlaylistCollaborators)
+		r.Post("/{id}/collaborators", app.AddMoviePlaylistCollaborator)
+		r.Delete("/{id}/collaborators/{userId}", app.RemoveMoviePlaylistCollaborator)
 	})
 
 	return app.SessionManager.LoadAndSave(router)
@@ -522,5 +525,124 @@ func TestPlaylistEditorsCanMutateContentButViewersCannot(t *testing.T) {
 	w = performPlaylistRequest(t, app, handler, fixtures.editor.ID, http.MethodDelete, moviePath+"/"+strconv.FormatInt(fixtures.movieID, 10), "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("editor remove movie status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	handler := playlistTestHandler(app)
+	fixtures := createPlaylistFixtures(t, app)
+
+	moviePlaylistID := strconv.FormatInt(fixtures.moviePlaylist.ID, 10)
+	collaboratorsPath := "/api/movies/playlists/" + moviePlaylistID + "/collaborators"
+	outsiderID := strconv.FormatInt(fixtures.outsider.ID, 10)
+
+	w := performPlaylistRequest(
+		t,
+		app,
+		handler,
+		fixtures.owner.ID,
+		http.MethodPost,
+		collaboratorsPath,
+		`{"user_id":`+outsiderID+`,"can_edit":true}`,
+	)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("owner add collaborator status = %d, want 201: %s", w.Code, w.Body.String())
+	}
+
+	w = performPlaylistRequest(t, app, handler, fixtures.owner.ID, http.MethodGet, collaboratorsPath, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("owner list collaborators status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	var listResponse struct {
+		Data struct {
+			Collaborators []database.GetPlaylistCollaboratorsRow `json:"collaborators"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &listResponse)
+	if err != nil {
+		t.Fatalf("decode collaborators response: %v", err)
+	}
+
+	foundOutsider := false
+	for _, collaborator := range listResponse.Data.Collaborators {
+		if collaborator.UserID == fixtures.outsider.ID {
+			foundOutsider = true
+			if !collaborator.CanEdit {
+				t.Fatal("new movie playlist collaborator should have edit access")
+			}
+		}
+	}
+	if !foundOutsider {
+		t.Fatalf("owner collaborator list does not include user %d", fixtures.outsider.ID)
+	}
+
+	moviesPath := "/api/movies/playlists/" + moviePlaylistID + "/movies"
+	w = performPlaylistRequest(
+		t,
+		app,
+		handler,
+		fixtures.outsider.ID,
+		http.MethodPost,
+		moviesPath,
+		`{"movie_ids":[`+strconv.FormatInt(fixtures.movieID, 10)+`]}`,
+	)
+	if w.Code != http.StatusOK {
+		t.Fatalf("editor add movie status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
+		path := collaboratorsPath
+		body := ""
+		if method == http.MethodPost {
+			body = `{"user_id":` + strconv.FormatInt(fixtures.outsider.ID, 10) + `,"can_edit":false}`
+		}
+		if method == http.MethodDelete {
+			path += "/" + outsiderID
+		}
+
+		w = performPlaylistRequest(t, app, handler, fixtures.viewer.ID, method, path, body)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("viewer %s collaborators status = %d, want 403: %s", method, w.Code, w.Body.String())
+		}
+	}
+
+	trackCollaboratorsPath := "/api/movies/playlists/" +
+		strconv.FormatInt(fixtures.trackPlaylist.ID, 10) +
+		"/collaborators"
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
+		path := trackCollaboratorsPath
+		body := ""
+		if method == http.MethodPost {
+			body = `{"user_id":` + outsiderID + `,"can_edit":true}`
+		}
+		if method == http.MethodDelete {
+			path += "/" + outsiderID
+		}
+
+		w = performPlaylistRequest(t, app, handler, fixtures.owner.ID, method, path, body)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("movie route %s track playlist status = %d, want 400: %s", method, w.Code, w.Body.String())
+		}
+	}
+
+	w = performPlaylistRequest(
+		t,
+		app,
+		handler,
+		fixtures.owner.ID,
+		http.MethodDelete,
+		collaboratorsPath+"/"+outsiderID,
+		"",
+	)
+	if w.Code != http.StatusOK {
+		t.Fatalf("owner remove collaborator status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	w = performPlaylistRequest(t, app, handler, fixtures.outsider.ID, http.MethodGet, moviesPath, "")
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("removed collaborator movie access status = %d, want 403: %s", w.Code, w.Body.String())
 	}
 }

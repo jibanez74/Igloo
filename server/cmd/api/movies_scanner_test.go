@@ -247,7 +247,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	}
 }
 
-func TestMovieScannerUpsertOverwritesManualMetadata(t *testing.T) {
+func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -263,6 +263,10 @@ func TestMovieScannerUpsertOverwritesManualMetadata(t *testing.T) {
 		MimeType:  "video/x-matroska",
 		Adult:     false,
 		Overview:  helpers.NullString("Original overview"),
+		AudienceRating: sql.NullFloat64{
+			Float64: 8.7,
+			Valid:   true,
+		},
 	})
 	if err != nil {
 		t.Fatalf("initial upsert: %v", err)
@@ -290,6 +294,9 @@ func TestMovieScannerUpsertOverwritesManualMetadata(t *testing.T) {
 	}
 	if updated.Size != 200 {
 		t.Fatalf("expected scanner-owned size to update to 200, got %d", updated.Size)
+	}
+	if !updated.AudienceRating.Valid || updated.AudienceRating.Float64 != 8.7 {
+		t.Fatalf("expected audience rating to remain 8.7, got %+v", updated.AudienceRating)
 	}
 }
 
