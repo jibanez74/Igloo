@@ -172,7 +172,7 @@ func InitApp() (initializedApp *Application, err error) {
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
 	app.ScanMoviesLibrary()
-	app.MusicScanLibrary()
+	app.ScanMusicLibrary()
 
 	app.InitRouter()
 
