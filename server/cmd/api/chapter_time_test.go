@@ -12,20 +12,28 @@ type capturedLogEntry struct {
 	args []any
 }
 
-type capturedLogger struct {
-	debugEntries []capturedLogEntry
-}
-
-func (l *capturedLogger) Debug(msg string, args ...any) {
+func newCapturedLogEntry(msg string, args []any) capturedLogEntry {
 	entry := capturedLogEntry{
 		msg:  msg,
 		args: make([]any, len(args)),
 	}
 	copy(entry.args, args)
-	l.debugEntries = append(l.debugEntries, entry)
+
+	return entry
 }
 
-func (l *capturedLogger) Info(_ string, _ ...any) {}
+type capturedLogger struct {
+	debugEntries []capturedLogEntry
+	infoEntries  []capturedLogEntry
+}
+
+func (l *capturedLogger) Debug(msg string, args ...any) {
+	l.debugEntries = append(l.debugEntries, newCapturedLogEntry(msg, args))
+}
+
+func (l *capturedLogger) Info(msg string, args ...any) {
+	l.infoEntries = append(l.infoEntries, newCapturedLogEntry(msg, args))
+}
 
 func (l *capturedLogger) Warn(_ string, _ ...any) {}
 

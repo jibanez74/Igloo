@@ -12,11 +12,6 @@ import (
 	"strings"
 )
 
-var (
-	movieScanGuard helpers.ScanGuard
-	musicScanGuard helpers.ScanGuard
-)
-
 type generalSettingsResponse struct {
 	TmdbKey             *string `json:"tmdb_key"`
 	ImmichBaseURL       *string `json:"immich_base_url"`

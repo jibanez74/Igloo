@@ -85,27 +85,27 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
+	if err = processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
 		app.Logger.Error("failed to process production companies", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update production companies"))
 		return
 	}
-	if err = app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
+	if err = processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
 		app.Logger.Error("failed to process cast", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update cast"))
 		return
 	}
-	if err = app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
+	if err = processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
 		app.Logger.Error("failed to process crew", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update crew"))
 		return
 	}
-	if err = app.processMovieGenres(ctx, qtx, nil, movie.ID, tmdbMovie.Genres); err != nil {
+	if err = processMovieGenres(ctx, qtx, nil, movie.ID, tmdbMovie.Genres); err != nil {
 		app.Logger.Error("failed to process genres", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update genres"))
 		return
 	}
-	if err = app.processExtraVideos(ctx, qtx, movie.ID, tmdbMovie.Videos.Results); err != nil {
+	if err = processExtraVideos(ctx, qtx, movie.ID, tmdbMovie.Videos.Results); err != nil {
 		app.Logger.Error("failed to process extra videos", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update extra videos"))
 		return
