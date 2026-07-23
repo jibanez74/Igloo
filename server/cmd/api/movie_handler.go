@@ -301,9 +301,8 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 }
 
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -438,9 +437,8 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 }
 
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 

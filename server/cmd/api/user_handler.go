@@ -65,15 +65,14 @@ type UpdateUserNameRequest struct {
 }
 
 func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req UpdateUserNameRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -112,15 +111,14 @@ type UpdateUserEmailRequest struct {
 }
 
 func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req UpdateUserEmailRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -166,15 +164,14 @@ type UpdateUserPasswordRequest struct {
 }
 
 func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req UpdateUserPasswordRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -243,15 +240,14 @@ type UpdateUserAvatarRequest struct {
 }
 
 func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req UpdateUserAvatarRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -302,9 +298,8 @@ var allowedAvatarMimeTypes = map[string]string{
 const maxAvatarSize = 20 << 20
 
 func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -430,9 +425,8 @@ func (app *Application) deleteAvatarFile(avatarURL string) {
 }
 
 func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
-	userID := app.userIDFromRequest(r)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 

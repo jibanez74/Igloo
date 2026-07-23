@@ -155,3 +155,61 @@ func TestClampFloat64_NaNPropagates(t *testing.T) {
 		t.Error("expected NaN when max is NaN")
 	}
 }
+
+func TestParseBitRate(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int64
+	}{
+		{
+			name:     "valid bitrate",
+			input:    "5000000",
+			expected: 5000000,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: 0,
+		},
+		{
+			name:     "invalid format",
+			input:    "invalid",
+			expected: 0,
+		},
+		{
+			name:     "zero",
+			input:    "0",
+			expected: 0,
+		},
+		{
+			name:     "very large number",
+			input:    "999999999999",
+			expected: 999999999999,
+		},
+		{
+			name:     "negative number",
+			input:    "-1000",
+			expected: -1000,
+		},
+		{
+			name:     "bitrate with decimal",
+			input:    "5000.5",
+			expected: 0,
+		},
+		{
+			name:     "bitrate with spaces",
+			input:    " 5000000 ",
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseBitRate(tt.input)
+			if result != tt.expected {
+				t.Errorf("ParseBitRate(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

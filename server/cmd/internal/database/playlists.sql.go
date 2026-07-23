@@ -140,20 +140,35 @@ SELECT
     SELECT COUNT(*)
     FROM playlist_movies AS pm
     WHERE pm.playlist_id = p.id
-  ) AS movie_count
+  ) AS movie_count,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = ?1
+  ) AS is_owner,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = ?1
+      OR EXISTS (
+        SELECT 1
+        FROM playlist_collaborators AS edit_pc
+        WHERE edit_pc.playlist_id = p.id
+          AND edit_pc.user_id = ?1
+          AND edit_pc.can_edit = true
+      )
+  ) AS can_edit
 FROM playlists AS p
-LEFT JOIN playlist_collaborators AS pc
-  ON p.id = pc.playlist_id
-WHERE (p.user_id = ? OR pc.user_id = ?)
+WHERE (
+    p.user_id = ?1
+    OR EXISTS (
+      SELECT 1
+      FROM playlist_collaborators AS access_pc
+      WHERE access_pc.playlist_id = p.id
+        AND access_pc.user_id = ?1
+    )
+  )
   AND p.content_type = 'movie'
-GROUP BY p.id
 ORDER BY p.updated_at DESC
 `
-
-type GetMoviePlaylistsWithCollaboratorAccessParams struct {
-	UserID   int64 `json:"user_id"`
-	UserID_2 int64 `json:"user_id_2"`
-}
 
 type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 	ID          int64          `json:"id"`
@@ -168,10 +183,12 @@ type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
 	MovieCount  int64          `json:"movie_count"`
+	IsOwner     bool           `json:"is_owner"`
+	CanEdit     bool           `json:"can_edit"`
 }
 
-func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, arg GetMoviePlaylistsWithCollaboratorAccessParams) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
-	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, arg.UserID, arg.UserID_2)
+func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
+	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +209,8 @@ func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, a
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.MovieCount,
+			&i.IsOwner,
+			&i.CanEdit,
 		); err != nil {
 			return nil, err
 		}
@@ -246,20 +265,35 @@ SELECT
     INNER JOIN tracks AS t
       ON pt.track_id = t.id
     WHERE pt.playlist_id = p.id
-  ) AS total_duration
+  ) AS total_duration,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = ?1
+  ) AS is_owner,
+  EXISTS (
+    SELECT 1
+    WHERE p.user_id = ?1
+      OR EXISTS (
+        SELECT 1
+        FROM playlist_collaborators AS edit_pc
+        WHERE edit_pc.playlist_id = p.id
+          AND edit_pc.user_id = ?1
+          AND edit_pc.can_edit = true
+      )
+  ) AS can_edit
 FROM playlists AS p
-LEFT JOIN playlist_collaborators AS pc
-  ON p.id = pc.playlist_id
-WHERE (p.user_id = ? OR pc.user_id = ?)
+WHERE (
+    p.user_id = ?1
+    OR EXISTS (
+      SELECT 1
+      FROM playlist_collaborators AS access_pc
+      WHERE access_pc.playlist_id = p.id
+        AND access_pc.user_id = ?1
+    )
+  )
   AND p.content_type = 'track'
-GROUP BY p.id
 ORDER BY p.updated_at DESC
 `
-
-type GetPlaylistsWithCollaboratorAccessParams struct {
-	UserID   int64 `json:"user_id"`
-	UserID_2 int64 `json:"user_id_2"`
-}
 
 type GetPlaylistsWithCollaboratorAccessRow struct {
 	ID            int64          `json:"id"`
@@ -275,10 +309,12 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 	UpdatedAt     string         `json:"updated_at"`
 	TrackCount    int64          `json:"track_count"`
 	TotalDuration interface{}    `json:"total_duration"`
+	IsOwner       bool           `json:"is_owner"`
+	CanEdit       bool           `json:"can_edit"`
 }
 
-func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, arg GetPlaylistsWithCollaboratorAccessParams) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
-	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, arg.UserID, arg.UserID_2)
+func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
+	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -300,6 +336,8 @@ func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, arg Ge
 			&i.UpdatedAt,
 			&i.TrackCount,
 			&i.TotalDuration,
+			&i.IsOwner,
+			&i.CanEdit,
 		); err != nil {
 			return nil, err
 		}

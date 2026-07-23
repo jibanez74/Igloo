@@ -1766,7 +1766,6 @@ SET
   tag_line = excluded.tag_line,
   certification = excluded.certification,
   critic_rating = excluded.critic_rating,
-  audience_rating = excluded.audience_rating,
   revenue = excluded.revenue,
   budget = excluded.budget,
   run_time = excluded.run_time,

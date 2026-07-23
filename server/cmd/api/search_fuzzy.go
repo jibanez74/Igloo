@@ -147,24 +147,6 @@ func damerauLevenshtein(a, b string, maxDist int) int {
 	return prev[lb]
 }
 
-// vocabCorrections is the single-token entry point used by focused tests. Full
-// search resolution loads the category index once and reuses it for all tokens.
-func (app *Application) vocabCorrections(ctx context.Context, vocabTable, token string) ([]string, error) {
-	tokenLen := len([]rune(token))
-	maxDist := searchTypoMaxDist(tokenLen)
-	if maxDist == 0 {
-		return nil, nil
-	}
-
-	index, err := app.searchVocabIndex(ctx, vocabTable)
-	if err != nil {
-		return nil, err
-	}
-
-	corrections, _ := index.corrections(token, maxDist, searchVocabMaxVisited)
-	return corrections, nil
-}
-
 // resolveSearchMatch runs the staged resolution described at the top of this
 // file and returns the winning MATCH expression together with its result
 // count. ok is false when the query has no usable tokens.

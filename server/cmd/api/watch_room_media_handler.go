@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"igloo/cmd/internal/helpers"
 
@@ -36,16 +35,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	audioTrack := int(room.AudioTrack)
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &audioTrack})
 
-	session.ExitMu.Lock()
-	finalPlaylist := session.FinalPlaylist
-	session.ExitMu.Unlock()
-
-	var playlist string
-	if finalPlaylist != "" {
-		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix)
-	} else {
-		playlist = generateVODPlaylist(session.DurationSec, baseURL, querySuffix, session.CopyVideo)
-	}
+	playlist := buildHLSPlaylistBody(session, session.DurationSec, baseURL, querySuffix)
 
 	w.Header().Set("Content-Type", hlsPlaylistContentType)
 	w.Header().Set("Cache-Control", "no-store")
@@ -64,7 +54,8 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
 		return
 	}
-	if err := validateHLSFilename(filename); err != nil {
+	filenameErr := validateHLSFilename(filename)
+	if filenameErr != nil {
 		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
 		return
 	}
@@ -81,35 +72,7 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	filePath := filepath.Join(session.TempDir, filename)
-
-	deadline := time.Now().Add(hlsSegmentWait)
-	for time.Now().Before(deadline) {
-		if segmentComplete(session, filename) {
-			w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
-			w.Header().Set("Cache-Control", "no-store")
-			http.ServeFile(w, r, filePath)
-			return
-		}
-
-		session.ExitMu.Lock()
-		exited := session.Exited
-		exitErr := session.ExitErr
-		session.ExitMu.Unlock()
-
-		if exited && !fileReady(filePath) {
-			if exitErr != nil {
-				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
-			} else {
-				helpers.ErrorJSON(w, errors.New("segment does not exist"), http.StatusNotFound)
-			}
-			return
-		}
-
-		time.Sleep(hlsSegmentPoll)
-	}
-
-	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
+	serveReadyHLSSegment(w, r, session, filename)
 }
 
 func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Request) {

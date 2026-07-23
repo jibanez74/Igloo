@@ -164,7 +164,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	var rawFields map[string]json.RawMessage
 	err := helpers.ReadJSON(w, r, &rawFields, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -188,7 +188,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	if raw, ok := rawFields["preferred_profile"]; ok {
 		var val *string
 		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
 		preferred = sql.NullString{}
@@ -208,7 +208,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	if raw, ok := rawFields["download_mbps"]; ok {
 		var val *float64
 		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
 		download = sql.NullFloat64{}
@@ -225,7 +225,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	if raw, ok := rawFields["preferred_audio_language"]; ok {
 		var val *string
 		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
 		audioLang = sql.NullString{}
@@ -245,7 +245,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	if raw, ok := rawFields["preferred_subtitle_language"]; ok {
 		var val *string
 		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
 		subtitleLang = sql.NullString{}
@@ -268,7 +268,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 
 		var val *float64
 		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
 		if val != nil {
@@ -287,7 +287,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 
 		var val string
 		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
 		val = strings.TrimSpace(val)

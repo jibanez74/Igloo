@@ -35,7 +35,7 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 
 	err := helpers.ReadJSON(w, r, &request, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -83,7 +83,7 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 
 	err := helpers.ReadJSON(w, r, &request, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (app *Application) LookupQuickConnect(w http.ResponseWriter, r *http.Reques
 
 	err := helpers.ReadJSON(w, r, &request, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -182,7 +182,7 @@ func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Reque
 
 	err := helpers.ReadJSON(w, r, &request, 0)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 

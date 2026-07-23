@@ -12,6 +12,9 @@ import (
 )
 
 const (
+	defaultAdminName  = "Admin"
+	defaultAdminEmail = "admin@sample.com"
+
 	defaultAppPort      = 8080
 	defaultDBPath       = "db/igloo.db"
 	defaultStaticDir    = "static"
