@@ -1,4 +1,4 @@
-import { createLazyFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Play } from "lucide-react";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
@@ -33,7 +33,7 @@ import type {
 } from "@/types";
 import type { NullableString } from "@/types";
 
-export const Route = createLazyFileRoute("/_auth/movies/in-theaters/$id")({
+export const Route = createFileRoute("/_auth/movies/in-theaters/$id")({
   component: MovieDetailsPage,
 });
 

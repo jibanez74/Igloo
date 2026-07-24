@@ -378,7 +378,7 @@ async function mockMusicIndexApi(
     }
 
     if (url.pathname === "/api/music/tracks/liked-ids") {
-      await fulfillJSON(route, apiResponse({ liked_track_ids: [2] }));
+      await fulfillJSON(route, apiResponse({ liked_track_ids: [2, 40, 41] }));
       return;
     }
 

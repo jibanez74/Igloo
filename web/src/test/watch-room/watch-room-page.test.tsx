@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { WatchRoomPage as WatchRoomPageContent } from "@/components/watch-room/WatchRoomPage";
-import { Route as WatchRoomRoute } from "@/routes/_auth/watch-rooms/$id.lazy";
+import { Route as WatchRoomRoute } from "@/routes/_auth/watch-rooms/$id";
 import {
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   WATCH_ROOM_SEEK_STEP_SEC,
@@ -142,7 +142,7 @@ vi.mock("@tanstack/react-router", async () => {
 
   return {
     ...actual,
-    createLazyFileRoute:
+    createFileRoute:
       () =>
       (options: { component: unknown }) => ({
         ...options,
@@ -366,11 +366,16 @@ describe("WatchRoomPageContent", () => {
     expect(FakeWebSocket.instances[0].sentMessages).toEqual([]);
   });
 
-  it("shows the unavailable state for invalid parsed route ids", () => {
+  it("shows the unavailable state for invalid parsed route ids", async () => {
     routeParamId = null;
     const RouteComponent = (
-      WatchRoomRoute as unknown as { component: ComponentType }
+      WatchRoomRoute as unknown as {
+        component: ComponentType & { preload?: () => Promise<void> };
+      }
     ).component;
+    // autoCodeSplitting wraps the component in a lazy loader; resolve it before
+    // rendering outside a router.
+    await RouteComponent.preload?.();
 
     renderWithQueryClient(<RouteComponent />);
 

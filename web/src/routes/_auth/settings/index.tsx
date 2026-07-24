@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -45,7 +45,7 @@ import type {
   UpdateGeneralSettingsRequest,
 } from "@/types";
 
-export const Route = createLazyFileRoute("/_auth/settings/")({
+export const Route = createFileRoute("/_auth/settings/")({
   component: GeneralSettings,
 });
 

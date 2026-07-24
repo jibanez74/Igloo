@@ -103,7 +103,7 @@ export default defineConfig([
   },
 
   {
-    files: ["src/lib/input-styles.ts", "src/routes/login.lazy.tsx"],
+    files: ["src/lib/input-styles.ts", "src/routes/login.tsx"],
     rules: { "no-restricted-syntax": "off" },
   },
 

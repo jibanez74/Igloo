@@ -245,7 +245,14 @@ describe("settings route tab transitions", () => {
 
     // Warm the lazy route chunk so navigation renders without a cold dynamic
     // import racing the waitFor timeout on slow CI runners.
-    await import("@/routes/_auth/settings/account.lazy");
+    const { Route: accountRoute } = await import(
+      "@/routes/_auth/settings/account"
+    );
+    await (
+      accountRoute.options.component as
+        | undefined
+        | { preload?: () => Promise<void> }
+    )?.preload?.();
 
     await user.click(screen.getByRole("tab", { name: "Account" }));
 

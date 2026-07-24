@@ -1,4 +1,4 @@
-import { createLazyFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -43,7 +43,7 @@ import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
 
-export const Route = createLazyFileRoute("/_auth/settings/users")({
+export const Route = createFileRoute("/_auth/settings/users")({
   component: UsersSettings,
 });
 
