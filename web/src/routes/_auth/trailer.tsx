@@ -81,10 +81,11 @@ function TrailerPage() {
 
   const shouldFetchMovie =
     mediaType === "movie" && mediaId != null && mediaId > 0 && !videoKey;
-  const { data } = useQuery({
+  const movieQuery = useQuery({
     ...movieDetailsQueryOpts(mediaId ?? 0),
     enabled: shouldFetchMovie,
   });
+  const data = movieQuery.data;
 
   const media = data?.data?.movie;
   const trailerFromApi = media?.videos?.results?.find(
@@ -101,15 +102,9 @@ function TrailerPage() {
   };
 
   const handleClose = () => {
-    if (returnTo) {
-      try {
-        router.navigate({ to: returnTo });
-      } catch {
-        navigate({ to: returnTo });
-      }
-    } else {
-      navigate({ to: "/" });
-    }
+    void router.navigate({ to: returnTo ?? "/" }).catch(() => {
+      void navigate({ to: "/" });
+    });
 
     focusMainAfterNavigation();
   };
@@ -187,11 +182,36 @@ function TrailerPage() {
       return;
     }
 
+    // Text entry always owns the keyboard.
     if (
-      target.closest(
-        'button, a[href], input, textarea, select, [role="slider"]',
-      ) ||
-      target.isContentEditable
+      target.isContentEditable ||
+      target.closest('textarea, select, input:not([type="range"])')
+    ) {
+      return;
+    }
+
+    // Interactive controls keep the keys they consume natively; every other
+    // key still works as a playback shortcut while dialog chrome is focused.
+    const sliderKeys = [
+      "ArrowLeft",
+      "ArrowRight",
+      "ArrowUp",
+      "ArrowDown",
+      "Home",
+      "End",
+      "PageUp",
+      "PageDown",
+    ];
+    if (
+      target.closest('input[type="range"], [role="slider"]') &&
+      sliderKeys.includes(e.key)
+    ) {
+      return;
+    }
+
+    if (
+      target.closest("button, a[href]") &&
+      (e.key === " " || e.key === "Enter")
     ) {
       return;
     }
@@ -240,7 +260,7 @@ function TrailerPage() {
       case "Home":
       case "0":
         e.preventDefault();
-        seekBackward(currentTime);
+        seekTo(0);
         break;
     }
   });
@@ -329,7 +349,89 @@ function TrailerPage() {
     );
   }
 
-  if (!trailerKey && data) {
+  if (!trailerKey && shouldFetchMovie && movieQuery.isPending) {
+    return (
+      <Dialog open onOpenChange={handleDialogOpenChange}>
+        <DialogFullscreenContent
+          ref={containerRef}
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
+          )}
+          onOpenAutoFocus={handleDialogOpenAutoFocus}
+          onEscapeKeyDown={handleDialogEscapeKeyDown}
+        >
+          <DialogTitle className="sr-only">Loading trailer</DialogTitle>
+          <DialogDescription className="sr-only">
+            Please wait while the trailer loads.
+          </DialogDescription>
+
+          <div className="text-center">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-primary/10">
+              <Spinner className="size-10 text-primary" />
+            </div>
+            <p className="text-lg font-medium text-foreground">Loading trailer...</p>
+            <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
+          </div>
+        </DialogFullscreenContent>
+      </Dialog>
+    );
+  }
+
+  if (!trailerKey && (movieQuery.isError || data?.error)) {
+    return (
+      <Dialog open onOpenChange={handleDialogOpenChange}>
+        <DialogFullscreenContent
+          ref={containerRef}
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
+          )}
+          onOpenAutoFocus={handleDialogOpenAutoFocus}
+          onEscapeKeyDown={handleDialogEscapeKeyDown}
+        >
+          <div className="max-w-md px-4 text-center">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
+              <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
+            </div>
+            <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
+              Unable to Load Trailer
+            </DialogTitle>
+            <DialogDescription className="mb-6 text-muted-foreground">
+              {data?.message || "Something went wrong while loading the trailer."}
+            </DialogDescription>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                ref={closeButtonRef}
+                onClick={() => void movieQuery.refetch()}
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
+                )}
+              >
+                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                Try Again
+              </button>
+              <button
+                type="button"
+                onClick={handleClose}
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
+                )}
+              >
+                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                Go Back
+              </button>
+            </div>
+          </div>
+        </DialogFullscreenContent>
+      </Dialog>
+    );
+  }
+
+  if (!trailerKey) {
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -369,36 +471,8 @@ function TrailerPage() {
     );
   }
 
-  if (!trailerKey && !data) {
-    return (
-      <Dialog open onOpenChange={handleDialogOpenChange}>
-        <DialogFullscreenContent
-          ref={containerRef}
-          className={cn(
-            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
-          )}
-          onOpenAutoFocus={handleDialogOpenAutoFocus}
-          onEscapeKeyDown={handleDialogEscapeKeyDown}
-        >
-          <DialogTitle className="sr-only">Loading trailer</DialogTitle>
-          <DialogDescription className="sr-only">
-            Please wait while the trailer loads.
-          </DialogDescription>
-
-          <div className="text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-primary/10">
-              <Spinner className="size-10 text-primary" />
-            </div>
-            <p className="text-lg font-medium text-foreground">Loading trailer...</p>
-            <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
-          </div>
-        </DialogFullscreenContent>
-      </Dialog>
-    );
-  }
-
   const isLoading = trailerKey && !isReady;
+  const isEffectivelyMuted = isMuted || volume === 0;
 
   return (
     <Dialog open onOpenChange={handleDialogOpenChange}>
@@ -557,9 +631,10 @@ function TrailerPage() {
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                 )}
-                aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
+                aria-label={isEffectivelyMuted ? "Unmute (M)" : "Mute (M)"}
+                aria-pressed={isEffectivelyMuted}
               >
-                {isMuted || volume === 0 ? (
+                {isEffectivelyMuted ? (
                   <VolumeX className="size-5" aria-hidden="true" />
                 ) : volume < 50 ? (
                   <Volume1 className="size-5" aria-hidden="true" />

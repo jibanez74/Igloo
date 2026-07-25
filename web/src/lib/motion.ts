@@ -6,3 +6,11 @@ export function getPrefersReducedMotion(): boolean {
 
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
+
+/** Scrolls the window to the top, instant when the user prefers reduced motion. */
+export function scrollWindowToTop(): void {
+  window.scrollTo({
+    top: 0,
+    behavior: getPrefersReducedMotion() ? "auto" : "smooth",
+  });
+}

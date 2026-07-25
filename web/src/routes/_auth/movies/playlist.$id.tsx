@@ -16,6 +16,7 @@ import {
   MOVIES_PLAYLISTS_TAB_SEARCH,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { scrollWindowToTop } from "@/lib/motion";
 import { unwrapString } from "@/lib/nullable";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
@@ -186,7 +187,7 @@ function MoviePlaylistPage() {
               totalPages={totalPages}
               onPageChange={(p) => {
                 setPage(p);
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                scrollWindowToTop();
               }}
             />
           )}

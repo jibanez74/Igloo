@@ -81,10 +81,20 @@ function LoginPage() {
         return;
       }
 
-      showSuccess("Welcome back!", res.message || "Login successful");
-
       queryClient.removeQueries();
-      await queryClient.fetchQuery(authUserQueryOpts({ revalidate: true }));
+      const authRes = await queryClient.fetchQuery(
+        authUserQueryOpts({ revalidate: true }),
+      );
+      if (authRes.error) {
+        showError(
+          "Login failed",
+          authRes.message || "Unable to establish the authenticated session",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      showSuccess("Welcome back!", res.message || "Login successful");
 
       await navigate({
         to: redirectTo,

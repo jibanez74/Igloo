@@ -39,6 +39,7 @@ import {
   TRACK_LIST_CONTAINER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { scrollWindowToTop } from "@/lib/motion";
 import type {
   ApiResponseType,
   MoviesLibraryListItemType,
@@ -528,7 +529,7 @@ function CategoryResultsTab<T>({
       search: (prev: SearchParams) => ({ ...prev, page: newPage }),
       replace: true,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   return (

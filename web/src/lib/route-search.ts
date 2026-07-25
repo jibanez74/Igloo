@@ -13,7 +13,12 @@ export const trailerSearchSchema = z.object({
   mediaType: z.optional(z.enum(["movie", "tv"])),
   mediaId: z.optional(z.coerce.number().check(z.int(), z.positive())),
   videoKey: z.optional(z.string()),
-  returnTo: z.optional(z.string()),
+  returnTo: z.optional(
+    z.pipe(
+      z.string(),
+      z.transform((url: string) => getSafeRedirect(url, "/")),
+    ),
+  ),
 });
 
 export const searchSearchSchema = z.object({
