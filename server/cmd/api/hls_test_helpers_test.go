@@ -19,9 +19,10 @@ type fakeFFmpegRunPlan struct {
 }
 
 type fakeFFmpeg struct {
-	mu    sync.Mutex
-	plans []fakeFFmpegRunPlan
-	calls []ffmpeg.HLSParams
+	mu            sync.Mutex
+	plans         []fakeFFmpegRunPlan
+	calls         []ffmpeg.HLSParams
+	subtitleCalls int
 }
 
 func (f *fakeFFmpeg) RunHLS(
@@ -66,7 +67,16 @@ func (f *fakeFFmpeg) RunHLS(
 }
 
 func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int64) ([]byte, error) {
+	f.mu.Lock()
+	f.subtitleCalls++
+	f.mu.Unlock()
 	return []byte("WEBVTT\n"), nil
+}
+
+func (f *fakeFFmpeg) SubtitleCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.subtitleCalls
 }
 
 func (f *fakeFFmpeg) Capabilities() ffmpeg.Capabilities {
@@ -86,6 +96,25 @@ func (f *fakeFFmpeg) Calls() []ffmpeg.HLSParams {
 	out := make([]ffmpeg.HLSParams, len(f.calls))
 	copy(out, f.calls)
 	return out
+}
+
+// createTestHLSSession mirrors the production call sequence: load and
+// normalize via loadHLSMovieForSession, then create the session.
+func createTestHLSSession(
+	app *Application,
+	ctx context.Context,
+	movieID int64,
+	profile string,
+	audioTrack *int,
+	playbackSession string,
+	startSec int,
+	isRoom bool,
+) (*HLSSession, error) {
+	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
+	if err != nil {
+		return nil, err
+	}
+	return app.createHLSSession(ctx, &movie, profile, audioTrack, playbackSession, effectiveStartSec, isRoom)
 }
 
 type testFMP4Fixture = fmp4testutil.Fixture

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -341,6 +342,36 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		}
 		app.Logger.Error("failed to verify movie for watch room", "error", err, "movie_id", req.MovieID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+
+	// audio_track is an ordinal into the movie's audio streams, so it has to be
+	// validated against the movie. Without this the room is created and members
+	// invited before playback fails on the first manifest request.
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(r.Context(), req.MovieID)
+	if err != nil {
+		app.Logger.Error("failed to load audio streams for watch room", "error", err, "movie_id", req.MovieID)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+
+	movieHasAudio := len(audioStreams) > 0
+	if !movieHasAudio && req.AudioTrack != 0 {
+		helpers.ErrorJSON(w, errors.New("audio_track is not valid for a movie without audio"), http.StatusBadRequest)
+		return
+	}
+
+	audioTrackOutOfRange := movieHasAudio && req.AudioTrack >= int64(len(audioStreams))
+	if audioTrackOutOfRange {
+		helpers.ErrorJSON(w, fmt.Errorf("audio track %d out of range (0-%d)", req.AudioTrack, len(audioStreams)-1), http.StatusBadRequest)
+		return
+	}
+
+	// Direct playback serves the raw container, so every member hears its first
+	// audio track no matter what the room stores.
+	directWithNonFirstAudio := req.Mode == watchRoomPlaybackModeDirect && req.AudioTrack != 0
+	if directWithNonFirstAudio {
+		helpers.ErrorJSON(w, errors.New("direct playback always uses the first audio track; choose another playback mode to pick a different one"), http.StatusBadRequest)
 		return
 	}
 

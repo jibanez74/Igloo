@@ -120,6 +120,8 @@ Igloo supports a special HLS profile named `remux`. Remux mode copies the video 
 
 Remux exists because it preserves source video quality and avoids expensive video encoding when the source video is browser-compatible. It is much cheaper than transcoding and is the best path for compatible H.264 sources.
 
+Remux is also reached without the user selecting it. Because direct play cannot select an audio track, choosing any track other than the container's first one resolves the playback mode to `remux` (see Audio Handling). Users who pick a non-default soundtrack on an otherwise direct-playable file therefore land on remux rather than direct play.
+
 Remux is only attempted for browser-compatible H.264 codec names:
 
 - `h264`
@@ -216,6 +218,14 @@ Otherwise, Igloo converts audio to stereo AAC at `320k`:
 ```
 
 AAC is the safest baseline for browser HLS playback. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
+
+### Audio Track Selection and Direct Play
+
+The `audio_track` request parameter is an ordinal into the movie's audio streams ordered by `stream_index`, which is the same order the client's audio picker renders. It is not the ffprobe stream index. Igloo resolves the ordinal to the stored absolute index at session creation and uses that for `-map`.
+
+Direct play has no equivalent mechanism. It serves the original file with range requests and no FFmpeg process, so the browser always decodes the container's first audio track and any other selection would be silently ignored. Igloo therefore treats the audio choice as authoritative: selecting any track other than the first resolves the playback mode from `direct` to `remux`, which copies the video stream and maps the requested audio track. Selecting the first track keeps direct play.
+
+The web client enforces this in `resolvePlaybackSettings`, so the rule applies to saved settings, user language preferences, and deep links alike. Direct play is only ever paired with the first audio track.
 
 ## Hardware Acceleration
 
@@ -357,6 +367,8 @@ Watch room HLS uses the same FFmpeg session machinery with room-specific cache k
 room:<room_id>
 ```
 
+A room stores its audio track when it is created, so the value is validated up front rather than at first playback. Room creation rejects an `audio_track` beyond the movie's audio stream count, a non-zero `audio_track` on a movie without audio, and a non-zero `audio_track` combined with direct playback, which would serve the container's first track to every member regardless of the stored value.
+
 Room sessions are isolated from personal playback sessions so a watch room cannot collide with a user's individual HLS session for the same movie. Watch rooms warm up HLS from the beginning so participants can join a prepared stream. When a room is deleted, Igloo marks the room session deleted, removes the cached session, kills the FFmpeg process if it is still running, and removes the temp directory.
 
 ## Subtitle Conversion
@@ -419,7 +431,7 @@ For failures:
 When changing FFmpeg or ffprobe behavior:
 
 - Check the embedded payload version with `ffmpeg -version` and `ffprobe -version` after refreshing binaries. Prefer the current stable Jellyfin FFmpeg release line for release payloads; do not switch to a generic upstream FFmpeg build or Jellyfin prerelease branch without a specific reason.
-- Keep argument construction covered by tests in `server/cmd/internal/ffmpeg/ffmpeg_hls_test.go`.
+- Keep argument construction covered by the tests in `server/cmd/internal/ffmpeg/` (`ffmpeg_hls_args_test.go`, `ffmpeg_hls_args_additional_test.go`, `ffmpeg_hls_hardware_args_test.go`, `ffmpeg_hls_run_test.go`).
 - Keep remux validation covered by `remux_validator` tests when changing fMP4 safety behavior.
 - Keep HLS handler and playlist tests updated when changing playlist shape, filenames, query parameters, readiness rules, or resume behavior.
 - Update `docs/openapi.json` when adding or changing HLS, subtitle, or playback settings endpoints.

@@ -58,8 +58,6 @@ type HLSSession struct {
 	ExpectedStop     bool
 	FinalPlaylist    string
 	ExitMu           sync.Mutex
-	RequestedProfile string
-	EffectiveProfile string
 	IsRoom           bool
 	CopyVideo        bool // true when FFmpeg uses -c:v copy for the effective session profile
 }
@@ -558,6 +556,8 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	if params.SelectedAudio != nil {
 		audioCodec = strings.ToLower(params.SelectedAudio.Codec)
 		copyAudio = audioCodec == "aac"
+		// ffmpeg's -map 0:N addresses the container's global stream numbering,
+		// so hand it the absolute ffprobe index rather than the ordinal.
 		audioStreamIndex = int(params.SelectedAudio.StreamIndex)
 	}
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
@@ -593,16 +593,14 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
-		MovieID:          params.Movie.ID,
-		PlaybackSession:  params.PlaybackSession,
-		TempDir:          tempDir,
-		Cancel:           cancel,
-		DurationSec:      params.DurationSec,
-		StartSec:         startSec,
-		RequestedProfile: params.RequestedProfile,
-		EffectiveProfile: params.EffectiveProfile,
-		IsRoom:           params.IsRoom,
-		CopyVideo:        copyVideo,
+		MovieID:         params.Movie.ID,
+		PlaybackSession: params.PlaybackSession,
+		TempDir:         tempDir,
+		Cancel:          cancel,
+		DurationSec:     params.DurationSec,
+		StartSec:        startSec,
+		IsRoom:          params.IsRoom,
+		CopyVideo:       copyVideo,
 	}
 
 	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
@@ -714,25 +712,9 @@ func (app *Application) GetOrCreateHLSSession(
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
 	requestedKey := HLSSessionKey(movieID, profile, audioTrack, playbackSession, startSec)
-	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
 	if err != nil {
-		return nil, requestedKey, fmt.Errorf("movie not found: %w", err)
-	}
-	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
-		return nil, requestedKey, fmt.Errorf("movie %d has no valid duration in the database", movieID)
-	}
-	if startSec < 0 {
-		return nil, requestedKey, fmt.Errorf("start %d is outside movie duration %.3f", startSec, movie.Duration.Float64)
-	}
-
-	effectiveStartSec := normalizedHLSStartSec(startSec, movie.Duration.Float64)
-	if effectiveStartSec != startSec {
-		app.Logger.Warn("hls start clamped to duration tail",
-			"movie_id", movieID,
-			"requested_start", startSec,
-			"clamped_start", effectiveStartSec,
-			"duration", movie.Duration.Float64,
-		)
+		return nil, requestedKey, err
 	}
 	key := HLSSessionKey(movieID, profile, audioTrack, playbackSession, effectiveStartSec)
 
@@ -777,7 +759,7 @@ func (app *Application) GetOrCreateHLSSession(
 
 		session, createErr := app.createHLSSession(
 			ctx,
-			movieID,
+			&movie,
 			profile,
 			audioTrack,
 			playbackSession,
@@ -793,7 +775,7 @@ func (app *Application) GetOrCreateHLSSession(
 			if errors.As(createErr, &capErr) && app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
 				session, createErr = app.createHLSSession(
 					ctx,
-					movieID,
+					&movie,
 					profile,
 					audioTrack,
 					playbackSession,
@@ -868,8 +850,13 @@ func (app *Application) GetOrCreateRoomHLSSession(
 			return nil, fmt.Errorf("watch room %d was deleted", roomID)
 		}
 
+		movie, _, loadErr := app.loadHLSMovieForSession(ctx, movieID, 0)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+
 		audioTrackCopy := audioTrack
-		session, createErr := app.createHLSSession(ctx, movieID, profile, &audioTrackCopy, "", 0, true)
+		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, "", 0, true)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -904,42 +891,53 @@ func (app *Application) CleanupRoomHLSSession(roomID int64) {
 	app.RoomHLSMu.Unlock()
 }
 
+// loadHLSMovieForSession loads the movie, validates that it has a usable
+// duration, and normalizes the requested start into the duration tail.
+func (app *Application) loadHLSMovieForSession(
+	ctx context.Context,
+	movieID int64,
+	startSec int,
+) (database.Movie, int, error) {
+	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		return database.Movie{}, 0, fmt.Errorf("movie not found: %w", err)
+	}
+	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
+		return database.Movie{}, 0, fmt.Errorf("movie %d has no valid duration in the database", movieID)
+	}
+	if startSec < 0 {
+		return database.Movie{}, 0, fmt.Errorf("start %d is outside movie duration %.3f", startSec, movie.Duration.Float64)
+	}
+
+	effectiveStartSec := normalizedHLSStartSec(startSec, movie.Duration.Float64)
+	if effectiveStartSec != startSec {
+		app.Logger.Warn("hls start clamped to duration tail",
+			"movie_id", movieID,
+			"requested_start", startSec,
+			"clamped_start", effectiveStartSec,
+			"duration", movie.Duration.Float64,
+		)
+	}
+	return movie, effectiveStartSec, nil
+}
+
 // createHLSSession loads stream metadata from the database, creates a temp dir,
-// and starts FFmpeg. No runtime ffprobe call is made.
+// and starts FFmpeg. No runtime ffprobe call is made. The movie must come from
+// loadHLSMovieForSession, and startSec must already be normalized by it.
 //
 // FFmpeg runs on context.Background() so the process outlives the originating
 // HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
 func (app *Application) createHLSSession(
 	ctx context.Context,
-	movieID int64,
+	movie *database.Movie,
 	profile string,
 	audioTrack *int,
 	playbackSession string,
 	startSec int,
 	isRoom bool,
 ) (*HLSSession, error) {
-	movie, err := app.Queries.GetMovieByID(ctx, movieID)
-	if err != nil {
-		return nil, fmt.Errorf("movie not found: %w", err)
-	}
-
-	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
-		return nil, fmt.Errorf("movie %d has no valid duration in the database", movieID)
-	}
+	movieID := movie.ID
 	durationSec := movie.Duration.Float64
-	if startSec < 0 {
-		return nil, fmt.Errorf("start %d is outside movie duration %.3f", startSec, durationSec)
-	}
-	effectiveStartSec := normalizedHLSStartSec(startSec, durationSec)
-	if effectiveStartSec != startSec {
-		app.Logger.Warn("hls start clamped to duration tail",
-			"movie_id", movieID,
-			"requested_start", startSec,
-			"clamped_start", effectiveStartSec,
-			"duration", durationSec,
-		)
-		startSec = effectiveStartSec
-	}
 
 	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movieID)
 	if err != nil {
@@ -965,6 +963,8 @@ func (app *Application) createHLSSession(
 		if *audioTrack < 0 || *audioTrack >= len(audioStreams) {
 			return nil, fmt.Errorf("audio track %d out of range (0-%d)", *audioTrack, len(audioStreams)-1)
 		}
+		// audioTrack is an ordinal into the stream_index-ordered audio rows, the
+		// same ordering the client's audio picker renders, not an ffprobe index.
 		selectedAudio = &audioStreams[*audioTrack]
 	}
 
@@ -972,7 +972,7 @@ func (app *Application) createHLSSession(
 	requestedProfile := profile
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
-	safetyCacheKey := remuxSafetyFingerprint(&movie, &primaryVideo)
+	safetyCacheKey := remuxSafetyFingerprint(movie, &primaryVideo)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
@@ -1017,7 +1017,7 @@ func (app *Application) createHLSSession(
 	}
 
 	hlsParams := hlsSessionStartParams{
-		Movie:            &movie,
+		Movie:            movie,
 		PrimaryVideo:     &primaryVideo,
 		SelectedAudio:    selectedAudio,
 		RequestedProfile: requestedProfile,

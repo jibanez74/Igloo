@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import PlaybackSettingsDialog from "@/components/movies/PlaybackSettingsDialog";
 import {
+  AUDIO_TRACK_MODE_NOTE,
+  AUDIO_TRACK_MODE_NOTE_ID,
   MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOVIE_TECHNICAL_DETAILS_KEY,
+  PLAYBACK_SETTINGS_SUMMARY_LOADING,
 } from "@/lib/constants";
 import type {
   ApiResponseType,
@@ -13,6 +16,15 @@ import type {
   SubtitleType,
   VideoStreamType,
 } from "@/types";
+
+const prefersCoarse = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-coarse-pointer", () => ({
+  usePrefersCoarsePointer: () => prefersCoarse.value,
+}));
+
+afterEach(() => {
+  prefersCoarse.value = false;
+});
 
 function nullableString(value = "") {
   return {
@@ -160,5 +172,230 @@ describe("PlaybackSettingsDialog", () => {
     expect(screen.getByLabelText("Subtitles")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+  });
+
+  it("saves the selected mode, audio track, and subtitle as one draft", () => {
+    prefersCoarse.value = true;
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      [MOVIE_TECHNICAL_DETAILS_KEY, 22],
+      technicalDetails(),
+    );
+    const onSave = vi.fn();
+    const onOpenChange = vi.fn();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={onOpenChange}
+          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+          onSave={onSave}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Playback"), {
+      target: { value: "720p_3mbps" },
+    });
+    fireEvent.change(screen.getByLabelText("Audio Track"), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitles"), {
+      target: { value: "0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      mode: "720p_3mbps",
+      audioTrack: 1,
+      subtitleTrack: 0,
+    });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("disables image-based subtitle options", () => {
+    prefersCoarse.value = true;
+    const queryClient = createQueryClient();
+    const details = technicalDetails();
+    details.data!.subtitles.push({
+      ...subtitleStream(),
+      id: 2,
+      stream_index: 4,
+      codec: "hdmv_pgs_subtitle",
+      title: nullableString("Signs"),
+    });
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={vi.fn()}
+          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+          onSave={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const bitmapOption = screen.getByRole("option", {
+      name: /\(image-based\)/,
+    });
+    expect(bitmapOption).toBeDisabled();
+
+    const textOption = screen.getByRole("option", { name: /SDH/ });
+    expect(textOption).not.toBeDisabled();
+  });
+
+  it("offers no modes and disables saving while technical details load", () => {
+    prefersCoarse.value = true;
+    const queryClient = createQueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={vi.fn()}
+          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+          onSave={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const modeSelect = screen.getByLabelText("Playback");
+    expect(modeSelect).toBeDisabled();
+    expect(
+      screen.queryByRole("option", { name: /Original file/ }),
+    ).toBeNull();
+
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+    expect(
+      screen.getAllByText(PLAYBACK_SETTINGS_SUMMARY_LOADING).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("only offers modes the source supports once technical details arrive", () => {
+    prefersCoarse.value = true;
+    const queryClient = createQueryClient();
+    const details = technicalDetails();
+    details.data!.movie.mime_type = "video/x-matroska";
+    details.data!.movie.container = "mkv";
+    details.data!.video_streams[0].codec = "hevc";
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={vi.fn()}
+          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+          onSave={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.queryByRole("option", { name: /Original file/ }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("option", { name: /Original video/ }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("option", { name: /1080p — best quality/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /720p — lower bandwidth/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("switches direct play to remux when a non-first audio track is picked", () => {
+    prefersCoarse.value = true;
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      [MOVIE_TECHNICAL_DETAILS_KEY, 22],
+      technicalDetails(),
+    );
+    const onSave = vi.fn();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={vi.fn()}
+          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+          onSave={onSave}
+        />
+      </QueryClientProvider>,
+    );
+
+    const modeSelect = screen.getByLabelText("Playback");
+    const audioSelect = screen.getByLabelText("Audio Track");
+    expect(modeSelect).toHaveValue("direct");
+    expect(screen.queryByText(AUDIO_TRACK_MODE_NOTE)).toBeNull();
+    expect(audioSelect).not.toHaveAttribute("aria-describedby");
+
+    fireEvent.change(audioSelect, { target: { value: "1" } });
+
+    expect(modeSelect).toHaveValue("remux");
+    expect(screen.getByText(AUDIO_TRACK_MODE_NOTE)).toBeInTheDocument();
+    expect(audioSelect).toHaveAttribute(
+      "aria-describedby",
+      AUDIO_TRACK_MODE_NOTE_ID,
+    );
+    expect(modeSelect).toHaveAttribute(
+      "aria-describedby",
+      AUDIO_TRACK_MODE_NOTE_ID,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onSave).toHaveBeenCalledWith({
+      mode: "remux",
+      audioTrack: 1,
+      subtitleTrack: null,
+    });
+  });
+
+  it("snaps the audio track back to the first stream when direct play is chosen", () => {
+    prefersCoarse.value = true;
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      [MOVIE_TECHNICAL_DETAILS_KEY, 22],
+      technicalDetails(),
+    );
+    const onSave = vi.fn();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={vi.fn()}
+          settings={{ mode: "remux", audioTrack: 1, subtitleTrack: null }}
+          onSave={onSave}
+        />
+      </QueryClientProvider>,
+    );
+
+    const modeSelect = screen.getByLabelText("Playback");
+    const audioSelect = screen.getByLabelText("Audio Track");
+    expect(screen.getByText(AUDIO_TRACK_MODE_NOTE)).toBeInTheDocument();
+
+    fireEvent.change(modeSelect, { target: { value: "direct" } });
+
+    expect(audioSelect).toHaveValue("0");
+    expect(screen.queryByText(AUDIO_TRACK_MODE_NOTE)).toBeNull();
+    expect(modeSelect).not.toHaveAttribute("aria-describedby");
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onSave).toHaveBeenCalledWith({
+      mode: "direct",
+      audioTrack: 0,
+      subtitleTrack: null,
+    });
   });
 });

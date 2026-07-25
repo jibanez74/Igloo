@@ -255,6 +255,10 @@ export const SUBTITLE_OFF_VALUE = "off";
 export const AUDIO_TRACK_SELECT_DEFAULT_VALUE = "0";
 export const AUDIO_TRACK_DEFAULT_LABEL = "Default";
 export const SUBTITLES_NONE_LABEL = "None";
+/** Explains why choosing a non-first audio track switches away from direct play. */
+export const AUDIO_TRACK_MODE_NOTE_ID = "audio-track-mode-note";
+export const AUDIO_TRACK_MODE_NOTE =
+  "Direct play always uses the first audio track, so playback switched to “Original video, adjusted audio.” The picture is untouched.";
 /**
  * Radix Select content uses `data-slot="select-content"` in components/ui/select.tsx.
  * Used to avoid closing a dialog when interacting with a portaled select.

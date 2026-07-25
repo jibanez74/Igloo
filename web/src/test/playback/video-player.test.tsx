@@ -111,6 +111,7 @@ function renderPlayer(
     <VideoPlayer
       videoRef={videoRef}
       src="/api/movies/1/stream"
+      isHlsSource={false}
       title="Test Movie"
       onError={vi.fn()}
       {...props}
@@ -152,6 +153,7 @@ describe("VideoPlayer subtitle track", () => {
       <VideoPlayer
         videoRef={createRef<HTMLVideoElement>()}
         src="/api/movies/1/stream"
+        isHlsSource={false}
         title="Test Movie"
         onError={vi.fn()}
         subtitleTrack={{
@@ -180,6 +182,7 @@ describe("VideoPlayer subtitle track", () => {
       <VideoPlayer
         videoRef={createRef<HTMLVideoElement>()}
         src="/api/movies/1/stream"
+        isHlsSource={false}
         title="Test Movie"
         onError={vi.fn()}
         subtitleTrack={null}
@@ -272,7 +275,7 @@ describe("VideoPlayer hls.js error routing", () => {
   async function renderHlsPlayer(
     props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
   ) {
-    renderPlayer({ src: hlsSrc, ...props });
+    renderPlayer({ src: hlsSrc, isHlsSource: true, ...props });
     // The hls.js module loads through a dynamic import; flush it.
     await act(async () => {});
     expect(fakeHlsInstances).toHaveLength(1);

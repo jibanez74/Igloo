@@ -515,6 +515,7 @@ function WatchRoomPlayerPanel({
         <VideoPlayer
           videoRef={videoRef}
           src={streamUrl}
+          isHlsSource={room.playback_mode !== "direct"}
           title={room.movie_title}
           isFullscreen={playerFullscreenMode}
           onError={onError}

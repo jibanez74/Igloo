@@ -19,8 +19,6 @@ const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
 const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
 
-export { STREAM_MODES };
-
 /**
  * True when the browser can play HLS via MSE without hls.js (e.g. Safari).
  * Evaluated once at module load; false in non-browser environments.
@@ -34,9 +32,12 @@ export const supportsNativeHLS = (() => {
   );
 })();
 
+/** The only track direct play can deliver: the container's first audio stream. */
+const DIRECT_PLAY_AUDIO_TRACK = 0;
+
 const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   mode: "direct",
-  audioTrack: 0,
+  audioTrack: DIRECT_PLAY_AUDIO_TRACK,
   subtitleTrack: null,
 };
 
@@ -70,6 +71,13 @@ function isContainerDirectPlayable(mimeType: string): boolean {
  * Available stream modes for the source. Without `videoCodec`, all modes are
  * returned (e.g. before technical details load). With codecs, filters direct /
  * remux / transcode per browser and resolution rules.
+ *
+ * `audioCodec` must be the FIRST audio stream's codec: direct play serves the
+ * raw container, so no other stream can affect direct-play eligibility.
+ *
+ * Invariant relied on by `resolveModeForAudioTrack`: direct requires a playable
+ * video codec, audio codec and container while remux requires only the video
+ * codec, so remux is available whenever direct is.
  */
 export function getAvailableModes(
   sourceHeight: number,
@@ -94,6 +102,31 @@ export function getAvailableModes(
     }
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });
+}
+
+/**
+ * Direct play serves the raw container, so the browser always decodes the
+ * container's first audio track and any other selection would be silently
+ * ignored. Upgrading to remux keeps the video stream copied while letting the
+ * server map the chosen track. Safe unconditionally — see `getAvailableModes`.
+ */
+export function resolveModeForAudioTrack(
+  mode: StreamModeId,
+  audioTrack: number,
+): StreamModeId {
+  if (mode === "direct" && audioTrack !== DIRECT_PLAY_AUDIO_TRACK) {
+    return "remux";
+  }
+  return mode;
+}
+
+/** Counterpart to `resolveModeForAudioTrack` for when the mode is the choice being made. */
+export function resolveAudioTrackForMode(
+  mode: StreamModeId,
+  audioTrack: number,
+): number {
+  if (mode === "direct") return DIRECT_PLAY_AUDIO_TRACK;
+  return audioTrack;
 }
 
 export function normalizeLang(raw: string | undefined): string | undefined {
@@ -154,6 +187,7 @@ export function getDefaultPlaybackSettings(
     if (normalized && subtitleStreams && subtitleStreams.length > 0) {
       const matchIndex = subtitleStreams.findIndex(
         (s) =>
+          !isBitmapSubtitleCodec(s.codec) &&
           normalizeLang(unwrapStringOrUndefined(s.language)) === normalized,
       );
       if (matchIndex >= 0) subtitleTrack = matchIndex;
@@ -161,7 +195,7 @@ export function getDefaultPlaybackSettings(
   }
 
   return {
-    mode,
+    mode: resolveModeForAudioTrack(mode, audioTrack),
     audioTrack,
     subtitleTrack,
   };
@@ -172,8 +206,14 @@ export function resolvePlaybackSettings(
   availableModes: readonly PlaybackModeOption[],
   audioStreams: AudioStreamType[] | undefined,
   subtitleStreams: SubtitleType[] | undefined,
+  userPrefs?: PlaybackSettingsType | null,
 ): PlaybackSettings {
-  const defaults = getDefaultPlaybackSettings(availableModes);
+  const defaults = getDefaultPlaybackSettings(
+    availableModes,
+    userPrefs,
+    audioStreams,
+    subtitleStreams,
+  );
   if (!settings) return defaults;
 
   const resolvedMode = availableModes.some((mode) => mode.id === settings.mode)
@@ -194,12 +234,15 @@ export function resolvePlaybackSettings(
     settings.subtitleTrack !== null &&
     Number.isInteger(settings.subtitleTrack) &&
     settings.subtitleTrack >= 0 &&
-    settings.subtitleTrack < subtitleStreamCount
+    settings.subtitleTrack < subtitleStreamCount &&
+    !isBitmapSubtitleCodec(
+      subtitleStreams?.[settings.subtitleTrack]?.codec ?? "",
+    )
       ? settings.subtitleTrack
       : defaults.subtitleTrack;
 
   return {
-    mode: resolvedMode,
+    mode: resolveModeForAudioTrack(resolvedMode, resolvedAudioTrack),
     audioTrack: resolvedAudioTrack,
     subtitleTrack: resolvedSubtitleTrack,
   };

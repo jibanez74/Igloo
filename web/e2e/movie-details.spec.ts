@@ -1,6 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { MOVIES_PER_PAGE } from "../src/lib/constants";
+import {
+  AUDIO_TRACK_MODE_NOTE,
+  MOVIES_PER_PAGE,
+} from "../src/lib/constants";
 import type { MovieWatchProgressType } from "../src/types";
 
 type NullableString = {
@@ -207,8 +210,40 @@ const technicalDetailsPayload = {
       language: nullableString("en"),
       title: nullableString("English Stereo"),
     },
+    {
+      id: 42,
+      movie_id: movieId,
+      stream_index: 2,
+      codec: "aac",
+      bit_rate: 192000,
+      channels: 2,
+      channel_layout: nullableString("stereo"),
+      language: nullableString("es"),
+      title: nullableString("Spanish Stereo"),
+    },
   ],
-  subtitles: [],
+  subtitles: [
+    {
+      id: 60,
+      movie_id: movieId,
+      stream_index: 2,
+      codec: "subrip",
+      language: nullableString("en"),
+      title: nullableString("English"),
+      is_forced: false,
+      is_default: false,
+    },
+    {
+      id: 61,
+      movie_id: movieId,
+      stream_index: 3,
+      codec: "hdmv_pgs_subtitle",
+      language: nullableString("en"),
+      title: nullableString("English Signs"),
+      is_forced: false,
+      is_default: false,
+    },
+  ],
   chapters: [
     {
       id: 50,
@@ -483,6 +518,143 @@ test("movie details page renders the mocked success path from the movies index",
   expect(extraVideoUrl.pathname).toBe("/trailer");
   expect(extraVideoUrl.searchParams.get("videoKey")).toBe(extraVideoKey);
   expect(extraVideoUrl.searchParams.get("returnTo")).toBe(`/movies/${movieId}`);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("playback settings dialog saves a selection that drives the play link", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockMovieDetailsApi(page);
+
+  await page.goto(`/movies/${movieId}`);
+  await expect(
+    page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
+  ).toBeVisible();
+
+  const moreOptionsButton = page.getByRole("button", { name: "More options" });
+  await moreOptionsButton.click();
+  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Playback Settings" });
+  await expect(dialog).toBeVisible();
+
+  const modeSelect = dialog.getByLabel("Playback");
+  const audioSelect = dialog.getByLabel("Audio Track");
+  const subtitleSelect = dialog.getByLabel("Subtitles");
+  await expect(modeSelect).toBeVisible();
+  await expect(audioSelect).toBeVisible();
+  await expect(subtitleSelect).toBeVisible();
+
+  // The source is 1080p h264/aac in mp4: direct plays by default and no 4K
+  // transcode may be offered.
+  await expect(modeSelect).toContainText("Original file — plays as-is");
+  await modeSelect.click();
+  const modeListbox = page.getByRole("listbox");
+  await expect(modeListbox).toBeVisible();
+  await expect(
+    modeListbox.getByRole("option", { name: /4K — highest quality/ }),
+  ).toHaveCount(0);
+  await modeListbox
+    .getByRole("option", { name: "720p — lower bandwidth" })
+    .click();
+
+  await subtitleSelect.click();
+  const subtitleListbox = page.getByRole("listbox");
+  await expect(
+    subtitleListbox.getByRole("option", {
+      name: "English · English Signs (image-based)",
+    }),
+  ).toBeDisabled();
+  await subtitleListbox
+    .getByRole("option", { name: "English", exact: true })
+    .click();
+
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+  // Closing the dialog must return focus to the menu trigger.
+  await expect(moreOptionsButton).toBeFocused();
+
+  const playLink = page.getByRole("link", { name: "Play" });
+  const playHref = await playLink.getAttribute("href");
+  expect(playHref).not.toBeNull();
+  const playUrl = new URL(playHref ?? "", "http://localhost");
+  expect(playUrl.searchParams.get("mode")).toBe("720p_3mbps");
+  expect(playUrl.searchParams.get("audio_track")).toBe("0");
+  expect(playUrl.searchParams.get("subtitle_track")).toBe("0");
+
+  // Reopening shows the saved selection as the draft.
+  await moreOptionsButton.click();
+  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Playback")).toContainText(
+    "720p — lower bandwidth",
+  );
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("picking a non-first audio track moves direct play to remux", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockMovieDetailsApi(page);
+
+  await page.goto(`/movies/${movieId}`);
+  await expect(
+    page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
+  ).toBeVisible();
+
+  const moreOptionsButton = page.getByRole("button", { name: "More options" });
+  await moreOptionsButton.click();
+  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Playback Settings" });
+  await expect(dialog).toBeVisible();
+
+  const modeSelect = dialog.getByLabel("Playback");
+  const audioSelect = dialog.getByLabel("Audio Track");
+  await expect(modeSelect).toContainText("Original file — plays as-is");
+  await expect(dialog.getByText(AUDIO_TRACK_MODE_NOTE)).toBeHidden();
+
+  // Direct play can only deliver the container's first track, so choosing
+  // Spanish must move the mode to remux rather than silently play English.
+  await audioSelect.click();
+  await page.getByRole("listbox").getByRole("option", { name: "Spanish · Stereo" }).click();
+
+  await expect(modeSelect).toContainText("Original video, adjusted audio");
+  const note = dialog.getByText(AUDIO_TRACK_MODE_NOTE);
+  await expect(note).toBeVisible();
+  const noteId = await note.getAttribute("id");
+  expect(noteId).not.toBeNull();
+  await expect(audioSelect).toHaveAttribute("aria-describedby", noteId ?? "");
+  await expect(modeSelect).toHaveAttribute("aria-describedby", noteId ?? "");
+
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+
+  const playHref = await page.getByRole("link", { name: "Play" }).getAttribute("href");
+  const playUrl = new URL(playHref ?? "", "http://localhost");
+  expect(playUrl.searchParams.get("mode")).toBe("remux");
+  expect(playUrl.searchParams.get("audio_track")).toBe("1");
+
+  // Choosing direct play again snaps the audio track back to the first stream.
+  await moreOptionsButton.click();
+  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Playback").click();
+  await page
+    .getByRole("listbox")
+    .getByRole("option", { name: "Original file — plays as-is" })
+    .click();
+
+  await expect(dialog.getByLabel("Audio Track")).toContainText("English · Stereo");
+  await expect(dialog.getByText(AUDIO_TRACK_MODE_NOTE)).toBeHidden();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

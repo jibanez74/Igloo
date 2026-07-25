@@ -88,4 +88,133 @@ describe("useMoviePlaybackData", () => {
       `7:720p_3mbps:0:${playbackSessionId}:110`,
     );
   });
+
+  it("drops a subtitle_track URL param that points at a bitmap subtitle", () => {
+    const movieId = 8;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
+      error: false,
+      data: {
+        movie: {
+          title: "Bitmap Subs",
+          poster_path: { String: "", Valid: false },
+          duration: nullableFloat64(120),
+        },
+      },
+    });
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
+      error: false,
+      data: {
+        movie: {
+          mime_type: "video/mp4",
+          duration: nullableFloat64(120),
+        },
+        video_streams: [{ codec: "h264", height: 1080 }],
+        audio_streams: [{ codec: "aac" }],
+        subtitles: [
+          {
+            codec: "hdmv_pgs_subtitle",
+            language: { String: "eng", Valid: true },
+            title: { String: "", Valid: false },
+          },
+        ],
+        chapters: [],
+      },
+    });
+    queryClient.setQueryData([MOVIE_WATCH_PROGRESS_KEY, movieId], {
+      error: false,
+      data: null,
+    });
+
+    const onSyncSearch = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 0,
+            subtitle_track: 0,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedSubtitleTrack).toBeNull();
+    expect(result.current.subtitleInfo).toBeNull();
+    expect(onSyncSearch).toHaveBeenCalledWith({
+      mode: "direct",
+      audioTrack: 0,
+      subtitleTrack: null,
+    });
+  });
+
+  it("streams a direct-play deep link through remux when it asks for a non-first audio track", () => {
+    const movieId = 9;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
+      error: false,
+      data: {
+        movie: {
+          title: "Multi Audio",
+          poster_path: { String: "", Valid: false },
+          duration: nullableFloat64(600),
+        },
+      },
+    });
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
+      error: false,
+      data: {
+        movie: {
+          mime_type: "video/mp4",
+          duration: nullableFloat64(600),
+        },
+        video_streams: [{ codec: "h264", height: 1080 }],
+        audio_streams: [{ codec: "aac" }, { codec: "aac" }],
+        subtitles: [],
+        chapters: [],
+      },
+    });
+    queryClient.setQueryData([MOVIE_WATCH_PROGRESS_KEY, movieId], {
+      error: false,
+      data: null,
+    });
+    const onSyncSearch = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 1,
+            subtitle_track: undefined,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedMode).toBe("remux");
+    expect(result.current.resolvedAudioTrack).toBe(1);
+    expect(result.current.streamUrl).toBe(
+      `/api/movies/9/hls/remux/playlist.m3u8?playback_session=${playbackSessionId}&start=0&audio_track=1`,
+    );
+    expect(onSyncSearch).toHaveBeenCalledWith({
+      mode: "remux",
+      audioTrack: 1,
+      subtitleTrack: null,
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -35,7 +35,6 @@ import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection
 import MovieChaptersSection from "@/components/movies/MovieChaptersSection";
 import {
   getAvailableModes,
-  getDefaultPlaybackSettings,
   getPrimaryVideoStream,
   resolvePlaybackSettings
 } from "@/lib/playback";
@@ -169,39 +168,29 @@ function LibraryMovieDetailsContent({
     mimeType ?? undefined,
   );
   const smartDefault: PlaybackSettings = resolvePlaybackSettings(
-    getDefaultPlaybackSettings(
-      availableModes,
-      userPlaybackPrefs,
-      audioStreams,
-      subtitleStreams,
-    ),
+    null,
     availableModes,
     audioStreams,
     subtitleStreams,
-  );
-  const smartMode = smartDefault.mode;
-  const smartAudioTrack = smartDefault.audioTrack;
-  const smartSubtitleTrack = smartDefault.subtitleTrack;
-
-  const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(
-    () => smartDefault,
+    userPlaybackPrefs,
   );
 
-  useLayoutEffect(() => {
-    queueMicrotask(() => {
-      setPlaybackSettings((current) =>
-        current.mode === smartMode &&
-        current.audioTrack === smartAudioTrack &&
-        current.subtitleTrack === smartSubtitleTrack
-          ? current
-          : {
-              mode: smartMode,
-              audioTrack: smartAudioTrack,
-              subtitleTrack: smartSubtitleTrack,
-            },
-      );
-    });
-  }, [smartMode, smartAudioTrack, smartSubtitleTrack]);
+  // Null until the user saves the Playback Settings dialog. Before a save the
+  // play link tracks the smart default as queries load; after a save the
+  // choice is only re-resolved against the current streams, never replaced.
+  const [savedSettings, setSavedSettings] = useState<PlaybackSettings | null>(
+    null,
+  );
+  const playbackSettings =
+    savedSettings === null
+      ? smartDefault
+      : resolvePlaybackSettings(
+          savedSettings,
+          availableModes,
+          audioStreams,
+          subtitleStreams,
+          userPlaybackPrefs,
+        );
 
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;
@@ -289,7 +278,7 @@ function LibraryMovieDetailsContent({
             movieTitle={movie.title}
             user={user}
             playbackSettings={playbackSettings}
-            onPlaybackSettingsChange={setPlaybackSettings}
+            onPlaybackSettingsChange={setSavedSettings}
             playbackSettingsOpen={playbackSettingsOpen}
             onPlaybackSettingsOpenChange={setPlaybackSettingsOpen}
             technicalDetailsOpen={technicalDetailsOpen}

@@ -1445,3 +1445,125 @@ func TestGetUsers_HTTP_SearchTreatsLikeMetacharactersLiterally(t *testing.T) {
 		t.Fatalf("expected Bob_One for underscore search, got %#v", underscoreMatch["name"])
 	}
 }
+
+// insertWatchRoomAudioStreams gives a movie `count` audio streams whose absolute
+// ffprobe indices deliberately start at 1, so an ordinal is never its own index.
+func insertWatchRoomAudioStreams(t *testing.T, app *Application, movieID int64, count int) {
+	t.Helper()
+	ctx := context.Background()
+	languages := []string{"eng", "spa", "fra"}
+
+	for i := 0; i < count; i++ {
+		_, err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+			MovieID:     movieID,
+			StreamIndex: int64(i + 1),
+			Codec:       "aac",
+			BitRate:     192000,
+			Channels:    2,
+			Language:    sql.NullString{String: languages[i%len(languages)], Valid: true},
+		})
+		if err != nil {
+			t.Fatalf("insert audio stream %d: %v", i, err)
+		}
+	}
+}
+
+func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		audioCount int
+		mode       string
+		audioTrack int
+		wantStatus int
+	}{
+		{name: "first track accepted for direct", audioCount: 3, mode: "direct", audioTrack: 0, wantStatus: http.StatusCreated},
+		{name: "out of range rejected", audioCount: 2, mode: "remux", audioTrack: 2, wantStatus: http.StatusBadRequest},
+		{name: "non first track rejected for direct", audioCount: 3, mode: "direct", audioTrack: 1, wantStatus: http.StatusBadRequest},
+		{name: "non zero track rejected without audio", audioCount: 0, mode: "remux", audioTrack: 1, wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupWatchRoomHTTPTestApp(t)
+			defer app.DB.Close()
+
+			ownerID, movieID := createTestUserAndMovie(t, app)
+			insertWatchRoomAudioStreams(t, app, movieID, tt.audioCount)
+			handler := mountWatchRoomRouter(t, app, ownerID)
+
+			body := fmt.Sprintf(`{"movie_id":%d,"mode":%q,"audio_track":%d,"invited_user_ids":[]}`, movieID, tt.mode, tt.audioTrack)
+			req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tt.wantStatus, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// An in-range non-first track on a transcoding mode must survive validation and
+// reach warm-up, which is the combination the settings dialog now produces.
+func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.FFmpeg = &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+
+	owner, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
+		Name:     "Multi Audio Owner",
+		Email:    "multi-audio-owner@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
+	// The fixture already holds one audio stream at index 1; add a second so
+	// ordinal 1 resolves to absolute ffprobe index 2.
+	_, err = app.DB.Exec(`
+		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, movieID, 2, "aac", 192000, 2, "spa")
+	if err != nil {
+		t.Fatalf("insert second audio stream: %v", err)
+	}
+
+	handler := mountWatchRoomRouter(t, app, owner.ID)
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":1,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp helpers.JSONResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
+	room, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("get room: %v", err)
+	}
+	if room.AudioTrack != 1 {
+		t.Fatalf("expected stored audio_track 1, got %d", room.AudioTrack)
+	}
+}

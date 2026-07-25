@@ -8,8 +8,9 @@ import {
   MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC,
   MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
   MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+  STREAM_MODES,
 } from "@/lib/constants";
-import { STREAM_MODES, formatSubtitleLabel, normalizeLang } from "@/lib/playback";
+import { formatSubtitleLabel, normalizeLang } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type {
   MoviePlaybackStatus,
@@ -165,6 +166,8 @@ export function buildMovieStreamUrl(
   reloadKey: number,
   playbackSessionId: string,
 ): string {
+  // Direct play serves the raw container, so there is no track to select;
+  // resolvePlaybackSettings guarantees audioTrack is the first stream here.
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
 
   const params = new URLSearchParams({

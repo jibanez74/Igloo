@@ -284,9 +284,11 @@ describe("CreateWatchRoomDialog", () => {
     await user.click(screen.getByRole("button", { name: "Create and join room" }));
 
     await waitFor(() => {
+      // The room is asked for the second audio track, which direct playback
+      // cannot deliver, so the resolved settings send remux instead.
       expect(createWatchRoomMock).toHaveBeenCalledWith({
         movie_id: 22,
-        mode: "direct",
+        mode: "remux",
         audio_track: 1,
         subtitle_track: 0,
         invited_user_ids: [2],

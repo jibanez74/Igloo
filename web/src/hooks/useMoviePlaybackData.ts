@@ -1,8 +1,7 @@
 import { useEffect, useEffectEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { STREAM_MODES, TMDB_POSTER_SIZE } from "@/lib/constants";
 import {
-  STREAM_MODES,
   getAvailableModes,
   getPrimaryVideoStream,
   resolvePlaybackSettings,
@@ -15,9 +14,11 @@ import {
   hlsStartTimeSec,
 } from "@/lib/movie-playback";
 import {
+  authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
   movieWatchProgressQueryOpts,
+  playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
@@ -70,6 +71,16 @@ export function useMoviePlaybackData({
   const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
     movieWatchProgressQueryOpts(movieId),
   );
+  const { data: userData } = useQuery(authUserQueryOpts());
+  const user = userData?.error === false ? (userData.data?.user ?? null) : null;
+  const { data: playbackSettingsData } = useQuery({
+    ...playbackSettingsQueryOpts(user?.id ?? 0),
+    enabled: user !== null,
+  });
+  const userPlaybackPrefs =
+    playbackSettingsData?.error === false && playbackSettingsData.data?.settings
+      ? playbackSettingsData.data.settings
+      : null;
 
   const techLoaded = !techPending && techData?.data != null;
   const videoStreams = techData?.data?.video_streams ?? [];
@@ -98,6 +109,7 @@ export function useMoviePlaybackData({
           availableModes,
           audioStreams,
           subtitleStreams,
+          userPlaybackPrefs,
         )
       : {
           mode,
@@ -131,7 +143,7 @@ export function useMoviePlaybackData({
     streamReloadKey,
     playbackSessionId,
   );
-  const qualityLabel =
+  const modeLabel =
     STREAM_MODES.find((m) => m.id === resolvedMode)?.label ?? resolvedMode;
   const modeUnavailable =
     availableModes !== null && availableModes.length === 0;
@@ -179,13 +191,12 @@ export function useMoviePlaybackData({
     movie,
     movieIsPending,
     movieNotFound,
-    techData,
     techPending,
     watchProgressData,
     watchProgressPending,
     title,
     posterUrl,
-    qualityLabel,
+    modeLabel,
     chapters,
     modeUnavailable,
     resolvedMode,

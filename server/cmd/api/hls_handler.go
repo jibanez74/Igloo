@@ -130,12 +130,6 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := validateHLSFilename(filename)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
-		return
-	}
-
 	serveReadyHLSSegment(w, r, session, filename)
 }
 
@@ -198,19 +192,6 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 	}
 
 	return 0
-}
-
-func validateHLSFilename(filename string) error {
-	if filename == helpers.HLS_INIT_FILENAME {
-		return nil
-	}
-
-	_, err := parseSegmentIndex(filename)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
@@ -305,11 +286,6 @@ func parseHLSParams(w http.ResponseWriter, r *http.Request) (hlsRequestParams, b
 	return params, true
 }
 
-func parseSegmentIndex(filename string) (int64, error) {
-	rest := strings.TrimSuffix(strings.TrimPrefix(filename, helpers.HLS_SEGMENT_FILENAME_PREFIX), helpers.HLS_SEGMENT_FILENAME_SUFFIX)
-	return strconv.ParseInt(rest, 10, 64)
-}
-
 func fileReady(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -368,6 +344,7 @@ func isAllowedHLSFilename(name string) bool {
 		return false
 	}
 
-	_, err := strconv.ParseUint(n, 10, 64)
+	// bitSize 63 keeps the index representable as a non-negative int64.
+	_, err := strconv.ParseUint(n, 10, 63)
 	return err == nil
 }

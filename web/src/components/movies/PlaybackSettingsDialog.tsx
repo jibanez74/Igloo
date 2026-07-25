@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import {
   AUDIO_TRACK_DEFAULT_LABEL,
+  AUDIO_TRACK_MODE_NOTE,
+  AUDIO_TRACK_MODE_NOTE_ID,
   AUDIO_TRACK_SELECT_DEFAULT_VALUE,
   PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS,
   PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS,
@@ -22,6 +24,8 @@ import {
   getAvailableModes,
   getPrimaryVideoStream,
   isBitmapSubtitleCodec,
+  resolveAudioTrackForMode,
+  resolveModeForAudioTrack,
   resolvePlaybackSettings
 } from "@/lib/playback";
 import type { PlaybackSettings, StreamModeId } from "@/types/playback";
@@ -99,14 +103,39 @@ function PlaybackSettingsDialogForm({
   const [subtitleTrack, setSubtitleTrack] = useState<number | null>(
     normalizedSettings.subtitleTrack,
   );
-  const loadingSelectsDisabled = isPending && !techLoaded;
+  const loadingSelectsDisabled = !techLoaded;
   const modeSelectDisabled = loadingSelectsDisabled || availableModes.length === 0;
   const canSave = mode !== null;
+  const modePlaceholder =
+    isPending && !techLoaded
+      ? PLAYBACK_SETTINGS_SUMMARY_LOADING
+      : NO_PLAYBACK_MODES_LABEL;
 
   const handleSave = () => {
     if (!mode) return;
     onSave({ mode, audioTrack, subtitleTrack });
   };
+
+  // The two selects constrain each other: direct play can only deliver the
+  // container's first audio track, so whichever control the user just touched
+  // wins and the other follows.
+  const handleModeChange = (next: StreamModeId) => {
+    setMode(next);
+    setAudioTrack(resolveAudioTrackForMode(next, audioTrack));
+  };
+
+  const handleAudioTrackChange = (next: number) => {
+    setMode(resolveModeForAudioTrack(mode ?? "direct", next));
+    setAudioTrack(next);
+  };
+
+  const showAudioTrackNote =
+    availableModes.some(m => m.id === "direct") &&
+    mode === "remux" &&
+    audioTrack !== 0;
+  const audioTrackNoteId = showAudioTrackNote
+    ? AUDIO_TRACK_MODE_NOTE_ID
+    : undefined;
 
   const summaryText =
     isPending && !techLoaded
@@ -127,16 +156,17 @@ function PlaybackSettingsDialogForm({
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="video-quality" className="text-foreground">
+          <Label htmlFor="playback-mode" className="text-foreground">
             Playback
           </Label>
           {prefersCoarsePointer ? (
             <select
-              id="video-quality"
+              id="playback-mode"
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={mode ?? ""}
-              onChange={e => setMode(e.target.value as StreamModeId)}
+              onChange={e => handleModeChange(e.target.value as StreamModeId)}
               disabled={modeSelectDisabled}
+              aria-describedby={audioTrackNoteId}
             >
               {availableModes.length > 0 ? (
                 availableModes.map(m => (
@@ -145,20 +175,21 @@ function PlaybackSettingsDialogForm({
                   </option>
                 ))
               ) : (
-                <option value="">{NO_PLAYBACK_MODES_LABEL}</option>
+                <option value="">{modePlaceholder}</option>
               )}
             </select>
           ) : (
             <Select
               value={mode ?? undefined}
-              onValueChange={v => setMode(v as StreamModeId)}
+              onValueChange={v => handleModeChange(v as StreamModeId)}
               disabled={modeSelectDisabled}
             >
               <SelectTrigger
-                id="video-quality"
+                id="playback-mode"
                 className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
+                aria-describedby={audioTrackNoteId}
               >
-                <SelectValue placeholder={NO_PLAYBACK_MODES_LABEL} />
+                <SelectValue placeholder={modePlaceholder} />
               </SelectTrigger>
               <SelectContent
                 container={selectPortalContainer}
@@ -187,8 +218,9 @@ function PlaybackSettingsDialogForm({
               id="audio-track"
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={String(audioTrack)}
-              onChange={e => setAudioTrack(Number(e.target.value))}
+              onChange={e => handleAudioTrackChange(Number(e.target.value))}
               disabled={loadingSelectsDisabled}
+              aria-describedby={audioTrackNoteId}
             >
               {audioStreams.length > 0 ? (
                 audioStreams.map((stream, index) => {
@@ -208,12 +240,13 @@ function PlaybackSettingsDialogForm({
           ) : (
             <Select
               value={String(audioTrack)}
-              onValueChange={v => setAudioTrack(Number(v))}
+              onValueChange={v => handleAudioTrackChange(Number(v))}
               disabled={loadingSelectsDisabled}
             >
               <SelectTrigger
                 id="audio-track"
                 className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
+                aria-describedby={audioTrackNoteId}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -245,6 +278,14 @@ function PlaybackSettingsDialogForm({
               </SelectContent>
             </Select>
           )}
+          {showAudioTrackNote ? (
+            <p
+              id={AUDIO_TRACK_MODE_NOTE_ID}
+              className="text-xs text-muted-foreground"
+            >
+              {AUDIO_TRACK_MODE_NOTE}
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -386,18 +427,17 @@ export default function PlaybackSettingsDialog({
   const videoCodec = primaryVideo?.codec;
   const audioCodec = audioStreams[0]?.codec;
   const mimeType = data?.data?.movie?.mime_type;
-  const availableModes = getAvailableModes(
-    sourceHeight,
-    videoCodec,
-    audioCodec,
-    mimeType,
-  );
+  // Without codec info getAvailableModes offers every mode; hold the list
+  // empty until technical details arrive so impossible modes are never shown.
+  const availableModes = techLoaded
+    ? getAvailableModes(sourceHeight, videoCodec, audioCodec, mimeType)
+    : [];
 
   const selectPortalContainer = prefersCoarsePointer
     ? undefined
     : (dialogSurfaceEl ?? undefined);
 
-  const dialogFormKey = `${movieId}-${formResetKey}`;
+  const dialogFormKey = `${movieId}-${formResetKey}-${techLoaded ? "ready" : "loading"}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

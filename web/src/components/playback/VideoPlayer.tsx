@@ -23,6 +23,8 @@ type SubtitleTrackInfo = {
 type VideoPlayerProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
   src: string;
+  /** True when `src` is an HLS playlist rather than a direct-play file. */
+  isHlsSource: boolean;
   title: string;
   isFullscreen?: boolean;
   onError: (message: string) => void;
@@ -49,6 +51,7 @@ const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
 export default function VideoPlayer({
   videoRef,
   src,
+  isHlsSource,
   title,
   isFullscreen = false,
   onError,
@@ -163,10 +166,7 @@ export default function VideoPlayer({
     const video = videoRef.current;
     if (!video || !src) return;
 
-    if (
-      (src.endsWith(".m3u8") || src.includes(".m3u8?")) &&
-      !supportsNativeHLS
-    ) {
+    if (isHlsSource && !supportsNativeHLS) {
       let cancelled = false;
       let disposeHls: (() => void) | null = null;
 
@@ -250,7 +250,7 @@ export default function VideoPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, startSec, videoRef]);
+  }, [isHlsSource, src, startSec, videoRef]);
 
   useEffect(() => {
     const video = videoRef.current;

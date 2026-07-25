@@ -8796,7 +8796,8 @@
           "audio_track": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Zero-based ordinal into the movie's audio streams. Must be less than the movie's audio stream count, must be 0 for a movie without audio, and must be 0 when `mode` is `direct` because direct playback always serves the container's first audio track."
           },
           "subtitle_track": {
             "type": [

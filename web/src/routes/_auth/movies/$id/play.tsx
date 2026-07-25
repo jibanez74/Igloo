@@ -204,7 +204,7 @@ function PlayMoviePage() {
     watchProgressPending,
     title,
     posterUrl,
-    qualityLabel,
+    modeLabel,
     chapters,
     modeUnavailable,
     resolvedMode,
@@ -579,6 +579,7 @@ function PlayMoviePage() {
     <VideoPlayer
       videoRef={videoRef}
       src={streamUrl}
+      isHlsSource={isHlsPlayback}
       title={title}
       isFullscreen={chromeFullscreenMode}
       onError={(msg) => setPlaybackError(msg)}
@@ -757,7 +758,7 @@ function PlayMoviePage() {
         duration={duration}
         displayedDuration={displayedDuration}
         playing={playing}
-        qualityLabel={qualityLabel}
+        modeLabel={modeLabel}
         chapters={chapters}
         videoRef={videoRef}
         onSeek={seek}
