@@ -210,6 +210,11 @@ async function mockSearchApi(page: Page) {
       return;
     }
 
+    if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
+      await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
+      return;
+    }
+
     const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
     unexpectedApiRequests.push(message);
     await fulfillJSON(route, { error: true, message }, 500);

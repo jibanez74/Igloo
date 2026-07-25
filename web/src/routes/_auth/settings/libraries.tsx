@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -49,7 +49,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
 
-export const Route = createLazyFileRoute("/_auth/settings/libraries")({
+export const Route = createFileRoute("/_auth/settings/libraries")({
   component: LibrariesSettings,
 });
 

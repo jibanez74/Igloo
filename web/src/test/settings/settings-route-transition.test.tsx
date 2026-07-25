@@ -243,9 +243,9 @@ describe("settings route tab transitions", () => {
 
     expect(await screen.findByText("Application Behavior")).toBeInTheDocument();
 
-    // Warm the lazy route chunk so navigation renders without a cold dynamic
+    // Warm the route module so navigation renders without a cold dynamic
     // import racing the waitFor timeout on slow CI runners.
-    await import("@/routes/_auth/settings/account.lazy");
+    await import("@/routes/_auth/settings/account");
 
     await user.click(screen.getByRole("tab", { name: "Account" }));
 

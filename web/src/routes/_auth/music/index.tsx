@@ -68,6 +68,7 @@ import {
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { scrollWindowToTop } from "@/lib/motion";
 
 import AlbumCard from "@/components/music/AlbumCard";
 import MusicianCard from "@/components/music/MusicianCard";
@@ -474,7 +475,7 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
       replace: true,
     });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   if (isLoading) {
@@ -594,7 +595,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
       replace: true,
     });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   if (isLoading) {
@@ -1176,7 +1177,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
       }),
       replace: true,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   const handlePlayTrack = (track: TrackListItemType) => {

@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
@@ -67,7 +67,7 @@ import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCa
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
 
-export const Route = createLazyFileRoute("/_auth/settings/account")({
+export const Route = createFileRoute("/_auth/settings/account")({
   component: AccountSettings,
 });
 

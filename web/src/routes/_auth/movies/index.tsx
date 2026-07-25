@@ -61,6 +61,7 @@ import { isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
+import { scrollWindowToTop } from "@/lib/motion";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import {
@@ -513,7 +514,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
       }),
       replace: true,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   const handleSortToggle = () =>
@@ -749,7 +750,7 @@ function GenresTabContent({
       }),
       replace: true,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   const handleSortToggle = () =>
@@ -1164,7 +1165,7 @@ function LikedMoviesInPlaylistsTab({
       }),
       replace: true,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWindowToTop();
   };
 
   const handleSortToggle = () =>

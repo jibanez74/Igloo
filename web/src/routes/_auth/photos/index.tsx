@@ -1,8 +1,8 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Images } from "lucide-react";
 import ComingSoon from "@/components/shared/ComingSoon";
 
-export const Route = createLazyFileRoute("/_auth/photos/")({
+export const Route = createFileRoute("/_auth/photos/")({
   component: PhotosPage,
 });
 
