@@ -26,7 +26,7 @@ import {
   isBitmapSubtitleCodec,
   resolveAudioTrackForMode,
   resolveModeForAudioTrack,
-  resolvePlaybackSettings
+  resolvePlaybackSettings,
 } from "@/lib/playback";
 import type { PlaybackSettings, StreamModeId } from "@/types/playback";
 import {
@@ -105,6 +105,8 @@ function PlaybackSettingsDialogForm({
   );
   const loadingSelectsDisabled = !techLoaded;
   const modeSelectDisabled = loadingSelectsDisabled || availableModes.length === 0;
+  const audioSelectDisabled =
+    loadingSelectsDisabled || availableModes.length === 0;
   const canSave = mode !== null;
   const modePlaceholder =
     isPending && !techLoaded
@@ -125,7 +127,14 @@ function PlaybackSettingsDialogForm({
   };
 
   const handleAudioTrackChange = (next: number) => {
-    setMode(resolveModeForAudioTrack(mode ?? "direct", next));
+    if (mode === null) return;
+
+    const nextMode = resolveModeForAudioTrack(mode, next);
+    if (!availableModes.some(availableMode => availableMode.id === nextMode)) {
+      return;
+    }
+
+    setMode(nextMode);
     setAudioTrack(next);
   };
 
@@ -219,7 +228,7 @@ function PlaybackSettingsDialogForm({
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={String(audioTrack)}
               onChange={e => handleAudioTrackChange(Number(e.target.value))}
-              disabled={loadingSelectsDisabled}
+              disabled={audioSelectDisabled}
               aria-describedby={audioTrackNoteId}
             >
               {audioStreams.length > 0 ? (
@@ -241,7 +250,7 @@ function PlaybackSettingsDialogForm({
             <Select
               value={String(audioTrack)}
               onValueChange={v => handleAudioTrackChange(Number(v))}
-              disabled={loadingSelectsDisabled}
+              disabled={audioSelectDisabled}
             >
               <SelectTrigger
                 id="audio-track"

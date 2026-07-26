@@ -200,6 +200,7 @@ function PlayMoviePage() {
     movieIsPending,
     movieNotFound,
     techPending,
+    playbackPreferencesReady,
     watchProgressData,
     watchProgressPending,
     title,
@@ -243,6 +244,7 @@ function PlayMoviePage() {
     hasMovie: !!movie,
     requestedMode: mode,
     techPending,
+    playbackPreferencesReady,
     modeUnavailable,
     playbackError,
   });

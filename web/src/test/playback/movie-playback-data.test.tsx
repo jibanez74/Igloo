@@ -10,8 +10,15 @@ import {
   MOVIE_WATCH_PROGRESS_KEY,
   PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
-import { toAbsolutePlaybackTime } from "@/lib/movie-playback";
-import type { AuthUser, PlaybackSettingsType } from "@/types";
+import {
+  deriveMoviePlaybackStatus,
+  toAbsolutePlaybackTime,
+} from "@/lib/movie-playback";
+import type {
+  AuthUser,
+  PlaybackSettingsType,
+  StreamModeId,
+} from "@/types";
 
 const playbackSessionId = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 const authenticatedUserId = 1;
@@ -156,6 +163,22 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+function playbackStatus(
+  data: ReturnType<typeof useMoviePlaybackData>,
+  requestedMode: StreamModeId,
+) {
+  return deriveMoviePlaybackStatus({
+    movieNotFound: data.movieNotFound,
+    movieIsPending: data.movieIsPending,
+    hasMovie: !!data.movie,
+    requestedMode,
+    techPending: data.techPending,
+    playbackPreferencesReady: data.playbackPreferencesReady,
+    modeUnavailable: data.modeUnavailable,
+    playbackError: null,
   });
 }
 
@@ -400,6 +423,11 @@ describe("useMoviePlaybackData", () => {
 
     expect(result.current.resolvedMode).toBe("direct");
     expect(result.current.resolvedAudioTrack).toBe(0);
+    expect(result.current.playbackPreferencesReady).toBe(false);
+    expect(playbackStatus(result.current, "2160p_16mbps")).toEqual({
+      kind: "loading",
+      message: "Preparing playback...",
+    });
     expect(onSyncSearch).not.toHaveBeenCalled();
 
     authRequest.resolve(
@@ -417,6 +445,11 @@ describe("useMoviePlaybackData", () => {
           credentials: "include",
         }),
       );
+    });
+    expect(result.current.playbackPreferencesReady).toBe(false);
+    expect(playbackStatus(result.current, "2160p_16mbps")).toEqual({
+      kind: "loading",
+      message: "Preparing playback...",
     });
     expect(onSyncSearch).not.toHaveBeenCalled();
 
@@ -437,6 +470,10 @@ describe("useMoviePlaybackData", () => {
       expect(result.current.resolvedMode).toBe("720p_3mbps");
       expect(result.current.resolvedAudioTrack).toBe(1);
       expect(result.current.resolvedSubtitleTrack).toBe(1);
+      expect(result.current.playbackPreferencesReady).toBe(true);
+      expect(playbackStatus(result.current, "2160p_16mbps")).toEqual({
+        kind: "ready",
+      });
       expect(onSyncSearch).toHaveBeenCalledTimes(1);
     });
     expect(onSyncSearch).toHaveBeenCalledWith({
@@ -459,7 +496,7 @@ describe("useMoviePlaybackData", () => {
     vi.stubGlobal("fetch", fetchMock);
     const onSyncSearch = vi.fn();
 
-    renderHook(
+    const { result } = renderHook(
       () =>
         useMoviePlaybackData({
           movieId,
@@ -479,6 +516,11 @@ describe("useMoviePlaybackData", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+    expect(result.current.playbackPreferencesReady).toBe(false);
+    expect(playbackStatus(result.current, "2160p_16mbps")).toEqual({
+      kind: "loading",
+      message: "Preparing playback...",
+    });
     expect(onSyncSearch).not.toHaveBeenCalled();
 
     playbackSettingsRequest.resolve(
@@ -492,6 +534,13 @@ describe("useMoviePlaybackData", () => {
     );
 
     await waitFor(() => {
+      expect(result.current.playbackPreferencesReady).toBe(true);
+      expect(result.current.resolvedMode).toBe("direct");
+      expect(result.current.resolvedAudioTrack).toBe(0);
+      expect(result.current.resolvedSubtitleTrack).toBeNull();
+      expect(playbackStatus(result.current, "2160p_16mbps")).toEqual({
+        kind: "ready",
+      });
       expect(onSyncSearch).toHaveBeenCalledTimes(1);
     });
     expect(onSyncSearch).toHaveBeenCalledWith({

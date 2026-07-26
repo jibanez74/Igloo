@@ -312,6 +312,56 @@ describe("PlaybackSettingsDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it.each([
+    ["native", true],
+    ["Radix", false],
+  ])(
+    "keeps %s playback and audio controls disabled when the source has no mode",
+    (_, coarsePointer) => {
+      prefersCoarse.value = coarsePointer;
+      const queryClient = createQueryClient();
+      const details = technicalDetails();
+      details.data!.movie.mime_type = "video/x-matroska";
+      details.data!.movie.container = "mkv";
+      details.data!.video_streams[0].codec = "hevc";
+      details.data!.video_streams[0].height = 480;
+      queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
+      const onSave = vi.fn();
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <PlaybackSettingsDialog
+            movieId={22}
+            open
+            onOpenChange={vi.fn()}
+            settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+            onSave={onSave}
+          />
+        </QueryClientProvider>,
+      );
+
+      const modeSelect = screen.getByLabelText("Playback");
+      const audioSelect = screen.getByLabelText("Audio Track");
+      const doneButton = screen.getByRole("button", { name: "Done" });
+
+      expect(modeSelect).toBeDisabled();
+      expect(audioSelect).toBeDisabled();
+      expect(doneButton).toBeDisabled();
+
+      if (coarsePointer) {
+        fireEvent.change(audioSelect, { target: { value: "1" } });
+      } else {
+        fireEvent.click(audioSelect);
+      }
+      fireEvent.click(doneButton);
+
+      expect(modeSelect).toBeDisabled();
+      expect(audioSelect).toBeDisabled();
+      expect(doneButton).toBeDisabled();
+      expect(onSave).not.toHaveBeenCalled();
+    },
+  );
+
   it("switches direct play to remux when a non-first audio track is picked", () => {
     prefersCoarse.value = true;
     const queryClient = createQueryClient();

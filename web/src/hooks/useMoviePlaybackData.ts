@@ -200,6 +200,7 @@ export function useMoviePlaybackData({
     movieIsPending,
     movieNotFound,
     techPending,
+    playbackPreferencesReady,
     watchProgressData,
     watchProgressPending,
     title,

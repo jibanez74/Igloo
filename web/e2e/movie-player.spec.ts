@@ -7,7 +7,7 @@ import { apiURL, readE2EEnv } from "./e2e-env";
 // from the metadata queries alone, and with the media stuck at HAVE_NOTHING a
 // seek sets the element's default playback start position, which currentTime
 // reads back — enough to prove the chapter-seek flow without real media.
-async function openMoviePlayer(page: Page) {
+async function logInMoviePlayer(page: Page) {
   const env = readE2EEnv();
   const loginResponse = await page.context().request.post(
     apiURL(env, "/api/auth/login"),
@@ -17,6 +17,10 @@ async function openMoviePlayer(page: Page) {
     },
   );
   expect(loginResponse.status()).toBe(200);
+}
+
+async function openMoviePlayer(page: Page) {
+  await logInMoviePlayer(page);
 
   await page.route("**/api/movies/*/stream*", () => {
     // Never fulfilled: keeps the player ready without firing a media error.
@@ -27,6 +31,66 @@ async function openMoviePlayer(page: Page) {
   await expect(
     page.getByRole("button", { name: "Play (Space or K)" }),
   ).toBeVisible();
+}
+
+for (const {
+  label,
+  mode,
+  expectedRequestPath,
+} of [
+  {
+    label: "direct",
+    mode: "direct",
+    expectedRequestPath: "/api/movies/101/stream",
+  },
+  {
+    label: "HLS",
+    mode: "720p_3mbps",
+    expectedRequestPath:
+      "/api/movies/101/hls/720p_3mbps/playlist.m3u8",
+  },
+]) {
+  test(`${label} playback waits for preferences before requesting media`, async ({
+    page,
+  }) => {
+    await logInMoviePlayer(page);
+
+    let releasePlaybackSettings!: () => void;
+    const playbackSettingsGate = new Promise<void>(resolve => {
+      releasePlaybackSettings = resolve;
+    });
+    let playbackSettingsRequested = false;
+    await page.route("**/api/settings/playback", async route => {
+      playbackSettingsRequested = true;
+      await playbackSettingsGate;
+      await route.continue();
+    });
+
+    const mediaRequests: string[] = [];
+    await page.route("**/api/movies/101/stream*", route => {
+      mediaRequests.push(route.request().url());
+    });
+    await page.route(
+      "**/api/movies/101/hls/*/playlist.m3u8*",
+      route => {
+        mediaRequests.push(route.request().url());
+      },
+    );
+
+    await page.goto(
+      `/movies/101/play?mode=${mode}&audio_track=0&start=0`,
+    );
+
+    await expect.poll(() => playbackSettingsRequested).toBe(true);
+    await expect(page.getByText("Preparing playback...")).toBeVisible();
+    await expect(page.locator("video")).toHaveCount(0);
+    expect(mediaRequests).toEqual([]);
+
+    releasePlaybackSettings();
+
+    await expect.poll(() => mediaRequests.length).toBe(1);
+    expect(mediaRequests[0]).toContain(expectedRequestPath);
+  });
 }
 
 test("chapter menu lists chapters with spoken labels and marks the current one", async ({
