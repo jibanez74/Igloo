@@ -1,16 +1,35 @@
 import type { ReactNode } from "react";
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useMoviePlaybackData } from "@/hooks/useMoviePlaybackData";
 import {
+  AUTH_USER_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_WATCH_PROGRESS_KEY,
+  PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import { toAbsolutePlaybackTime } from "@/lib/movie-playback";
+import type { AuthUser, PlaybackSettingsType } from "@/types";
 
 const playbackSessionId = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
+const authenticatedUserId = 1;
+
+const playbackProfiles = [
+  {
+    id: "1080p_8mbps",
+    label: "1080p · 8 Mbps",
+    height: 1080,
+    video_mbps: 8,
+  },
+  {
+    id: "720p_3mbps",
+    label: "720p · 3 Mbps",
+    height: 720,
+    video_mbps: 3,
+  },
+];
 
 function nullableFloat64(value: number) {
   return { Float64: value, Valid: true };
@@ -23,6 +42,126 @@ function wrapperFor(queryClient: QueryClient) {
     );
   };
 }
+
+function authenticatedUser(): AuthUser {
+  return {
+    id: authenticatedUserId,
+    name: "Playback User",
+    email: "playback@example.com",
+    is_admin: false,
+    avatar: null,
+    has_pin: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+}
+
+function playbackSettings(
+  overrides: Partial<PlaybackSettingsType> = {},
+): PlaybackSettingsType {
+  return {
+    profiles: playbackProfiles,
+    preferred_profile: null,
+    download_mbps: null,
+    server_upload_mbps: null,
+    hardware_acceleration_device: "cpu",
+    is_admin: false,
+    preferred_audio_language: null,
+    preferred_subtitle_language: null,
+    ...overrides,
+  };
+}
+
+function seedAuthenticatedUser(queryClient: QueryClient) {
+  queryClient.setQueryData([AUTH_USER_KEY], {
+    error: false,
+    data: { user: authenticatedUser() },
+  });
+}
+
+function seedSettledPlaybackPreferences(
+  queryClient: QueryClient,
+  settings = playbackSettings(),
+) {
+  seedAuthenticatedUser(queryClient);
+  queryClient.setQueryData([PLAYBACK_SETTINGS_KEY, authenticatedUserId], {
+    error: false,
+    data: { settings },
+  });
+}
+
+function seedPreferenceResolutionMovie(
+  queryClient: QueryClient,
+  movieId: number,
+) {
+  queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
+    error: false,
+    data: {
+      movie: {
+        title: "Preference Race",
+        poster_path: { String: "", Valid: false },
+        duration: nullableFloat64(600),
+      },
+    },
+  });
+  queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
+    error: false,
+    data: {
+      movie: {
+        mime_type: "video/mp4",
+        duration: nullableFloat64(600),
+      },
+      video_streams: [{ codec: "h264", height: 1080 }],
+      audio_streams: [
+        {
+          codec: "aac",
+          language: { String: "eng", Valid: true },
+        },
+        {
+          codec: "aac",
+          language: { String: "spa", Valid: true },
+        },
+      ],
+      subtitles: [
+        {
+          codec: "subrip",
+          language: { String: "eng", Valid: true },
+          title: { String: "", Valid: false },
+        },
+        {
+          codec: "subrip",
+          language: { String: "spa", Valid: true },
+          title: { String: "", Valid: false },
+        },
+      ],
+      chapters: [],
+    },
+  });
+  queryClient.setQueryData([MOVIE_WATCH_PROGRESS_KEY, movieId], {
+    error: false,
+    data: null,
+  });
+}
+
+function createDeferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("useMoviePlaybackData", () => {
   it("clamps a stale start before deriving every HLS timing value", () => {
@@ -57,6 +196,7 @@ describe("useMoviePlaybackData", () => {
       error: false,
       data: null,
     });
+    seedSettledPlaybackPreferences(queryClient);
 
     const { result } = renderHook(
       () =>
@@ -127,6 +267,7 @@ describe("useMoviePlaybackData", () => {
       error: false,
       data: null,
     });
+    seedSettledPlaybackPreferences(queryClient);
 
     const onSyncSearch = vi.fn();
     const { result } = renderHook(
@@ -187,6 +328,7 @@ describe("useMoviePlaybackData", () => {
       error: false,
       data: null,
     });
+    seedSettledPlaybackPreferences(queryClient);
     const onSyncSearch = vi.fn();
 
     const { result } = renderHook(
@@ -214,6 +356,147 @@ describe("useMoviePlaybackData", () => {
     expect(onSyncSearch).toHaveBeenCalledWith({
       mode: "remux",
       audioTrack: 1,
+      subtitleTrack: null,
+    });
+  });
+
+  it("waits for auth and playback preferences before normalizing stale deep-link values", async () => {
+    const movieId = 10;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+
+    const authRequest = createDeferredResponse();
+    const playbackSettingsRequest = createDeferredResponse();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === "/api/auth/user") {
+        return authRequest.promise;
+      }
+      if (String(input) === "/api/settings/playback") {
+        return playbackSettingsRequest.promise;
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onSyncSearch = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "2160p_16mbps",
+            audio_track: 99,
+            subtitle_track: 99,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedMode).toBe("direct");
+    expect(result.current.resolvedAudioTrack).toBe(0);
+    expect(onSyncSearch).not.toHaveBeenCalled();
+
+    authRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: { user: authenticatedUser() },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/settings/playback",
+        expect.objectContaining({
+          method: "GET",
+          credentials: "include",
+        }),
+      );
+    });
+    expect(onSyncSearch).not.toHaveBeenCalled();
+
+    playbackSettingsRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: {
+          settings: playbackSettings({
+            preferred_profile: "720p_3mbps",
+            preferred_audio_language: "es",
+            preferred_subtitle_language: "es",
+          }),
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.resolvedMode).toBe("720p_3mbps");
+      expect(result.current.resolvedAudioTrack).toBe(1);
+      expect(result.current.resolvedSubtitleTrack).toBe(1);
+      expect(onSyncSearch).toHaveBeenCalledTimes(1);
+    });
+    expect(onSyncSearch).toHaveBeenCalledWith({
+      mode: "720p_3mbps",
+      audioTrack: 1,
+      subtitleTrack: 1,
+    });
+  });
+
+  it("normalizes through existing defaults after playback settings fail", async () => {
+    const movieId = 11;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedAuthenticatedUser(queryClient);
+
+    const playbackSettingsRequest = createDeferredResponse();
+    const fetchMock = vi.fn(() => playbackSettingsRequest.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const onSyncSearch = vi.fn();
+
+    renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "2160p_16mbps",
+            audio_track: 99,
+            subtitle_track: 99,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(onSyncSearch).not.toHaveBeenCalled();
+
+    playbackSettingsRequest.resolve(
+      jsonResponse(
+        {
+          error: true,
+          message: "Playback settings unavailable",
+        },
+        500,
+      ),
+    );
+
+    await waitFor(() => {
+      expect(onSyncSearch).toHaveBeenCalledTimes(1);
+    });
+    expect(onSyncSearch).toHaveBeenCalledWith({
+      mode: "direct",
+      audioTrack: 0,
       subtitleTrack: null,
     });
   });

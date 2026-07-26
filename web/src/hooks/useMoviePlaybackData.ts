@@ -71,9 +71,14 @@ export function useMoviePlaybackData({
   const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
     movieWatchProgressQueryOpts(movieId),
   );
-  const { data: userData } = useQuery(authUserQueryOpts());
+  const { data: userData, isPending: authUserPending } = useQuery(
+    authUserQueryOpts(),
+  );
   const user = userData?.error === false ? (userData.data?.user ?? null) : null;
-  const { data: playbackSettingsData } = useQuery({
+  const {
+    data: playbackSettingsData,
+    isPending: playbackSettingsPending,
+  } = useQuery({
     ...playbackSettingsQueryOpts(user?.id ?? 0),
     enabled: user !== null,
   });
@@ -81,6 +86,8 @@ export function useMoviePlaybackData({
     playbackSettingsData?.error === false && playbackSettingsData.data?.settings
       ? playbackSettingsData.data.settings
       : null;
+  const playbackPreferencesReady =
+    !authUserPending && (user === null || !playbackSettingsPending);
 
   const techLoaded = !techPending && techData?.data != null;
   const videoStreams = techData?.data?.video_streams ?? [];
@@ -161,7 +168,7 @@ export function useMoviePlaybackData({
   });
 
   useEffect(() => {
-    if (availableModes === null) return;
+    if (!playbackPreferencesReady || availableModes === null) return;
 
     const resolvedSubtitleSearch = resolvedSubtitleTrack ?? undefined;
     if (
@@ -181,6 +188,7 @@ export function useMoviePlaybackData({
     audioTrack,
     availableModes,
     mode,
+    playbackPreferencesReady,
     resolvedAudioTrack,
     resolvedMode,
     resolvedSubtitleTrack,
