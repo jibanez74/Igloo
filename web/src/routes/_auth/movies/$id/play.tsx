@@ -51,8 +51,9 @@ import {
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
+  STREAM_MODES,
 } from "@/lib/constants";
-import { showActionFailed } from "@/lib/toast-helpers";
+import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import {
   playbackSettingsToPlaySearch,
@@ -65,6 +66,7 @@ import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useIdleControls } from "@/hooks/useIdleControls";
 import { useMovieWatchProgressSaver } from "@/hooks/useMovieWatchProgressSaver";
+import { useDirectPlayFallback } from "@/hooks/useDirectPlayFallback";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
@@ -183,6 +185,10 @@ function PlayMoviePage() {
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
   const pendingAutoPlayOnLoadRef = useRef(false);
+  // VideoPlayer calls onNativeError then synchronously onError; when a
+  // fallback consumed the native error, the paired onError must not raise
+  // the error screen.
+  const fallbackConsumedErrorRef = useRef(false);
 
   useEffect(() => {
     pause();
@@ -201,6 +207,11 @@ function PlayMoviePage() {
     [movieId],
   );
   const [chapterAnnouncement, setChapterAnnouncement] =
+    useState<ChapterAnnouncement>({
+      key: 0,
+      text: "",
+    });
+  const [fallbackAnnouncement, setFallbackAnnouncement] =
     useState<ChapterAnnouncement>({
       key: 0,
       text: "",
@@ -225,6 +236,8 @@ function PlayMoviePage() {
     movieIsPending,
     movieNotFound,
     techPending,
+    techLoaded,
+    directPlayAvailable,
     playbackPreferencesReady,
     watchProgressData,
     watchProgressPending,
@@ -379,6 +392,41 @@ function PlayMoviePage() {
     onRetry: () => setStreamReloadKey((prev) => prev + 1),
     onMaxAttempts: setPlaybackError,
   });
+
+  const { handleNativeError: handleDirectPlayFallbackError } =
+    useDirectPlayFallback({
+      streamWindowKey: sessionWindowKey,
+      videoRef,
+      isHlsPlayback,
+      resolvedMode,
+      techLoaded,
+      directAvailable: directPlayAvailable,
+      playerMounted: status.kind === "ready",
+      onFallback: () => {
+        const remuxLabel =
+          STREAM_MODES.find((m) => m.id === "remux")?.label ?? "remux";
+        const notice = `This file can't be played directly by your browser. Switched to ${remuxLabel}.`;
+        setFallbackAnnouncement((prev) => ({ key: prev.key + 1, text: notice }));
+        showInfo("Switched playback mode", notice);
+        // Resume playing once the remux stream is ready; the auto-resume
+        // effect is keyed on the stream window and re-fires after this
+        // navigation.
+        pendingAutoPlayOnLoadRef.current = true;
+        navigate({
+          search: (prev: PlaySearchParams) => ({
+            ...prev,
+            mode: "remux",
+            // A failure before metadata leaves currentTime at 0; keep the
+            // requested start instead of resetting the position.
+            start:
+              currentTimeRef.current > 0
+                ? Math.floor(clampPlaybackTime(currentTimeRef.current))
+                : (prev.start ?? 0),
+          }),
+          replace: true,
+        });
+      },
+    });
 
   const playVideo = async () => {
     const video = videoRef.current;
@@ -535,7 +583,10 @@ function PlayMoviePage() {
     return () => {
       video.removeEventListener("canplay", resumePlayback);
     };
-  }, [streamUrl]);
+    // Keyed on the stream window, not streamUrl: the direct-play URL is a
+    // constant, so a fallback navigation would never re-fire this otherwise
+    // (audit D12).
+  }, [sessionWindowKey]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(movieDurationSec && movieDurationSec > 0)) return;
@@ -543,6 +594,10 @@ function PlayMoviePage() {
   }, [isHlsPlayback, movieDurationSec]);
 
   const handleNativePlaybackError = (code: number | null | undefined) => {
+    if (handleDirectPlayFallbackError(code)) {
+      fallbackConsumedErrorRef.current = true;
+      return;
+    }
     setPlaybackError(nativeMoviePlaybackErrorMessage(code));
   };
 
@@ -609,7 +664,13 @@ function PlayMoviePage() {
       isHlsSource={isHlsPlayback}
       title={title}
       isFullscreen={chromeFullscreenMode}
-      onError={(msg) => setPlaybackError(msg)}
+      onError={(msg) => {
+        if (fallbackConsumedErrorRef.current) {
+          fallbackConsumedErrorRef.current = false;
+          return;
+        }
+        setPlaybackError(msg);
+      }}
       onPlay={() => setPlaying(true)}
       onPause={() => {
         setPlaying(false);
@@ -706,6 +767,11 @@ function PlayMoviePage() {
       <LiveAnnouncer
         message={chapterAnnouncement.text}
         announcementKey={chapterAnnouncement.key}
+        politeness="assertive"
+      />
+      <LiveAnnouncer
+        message={fallbackAnnouncement.text}
+        announcementKey={fallbackAnnouncement.key}
         politeness="assertive"
       />
       <ResumeDialog

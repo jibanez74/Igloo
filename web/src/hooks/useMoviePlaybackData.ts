@@ -154,6 +154,8 @@ export function useMoviePlaybackData({
     STREAM_MODES.find((m) => m.id === resolvedMode)?.label ?? resolvedMode;
   const modeUnavailable =
     availableModes !== null && availableModes.length === 0;
+  const directPlayAvailable =
+    availableModes?.some((m) => m.id === "direct") ?? false;
   const playbackTiming = { isHlsPlayback, hlsStartSec, movieDurationSec };
   const subtitleInfo = buildMovieSubtitleTrackInfo({
     movieId,
@@ -201,6 +203,8 @@ export function useMoviePlaybackData({
     movieIsPending,
     movieNotFound,
     techPending,
+    techLoaded,
+    directPlayAvailable,
     playbackPreferencesReady,
     watchProgressData,
     watchProgressPending,

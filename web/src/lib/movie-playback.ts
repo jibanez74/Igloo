@@ -308,6 +308,38 @@ export function currentPlaybackTimestampMs() {
   return Date.now();
 }
 
+/** What set off a direct-play fallback check: a MediaError code, or the stall guard. */
+export type DirectPlayFallbackTrigger = number | "stall";
+
+type DirectPlayFallbackArgs = {
+  trigger: DirectPlayFallbackTrigger | null | undefined;
+  isHlsPlayback: boolean;
+  resolvedMode: StreamModeId;
+  techLoaded: boolean;
+  directAvailable: boolean;
+  alreadyAttempted: boolean;
+};
+
+/**
+ * Whether a failed direct play should fall back to remux (audit §9.3).
+ * Deliberately narrow: only MEDIA_ERR_DECODE / MEDIA_ERR_SRC_NOT_SUPPORTED
+ * (the codes that unambiguously mean "this browser cannot play these bytes")
+ * or the silent stall guard; never from HLS, never on network/abort errors,
+ * at most once per stream window, and only after the app has affirmatively
+ * decided the file is direct-playable — otherwise D16's pre-eligibility
+ * request would masquerade as a real incompatibility.
+ */
+export function shouldDirectPlayFallback(args: DirectPlayFallbackArgs): boolean {
+  if (args.isHlsPlayback || args.resolvedMode !== "direct") return false;
+  if (!args.techLoaded || !args.directAvailable) return false;
+  if (args.alreadyAttempted) return false;
+  return (
+    args.trigger === "stall" ||
+    args.trigger === MEDIA_ERR_DECODE ||
+    args.trigger === MEDIA_ERR_SRC_NOT_SUPPORTED
+  );
+}
+
 export function nativeMoviePlaybackErrorMessage(
   code: number | null | undefined,
 ) {

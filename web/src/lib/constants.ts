@@ -228,6 +228,14 @@ export const MEDIA_ERR_NETWORK = 2;
 export const MEDIA_ERR_DECODE = 3;
 export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 
+/**
+ * Direct play that produced no metadata and no progress within this window is
+ * treated as silently failed and falls back to remux: the important container
+ * failures (e.g. MKV in Chromium) stall at 0ms without ever raising a
+ * MediaError. Generous enough for a slow first byte on a large file.
+ */
+export const DIRECT_PLAY_STALL_TIMEOUT_MS = 10_000;
+
 /** Max session-lost recoveries per stream window (enforced in `useHlsSessionRecovery`). */
 export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
 /** Min ms between recovery attempts to avoid tight loops when `src` updates re-trigger 404. */
