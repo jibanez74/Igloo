@@ -42,6 +42,7 @@ func seedStreamTestMovie(t *testing.T, app *Application, container, mimeType str
 func streamTestHandler(app *Application) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/api/movies/{id}/stream", app.StreamMovie)
+	r.Head("/api/movies/{id}/stream", app.StreamMovie)
 	return r
 }
 
@@ -159,6 +160,54 @@ func TestStreamMovieServesRanges(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStreamMovieHead(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	content := bytes.Repeat([]byte("0123456789"), 30)
+	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
+	handler := streamTestHandler(app)
+
+	t.Run("plain head", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodHead, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+		if got := w.Header().Get("Content-Length"); got != fmt.Sprintf("%d", len(content)) {
+			t.Errorf("Content-Length = %q, want %d", got, len(content))
+		}
+		if got := w.Header().Get("Accept-Ranges"); got != "bytes" {
+			t.Errorf("Accept-Ranges = %q, want bytes", got)
+		}
+		if got := w.Header().Get("Content-Type"); got != "video/mp4" {
+			t.Errorf("Content-Type = %q, want video/mp4", got)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("body = %d bytes, want empty", w.Body.Len())
+		}
+	})
+
+	t.Run("head with range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodHead, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
+		req.Header.Set("Range", "bytes=0-99")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusPartialContent {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusPartialContent)
+		}
+		if got := w.Header().Get("Content-Range"); got != fmt.Sprintf("bytes 0-99/%d", len(content)) {
+			t.Errorf("Content-Range = %q, want bytes 0-99/%d", got, len(content))
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("body = %d bytes, want empty", w.Body.Len())
+		}
+	})
 }
 
 func TestStreamMovieErrorPaths(t *testing.T) {

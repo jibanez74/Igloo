@@ -1349,6 +1349,17 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 		t.Fatalf("Content-Type = %q, want video/mp4", got)
 	}
 
+	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodHead, path, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for direct stream HEAD, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Length"); got != fmt.Sprintf("%d", len(body)) {
+		t.Fatalf("HEAD Content-Length = %q, want %d", got, len(body))
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("HEAD body = %d bytes, want empty", w.Body.Len())
+	}
+
 	w = performWatchRoomHTTPRequest(t, app, outsider.ID, http.MethodGet, path, "")
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-member stream, got %d: %s", w.Code, w.Body.String())

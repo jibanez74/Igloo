@@ -170,6 +170,7 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 		r.Get("/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, app.HLSManifest)
 		r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 		r.Get("/{id}/stream", app.StreamMovie)
+		r.Head("/{id}/stream", app.StreamMovie)
 		r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
 
 		r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
@@ -213,6 +214,7 @@ func (app *Application) registerWatchRoomRoutes(r chi.Router) {
 		r.Get("/{id}", app.GetWatchRoom)
 		r.Post("/{id}/join", app.JoinWatchRoom)
 		r.Get("/{id}/stream", app.StreamWatchRoomMovie)
+		r.Head("/{id}/stream", app.StreamWatchRoomMovie)
 		r.Get("/{id}/hls/"+helpers.HLS_PLAYLIST_FILENAME, app.WatchRoomHLSManifest)
 		r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
 		r.Delete("/{id}", app.DeleteWatchRoom)
@@ -265,6 +267,7 @@ func (app *Application) registerTrackRoutes(r chi.Router) {
 		r.Get("/shuffle", app.GetShuffleTracks)
 		r.Get("/details/{id}", app.GetTrackByID)
 		r.Get("/{id}/stream", app.StreamTrack)
+		r.Head("/{id}/stream", app.StreamTrack)
 		r.Post("/{id}/like", app.ToggleLikeTrack)
 		r.Get("/liked", app.GetLikedTracks)
 		r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
