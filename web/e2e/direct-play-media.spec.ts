@@ -16,6 +16,9 @@ import {
 //   E2E_DIRECT_MULTIAUDIO_MOVIE_ID MP4 with two or more audio streams
 //   E2E_DIRECT_MP4_MOVIE_ID        optional happy-path control: plain
 //                                  8-bit H.264 + AAC MP4
+//   E2E_DIRECT_SUBTITLE_MOVIE_ID   optional: direct-eligible MP4 with an
+//                                  embedded text subtitle stream at least
+//                                  90 seconds long (audit D11)
 
 type DirectMediaEnv = Pick<E2EEnv, "email" | "password"> & {
   responseTimeoutMs: number;
@@ -23,12 +26,14 @@ type DirectMediaEnv = Pick<E2EEnv, "email" | "password"> & {
   tenBitMovieId: number;
   multiAudioMovieId: number;
   mp4MovieId?: number;
+  subtitleMovieId?: number;
 };
 
 type TechnicalDetails = {
   movie: {
     container: string;
     mime_type: string;
+    duration: { Float64: number; Valid: boolean } | null;
   };
   video_streams: Array<{
     codec: string;
@@ -38,6 +43,9 @@ type TechnicalDetails = {
   audio_streams: Array<{
     codec: string;
     is_default: boolean;
+  }>;
+  subtitles: Array<{
+    codec: string;
   }>;
 };
 
@@ -67,6 +75,7 @@ function readDirectMediaEnv(): DirectMediaEnv | null {
     tenBitMovieId,
     multiAudioMovieId,
     mp4MovieId: positiveIntEnv("E2E_DIRECT_MP4_MOVIE_ID"),
+    subtitleMovieId: positiveIntEnv("E2E_DIRECT_SUBTITLE_MOVIE_ID"),
   };
 }
 
@@ -211,6 +220,88 @@ test.describe("Direct-play eligibility with real media", () => {
     // A working non-direct mode must never have touched the raw stream, and a
     // direct mode must never bounce away from it mid-playback.
     expect(new URL(page.url()).searchParams.get("mode")).toBe(mode);
+  });
+
+  // Audit D11 — the deciding browser test the audit could not run: a resume
+  // navigation changes `start` while the player is mounted (the D10 trigger),
+  // and the sideloaded subtitle track must still be showing afterwards.
+  // Neither jsdom (stubbed load()/track) nor the mocked e2e stack (no
+  // decodable media, so the direct-play fallback navigates away) can decide
+  // this; only a real browser over real media can.
+  test("subtitles stay showing across a resume start change in direct play", async ({
+    page,
+  }) => {
+    test.skip(
+      !directEnv!.subtitleMovieId,
+      "Set E2E_DIRECT_SUBTITLE_MOVIE_ID to run the subtitle-persistence test.",
+    );
+
+    const movieId = directEnv!.subtitleMovieId!;
+    const details = await fetchMovieTechnicalDetails<TechnicalDetails>(
+      page,
+      movieId,
+    );
+    expect(
+      details.subtitles.length,
+      "E2E_DIRECT_SUBTITLE_MOVIE_ID must point at a movie with an embedded subtitle stream",
+    ).toBeGreaterThan(0);
+    const durationSec = details.movie.duration?.Valid
+      ? details.movie.duration.Float64
+      : 0;
+    expect(
+      durationSec,
+      "E2E_DIRECT_SUBTITLE_MOVIE_ID must point at a movie at least 90 seconds long",
+    ).toBeGreaterThanOrEqual(90);
+
+    // Seed saved progress so the resume dialog opens: past the eligibility
+    // minimum, well short of the completion threshold.
+    const resumeTargetSec = Math.min(45, Math.floor(durationSec / 2));
+    await clearMovieWatchProgress(page, movieId);
+    const saveResponse = await page
+      .context()
+      .request.put(`/api/movies/${movieId}/watch-progress`, {
+        data: {
+          progress_sec: resumeTargetSec,
+          duration_sec: durationSec,
+          save_session_id: `e2e-subtitle-persistence-${Date.now()}`,
+          save_sequence: 1,
+        },
+        failOnStatusCode: false,
+      });
+    expect(saveResponse.status()).toBe(200);
+
+    await page.goto(
+      `/movies/${movieId}/play?mode=direct&audio_track=0&subtitle_track=0&start=0`,
+    );
+
+    const subtitleShowing = () =>
+      page.locator("video").evaluate(video => {
+        const track = video.querySelector<HTMLTrackElement>(
+          "track[data-subtitle]",
+        );
+        return track?.track.mode ?? null;
+      });
+
+    // The dialog only opens once watch progress resolves with start=0.
+    await page.getByRole("button", { name: "Resume" }).click();
+    await expect(page).toHaveURL(new RegExp(`start=${resumeTargetSec}(&|$)`), {
+      timeout: directEnv!.responseTimeoutMs,
+    });
+
+    await pressPlay(page);
+    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
+
+    // The seek landed instead of restarting from byte 0...
+    const currentTime = await page
+      .locator("video")
+      .evaluate(video =>
+        video instanceof HTMLVideoElement ? video.currentTime : 0,
+      );
+    expect(currentTime).toBeGreaterThanOrEqual(resumeTargetSec - 15);
+    // ...the mode never fell back away from direct...
+    expect(new URL(page.url()).searchParams.get("mode")).toBe("direct");
+    // ...and the subtitle track survived the start change (audit D11).
+    expect(await subtitleShowing()).toBe("showing");
   });
 
   // Matrix row 1 — happy-path control: an eligible MP4 direct-plays for real.
