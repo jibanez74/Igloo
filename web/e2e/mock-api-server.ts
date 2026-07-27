@@ -650,6 +650,7 @@ function movieTechnicalDetails(id: number) {
         frame_rate: 23.976,
         avg_frame_rate: nullableString("24000/1001"),
         bit_depth: nullableInt(8),
+        pixel_format: nullableString("yuv420p"),
         color_range: nullableString("tv"),
         color_space: nullableString("bt709"),
         color_primaries: nullableString("bt709"),

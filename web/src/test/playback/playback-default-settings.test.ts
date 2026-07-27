@@ -442,6 +442,8 @@ describe("audio track and mode resolvers", () => {
                       codec_profile: nullString,
                       codec_level: nullInt,
                       height,
+                      bit_depth: nullInt,
+                      pixel_format: nullString,
                     },
               audioStreams:
                 audioCodec === undefined

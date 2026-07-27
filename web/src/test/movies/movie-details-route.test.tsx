@@ -206,6 +206,7 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         frame_rate: 24,
         avg_frame_rate: nullableString("24/1"),
         bit_depth: nullableInt64(8),
+        pixel_format: nullableString("yuv420p"),
         color_range: nullableString("tv"),
         color_space: nullableString("bt709"),
         color_primaries: nullableString("bt709"),

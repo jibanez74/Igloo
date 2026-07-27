@@ -10,7 +10,7 @@ import {
   createCanPlayProbe,
   type CanPlayProbe,
 } from "@/lib/direct-play-probe";
-import { unwrapStringOrUndefined } from "@/lib/nullable";
+import { unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
 import type { PlaybackSettings, StreamModeId } from "@/types/playback";
@@ -86,8 +86,53 @@ function isContainerDirectPlayable(mimeType: string): boolean {
 /** Video fields the direct-play eligibility rules consult. */
 export type DirectPlayVideoInfo = Pick<
   VideoStreamType,
-  "codec" | "codec_profile" | "codec_level" | "height"
+  "codec" | "codec_profile" | "codec_level" | "height" | "bit_depth" | "pixel_format"
 >;
+
+const NON_BROWSER_H264_PROFILE_MARKERS = ["10", "4:2:2", "422", "4:4:4", "444"];
+const NON_BROWSER_H264_PIXEL_FORMAT_MARKERS = [
+  "10",
+  "12",
+  "14",
+  "16",
+  "422",
+  "444",
+];
+
+/**
+ * Browsers cannot decode 10-bit, 4:2:2 or 4:4:4 H.264 even though the codec
+ * name passes the allowlist. Mirrors the server's
+ * isBrowserSafeH264RemuxCandidate rules (server/cmd/api/hls_session.go) —
+ * kept as an explicit static rule even though the canPlayType probe usually
+ * catches these, because the watch-room server relies on the same rules and
+ * cannot probe. Audit §3.3 (D2).
+ */
+function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
+  const bitDepth = unwrapInt(video.bit_depth);
+  if (bitDepth !== null && bitDepth > 8) return false;
+
+  const pixelFormat = unwrapStringOrUndefined(video.pixel_format)
+    ?.trim()
+    .toLowerCase();
+  if (
+    pixelFormat &&
+    NON_BROWSER_H264_PIXEL_FORMAT_MARKERS.some((m) => pixelFormat.includes(m))
+  ) {
+    return false;
+  }
+
+  const profile = unwrapStringOrUndefined(video.codec_profile)
+    ?.trim()
+    .toLowerCase();
+  if (
+    profile &&
+    NON_BROWSER_H264_PROFILE_MARKERS.some((m) => profile.includes(m))
+  ) {
+    return false;
+  }
+
+  return true;
+}
 
 /** Audio fields the direct-play eligibility rules consult. */
 export type DirectPlayAudioInfo = Pick<
@@ -145,6 +190,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
       if (!video) return true;
       const staticRulesPass =
         isVideoDirectPlayable(video.codec) &&
+        isBrowserSafeH264(video) &&
         isAudioDirectPlayable(audioStreams?.[0]?.codec) &&
         isContainerDirectPlayable(mimeType ?? "") &&
         directPlayAudioSelectionEligible(audioStreams ?? []);

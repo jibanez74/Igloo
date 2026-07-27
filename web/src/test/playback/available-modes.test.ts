@@ -15,6 +15,8 @@ const h264Video = (
   codec_profile: { String: "High", Valid: true },
   codec_level: { Int64: 41, Valid: true },
   height: 1080,
+  bit_depth: { Int64: 8, Valid: true },
+  pixel_format: { String: "yuv420p", Valid: true },
   ...overrides,
 });
 
@@ -121,6 +123,63 @@ describe("direct-play audio ambiguity gate", () => {
       }),
     );
     expect(ids).toContain("direct");
+  });
+});
+
+describe("browser-safe H.264 gate", () => {
+  // Audit matrix row 22: browsers cannot decode 10-bit / 4:2:2 / 4:4:4 H.264;
+  // these must fall to the HLS path even though the codec name passes.
+  it.each([
+    ["High 10 profile", { codec_profile: { String: "High 10", Valid: true } }],
+    [
+      "High 4:2:2 profile",
+      { codec_profile: { String: "High 4:2:2", Valid: true } },
+    ],
+    [
+      "High 4:4:4 Predictive profile",
+      { codec_profile: { String: "High 4:4:4 Predictive", Valid: true } },
+    ],
+    ["10-bit depth alone", { bit_depth: { Int64: 10, Valid: true } }],
+    [
+      "10-bit pixel format alone",
+      { pixel_format: { String: "yuv420p10le", Valid: true } },
+    ],
+    [
+      "4:2:2 pixel format alone",
+      { pixel_format: { String: "yuv422p", Valid: true } },
+    ],
+  ])("refuses direct play for %s while keeping remux", (_name, overrides) => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(overrides),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+    expect(ids).not.toContain("direct");
+    expect(ids).toContain("remux");
+  });
+
+  it("keeps direct play for plain 8-bit High profile", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+    expect(ids).toContain("direct");
+  });
+
+  it("does not consult the probe when the static rules refuse", () => {
+    const canPlay = vi.fn().mockReturnValue("probably");
+    getAvailableModes({
+      video: h264Video({ bit_depth: { Int64: 10, Valid: true } }),
+      audioStreams: [aacAudio()],
+      mimeType: "video/mp4",
+      canPlay,
+    });
+    expect(canPlay).not.toHaveBeenCalled();
   });
 });
 

@@ -64,6 +64,7 @@ function videoStream(): VideoStreamType {
     frame_rate: 24,
     avg_frame_rate: nullableString("24/1"),
     bit_depth: nullableInt64(8),
+    pixel_format: nullableString("yuv420p"),
     color_range: nullableString(),
     color_space: nullableString(),
     color_primaries: nullableString(),

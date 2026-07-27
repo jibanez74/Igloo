@@ -103,6 +103,7 @@ function videoStream(overrides: Partial<VideoStreamType> = {}): VideoStreamType 
     frame_rate: 24,
     avg_frame_rate: { String: "24/1", Valid: true },
     bit_depth: { Int64: 8, Valid: true },
+    pixel_format: { String: "yuv420p", Valid: true },
     color_range: { String: "", Valid: false },
     color_space: { String: "", Valid: false },
     color_primaries: { String: "", Valid: false },

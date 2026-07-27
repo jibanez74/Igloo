@@ -358,7 +358,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err := app.Queries.GetMovieByID(r.Context(), req.MovieID)
+	movie, err := app.Queries.GetMovieByID(r.Context(), req.MovieID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
@@ -404,6 +404,31 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	if directWithAmbiguousAudio {
 		helpers.ErrorJSON(w, errors.New("direct playback cannot guarantee which audio track this movie plays; choose another playback mode"), http.StatusBadRequest)
 		return
+	}
+
+	// Mirror the web client's remaining static direct-play rules so a room can
+	// never be created in a mode the members' browsers cannot play: browsers
+	// only direct-play MP4 containers, and 10-bit / 4:2:2 / 4:4:4 H.264 does
+	// not decode even though the codec name passes.
+	if req.Mode == watchRoomPlaybackModeDirect {
+		if helpers.VideoMimeTypes[movie.Container] != "video/mp4" {
+			helpers.ErrorJSON(w, errors.New("direct playback is only available for MP4 movies; choose another playback mode"), http.StatusBadRequest)
+			return
+		}
+
+		videoStreams, err := app.Queries.GetVideoStreamsByMovieID(r.Context(), req.MovieID)
+		if err != nil {
+			app.Logger.Error("failed to load video streams for watch room", "error", err, "movie_id", req.MovieID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
+		if len(videoStreams) > 0 {
+			browserSafe, _ := isBrowserSafeH264RemuxCandidate(&videoStreams[0])
+			if !browserSafe {
+				helpers.ErrorJSON(w, errors.New("this movie's video cannot be played directly by browsers; choose another playback mode"), http.StatusBadRequest)
+				return
+			}
+		}
 	}
 
 	invitedIDs := deduplicateAndFilterUserIDs(req.InvitedUserIDs, userID)
