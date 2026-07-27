@@ -43,8 +43,10 @@ For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each mo
 - video, audio, and subtitle stream rows
 - chapter information
 - video dimensions, codec names, profiles, bit depth, pixel formats, frame rates, and color metadata
-- audio codecs, language tags, channel layout, sample rate, and bitrate
-- subtitle codecs, language tags, stream indices, and titles
+- audio codecs, language tags, channel layout, sample rate, bitrate, and the `default` disposition
+- subtitle codecs, language tags, stream indices, titles, and the `default`/`forced` dispositions
+
+Stream tag keys are normalized the same way format tags are (lowercased, separators stripped, `lang` accepted as a `language` alias), so Matroska muxers that write `TITLE`/`LANGUAGE` still produce labelled, preference-matchable streams.
 
 For music, Igloo uses ffprobe to populate track metadata such as title, sort title, artist, album, genre, track number, disc number, release date, duration, bitrate, composer, and copyright. The library scan supplies each source file's size from the filesystem.
 
@@ -143,6 +145,17 @@ If preflight times out or FFmpeg exits before enough output is available, Igloo 
 
 The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the highest configured transcode profile whose target height fits within the source height. If the source is smaller than every configured profile, it falls back to `720p_3mbps` so playback still has a reliable transcode path.
 
+## Direct Play Eligibility and Fallback
+
+Direct play serves the original file over HTTP range requests with no FFmpeg process. Whether the web client offers it is decided from the scanned metadata plus one browser probe (`web/src/lib/playback.ts`, `getAvailableModes`; background in `docs/web-direct-playback-audit.md`):
+
+- **Container.** Only MP4 (`mp4`/`m4v`) is eligible. The container→MIME mapping is pinned in `helpers.VideoMimeTypes` — never derived from the host's MIME tables — and MKV must never be added: Chrome and Firefox fail Matroska in a `<video>` element silently at 0ms with no `MediaError`.
+- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2 and 4:4:4 sources are refused using the same profile / bit-depth / pixel-format rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`).
+- **Audio.** The first audio stream's codec must be browser-playable, and the stream the browser will pick must be unambiguous: with two or more audio streams, a `default` disposition on a non-first stream or multiple `default` flags refuse direct play (no flags at all stays eligible — browsers follow container track order). Selecting any non-first track resolves the mode to `remux` (see Audio Handling).
+- **Browser probe.** After the static rules pass, the client asks `canPlayType` with an RFC 6381 string built from the stored codec profile and level. The probe can only narrow eligibility, never widen it: watch-room creation enforces the same rules server-side and cannot probe.
+
+The client never requests `/stream` before technical details have resolved, so a bookmarked `?mode=direct` link to an ineligible file resolves to an HLS mode without touching the raw stream. If an affirmatively eligible direct play still fails — `MEDIA_ERR_DECODE`, `MEDIA_ERR_SRC_NOT_SUPPORTED`, or no `loadedmetadata` within 10 seconds (the silent-stall case) — the player switches to `remux` exactly once per stream window, preserving position and track selection, and announces the switch.
+
 ## Transcode Profiles
 
 Allowed HLS profiles are centralized in `server/cmd/internal/helpers/hls_profiles.go`:
@@ -225,7 +238,7 @@ The `audio_track` request parameter is an ordinal into the movie's audio streams
 
 Direct play has no equivalent mechanism. It serves the original file with range requests and no FFmpeg process, so the browser always decodes the container's first audio track and any other selection would be silently ignored. Igloo therefore treats the audio choice as authoritative: selecting any track other than the first resolves the playback mode from `direct` to `remux`, which copies the video stream and maps the requested audio track. Selecting the first track keeps direct play.
 
-The web client enforces this in `resolvePlaybackSettings`, so the rule applies to saved settings, user language preferences, and deep links alike. Direct play is only ever paired with the first audio track.
+The web client enforces this in `resolvePlaybackSettings`, so the rule applies to saved settings, user language preferences, and deep links alike. Direct play is only ever paired with the first audio track, and it is refused outright when the container's `default` dispositions make the browser's own pick ambiguous (see Direct Play Eligibility and Fallback).
 
 ## Hardware Acceleration
 
