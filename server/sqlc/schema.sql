@@ -331,6 +331,7 @@ CREATE TABLE
     channel_layout TEXT,
     language TEXT,
     title TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT false,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE

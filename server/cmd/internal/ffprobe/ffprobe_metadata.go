@@ -49,12 +49,34 @@ type Stream struct {
 }
 
 type StreamDisposition struct {
-	AttachedPic int `json:"attached_pic"`
+	AttachedPic     int `json:"attached_pic"`
+	Default         int `json:"default"`
+	Forced          int `json:"forced"`
+	Comment         int `json:"comment"`
+	Dub             int `json:"dub"`
+	Original        int `json:"original"`
+	HearingImpaired int `json:"hearing_impaired"`
+	VisualImpaired  int `json:"visual_impaired"`
 }
 
 type StreamTags struct {
 	Title    string `json:"title"`
 	Language string `json:"language"`
+}
+
+// UnmarshalJSON normalizes stream tag keys the same way FormatTags does, so
+// Matroska muxers that write TITLE/LANGUAGE (or the "lang" alias) still
+// produce labelled, preference-matchable streams.
+func (t *StreamTags) UnmarshalJSON(data []byte) error {
+	values, err := normalizedTagValues(data)
+	if err != nil {
+		return err
+	}
+
+	t.Title = firstTagValue(values, "title")
+	t.Language = firstTagValue(values, "language", "lang")
+
+	return nil
 }
 
 type Format struct {
@@ -80,10 +102,33 @@ type FormatTags struct {
 }
 
 func (t *FormatTags) UnmarshalJSON(data []byte) error {
+	values, err := normalizedTagValues(data)
+	if err != nil {
+		return err
+	}
+
+	t.Title = firstTagValue(values, "title")
+	t.Artist = firstTagValue(values, "artist")
+	t.AlbumArtist = firstTagValue(values, "albumartist")
+	t.Composer = firstTagValue(values, "composer")
+	t.Album = firstTagValue(values, "album")
+	t.Genre = firstTagValue(values, "genre")
+	t.Track = firstTagValue(values, "track", "tracknumber")
+	t.Disc = firstTagValue(values, "disc", "discnumber")
+	t.Date = firstTagValue(values, "date", "year")
+	t.Copyright = firstTagValue(values, "copyright")
+	t.SortName = firstTagValue(values, "sortname", "titlesort")
+	t.SortAlbum = firstTagValue(values, "sortalbum", "albumsort")
+	t.SortArtist = firstTagValue(values, "sortartist", "artistsort")
+
+	return nil
+}
+
+func normalizedTagValues(data []byte) (map[string]string, error) {
 	var raw map[string]interface{}
 	err := json.Unmarshal(data, &raw)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	values := make(map[string]string, len(raw))
@@ -106,21 +151,7 @@ func (t *FormatTags) UnmarshalJSON(data []byte) error {
 		values[normalizedKey] = text
 	}
 
-	t.Title = firstTagValue(values, "title")
-	t.Artist = firstTagValue(values, "artist")
-	t.AlbumArtist = firstTagValue(values, "albumartist")
-	t.Composer = firstTagValue(values, "composer")
-	t.Album = firstTagValue(values, "album")
-	t.Genre = firstTagValue(values, "genre")
-	t.Track = firstTagValue(values, "track", "tracknumber")
-	t.Disc = firstTagValue(values, "disc", "discnumber")
-	t.Date = firstTagValue(values, "date", "year")
-	t.Copyright = firstTagValue(values, "copyright")
-	t.SortName = firstTagValue(values, "sortname", "titlesort")
-	t.SortAlbum = firstTagValue(values, "sortalbum", "albumsort")
-	t.SortArtist = firstTagValue(values, "sortartist", "artistsort")
-
-	return nil
+	return values, nil
 }
 
 func normalizeTagKey(key string) string {

@@ -1026,6 +1026,7 @@ func insertAudioStream(ctx context.Context, qtx *database.Queries, movieID int64
 		ChannelLayout: helpers.NullString(stream.ChannelLayout),
 		Language:      helpers.NullString(stream.Tags.Language),
 		Title:         helpers.NullString(stream.Tags.Title),
+		IsDefault:     stream.Disposition.Default == 1,
 	})
 	if err != nil {
 		return fmt.Errorf("insert audio stream failed: %w", err)
@@ -1040,8 +1041,8 @@ func insertSubtitleStream(ctx context.Context, qtx *database.Queries, movieID in
 		Codec:       stream.CodecName,
 		Language:    helpers.NullString(stream.Tags.Language),
 		Title:       helpers.NullString(stream.Tags.Title),
-		IsForced:    false,
-		IsDefault:   false,
+		IsForced:    stream.Disposition.Forced == 1,
+		IsDefault:   stream.Disposition.Default == 1,
 	})
 	if err != nil {
 		return fmt.Errorf("insert subtitle failed: %w", err)
