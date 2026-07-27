@@ -474,17 +474,6 @@ function PlayMoviePage() {
     await togglePlay();
   };
 
-  const handlePlaybackSurfaceKeyDown = async (
-    event: React.KeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (!chromeFullscreenMode) return;
-    if (event.target !== event.currentTarget) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-
-    event.preventDefault();
-    await togglePlay();
-  };
-
   const seek = (newTime: number) => {
     const video = videoRef.current;
     if (!video) return;
@@ -785,7 +774,7 @@ function PlayMoviePage() {
       />
 
       <p className="sr-only">
-        Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind
+        Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind{" "}
         {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
         {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
         fullscreen, Escape to exit fullscreen, Back button to go back.
@@ -825,13 +814,12 @@ function PlayMoviePage() {
       </header>
 
       {chromeFullscreenMode ? (
+        // Click-to-toggle is a pointer convenience only; the same toggle is
+        // reachable from the footer play button and Space/K, so the surface
+        // carries no button role (audit D14).
         <div
           className="relative flex min-h-0 flex-1 flex-col"
-          role="button"
-          tabIndex={0}
-          aria-label="Toggle movie playback"
           onClick={handlePlaybackSurfaceClick}
-          onKeyDown={handlePlaybackSurfaceKeyDown}
         >
           {videoPlayer}
           {capacityOverlay}

@@ -140,10 +140,8 @@ export default function MoviePlayerControls({
           </div>
 
           <div className="flex min-w-25 items-center justify-end gap-2">
-            <span
-              className="rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground"
-              aria-label="Current stream quality"
-            >
+            <span className="rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground">
+              <span className="sr-only">Current stream quality: </span>
               {modeLabel}
             </span>
             <ChapterMenu
