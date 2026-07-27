@@ -97,6 +97,7 @@ export default function CreateWatchRoomDialog({
   const mimeType = techData?.data?.movie?.mime_type ?? undefined;
   const availableModes = getAvailableModes({
     video: videoStream,
+    videoStreamsLoaded: Boolean(techData?.data),
     audioStreams,
     mimeType,
   });

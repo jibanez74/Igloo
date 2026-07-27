@@ -429,41 +429,73 @@ describe("audio track and mode resolvers", () => {
     const containers = ["video/mp4", "video/webm", "video/x-matroska", ""];
     const heights = [0, 480, 1080, 2160];
 
-    for (const videoCodec of videoCodecs) {
-      for (const audioCodec of audioCodecs) {
-        for (const mimeType of containers) {
-          for (const height of heights) {
-            const modes = getAvailableModes({
-              video:
-                videoCodec === undefined
-                  ? undefined
-                  : {
-                      codec: videoCodec,
-                      codec_profile: nullString,
-                      codec_level: nullInt,
-                      height,
-                      bit_depth: nullInt,
-                      pixel_format: nullString,
-                    },
-              audioStreams:
-                audioCodec === undefined
-                  ? []
-                  : [
-                      {
-                        codec: audioCodec,
+    for (const videoStreamsLoaded of [true, false]) {
+      for (const videoCodec of videoCodecs) {
+        for (const audioCodec of audioCodecs) {
+          for (const mimeType of containers) {
+            for (const height of heights) {
+              const modes = getAvailableModes({
+                videoStreamsLoaded,
+                video:
+                  videoCodec === undefined
+                    ? undefined
+                    : {
+                        codec: videoCodec,
                         codec_profile: nullString,
-                        is_default: false,
+                        codec_level: nullInt,
+                        height,
+                        bit_depth: nullInt,
+                        pixel_format: nullString,
                       },
-                    ],
-              mimeType,
-            });
-            const ids = modes.map(m => m.id);
-            if (ids.includes("direct")) {
-              expect(ids).toContain("remux");
+                audioStreams:
+                  audioCodec === undefined
+                    ? []
+                    : [
+                        {
+                          codec: audioCodec,
+                          codec_profile: nullString,
+                          is_default: false,
+                        },
+                      ],
+                mimeType,
+              });
+              const ids = modes.map(m => m.id);
+              if (ids.includes("direct")) {
+                expect(ids).toContain("remux");
+              }
             }
           }
         }
       }
     }
+  });
+
+  // Audit matrix row 18b (D17): a movie whose scan produced zero video
+  // streams must not be offered direct play or remux once metadata has
+  // loaded — an absent video stream only means "unknown" while it is still
+  // in flight.
+  it("refuses direct and remux when metadata is loaded without a video stream", () => {
+    const audioStreams = [
+      { codec: "aac", codec_profile: { String: "", Valid: false }, is_default: false },
+    ];
+
+    const loaded = getAvailableModes({
+      videoStreamsLoaded: true,
+      video: undefined,
+      audioStreams,
+      mimeType: "video/mp4",
+    }).map(m => m.id);
+    expect(loaded).not.toContain("direct");
+    expect(loaded).not.toContain("remux");
+    expect(loaded).toHaveLength(0);
+
+    const pending = getAvailableModes({
+      videoStreamsLoaded: false,
+      video: undefined,
+      audioStreams,
+      mimeType: "video/mp4",
+    }).map(m => m.id);
+    expect(pending).toContain("direct");
+    expect(pending).toContain("remux");
   });
 });

@@ -135,6 +135,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const primaryVideo = getPrimaryVideoStream(videoStreams);
     const availableModes = getAvailableModes({
       video: primaryVideo,
+      videoStreamsLoaded: true,
       audioStreams,
       mimeType: techData.movie?.mime_type,
     });

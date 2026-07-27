@@ -100,6 +100,7 @@ export function useMoviePlaybackData({
   const availableModes = techLoaded
     ? getAvailableModes({
         video: primaryVideo,
+        videoStreamsLoaded: true,
         audioStreams,
         mimeType: techData.data.movie?.mime_type,
       })

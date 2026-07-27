@@ -273,6 +273,67 @@ describe("useMoviePlaybackData", () => {
     );
   });
 
+  // Audit matrix row 18b (D17): loaded metadata with zero video streams must
+  // not leave direct play on offer — the player never mounts and no /stream
+  // request can be issued.
+  it("marks every mode unavailable when metadata has no video stream", () => {
+    const movieId = 21;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
+      error: false,
+      data: {
+        movie: {
+          title: "No Video Streams",
+          poster_path: { String: "", Valid: false },
+          duration: nullableFloat64(600),
+        },
+      },
+    });
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
+      error: false,
+      data: {
+        movie: {
+          mime_type: "video/mp4",
+          duration: nullableFloat64(600),
+        },
+        video_streams: [],
+        audio_streams: [{ codec: "aac" }],
+        subtitles: [],
+        chapters: [],
+      },
+    });
+    queryClient.setQueryData([MOVIE_WATCH_PROGRESS_KEY, movieId], {
+      error: false,
+      data: null,
+    });
+    seedSettledPlaybackPreferences(queryClient);
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 0,
+            subtitle_track: undefined,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.modeUnavailable).toBe(true);
+    expect(result.current.directPlayAvailable).toBe(false);
+    expect(playbackStatus(result.current, "direct").kind).toBe(
+      "modeUnavailable",
+    );
+  });
+
   it("drops a subtitle_track URL param that points at a bitmap subtitle", () => {
     const movieId = 8;
     const queryClient = new QueryClient({

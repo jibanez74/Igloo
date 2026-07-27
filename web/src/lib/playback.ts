@@ -157,8 +157,18 @@ export function directPlayAudioSelectionEligible(
 }
 
 export type AvailableModesArgs = {
-  /** The primary video stream; when absent, all non-transcode modes are offered. */
+  /**
+   * The primary video stream. When absent while `videoStreamsLoaded` is
+   * false, all non-transcode modes are offered (metadata still in flight);
+   * when absent while it is true, the movie has no playable video stream and
+   * direct/remux are refused (audit D17).
+   */
   video?: DirectPlayVideoInfo;
+  /**
+   * Whether technical details have loaded, so an absent `video` means "no
+   * playable video stream" rather than "unknown".
+   */
+  videoStreamsLoaded: boolean;
   /**
    * Audio streams in `stream_index` order. Only the FIRST stream can affect
    * direct-play eligibility: direct play serves the raw container, and the
@@ -187,7 +197,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
 
   return STREAM_MODES.filter((m) => {
     if (m.type === "direct") {
-      if (!video) return true;
+      if (!video) return !args.videoStreamsLoaded;
       const staticRulesPass =
         isVideoDirectPlayable(video.codec) &&
         isBrowserSafeH264(video) &&
@@ -204,7 +214,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
       return canPlay(typeString) !== "";
     }
     if (m.type === "remux") {
-      if (!video) return true;
+      if (!video) return !args.videoStreamsLoaded;
       return isVideoDirectPlayable(video.codec);
     }
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;

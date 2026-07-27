@@ -36,6 +36,7 @@ describe("getAvailableModes container gate", () => {
   it("offers direct play for an eligible MP4 source", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",
@@ -56,6 +57,7 @@ describe("getAvailableModes container gate", () => {
   ])("refuses direct play for %s while keeping remux", (mimeType) => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType,
@@ -88,6 +90,7 @@ describe("direct-play audio ambiguity gate", () => {
   it("refuses direct play when the default disposition is not on stream 0", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [
           aacAudio({ is_default: false }),
@@ -103,6 +106,7 @@ describe("direct-play audio ambiguity gate", () => {
   it("keeps direct play for multiple streams when stream 0 is the single default", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [
           aacAudio({ is_default: true }),
@@ -117,6 +121,7 @@ describe("direct-play audio ambiguity gate", () => {
   it("keeps direct play for multiple streams with no default flags", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [aacAudio(), aacAudio(), aacAudio()],
         mimeType: "video/mp4",
@@ -151,6 +156,7 @@ describe("browser-safe H.264 gate", () => {
   ])("refuses direct play for %s while keeping remux", (_name, overrides) => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(overrides),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",
@@ -163,6 +169,7 @@ describe("browser-safe H.264 gate", () => {
   it("keeps direct play for plain 8-bit High profile", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",
@@ -174,6 +181,7 @@ describe("browser-safe H.264 gate", () => {
   it("does not consult the probe when the static rules refuse", () => {
     const canPlay = vi.fn().mockReturnValue("probably");
     getAvailableModes({
+      videoStreamsLoaded: true,
       video: h264Video({ bit_depth: { Int64: 10, Valid: true } }),
       audioStreams: [aacAudio()],
       mimeType: "video/mp4",
@@ -187,6 +195,7 @@ describe("getAvailableModes canPlayType gate", () => {
   it("asks the probe with the full RFC 6381 type string", () => {
     const canPlay = vi.fn().mockReturnValue("probably");
     getAvailableModes({
+      videoStreamsLoaded: true,
       video: h264Video(),
       audioStreams: [aacAudio()],
       mimeType: "video/mp4",
@@ -200,6 +209,7 @@ describe("getAvailableModes canPlayType gate", () => {
   it("removes only direct when the probe refuses a statically eligible file", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",
@@ -214,6 +224,7 @@ describe("getAvailableModes canPlayType gate", () => {
     const canPlay = vi.fn().mockReturnValue("probably");
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType: "video/x-matroska",
@@ -227,6 +238,7 @@ describe("getAvailableModes canPlayType gate", () => {
   it("treats a 'maybe' answer as playable", () => {
     const ids = modeIds(
       getAvailableModes({
+        videoStreamsLoaded: true,
         video: h264Video({ codec_profile: nullString, codec_level: nullInt }),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",

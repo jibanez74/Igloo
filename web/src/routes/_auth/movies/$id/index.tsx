@@ -163,6 +163,7 @@ function LibraryMovieDetailsContent({
   const mimeType = techData?.data?.movie?.mime_type;
   const availableModes = getAvailableModes({
     video: videoStream,
+    videoStreamsLoaded: Boolean(techData?.data),
     audioStreams,
     mimeType: mimeType ?? undefined,
   });
