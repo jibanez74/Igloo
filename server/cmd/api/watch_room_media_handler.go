@@ -119,5 +119,6 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("ETag", strongFileETag(stat))
 	http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)
 }

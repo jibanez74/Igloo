@@ -210,6 +210,88 @@ func TestStreamMovieHead(t *testing.T) {
 	})
 }
 
+func TestStreamMovieETagValidation(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	content := bytes.Repeat([]byte("0123456789"), 30)
+	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
+	handler := streamTestHandler(app)
+	target := fmt.Sprintf("/api/movies/%d/stream", movie.ID)
+
+	fetchETag := func(t *testing.T, method string) string {
+		t.Helper()
+		req := httptest.NewRequest(method, target, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+		etag := w.Header().Get("ETag")
+		if etag == "" {
+			t.Fatalf("%s response has no ETag", method)
+		}
+		return etag
+	}
+
+	etag := fetchETag(t, http.MethodGet)
+	stat, err := os.Stat(movie.FilePath)
+	if err != nil {
+		t.Fatalf("stat movie file: %v", err)
+	}
+	want := fmt.Sprintf("\"%x-%x\"", stat.Size(), stat.ModTime().UnixNano())
+	if etag != want {
+		t.Errorf("ETag = %q, want %q", etag, want)
+	}
+	if headETag := fetchETag(t, http.MethodHead); headETag != etag {
+		t.Errorf("HEAD ETag = %q, want %q", headETag, etag)
+	}
+
+	t.Run("if-none-match", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("If-None-Match", etag)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotModified {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusNotModified)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("body = %d bytes, want empty", w.Body.Len())
+		}
+	})
+
+	t.Run("if-range match serves the range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Range", "bytes=0-99")
+		req.Header.Set("If-Range", etag)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusPartialContent {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusPartialContent)
+		}
+		if !bytes.Equal(w.Body.Bytes(), content[0:100]) {
+			t.Errorf("body = %d bytes, want the first 100 bytes", w.Body.Len())
+		}
+	})
+
+	t.Run("if-range mismatch serves the full file", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Range", "bytes=0-99")
+		req.Header.Set("If-Range", "\"stale-etag\"")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+		if !bytes.Equal(w.Body.Bytes(), content) {
+			t.Errorf("body = %d bytes, want the full %d bytes", w.Body.Len(), len(content))
+		}
+	})
+}
+
 func TestStreamMovieErrorPaths(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

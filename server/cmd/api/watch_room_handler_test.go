@@ -1348,6 +1348,9 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "video/mp4") {
 		t.Fatalf("Content-Type = %q, want video/mp4", got)
 	}
+	if got := w.Header().Get("ETag"); got == "" {
+		t.Fatal("direct stream response has no ETag")
+	}
 
 	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodHead, path, "")
 	if w.Code != http.StatusOK {

@@ -209,7 +209,7 @@ func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 // StreamTrack streams the audio file for playback.
 // Uses http.ServeContent which handles:
 //   - Range requests (for seeking/scrubbing)
-//   - If-Modified-Since headers (caching)
+//   - If-Modified-Since / If-None-Match headers (caching, via the ETag set below)
 //   - Content-Type and Content-Length headers
 func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
@@ -253,6 +253,7 @@ func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", track.MimeType)
+	w.Header().Set("ETag", strongFileETag(stat))
 
 	http.ServeContent(w, r, track.FileName, stat.ModTime(), file)
 }
