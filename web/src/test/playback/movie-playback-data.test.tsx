@@ -196,7 +196,6 @@ function playbackStatus(
     movieIsPending: data.movieIsPending,
     hasMovie: !!data.movie,
     requestedMode,
-    effectiveMode: data.resolvedMode,
     techPending: data.techPending,
     playbackPreferencesReady: data.playbackPreferencesReady,
     modeUnavailable: data.modeUnavailable,
@@ -581,7 +580,7 @@ describe("useMoviePlaybackData", () => {
     expect(result.current.streamUrl).not.toContain("/stream");
   });
 
-  it("keeps cold direct playback ready for the first audio track", async () => {
+  it("keeps cold direct playback preparing until technical details resolve", async () => {
     const movieId = 93;
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -609,9 +608,11 @@ describe("useMoviePlaybackData", () => {
 
     expect(result.current.techPending).toBe(true);
     expect(result.current.resolvedMode).toBe("direct");
-    expect(result.current.streamUrl).toBe("/api/movies/93/stream");
+    // The player must not mount (and no /stream request may fire) before
+    // eligibility is known — audit D16.
     expect(playbackStatus(result.current, "direct")).toEqual({
-      kind: "ready",
+      kind: "loading",
+      message: "Preparing playback...",
     });
 
     technicalDetailsRequest.resolve(
@@ -632,6 +633,9 @@ describe("useMoviePlaybackData", () => {
     await waitFor(() => {
       expect(result.current.techPending).toBe(false);
     });
+    expect(result.current.resolvedMode).toBe("direct");
+    expect(result.current.streamUrl).toBe("/api/movies/93/stream");
+    expect(playbackStatus(result.current, "direct")).toEqual({ kind: "ready" });
   });
 
   it("waits for auth and playback preferences before normalizing stale deep-link values", async () => {

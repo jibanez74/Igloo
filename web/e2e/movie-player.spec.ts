@@ -197,6 +197,74 @@ test("cold non-first audio waits for metadata and never requests the raw stream"
   ).toBe(false);
 });
 
+test("cold direct deep link to an ineligible file never requests the raw stream", async ({
+  page,
+}) => {
+  await logInMoviePlayer(page);
+
+  // Serve the movie as MKV with delayed technical details: a bookmarked
+  // ?mode=direct&audio_track=0 link must wait for eligibility instead of
+  // optimistically firing /stream (audit D16, matrix row 18c).
+  let releaseTechnicalDetails!: () => void;
+  const technicalDetailsGate = new Promise<void>(resolve => {
+    releaseTechnicalDetails = resolve;
+  });
+  let technicalDetailsRequested = false;
+  await page.route(
+    "**/api/movies/101/technical-details",
+    async route => {
+      technicalDetailsRequested = true;
+      await technicalDetailsGate;
+
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data: {
+          movie: Record<string, unknown>;
+        };
+      };
+      body.data.movie.container = "mkv";
+      body.data.movie.mime_type = "video/x-matroska";
+      await route.fulfill({ response, json: body });
+    },
+  );
+
+  const mediaRequests: string[] = [];
+  await page.route("**/api/movies/101/stream*", route => {
+    mediaRequests.push(route.request().url());
+  });
+  await page.route(
+    "**/api/movies/101/hls/*/playlist.m3u8*",
+    route => {
+      mediaRequests.push(route.request().url());
+    },
+  );
+
+  await page.goto(
+    "/movies/101/play?mode=direct&audio_track=0&subtitle_track=off&start=0",
+  );
+
+  await expect.poll(() => technicalDetailsRequested).toBe(true);
+  await expect(page.getByText("Preparing playback...")).toBeVisible();
+  await expect(page.locator("video")).toHaveCount(0);
+  expect(mediaRequests).toEqual([]);
+
+  releaseTechnicalDetails();
+
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("mode"))
+    .toBe("remux");
+  await expect.poll(() => mediaRequests.length).toBe(1);
+  expect(new URL(mediaRequests[0]).pathname).toBe(
+    "/api/movies/101/hls/remux/playlist.m3u8",
+  );
+  expect(
+    mediaRequests.some(url => new URL(url).pathname.endsWith("/stream")),
+  ).toBe(false);
+  // The pre-emptive mode resolution is silent: it must not read as an
+  // error-driven fallback announcement.
+  await expect(page.getByText(/can't be played directly/)).toHaveCount(0);
+});
+
 test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) => {
   await logInMoviePlayer(page);
 

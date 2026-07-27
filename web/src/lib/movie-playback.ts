@@ -23,7 +23,6 @@ type MoviePlaybackStatusArgs = {
   movieIsPending: boolean;
   hasMovie: boolean;
   requestedMode: StreamModeId;
-  effectiveMode: StreamModeId;
   techPending: boolean;
   playbackPreferencesReady: boolean;
   modeUnavailable: boolean;
@@ -131,7 +130,11 @@ export function deriveMoviePlaybackStatus(
   if (!args.playbackPreferencesReady) {
     return { kind: "loading", message: "Preparing playback..." };
   }
-  if (args.effectiveMode !== "direct" && args.techPending) {
+  // Direct waits for technical details like every other mode: mounting the
+  // player earlier fires a /stream request before eligibility is known
+  // (audit D16, §3.5). The route loader prefetches these, so a warm cache
+  // never sees this state.
+  if (args.techPending) {
     return { kind: "loading", message: "Preparing playback..." };
   }
   if (args.modeUnavailable) {

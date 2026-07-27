@@ -83,7 +83,31 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const movieId = parseInt(params.id, 10);
     if (Number.isNaN(movieId) || movieId <= 0) return;
 
-    if (deps.mode !== undefined) return;
+    if (deps.mode !== undefined) {
+      // The player waits for technical details before requesting media
+      // (audit D16), so warm the caches for URLs that already carry a mode —
+      // but without blocking navigation, or the player skeleton would not
+      // render until every query resolves. The component's own queries join
+      // these in-flight fetches; errors surface through them.
+      void (async () => {
+        const authRes = await context.queryClient.ensureQueryData(
+          authUserQueryOpts(),
+        );
+        if (authRes.error) return;
+        await Promise.all([
+          context.queryClient.ensureQueryData(
+            libraryMovieDetailsQueryOpts(movieId),
+          ),
+          context.queryClient.ensureQueryData(
+            movieTechnicalDetailsQueryOpts(movieId),
+          ),
+          context.queryClient.ensureQueryData(
+            playbackSettingsQueryOpts(authRes.data.user.id),
+          ),
+        ]);
+      })().catch(() => {});
+      return;
+    }
 
     const authRes = await context.queryClient.ensureQueryData(
       authUserQueryOpts(),
@@ -242,7 +266,6 @@ function PlayMoviePage() {
     movieIsPending,
     hasMovie: !!movie,
     requestedMode: mode,
-    effectiveMode: resolvedMode,
     techPending,
     playbackPreferencesReady,
     modeUnavailable,
