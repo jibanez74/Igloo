@@ -6,7 +6,7 @@
 
 This document is an investigation and recommendation report. At the time it was written, **no code was changed, and no diagnostic edits were made** (see §12).
 
-> **Implementation status (2026-07-27, third revision):** §11.1 items 1–6 have been implemented on `fix/playback-settings` — findings **D1, D3, D7, D8, D2, D16, D12, D-FB and D-FB2 are fixed**, and the bulk of **D-TEST** has landed with them (see §14 for the commit-per-item mapping). Sections describing the pre-fix behaviour (notably §3, §6, §9 and §10.1) are preserved as written and describe the code **as audited**, not as it is now; in-place status notes mark the load-bearing statements the fixes invalidated. Still open: D4, D5, D6, D9, D10, D11 (unverified), D13–D15, D17, D-EXT, D-WR.
+> **Implementation status (2026-07-27, fourth revision):** the remaining register is closed — **D4, D5, D9, D10, D11, D13–D15, D17 and D-WR are fixed** on `fix/playback-settings` (see §14 for the commit-per-item mapping). Combined with the third revision (D1, D2, D3, D7, D8, D12, D16, D-FB, D-FB2, D-TEST), every finding is resolved except **D6** (sendfile/session-middleware rescoping, deliberately deferred — it touches the auth middleware layout for all stream routes) and **D-EXT** (sidecar subtitle indexing, a product feature for its own branch). Sections describing the pre-fix behaviour are preserved as written and describe the code **as audited**, not as it is now.
 
 ---
 
@@ -882,7 +882,7 @@ Using `httptest` and a small temp file:
 
 ## 11. Findings register
 
-Severity reflects user impact on the direct-playback feature. ✅ marks findings fixed by the third-revision implementation (§14); the Evidence and Smallest-correct-fix columns describe the code as audited.
+Severity reflects user impact on the direct-playback feature. ✅ marks findings fixed by the third- and fourth-revision implementations (§14); the Evidence and Smallest-correct-fix columns describe the code as audited.
 
 | ID | Sev | Finding | Evidence | Smallest correct fix |
 |---|---|---|---|---|
@@ -894,24 +894,24 @@ Severity reflects user impact on the direct-playback feature. ✅ marks findings
 | **D-FB** ✅ | High | No fallback from direct play — "Try Again" retries the identical mode | `play.tsx:649-654`; `VideoPlayer.tsx:359-388` | One-shot, per-stream-window navigation to `remux` on `MEDIA_ERR_SRC_NOT_SUPPORTED` / `MEDIA_ERR_DECODE` only, gated on `techLoaded` and `direct ∈ availableModes`, preserving position and track selection; announce the switch. Fix D12 and D16 first |
 | **D3** ✅ | **High** | No `canPlayType()` on the direct path; one static allowlist stands in for every browser. §5.6 shows why a hardcoded container list is unsafe — it was wrong here and it was wrong in Jellyfin | `playback.ts:30-37` (the only probe, HLS-only) | Add a **narrowing-only** second gate: build an RFC 6381 codec string from `codec_profile`/`codec_level` and require a non-empty `canPlayType`. Must be `staticRules && probe`, never a disjunction — the watch-room server enforces the same invariant and cannot run a probe (§3.4). Make it an injectable function, not a module-load IIFE, or it is untestable |
 | **D-FB2** ✅ | Medium | A silent container failure produces no `MediaError`, so an error-code-only fallback cannot fire | §5.6; jellyfin-web#7651 | Add a bounded stall guard (no `loadedmetadata` / no progress past 0 within N s) to the D-FB fallback |
-| **D4** | Medium | `HEAD /api/movies/{id}/stream` returns 405 | `routes.go:172`; no `GetHead` in `routes.go:10-26` | Add `middleware.GetHead` (or an explicit `r.Head`), and document `head` in `docs/openapi.json` |
-| **D9** | Medium | "Original file — plays as-is" describes the container, not the audio the user hears | `constants.ts:159`; `MoviePlayerControls.tsx:147` | After D7/D8, name the selected audio in the badge or its tooltip |
-| **D10** | Medium | Direct-play source is torn down and reloaded whenever `startSec` changes | `VideoPlayer.tsx:253` | Split the effect, or drop `startSec` from the dep array on the direct branch |
-| **D11** | Medium, **unverified** | Subtitles *may* silently stop showing after that reload. The HTML load algorithm forgets only in-band text tracks, so a `<track>`-derived one probably survives — this audit did not test it | `VideoPlayer.tsx:312` | **Write the §10.3 subtitle-persistence spec first and let it decide.** If confirmed: re-apply `track.track.mode = "showing"` after resource selection restarts (or fix D10, which removes the trigger). If not: keep the test, drop the finding |
-| **D5** | Low | No `ETag`; `If-Range` validation is date-granular | `movie_handler.go:689-742` | Set a strong ETag from size + mtime before `ServeContent` |
+| **D4** ✅ | Medium | `HEAD /api/movies/{id}/stream` returns 405 | `routes.go:172`; no `GetHead` in `routes.go:10-26` | Add `middleware.GetHead` (or an explicit `r.Head`), and document `head` in `docs/openapi.json` |
+| **D9** ✅ | Medium | "Original file — plays as-is" describes the container, not the audio the user hears | `constants.ts:159`; `MoviePlayerControls.tsx:147` | After D7/D8, name the selected audio in the badge or its tooltip |
+| **D10** ✅ | Medium | Direct-play source is torn down and reloaded whenever `startSec` changes | `VideoPlayer.tsx:253` | Split the effect, or drop `startSec` from the dep array on the direct branch |
+| **D11** ✅ | Medium, **unverified** | Subtitles *may* silently stop showing after that reload. The HTML load algorithm forgets only in-band text tracks, so a `<track>`-derived one probably survives — this audit did not test it | `VideoPlayer.tsx:312` | **Write the §10.3 subtitle-persistence spec first and let it decide.** If confirmed: re-apply `track.track.mode = "showing"` after resource selection restarts (or fix D10, which removes the trigger). If not: keep the test, drop the finding |
+| **D5** ✅ | Low | No `ETag`; `If-Range` validation is date-granular | `movie_handler.go:689-742` | Set a strong ETag from size + mtime before `ServeContent` |
 | **D6** | Low | scs's writer defeats sendfile; session re-committed per range response | scs `sessionResponseWriter` lacks `io.ReaderFrom` | Scope the session middleware off media routes, or pass `ReadFrom` through |
 | **D12** ✅ | Low | `streamReloadKey` and the auto-resume effect are inert for direct play | `movie-playback.ts:176`; `play.tsx:492-516` | Key auto-resume on `sessionWindowKey` rather than `streamUrl` |
-| **D13** | Low | `aria-label` on a plain `<span>` is not announced | `MoviePlayerControls.tsx:143-148` | Use visually-hidden text, or move the label onto a focusable/labelled element |
-| **D14** | Low | `div role="button"` wraps the `<video>` in fullscreen | `play.tsx:738-749` | Drop the role and `tabIndex`; keep the click handler (the toggle is already reachable via the footer button and Space/K) |
-| **D15** | Trivial | `sr-only` text renders "rewind10 seconds" | `play.tsx:700` | Add `{" "}` |
-| **D17** | Low | `getAvailableModes` offers every mode, direct included, when `videoCodec` is `undefined` — reachable with `techLoaded` true for a movie with zero `video_streams` rows | `playback.ts:92`, `:96`; `useMoviePlaybackData.ts:100` | Treat "metadata loaded but no video stream" as ineligible for direct rather than as "no codec info yet" |
+| **D13** ✅ | Low | `aria-label` on a plain `<span>` is not announced | `MoviePlayerControls.tsx:143-148` | Use visually-hidden text, or move the label onto a focusable/labelled element |
+| **D14** ✅ | Low | `div role="button"` wraps the `<video>` in fullscreen | `play.tsx:738-749` | Drop the role and `tabIndex`; keep the click handler (the toggle is already reachable via the footer button and Space/K) |
+| **D15** ✅ | Trivial | `sr-only` text renders "rewind10 seconds" | `play.tsx:700` | Add `{" "}` |
+| **D17** ✅ | Low | `getAvailableModes` offers every mode, direct included, when `videoCodec` is `undefined` — reachable with `techLoaded` true for a movie with zero `video_streams` rows | `playback.ts:92`, `:96`; `useMoviePlaybackData.ts:100` | Treat "metadata loaded but no video stream" as ineligible for direct rather than as "no codec info yet" |
 | **D-TEST** ✅ | High | No test covers `StreamMovie`, any `Range` header, `mime_type` derivation, the direct-play `src` assignment, or a cold `mode=direct&audio_track=0` deep link | §10.1 | The suites in §10.3 — landed with the fixes, except the D11 subtitle-persistence spec (deferred with D11) |
 | **D-EXT** | Info | External subtitle sidecar files are not indexed | scanner reads embedded streams only | Out of scope; noted as a product gap |
-| **D-WR** | Info | `StreamWatchRoomMovie` returns 500 for a missing movie; negative `audio_track` unvalidated at room creation | `watch_room_media_handler.go:84-89`; `watch_room_handler.go:359-364` | Adjacent, out of scope |
+| **D-WR** ✅ | Info | `StreamWatchRoomMovie` returns 500 for a missing movie; negative `audio_track` unvalidated at room creation | `watch_room_media_handler.go:84-89`; `watch_room_handler.go:359-364` | Adjacent, out of scope |
 
 ### 11.1 Recommended sequence
 
-> **Status note (third revision):** items 1–6 are implemented, in this order, one commit each (mapping in §14). Items 7–9 remain open except D12 (landed as the fallback's prerequisite) and the bulk of D-TEST.
+> **Status note (fourth revision):** items 1–6 landed with the third revision; items 7–9 landed with the fourth (mapping in §14). The whole sequence is complete except D6, which remains deferred.
 
 1. **D1** — pin the container→MIME map. Cheapest of the five, purely server-side, independently testable without a browser, fixes the `Content-Type` on the wire (which matters for every consumer that is not a `<video>` element), kills the duplicate derivation inside `StreamMovie`, and states the MP4-only rule that §3.2 shows is currently accidental. Lock it with the D-TEST regression guard for matrix row 7 in the same change.
 2. **D3** — add the `canPlayType` gate, **narrowing-only**. It is the only change that makes the container/codec decision self-correcting, and §5.6 is the proof that a hand-maintained list will drift. Land it after D1 so the static rule it narrows is the pinned one, not the accidental one.
@@ -971,6 +971,24 @@ The second revision (§14) was a verification pass, not a re-audit. What it did:
 What it did **not** do: drive a browser, start a server, or play a media file. That boundary is unchanged, which is why D11 was demoted rather than resolved, and why §5 was reframed rather than corrected.
 
 ## 14. Revision history
+
+**2026-07-27 (fourth revision) — implementation of the remaining register.** D4, D5, D9, D10, D11, D13–D15, D17 and D-WR were implemented on `fix/playback-settings`, one commit per item:
+
+| Item | Findings | Commit |
+|---|---|---|
+| 7a | D4 | `0a56602a` — explicit `r.Head` on the movie, watch-room, and music track stream routes; `head` operations in `openapi.json`; HEAD httptest cases |
+| 7b | D5 | `96778af0` — `strongFileETag` (size + nanosecond mtime) set before `ServeContent` in all three stream handlers; `If-None-Match`/`If-Range` tests |
+| 7c | D-WR | `455025a6` — `sql.ErrNoRows` → 404 in `StreamWatchRoomMovie`; its leftover `mime.TypeByExtension` Content-Type fallback replaced with the pinned `helpers.VideoMimeTypes` map (D1 residue) |
+| 9a | D17 | `fc163adf` — required `videoStreamsLoaded` flag on `AvailableModesArgs`; loaded-but-no-video refuses direct **and remux**, yielding the empty-modes → `modeUnavailable` screen; matrix row 18b tests |
+| 9b | D17 mirror | `66730961` — watch-room creation refuses a direct room for a zero-video-stream movie (the server gate previously skipped its safety check in that case) |
+| 8a | D9 | `486520e5` — `directPlayModeLabel` names the ordinal-0 audio language ("Original file — English audio"), language-only per the user's choice; generic label kept as the fallback and in the settings dialog |
+| 7d | D10 | `f8a94475` — source effect split in two: the hls.js effect keeps `startSec` (rewind-buffer rebuilds are how HLS seeks on an unchanged URL), the native effect drops it; regression tests written first |
+| 7e | D11 | `ab28a621` — deciding browser spec added to the opt-in real-media suite (`E2E_DIRECT_SUBTITLE_MOVIE_ID`); D10's fix removed the only trigger, so D11 closes either way |
+| 9c | D13–D15 | `1988ca1c` — badge announced via visually-hidden text; fullscreen surface `role="button"`/`tabIndex`/keydown removed; "rewind10 seconds" whitespace fixed |
+
+Design deviations from the report, recorded: **D4** used explicit `r.Head` registrations rather than `middleware.GetHead` — the OpenAPI coverage test is bidirectional and `GetHead` registers nothing with chi, so documented `head` operations would have failed its stale check. **D17** refuses remux as well as direct when metadata is loaded with no video stream (nothing can remux a movie with no video), which routes into the existing `modeUnavailable` screen; the same rule was mirrored into watch-room creation, where the server gate silently allowed the zero-stream case. **D11**'s verdict is that neither jsdom (stubbed `load()`, polyfilled `track`) nor the mocked e2e stack (no decodable media — the D-FB fallback navigates away mid-spec) can decide it; the jsdom regression test guards the D10 trigger and the browser truth lives in the opt-in real-media suite. The §10.3 idea of asserting "exactly one `/stream` request" was dropped from the browser spec — a real element issues many range requests for one source, so the spec asserts the seek landing and the subtitle staying `showing` instead.
+
+Still open after this revision: **D6** (deferred: efficiency-only, and the fix rescopes the session middleware for every stream route) and **D-EXT** (a product feature, not a defect).
 
 **2026-07-27 (third revision) — implementation.** §11.1 items 1–6 were implemented on `fix/playback-settings`, one commit per item:
 
