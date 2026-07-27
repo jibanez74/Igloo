@@ -28,6 +28,7 @@ const audioStream = (
       ? { Valid: false, String: "" }
       : { Valid: true, String: language },
   title: { Valid: false, String: "" },
+  is_default: false,
 });
 
 const subtitleStream = (
@@ -445,7 +446,13 @@ describe("audio track and mode resolvers", () => {
               audioStreams:
                 audioCodec === undefined
                   ? []
-                  : [{ codec: audioCodec, codec_profile: nullString }],
+                  : [
+                      {
+                        codec: audioCodec,
+                        codec_profile: nullString,
+                        is_default: false,
+                      },
+                    ],
               mimeType,
             });
             const ids = modes.map(m => m.id);

@@ -92,8 +92,24 @@ export type DirectPlayVideoInfo = Pick<
 /** Audio fields the direct-play eligibility rules consult. */
 export type DirectPlayAudioInfo = Pick<
   AudioStreamType,
-  "codec" | "codec_profile"
+  "codec" | "codec_profile" | "is_default"
 >;
+
+/**
+ * Whether direct play can guarantee which audio stream the browser decodes:
+ * refuse on ambiguity, not on absence. With no `default` flags at all,
+ * browsers follow container track order, so the first stream is the one that
+ * plays. Mirrors directPlayAudioSelectionUnambiguous in the Go server
+ * (watch_room_handler.go) — keep the two in sync. Audit §6.2 (D8).
+ */
+export function directPlayAudioSelectionEligible(
+  audioStreams: Pick<AudioStreamType, "is_default">[],
+): boolean {
+  if (audioStreams.length <= 1) return true;
+  const defaultCount = audioStreams.filter((s) => s.is_default).length;
+  if (defaultCount === 0) return true;
+  return defaultCount === 1 && audioStreams[0].is_default;
+}
 
 export type AvailableModesArgs = {
   /** The primary video stream; when absent, all non-transcode modes are offered. */
@@ -130,7 +146,8 @@ export function getAvailableModes(args: AvailableModesArgs) {
       const staticRulesPass =
         isVideoDirectPlayable(video.codec) &&
         isAudioDirectPlayable(audioStreams?.[0]?.codec) &&
-        isContainerDirectPlayable(mimeType ?? "");
+        isContainerDirectPlayable(mimeType ?? "") &&
+        directPlayAudioSelectionEligible(audioStreams ?? []);
       if (!staticRulesPass) return false;
       // The probe may only narrow eligibility, never widen it: the watch-room
       // server enforces the same direct ⊂ remux invariant from the static

@@ -79,6 +79,30 @@ func isValidPlaybackMode(mode string) bool {
 	return helpers.IsAllowedHLSProfile(mode)
 }
 
+// directPlayAudioSelectionUnambiguous reports whether direct play can
+// guarantee which audio stream a browser decodes: refuse on ambiguity, not on
+// absence. Mirrors directPlayAudioSelectionEligible in web/src/lib/playback.ts
+// — keep the two in sync (docs/web-direct-playback-audit.md §6.2, D8).
+func directPlayAudioSelectionUnambiguous(audioStreams []database.AudioStream) bool {
+	if len(audioStreams) <= 1 {
+		return true
+	}
+
+	defaultCount := 0
+	for _, stream := range audioStreams {
+		if stream.IsDefault {
+			defaultCount++
+		}
+	}
+	if defaultCount == 0 {
+		// No flags at all: browsers follow container track order, so the
+		// first stream is the one that plays.
+		return true
+	}
+
+	return defaultCount == 1 && audioStreams[0].IsDefault
+}
+
 func deduplicateAndFilterUserIDs(ids []int64, ownerID int64) []int64 {
 	seen := make(map[int64]bool)
 	result := []int64{}
@@ -372,6 +396,13 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	directWithNonFirstAudio := req.Mode == watchRoomPlaybackModeDirect && req.AudioTrack != 0
 	if directWithNonFirstAudio {
 		helpers.ErrorJSON(w, errors.New("direct playback always uses the first audio track; choose another playback mode to pick a different one"), http.StatusBadRequest)
+		return
+	}
+
+	directWithAmbiguousAudio := req.Mode == watchRoomPlaybackModeDirect &&
+		!directPlayAudioSelectionUnambiguous(audioStreams)
+	if directWithAmbiguousAudio {
+		helpers.ErrorJSON(w, errors.New("direct playback cannot guarantee which audio track this movie plays; choose another playback mode"), http.StatusBadRequest)
 		return
 	}
 

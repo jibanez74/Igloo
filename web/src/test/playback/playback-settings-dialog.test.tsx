@@ -88,6 +88,7 @@ function audioStream(
     channel_layout: nullableString("stereo"),
     language: nullableString("eng"),
     title: nullableString("English Stereo"),
+    is_default: false,
     ...overrides,
   };
 }

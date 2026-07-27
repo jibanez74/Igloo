@@ -650,6 +650,89 @@ func TestCreateWatchRoom_HTTP_NegativeAudioTrackRejected(t *testing.T) {
 	}
 }
 
+func TestDirectPlayAudioSelectionUnambiguous(t *testing.T) {
+	stream := func(isDefault bool) database.AudioStream {
+		return database.AudioStream{IsDefault: isDefault}
+	}
+
+	cases := []struct {
+		name    string
+		streams []database.AudioStream
+		want    bool
+	}{
+		{name: "no streams", streams: nil, want: true},
+		{name: "single stream", streams: []database.AudioStream{stream(false)}, want: true},
+		{name: "multiple streams, no defaults", streams: []database.AudioStream{stream(false), stream(false)}, want: true},
+		{name: "single default on stream 0", streams: []database.AudioStream{stream(true), stream(false)}, want: true},
+		{name: "single default on non-zero index", streams: []database.AudioStream{stream(false), stream(true)}, want: false},
+		{name: "multiple defaults", streams: []database.AudioStream{stream(true), stream(true)}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := directPlayAudioSelectionUnambiguous(tc.streams)
+			if got != tc.want {
+				t.Errorf("directPlayAudioSelectionUnambiguous = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func insertWatchRoomTestAudioStream(t *testing.T, app *Application, movieID int64, streamIndex int64, isDefault bool) {
+	t.Helper()
+
+	_, err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
+		MovieID:     movieID,
+		StreamIndex: streamIndex,
+		Codec:       "aac",
+		Channels:    2,
+		IsDefault:   isDefault,
+	})
+	if err != nil {
+		t.Fatalf("insert audio stream: %v", err)
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestAudioStream(t, app, movieID, 1, false)
+	insertWatchRoomTestAudioStream(t, app, movieID, 2, true)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for direct mode with a non-first default audio stream, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestAudioStream(t, app, movieID, 1, true)
+	insertWatchRoomTestAudioStream(t, app, movieID, 2, false)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201 for direct mode with the default on stream 0, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestCreateWatchRoom_HTTP_NegativeSubtitleTrackRejected(t *testing.T) {
 	app := setupWatchRoomHTTPTestApp(t)
 	defer app.DB.Close()

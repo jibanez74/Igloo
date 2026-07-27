@@ -276,6 +276,7 @@ export type AudioStreamType = {
   channel_layout: NullableString;
   language: NullableString;
   title: NullableString;
+  is_default: boolean;
 };
 
 export type SubtitleType = {

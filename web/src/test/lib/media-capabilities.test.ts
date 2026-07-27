@@ -60,6 +60,7 @@ function audioStream(overrides: Partial<AudioStreamType>): AudioStreamType {
     channel_layout: nullableString("stereo"),
     language: nullableString("eng"),
     title: nullableString(),
+    is_default: false,
     ...overrides,
   };
 }

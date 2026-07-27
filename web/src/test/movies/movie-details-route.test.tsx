@@ -227,6 +227,7 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         channel_layout: nullableString("stereo"),
         language: nullableString("en"),
         title: nullableString("English"),
+        is_default: false,
       },
     ],
     subtitles: [],

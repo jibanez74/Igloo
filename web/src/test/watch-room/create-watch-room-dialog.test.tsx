@@ -126,6 +126,7 @@ function audioStream(overrides: Partial<AudioStreamType> = {}): AudioStreamType 
     channel_layout: { String: "stereo", Valid: true },
     language: { String: "eng", Valid: true },
     title: { String: "", Valid: false },
+    is_default: false,
     ...overrides,
   };
 }

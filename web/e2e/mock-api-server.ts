@@ -671,6 +671,7 @@ function movieTechnicalDetails(id: number) {
         channel_layout: nullableString("5.1"),
         language: nullableString("eng"),
         title: nullableString("English"),
+        is_default: true,
       },
     ],
     subtitles: [

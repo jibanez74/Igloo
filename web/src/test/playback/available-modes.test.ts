@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { getAvailableModes } from "@/lib/playback";
+import {
+  directPlayAudioSelectionEligible,
+  getAvailableModes,
+} from "@/lib/playback";
 import type { DirectPlayAudioInfo, DirectPlayVideoInfo } from "@/lib/playback";
 
 const nullString = { String: "", Valid: false };
@@ -20,6 +23,7 @@ const aacAudio = (
 ): DirectPlayAudioInfo => ({
   codec: "aac",
   codec_profile: { String: "LC", Valid: true },
+  is_default: false,
   ...overrides,
 });
 
@@ -57,6 +61,66 @@ describe("getAvailableModes container gate", () => {
     );
     expect(ids).not.toContain("direct");
     expect(ids).toContain("remux");
+  });
+});
+
+describe("direct-play audio ambiguity gate", () => {
+  // Audit §6.2: refuse on ambiguity, not on absence.
+  it.each([
+    ["single stream", [false], true],
+    ["single default-flagged stream", [true], true],
+    // Row 16: no flags at all — browsers follow track order, stream 0 plays.
+    ["multiple streams, no defaults", [false, false, false], true],
+    ["multiple streams, single default on stream 0", [true, false], true],
+    // Row 16b / 18: the container says a later stream is the one that plays.
+    ["single default on a non-zero index", [false, true], false],
+    // Row 16c: more than one default is browser-defined behaviour.
+    ["multiple defaults", [true, true], false],
+  ])("%s → eligible=%s", (_name, defaults, wantEligible) => {
+    const streams = defaults.map((is_default) => ({ is_default }));
+    expect(directPlayAudioSelectionEligible(streams)).toBe(wantEligible);
+  });
+
+  // Row 18: AAC commentary first, the flagged main track second — the codec
+  // gate alone would pass (stream 0 is AAC), the ambiguity gate must refuse.
+  it("refuses direct play when the default disposition is not on stream 0", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [
+          aacAudio({ is_default: false }),
+          aacAudio({ is_default: true }),
+        ],
+        mimeType: "video/mp4",
+      }),
+    );
+    expect(ids).not.toContain("direct");
+    expect(ids).toContain("remux");
+  });
+
+  it("keeps direct play for multiple streams when stream 0 is the single default", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [
+          aacAudio({ is_default: true }),
+          aacAudio({ is_default: false }),
+        ],
+        mimeType: "video/mp4",
+      }),
+    );
+    expect(ids).toContain("direct");
+  });
+
+  it("keeps direct play for multiple streams with no default flags", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [aacAudio(), aacAudio(), aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+    expect(ids).toContain("direct");
   });
 });
 
