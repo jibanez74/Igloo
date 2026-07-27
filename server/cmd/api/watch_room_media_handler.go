@@ -1,11 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
-	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"igloo/cmd/internal/helpers"
@@ -83,6 +82,11 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 
 	movie, err := app.Queries.GetMovieForDirectStream(r.Context(), room.MovieID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			return
+		}
+
 		app.Logger.Error("failed to get watch room movie for streaming", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
 		return
@@ -109,13 +113,11 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	contentType := movie.MimeType
+	// Derive Content-Type from the stored container so the header stays
+	// correct even for rows scanned before the pinned MIME map existed.
+	contentType := helpers.VideoMimeTypes[movie.Container]
 	if contentType == "" {
-		ext := filepath.Ext(movie.FileName)
-		contentType = mime.TypeByExtension(ext)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
+		contentType = movie.MimeType
 	}
 
 	w.Header().Set("Content-Type", contentType)

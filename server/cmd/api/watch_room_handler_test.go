@@ -1376,6 +1376,38 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 	}
 }
 
+func TestStreamWatchRoomMovie_HTTP_DeletedMovieReturns404(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+
+	// Deleting a movie normally cascades to its rooms; suspend FK enforcement
+	// to simulate a room left pointing at a movie row that no longer exists.
+	// The in-memory test DB has a single pooled connection, so sequential
+	// Execs land on the same connection the pragma applies to.
+	_, err := app.DB.ExecContext(ctx, `PRAGMA foreign_keys = OFF`)
+	if err != nil {
+		t.Fatalf("disable foreign keys: %v", err)
+	}
+	_, err = app.DB.ExecContext(ctx, `DELETE FROM movies WHERE id = ?`, movieID)
+	if err != nil {
+		t.Fatalf("delete movie: %v", err)
+	}
+	_, err = app.DB.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
+	if err != nil {
+		t.Fatalf("re-enable foreign keys: %v", err)
+	}
+
+	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID), "")
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for a room whose movie is gone, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestWatchRoomHLS_HTTP_RequiresMembershipModeAndManifestBeforeSegments(t *testing.T) {
 	app := setupWatchRoomHTTPTestApp(t)
 	defer app.DB.Close()
