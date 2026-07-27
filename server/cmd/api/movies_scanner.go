@@ -11,7 +11,6 @@ import (
 	"igloo/cmd/internal/tmdb"
 	"maps"
 	"math"
-	"mime"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -271,7 +270,7 @@ func (app *Application) resolveMovieFile(ctx context.Context, file helpers.ScanF
 		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	mimeType := mime.TypeByExtension("." + file.Ext)
+	mimeType := helpers.VideoMimeTypes[file.Ext]
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}

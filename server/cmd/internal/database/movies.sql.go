@@ -612,6 +612,7 @@ const getMovieForDirectStream = `-- name: GetMovieForDirectStream :one
 SELECT
   file_path,
   file_name,
+  container,
   mime_type
 FROM movies
 WHERE id = ?
@@ -619,15 +620,21 @@ LIMIT 1
 `
 
 type GetMovieForDirectStreamRow struct {
-	FilePath string `json:"file_path"`
-	FileName string `json:"file_name"`
-	MimeType string `json:"mime_type"`
+	FilePath  string `json:"file_path"`
+	FileName  string `json:"file_name"`
+	Container string `json:"container"`
+	MimeType  string `json:"mime_type"`
 }
 
 func (q *Queries) GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error) {
 	row := q.queryRow(ctx, q.getMovieForDirectStreamStmt, getMovieForDirectStream, id)
 	var i GetMovieForDirectStreamRow
-	err := row.Scan(&i.FilePath, &i.FileName, &i.MimeType)
+	err := row.Scan(
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.MimeType,
+	)
 	return i, err
 }
 

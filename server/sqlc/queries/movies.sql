@@ -2,6 +2,7 @@
 SELECT
   file_path,
   file_name,
+  container,
   mime_type
 FROM movies
 WHERE id = ?

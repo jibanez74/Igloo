@@ -184,7 +184,7 @@ func TestRunMovieScanPreservesMissingMovieRows(t *testing.T) {
 		FileName:  filepath.Base(missingPath),
 		Size:      7,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 	})
 	if err != nil {
@@ -247,6 +247,43 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	}
 }
 
+func TestResolveMovieFilePinsMimeTypePerContainer(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+
+	// Expected values are literals on purpose: a bad edit to
+	// helpers.VideoMimeTypes must fail here, so do not assert against the map.
+	cases := []struct {
+		ext  string
+		want string
+	}{
+		{ext: "mp4", want: "video/mp4"},
+		{ext: "m4v", want: "video/mp4"},
+		{ext: "mkv", want: "video/x-matroska"},
+		{ext: "webm", want: "video/webm"},
+		{ext: "avi", want: "video/x-msvideo"},
+		{ext: "mov", want: "video/quicktime"},
+	}
+
+	for _, tc := range cases {
+		resolved, err := app.resolveMovieFile(context.Background(), helpers.ScanFile{
+			Path: "/movies/Sample.Movie.2024." + tc.ext,
+			Ext:  tc.ext,
+			Size: 100,
+		})
+		if err != nil {
+			t.Fatalf("resolve %s movie: %v", tc.ext, err)
+		}
+		if resolved.params.MimeType != tc.want {
+			t.Errorf("mime_type for .%s = %q, want %q", tc.ext, resolved.params.MimeType, tc.want)
+		}
+		if resolved.params.Container != tc.ext {
+			t.Errorf("container for .%s = %q, want %q", tc.ext, resolved.params.Container, tc.ext)
+		}
+	}
+}
+
 func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -260,7 +297,7 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		FileName:  "Moneyball.2011.mkv",
 		Size:      100,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 		Overview:  helpers.NullString("Original overview"),
 		AudienceRating: sql.NullFloat64{
@@ -278,7 +315,7 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		FileName:  "Moneyball.2011.mkv",
 		Size:      200,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 		Overview:  helpers.NullString("Scanner overview"),
 	})
@@ -1014,7 +1051,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 		FileName:  "Entity.Cache.2024.mkv",
 		Size:      100,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 	})
 	if err != nil {

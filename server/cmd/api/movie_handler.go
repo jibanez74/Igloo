@@ -6,10 +6,8 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -727,13 +725,11 @@ func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := movie.MimeType
+	// Derive Content-Type from the stored container so the header stays
+	// correct even for rows scanned before the pinned MIME map existed.
+	contentType := helpers.VideoMimeTypes[movie.Container]
 	if contentType == "" {
-		ext := filepath.Ext(movie.FileName)
-		contentType = mime.TypeByExtension(ext)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
+		contentType = movie.MimeType
 	}
 
 	w.Header().Set("Content-Type", contentType)

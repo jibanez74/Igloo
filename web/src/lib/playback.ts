@@ -21,7 +21,14 @@ type PlaybackSettingsInput = Omit<PlaybackSettings, "subtitleTrack"> & {
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
-const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
+/**
+ * Direct play is MP4-only by design. Neither Chrome nor Firefox plays Matroska
+ * in a <video> element — it stalls silently at 0ms with no MediaError — so do
+ * NOT add video/x-matroska here. video/webm and video/ogg were dead entries:
+ * WebM cannot carry H.264 (the only allowed video codec) and .ogv is not a
+ * valid scanner extension. See docs/web-direct-playback-audit.md §3.2, §5.6.
+ */
+const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4"];
 
 /**
  * True when the browser can play HLS via MSE without hls.js (e.g. Safari).
