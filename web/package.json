@@ -25,6 +25,8 @@
     "test:e2e:album-details": "playwright test e2e/album-details.spec.ts",
     "test:e2e:musician-details": "playwright test e2e/musician-details.spec.ts",
     "test:e2e:hls": "playwright test e2e/hls-transcode.spec.ts",
+    "test:e2e:direct-media": "playwright test e2e/direct-play-media.spec.ts",
+    "test:e2e:direct-fallback": "playwright test e2e/direct-play-fallback.spec.ts",
     "test:e2e:watch-room": "playwright test e2e/watch-room.spec.ts",
     "test:e2e:quick-connect": "playwright test e2e/quick-connect.spec.ts",
     "preview": "vite preview",

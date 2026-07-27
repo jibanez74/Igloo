@@ -1,12 +1,12 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import {
+  clearMovieWatchProgress,
+  expectVideoAdvances,
+  fetchMovieTechnicalDetails,
+  loginWithCredentials,
+} from "./media-e2e-helpers";
 
 type VideoStream = {
   codec: string;
@@ -128,51 +128,15 @@ function primaryVideoStream(streams: VideoStream[]) {
   );
 }
 
-async function login(page: Page, env: HlsEnv) {
-  const loginResponse = await page.context().request.post("/api/auth/login", {
-    data: {
-      email: env.email,
-      password: env.password,
-    },
-    failOnStatusCode: false,
-  });
-  expect(loginResponse.status()).toBe(200);
-
-  const loginBody = (await loginResponse.json()) as ApiResponse<unknown>;
-  expect(loginBody.error, loginBody.message).toBe(false);
-
-  const authResponse = await page.context().request.get("/api/auth/user", {
-    failOnStatusCode: false,
-  });
-  expect(authResponse.status()).toBe(200);
-}
-
-async function fetchTechnicalDetails(page: Page, movieId: number) {
-  const response = await page
-    .context()
-    .request.get(`/api/movies/${movieId}/technical-details`, {
-      failOnStatusCode: false,
-    });
-  expect(response.status()).toBe(200);
-
-  const body = (await response.json()) as ApiResponse<MovieTechnicalDetails>;
-  expect(body.error, body.message).toBe(false);
-  expect(body.data).toBeTruthy();
-  return body.data!;
-}
-
-async function clearWatchProgress(page: Page, movieId: number) {
-  await page.context().request.delete(`/api/movies/${movieId}/watch-progress`, {
-    failOnStatusCode: false,
-  });
-}
-
 async function expectMovieSupportsCase(
   page: Page,
   hlsCase: HlsCase,
   audioTrack: number,
 ) {
-  const details = await fetchTechnicalDetails(page, hlsCase.movieId);
+  const details = await fetchMovieTechnicalDetails<MovieTechnicalDetails>(
+    page,
+    hlsCase.movieId,
+  );
   const primaryVideo = primaryVideoStream(details.video_streams);
 
   expect(primaryVideo, "movie must have a primary video stream").toBeTruthy();
@@ -229,39 +193,6 @@ async function waitForUniqueSegments(
   return [...found.values()].slice(0, count);
 }
 
-async function expectVideoAdvances(page: Page, timeout: number) {
-  await page.waitForFunction(
-    () => {
-      const video = document.querySelector("video");
-      return (
-        video instanceof HTMLVideoElement &&
-        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-        Number.isFinite(video.duration) &&
-        video.duration > 0
-      );
-    },
-    undefined,
-    { timeout },
-  );
-
-  const currentTime = await page.locator("video").evaluate(video => {
-    return video instanceof HTMLVideoElement ? video.currentTime : 0;
-  });
-
-  await page.waitForFunction(
-    previousTime => {
-      const video = document.querySelector("video");
-      return (
-        video instanceof HTMLVideoElement &&
-        !video.paused &&
-        video.currentTime >= Number(previousTime) + 2
-      );
-    },
-    currentTime,
-    { timeout },
-  );
-}
-
 const hlsEnv = readHlsEnv();
 const hlsCases: HlsCase[] = hlsEnv?.cases ?? [
   {
@@ -285,7 +216,7 @@ test.describe("HLS transcoding playback", () => {
     "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID to run HLS e2e tests.",
   );
   test.beforeEach(async ({ page }) => {
-    await login(page, hlsEnv!);
+    await loginWithCredentials(page, hlsEnv!);
   });
 
   test.beforeAll(() => {
@@ -310,7 +241,7 @@ test.describe("HLS transcoding playback", () => {
       });
 
       await expectMovieSupportsCase(page, hlsCase, hlsEnv!.audioTrack);
-      await clearWatchProgress(page, hlsCase.movieId);
+      await clearMovieWatchProgress(page, hlsCase.movieId);
 
       const manifestResponsePromise = page.waitForResponse(
         response =>
