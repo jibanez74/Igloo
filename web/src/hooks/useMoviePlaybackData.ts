@@ -4,6 +4,7 @@ import { STREAM_MODES, TMDB_POSTER_SIZE } from "@/lib/constants";
 import {
   getAvailableModes,
   getPrimaryVideoStream,
+  resolveModeForAudioTrack,
   resolvePlaybackSettings,
 } from "@/lib/playback";
 import {
@@ -22,21 +23,19 @@ import {
 } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
-import type { PlaySearchParams } from "@/lib/route-search";
-import type { StreamModeId } from "@/types";
-
-type MoviePlaybackSyncTarget = {
-  mode: StreamModeId;
-  audioTrack: number;
-  subtitleTrack: number | null;
-};
+import {
+  playbackSettingsToPlaySearch,
+  subtitleTrackFromPlaySearch,
+  type PlaySearchParams,
+} from "@/lib/route-search";
+import type { PlaybackSettings, StreamModeId } from "@/types";
 
 type UseMoviePlaybackDataArgs = {
   movieId: number;
   search: PlaySearchParams;
   streamReloadKey: number;
   playbackSessionId: string;
-  onSyncSearch: (target: MoviePlaybackSyncTarget) => void;
+  onSyncSearch: (target: PlaybackSettings) => void;
 };
 
 export function useMoviePlaybackData({
@@ -48,10 +47,11 @@ export function useMoviePlaybackData({
 }: UseMoviePlaybackDataArgs) {
   const {
     audio_track: audioTrack,
-    subtitle_track: subtitleTrack,
     start,
   } = search;
+  const subtitleTrack = subtitleTrackFromPlaySearch(search.subtitle_track);
   const mode: StreamModeId = search.mode ?? "direct";
+  const provisionalMode = resolveModeForAudioTrack(mode, audioTrack);
 
   const {
     data,
@@ -111,7 +111,7 @@ export function useMoviePlaybackData({
           {
             mode,
             audioTrack,
-            subtitleTrack: subtitleTrack ?? null,
+            subtitleTrack,
           },
           availableModes,
           audioStreams,
@@ -119,7 +119,7 @@ export function useMoviePlaybackData({
           userPlaybackPrefs,
         )
       : {
-          mode,
+          mode: provisionalMode,
           audioTrack,
           subtitleTrack: subtitleTrack ?? null,
         };
@@ -141,7 +141,8 @@ export function useMoviePlaybackData({
     playbackStartSec,
     hlsStartSec,
   );
-  const streamAudioTrack = audioStreams.length > 0 ? resolvedAudioTrack : null;
+  const streamAudioTrack =
+    techLoaded && audioStreams.length === 0 ? null : resolvedAudioTrack;
   const streamUrl = buildMovieStreamUrl(
     movieId,
     resolvedMode,
@@ -163,36 +164,37 @@ export function useMoviePlaybackData({
   });
   const sessionWindowKey = `${movieId}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(hlsStartSec)}`;
 
-  const syncSearch = useEffectEvent((target: MoviePlaybackSyncTarget) => {
+  const syncSearch = useEffectEvent((target: PlaybackSettings) => {
     onSyncSearch(target);
   });
 
   useEffect(() => {
-    if (!playbackPreferencesReady || availableModes === null) return;
+    if (!playbackPreferencesReady || !techLoaded) return;
 
-    const resolvedSubtitleSearch = resolvedSubtitleTrack ?? undefined;
+    const resolvedSettings = {
+      mode: resolvedMode,
+      audioTrack: resolvedAudioTrack,
+      subtitleTrack: resolvedSubtitleTrack,
+    };
+    const resolvedSearch = playbackSettingsToPlaySearch(resolvedSettings);
     if (
-      mode === resolvedMode &&
-      audioTrack === resolvedAudioTrack &&
-      subtitleTrack === resolvedSubtitleSearch
+      search.mode === resolvedSearch.mode &&
+      audioTrack === resolvedSearch.audio_track &&
+      search.subtitle_track === resolvedSearch.subtitle_track
     ) {
       return;
     }
 
-    syncSearch({
-      mode: resolvedMode,
-      audioTrack: resolvedAudioTrack,
-      subtitleTrack: resolvedSubtitleTrack,
-    });
+    syncSearch(resolvedSettings);
   }, [
     audioTrack,
-    availableModes,
-    mode,
     playbackPreferencesReady,
     resolvedAudioTrack,
     resolvedMode,
     resolvedSubtitleTrack,
-    subtitleTrack,
+    search.mode,
+    search.subtitle_track,
+    techLoaded,
   ]);
 
   return {

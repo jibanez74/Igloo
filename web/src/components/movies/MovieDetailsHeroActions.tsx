@@ -27,6 +27,7 @@ import {
   MOVIE_WATCH_PROGRESS_KEY,
 } from "@/lib/constants";
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
+import { playbackSettingsToPlaySearch } from "@/lib/route-search";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, MovieWatchProgressType } from "@/types";
@@ -200,11 +201,7 @@ export default function MovieDetailsHeroActions({
         ref={playButtonRef}
         to="/movies/$id/play"
         params={{ id: String(movieId) }}
-        search={{
-          mode: playbackSettings.mode,
-          audio_track: playbackSettings.audioTrack,
-          subtitle_track: playbackSettings.subtitleTrack ?? undefined,
-        }}
+        search={playbackSettingsToPlaySearch(playbackSettings)}
         className={cn(
           buttonVariants({ variant: "accent", size: "lg" }),
           "min-h-11 flex-1 touch-manipulation sm:flex-none",

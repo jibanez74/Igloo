@@ -15,6 +15,10 @@ type PlaybackModeOption = {
   id: StreamModeId;
 };
 
+type PlaybackSettingsInput = Omit<PlaybackSettings, "subtitleTrack"> & {
+  subtitleTrack?: number | null;
+};
+
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
 const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
@@ -202,7 +206,7 @@ export function getDefaultPlaybackSettings(
 }
 
 export function resolvePlaybackSettings(
-  settings: PlaybackSettings | null | undefined,
+  settings: PlaybackSettingsInput | null | undefined,
   availableModes: readonly PlaybackModeOption[],
   audioStreams: AudioStreamType[] | undefined,
   subtitleStreams: SubtitleType[] | undefined,
@@ -230,16 +234,20 @@ export function resolvePlaybackSettings(
       : defaults.audioTrack;
 
   const subtitleStreamCount = subtitleStreams?.length ?? 0;
-  const resolvedSubtitleTrack =
-    settings.subtitleTrack !== null &&
+  let resolvedSubtitleTrack = defaults.subtitleTrack;
+  if (settings.subtitleTrack === null) {
+    resolvedSubtitleTrack = null;
+  } else if (
+    settings.subtitleTrack !== undefined &&
     Number.isInteger(settings.subtitleTrack) &&
     settings.subtitleTrack >= 0 &&
     settings.subtitleTrack < subtitleStreamCount &&
     !isBitmapSubtitleCodec(
       subtitleStreams?.[settings.subtitleTrack]?.codec ?? "",
     )
-      ? settings.subtitleTrack
-      : defaults.subtitleTrack;
+  ) {
+    resolvedSubtitleTrack = settings.subtitleTrack;
+  }
 
   return {
     mode: resolveModeForAudioTrack(resolvedMode, resolvedAudioTrack),

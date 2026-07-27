@@ -23,6 +23,7 @@ type MoviePlaybackStatusArgs = {
   movieIsPending: boolean;
   hasMovie: boolean;
   requestedMode: StreamModeId;
+  effectiveMode: StreamModeId;
   techPending: boolean;
   playbackPreferencesReady: boolean;
   modeUnavailable: boolean;
@@ -130,7 +131,7 @@ export function deriveMoviePlaybackStatus(
   if (!args.playbackPreferencesReady) {
     return { kind: "loading", message: "Preparing playback..." };
   }
-  if (args.requestedMode !== "direct" && args.techPending) {
+  if (args.effectiveMode !== "direct" && args.techPending) {
     return { kind: "loading", message: "Preparing playback..." };
   }
   if (args.modeUnavailable) {

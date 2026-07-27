@@ -1,6 +1,7 @@
 import { z } from "zod/mini";
-import { STREAM_MODE_IDS } from "@/lib/constants";
+import { STREAM_MODE_IDS, SUBTITLE_OFF_VALUE } from "@/lib/constants";
 import { getSafeRedirect } from "@/lib/redirect-utils";
+import type { PlaybackSettings } from "@/types/playback";
 
 export const loginSearchSchema = z.object({
   redirect: z.pipe(
@@ -94,7 +95,12 @@ export const playSearchSchema = z.object({
     0,
   ),
   subtitle_track: z.catch(
-    z.optional(z.coerce.number().check(z.int(), z.minimum(0))),
+    z.optional(
+      z.union([
+        z.literal(SUBTITLE_OFF_VALUE),
+        z.coerce.number().check(z.int(), z.minimum(0)),
+      ]),
+    ),
     undefined,
   ),
   start: z._default(
@@ -104,3 +110,28 @@ export const playSearchSchema = z.object({
 });
 
 export type PlaySearchParams = z.infer<typeof playSearchSchema>;
+
+export function subtitleTrackFromPlaySearch(
+  subtitleTrack: PlaySearchParams["subtitle_track"],
+): PlaybackSettings["subtitleTrack"] | undefined {
+  return subtitleTrack === SUBTITLE_OFF_VALUE ? null : subtitleTrack;
+}
+
+type PlaybackSettingsPlaySearch = {
+  mode: PlaybackSettings["mode"];
+  audio_track: number;
+  subtitle_track: number | typeof SUBTITLE_OFF_VALUE;
+};
+
+export function playbackSettingsToPlaySearch(
+  settings: PlaybackSettings,
+): PlaybackSettingsPlaySearch {
+  return {
+    mode: settings.mode,
+    audio_track: settings.audioTrack,
+    subtitle_track:
+      settings.subtitleTrack === null
+        ? SUBTITLE_OFF_VALUE
+        : settings.subtitleTrack,
+  };
+}

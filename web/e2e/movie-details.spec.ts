@@ -496,7 +496,7 @@ test("movie details page renders the mocked success path from the movies index",
   expect(playUrl.pathname).toBe(`/movies/${movieId}/play`);
   expect(playUrl.searchParams.get("mode")).toBe("direct");
   expect(playUrl.searchParams.get("audio_track")).toBe("0");
-  expect(playUrl.searchParams.get("subtitle_track")).toBeNull();
+  expect(playUrl.searchParams.get("subtitle_track")).toBe("off");
 
   const chapterLink = page.getByRole("link", { name: /Opening Credits/i });
   await expect(chapterLink).toBeVisible();
@@ -506,6 +506,7 @@ test("movie details page renders the mocked success path from the movies index",
   expect(chapterUrl.pathname).toBe(`/movies/${movieId}/play`);
   expect(chapterUrl.searchParams.get("mode")).toBe("direct");
   expect(chapterUrl.searchParams.get("audio_track")).toBe("0");
+  expect(chapterUrl.searchParams.get("subtitle_track")).toBe("off");
   expect(chapterUrl.searchParams.get("start")).toBe(
     String(chapterStartSeconds),
   );
@@ -584,15 +585,35 @@ test("playback settings dialog saves a selection that drives the play link", asy
   expect(playUrl.searchParams.get("audio_track")).toBe("0");
   expect(playUrl.searchParams.get("subtitle_track")).toBe("0");
 
-  // Reopening shows the saved selection as the draft.
+  // Reopening shows the saved selection as the draft, and explicitly choosing
+  // None must remain authoritative in every generated playback link.
   await moreOptionsButton.click();
   await page.getByRole("menuitem", { name: "Playback Settings" }).click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Playback")).toContainText(
     "720p — lower bandwidth",
   );
-  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await dialog.getByLabel("Subtitles").click();
+  await page
+    .getByRole("listbox")
+    .getByRole("option", { name: "None", exact: true })
+    .click();
+  await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
+
+  const subtitleOffPlayUrl = new URL(
+    (await playLink.getAttribute("href")) ?? "",
+    "http://localhost",
+  );
+  expect(subtitleOffPlayUrl.searchParams.get("subtitle_track")).toBe("off");
+
+  const subtitleOffChapterUrl = new URL(
+    (await page
+      .getByRole("link", { name: /Opening Credits/i })
+      .getAttribute("href")) ?? "",
+    "http://localhost",
+  );
+  expect(subtitleOffChapterUrl.searchParams.get("subtitle_track")).toBe("off");
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

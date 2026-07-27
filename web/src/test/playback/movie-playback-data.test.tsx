@@ -150,6 +150,27 @@ function seedPreferenceResolutionMovie(
   });
 }
 
+function seedMovieWithoutTechnicalDetails(
+  queryClient: QueryClient,
+  movieId: number,
+) {
+  queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
+    error: false,
+    data: {
+      movie: {
+        title: "Cold Playback",
+        poster_path: { String: "", Valid: false },
+        duration: nullableFloat64(600),
+      },
+    },
+  });
+  queryClient.setQueryData([MOVIE_WATCH_PROGRESS_KEY, movieId], {
+    error: false,
+    data: null,
+  });
+  seedSettledPlaybackPreferences(queryClient);
+}
+
 function createDeferredResponse() {
   let resolve!: (response: Response) => void;
   const promise = new Promise<Response>((resolvePromise) => {
@@ -175,6 +196,7 @@ function playbackStatus(
     movieIsPending: data.movieIsPending,
     hasMovie: !!data.movie,
     requestedMode,
+    effectiveMode: data.resolvedMode,
     techPending: data.techPending,
     playbackPreferencesReady: data.playbackPreferencesReady,
     modeUnavailable: data.modeUnavailable,
@@ -319,6 +341,78 @@ describe("useMoviePlaybackData", () => {
     });
   });
 
+  it("applies subtitle preferences only when the route selection is omitted", async () => {
+    const movieId = 81;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedSettledPlaybackPreferences(
+      queryClient,
+      playbackSettings({ preferred_subtitle_language: "es" }),
+    );
+    const onSyncSearch = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 0,
+            subtitle_track: undefined,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedSubtitleTrack).toBe(1);
+    await waitFor(() => {
+      expect(onSyncSearch).toHaveBeenCalledWith({
+        mode: "direct",
+        audioTrack: 0,
+        subtitleTrack: 1,
+      });
+    });
+  });
+
+  it("keeps an explicit subtitle-off route selection over preferences", () => {
+    const movieId = 82;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedSettledPlaybackPreferences(
+      queryClient,
+      playbackSettings({ preferred_subtitle_language: "es" }),
+    );
+    const onSyncSearch = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 0,
+            subtitle_track: "off",
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedSubtitleTrack).toBeNull();
+    expect(onSyncSearch).not.toHaveBeenCalled();
+  });
+
   it("streams a direct-play deep link through remux when it asks for a non-first audio track", () => {
     const movieId = 9;
     const queryClient = new QueryClient({
@@ -380,6 +474,163 @@ describe("useMoviePlaybackData", () => {
       mode: "remux",
       audioTrack: 1,
       subtitleTrack: null,
+    });
+  });
+
+  it("uses provisional remux while valid non-first-audio metadata is pending", async () => {
+    const movieId = 91;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedMovieWithoutTechnicalDetails(queryClient, movieId);
+    const technicalDetailsRequest = createDeferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => technicalDetailsRequest.promise));
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 1,
+            subtitle_track: "off",
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.techPending).toBe(true);
+    expect(result.current.resolvedMode).toBe("remux");
+    expect(result.current.resolvedAudioTrack).toBe(1);
+    expect(result.current.streamUrl).toBe(
+      `/api/movies/91/hls/remux/playlist.m3u8?playback_session=${playbackSessionId}&start=0&audio_track=1`,
+    );
+    expect(result.current.sessionWindowKey).toBe(
+      `91:remux:1:${playbackSessionId}:0`,
+    );
+    expect(playbackStatus(result.current, "direct")).toEqual({
+      kind: "loading",
+      message: "Preparing playback...",
+    });
+
+    technicalDetailsRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: {
+          movie: {
+            mime_type: "video/mp4",
+            duration: nullableFloat64(600),
+          },
+          video_streams: [{ codec: "h264", height: 1080 }],
+          audio_streams: [{ codec: "aac" }, { codec: "aac" }],
+          subtitles: [],
+          chapters: [],
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.techPending).toBe(false);
+      expect(result.current.resolvedMode).toBe("remux");
+      expect(result.current.resolvedAudioTrack).toBe(1);
+    });
+    expect(result.current.streamUrl).toBe(
+      `/api/movies/91/hls/remux/playlist.m3u8?playback_session=${playbackSessionId}&start=0&audio_track=1`,
+    );
+  });
+
+  it("never falls back to the raw stream after technical-details failure", () => {
+    const movieId = 92;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedMovieWithoutTechnicalDetails(queryClient, movieId);
+    queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
+      error: true,
+      message: "Technical details unavailable",
+    });
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 1,
+            subtitle_track: "off",
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.techPending).toBe(false);
+    expect(result.current.resolvedMode).toBe("remux");
+    expect(result.current.resolvedAudioTrack).toBe(1);
+    expect(result.current.streamUrl).toContain(
+      "/api/movies/92/hls/remux/playlist.m3u8",
+    );
+    expect(result.current.streamUrl).toContain("audio_track=1");
+    expect(result.current.streamUrl).not.toContain("/stream");
+  });
+
+  it("keeps cold direct playback ready for the first audio track", async () => {
+    const movieId = 93;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedMovieWithoutTechnicalDetails(queryClient, movieId);
+    const technicalDetailsRequest = createDeferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => technicalDetailsRequest.promise));
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 0,
+            subtitle_track: "off",
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.techPending).toBe(true);
+    expect(result.current.resolvedMode).toBe("direct");
+    expect(result.current.streamUrl).toBe("/api/movies/93/stream");
+    expect(playbackStatus(result.current, "direct")).toEqual({
+      kind: "ready",
+    });
+
+    technicalDetailsRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: {
+          movie: {
+            mime_type: "video/mp4",
+            duration: nullableFloat64(600),
+          },
+          video_streams: [{ codec: "h264", height: 1080 }],
+          audio_streams: [{ codec: "aac" }],
+          subtitles: [],
+          chapters: [],
+        },
+      }),
+    );
+    await waitFor(() => {
+      expect(result.current.techPending).toBe(false);
     });
   });
 

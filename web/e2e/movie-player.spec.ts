@@ -26,7 +26,9 @@ async function openMoviePlayer(page: Page) {
     // Never fulfilled: keeps the player ready without firing a media error.
   });
 
-  await page.goto("/movies/101/play?mode=direct&audio_track=0&start=0");
+  await page.goto(
+    "/movies/101/play?mode=direct&audio_track=0&subtitle_track=off&start=0",
+  );
 
   await expect(
     page.getByRole("button", { name: "Play (Space or K)" }),
@@ -92,6 +94,134 @@ for (const {
     expect(mediaRequests[0]).toContain(expectedRequestPath);
   });
 }
+
+test("omitted subtitle state synchronizes to the canonical off URL", async ({
+  page,
+}) => {
+  await logInMoviePlayer(page);
+
+  await page.route("**/api/movies/*/stream*", () => {
+    // Keep direct media pending while the route synchronizes its search state.
+  });
+
+  await page.goto("/movies/101/play?mode=direct&audio_track=0&start=0");
+  await expect(
+    page.getByRole("button", { name: "Play (Space or K)" }),
+  ).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("subtitle_track"))
+    .toBe("off");
+});
+
+test("loader redirect serializes subtitle-off canonically", async ({ page }) => {
+  await logInMoviePlayer(page);
+
+  await page.route("**/api/movies/*/stream*", () => {
+    // Keep direct media pending after the loader's default-settings redirect.
+  });
+
+  await page.goto("/movies/101/play?start=0");
+  await expect(
+    page.getByRole("button", { name: "Play (Space or K)" }),
+  ).toBeVisible();
+
+  const url = new URL(page.url());
+  expect(url.searchParams.get("mode")).toBe("direct");
+  expect(url.searchParams.get("audio_track")).toBe("0");
+  expect(url.searchParams.get("subtitle_track")).toBe("off");
+});
+
+test("cold non-first audio waits for metadata and never requests the raw stream", async ({
+  page,
+}) => {
+  await logInMoviePlayer(page);
+
+  let releaseTechnicalDetails!: () => void;
+  const technicalDetailsGate = new Promise<void>(resolve => {
+    releaseTechnicalDetails = resolve;
+  });
+  let technicalDetailsRequested = false;
+  await page.route(
+    "**/api/movies/101/technical-details",
+    async route => {
+      technicalDetailsRequested = true;
+      await technicalDetailsGate;
+
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data: {
+          audio_streams: Array<Record<string, unknown>>;
+        };
+      };
+      body.data.audio_streams.push({
+        ...body.data.audio_streams[0],
+        id: 2,
+        stream_index: 2,
+        language: { String: "spa", Valid: true },
+        title: { String: "Spanish", Valid: true },
+      });
+      await route.fulfill({ response, json: body });
+    },
+  );
+
+  const mediaRequests: string[] = [];
+  await page.route("**/api/movies/101/stream*", route => {
+    mediaRequests.push(route.request().url());
+  });
+  await page.route(
+    "**/api/movies/101/hls/*/playlist.m3u8*",
+    route => {
+      mediaRequests.push(route.request().url());
+    },
+  );
+
+  await page.goto(
+    "/movies/101/play?mode=direct&audio_track=1&subtitle_track=off&start=0",
+  );
+
+  await expect.poll(() => technicalDetailsRequested).toBe(true);
+  await expect(page.getByText("Preparing playback...")).toBeVisible();
+  await expect(page.locator("video")).toHaveCount(0);
+  expect(mediaRequests).toEqual([]);
+
+  releaseTechnicalDetails();
+
+  await expect.poll(() => mediaRequests.length).toBe(1);
+  const requestUrl = new URL(mediaRequests[0]);
+  expect(requestUrl.pathname).toBe(
+    "/api/movies/101/hls/remux/playlist.m3u8",
+  );
+  expect(requestUrl.searchParams.get("audio_track")).toBe("1");
+  expect(
+    mediaRequests.some(url => new URL(url).pathname.endsWith("/stream")),
+  ).toBe(false);
+});
+
+test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) => {
+  await logInMoviePlayer(page);
+
+  await page.route(
+    "**/api/movies/101/hls/*/playlist.m3u8*",
+    () => {
+      // Keep HLS pending; player controls and route navigation remain testable.
+    },
+  );
+
+  await page.goto(
+    "/movies/101/play?mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0",
+  );
+  await expect(
+    page.getByRole("button", { name: "Play (Space or K)" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Chapters, 2 chapters" }).click();
+  await page.getByRole("menuitem", { name: /The Journey/ }).click();
+
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("start"))
+    .toBe("372");
+  expect(new URL(page.url()).searchParams.get("subtitle_track")).toBe("off");
+});
 
 test("chapter menu lists chapters with spoken labels and marks the current one", async ({
   page,

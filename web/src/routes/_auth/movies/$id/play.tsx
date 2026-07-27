@@ -54,7 +54,11 @@ import {
 } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import { playSearchSchema, type PlaySearchParams } from "@/lib/route-search";
+import {
+  playbackSettingsToPlaySearch,
+  playSearchSchema,
+  type PlaySearchParams,
+} from "@/lib/route-search";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
@@ -124,9 +128,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
       to: "/movies/$id/play",
       params: { id: params.id },
       search: {
-        mode: resolved.mode,
-        audio_track: resolved.audioTrack,
-        subtitle_track: resolved.subtitleTrack ?? undefined,
+        ...playbackSettingsToPlaySearch(resolved),
         start: deps.start ?? 0,
       },
       replace: true,
@@ -225,13 +227,11 @@ function PlayMoviePage() {
     search,
     streamReloadKey,
     playbackSessionId,
-    onSyncSearch: ({ mode, audioTrack, subtitleTrack }) => {
+    onSyncSearch: settings => {
       navigate({
         search: (prev: PlaySearchParams) => ({
           ...prev,
-          mode,
-          audio_track: audioTrack,
-          subtitle_track: subtitleTrack ?? undefined,
+          ...playbackSettingsToPlaySearch(settings),
         }),
         replace: true,
       });
@@ -243,6 +243,7 @@ function PlayMoviePage() {
     movieIsPending,
     hasMovie: !!movie,
     requestedMode: mode,
+    effectiveMode: resolvedMode,
     techPending,
     playbackPreferencesReady,
     modeUnavailable,
@@ -333,9 +334,11 @@ function PlayMoviePage() {
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
-        mode: resolvedMode,
-        audio_track: resolvedAudioTrack,
-        subtitle_track: resolvedSubtitleTrack ?? undefined,
+        ...playbackSettingsToPlaySearch({
+          mode: resolvedMode,
+          audioTrack: resolvedAudioTrack,
+          subtitleTrack: resolvedSubtitleTrack,
+        }),
         start: Math.floor(clampedTargetTime),
       }),
       replace: true,

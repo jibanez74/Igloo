@@ -12,6 +12,7 @@ describe("deriveMoviePlaybackStatus", () => {
           movieIsPending: false,
           hasMovie: true,
           requestedMode,
+          effectiveMode: requestedMode,
           techPending: false,
           playbackPreferencesReady: false,
           modeUnavailable: false,
@@ -20,4 +21,36 @@ describe("deriveMoviePlaybackStatus", () => {
       ).toEqual({ kind: "loading", message: "Preparing playback..." });
     },
   );
+
+  it("keeps provisional remux preparing while technical details are pending", () => {
+    expect(
+      deriveMoviePlaybackStatus({
+        movieNotFound: false,
+        movieIsPending: false,
+        hasMovie: true,
+        requestedMode: "direct",
+        effectiveMode: "remux",
+        techPending: true,
+        playbackPreferencesReady: true,
+        modeUnavailable: false,
+        playbackError: null,
+      }),
+    ).toEqual({ kind: "loading", message: "Preparing playback..." });
+  });
+
+  it("keeps cold first-audio direct playback ready", () => {
+    expect(
+      deriveMoviePlaybackStatus({
+        movieNotFound: false,
+        movieIsPending: false,
+        hasMovie: true,
+        requestedMode: "direct",
+        effectiveMode: "direct",
+        techPending: true,
+        playbackPreferencesReady: true,
+        modeUnavailable: false,
+        playbackError: null,
+      }),
+    ).toEqual({ kind: "ready" });
+  });
 });

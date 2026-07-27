@@ -282,6 +282,41 @@ describe("resolvePlaybackSettings", () => {
     expect(result).toEqual({ mode: "direct", audioTrack: 0, subtitleTrack: null });
   });
 
+  it("keeps an explicit subtitle-off selection over user preferences", () => {
+    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+    const subtitles = [
+      subtitleStream(0, "eng"),
+      subtitleStream(1, "spa"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: null },
+      ALL_MODES,
+      [],
+      subtitles,
+      prefs,
+    );
+    expect(result.subtitleTrack).toBeNull();
+  });
+
+  it.each([
+    ["an omitted selection", undefined],
+    ["an out-of-range selection", 99],
+  ])("uses the preferred text subtitle for %s", (_label, subtitleTrack) => {
+    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+    const subtitles = [
+      subtitleStream(0, "eng"),
+      subtitleStream(1, "spa"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack },
+      ALL_MODES,
+      [],
+      subtitles,
+      prefs,
+    );
+    expect(result.subtitleTrack).toBe(1);
+  });
+
   it("rejects a subtitle selection that points at a bitmap track", () => {
     const subtitles = [
       { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
@@ -294,6 +329,22 @@ describe("resolvePlaybackSettings", () => {
       subtitles,
     );
     expect(result.subtitleTrack).toBeNull();
+  });
+
+  it("falls back from a bitmap selection to the preferred text subtitle", () => {
+    const prefs = makePrefs({ preferred_subtitle_language: "en" });
+    const subtitles = [
+      { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
+      subtitleStream(1, "eng"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: 0 },
+      ALL_MODES,
+      [],
+      subtitles,
+      prefs,
+    );
+    expect(result.subtitleTrack).toBe(1);
   });
 
   it("keeps a text subtitle selection", () => {
