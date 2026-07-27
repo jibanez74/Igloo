@@ -5,6 +5,11 @@ import {
   STREAM_MODES,
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
+import {
+  buildDirectPlayTypeString,
+  createCanPlayProbe,
+  type CanPlayProbe,
+} from "@/lib/direct-play-probe";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
@@ -78,38 +83,66 @@ function isContainerDirectPlayable(mimeType: string): boolean {
   return BROWSER_COMPATIBLE_MIME_TYPES.includes(mimeType.toLowerCase());
 }
 
+/** Video fields the direct-play eligibility rules consult. */
+export type DirectPlayVideoInfo = Pick<
+  VideoStreamType,
+  "codec" | "codec_profile" | "codec_level" | "height"
+>;
+
+/** Audio fields the direct-play eligibility rules consult. */
+export type DirectPlayAudioInfo = Pick<
+  AudioStreamType,
+  "codec" | "codec_profile"
+>;
+
+export type AvailableModesArgs = {
+  /** The primary video stream; when absent, all non-transcode modes are offered. */
+  video?: DirectPlayVideoInfo;
+  /**
+   * Audio streams in `stream_index` order. Only the FIRST stream can affect
+   * direct-play eligibility: direct play serves the raw container, and the
+   * browser decodes the container's first audio track.
+   */
+  audioStreams?: DirectPlayAudioInfo[];
+  mimeType?: string;
+  /** Injectable for tests; defaults to a real `canPlayType` probe. */
+  canPlay?: CanPlayProbe;
+};
+
+const defaultCanPlayProbe = createCanPlayProbe();
+
 /**
- * Available stream modes for the source. Without `videoCodec`, all modes are
+ * Available stream modes for the source. Without `video`, all modes are
  * returned (e.g. before technical details load). With codecs, filters direct /
  * remux / transcode per browser and resolution rules.
- *
- * `audioCodec` must be the FIRST audio stream's codec: direct play serves the
- * raw container, so no other stream can affect direct-play eligibility.
  *
  * Invariant relied on by `resolveModeForAudioTrack`: direct requires a playable
  * video codec, audio codec and container while remux requires only the video
  * codec, so remux is available whenever direct is.
  */
-export function getAvailableModes(
-  sourceHeight: number,
-  videoCodec?: string,
-  audioCodec?: string,
-  mimeType?: string,
-) {
-  const hasCodecInfo = videoCodec !== undefined;
+export function getAvailableModes(args: AvailableModesArgs) {
+  const { video, audioStreams, mimeType } = args;
+  const sourceHeight = video?.height ?? 0;
 
   return STREAM_MODES.filter((m) => {
     if (m.type === "direct") {
-      if (!hasCodecInfo) return true;
-      return (
-        isVideoDirectPlayable(videoCodec) &&
-        isAudioDirectPlayable(audioCodec) &&
-        isContainerDirectPlayable(mimeType ?? "")
-      );
+      if (!video) return true;
+      const staticRulesPass =
+        isVideoDirectPlayable(video.codec) &&
+        isAudioDirectPlayable(audioStreams?.[0]?.codec) &&
+        isContainerDirectPlayable(mimeType ?? "");
+      if (!staticRulesPass) return false;
+      // The probe may only narrow eligibility, never widen it: the watch-room
+      // server enforces the same direct ⊂ remux invariant from the static
+      // rules alone and cannot ask a browser. Keep this an AND, never an OR.
+      // See docs/web-direct-playback-audit.md §3.4 (D3).
+      const canPlay = args.canPlay ?? defaultCanPlayProbe;
+      const typeString = buildDirectPlayTypeString(video, audioStreams?.[0]);
+      return canPlay(typeString) !== "";
     }
     if (m.type === "remux") {
-      if (!hasCodecInfo) return true;
-      return isVideoDirectPlayable(videoCodec);
+      if (!video) return true;
+      return isVideoDirectPlayable(video.codec);
     }
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });

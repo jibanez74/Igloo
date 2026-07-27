@@ -432,14 +432,11 @@ export default function PlaybackSettingsDialog({
   const videoStreams = data?.data?.video_streams ?? [];
 
   const primaryVideo = getPrimaryVideoStream(videoStreams);
-  const sourceHeight = primaryVideo?.height ?? 0;
-  const videoCodec = primaryVideo?.codec;
-  const audioCodec = audioStreams[0]?.codec;
   const mimeType = data?.data?.movie?.mime_type;
   // Without codec info getAvailableModes offers every mode; hold the list
   // empty until technical details arrive so impossible modes are never shown.
   const availableModes = techLoaded
-    ? getAvailableModes(sourceHeight, videoCodec, audioCodec, mimeType)
+    ? getAvailableModes({ video: primaryVideo, audioStreams, mimeType })
     : [];
 
   const selectPortalContainer = prefersCoarsePointer

@@ -107,12 +107,11 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const audioStreams = techData.audio_streams ?? [];
     const subtitleStreams = techData.subtitles ?? [];
     const primaryVideo = getPrimaryVideoStream(videoStreams);
-    const availableModes = getAvailableModes(
-      primaryVideo?.height ?? 0,
-      primaryVideo?.codec,
-      audioStreams[0]?.codec,
-      techData.movie?.mime_type,
-    );
+    const availableModes = getAvailableModes({
+      video: primaryVideo,
+      audioStreams,
+      mimeType: techData.movie?.mime_type,
+    });
     if (availableModes.length === 0) return;
 
     const userPrefs =

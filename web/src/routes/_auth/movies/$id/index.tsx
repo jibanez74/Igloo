@@ -161,12 +161,11 @@ function LibraryMovieDetailsContent({
   const subtitleStreams = techData?.data?.subtitles ?? [];
   const videoStream = getPrimaryVideoStream(videoStreams);
   const mimeType = techData?.data?.movie?.mime_type;
-  const availableModes = getAvailableModes(
-    videoStream?.height ?? 0,
-    videoStream?.codec,
-    audioStreams[0]?.codec,
-    mimeType ?? undefined,
-  );
+  const availableModes = getAvailableModes({
+    video: videoStream,
+    audioStreams,
+    mimeType: mimeType ?? undefined,
+  });
   const smartDefault: PlaybackSettings = resolvePlaybackSettings(
     null,
     availableModes,

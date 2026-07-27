@@ -421,6 +421,8 @@ describe("audio track and mode resolvers", () => {
   // resolveModeForAudioTrack upgrades to remux without checking availability,
   // which is only safe while remux is offered wherever direct is.
   it("never offers direct play without remux", () => {
+    const nullString = { String: "", Valid: false };
+    const nullInt = { Int64: 0, Valid: false };
     const videoCodecs = ["h264", "avc1", "hevc", "vp9", undefined];
     const audioCodecs = ["aac", "ac3", "dts", "flac", undefined];
     const containers = ["video/mp4", "video/webm", "video/x-matroska", ""];
@@ -430,7 +432,22 @@ describe("audio track and mode resolvers", () => {
       for (const audioCodec of audioCodecs) {
         for (const mimeType of containers) {
           for (const height of heights) {
-            const modes = getAvailableModes(height, videoCodec, audioCodec, mimeType);
+            const modes = getAvailableModes({
+              video:
+                videoCodec === undefined
+                  ? undefined
+                  : {
+                      codec: videoCodec,
+                      codec_profile: nullString,
+                      codec_level: nullInt,
+                      height,
+                    },
+              audioStreams:
+                audioCodec === undefined
+                  ? []
+                  : [{ codec: audioCodec, codec_profile: nullString }],
+              mimeType,
+            });
             const ids = modes.map(m => m.id);
             if (ids.includes("direct")) {
               expect(ids).toContain("remux");

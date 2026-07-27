@@ -95,12 +95,11 @@ export default function CreateWatchRoomDialog({
   const subtitleStreams = techData?.data?.subtitles ?? [];
   const videoStream = getPrimaryVideoStream(videoStreams);
   const mimeType = techData?.data?.movie?.mime_type ?? undefined;
-  const availableModes = getAvailableModes(
-    videoStream?.height ?? 0,
-    videoStream?.codec,
-    audioStreams[0]?.codec,
+  const availableModes = getAvailableModes({
+    video: videoStream,
+    audioStreams,
     mimeType,
-  );
+  });
   const resolvedSettings = resolvePlaybackSettings(
     playbackSettings,
     availableModes,

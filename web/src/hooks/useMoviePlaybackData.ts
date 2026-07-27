@@ -98,12 +98,11 @@ export function useMoviePlaybackData({
     ? getPrimaryVideoStream(videoStreams)
     : undefined;
   const availableModes = techLoaded
-    ? getAvailableModes(
-        primaryVideo?.height ?? 0,
-        primaryVideo?.codec,
-        audioStreams[0]?.codec,
-        techData.data.movie?.mime_type,
-      )
+    ? getAvailableModes({
+        video: primaryVideo,
+        audioStreams,
+        mimeType: techData.data.movie?.mime_type,
+      })
     : null;
   const resolvedPlaybackSettings =
     availableModes !== null

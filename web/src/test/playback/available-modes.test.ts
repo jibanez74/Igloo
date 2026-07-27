@@ -1,12 +1,40 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { getAvailableModes } from "@/lib/playback";
+import type { DirectPlayAudioInfo, DirectPlayVideoInfo } from "@/lib/playback";
+
+const nullString = { String: "", Valid: false };
+const nullInt = { Int64: 0, Valid: false };
+
+const h264Video = (
+  overrides: Partial<DirectPlayVideoInfo> = {},
+): DirectPlayVideoInfo => ({
+  codec: "h264",
+  codec_profile: { String: "High", Valid: true },
+  codec_level: { Int64: 41, Valid: true },
+  height: 1080,
+  ...overrides,
+});
+
+const aacAudio = (
+  overrides: Partial<DirectPlayAudioInfo> = {},
+): DirectPlayAudioInfo => ({
+  codec: "aac",
+  codec_profile: { String: "LC", Valid: true },
+  ...overrides,
+});
 
 const modeIds = (modes: ReturnType<typeof getAvailableModes>) =>
   modes.map((m) => m.id);
 
 describe("getAvailableModes container gate", () => {
   it("offers direct play for an eligible MP4 source", () => {
-    const ids = modeIds(getAvailableModes(1080, "h264", "aac", "video/mp4"));
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
     expect(ids).toContain("direct");
     expect(ids).toContain("remux");
   });
@@ -20,8 +48,68 @@ describe("getAvailableModes container gate", () => {
     "video/ogg",
     "application/octet-stream",
   ])("refuses direct play for %s while keeping remux", (mimeType) => {
-    const ids = modeIds(getAvailableModes(1080, "h264", "aac", mimeType));
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType,
+      }),
+    );
     expect(ids).not.toContain("direct");
     expect(ids).toContain("remux");
+  });
+});
+
+describe("getAvailableModes canPlayType gate", () => {
+  it("asks the probe with the full RFC 6381 type string", () => {
+    const canPlay = vi.fn().mockReturnValue("probably");
+    getAvailableModes({
+      video: h264Video(),
+      audioStreams: [aacAudio()],
+      mimeType: "video/mp4",
+      canPlay,
+    });
+    expect(canPlay).toHaveBeenCalledWith(
+      'video/mp4; codecs="avc1.640029, mp4a.40.2"',
+    );
+  });
+
+  it("removes only direct when the probe refuses a statically eligible file", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+        canPlay: () => "",
+      }),
+    );
+    expect(ids).not.toContain("direct");
+    expect(ids).toContain("remux");
+  });
+
+  it("never lets the probe widen eligibility past the static rules", () => {
+    const canPlay = vi.fn().mockReturnValue("probably");
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType: "video/x-matroska",
+        canPlay,
+      }),
+    );
+    expect(ids).not.toContain("direct");
+    expect(canPlay).not.toHaveBeenCalled();
+  });
+
+  it("treats a 'maybe' answer as playable", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video({ codec_profile: nullString, codec_level: nullInt }),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+        canPlay: (typeString) => (typeString === "video/mp4" ? "maybe" : ""),
+      }),
+    );
+    expect(ids).toContain("direct");
   });
 });
