@@ -273,6 +273,67 @@ describe("useMoviePlaybackData", () => {
     );
   });
 
+  // Audit D9: while direct play is active the audible stream is always
+  // ordinal 0, so the badge names its language instead of the generic
+  // "plays as-is" claim.
+  it("names the playing audio language in the direct mode label", () => {
+    const movieId = 22;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedSettledPlaybackPreferences(queryClient);
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "direct",
+            audio_track: 0,
+            subtitle_track: undefined,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedMode).toBe("direct");
+    expect(result.current.modeLabel).toBe("Original file — English audio");
+  });
+
+  it("keeps the generic mode label for non-direct playback", () => {
+    const movieId = 23;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedSettledPlaybackPreferences(queryClient);
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "remux",
+            audio_track: 1,
+            subtitle_track: undefined,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    expect(result.current.resolvedMode).toBe("remux");
+    expect(result.current.modeLabel).toBe("Original video, adjusted audio");
+  });
+
   // Audit matrix row 18b (D17): loaded metadata with zero video streams must
   // not leave direct play on offer — the player never mounts and no /stream
   // request can be issued.

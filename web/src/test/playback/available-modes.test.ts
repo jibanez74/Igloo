@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   directPlayAudioSelectionEligible,
+  directPlayModeLabel,
   getAvailableModes,
 } from "@/lib/playback";
 import type { DirectPlayAudioInfo, DirectPlayVideoInfo } from "@/lib/playback";
+import type { AudioStreamType } from "@/types/movies";
 
 const nullString = { String: "", Valid: false };
 const nullInt = { Int64: 0, Valid: false };
@@ -188,6 +190,45 @@ describe("browser-safe H.264 gate", () => {
       canPlay,
     });
     expect(canPlay).not.toHaveBeenCalled();
+  });
+});
+
+describe("directPlayModeLabel", () => {
+  const audioStream = (language: string | null): AudioStreamType => ({
+    id: 1,
+    movie_id: 1,
+    stream_index: 1,
+    codec: "aac",
+    codec_profile: nullString,
+    bit_rate: 128000,
+    sample_rate: nullInt,
+    channels: 2,
+    channel_layout: { String: "stereo", Valid: true },
+    language:
+      language === null
+        ? { String: "", Valid: false }
+        : { String: language, Valid: true },
+    title: { String: "", Valid: false },
+    is_default: false,
+  });
+
+  // Audit D9: when direct play is active the audible stream is always
+  // ordinal 0, so the badge can name its language with certainty.
+  it("names the first stream's language", () => {
+    expect(directPlayModeLabel([audioStream("eng")])).toBe(
+      "Original file — English audio",
+    );
+  });
+
+  it("falls back to the generic label when the language is unknown", () => {
+    expect(directPlayModeLabel([audioStream(null)])).toBe(
+      "Original file — plays as-is",
+    );
+  });
+
+  it("falls back to the generic label with no audio streams", () => {
+    expect(directPlayModeLabel([])).toBe("Original file — plays as-is");
+    expect(directPlayModeLabel(undefined)).toBe("Original file — plays as-is");
   });
 });
 

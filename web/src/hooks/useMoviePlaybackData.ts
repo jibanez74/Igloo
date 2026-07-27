@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { STREAM_MODES, TMDB_POSTER_SIZE } from "@/lib/constants";
 import {
+  directPlayModeLabel,
   getAvailableModes,
   getPrimaryVideoStream,
   resolveModeForAudioTrack,
@@ -152,7 +153,10 @@ export function useMoviePlaybackData({
     playbackSessionId,
   );
   const modeLabel =
-    STREAM_MODES.find((m) => m.id === resolvedMode)?.label ?? resolvedMode;
+    resolvedMode === "direct"
+      ? directPlayModeLabel(techLoaded ? audioStreams : undefined)
+      : (STREAM_MODES.find((m) => m.id === resolvedMode)?.label ??
+        resolvedMode);
   const modeUnavailable =
     availableModes !== null && availableModes.length === 0;
   const directPlayAvailable =

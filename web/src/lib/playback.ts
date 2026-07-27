@@ -413,6 +413,26 @@ export function formatPlaybackAudioLabel(
   return `Track ${index + 1} · ${channels}`;
 }
 
+/**
+ * Player-badge label for direct play. Whenever direct play is actually
+ * chosen, the audible stream is ordinal 0 of the stream_index-ordered rows
+ * (see directPlayAudioSelectionEligible), so its language can be named with
+ * certainty (audit D9). Falls back to the generic mode label when the
+ * language is unknown.
+ */
+export function directPlayModeLabel(
+  audioStreams: AudioStreamType[] | undefined,
+): string {
+  const fallback =
+    STREAM_MODES.find(m => m.id === "direct")?.label ?? "direct";
+  const langName = formatLanguageName(
+    unwrapStringOrUndefined(audioStreams?.[0]?.language),
+  );
+  if (!langName) return fallback;
+  const base = fallback.split(" — ")[0];
+  return `${base} — ${langName} audio`;
+}
+
 export function describePlaybackExperience(
   mode: StreamModeId,
   audioStream: AudioStreamType | undefined,
