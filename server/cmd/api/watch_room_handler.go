@@ -422,12 +422,17 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 			return
 		}
-		if len(videoStreams) > 0 {
-			browserSafe, _ := isBrowserSafeH264RemuxCandidate(&videoStreams[0])
-			if !browserSafe {
-				helpers.ErrorJSON(w, errors.New("this movie's video cannot be played directly by browsers; choose another playback mode"), http.StatusBadRequest)
-				return
-			}
+		// Zero streams means the scan found no playable video, not "unknown" —
+		// the web client refuses direct play for the same shape (audit D17).
+		if len(videoStreams) == 0 {
+			helpers.ErrorJSON(w, errors.New("this movie has no playable video stream; direct playback is unavailable"), http.StatusBadRequest)
+			return
+		}
+
+		browserSafe, _ := isBrowserSafeH264RemuxCandidate(&videoStreams[0])
+		if !browserSafe {
+			helpers.ErrorJSON(w, errors.New("this movie's video cannot be played directly by browsers; choose another playback mode"), http.StatusBadRequest)
+			return
 		}
 	}
 

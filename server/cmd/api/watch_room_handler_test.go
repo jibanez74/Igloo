@@ -88,6 +88,7 @@ func TestWatchRoom_OwnerInsertedAsMember(t *testing.T) {
 	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[]}`, movieID)
@@ -128,6 +129,7 @@ func TestWatchRoom_InvitedUsersAddedAsMembers(t *testing.T) {
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 
 	guest1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
 		Name:     "Guest One",
@@ -593,6 +595,7 @@ func TestCreateWatchRoom_HTTP_Success(t *testing.T) {
 	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[]}`, movieID)
@@ -776,6 +779,26 @@ func TestCreateWatchRoom_HTTP_DirectWithBrowserSafeH264Accepted(t *testing.T) {
 	}
 }
 
+// Audit matrix row 18b (D17), server mirror: a movie whose scan produced no
+// video streams cannot be direct-played, so a direct room must be refused.
+func TestCreateWatchRoom_HTTP_DirectWithNoVideoStreamsRejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a direct room on a movie with no video streams, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
 	app := setupWatchRoomHTTPTestApp(t)
 	defer app.DB.Close()
@@ -801,6 +824,7 @@ func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T)
 	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	insertWatchRoomTestAudioStream(t, app, movieID, 1, true)
 	insertWatchRoomTestAudioStream(t, app, movieID, 2, false)
 	handler := mountWatchRoomRouter(t, app, ownerID)
@@ -876,6 +900,7 @@ func TestCreateWatchRoom_HTTP_OwnerInviteDeduplication(t *testing.T) {
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d]}`, movieID, ownerID)
@@ -1700,6 +1725,7 @@ func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
 			defer app.DB.Close()
 
 			ownerID, movieID := createTestUserAndMovie(t, app)
+			insertWatchRoomTestVideoStream(t, app, movieID, "High")
 			insertWatchRoomAudioStreams(t, app, movieID, tt.audioCount)
 			handler := mountWatchRoomRouter(t, app, ownerID)
 
