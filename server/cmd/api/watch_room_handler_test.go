@@ -779,6 +779,52 @@ func TestCreateWatchRoom_HTTP_DirectWithBrowserSafeH264Accepted(t *testing.T) {
 	}
 }
 
+// An embedded poster is stored as a video stream, and in some files it sorts
+// ahead of the feature. The gate must judge the feature, exactly as the web
+// client's getPrimaryVideoStream does, or the room is refused for a movie that
+// direct-plays fine.
+func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+
+	_, err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+		MovieID:     movieID,
+		StreamIndex: 0,
+		Codec:       "mjpeg",
+		Width:       600,
+		Height:      900,
+	})
+	if err != nil {
+		t.Fatalf("insert cover art stream: %v", err)
+	}
+
+	_, err = app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+		MovieID:      movieID,
+		StreamIndex:  1,
+		Codec:        "h264",
+		CodecProfile: sql.NullString{String: "High", Valid: true},
+		Width:        1920,
+		Height:       1080,
+	})
+	if err != nil {
+		t.Fatalf("insert feature video stream: %v", err)
+	}
+
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201 for a direct room whose first video stream is cover art, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 // Audit matrix row 18b (D17), server mirror: a movie whose scan produced no
 // video streams cannot be direct-played, so a direct room must be refused.
 func TestCreateWatchRoom_HTTP_DirectWithNoVideoStreamsRejected(t *testing.T) {

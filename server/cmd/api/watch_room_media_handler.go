@@ -113,14 +113,7 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Derive Content-Type from the stored container so the header stays
-	// correct even for rows scanned before the pinned MIME map existed.
-	contentType := helpers.VideoMimeTypes[movie.Container]
-	if contentType == "" {
-		contentType = movie.MimeType
-	}
-
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", movieContentType(movie.Container, movie.MimeType))
 	w.Header().Set("ETag", strongFileETag(stat))
 	http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)
 }

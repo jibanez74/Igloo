@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
+import { directPlayAudioSelectionEligible } from "../src/lib/playback";
 import {
   clearMovieWatchProgress,
   expectVideoAdvances,
@@ -81,16 +82,9 @@ function readDirectMediaEnv(): DirectMediaEnv | null {
 
 const directEnv = readDirectMediaEnv();
 
-/**
- * Mirrors directPlayAudioSelectionEligible (web/src/lib/playback.ts) so the
- * multi-audio expectation adapts to the operator's actual file.
- */
-function audioSelectionEligible(audioStreams: TechnicalDetails["audio_streams"]) {
-  if (audioStreams.length <= 1) return true;
-  const defaults = audioStreams.filter(stream => stream.is_default);
-  if (defaults.length === 0) return true;
-  return defaults.length === 1 && audioStreams[0].is_default;
-}
+// The app's own rule, so the multi-audio expectation cannot drift from it
+// while still adapting to the operator's actual file.
+const audioSelectionEligible = directPlayAudioSelectionEligible;
 
 function trackStreamRequests(page: Page, movieId: number) {
   const streamRequests: string[] = [];

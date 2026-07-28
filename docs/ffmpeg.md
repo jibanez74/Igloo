@@ -131,7 +131,7 @@ Remux is only attempted for browser-compatible H.264 codec names:
 - `avc`
 - `avc1`
 
-If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. This avoids serving copied video that browsers are unlikely to play through HLS.
+If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. The pixel-format rule is an allowlist of the 8-bit 4:2:0 formats browsers decode (`yuv420p`, `yuvj420p`, `nv12`, `nv21`), so an unrecognised format falls back rather than being assumed safe. This avoids serving copied video that browsers are unlikely to play through HLS.
 
 Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples that are not independently decodable by browser players. To avoid that, Igloo preflights remux output before committing to it:
 
@@ -150,7 +150,7 @@ The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the
 Direct play serves the original file over HTTP range requests with no FFmpeg process. Whether the web client offers it is decided from the scanned metadata plus one browser probe (`web/src/lib/playback.ts`, `getAvailableModes`; background in `docs/web-direct-playback-audit.md`):
 
 - **Container.** Only MP4 (`mp4`/`m4v`) is eligible. The container→MIME mapping is pinned in `helpers.VideoMimeTypes` — never derived from the host's MIME tables — and MKV must never be added: Chrome and Firefox fail Matroska in a `<video>` element silently at 0ms with no `MediaError`.
-- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2 and 4:4:4 sources are refused using the same profile / bit-depth / pixel-format rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`).
+- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2 and 4:4:4 sources are refused using the same profile / bit-depth / pixel-format rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`). Pixel formats are checked against an allowlist of the 8-bit 4:2:0 formats (`yuv420p`, `yuvj420p`, `nv12`, `nv21`) — the two copies of the list must stay in sync.
 - **Audio.** The first audio stream's codec must be browser-playable, and the stream the browser will pick must be unambiguous: with two or more audio streams, a `default` disposition on a non-first stream or multiple `default` flags refuse direct play (no flags at all stays eligible — browsers follow container track order). Selecting any non-first track resolves the mode to `remux` (see Audio Handling).
 - **Browser probe.** After the static rules pass, the client asks `canPlayType` with an RFC 6381 string built from the stored codec profile and level. The probe can only narrow eligibility, never widen it: watch-room creation enforces the same rules server-side and cannot probe.
 

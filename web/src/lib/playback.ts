@@ -90,13 +90,17 @@ export type DirectPlayVideoInfo = Pick<
 >;
 
 const NON_BROWSER_H264_PROFILE_MARKERS = ["10", "4:2:2", "422", "4:4:4", "444"];
-const NON_BROWSER_H264_PIXEL_FORMAT_MARKERS = [
-  "10",
-  "12",
-  "14",
-  "16",
-  "422",
-  "444",
+/**
+ * The only pixel formats browsers decode for H.264: 8-bit 4:2:0. An allowlist
+ * rather than a marker denylist because substring matching misreads 8-bit
+ * names — `nv12` contains "12" and `yuv410p` contains "10". Keep in sync with
+ * browserSafeH264PixelFormats in the Go server (hls_session.go).
+ */
+const BROWSER_SAFE_H264_PIXEL_FORMATS = [
+  "yuv420p",
+  "yuvj420p",
+  "nv12",
+  "nv21",
 ];
 
 /**
@@ -114,10 +118,7 @@ function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
   const pixelFormat = unwrapStringOrUndefined(video.pixel_format)
     ?.trim()
     .toLowerCase();
-  if (
-    pixelFormat &&
-    NON_BROWSER_H264_PIXEL_FORMAT_MARKERS.some((m) => pixelFormat.includes(m))
-  ) {
+  if (pixelFormat && !BROWSER_SAFE_H264_PIXEL_FORMATS.includes(pixelFormat)) {
     return false;
   }
 

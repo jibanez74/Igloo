@@ -129,12 +129,7 @@ function PlaybackSettingsDialogForm({
   const handleAudioTrackChange = (next: number) => {
     if (mode === null) return;
 
-    const nextMode = resolveModeForAudioTrack(mode, next);
-    if (!availableModes.some(availableMode => availableMode.id === nextMode)) {
-      return;
-    }
-
-    setMode(nextMode);
+    setMode(resolveModeForAudioTrack(mode, next));
     setAudioTrack(next);
   };
 

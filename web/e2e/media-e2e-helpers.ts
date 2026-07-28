@@ -55,10 +55,21 @@ export async function clearMovieWatchProgress(page: Page, movieId: number) {
   });
 }
 
+// Both waits throw on MediaError rather than polling until the timeout: a
+// decode or source failure can never satisfy the condition, so reporting the
+// error code straight away beats a "waitForFunction timed out" after the
+// suite's several-minute budget. Every lookup goes through
+// document.querySelector so a page with more than one <video> cannot trip
+// Playwright's strict-mode locator check partway through.
 export async function expectVideoAdvances(page: Page, timeout: number) {
   await page.waitForFunction(
     () => {
       const video = document.querySelector("video");
+      if (video instanceof HTMLVideoElement && video.error) {
+        throw new Error(
+          `media error ${video.error.code}: ${video.error.message || "no message"}`,
+        );
+      }
       return (
         video instanceof HTMLVideoElement &&
         video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
@@ -70,13 +81,18 @@ export async function expectVideoAdvances(page: Page, timeout: number) {
     { timeout },
   );
 
-  const currentTime = await page.locator("video").evaluate(video => {
-    return video instanceof HTMLVideoElement ? video.currentTime : 0;
-  });
+  const currentTime = await page.evaluate(
+    () => document.querySelector("video")?.currentTime ?? 0,
+  );
 
   await page.waitForFunction(
     previousTime => {
       const video = document.querySelector("video");
+      if (video instanceof HTMLVideoElement && video.error) {
+        throw new Error(
+          `media error ${video.error.code}: ${video.error.message || "no message"}`,
+        );
+      }
       return (
         video instanceof HTMLVideoElement &&
         !video.paused &&

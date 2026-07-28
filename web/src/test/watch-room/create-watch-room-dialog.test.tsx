@@ -22,6 +22,7 @@ import type {
 } from "@/types/movies";
 
 const createWatchRoomMock = vi.fn();
+const getMovieTechnicalDetailsMock = vi.fn();
 const navigateMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showCreatedMock = vi.fn();
@@ -46,6 +47,8 @@ vi.mock("@/lib/api", async () => {
   return {
     ...actual,
     createWatchRoom: (...args: unknown[]) => createWatchRoomMock(...args),
+    getMovieTechnicalDetails: (...args: unknown[]) =>
+      getMovieTechnicalDetailsMock(...args),
   };
 });
 
@@ -194,10 +197,18 @@ function inviteUsers(): ApiResponseType<WatchRoomInviteUsersResponseType> {
 
 type DialogProps = ComponentProps<typeof CreateWatchRoomDialog>;
 
-function renderDialog(overrides: Partial<DialogProps> = {}) {
+function renderDialog(
+  overrides: Partial<DialogProps> = {},
+  { seedTechnicalDetails = true } = {},
+) {
   const queryClient = createTestQueryClient();
   queryClient.setQueryData([WATCH_ROOM_INVITE_USERS_KEY], inviteUsers());
-  queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], technicalDetails());
+  if (seedTechnicalDetails) {
+    queryClient.setQueryData(
+      [MOVIE_TECHNICAL_DETAILS_KEY, 22],
+      technicalDetails(),
+    );
+  }
 
   const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
   const onOpenChange = vi.fn();
@@ -232,6 +243,8 @@ function renderDialog(overrides: Partial<DialogProps> = {}) {
 
 beforeEach(() => {
   createWatchRoomMock.mockReset();
+  getMovieTechnicalDetailsMock.mockReset();
+  getMovieTechnicalDetailsMock.mockReturnValue(new Promise(() => {}));
   navigateMock.mockReset();
   showActionFailedMock.mockReset();
   showCreatedMock.mockReset();
@@ -271,6 +284,23 @@ describe("CreateWatchRoomDialog", () => {
     expect(showValidationErrorMock).toHaveBeenCalledWith(
       "Select at least one person to invite.",
     );
+    expect(createWatchRoomMock).not.toHaveBeenCalled();
+  });
+
+  // Before technical details resolve, getAvailableModes optimistically keeps
+  // `direct`, so an early submit would post a mode the source may not support
+  // and the server would reject the room.
+  it("cannot create a room until technical details resolve", async () => {
+    const user = userEvent.setup();
+    renderDialog({}, { seedTechnicalDetails: false });
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /invite dana scully/i }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Create and join room" }),
+    ).toBeDisabled();
     expect(createWatchRoomMock).not.toHaveBeenCalled();
   });
 

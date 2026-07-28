@@ -195,8 +195,14 @@ export default function CreateWatchRoomDialog({
     mutation.mutate();
   };
 
+  // Until technical details resolve, getAvailableModes optimistically keeps
+  // `direct`, so submitting early would post a mode the source may not
+  // support. PlaybackSettingsDialog gates its save the same way.
   const createDisabled =
-    mutation.isPending || inviteUsersPending || inviteUsers.length === 0;
+    mutation.isPending ||
+    inviteUsersPending ||
+    !techData?.data ||
+    inviteUsers.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

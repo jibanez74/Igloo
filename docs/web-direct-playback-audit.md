@@ -6,6 +6,8 @@
 
 This document is an investigation and recommendation report. At the time it was written, **no code was changed, and no diagnostic edits were made** (see §12).
 
+> **Implementation status (2026-07-27, fifth revision):** the register stays closed; the fifth revision corrects two defects found by review *in the fixes themselves* — the D2 pixel-format rule misread 8-bit `nv12`/`yuv410p` as high bit depth, and the D1/D8 watch-room mirror could reach a different verdict than the client it mirrors. Details in §14.
+>
 > **Implementation status (2026-07-27, fourth revision):** the remaining register is closed — **D4, D5, D9, D10, D11, D13–D15, D17 and D-WR are fixed** on `fix/playback-settings` (see §14 for the commit-per-item mapping). Combined with the third revision (D1, D2, D3, D7, D8, D12, D16, D-FB, D-FB2, D-TEST), every finding is resolved except **D6** (sendfile/session-middleware rescoping, deliberately deferred — it touches the auth middleware layout for all stream routes) and **D-EXT** (sidecar subtitle indexing, a product feature for its own branch). Sections describing the pre-fix behaviour are preserved as written and describe the code **as audited**, not as it is now.
 
 ---
@@ -54,7 +56,7 @@ The one place the taxonomy leaks into the UI: the badge in the player footer sho
 
 ### 2.2 Flow from Play to playing
 
-```
+```text
 MovieDetailsHeroActions  →  Link to /movies/$id/play?mode&audio_track&subtitle_track
         │                       (search params come from PlaybackSettingsDialog,
         │                        or from getDefaultPlaybackSettings if untouched)
@@ -971,6 +973,14 @@ The second revision (§14) was a verification pass, not a re-audit. What it did:
 What it did **not** do: drive a browser, start a server, or play a media file. That boundary is unchanged, which is why D11 was demoted rather than resolved, and why §5 was reframed rather than corrected.
 
 ## 14. Revision history
+
+**2026-07-27 (fifth revision) — review corrections.** Code review of the branch found two defects in the fixes themselves, both in rules the report had specified correctly but the implementation matched loosely.
+
+*The D2 pixel-format rule refused files it should allow.* Both copies matched `pixel_format` with substrings (`"10"`, `"12"`, `"14"`, `"16"`, `"422"`, `"444"`), so the 8-bit 4:2:0 names `nv12` and `yuv410p` read as high bit depth. Direct play was silently refused for them on the web side, and the server's *remux* gate demoted them to a full transcode. Both are now an allowlist of the formats browsers actually decode for H.264 — `yuv420p`, `yuvj420p`, `nv12`, `nv21` — which also makes an unrecognised format fall back rather than be assumed safe. The `codec_profile` marker list is unchanged: profile strings like `High 10` and `High 4:2:2` genuinely need substring matching.
+
+*The watch-room mirror could disagree with the client it mirrors.* Two parity gaps: the client gates on the stored `movie.mime_type` while the handler re-derived the MIME type from `movie.Container`, and the handler judged `videoStreams[0]` while the client resolves the feature through `getPrimaryVideoStream`, so a file whose attached picture sorts first reached opposite verdicts. One `movieContentType` helper now answers for the direct-stream `Content-Type`, the watch-room stream `Content-Type`, the `mime_type` field of technical-details, and the D1 container check — the client's input and the server's validation are the same string by construction. `primaryVideoStream` mirrors the client's cover-art skip and is used by both watch-room creation and `createHLSSession`.
+
+Also fixed from the same review: watch-room creation is now disabled until technical details resolve (it could otherwise post an optimistic `direct` for the server to reject), the player badge's visually-hidden label says "Current playback mode" rather than "Current stream quality" now that it names the audio track, and a `handleAudioTrackChange` guard made unreachable by the `direct ⊂ remux` invariant was deleted.
 
 **2026-07-27 (fourth revision) — implementation of the remaining register.** D4, D5, D9, D10, D11, D13–D15, D17 and D-WR were implemented on `fix/playback-settings`, one commit per item:
 

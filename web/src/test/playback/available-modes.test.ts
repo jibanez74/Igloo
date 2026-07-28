@@ -155,6 +155,10 @@ describe("browser-safe H.264 gate", () => {
       "4:2:2 pixel format alone",
       { pixel_format: { String: "yuv422p", Valid: true } },
     ],
+    [
+      "4:4:4 pixel format alone",
+      { pixel_format: { String: "yuv444p", Valid: true } },
+    ],
   ])("refuses direct play for %s while keeping remux", (_name, overrides) => {
     const ids = modeIds(
       getAvailableModes({
@@ -168,17 +172,24 @@ describe("browser-safe H.264 gate", () => {
     expect(ids).toContain("remux");
   });
 
-  it("keeps direct play for plain 8-bit High profile", () => {
-    const ids = modeIds(
-      getAvailableModes({
-        videoStreamsLoaded: true,
-        video: h264Video(),
-        audioStreams: [aacAudio()],
-        mimeType: "video/mp4",
-      }),
-    );
-    expect(ids).toContain("direct");
-  });
+  // "nv12" and "yuv410p" contain "12"/"10", so a substring marker list read
+  // them as high bit depth and refused a file browsers decode fine.
+  it.each(["yuv420p", "yuvj420p", "nv12", "nv21"])(
+    "keeps direct play for the 8-bit 4:2:0 pixel format %s",
+    pixelFormat => {
+      const ids = modeIds(
+        getAvailableModes({
+          videoStreamsLoaded: true,
+          video: h264Video({
+            pixel_format: { String: pixelFormat, Valid: true },
+          }),
+          audioStreams: [aacAudio()],
+          mimeType: "video/mp4",
+        }),
+      );
+      expect(ids).toContain("direct");
+    },
+  );
 
   it("does not consult the probe when the static rules refuse", () => {
     const canPlay = vi.fn().mockReturnValue("probably");

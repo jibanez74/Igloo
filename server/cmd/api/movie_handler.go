@@ -670,7 +670,9 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 				"file_path": movie.FilePath,
 				"size":      movie.Size,
 				"container": movie.Container,
-				"mime_type": movie.MimeType,
+				// The value the client's direct-play container gate reads, so
+				// it must be the one the watch-room handler validates against.
+				"mime_type": movieContentType(movie.Container, movie.MimeType),
 				"run_time":  movie.RunTime,
 				"duration":  movie.Duration,
 			},
@@ -725,14 +727,7 @@ func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Derive Content-Type from the stored container so the header stays
-	// correct even for rows scanned before the pinned MIME map existed.
-	contentType := helpers.VideoMimeTypes[movie.Container]
-	if contentType == "" {
-		contentType = movie.MimeType
-	}
-
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", movieContentType(movie.Container, movie.MimeType))
 	w.Header().Set("ETag", strongFileETag(stat))
 
 	http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)

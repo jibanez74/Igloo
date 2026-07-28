@@ -1,26 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { apiURL, readE2EEnv } from "./e2e-env";
+import { readE2EEnv } from "./e2e-env";
+import { loginWithCredentials } from "./media-e2e-helpers";
 
 // Drives the movie play route against the mock API server. The stream request
 // is intentionally left pending: the player chrome reaches its ready state
 // from the metadata queries alone, and with the media stuck at HAVE_NOTHING a
 // seek sets the element's default playback start position, which currentTime
 // reads back — enough to prove the chapter-seek flow without real media.
-async function logInMoviePlayer(page: Page) {
-  const env = readE2EEnv();
-  const loginResponse = await page.context().request.post(
-    apiURL(env, "/api/auth/login"),
-    {
-      data: { email: env.email, password: env.password },
-      failOnStatusCode: false,
-    },
-  );
-  expect(loginResponse.status()).toBe(200);
-}
-
 async function openMoviePlayer(page: Page) {
-  await logInMoviePlayer(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   await page.route("**/api/movies/*/stream*", () => {
     // Never fulfilled: keeps the player ready without firing a media error.
@@ -55,7 +44,7 @@ for (const {
   test(`${label} playback waits for preferences before requesting media`, async ({
     page,
   }) => {
-    await logInMoviePlayer(page);
+    await loginWithCredentials(page, readE2EEnv());
 
     let releasePlaybackSettings!: () => void;
     const playbackSettingsGate = new Promise<void>(resolve => {
@@ -98,7 +87,7 @@ for (const {
 test("omitted subtitle state synchronizes to the canonical off URL", async ({
   page,
 }) => {
-  await logInMoviePlayer(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   await page.route("**/api/movies/*/stream*", () => {
     // Keep direct media pending while the route synchronizes its search state.
@@ -114,7 +103,7 @@ test("omitted subtitle state synchronizes to the canonical off URL", async ({
 });
 
 test("loader redirect serializes subtitle-off canonically", async ({ page }) => {
-  await logInMoviePlayer(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   await page.route("**/api/movies/*/stream*", () => {
     // Keep direct media pending after the loader's default-settings redirect.
@@ -134,7 +123,7 @@ test("loader redirect serializes subtitle-off canonically", async ({ page }) => 
 test("cold non-first audio waits for metadata and never requests the raw stream", async ({
   page,
 }) => {
-  await logInMoviePlayer(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   let releaseTechnicalDetails!: () => void;
   const technicalDetailsGate = new Promise<void>(resolve => {
@@ -200,7 +189,7 @@ test("cold non-first audio waits for metadata and never requests the raw stream"
 test("cold direct deep link to an ineligible file never requests the raw stream", async ({
   page,
 }) => {
-  await logInMoviePlayer(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   // Serve the movie as MKV with delayed technical details: a bookmarked
   // ?mode=direct&audio_track=0 link must wait for eligibility instead of
@@ -266,7 +255,7 @@ test("cold direct deep link to an ineligible file never requests the raw stream"
 });
 
 test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) => {
-  await logInMoviePlayer(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   await page.route(
     "**/api/movies/101/hls/*/playlist.m3u8*",

@@ -1,5 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
-import { apiURL, readE2EEnv } from "./e2e-env";
+import { expect, test } from "@playwright/test";
+import { readE2EEnv } from "./e2e-env";
+import { loginWithCredentials } from "./media-e2e-helpers";
 
 // Drives the one-shot direct→remux fallback (audit D-FB): the mock movie is
 // direct-play eligible (MP4, H.264 High 4.1, AAC LC — Chromium's canPlayType
@@ -7,21 +8,10 @@ import { apiURL, readE2EEnv } from "./e2e-env";
 // MEDIA_ERR_SRC_NOT_SUPPORTED / MEDIA_ERR_DECODE and the player must switch
 // to remux exactly once, at the preserved position, with tracks intact.
 
-async function logIn(page: Page) {
-  const env = readE2EEnv();
-  const loginResponse = await page
-    .context()
-    .request.post(apiURL(env, "/api/auth/login"), {
-      data: { email: env.email, password: env.password },
-      failOnStatusCode: false,
-    });
-  expect(loginResponse.status()).toBe(200);
-}
-
 test("failed direct play falls back to remux once at the preserved position", async ({
   page,
 }) => {
-  await logIn(page);
+  await loginWithCredentials(page, readE2EEnv());
 
   const streamRequests: string[] = [];
   await page.route("**/api/movies/101/stream*", async route => {

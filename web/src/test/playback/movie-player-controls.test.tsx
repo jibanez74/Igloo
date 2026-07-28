@@ -82,7 +82,7 @@ describe("MoviePlayerControls", () => {
 
     const badge = screen.getByText("Original file — English audio");
     expect(badge).toHaveTextContent(
-      "Current stream quality: Original file — English audio",
+      "Current playback mode: Original file — English audio",
     );
     expect(badge.querySelector(".sr-only")).not.toBeNull();
     expect(badge).not.toHaveAttribute("aria-label");

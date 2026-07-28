@@ -126,26 +126,25 @@ func isNonBrowserH264Profile(profile string) bool {
 	return false
 }
 
+// browserSafeH264PixelFormats lists the only pixel formats browsers decode for
+// H.264: 8-bit 4:2:0. An allowlist rather than a marker denylist because
+// substring matching misreads 8-bit names — "nv12" contains "12" and "yuv410p"
+// contains "10". Keep in sync with BROWSER_SAFE_H264_PIXEL_FORMATS in the web
+// client (web/src/lib/playback.ts).
+var browserSafeH264PixelFormats = map[string]bool{
+	"yuv420p":  true,
+	"yuvj420p": true,
+	"nv12":     true,
+	"nv21":     true,
+}
+
 func isNonBrowserH264PixelFormat(pixelFormat string) bool {
 	pixelFormat = strings.ToLower(strings.TrimSpace(pixelFormat))
 	if pixelFormat == "" {
 		return false
 	}
 
-	unsupportedMarkers := []string{
-		"10",
-		"12",
-		"14",
-		"16",
-		"422",
-		"444",
-	}
-	for _, marker := range unsupportedMarkers {
-		if strings.Contains(pixelFormat, marker) {
-			return true
-		}
-	}
-	return false
+	return !browserSafeH264PixelFormats[pixelFormat]
 }
 
 func audioTrackCacheKey(audioTrack *int) string {
@@ -943,7 +942,8 @@ func (app *Application) createHLSSession(
 	if err != nil {
 		return nil, fmt.Errorf("failed to load video streams: %w", err)
 	}
-	if len(videoStreams) == 0 {
+	primaryVideo := primaryVideoStream(videoStreams)
+	if primaryVideo == nil {
 		return nil, fmt.Errorf("no playable video track found for movie %d", movieID)
 	}
 
@@ -968,15 +968,14 @@ func (app *Application) createHLSSession(
 		selectedAudio = &audioStreams[*audioTrack]
 	}
 
-	primaryVideo := videoStreams[0]
 	requestedProfile := profile
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
-	safetyCacheKey := remuxSafetyFingerprint(movie, &primaryVideo)
+	safetyCacheKey := remuxSafetyFingerprint(movie, primaryVideo)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
-		if ok, fallbackReason := isBrowserSafeH264RemuxCandidate(&primaryVideo); !ok {
+		if ok, fallbackReason := isBrowserSafeH264RemuxCandidate(primaryVideo); !ok {
 			effectiveProfile = fallbackProfile
 			app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
 			app.Logger.Warn("remux safety fallback engaged",
@@ -1018,7 +1017,7 @@ func (app *Application) createHLSSession(
 
 	hlsParams := hlsSessionStartParams{
 		Movie:            movie,
-		PrimaryVideo:     &primaryVideo,
+		PrimaryVideo:     primaryVideo,
 		SelectedAudio:    selectedAudio,
 		RequestedProfile: requestedProfile,
 		EffectiveProfile: effectiveProfile,
