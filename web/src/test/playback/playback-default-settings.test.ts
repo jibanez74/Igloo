@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { getDefaultPlaybackSettings } from "@/lib/playback";
+import {
+  getAvailableModes,
+  getDefaultPlaybackSettings,
+  resolveAudioTrackForMode,
+  resolveModeForAudioTrack,
+  resolvePlaybackSettings,
+} from "@/lib/playback";
 import type { StreamModeId } from "@/types/playback";
 import type { PlaybackSettingsType } from "@/types/settings";
 import type { AudioStreamType, SubtitleType } from "@/types/movies";
@@ -22,6 +28,7 @@ const audioStream = (
       ? { Valid: false, String: "" }
       : { Valid: true, String: language },
   title: { Valid: false, String: "" },
+  is_default: false,
 });
 
 const subtitleStream = (
@@ -220,5 +227,275 @@ describe("getDefaultPlaybackSettings", () => {
     const audio = [audioStream(0, "eng"), audioStream(1, "fil")];
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, audio);
     expect(result.audioTrack).toBe(0);
+  });
+
+  it("never auto-selects a bitmap subtitle for the preferred language", () => {
+    const prefs = makePrefs({ preferred_subtitle_language: "en" });
+    const subtitles = [
+      { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
+      subtitleStream(1, "eng"),
+    ];
+    const result = getDefaultPlaybackSettings(ALL_MODES, prefs, [], subtitles);
+    expect(result.subtitleTrack).toBe(1);
+  });
+});
+
+describe("resolvePlaybackSettings", () => {
+  it("falls back to the user's preferred profile when the mode is invalid", () => {
+    const prefs = makePrefs({ preferred_profile: "1080p_8mbps" });
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: null },
+      SUB_HD_MODES.concat([{ id: "1080p_8mbps" }]),
+      [],
+      [],
+      prefs,
+    );
+    expect(result.mode).toBe("1080p_8mbps");
+  });
+
+  it("falls back to the preferred audio language when the track is out of range", () => {
+    const prefs = makePrefs({ preferred_audio_language: "es" });
+    const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 9, subtitleTrack: null },
+      ALL_MODES,
+      audio,
+      [],
+      prefs,
+    );
+    expect(result.audioTrack).toBe(1);
+    expect(result.mode).toBe("remux");
+  });
+
+  it("keeps a valid explicit selection over user preferences", () => {
+    const prefs = makePrefs({
+      preferred_profile: "720p_3mbps",
+      preferred_audio_language: "es",
+    });
+    const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: null },
+      ALL_MODES,
+      audio,
+      [],
+      prefs,
+    );
+    expect(result).toEqual({ mode: "direct", audioTrack: 0, subtitleTrack: null });
+  });
+
+  it("keeps an explicit subtitle-off selection over user preferences", () => {
+    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+    const subtitles = [
+      subtitleStream(0, "eng"),
+      subtitleStream(1, "spa"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: null },
+      ALL_MODES,
+      [],
+      subtitles,
+      prefs,
+    );
+    expect(result.subtitleTrack).toBeNull();
+  });
+
+  it.each([
+    ["an omitted selection", undefined],
+    ["an out-of-range selection", 99],
+  ])("uses the preferred text subtitle for %s", (_label, subtitleTrack) => {
+    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+    const subtitles = [
+      subtitleStream(0, "eng"),
+      subtitleStream(1, "spa"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack },
+      ALL_MODES,
+      [],
+      subtitles,
+      prefs,
+    );
+    expect(result.subtitleTrack).toBe(1);
+  });
+
+  it("rejects a subtitle selection that points at a bitmap track", () => {
+    const subtitles = [
+      { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
+      subtitleStream(1, "spa"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: 0 },
+      ALL_MODES,
+      [],
+      subtitles,
+    );
+    expect(result.subtitleTrack).toBeNull();
+  });
+
+  it("falls back from a bitmap selection to the preferred text subtitle", () => {
+    const prefs = makePrefs({ preferred_subtitle_language: "en" });
+    const subtitles = [
+      { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
+      subtitleStream(1, "eng"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: 0 },
+      ALL_MODES,
+      [],
+      subtitles,
+      prefs,
+    );
+    expect(result.subtitleTrack).toBe(1);
+  });
+
+  it("keeps a text subtitle selection", () => {
+    const subtitles = [
+      { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
+      subtitleStream(1, "spa"),
+    ];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: 1 },
+      ALL_MODES,
+      [],
+      subtitles,
+    );
+    expect(result.subtitleTrack).toBe(1);
+  });
+
+  it("upgrades direct play to remux when a non-first audio track is selected", () => {
+    const audio = [audioStream(0, "eng"), audioStream(1, "fra"), audioStream(2, "spa")];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 2, subtitleTrack: null },
+      ALL_MODES,
+      audio,
+      [],
+    );
+    expect(result).toEqual({ mode: "remux", audioTrack: 2, subtitleTrack: null });
+  });
+
+  it("keeps direct play for the first audio track", () => {
+    const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
+    const result = resolvePlaybackSettings(
+      { mode: "direct", audioTrack: 0, subtitleTrack: null },
+      ALL_MODES,
+      audio,
+      [],
+    );
+    expect(result.mode).toBe("direct");
+  });
+
+  it("leaves non-direct modes untouched for a non-first audio track", () => {
+    const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
+    const result = resolvePlaybackSettings(
+      { mode: "720p_3mbps", audioTrack: 1, subtitleTrack: null },
+      ALL_MODES,
+      audio,
+      [],
+    );
+    expect(result).toEqual({ mode: "720p_3mbps", audioTrack: 1, subtitleTrack: null });
+  });
+
+  it("upgrades a preferred-language default away from direct play", () => {
+    const prefs = makePrefs({ preferred_audio_language: "es" });
+    const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
+    const result = getDefaultPlaybackSettings(ALL_MODES, prefs, audio, []);
+    expect(result.mode).toBe("remux");
+    expect(result.audioTrack).toBe(1);
+  });
+});
+
+describe("audio track and mode resolvers", () => {
+  it("upgrades direct to remux only for a non-first track", () => {
+    expect(resolveModeForAudioTrack("direct", 0)).toBe("direct");
+    expect(resolveModeForAudioTrack("direct", 1)).toBe("remux");
+    expect(resolveModeForAudioTrack("remux", 3)).toBe("remux");
+    expect(resolveModeForAudioTrack("720p_3mbps", 3)).toBe("720p_3mbps");
+  });
+
+  it("snaps the audio track back to the first stream for direct play", () => {
+    expect(resolveAudioTrackForMode("direct", 3)).toBe(0);
+    expect(resolveAudioTrackForMode("direct", 0)).toBe(0);
+    expect(resolveAudioTrackForMode("remux", 3)).toBe(3);
+    expect(resolveAudioTrackForMode("1080p_8mbps", 3)).toBe(3);
+  });
+
+  // resolveModeForAudioTrack upgrades to remux without checking availability,
+  // which is only safe while remux is offered wherever direct is.
+  it("never offers direct play without remux", () => {
+    const nullString = { String: "", Valid: false };
+    const nullInt = { Int64: 0, Valid: false };
+    const videoCodecs = ["h264", "avc1", "hevc", "vp9", undefined];
+    const audioCodecs = ["aac", "ac3", "dts", "flac", undefined];
+    const containers = ["video/mp4", "video/webm", "video/x-matroska", ""];
+    const heights = [0, 480, 1080, 2160];
+
+    for (const videoStreamsLoaded of [true, false]) {
+      for (const videoCodec of videoCodecs) {
+        for (const audioCodec of audioCodecs) {
+          for (const mimeType of containers) {
+            for (const height of heights) {
+              const modes = getAvailableModes({
+                videoStreamsLoaded,
+                video:
+                  videoCodec === undefined
+                    ? undefined
+                    : {
+                        codec: videoCodec,
+                        codec_profile: nullString,
+                        codec_level: nullInt,
+                        height,
+                        bit_depth: nullInt,
+                        pixel_format: nullString,
+                      },
+                audioStreams:
+                  audioCodec === undefined
+                    ? []
+                    : [
+                        {
+                          codec: audioCodec,
+                          codec_profile: nullString,
+                          is_default: false,
+                        },
+                      ],
+                mimeType,
+              });
+              const ids = modes.map(m => m.id);
+              if (ids.includes("direct")) {
+                expect(ids).toContain("remux");
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Audit matrix row 18b (D17): a movie whose scan produced zero video
+  // streams must not be offered direct play or remux once metadata has
+  // loaded — an absent video stream only means "unknown" while it is still
+  // in flight.
+  it("refuses direct and remux when metadata is loaded without a video stream", () => {
+    const audioStreams = [
+      { codec: "aac", codec_profile: { String: "", Valid: false }, is_default: false },
+    ];
+
+    const loaded = getAvailableModes({
+      videoStreamsLoaded: true,
+      video: undefined,
+      audioStreams,
+      mimeType: "video/mp4",
+    }).map(m => m.id);
+    expect(loaded).not.toContain("direct");
+    expect(loaded).not.toContain("remux");
+    expect(loaded).toHaveLength(0);
+
+    const pending = getAvailableModes({
+      videoStreamsLoaded: false,
+      video: undefined,
+      audioStreams,
+      mimeType: "video/mp4",
+    }).map(m => m.id);
+    expect(pending).toContain("direct");
+    expect(pending).toContain("remux");
   });
 });

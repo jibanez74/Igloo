@@ -256,6 +256,7 @@ export type VideoStreamType = {
   frame_rate: number;
   avg_frame_rate: NullableString;
   bit_depth: NullableInt64;
+  pixel_format: NullableString;
   color_range: NullableString;
   color_space: NullableString;
   color_primaries: NullableString;
@@ -276,6 +277,7 @@ export type AudioStreamType = {
   channel_layout: NullableString;
   language: NullableString;
   title: NullableString;
+  is_default: boolean;
 };
 
 export type SubtitleType = {

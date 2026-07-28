@@ -20,7 +20,7 @@ describe("MoviePlayerControls", () => {
         duration={120}
         displayedDuration={120}
         playing={false}
-        qualityLabel="Direct"
+        modeLabel="Direct"
         chapters={[]}
         videoRef={createRef<HTMLVideoElement>()}
         onSeek={vi.fn()}
@@ -55,6 +55,39 @@ describe("MoviePlayerControls", () => {
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
   });
 
+  // Audit D13: aria-label on a generic span is ignored by assistive tech, so
+  // the badge announces its meaning through visually-hidden text instead.
+  it("announces the stream-quality badge with screen-reader context", () => {
+    render(
+      <MoviePlayerControls
+        chromeFullscreenMode
+        controlsVisible
+        isFullscreen={false}
+        isImmersiveViewport
+        currentTime={12}
+        duration={120}
+        displayedDuration={120}
+        playing={false}
+        modeLabel="Original file — English audio"
+        chapters={[]}
+        videoRef={createRef<HTMLVideoElement>()}
+        onSeek={vi.fn()}
+        onSeekBackward={vi.fn()}
+        onSeekForward={vi.fn()}
+        onTogglePlay={vi.fn()}
+        onToggleFullscreen={vi.fn()}
+        onSelectChapter={vi.fn()}
+      />,
+    );
+
+    const badge = screen.getByText("Original file — English audio");
+    expect(badge).toHaveTextContent(
+      "Current playback mode: Original file — English audio",
+    );
+    expect(badge.querySelector(".sr-only")).not.toBeNull();
+    expect(badge).not.toHaveAttribute("aria-label");
+  });
+
   it("pads the current time to h:mm:ss for movies over an hour", () => {
     render(
       <MoviePlayerControls
@@ -66,7 +99,7 @@ describe("MoviePlayerControls", () => {
         duration={7500}
         displayedDuration={7500}
         playing={false}
-        qualityLabel="Direct"
+        modeLabel="Direct"
         chapters={[]}
         videoRef={createRef<HTMLVideoElement>()}
         onSeek={vi.fn()}

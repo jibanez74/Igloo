@@ -6,12 +6,13 @@ import { createWatchRoom } from "@/lib/api";
 import {
   AUDIO_TRACK_DEFAULT_LABEL,
   MOTION_MICRO_COLORS_CLASS,
+  PLAYBACK_SETTINGS_SUMMARY_LOADING,
+  STREAM_MODES,
   SUBTITLES_NONE_LABEL,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import { cn, getInitials } from "@/lib/utils";
 import {
-  STREAM_MODES,
   formatPlaybackAudioLabel,
   formatSubtitleLabel,
   getAvailableModes,
@@ -71,7 +72,10 @@ export default function CreateWatchRoomDialog({
   const { data: inviteUsersData, isPending: inviteUsersPending } = useQuery(
     watchRoomInviteUsersQueryOpts(open),
   );
-  const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const { data: techData, isPending: techPending } = useQuery(
+    movieTechnicalDetailsQueryOpts(movieId),
+  );
+  const techLoaded = Boolean(techData?.data);
 
   const inviteUsers =
     inviteUsersData?.error === false ? inviteUsersData.data.users : [];
@@ -95,12 +99,12 @@ export default function CreateWatchRoomDialog({
   const subtitleStreams = techData?.data?.subtitles ?? [];
   const videoStream = getPrimaryVideoStream(videoStreams);
   const mimeType = techData?.data?.movie?.mime_type ?? undefined;
-  const availableModes = getAvailableModes(
-    videoStream?.height ?? 0,
-    videoStream?.codec,
-    audioStreams[0]?.codec,
+  const availableModes = getAvailableModes({
+    video: videoStream,
+    videoStreamsLoaded: techLoaded,
+    audioStreams,
     mimeType,
-  );
+  });
   const resolvedSettings = resolvePlaybackSettings(
     playbackSettings,
     availableModes,
@@ -195,8 +199,15 @@ export default function CreateWatchRoomDialog({
     mutation.mutate();
   };
 
+  // Until technical details resolve, getAvailableModes optimistically keeps
+  // `direct`, so submitting early would post a mode the source may not
+  // support. PlaybackSettingsDialog gates its save the same way. The presets
+  // section below says why the button is disabled while this holds.
   const createDisabled =
-    mutation.isPending || inviteUsersPending || inviteUsers.length === 0;
+    mutation.isPending ||
+    inviteUsersPending ||
+    !techLoaded ||
+    inviteUsers.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -229,28 +240,48 @@ export default function CreateWatchRoomDialog({
               >
                 Room playback presets
               </h3>
-              <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-                <div>
-                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Playback
-                  </dt>
-                  <dd className="mt-1 text-sm text-foreground">{modeLabel}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Audio
-                  </dt>
-                  <dd className="mt-1 text-sm text-foreground">{audioLabel}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Subtitles
-                  </dt>
-                  <dd className="mt-1 text-sm text-foreground">
-                    {subtitleLabel}
-                  </dd>
-                </div>
-              </dl>
+              {techPending && !techLoaded ? (
+                // The presets are unknown until the metadata lands, and
+                // creation is blocked meanwhile — say so rather than leave a
+                // disabled button with no stated reason.
+                <p
+                  role="status"
+                  className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"
+                >
+                  <Spinner className="size-4" aria-hidden="true" />
+                  {PLAYBACK_SETTINGS_SUMMARY_LOADING}
+                </p>
+              ) : !techLoaded ? (
+                <p className="mt-3 text-sm text-destructive">
+                  {(techData?.error && techData.message) ||
+                    "Failed to load playback options. Please try again."}
+                </p>
+              ) : (
+                <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Playback
+                    </dt>
+                    <dd className="mt-1 text-sm text-foreground">{modeLabel}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Audio
+                    </dt>
+                    <dd className="mt-1 text-sm text-foreground">
+                      {audioLabel}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Subtitles
+                    </dt>
+                    <dd className="mt-1 text-sm text-foreground">
+                      {subtitleLabel}
+                    </dd>
+                  </div>
+                </dl>
+              )}
             </section>
 
             <section

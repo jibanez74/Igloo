@@ -2,6 +2,7 @@
 SELECT
   file_path,
   file_name,
+  container,
   mime_type
 FROM movies
 WHERE id = ?
@@ -226,10 +227,11 @@ INSERT INTO audio_streams (
   channels,
   channel_layout,
   language,
-  title
+  title,
+  is_default
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: DeleteMovieSubtitles :exec

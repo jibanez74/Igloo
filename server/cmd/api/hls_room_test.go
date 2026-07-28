@@ -240,11 +240,9 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 	}
 	defer cleanupHLSSession(session)
 
-	if session.RequestedProfile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("RequestedProfile = %q, want remux", session.RequestedProfile)
-	}
-	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	calls := fake.Calls()
+	if len(calls) == 0 || calls[len(calls)-1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("RunHLS calls = %+v, want final profile %q", calls, helpers.HLS_PROFILE_1080P_8MBPS)
 	}
 	if session.CopyVideo {
 		t.Fatal("CopyVideo = true, want false after room fallback")

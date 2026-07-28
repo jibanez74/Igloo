@@ -1,4 +1,5 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
@@ -19,6 +20,14 @@ import type {
   PlaybackSettingsType,
 } from "@/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// The playback settings dialog renders native selects on coarse pointers,
+// which jsdom can drive with fireEvent.change (Radix selects need real
+// pointer events). Only the dialog consumes this hook.
+const prefersCoarse = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-coarse-pointer", () => ({
+  usePrefersCoarsePointer: () => prefersCoarse.value,
+}));
 
 const DETAIL_PAGE_ANIMATION_MARKER =
   "animate-in fade-in slide-in-from-bottom-2";
@@ -197,6 +206,7 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         frame_rate: 24,
         avg_frame_rate: nullableString("24/1"),
         bit_depth: nullableInt64(8),
+        pixel_format: nullableString("yuv420p"),
         color_range: nullableString("tv"),
         color_space: nullableString("bt709"),
         color_primaries: nullableString("bt709"),
@@ -218,6 +228,7 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         channel_layout: nullableString("stereo"),
         language: nullableString("en"),
         title: nullableString("English"),
+        is_default: false,
       },
     ],
     subtitles: [],
@@ -552,5 +563,47 @@ describe("movie details route playback settings sync", () => {
     await waitFor(() => {
       expect(getPlayLinkMode()).toBe("1080p_8mbps");
     });
+  });
+
+  it("keeps the user's saved dialog selection when playback settings data changes", async () => {
+    prefersCoarse.value = true;
+    try {
+      const { queryClient } = await renderMovieDetailsRoute("/movies/57/");
+
+      expect(
+        await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
+      ).toBeInTheDocument();
+      expect(getPlayLinkMode()).toBe("remux");
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: "More options" }));
+      await user.click(
+        await screen.findByRole("menuitem", { name: "Playback Settings" }),
+      );
+
+      const modeSelect = await screen.findByLabelText("Playback");
+      fireEvent.change(modeSelect, { target: { value: "720p_3mbps" } });
+      await user.click(screen.getByRole("button", { name: "Done" }));
+
+      await waitFor(() => {
+        expect(getPlayLinkMode()).toBe("720p_3mbps");
+      });
+
+      await act(async () => {
+        queryClient.setQueryData(
+          [PLAYBACK_SETTINGS_KEY, 1],
+          success({
+            settings: {
+              ...playbackSettings(),
+              preferred_profile: "1080p_8mbps",
+            },
+          }),
+        );
+      });
+
+      expect(getPlayLinkMode()).toBe("720p_3mbps");
+    } finally {
+      prefersCoarse.value = false;
+    }
   });
 });

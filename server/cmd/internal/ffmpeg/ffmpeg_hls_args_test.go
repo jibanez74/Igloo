@@ -331,6 +331,33 @@ func TestBuildHLSArgs_RemuxCopyAudio(t *testing.T) {
 	}
 }
 
+// Choosing a non-first audio track on a direct-playable file resolves to remux,
+// so remux must map the selected absolute index while still copying the video.
+func TestBuildHLSArgs_RemuxSelectedAudioTrack(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s.mp4",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_REMUX,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 4,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		CopyVideo:        true,
+		CopyAudio:        true,
+		StartSec:         0,
+	})
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "-map 0:4") {
+		t.Errorf("remux must map the selected audio stream, got %s", argStr)
+	}
+	if !strings.Contains(argStr, "-c:v copy") {
+		t.Error("remux must use -c:v copy")
+	}
+	if !strings.Contains(argStr, "-c:a copy") {
+		t.Error("an AAC source track must be copied, not re-encoded")
+	}
+}
+
 func TestBuildHLSArgs_InvalidProfile(t *testing.T) {
 	_, err := buildHLSArgs(HLSParams{
 		SourcePath:       "/s",

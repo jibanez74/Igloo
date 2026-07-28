@@ -28,7 +28,7 @@ type MoviePlayerControlsProps = {
   duration: number;
   displayedDuration: number;
   playing: boolean;
-  qualityLabel: string;
+  modeLabel: string;
   chapters: ChapterType[];
   videoRef: RefObject<HTMLVideoElement | null>;
   onSeek: (time: number) => void;
@@ -48,7 +48,7 @@ export default function MoviePlayerControls({
   duration,
   displayedDuration,
   playing,
-  qualityLabel,
+  modeLabel,
   chapters,
   videoRef,
   onSeek,
@@ -140,11 +140,9 @@ export default function MoviePlayerControls({
           </div>
 
           <div className="flex min-w-25 items-center justify-end gap-2">
-            <span
-              className="rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground"
-              aria-label="Current stream quality"
-            >
-              {qualityLabel}
+            <span className="rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground">
+              <span className="sr-only">Current playback mode: </span>
+              {modeLabel}
             </span>
             <ChapterMenu
               chapters={chapters}

@@ -22,37 +22,6 @@ const (
 	testOtherPlaybackSessionID = "b3c1f6d2-8a4e-4f0b-9c7d-1e2a3b4c5d6e"
 )
 
-func TestParseSegmentIndex(t *testing.T) {
-	tests := []struct {
-		filename string
-		wantIdx  int64
-		wantErr  bool
-	}{
-		{helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX, 0, false},
-		{helpers.HLS_SEGMENT_FILENAME_PREFIX + "42" + helpers.HLS_SEGMENT_FILENAME_SUFFIX, 42, false},
-		{helpers.HLS_SEGMENT_FILENAME_PREFIX + "900" + helpers.HLS_SEGMENT_FILENAME_SUFFIX, 900, false},
-		{"init.mp4", 0, true},
-		{"bad_name.m4s", 0, true},
-		{helpers.HLS_SEGMENT_FILENAME_PREFIX + "abc" + helpers.HLS_SEGMENT_FILENAME_SUFFIX, 0, true},
-	}
-	for _, tt := range tests {
-		idx, err := parseSegmentIndex(tt.filename)
-		if tt.wantErr {
-			if err == nil {
-				t.Errorf("parseSegmentIndex(%q) expected error, got idx=%d", tt.filename, idx)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("parseSegmentIndex(%q) unexpected error: %v", tt.filename, err)
-			continue
-		}
-		if idx != tt.wantIdx {
-			t.Errorf("parseSegmentIndex(%q) = %d, want %d", tt.filename, idx, tt.wantIdx)
-		}
-	}
-}
-
 func TestHLSSessionKey(t *testing.T) {
 	audioTrack := 2
 	key := HLSSessionKey(123, "720p_3mbps", &audioTrack, testPlaybackSessionID, 40)
@@ -74,6 +43,9 @@ func TestIsAllowedHLSFilename(t *testing.T) {
 		{"segment_abc.m4s", false},
 		{"other.mp4", false},
 		{"../escape.m4s", false},
+		{"bad_name.m4s", false},
+		// Larger than int64 max: index must stay representable as int64.
+		{"segment_18446744073709551615.m4s", false},
 	}
 	for _, tt := range tests {
 		got := isAllowedHLSFilename(tt.name)
@@ -100,52 +72,6 @@ func TestStartSegmentComputation(t *testing.T) {
 		if got != tt.wantSegment {
 			t.Errorf("startSec=%.1f -> segment=%d, want %d", tt.startSec, got, tt.wantSegment)
 		}
-	}
-}
-
-func TestValidateHLSFilename(t *testing.T) {
-	tests := []struct {
-		name     string
-		filename string
-		wantErr  bool
-	}{
-		{
-			name:     "init file is allowed",
-			filename: helpers.HLS_INIT_FILENAME,
-		},
-		{
-			name:     "segment filename is allowed",
-			filename: "segment_69.m4s",
-		},
-		{
-			name:     "later segment filename is allowed",
-			filename: "segment_99.m4s",
-		},
-		{
-			name:     "invalid segment name returns error",
-			filename: "bad_name.m4s",
-			wantErr:  true,
-		},
-		{
-			name:     "out of range segment index returns error",
-			filename: "segment_18446744073709551615.m4s",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateHLSFilename(tt.filename)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("validateHLSFilename(%q) expected error", tt.filename)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("validateHLSFilename(%q) unexpected error: %v", tt.filename, err)
-			}
-		})
 	}
 }
 
@@ -405,15 +331,13 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	userID := int64(42)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	session := &HLSSession{
-		MovieID:          movieID,
-		OwnerUserID:      userID,
-		PlaybackSession:  testPlaybackSessionID,
-		TempDir:          t.TempDir(),
-		DurationSec:      12,
-		StartSec:         0,
-		RequestedProfile: helpers.HLS_PROFILE_REMUX,
-		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
-		CopyVideo:        false,
+		MovieID:         movieID,
+		OwnerUserID:     userID,
+		PlaybackSession: testPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		DurationSec:     12,
+		StartSec:        0,
+		CopyVideo:       false,
 	}
 	app.HLSSessionCache.SetDefault(HLSSessionKey(movieID, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
@@ -539,15 +463,13 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	}
 
 	session := &HLSSession{
-		MovieID:          5,
-		OwnerUserID:      userID,
-		TempDir:          dir,
-		StartSec:         0,
-		RequestedProfile: helpers.HLS_PROFILE_REMUX,
-		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
-		CopyVideo:        false,
-		Exited:           true,
-		ExitMu:           sync.Mutex{},
+		MovieID:     5,
+		OwnerUserID: userID,
+		TempDir:     dir,
+		StartSec:    0,
+		CopyVideo:   false,
+		Exited:      true,
+		ExitMu:      sync.Mutex{},
 	}
 	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 

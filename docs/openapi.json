@@ -2250,6 +2250,48 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         }
+      },
+      "head": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "Headers for a direct movie stream",
+        "description": "Identical to GET but returns headers only, with no response body.",
+        "operationId": "streamMovieHead",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryMediaResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
       }
     },
     "/api/movies/{id}/subtitles/{trackIndex}/web.vtt": {
@@ -2808,6 +2850,51 @@
         ],
         "summary": "Direct-stream a watch-room movie",
         "operationId": "streamWatchRoomMovie",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryMediaResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Watch Rooms"
+        ],
+        "summary": "Headers for a direct watch-room movie stream",
+        "description": "Identical to GET but returns headers only, with no response body.",
+        "operationId": "streamWatchRoomMovieHead",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdPath"
@@ -3409,6 +3496,48 @@
         ],
         "summary": "Direct-stream an audio track",
         "operationId": "streamTrack",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryMediaResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Music"
+        ],
+        "summary": "Headers for a direct audio track stream",
+        "description": "Identical to GET but returns headers only, with no response body.",
+        "operationId": "streamTrackHead",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdPath"
@@ -8796,7 +8925,8 @@
           "audio_track": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Zero-based ordinal into the movie's audio streams. Must be less than the movie's audio stream count, must be 0 for a movie without audio, and must be 0 when `mode` is `direct` because direct playback always serves the container's first audio track."
           },
           "subtitle_track": {
             "type": [

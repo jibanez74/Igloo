@@ -33,6 +33,21 @@ var ValidVideoExtensions = map[string]bool{
 	"webm": true,
 }
 
+// VideoMimeTypes pins the container→MIME mapping for movie files. Deriving it
+// with mime.TypeByExtension is host-dependent (/etc/mime.types overrides Go's
+// table and maps .webm to audio/webm; minimal images have no table at all),
+// which made playback eligibility and Content-Type vary by machine — see
+// docs/web-direct-playback-audit.md §3.2 (D1). Keys must match
+// ValidVideoExtensions exactly.
+var VideoMimeTypes = map[string]string{
+	"mp4":  "video/mp4",
+	"m4v":  "video/mp4",
+	"mkv":  "video/x-matroska",
+	"webm": "video/webm",
+	"avi":  "video/x-msvideo",
+	"mov":  "video/quicktime",
+}
+
 var movieReleaseNoiseTokens = map[string]bool{
 	"1080p": true, "720p": true, "480p": true, "2160p": true, "4k": true,
 	"bluray": true, "brrip": true, "webrip": true, "web": true, "web-dl": true, "webdl": true,

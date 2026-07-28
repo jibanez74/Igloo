@@ -77,7 +77,7 @@ export default function AppSidebar({
   const { isMobile, setOpenMobile } = useSidebar();
   const currentPath = routerState.location.pathname;
 
-  // Close the mobile sidebar when navigating
+  // Close the mobile sidebar when navigating on a mobile screen
   const handleNavClick = () => {
     if (isMobile) {
       setOpenMobile(false);

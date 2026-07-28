@@ -184,7 +184,7 @@ func TestRunMovieScanPreservesMissingMovieRows(t *testing.T) {
 		FileName:  filepath.Base(missingPath),
 		Size:      7,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 	})
 	if err != nil {
@@ -247,6 +247,113 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	}
 }
 
+func TestResolveMovieFilePinsMimeTypePerContainer(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+
+	// Expected values are literals on purpose: a bad edit to
+	// helpers.VideoMimeTypes must fail here, so do not assert against the map.
+	cases := []struct {
+		ext  string
+		want string
+	}{
+		{ext: "mp4", want: "video/mp4"},
+		{ext: "m4v", want: "video/mp4"},
+		{ext: "mkv", want: "video/x-matroska"},
+		{ext: "webm", want: "video/webm"},
+		{ext: "avi", want: "video/x-msvideo"},
+		{ext: "mov", want: "video/quicktime"},
+	}
+
+	for _, tc := range cases {
+		resolved, err := app.resolveMovieFile(context.Background(), helpers.ScanFile{
+			Path: "/movies/Sample.Movie.2024." + tc.ext,
+			Ext:  tc.ext,
+			Size: 100,
+		})
+		if err != nil {
+			t.Fatalf("resolve %s movie: %v", tc.ext, err)
+		}
+		if resolved.params.MimeType != tc.want {
+			t.Errorf("mime_type for .%s = %q, want %q", tc.ext, resolved.params.MimeType, tc.want)
+		}
+		if resolved.params.Container != tc.ext {
+			t.Errorf("container for .%s = %q, want %q", tc.ext, resolved.params.Container, tc.ext)
+		}
+	}
+}
+
+func TestProcessMovieStreamsPersistsDispositions(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "Disposition Movie",
+		FilePath:  "/movies/Disposition.Movie.2024.mp4",
+		FileName:  "Disposition.Movie.2024.mp4",
+		Size:      1024,
+		Container: "mp4",
+		MimeType:  helpers.VideoMimeTypes["mp4"],
+	})
+	if err != nil {
+		t.Fatalf("insert movie: %v", err)
+	}
+
+	fixture := movieScannerMetadataFixture("120")
+	fixture.Streams = append(fixture.Streams,
+		ffprobe.Stream{
+			Index:       4,
+			CodecName:   "aac",
+			CodecType:   "audio",
+			Channels:    2,
+			Tags:        ffprobe.StreamTags{Language: "eng", Title: "Main"},
+			Disposition: ffprobe.StreamDisposition{Default: 1},
+		},
+		ffprobe.Stream{
+			Index:       5,
+			CodecName:   "subrip",
+			CodecType:   "subtitle",
+			Tags:        ffprobe.StreamTags{Language: "eng", Title: "Signs"},
+			Disposition: ffprobe.StreamDisposition{Forced: 1, Default: 1},
+		},
+	)
+
+	_, err = app.processMovieStreams(ctx, app.Queries, movie.ID, fixture.Streams)
+	if err != nil {
+		t.Fatalf("process movie streams: %v", err)
+	}
+
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get audio streams: %v", err)
+	}
+	if len(audioStreams) != 2 {
+		t.Fatalf("audio stream count = %d, want 2", len(audioStreams))
+	}
+	if audioStreams[0].IsDefault {
+		t.Error("first audio stream (no disposition) persisted is_default=true, want false")
+	}
+	if !audioStreams[1].IsDefault {
+		t.Error("default-flagged audio stream persisted is_default=false, want true")
+	}
+
+	subtitles, err := app.Queries.GetSubtitlesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get subtitles: %v", err)
+	}
+	if len(subtitles) != 2 {
+		t.Fatalf("subtitle count = %d, want 2", len(subtitles))
+	}
+	if subtitles[0].IsForced || subtitles[0].IsDefault {
+		t.Error("plain subtitle persisted disposition flags, want none")
+	}
+	if !subtitles[1].IsForced || !subtitles[1].IsDefault {
+		t.Error("forced+default subtitle lost its flags")
+	}
+}
+
 func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -260,7 +367,7 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		FileName:  "Moneyball.2011.mkv",
 		Size:      100,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 		Overview:  helpers.NullString("Original overview"),
 		AudienceRating: sql.NullFloat64{
@@ -278,7 +385,7 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		FileName:  "Moneyball.2011.mkv",
 		Size:      200,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 		Overview:  helpers.NullString("Scanner overview"),
 	})
@@ -1014,7 +1121,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 		FileName:  "Entity.Cache.2024.mkv",
 		Size:      100,
 		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
 		Adult:     false,
 	})
 	if err != nil {

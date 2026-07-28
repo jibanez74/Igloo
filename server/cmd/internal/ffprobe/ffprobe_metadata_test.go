@@ -204,6 +204,98 @@ func TestFormatTagsUnmarshalAliases(t *testing.T) {
 	}
 }
 
+func TestStreamDispositionUnmarshalKeepsAllFlags(t *testing.T) {
+	var stream Stream
+	err := json.Unmarshal([]byte(`{
+		"index": 2,
+		"codec_name": "aac",
+		"codec_type": "audio",
+		"disposition": {
+			"default": 1,
+			"dub": 1,
+			"original": 1,
+			"comment": 1,
+			"forced": 1,
+			"hearing_impaired": 1,
+			"visual_impaired": 1,
+			"attached_pic": 1
+		}
+	}`), &stream)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	d := stream.Disposition
+	if d.Default != 1 {
+		t.Error("Default flag was dropped")
+	}
+	if d.Forced != 1 {
+		t.Error("Forced flag was dropped")
+	}
+	if d.Comment != 1 {
+		t.Error("Comment flag was dropped")
+	}
+	if d.Dub != 1 {
+		t.Error("Dub flag was dropped")
+	}
+	if d.Original != 1 {
+		t.Error("Original flag was dropped")
+	}
+	if d.HearingImpaired != 1 {
+		t.Error("HearingImpaired flag was dropped")
+	}
+	if d.VisualImpaired != 1 {
+		t.Error("VisualImpaired flag was dropped")
+	}
+	if d.AttachedPic != 1 {
+		t.Error("AttachedPic flag was dropped")
+	}
+}
+
+func TestStreamTagsUnmarshalNormalizesKeys(t *testing.T) {
+	cases := []struct {
+		name         string
+		payload      string
+		wantTitle    string
+		wantLanguage string
+	}{
+		{
+			name:         "uppercase matroska keys",
+			payload:      `{"TITLE": "Director Commentary", "LANGUAGE": "eng"}`,
+			wantTitle:    "Director Commentary",
+			wantLanguage: "eng",
+		},
+		{
+			name:         "lang alias and padded values",
+			payload:      `{"lang": "  fra  ", "title": "  Main  "}`,
+			wantTitle:    "Main",
+			wantLanguage: "fra",
+		},
+		{
+			name:         "empty values ignored",
+			payload:      `{"title": "", "language": ""}`,
+			wantTitle:    "",
+			wantLanguage: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var tags StreamTags
+			err := json.Unmarshal([]byte(tc.payload), &tags)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			if tags.Title != tc.wantTitle {
+				t.Errorf("Title = %q, want %q", tags.Title, tc.wantTitle)
+			}
+			if tags.Language != tc.wantLanguage {
+				t.Errorf("Language = %q, want %q", tags.Language, tc.wantLanguage)
+			}
+		})
+	}
+}
+
 func fakeFFprobe(t *testing.T) string {
 	t.Helper()
 

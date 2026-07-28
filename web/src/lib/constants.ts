@@ -228,6 +228,14 @@ export const MEDIA_ERR_NETWORK = 2;
 export const MEDIA_ERR_DECODE = 3;
 export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 
+/**
+ * Direct play that produced no metadata and no progress within this window is
+ * treated as silently failed and falls back to remux: the important container
+ * failures (e.g. MKV in Chromium) stall at 0ms without ever raising a
+ * MediaError. Generous enough for a slow first byte on a large file.
+ */
+export const DIRECT_PLAY_STALL_TIMEOUT_MS = 10_000;
+
 /** Max session-lost recoveries per stream window (enforced in `useHlsSessionRecovery`). */
 export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
 /** Min ms between recovery attempts to avoid tight loops when `src` updates re-trigger 404. */
@@ -255,6 +263,10 @@ export const SUBTITLE_OFF_VALUE = "off";
 export const AUDIO_TRACK_SELECT_DEFAULT_VALUE = "0";
 export const AUDIO_TRACK_DEFAULT_LABEL = "Default";
 export const SUBTITLES_NONE_LABEL = "None";
+/** Explains why choosing a non-first audio track switches away from direct play. */
+export const AUDIO_TRACK_MODE_NOTE_ID = "audio-track-mode-note";
+export const AUDIO_TRACK_MODE_NOTE =
+  "Direct play always uses the first audio track, so playback switched to “Original video, adjusted audio.” The picture is untouched.";
 /**
  * Radix Select content uses `data-slot="select-content"` in components/ui/select.tsx.
  * Used to avoid closing a dialog when interacting with a portaled select.

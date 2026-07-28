@@ -37,6 +37,7 @@ function videoStream(overrides: Partial<VideoStreamType>): VideoStreamType {
     frame_rate: 23.976,
     avg_frame_rate: nullableString(),
     bit_depth: nullableInt64(),
+    pixel_format: nullableString(),
     color_range: nullableString(),
     color_space: nullableString(),
     color_primaries: nullableString(),
@@ -60,6 +61,7 @@ function audioStream(overrides: Partial<AudioStreamType>): AudioStreamType {
     channel_layout: nullableString("stereo"),
     language: nullableString("eng"),
     title: nullableString(),
+    is_default: false,
     ...overrides,
   };
 }

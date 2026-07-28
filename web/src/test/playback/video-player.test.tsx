@@ -111,6 +111,7 @@ function renderPlayer(
     <VideoPlayer
       videoRef={videoRef}
       src="/api/movies/1/stream"
+      isHlsSource={false}
       title="Test Movie"
       onError={vi.fn()}
       {...props}
@@ -152,6 +153,7 @@ describe("VideoPlayer subtitle track", () => {
       <VideoPlayer
         videoRef={createRef<HTMLVideoElement>()}
         src="/api/movies/1/stream"
+        isHlsSource={false}
         title="Test Movie"
         onError={vi.fn()}
         subtitleTrack={{
@@ -180,6 +182,7 @@ describe("VideoPlayer subtitle track", () => {
       <VideoPlayer
         videoRef={createRef<HTMLVideoElement>()}
         src="/api/movies/1/stream"
+        isHlsSource={false}
         title="Test Movie"
         onError={vi.fn()}
         subtitleTrack={null}
@@ -187,6 +190,61 @@ describe("VideoPlayer subtitle track", () => {
     );
 
     expect(video.querySelector("track[data-subtitle]")).toBeNull();
+  });
+});
+
+describe("VideoPlayer source lifecycle on start changes", () => {
+  // Audit D10: the direct-play URL is a constant, so a start change (resume
+  // dialog navigation) must seek, not tear the source down and refetch the
+  // file from byte 0.
+  it("does not reload a direct source when only startSec changes", () => {
+    const videoRef = createRef<HTMLVideoElement>();
+    const loadMock = vi.mocked(window.HTMLMediaElement.prototype.load);
+    const baseProps = {
+      videoRef,
+      src: "/api/movies/1/stream",
+      isHlsSource: false,
+      title: "Test Movie",
+      onError: vi.fn(),
+      subtitleTrack: {
+        url: "/api/movies/1/subtitles/2/web.vtt",
+        label: "English",
+        srclang: "en",
+      },
+    };
+    const { rerender } = render(<VideoPlayer {...baseProps} startSec={0} />);
+    const video = screen.getByLabelText("Video player for Test Movie");
+    expect(video).toHaveAttribute("src", "/api/movies/1/stream");
+    const loadCallsAfterMount = loadMock.mock.calls.length;
+
+    rerender(<VideoPlayer {...baseProps} startSec={30} />);
+
+    expect(loadMock.mock.calls.length).toBe(loadCallsAfterMount);
+    expect(video).toHaveAttribute("src", "/api/movies/1/stream");
+    // Audit D11 guard: the subtitle track must stay enabled across the change.
+    const track = video.querySelector<HTMLTrackElement>("track[data-subtitle]");
+    expect(track?.track.mode).toBe("showing");
+  });
+
+  // Lock-in: for hls.js the URL can stay identical while startSec changes (a
+  // resume target inside the rewind buffer keeps start=0 in the URL), and the
+  // rebuild with startPosition is what applies that seek. It must survive.
+  it("rebuilds the hls.js instance when startSec changes on the same URL", async () => {
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      src: "/api/movies/1/hls/remux/playlist.m3u8?playback_session=uuid&start=0",
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+    };
+    const { rerender } = render(<VideoPlayer {...baseProps} startSec={5} />);
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(1);
+
+    rerender(<VideoPlayer {...baseProps} startSec={8} />);
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(2);
   });
 });
 
@@ -272,7 +330,7 @@ describe("VideoPlayer hls.js error routing", () => {
   async function renderHlsPlayer(
     props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
   ) {
-    renderPlayer({ src: hlsSrc, ...props });
+    renderPlayer({ src: hlsSrc, isHlsSource: true, ...props });
     // The hls.js module loads through a dynamic import; flush it.
     await act(async () => {});
     expect(fakeHlsInstances).toHaveLength(1);

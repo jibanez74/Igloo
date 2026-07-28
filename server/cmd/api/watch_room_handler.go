@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -76,6 +77,30 @@ func isValidPlaybackMode(mode string) bool {
 		return true
 	}
 	return helpers.IsAllowedHLSProfile(mode)
+}
+
+// directPlayAudioSelectionUnambiguous reports whether direct play can
+// guarantee which audio stream a browser decodes: refuse on ambiguity, not on
+// absence. Mirrors directPlayAudioSelectionEligible in web/src/lib/playback.ts
+// — keep the two in sync (docs/web-direct-playback-audit.md §6.2, D8).
+func directPlayAudioSelectionUnambiguous(audioStreams []database.AudioStream) bool {
+	if len(audioStreams) <= 1 {
+		return true
+	}
+
+	defaultCount := 0
+	for _, stream := range audioStreams {
+		if stream.IsDefault {
+			defaultCount++
+		}
+	}
+	if defaultCount == 0 {
+		// No flags at all: browsers follow container track order, so the
+		// first stream is the one that plays.
+		return true
+	}
+
+	return defaultCount == 1 && audioStreams[0].IsDefault
 }
 
 func deduplicateAndFilterUserIDs(ids []int64, ownerID int64) []int64 {
@@ -333,7 +358,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err := app.Queries.GetMovieByID(r.Context(), req.MovieID)
+	movie, err := app.Queries.GetMovieByID(r.Context(), req.MovieID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
@@ -342,6 +367,74 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		app.Logger.Error("failed to verify movie for watch room", "error", err, "movie_id", req.MovieID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
+	}
+
+	// audio_track is an ordinal into the movie's audio streams, so it has to be
+	// validated against the movie. Without this the room is created and members
+	// invited before playback fails on the first manifest request.
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(r.Context(), req.MovieID)
+	if err != nil {
+		app.Logger.Error("failed to load audio streams for watch room", "error", err, "movie_id", req.MovieID)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+
+	movieHasAudio := len(audioStreams) > 0
+	if !movieHasAudio && req.AudioTrack != 0 {
+		helpers.ErrorJSON(w, errors.New("audio_track is not valid for a movie without audio"), http.StatusBadRequest)
+		return
+	}
+
+	audioTrackOutOfRange := movieHasAudio && req.AudioTrack >= int64(len(audioStreams))
+	if audioTrackOutOfRange {
+		helpers.ErrorJSON(w, fmt.Errorf("audio track %d out of range (0-%d)", req.AudioTrack, len(audioStreams)-1), http.StatusBadRequest)
+		return
+	}
+
+	// Direct playback serves the raw container, so every member hears its first
+	// audio track no matter what the room stores.
+	directWithNonFirstAudio := req.Mode == watchRoomPlaybackModeDirect && req.AudioTrack != 0
+	if directWithNonFirstAudio {
+		helpers.ErrorJSON(w, errors.New("direct playback always uses the first audio track; choose another playback mode to pick a different one"), http.StatusBadRequest)
+		return
+	}
+
+	directWithAmbiguousAudio := req.Mode == watchRoomPlaybackModeDirect &&
+		!directPlayAudioSelectionUnambiguous(audioStreams)
+	if directWithAmbiguousAudio {
+		helpers.ErrorJSON(w, errors.New("direct playback cannot guarantee which audio track this movie plays; choose another playback mode"), http.StatusBadRequest)
+		return
+	}
+
+	// Mirror the web client's remaining static direct-play rules so a room can
+	// never be created in a mode the members' browsers cannot play: browsers
+	// only direct-play MP4 containers, and 10-bit / 4:2:2 / 4:4:4 H.264 does
+	// not decode even though the codec name passes.
+	if req.Mode == watchRoomPlaybackModeDirect {
+		if movieContentType(movie.Container, movie.MimeType) != "video/mp4" {
+			helpers.ErrorJSON(w, errors.New("direct playback is only available for MP4 movies; choose another playback mode"), http.StatusBadRequest)
+			return
+		}
+
+		videoStreams, err := app.Queries.GetVideoStreamsByMovieID(r.Context(), req.MovieID)
+		if err != nil {
+			app.Logger.Error("failed to load video streams for watch room", "error", err, "movie_id", req.MovieID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
+		// Zero streams means the scan found no playable video, not "unknown" —
+		// the web client refuses direct play for the same shape (audit D17).
+		primaryVideo := primaryVideoStream(videoStreams)
+		if primaryVideo == nil {
+			helpers.ErrorJSON(w, errors.New("this movie has no playable video stream; direct playback is unavailable"), http.StatusBadRequest)
+			return
+		}
+
+		browserSafe, _ := isBrowserSafeH264RemuxCandidate(primaryVideo)
+		if !browserSafe {
+			helpers.ErrorJSON(w, errors.New("this movie's video cannot be played directly by browsers; choose another playback mode"), http.StatusBadRequest)
+			return
+		}
 	}
 
 	invitedIDs := deduplicateAndFilterUserIDs(req.InvitedUserIDs, userID)

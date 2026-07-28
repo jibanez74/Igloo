@@ -43,8 +43,10 @@ For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each mo
 - video, audio, and subtitle stream rows
 - chapter information
 - video dimensions, codec names, profiles, bit depth, pixel formats, frame rates, and color metadata
-- audio codecs, language tags, channel layout, sample rate, and bitrate
-- subtitle codecs, language tags, stream indices, and titles
+- audio codecs, language tags, channel layout, sample rate, bitrate, and the `default` disposition
+- subtitle codecs, language tags, stream indices, titles, and the `default`/`forced` dispositions
+
+Stream tag keys are normalized the same way format tags are (lowercased, separators stripped, `lang` accepted as a `language` alias), so Matroska muxers that write `TITLE`/`LANGUAGE` still produce labelled, preference-matchable streams.
 
 For music, Igloo uses ffprobe to populate track metadata such as title, sort title, artist, album, genre, track number, disc number, release date, duration, bitrate, composer, and copyright. The library scan supplies each source file's size from the filesystem.
 
@@ -120,6 +122,8 @@ Igloo supports a special HLS profile named `remux`. Remux mode copies the video 
 
 Remux exists because it preserves source video quality and avoids expensive video encoding when the source video is browser-compatible. It is much cheaper than transcoding and is the best path for compatible H.264 sources.
 
+Remux is also reached without the user selecting it. Because direct play cannot select an audio track, choosing any track other than the container's first one resolves the playback mode to `remux` (see Audio Handling). Users who pick a non-default soundtrack on an otherwise direct-playable file therefore land on remux rather than direct play.
+
 Remux is only attempted for browser-compatible H.264 codec names:
 
 - `h264`
@@ -127,7 +131,7 @@ Remux is only attempted for browser-compatible H.264 codec names:
 - `avc`
 - `avc1`
 
-If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. This avoids serving copied video that browsers are unlikely to play through HLS.
+If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. The pixel-format rule is an allowlist of the 8-bit 4:2:0 formats browsers decode (`yuv420p`, `yuvj420p`, `nv12`, `nv21`), so an unrecognised format falls back rather than being assumed safe. This avoids serving copied video that browsers are unlikely to play through HLS.
 
 Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples that are not independently decodable by browser players. To avoid that, Igloo preflights remux output before committing to it:
 
@@ -140,6 +144,17 @@ Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples 
 If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without caching an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo caches the unsafe verdict and falls back immediately for later sessions using the same movie, stream index, file size, and update timestamp.
 
 The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the highest configured transcode profile whose target height fits within the source height. If the source is smaller than every configured profile, it falls back to `720p_3mbps` so playback still has a reliable transcode path.
+
+## Direct Play Eligibility and Fallback
+
+Direct play serves the original file over HTTP range requests with no FFmpeg process. Whether the web client offers it is decided from the scanned metadata plus one browser probe (`web/src/lib/playback.ts`, `getAvailableModes`; background in `docs/web-direct-playback-audit.md`):
+
+- **Container.** Only MP4 (`mp4`/`m4v`) is eligible. The container→MIME mapping is pinned in `helpers.VideoMimeTypes` — never derived from the host's MIME tables — and MKV must never be added: Chrome and Firefox fail Matroska in a `<video>` element silently at 0ms with no `MediaError`.
+- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2 and 4:4:4 sources are refused using the same profile / bit-depth / pixel-format rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`). Pixel formats are checked against an allowlist of the 8-bit 4:2:0 formats (`yuv420p`, `yuvj420p`, `nv12`, `nv21`) — the two copies of the list must stay in sync.
+- **Audio.** The first audio stream's codec must be browser-playable, and the stream the browser will pick must be unambiguous: with two or more audio streams, a `default` disposition on a non-first stream or multiple `default` flags refuse direct play (no flags at all stays eligible — browsers follow container track order). Selecting any non-first track resolves the mode to `remux` (see Audio Handling).
+- **Browser probe.** After the static rules pass, the client asks `canPlayType` with an RFC 6381 string built from the stored codec profile and level. The probe can only narrow eligibility, never widen it: watch-room creation enforces the same rules server-side and cannot probe.
+
+The client never requests `/stream` before technical details have resolved, so a bookmarked `?mode=direct` link to an ineligible file resolves to an HLS mode without touching the raw stream. If an affirmatively eligible direct play still fails — `MEDIA_ERR_DECODE`, `MEDIA_ERR_SRC_NOT_SUPPORTED`, or no `loadedmetadata` within 10 seconds (the silent-stall case) — the player switches to `remux` exactly once per stream window, preserving position and track selection, and announces the switch.
 
 ## Transcode Profiles
 
@@ -216,6 +231,14 @@ Otherwise, Igloo converts audio to stereo AAC at `320k`:
 ```
 
 AAC is the safest baseline for browser HLS playback. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
+
+### Audio Track Selection and Direct Play
+
+The `audio_track` request parameter is an ordinal into the movie's audio streams ordered by `stream_index`, which is the same order the client's audio picker renders. It is not the ffprobe stream index. Igloo resolves the ordinal to the stored absolute index at session creation and uses that for `-map`.
+
+Direct play has no equivalent mechanism. It serves the original file with range requests and no FFmpeg process, so the browser always decodes the container's first audio track and any other selection would be silently ignored. Igloo therefore treats the audio choice as authoritative: selecting any track other than the first resolves the playback mode from `direct` to `remux`, which copies the video stream and maps the requested audio track. Selecting the first track keeps direct play.
+
+The web client enforces this in `resolvePlaybackSettings`, so the rule applies to saved settings, user language preferences, and deep links alike. Direct play is only ever paired with the first audio track, and it is refused outright when the container's `default` dispositions make the browser's own pick ambiguous (see Direct Play Eligibility and Fallback).
 
 ## Hardware Acceleration
 
@@ -357,6 +380,8 @@ Watch room HLS uses the same FFmpeg session machinery with room-specific cache k
 room:<room_id>
 ```
 
+A room stores its audio track when it is created, so the value is validated up front rather than at first playback. Room creation rejects an `audio_track` beyond the movie's audio stream count, a non-zero `audio_track` on a movie without audio, and a non-zero `audio_track` combined with direct playback, which would serve the container's first track to every member regardless of the stored value.
+
 Room sessions are isolated from personal playback sessions so a watch room cannot collide with a user's individual HLS session for the same movie. Watch rooms warm up HLS from the beginning so participants can join a prepared stream. When a room is deleted, Igloo marks the room session deleted, removes the cached session, kills the FFmpeg process if it is still running, and removes the temp directory.
 
 ## Subtitle Conversion
@@ -419,7 +444,7 @@ For failures:
 When changing FFmpeg or ffprobe behavior:
 
 - Check the embedded payload version with `ffmpeg -version` and `ffprobe -version` after refreshing binaries. Prefer the current stable Jellyfin FFmpeg release line for release payloads; do not switch to a generic upstream FFmpeg build or Jellyfin prerelease branch without a specific reason.
-- Keep argument construction covered by tests in `server/cmd/internal/ffmpeg/ffmpeg_hls_test.go`.
+- Keep argument construction covered by the tests in `server/cmd/internal/ffmpeg/` (`ffmpeg_hls_args_test.go`, `ffmpeg_hls_args_additional_test.go`, `ffmpeg_hls_hardware_args_test.go`, `ffmpeg_hls_run_test.go`).
 - Keep remux validation covered by `remux_validator` tests when changing fMP4 safety behavior.
 - Keep HLS handler and playlist tests updated when changing playlist shape, filenames, query parameters, readiness rules, or resume behavior.
 - Update `docs/openapi.json` when adding or changing HLS, subtitle, or playback settings endpoints.

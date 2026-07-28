@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { formatTimecode } from "@/lib/format";
 import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
+import { playbackSettingsToPlaySearch } from "@/lib/route-search";
 import { cn } from "@/lib/utils";
 import type { ChapterType } from "@/types/movies";
 import type { PlaybackSettings } from "@/types/playback";
@@ -44,9 +45,7 @@ export default function MovieChaptersSection({
               to="/movies/$id/play"
               params={{ id: String(movieId) }}
               search={{
-                mode: playbackSettings.mode,
-                audio_track: playbackSettings.audioTrack,
-                subtitle_track: playbackSettings.subtitleTrack ?? undefined,
+                ...playbackSettingsToPlaySearch(playbackSettings),
                 start: chapter.start_time,
               }}
               className={cn(

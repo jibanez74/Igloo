@@ -200,7 +200,7 @@ func (q *Queries) DeleteMovieVideoStreams(ctx context.Context, movieID int64) er
 
 const getAudioStreamsByMovieID = `-- name: GetAudioStreamsByMovieID :many
 SELECT
-  id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
+  id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, is_default, created_at, updated_at
 FROM audio_streams
 WHERE movie_id = ?
 ORDER BY stream_index
@@ -228,6 +228,7 @@ func (q *Queries) GetAudioStreamsByMovieID(ctx context.Context, movieID int64) (
 			&i.ChannelLayout,
 			&i.Language,
 			&i.Title,
+			&i.IsDefault,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -612,6 +613,7 @@ const getMovieForDirectStream = `-- name: GetMovieForDirectStream :one
 SELECT
   file_path,
   file_name,
+  container,
   mime_type
 FROM movies
 WHERE id = ?
@@ -619,15 +621,21 @@ LIMIT 1
 `
 
 type GetMovieForDirectStreamRow struct {
-	FilePath string `json:"file_path"`
-	FileName string `json:"file_name"`
-	MimeType string `json:"mime_type"`
+	FilePath  string `json:"file_path"`
+	FileName  string `json:"file_name"`
+	Container string `json:"container"`
+	MimeType  string `json:"mime_type"`
 }
 
 func (q *Queries) GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error) {
 	row := q.queryRow(ctx, q.getMovieForDirectStreamStmt, getMovieForDirectStream, id)
 	var i GetMovieForDirectStreamRow
-	err := row.Scan(&i.FilePath, &i.FileName, &i.MimeType)
+	err := row.Scan(
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.MimeType,
+	)
 	return i, err
 }
 
@@ -1193,11 +1201,12 @@ INSERT INTO audio_streams (
   channels,
   channel_layout,
   language,
-  title
+  title,
+  is_default
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, is_default, created_at, updated_at
 `
 
 type InsertAudioStreamParams struct {
@@ -1211,6 +1220,7 @@ type InsertAudioStreamParams struct {
 	ChannelLayout sql.NullString `json:"channel_layout"`
 	Language      sql.NullString `json:"language"`
 	Title         sql.NullString `json:"title"`
+	IsDefault     bool           `json:"is_default"`
 }
 
 func (q *Queries) InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) (AudioStream, error) {
@@ -1225,6 +1235,7 @@ func (q *Queries) InsertAudioStream(ctx context.Context, arg InsertAudioStreamPa
 		arg.ChannelLayout,
 		arg.Language,
 		arg.Title,
+		arg.IsDefault,
 	)
 	var i AudioStream
 	err := row.Scan(
@@ -1239,6 +1250,7 @@ func (q *Queries) InsertAudioStream(ctx context.Context, arg InsertAudioStreamPa
 		&i.ChannelLayout,
 		&i.Language,
 		&i.Title,
+		&i.IsDefault,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateWatchRoomDialog from "@/components/watch-room/CreateWatchRoomDialog";
 import {
   MOVIE_TECHNICAL_DETAILS_KEY,
+  PLAYBACK_SETTINGS_SUMMARY_LOADING,
   WATCH_ROOM_INVITE_USERS_KEY,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
@@ -22,6 +23,7 @@ import type {
 } from "@/types/movies";
 
 const createWatchRoomMock = vi.fn();
+const getMovieTechnicalDetailsMock = vi.fn();
 const navigateMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showCreatedMock = vi.fn();
@@ -46,6 +48,8 @@ vi.mock("@/lib/api", async () => {
   return {
     ...actual,
     createWatchRoom: (...args: unknown[]) => createWatchRoomMock(...args),
+    getMovieTechnicalDetails: (...args: unknown[]) =>
+      getMovieTechnicalDetailsMock(...args),
   };
 });
 
@@ -86,6 +90,13 @@ function success<T extends Record<string, unknown>>(
   };
 }
 
+function failure(message: string): ApiResponseType<never> {
+  return {
+    error: true,
+    message,
+  };
+}
+
 function videoStream(overrides: Partial<VideoStreamType> = {}): VideoStreamType {
   return {
     id: 1,
@@ -103,6 +114,7 @@ function videoStream(overrides: Partial<VideoStreamType> = {}): VideoStreamType 
     frame_rate: 24,
     avg_frame_rate: { String: "24/1", Valid: true },
     bit_depth: { Int64: 8, Valid: true },
+    pixel_format: { String: "yuv420p", Valid: true },
     color_range: { String: "", Valid: false },
     color_space: { String: "", Valid: false },
     color_primaries: { String: "", Valid: false },
@@ -126,6 +138,7 @@ function audioStream(overrides: Partial<AudioStreamType> = {}): AudioStreamType 
     channel_layout: { String: "stereo", Valid: true },
     language: { String: "eng", Valid: true },
     title: { String: "", Valid: false },
+    is_default: false,
     ...overrides,
   };
 }
@@ -192,10 +205,18 @@ function inviteUsers(): ApiResponseType<WatchRoomInviteUsersResponseType> {
 
 type DialogProps = ComponentProps<typeof CreateWatchRoomDialog>;
 
-function renderDialog(overrides: Partial<DialogProps> = {}) {
+function renderDialog(
+  overrides: Partial<DialogProps> = {},
+  { seedTechnicalDetails = true } = {},
+) {
   const queryClient = createTestQueryClient();
   queryClient.setQueryData([WATCH_ROOM_INVITE_USERS_KEY], inviteUsers());
-  queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], technicalDetails());
+  if (seedTechnicalDetails) {
+    queryClient.setQueryData(
+      [MOVIE_TECHNICAL_DETAILS_KEY, 22],
+      technicalDetails(),
+    );
+  }
 
   const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
   const onOpenChange = vi.fn();
@@ -230,6 +251,8 @@ function renderDialog(overrides: Partial<DialogProps> = {}) {
 
 beforeEach(() => {
   createWatchRoomMock.mockReset();
+  getMovieTechnicalDetailsMock.mockReset();
+  getMovieTechnicalDetailsMock.mockReturnValue(new Promise(() => {}));
   navigateMock.mockReset();
   showActionFailedMock.mockReset();
   showCreatedMock.mockReset();
@@ -272,6 +295,42 @@ describe("CreateWatchRoomDialog", () => {
     expect(createWatchRoomMock).not.toHaveBeenCalled();
   });
 
+  // Before technical details resolve, getAvailableModes optimistically keeps
+  // `direct`, so an early submit would post a mode the source may not support
+  // and the server would reject the room. The presets section has to say why
+  // the button is disabled, or it reads as broken.
+  it("cannot create a room until technical details resolve", async () => {
+    const user = userEvent.setup();
+    renderDialog({}, { seedTechnicalDetails: false });
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /invite dana scully/i }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Create and join room" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      PLAYBACK_SETTINGS_SUMMARY_LOADING,
+    );
+    expect(createWatchRoomMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a technical-details failure instead of leaving the button silently disabled", async () => {
+    getMovieTechnicalDetailsMock.mockResolvedValue(
+      failure("Technical details are unavailable."),
+    );
+    renderDialog({}, { seedTechnicalDetails: false });
+
+    expect(
+      await screen.findByText("Technical details are unavailable."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create and join room" }),
+    ).toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("creates the room with resolved playback settings and navigates to it", async () => {
     createWatchRoomMock.mockResolvedValue(
       success<CreateWatchRoomResponseType>({ room_id: 123 }),
@@ -284,9 +343,11 @@ describe("CreateWatchRoomDialog", () => {
     await user.click(screen.getByRole("button", { name: "Create and join room" }));
 
     await waitFor(() => {
+      // The room is asked for the second audio track, which direct playback
+      // cannot deliver, so the resolved settings send remux instead.
       expect(createWatchRoomMock).toHaveBeenCalledWith({
         movie_id: 22,
-        mode: "direct",
+        mode: "remux",
         audio_track: 1,
         subtitle_track: 0,
         invited_user_ids: [2],

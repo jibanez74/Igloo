@@ -11,7 +11,6 @@ import (
 	"igloo/cmd/internal/tmdb"
 	"maps"
 	"math"
-	"mime"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -271,7 +270,7 @@ func (app *Application) resolveMovieFile(ctx context.Context, file helpers.ScanF
 		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	mimeType := mime.TypeByExtension("." + file.Ext)
+	mimeType := helpers.VideoMimeTypes[file.Ext]
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
@@ -1027,6 +1026,7 @@ func insertAudioStream(ctx context.Context, qtx *database.Queries, movieID int64
 		ChannelLayout: helpers.NullString(stream.ChannelLayout),
 		Language:      helpers.NullString(stream.Tags.Language),
 		Title:         helpers.NullString(stream.Tags.Title),
+		IsDefault:     stream.Disposition.Default == 1,
 	})
 	if err != nil {
 		return fmt.Errorf("insert audio stream failed: %w", err)
@@ -1041,8 +1041,8 @@ func insertSubtitleStream(ctx context.Context, qtx *database.Queries, movieID in
 		Codec:       stream.CodecName,
 		Language:    helpers.NullString(stream.Tags.Language),
 		Title:       helpers.NullString(stream.Tags.Title),
-		IsForced:    false,
-		IsDefault:   false,
+		IsForced:    stream.Disposition.Forced == 1,
+		IsDefault:   stream.Disposition.Default == 1,
 	})
 	if err != nil {
 		return fmt.Errorf("insert subtitle failed: %w", err)

@@ -1,11 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
-	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"igloo/cmd/internal/helpers"
@@ -54,11 +53,6 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
 		return
 	}
-	filenameErr := validateHLSFilename(filename)
-	if filenameErr != nil {
-		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
-		return
-	}
 
 	key := RoomHLSSessionKey(room.ID)
 	session, found, err := app.getActiveRoomHLSSession(room.ID, key)
@@ -88,6 +82,11 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 
 	movie, err := app.Queries.GetMovieForDirectStream(r.Context(), room.MovieID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			return
+		}
+
 		app.Logger.Error("failed to get watch room movie for streaming", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
 		return
@@ -114,15 +113,7 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	contentType := movie.MimeType
-	if contentType == "" {
-		ext := filepath.Ext(movie.FileName)
-		contentType = mime.TypeByExtension(ext)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-	}
-
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", movieContentType(movie.Container, movie.MimeType))
+	w.Header().Set("ETag", strongFileETag(stat))
 	http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)
 }

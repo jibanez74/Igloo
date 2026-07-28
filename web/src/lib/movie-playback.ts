@@ -8,8 +8,9 @@ import {
   MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC,
   MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
   MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+  STREAM_MODES,
 } from "@/lib/constants";
-import { STREAM_MODES, formatSubtitleLabel, normalizeLang } from "@/lib/playback";
+import { formatSubtitleLabel, normalizeLang } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type {
   MoviePlaybackStatus,
@@ -23,6 +24,7 @@ type MoviePlaybackStatusArgs = {
   hasMovie: boolean;
   requestedMode: StreamModeId;
   techPending: boolean;
+  playbackPreferencesReady: boolean;
   modeUnavailable: boolean;
   playbackError: string | null;
 };
@@ -125,7 +127,14 @@ export function deriveMoviePlaybackStatus(
   if (args.movieIsPending || !args.hasMovie) {
     return { kind: "loading", message: "Loading movie..." };
   }
-  if (args.requestedMode !== "direct" && args.techPending) {
+  if (!args.playbackPreferencesReady) {
+    return { kind: "loading", message: "Preparing playback..." };
+  }
+  // Direct waits for technical details like every other mode: mounting the
+  // player earlier fires a /stream request before eligibility is known
+  // (audit D16, §3.5). The route loader prefetches these, so a warm cache
+  // never sees this state.
+  if (args.techPending) {
     return { kind: "loading", message: "Preparing playback..." };
   }
   if (args.modeUnavailable) {
@@ -165,6 +174,8 @@ export function buildMovieStreamUrl(
   reloadKey: number,
   playbackSessionId: string,
 ): string {
+  // Direct play serves the raw container, so there is no track to select;
+  // resolvePlaybackSettings guarantees audioTrack is the first stream here.
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
 
   const params = new URLSearchParams({
@@ -295,6 +306,38 @@ export function shouldRebaseHlsMovieSession({
 
 export function currentPlaybackTimestampMs() {
   return Date.now();
+}
+
+/** What set off a direct-play fallback check: a MediaError code, or the stall guard. */
+export type DirectPlayFallbackTrigger = number | "stall";
+
+type DirectPlayFallbackArgs = {
+  trigger: DirectPlayFallbackTrigger | null | undefined;
+  isHlsPlayback: boolean;
+  resolvedMode: StreamModeId;
+  techLoaded: boolean;
+  directAvailable: boolean;
+  alreadyAttempted: boolean;
+};
+
+/**
+ * Whether a failed direct play should fall back to remux (audit §9.3).
+ * Deliberately narrow: only MEDIA_ERR_DECODE / MEDIA_ERR_SRC_NOT_SUPPORTED
+ * (the codes that unambiguously mean "this browser cannot play these bytes")
+ * or the silent stall guard; never from HLS, never on network/abort errors,
+ * at most once per stream window, and only after the app has affirmatively
+ * decided the file is direct-playable — otherwise D16's pre-eligibility
+ * request would masquerade as a real incompatibility.
+ */
+export function shouldDirectPlayFallback(args: DirectPlayFallbackArgs): boolean {
+  if (args.isHlsPlayback || args.resolvedMode !== "direct") return false;
+  if (!args.techLoaded || !args.directAvailable) return false;
+  if (args.alreadyAttempted) return false;
+  return (
+    args.trigger === "stall" ||
+    args.trigger === MEDIA_ERR_DECODE ||
+    args.trigger === MEDIA_ERR_SRC_NOT_SUPPORTED
+  );
 }
 
 export function nativeMoviePlaybackErrorMessage(

@@ -76,7 +76,7 @@ func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
 		t.Fatalf("select id: %v", err)
 	}
 
-	_, err = app.createHLSSession(ctx, id, "720p_3mbps", testIntPtr(0), testPlaybackSessionID, 0, false)
+	_, err = createTestHLSSession(app, ctx, id, "720p_3mbps", testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err == nil {
 		t.Fatal("expected error when duration missing")
 	}
@@ -104,7 +104,7 @@ func TestCreateHLSSession_ErrorsWhenNoVideoStream(t *testing.T) {
 		t.Fatalf("select id: %v", err)
 	}
 
-	_, err = app.createHLSSession(ctx, id, "720p_3mbps", testIntPtr(0), testPlaybackSessionID, 0, false)
+	_, err = createTestHLSSession(app, ctx, id, "720p_3mbps", testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err == nil {
 		t.Fatal("expected error when no video stream rows")
 	}
@@ -146,7 +146,7 @@ func TestCreateHLSSession_ErrorsWhenAudioTrackOutOfRange(t *testing.T) {
 		t.Fatalf("insert audio stream: %v", err)
 	}
 
-	_, err = app.createHLSSession(ctx, movieID, "720p_3mbps", testIntPtr(1), testPlaybackSessionID, 0, false)
+	_, err = createTestHLSSession(app, ctx, movieID, "720p_3mbps", testIntPtr(1), testPlaybackSessionID, 0, false)
 	if err == nil {
 		t.Fatal("expected error when audio track index out of range")
 	}
@@ -176,18 +176,12 @@ func TestCreateHLSSession_RemuxSafeStaysOnRemux(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(session)
 
-	if session.RequestedProfile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("RequestedProfile = %q, want remux", session.RequestedProfile)
-	}
-	if session.EffectiveProfile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("EffectiveProfile = %q, want remux", session.EffectiveProfile)
-	}
 	if !session.CopyVideo {
 		t.Fatal("CopyVideo = false, want true for safe remux")
 	}
@@ -237,7 +231,8 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	startSec := 87
 
-	session, err := app.createHLSSession(
+	session, err := createTestHLSSession(
+		app,
 		context.Background(),
 		movieID,
 		helpers.HLS_PROFILE_REMUX,
@@ -251,12 +246,6 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 	}
 	defer cleanupHLSSession(session)
 
-	if session.RequestedProfile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("RequestedProfile = %q, want remux", session.RequestedProfile)
-	}
-	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
-	}
 	if session.CopyVideo {
 		t.Fatal("CopyVideo = true, want false after fallback transcode")
 	}
@@ -322,13 +311,13 @@ func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	firstSession, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("first createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(firstSession)
 
-	secondSession, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	secondSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("second createHLSSession returned error: %v", err)
 	}
@@ -348,8 +337,8 @@ func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
 	if calls[2].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
 		t.Fatalf("third RunHLS profile = %q, want cached fallback %q", calls[2].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
 	}
-	if secondSession.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("second session EffectiveProfile = %q, want %q", secondSession.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	if secondSession.CopyVideo {
+		t.Fatal("second session CopyVideo = true, want false for cached-unsafe fallback")
 	}
 }
 
@@ -385,25 +374,22 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	firstSession, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("first createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(firstSession)
 
-	if firstSession.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("first session EffectiveProfile = %q, want %q", firstSession.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	if firstSession.CopyVideo {
+		t.Fatal("first session CopyVideo = true, want false after preflight fallback")
 	}
 
-	secondSession, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	secondSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("second createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(secondSession)
 
-	if secondSession.EffectiveProfile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("second session EffectiveProfile = %q, want %q", secondSession.EffectiveProfile, helpers.HLS_PROFILE_REMUX)
-	}
 	if !secondSession.CopyVideo {
 		t.Fatal("second session CopyVideo = false, want true after retrying remux")
 	}
@@ -444,15 +430,12 @@ func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "hevc", 2160)
 
-	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(session)
 
-	if session.EffectiveProfile != helpers.HLS_PROFILE_2160P_16MBPS {
-		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_2160P_16MBPS)
-	}
 	if session.CopyVideo {
 		t.Fatal("CopyVideo = true, want false for non-H.264 fallback")
 	}
@@ -498,15 +481,12 @@ func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 		t.Fatalf("update video stream: %v", err)
 	}
 
-	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(session)
 
-	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
-	}
 	if session.CopyVideo {
 		t.Fatal("CopyVideo = true, want false for High 10 H.264 fallback")
 	}
@@ -541,18 +521,12 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_1080P_6MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_1080P_6MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
 	defer cleanupHLSSession(session)
 
-	if session.RequestedProfile != helpers.HLS_PROFILE_1080P_6MBPS {
-		t.Fatalf("RequestedProfile = %q, want %q", session.RequestedProfile, helpers.HLS_PROFILE_1080P_6MBPS)
-	}
-	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_6MBPS {
-		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_6MBPS)
-	}
 	if session.CopyVideo {
 		t.Fatal("CopyVideo = true, want false for non-remux profile")
 	}
@@ -654,7 +628,7 @@ func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
@@ -680,7 +654,7 @@ func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	_, err = app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+	_, err = createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
 	var capacityErr *hlsTranscodeCapacityError
 	if !errors.As(err, &capacityErr) {
 		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
@@ -1219,7 +1193,7 @@ func TestCreateHLSSession_ClampsStartAtOrPastDuration(t *testing.T) {
 	// the tail instead of failing.
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 7200, false)
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 7200, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
@@ -1257,7 +1231,7 @@ func TestCreateHLSSession_ClampsStartToZeroForTinyDurations(t *testing.T) {
 		t.Fatalf("insert video stream: %v", err)
 	}
 
-	session, err := app.createHLSSession(ctx, movieID, "720p_3mbps", nil, testPlaybackSessionID, 10, false)
+	session, err := createTestHLSSession(app, ctx, movieID, "720p_3mbps", nil, testPlaybackSessionID, 10, false)
 	if err != nil {
 		t.Fatalf("createHLSSession returned error: %v", err)
 	}
@@ -1358,4 +1332,73 @@ func filePathBase(path string) string {
 		return path
 	}
 	return path[lastSlash+1:]
+}
+
+// The audio_track parameter is an ordinal into the movie's audio streams while
+// ffmpeg's -map needs the absolute ffprobe index. Pin the translation with a
+// fixture where the two deliberately disagree.
+func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	// The fixture holds one audio stream at absolute index 1; adding a Spanish
+	// stream at absolute index 3 makes ordinal 1 resolve to index 3.
+	_, err := app.DB.Exec(`
+		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, movieID, 3, "ac3", 448000, 6, "spa")
+	if err != nil {
+		t.Fatalf("insert second audio stream: %v", err)
+	}
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(1), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 RunHLS call, got %d", len(calls))
+	}
+	if calls[0].AudioStreamIndex != 3 {
+		t.Fatalf("AudioStreamIndex = %d, want 3 (absolute ffprobe index for ordinal 1)", calls[0].AudioStreamIndex)
+	}
+	// ac3 is not AAC, so it must be transcoded rather than copied.
+	if calls[0].CopyAudio {
+		t.Fatal("CopyAudio = true, want false for an ac3 source track")
+	}
+}
+
+func TestCreateHLSSession_AudioTrackBeyondStreamCountRejected(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.FFmpeg = &fakeFFmpeg{}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	_, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(1), testPlaybackSessionID, 0, false)
+	if err == nil {
+		t.Fatal("expected an out-of-range audio track to fail")
+	}
+	if !strings.Contains(err.Error(), "out of range") {
+		t.Fatalf("expected an out-of-range error, got %v", err)
+	}
 }

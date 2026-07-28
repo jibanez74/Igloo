@@ -19,13 +19,21 @@ type remuxSafetyVerdict struct {
 	Reason string
 }
 
+// remuxSafetyFingerprint keys the cached remux-safety verdict. Beyond file
+// identity it includes the stream properties the safety decision reads
+// (isBrowserSafeH264RemuxCandidate), so a rescan that changes stream rows
+// without touching the file invalidates the verdict.
 func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) string {
 	return fmt.Sprintf(
-		"%d:%d:%d:%s",
+		"%d:%d:%d:%s:%s:%s:%d:%s",
 		movie.ID,
 		video.StreamIndex,
 		movie.Size,
 		movie.UpdatedAt,
+		video.Codec,
+		video.CodecProfile.String,
+		video.BitDepth.Int64,
+		video.PixelFormat.String,
 	)
 }
 

@@ -51,16 +51,22 @@ import {
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
+  STREAM_MODES,
 } from "@/lib/constants";
-import { showActionFailed } from "@/lib/toast-helpers";
+import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import { playSearchSchema, type PlaySearchParams } from "@/lib/route-search";
+import {
+  playbackSettingsToPlaySearch,
+  playSearchSchema,
+  type PlaySearchParams,
+} from "@/lib/route-search";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useIdleControls } from "@/hooks/useIdleControls";
 import { useMovieWatchProgressSaver } from "@/hooks/useMovieWatchProgressSaver";
+import { useDirectPlayFallback } from "@/hooks/useDirectPlayFallback";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
@@ -79,7 +85,31 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const movieId = parseInt(params.id, 10);
     if (Number.isNaN(movieId) || movieId <= 0) return;
 
-    if (deps.mode !== undefined) return;
+    if (deps.mode !== undefined) {
+      // The player waits for technical details before requesting media
+      // (audit D16), so warm the caches for URLs that already carry a mode —
+      // but without blocking navigation, or the player skeleton would not
+      // render until every query resolves. The component's own queries join
+      // these in-flight fetches; errors surface through them.
+      void (async () => {
+        const authRes = await context.queryClient.ensureQueryData(
+          authUserQueryOpts(),
+        );
+        if (authRes.error) return;
+        await Promise.all([
+          context.queryClient.ensureQueryData(
+            libraryMovieDetailsQueryOpts(movieId),
+          ),
+          context.queryClient.ensureQueryData(
+            movieTechnicalDetailsQueryOpts(movieId),
+          ),
+          context.queryClient.ensureQueryData(
+            playbackSettingsQueryOpts(authRes.data.user.id),
+          ),
+        ]);
+      })().catch(() => {});
+      return;
+    }
 
     const authRes = await context.queryClient.ensureQueryData(
       authUserQueryOpts(),
@@ -103,12 +133,12 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const audioStreams = techData.audio_streams ?? [];
     const subtitleStreams = techData.subtitles ?? [];
     const primaryVideo = getPrimaryVideoStream(videoStreams);
-    const availableModes = getAvailableModes(
-      primaryVideo?.height ?? 0,
-      primaryVideo?.codec,
-      audioStreams[0]?.codec,
-      techData.movie?.mime_type,
-    );
+    const availableModes = getAvailableModes({
+      video: primaryVideo,
+      videoStreamsLoaded: true,
+      audioStreams,
+      mimeType: techData.movie?.mime_type,
+    });
     if (availableModes.length === 0) return;
 
     const userPrefs =
@@ -124,9 +154,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
       to: "/movies/$id/play",
       params: { id: params.id },
       search: {
-        mode: resolved.mode,
-        audio_track: resolved.audioTrack,
-        subtitle_track: resolved.subtitleTrack ?? undefined,
+        ...playbackSettingsToPlaySearch(resolved),
         start: deps.start ?? 0,
       },
       replace: true,
@@ -158,6 +186,10 @@ function PlayMoviePage() {
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
   const pendingAutoPlayOnLoadRef = useRef(false);
+  // VideoPlayer calls onNativeError then synchronously onError; when a
+  // fallback consumed the native error, the paired onError must not raise
+  // the error screen.
+  const fallbackConsumedErrorRef = useRef(false);
 
   useEffect(() => {
     pause();
@@ -176,6 +208,11 @@ function PlayMoviePage() {
     [movieId],
   );
   const [chapterAnnouncement, setChapterAnnouncement] =
+    useState<ChapterAnnouncement>({
+      key: 0,
+      text: "",
+    });
+  const [fallbackAnnouncement, setFallbackAnnouncement] =
     useState<ChapterAnnouncement>({
       key: 0,
       text: "",
@@ -200,11 +237,14 @@ function PlayMoviePage() {
     movieIsPending,
     movieNotFound,
     techPending,
+    techLoaded,
+    directPlayAvailable,
+    playbackPreferencesReady,
     watchProgressData,
     watchProgressPending,
     title,
     posterUrl,
-    qualityLabel,
+    modeLabel,
     chapters,
     modeUnavailable,
     resolvedMode,
@@ -224,13 +264,11 @@ function PlayMoviePage() {
     search,
     streamReloadKey,
     playbackSessionId,
-    onSyncSearch: ({ mode, audioTrack, subtitleTrack }) => {
+    onSyncSearch: settings => {
       navigate({
         search: (prev: PlaySearchParams) => ({
           ...prev,
-          mode,
-          audio_track: audioTrack,
-          subtitle_track: subtitleTrack ?? undefined,
+          ...playbackSettingsToPlaySearch(settings),
         }),
         replace: true,
       });
@@ -243,6 +281,7 @@ function PlayMoviePage() {
     hasMovie: !!movie,
     requestedMode: mode,
     techPending,
+    playbackPreferencesReady,
     modeUnavailable,
     playbackError,
   });
@@ -331,9 +370,11 @@ function PlayMoviePage() {
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
-        mode: resolvedMode,
-        audio_track: resolvedAudioTrack,
-        subtitle_track: resolvedSubtitleTrack ?? undefined,
+        ...playbackSettingsToPlaySearch({
+          mode: resolvedMode,
+          audioTrack: resolvedAudioTrack,
+          subtitleTrack: resolvedSubtitleTrack,
+        }),
         start: Math.floor(clampedTargetTime),
       }),
       replace: true,
@@ -352,6 +393,41 @@ function PlayMoviePage() {
     onRetry: () => setStreamReloadKey((prev) => prev + 1),
     onMaxAttempts: setPlaybackError,
   });
+
+  const { handleNativeError: handleDirectPlayFallbackError } =
+    useDirectPlayFallback({
+      streamWindowKey: sessionWindowKey,
+      videoRef,
+      isHlsPlayback,
+      resolvedMode,
+      techLoaded,
+      directAvailable: directPlayAvailable,
+      playerMounted: status.kind === "ready",
+      onFallback: () => {
+        const remuxLabel =
+          STREAM_MODES.find((m) => m.id === "remux")?.label ?? "remux";
+        const notice = `This file can't be played directly by your browser. Switched to ${remuxLabel}.`;
+        setFallbackAnnouncement((prev) => ({ key: prev.key + 1, text: notice }));
+        showInfo("Switched playback mode", notice);
+        // Resume playing once the remux stream is ready; the auto-resume
+        // effect is keyed on the stream window and re-fires after this
+        // navigation.
+        pendingAutoPlayOnLoadRef.current = true;
+        navigate({
+          search: (prev: PlaySearchParams) => ({
+            ...prev,
+            mode: "remux",
+            // A failure before metadata leaves currentTime at 0; keep the
+            // requested start instead of resetting the position.
+            start:
+              currentTimeRef.current > 0
+                ? Math.floor(clampPlaybackTime(currentTimeRef.current))
+                : (prev.start ?? 0),
+          }),
+          replace: true,
+        });
+      },
+    });
 
   const playVideo = async () => {
     const video = videoRef.current;
@@ -395,17 +471,6 @@ function PlayMoviePage() {
       return;
     }
 
-    await togglePlay();
-  };
-
-  const handlePlaybackSurfaceKeyDown = async (
-    event: React.KeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (!chromeFullscreenMode) return;
-    if (event.target !== event.currentTarget) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-
-    event.preventDefault();
     await togglePlay();
   };
 
@@ -508,7 +573,10 @@ function PlayMoviePage() {
     return () => {
       video.removeEventListener("canplay", resumePlayback);
     };
-  }, [streamUrl]);
+    // Keyed on the stream window, not streamUrl: the direct-play URL is a
+    // constant, so a fallback navigation would never re-fire this otherwise
+    // (audit D12).
+  }, [sessionWindowKey]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(movieDurationSec && movieDurationSec > 0)) return;
@@ -516,6 +584,10 @@ function PlayMoviePage() {
   }, [isHlsPlayback, movieDurationSec]);
 
   const handleNativePlaybackError = (code: number | null | undefined) => {
+    if (handleDirectPlayFallbackError(code)) {
+      fallbackConsumedErrorRef.current = true;
+      return;
+    }
     setPlaybackError(nativeMoviePlaybackErrorMessage(code));
   };
 
@@ -579,9 +651,16 @@ function PlayMoviePage() {
     <VideoPlayer
       videoRef={videoRef}
       src={streamUrl}
+      isHlsSource={isHlsPlayback}
       title={title}
       isFullscreen={chromeFullscreenMode}
-      onError={(msg) => setPlaybackError(msg)}
+      onError={(msg) => {
+        if (fallbackConsumedErrorRef.current) {
+          fallbackConsumedErrorRef.current = false;
+          return;
+        }
+        setPlaybackError(msg);
+      }}
       onPlay={() => setPlaying(true)}
       onPause={() => {
         setPlaying(false);
@@ -680,6 +759,11 @@ function PlayMoviePage() {
         announcementKey={chapterAnnouncement.key}
         politeness="assertive"
       />
+      <LiveAnnouncer
+        message={fallbackAnnouncement.text}
+        announcementKey={fallbackAnnouncement.key}
+        politeness="assertive"
+      />
       <ResumeDialog
         open={resumeDialogOpen}
         resumeTargetSec={resumeTargetSec}
@@ -690,7 +774,7 @@ function PlayMoviePage() {
       />
 
       <p className="sr-only">
-        Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind
+        Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind{" "}
         {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
         {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
         fullscreen, Escape to exit fullscreen, Back button to go back.
@@ -730,13 +814,12 @@ function PlayMoviePage() {
       </header>
 
       {chromeFullscreenMode ? (
+        // Click-to-toggle is a pointer convenience only; the same toggle is
+        // reachable from the footer play button and Space/K, so the surface
+        // carries no button role (audit D14).
         <div
           className="relative flex min-h-0 flex-1 flex-col"
-          role="button"
-          tabIndex={0}
-          aria-label="Toggle movie playback"
           onClick={handlePlaybackSurfaceClick}
-          onKeyDown={handlePlaybackSurfaceKeyDown}
         >
           {videoPlayer}
           {capacityOverlay}
@@ -757,7 +840,7 @@ function PlayMoviePage() {
         duration={duration}
         displayedDuration={displayedDuration}
         playing={playing}
-        qualityLabel={qualityLabel}
+        modeLabel={modeLabel}
         chapters={chapters}
         videoRef={videoRef}
         onSeek={seek}

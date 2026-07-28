@@ -88,6 +88,7 @@ func TestWatchRoom_OwnerInsertedAsMember(t *testing.T) {
 	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[]}`, movieID)
@@ -128,6 +129,7 @@ func TestWatchRoom_InvitedUsersAddedAsMembers(t *testing.T) {
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 
 	guest1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
 		Name:     "Guest One",
@@ -593,6 +595,7 @@ func TestCreateWatchRoom_HTTP_Success(t *testing.T) {
 	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[]}`, movieID)
@@ -647,6 +650,239 @@ func TestCreateWatchRoom_HTTP_NegativeAudioTrackRejected(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestDirectPlayAudioSelectionUnambiguous(t *testing.T) {
+	stream := func(isDefault bool) database.AudioStream {
+		return database.AudioStream{IsDefault: isDefault}
+	}
+
+	cases := []struct {
+		name    string
+		streams []database.AudioStream
+		want    bool
+	}{
+		{name: "no streams", streams: nil, want: true},
+		{name: "single stream", streams: []database.AudioStream{stream(false)}, want: true},
+		{name: "multiple streams, no defaults", streams: []database.AudioStream{stream(false), stream(false)}, want: true},
+		{name: "single default on stream 0", streams: []database.AudioStream{stream(true), stream(false)}, want: true},
+		{name: "single default on non-zero index", streams: []database.AudioStream{stream(false), stream(true)}, want: false},
+		{name: "multiple defaults", streams: []database.AudioStream{stream(true), stream(true)}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := directPlayAudioSelectionUnambiguous(tc.streams)
+			if got != tc.want {
+				t.Errorf("directPlayAudioSelectionUnambiguous = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func insertWatchRoomTestAudioStream(t *testing.T, app *Application, movieID int64, streamIndex int64, isDefault bool) {
+	t.Helper()
+
+	_, err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
+		MovieID:     movieID,
+		StreamIndex: streamIndex,
+		Codec:       "aac",
+		Channels:    2,
+		IsDefault:   isDefault,
+	})
+	if err != nil {
+		t.Fatalf("insert audio stream: %v", err)
+	}
+}
+
+func insertWatchRoomTestVideoStream(t *testing.T, app *Application, movieID int64, codecProfile string) {
+	t.Helper()
+
+	_, err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+		MovieID:      movieID,
+		StreamIndex:  0,
+		Codec:        "h264",
+		CodecProfile: sql.NullString{String: codecProfile, Valid: codecProfile != ""},
+		Width:        1920,
+		Height:       1080,
+	})
+	if err != nil {
+		t.Fatalf("insert video stream: %v", err)
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectForNonMP4Rejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, _ := createTestUserAndMovie(t, app)
+	mkvMovie, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
+		Title:     "Matroska Movie",
+		FilePath:  "/movies/matroska.mkv",
+		FileName:  "matroska.mkv",
+		Size:      2048,
+		Container: "mkv",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
+	})
+	if err != nil {
+		t.Fatalf("insert mkv movie: %v", err)
+	}
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, mkvMovie.ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a direct room on a non-MP4 movie, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectWithNonBrowserSafeH264Rejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High 10")
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a direct room on a High 10 movie, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectWithBrowserSafeH264Accepted(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201 for a direct room on a browser-safe H.264 MP4, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// An embedded poster is stored as a video stream, and in some files it sorts
+// ahead of the feature. The gate must judge the feature, exactly as the web
+// client's getPrimaryVideoStream does, or the room is refused for a movie that
+// direct-plays fine.
+func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+
+	_, err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+		MovieID:     movieID,
+		StreamIndex: 0,
+		Codec:       "mjpeg",
+		Width:       600,
+		Height:      900,
+	})
+	if err != nil {
+		t.Fatalf("insert cover art stream: %v", err)
+	}
+
+	_, err = app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+		MovieID:      movieID,
+		StreamIndex:  1,
+		Codec:        "h264",
+		CodecProfile: sql.NullString{String: "High", Valid: true},
+		Width:        1920,
+		Height:       1080,
+	})
+	if err != nil {
+		t.Fatalf("insert feature video stream: %v", err)
+	}
+
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201 for a direct room whose first video stream is cover art, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// Audit matrix row 18b (D17), server mirror: a movie whose scan produced no
+// video streams cannot be direct-played, so a direct room must be refused.
+func TestCreateWatchRoom_HTTP_DirectWithNoVideoStreamsRejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a direct room on a movie with no video streams, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestAudioStream(t, app, movieID, 1, false)
+	insertWatchRoomTestAudioStream(t, app, movieID, 2, true)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for direct mode with a non-first default audio stream, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
+	insertWatchRoomTestAudioStream(t, app, movieID, 1, true)
+	insertWatchRoomTestAudioStream(t, app, movieID, 2, false)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201 for direct mode with the default on stream 0, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -710,6 +946,7 @@ func TestCreateWatchRoom_HTTP_OwnerInviteDeduplication(t *testing.T) {
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d]}`, movieID, ownerID)
@@ -1182,6 +1419,20 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "video/mp4") {
 		t.Fatalf("Content-Type = %q, want video/mp4", got)
 	}
+	if got := w.Header().Get("ETag"); got == "" {
+		t.Fatal("direct stream response has no ETag")
+	}
+
+	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodHead, path, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for direct stream HEAD, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Length"); got != fmt.Sprintf("%d", len(body)) {
+		t.Fatalf("HEAD Content-Length = %q, want %d", got, len(body))
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("HEAD body = %d bytes, want empty", w.Body.Len())
+	}
 
 	w = performWatchRoomHTTPRequest(t, app, outsider.ID, http.MethodGet, path, "")
 	if w.Code != http.StatusForbidden {
@@ -1193,6 +1444,38 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", hlsRoom.ID), "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when streaming an HLS room directly, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestStreamWatchRoomMovie_HTTP_DeletedMovieReturns404(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+
+	// Deleting a movie normally cascades to its rooms; suspend FK enforcement
+	// to simulate a room left pointing at a movie row that no longer exists.
+	// The in-memory test DB has a single pooled connection, so sequential
+	// Execs land on the same connection the pragma applies to.
+	_, err := app.DB.ExecContext(ctx, `PRAGMA foreign_keys = OFF`)
+	if err != nil {
+		t.Fatalf("disable foreign keys: %v", err)
+	}
+	_, err = app.DB.ExecContext(ctx, `DELETE FROM movies WHERE id = ?`, movieID)
+	if err != nil {
+		t.Fatalf("delete movie: %v", err)
+	}
+	_, err = app.DB.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
+	if err != nil {
+		t.Fatalf("re-enable foreign keys: %v", err)
+	}
+
+	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID), "")
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for a room whose movie is gone, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -1443,5 +1726,128 @@ func TestGetUsers_HTTP_SearchTreatsLikeMetacharactersLiterally(t *testing.T) {
 	underscoreMatch := users[0].(map[string]any)
 	if underscoreMatch["name"] != "Bob_One" {
 		t.Fatalf("expected Bob_One for underscore search, got %#v", underscoreMatch["name"])
+	}
+}
+
+// insertWatchRoomAudioStreams gives a movie `count` audio streams whose absolute
+// ffprobe indices deliberately start at 1, so an ordinal is never its own index.
+func insertWatchRoomAudioStreams(t *testing.T, app *Application, movieID int64, count int) {
+	t.Helper()
+	ctx := context.Background()
+	languages := []string{"eng", "spa", "fra"}
+
+	for i := 0; i < count; i++ {
+		_, err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+			MovieID:     movieID,
+			StreamIndex: int64(i + 1),
+			Codec:       "aac",
+			BitRate:     192000,
+			Channels:    2,
+			Language:    sql.NullString{String: languages[i%len(languages)], Valid: true},
+		})
+		if err != nil {
+			t.Fatalf("insert audio stream %d: %v", i, err)
+		}
+	}
+}
+
+func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		audioCount int
+		mode       string
+		audioTrack int
+		wantStatus int
+	}{
+		{name: "first track accepted for direct", audioCount: 3, mode: "direct", audioTrack: 0, wantStatus: http.StatusCreated},
+		{name: "out of range rejected", audioCount: 2, mode: "remux", audioTrack: 2, wantStatus: http.StatusBadRequest},
+		{name: "non first track rejected for direct", audioCount: 3, mode: "direct", audioTrack: 1, wantStatus: http.StatusBadRequest},
+		{name: "non zero track rejected without audio", audioCount: 0, mode: "remux", audioTrack: 1, wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupWatchRoomHTTPTestApp(t)
+			defer app.DB.Close()
+
+			ownerID, movieID := createTestUserAndMovie(t, app)
+			insertWatchRoomTestVideoStream(t, app, movieID, "High")
+			insertWatchRoomAudioStreams(t, app, movieID, tt.audioCount)
+			handler := mountWatchRoomRouter(t, app, ownerID)
+
+			body := fmt.Sprintf(`{"movie_id":%d,"mode":%q,"audio_track":%d,"invited_user_ids":[]}`, movieID, tt.mode, tt.audioTrack)
+			req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tt.wantStatus, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// An in-range non-first track on a transcoding mode must survive validation and
+// reach warm-up, which is the combination the settings dialog now produces.
+func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.FFmpeg = &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+
+	owner, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
+		Name:     "Multi Audio Owner",
+		Email:    "multi-audio-owner@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
+	// The fixture already holds one audio stream at index 1; add a second so
+	// ordinal 1 resolves to absolute ffprobe index 2.
+	_, err = app.DB.Exec(`
+		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, movieID, 2, "aac", 192000, 2, "spa")
+	if err != nil {
+		t.Fatalf("insert second audio stream: %v", err)
+	}
+
+	handler := mountWatchRoomRouter(t, app, owner.ID)
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":1,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp helpers.JSONResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
+	room, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("get room: %v", err)
+	}
+	if room.AudioTrack != 1 {
+		t.Fatalf("expected stored audio_track 1, got %d", room.AudioTrack)
 	}
 }

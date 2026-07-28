@@ -32,13 +32,15 @@ func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int
 		t.Fatalf("failed to create test user: %v", err)
 	}
 
+	// MP4 on purpose: watch-room tests create direct-mode rooms with this
+	// movie, and direct playback is refused for non-MP4 containers.
 	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Test Movie",
-		FilePath:  "/movies/test.mkv",
-		FileName:  "test.mkv",
+		FilePath:  "/movies/test.mp4",
+		FileName:  "test.mp4",
 		Size:      1024,
-		Container: "mkv",
-		MimeType:  "video/x-matroska",
+		Container: "mp4",
+		MimeType:  helpers.VideoMimeTypes["mp4"],
 	})
 	if err != nil {
 		t.Fatalf("failed to create test movie: %v", err)

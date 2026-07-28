@@ -44,6 +44,7 @@ type AudioStream struct {
 	ChannelLayout sql.NullString `json:"channel_layout"`
 	Language      sql.NullString `json:"language"`
 	Title         sql.NullString `json:"title"`
+	IsDefault     bool           `json:"is_default"`
 	CreatedAt     string         `json:"created_at"`
 	UpdatedAt     string         `json:"updated_at"`
 }
