@@ -913,6 +913,7 @@ func (app *Application) processMovieStreams(
 	streams []ffprobe.Stream,
 ) (videoStreamCount int, err error) {
 	app.invalidateSubtitleVTTCache(movieID)
+	app.StreamFileCache.Delete(movieStreamFileKey(movieID))
 
 	err = qtx.DeleteMovieVideoStreams(ctx, movieID)
 	if err != nil {

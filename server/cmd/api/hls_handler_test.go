@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -197,6 +198,33 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		}
 		if !strings.Contains(w.Body.String(), "transcoding stopped") {
 			t.Fatalf("body = %q, want transcode failure", w.Body.String())
+		}
+	})
+
+	// A seek abandons the in-flight segment request. Without honouring
+	// cancellation the goroutine keeps polling for hlsSegmentWait, so scrubbing
+	// accumulates them.
+	t.Run("returns as soon as the client goes away", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil).WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			serveReadyHLSSegment(w, req, &HLSSession{TempDir: t.TempDir()}, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("segment request kept polling after the client went away")
+		}
+
+		if w.Code != http.StatusOK || w.Body.Len() != 0 {
+			t.Fatalf("abandoned request wrote status %d and %d bytes, want nothing", w.Code, w.Body.Len())
 		}
 	})
 }

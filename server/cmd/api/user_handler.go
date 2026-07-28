@@ -453,6 +453,8 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	app.forgetUserDevices(userID)
+
 	err = app.SessionManager.Destroy(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to destroy session after account deletion", "error", err)

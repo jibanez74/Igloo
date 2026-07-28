@@ -20,9 +20,13 @@ const (
 	hlsTranscodeBusyRetryAfterSec = 5
 	hlsPlaybackSessionIDPattern   = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
 	hlsSegmentWait                = 120 * time.Second
-	hlsSegmentPoll                = 250 * time.Millisecond
-	hlsPlaylistContentType        = "application/vnd.apple.mpegurl"
-	hlsSegmentHTTPContentType     = "video/mp4"
+	// A segment that lands just after a check waits a full interval before it
+	// is served, and that wait is on the startup and post-seek path. The check
+	// is one or two stats against page-cached directory entries, so polling
+	// tightly costs far less than the latency it removes.
+	hlsSegmentPoll            = 25 * time.Millisecond
+	hlsPlaylistContentType    = "application/vnd.apple.mpegurl"
+	hlsSegmentHTTPContentType = "video/mp4"
 )
 
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
@@ -148,6 +152,9 @@ func buildHLSPlaylistBody(session *HLSSession, durationSec float64, baseURL, que
 func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSession, filename string) {
 	filePath := filepath.Join(session.TempDir, filename)
 
+	ticker := time.NewTicker(hlsSegmentPoll)
+	defer ticker.Stop()
+
 	deadline := time.Now().Add(hlsSegmentWait)
 	for time.Now().Before(deadline) {
 		if segmentComplete(session, filename) {
@@ -171,7 +178,14 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 			return
 		}
 
-		time.Sleep(hlsSegmentPoll)
+		select {
+		case <-r.Context().Done():
+			// The player abandoned the request, almost always because of a
+			// seek. Returning now keeps scrubbing from leaving goroutines
+			// polling until the deadline.
+			return
+		case <-ticker.C:
+		}
 	}
 
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)

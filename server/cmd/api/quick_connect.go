@@ -30,6 +30,12 @@ const (
 
 	deviceLastSeenTTL = 5 * time.Minute
 
+	// Bearer tokens are resolved on every request, including each HLS segment
+	// a TV client fetches, so the lookup is cached. Revocation evicts
+	// explicitly; the TTL only bounds paths that delete a device without going
+	// through a handler, such as the stale-device sweep.
+	deviceAuthCacheTTL = 30 * time.Second
+
 	// Devices whose last_used_at is older than this are revoked automatically,
 	// both lazily at auth time and by the daily sweep.
 	deviceInactivityTTL = 90 * 24 * time.Hour

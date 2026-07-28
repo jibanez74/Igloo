@@ -122,7 +122,7 @@ func (app *Application) RevokeDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.DeviceLastSeen.Delete(strconv.FormatInt(deviceID, 10))
+	app.forgetDevice(deviceID)
 
 	app.Logger.Info("device revoked", "user_id", userID, "device_id", deviceID)
 

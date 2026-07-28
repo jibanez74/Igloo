@@ -266,6 +266,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.invalidateSubtitleVTTCache(id)
+	app.StreamFileCache.Delete(movieStreamFileKey(id))
 
 	if err = app.Queries.DeleteMovie(ctx, id); err != nil {
 		app.Logger.Error("failed to delete movie", "error", err, "id", id)

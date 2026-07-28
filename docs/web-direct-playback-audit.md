@@ -6,6 +6,8 @@
 
 This document is an investigation and recommendation report. At the time it was written, **no code was changed, and no diagnostic edits were made** (see §12).
 
+> **Implementation status (2026-07-27, sixth revision):** **D6 is fixed**, so the only item still open is **D-EXT** (a product feature, not a defect). The fix keeps authentication on every media route and removes the cost instead: `restoreSendfile` (`server/cmd/api/sendfile_writer.go`, installed in `routes.go` immediately after the session middleware) re-exposes `io.ReaderFrom` by unwrapping to chi's writer, and the per-request SQLite work behind each range request was cached away. Details in §4.4 and §14.
+>
 > **Implementation status (2026-07-27, fifth revision):** the register stays closed; the fifth revision corrects two defects found by review *in the fixes themselves* — the D2 pixel-format rule misread 8-bit `nv12`/`yuv410p` as high bit depth, and the D1/D8 watch-room mirror could reach a different verdict than the client it mirrors. Details in §14.
 >
 > **Implementation status (2026-07-27, fourth revision):** the remaining register is closed — **D4, D5, D9, D10, D11, D13–D15, D17 and D-WR are fixed** on `fix/playback-settings` (see §14 for the commit-per-item mapping). Combined with the third revision (D1, D2, D3, D7, D8, D12, D16, D-FB, D-FB2, D-TEST), every finding is resolved except **D6** (sendfile/session-middleware rescoping, deliberately deferred — it touches the auth middleware layout for all stream routes) and **D-EXT** (sidecar subtitle indexing, a product feature for its own branch). Sections describing the pre-fix behaviour are preserved as written and describe the code **as audited**, not as it is now.
@@ -375,9 +377,16 @@ Validation is `Last-Modified` only, i.e. one-second granular. `If-Range` therefo
 
 ### 4.4 Finding D6 (low) — sendfile is defeated
 
-`scs.LoadAndSave` wraps the `ResponseWriter` in `sessionResponseWriter`, which in `scs/v2@v2.9.0` implements `Write`, `WriteHeader` and `Unwrap` — and **not** `io.ReaderFrom`. It is the innermost wrapper, so `ServeContent`'s `io.CopyN` cannot reach a `ReadFrom` on anything beneath it, and every byte of every movie is copied through a 32 KiB userspace buffer instead of `sendfile(2)`. The same wrapper also re-commits the session and re-emits `Vary: Cookie` on each range response, and bearer-token clients pay one `GetDeviceByTokenHash` SELECT per range request.
+`scs.LoadAndSave` wraps the `ResponseWriter` in `sessionResponseWriter`, which in `scs/v2@v2.9.0` implements `Write`, `WriteHeader` and `Unwrap` — and **not** `io.ReaderFrom`. It is the innermost wrapper, so `ServeContent`'s `io.CopyN` cannot reach a `ReadFrom` on anything beneath it, and every byte of every movie is copied through a 32 KiB userspace buffer instead of `sendfile(2)`. The same wrapper re-emits `Vary: Cookie` on each range response, and bearer-token clients pay one `GetDeviceByTokenHash` SELECT per range request.
 
 Correctness is unaffected and memory is bounded. The cost is CPU and syscalls, and it scales with bitrate × concurrent viewers — precisely the 4K multi-user case. This is a real but low-priority efficiency finding; it also cannot be fixed inside `StreamMovie` (it needs the session middleware scoped off the media routes, or a `ReaderFrom` pass-through).
+
+> **Fixed (sixth revision), by the pass-through rather than the rescoping.** Two things were re-measured before choosing:
+>
+> - The lost capability comes from the *session* middleware, not the auth middleware. `IsAuth` is a context lookup and costs nothing, so removing authentication from the media routes would not have restored `sendfile` — it would only have opened the library to anyone who can reach the server, and both `canAccessPersonalHLSSession` and the watch-room membership check need a user identity anyway.
+> - The larger cost was never the copy. `SessionManager.Load` runs one SQLite SELECT per request and `StreamMovie` ran another, on a database opened with `db.SetMaxOpenConns(1)` (`startup.go`) — so every range request queued behind the scanner, watch-progress writes and search. The claim above that the session is "re-committed per range response" was wrong: `commitAndWriteSessionCookie` only writes when the session status is `Modified` or `Destroyed`, which a stream request never is.
+>
+> What landed: `restoreSendfile` (`server/cmd/api/sendfile_writer.go`), installed in `routes.go` right after `LoadAndSaveSession`, walks the `Unwrap()` chain to the **outermost** `io.ReaderFrom` — chi's wrapped writer, so the request logger's byte counter still sees the body — and re-exposes it. `ServeContent` calls `WriteHeader` before copying, so the session still commits through the wrapped chain; the wrapper also commits the header itself if a future handler ever calls `ReadFrom` without one. Session reads now go through a caching `scs.Store` decorator, bearer-token resolution and the per-request file lookup are cached the same way, and `StreamMovie` / `StreamWatchRoomMovie` / `StreamTrack` share one `serveMediaFile` helper. A steady-state range request performs no SQLite queries and no userspace copies.
 
 ### 4.5 Efficiency verdict for large 4K files and multiple users
 
@@ -901,7 +910,7 @@ Severity reflects user impact on the direct-playback feature. ✅ marks findings
 | **D10** ✅ | Medium | Direct-play source is torn down and reloaded whenever `startSec` changes | `VideoPlayer.tsx:253` | Split the effect, or drop `startSec` from the dep array on the direct branch |
 | **D11** ✅ | Medium, **unverified** | Subtitles *may* silently stop showing after that reload. The HTML load algorithm forgets only in-band text tracks, so a `<track>`-derived one probably survives — this audit did not test it | `VideoPlayer.tsx:312` | **Write the §10.3 subtitle-persistence spec first and let it decide.** If confirmed: re-apply `track.track.mode = "showing"` after resource selection restarts (or fix D10, which removes the trigger). If not: keep the test, drop the finding |
 | **D5** ✅ | Low | No `ETag`; `If-Range` validation is date-granular | `movie_handler.go:689-742` | Set a strong ETag from size + mtime before `ServeContent` |
-| **D6** | Low | scs's writer defeats sendfile; session re-committed per range response | scs `sessionResponseWriter` lacks `io.ReaderFrom` | Scope the session middleware off media routes, or pass `ReadFrom` through |
+| **D6** ✅ | Low | scs's writer defeats sendfile; a session SELECT and a movie SELECT run per range request on a single-connection database | scs `sessionResponseWriter` lacks `io.ReaderFrom`; `startup.go` `SetMaxOpenConns(1)` | Scope the session middleware off media routes, or pass `ReadFrom` through |
 | **D12** ✅ | Low | `streamReloadKey` and the auto-resume effect are inert for direct play | `movie-playback.ts:176`; `play.tsx:492-516` | Key auto-resume on `sessionWindowKey` rather than `streamUrl` |
 | **D13** ✅ | Low | `aria-label` on a plain `<span>` is not announced | `MoviePlayerControls.tsx:143-148` | Use visually-hidden text, or move the label onto a focusable/labelled element |
 | **D14** ✅ | Low | `div role="button"` wraps the `<video>` in fullscreen | `play.tsx:738-749` | Drop the role and `tabIndex`; keep the click handler (the toggle is already reachable via the footer button and Space/K) |
@@ -913,7 +922,7 @@ Severity reflects user impact on the direct-playback feature. ✅ marks findings
 
 ### 11.1 Recommended sequence
 
-> **Status note (fourth revision):** items 1–6 landed with the third revision; items 7–9 landed with the fourth (mapping in §14). The whole sequence is complete except D6, which remains deferred.
+> **Status note (sixth revision):** items 1–6 landed with the third revision; items 7–9 landed with the fourth, except D6, which landed with the sixth. The sequence is complete.
 
 1. **D1** — pin the container→MIME map. Cheapest of the five, purely server-side, independently testable without a browser, fixes the `Content-Type` on the wire (which matters for every consumer that is not a `<video>` element), kills the duplicate derivation inside `StreamMovie`, and states the MP4-only rule that §3.2 shows is currently accidental. Lock it with the D-TEST regression guard for matrix row 7 in the same change.
 2. **D3** — add the `canPlayType` gate, **narrowing-only**. It is the only change that makes the container/codec decision self-correcting, and §5.6 is the proof that a hand-maintained list will drift. Land it after D1 so the static rule it narrows is the pinned one, not the accidental one.
@@ -973,6 +982,19 @@ The second revision (§14) was a verification pass, not a re-audit. What it did:
 What it did **not** do: drive a browser, start a server, or play a media file. That boundary is unchanged, which is why D11 was demoted rather than resolved, and why §5 was reframed rather than corrected.
 
 ## 14. Revision history
+
+**2026-07-27 (sixth revision) — D6, on `fix/send-file-speed-up`.** The last deferred finding is closed, together with the per-request database work that turned out to dominate it. Landed:
+
+- `restoreSendfile` + `sendfileResponseWriter` (`sendfile_writer.go`), wired in `routes.go` immediately after `LoadAndSaveSession`. Guarded by `TestSendfileSurvivesSessionMiddleware`, which fails if the middleware is removed, and by `TestStreamMovieOverSessionMiddleware`, which runs over a real socket — `httptest.ResponseRecorder` does not implement `io.ReaderFrom`, so the pre-existing range tests never reached the zero-copy branch at all.
+- `cachedSessionStore` (`session_store_cache.go`) decorating `sqlite3store`, so a session read costs no SQLite round trip. `Delete` evicts, keeping logout immediate; `Commit` caps its cache TTL at the session expiry, because scs treats the store as the only authority on expiry.
+- Bearer-token resolution cached in `DeviceTokenAuth`, evicted by `forgetDevice` on revocation and logout — the cost a TV client would otherwise pay on every HLS segment.
+- `movieStreamFile` / `trackStreamFile` (`stream_file.go`) caching the per-range-request row lookup, evicted on movie deletion and on rescan alongside the subtitle cache.
+- `serveMediaFile` replacing three copies of the open/stat/ETag/`ServeContent` block in `StreamMovie`, `StreamWatchRoomMovie` and `StreamTrack`; `stream_etag.go` folded into `stream_file.go`. `StreamTrack` had no test coverage before and now has its own.
+- Out of the audit's scope but on the same hot path: `serveReadyHLSSegment` polled every 250 ms and ignored `r.Context().Done()`, so a segment could wait ~240 ms for nothing and a seek left a goroutine polling for up to 120 s. It now polls every 25 ms and returns as soon as the client goes away (`docs/ffmpeg.md`).
+
+Design deviations from §4.4's recommendation, recorded: the report proposed scoping the session middleware off the media routes. That was rejected — splitting the chi tree so `/api/movies/{id}/stream` sits outside the `/api` mount relies on trie backtracking past a catch-all, which is subtle enough to break silently on an unrelated route change. The `ReaderFrom` pass-through, the report's own alternative, achieves the same result with no routing change. Separately, `setupTestApp` now calls the production `initRuntimeCaches` instead of hand-listing caches; the hand-listed copy had already drifted, and every cache added in this revision would have been missing from tests.
+
+Still open after this revision: **D-EXT** only (a product feature, not a defect).
 
 **2026-07-27 (fifth revision) — review corrections.** Code review of the branch found two defects in the fixes themselves, both in rules the report had specified correctly but the implementation matched loosely.
 
