@@ -127,7 +127,7 @@ func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.D
 			}
 		}
 
-		time.Sleep(hlsSegmentPoll)
+		time.Sleep(hlsRemuxPreflightPoll)
 	}
 
 	return fmt.Errorf(

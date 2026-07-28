@@ -6,6 +6,8 @@
 
 This document is an investigation and recommendation report. At the time it was written, **no code was changed, and no diagnostic edits were made** (see §12).
 
+> **Implementation status (2026-07-28, seventh revision):** the register stays closed at **D-EXT only**. The seventh revision corrects two defects review found *in the sixth revision's fixes* — the tightened HLS segment poll also accelerated the remux preflight loop tenfold, and the new stream-file cache could publish a fill that raced the eviction meant to drop it — and reconciles §4 with the code, which still read as though D4 and D5 were open. Details in §14.
+>
 > **Implementation status (2026-07-27, sixth revision):** **D6 is fixed**, so the only item still open is **D-EXT** (a product feature, not a defect). The fix keeps authentication on every media route and removes the cost instead: `restoreSendfile` (`server/cmd/api/sendfile_writer.go`, installed in `routes.go` immediately after the session middleware) re-exposes `io.ReaderFrom` by unwrapping to chi's writer, and the per-request SQLite work behind each range request was cached away. Details in §4.4 and §14.
 >
 > **Implementation status (2026-07-27, fifth revision):** the register stays closed; the fifth revision corrects two defects found by review *in the fixes themselves* — the D2 pixel-format rule misread 8-bit `nv12`/`yuv410p` as high bit depth, and the D1/D8 watch-room mirror could reach a different verdict than the client it mirrors. Details in §14.
@@ -330,6 +332,8 @@ Worth stating plainly, because these were designed deliberately and hold up:
 
 ## 4. HTTP media delivery audit
 
+> **Status note (seventh revision):** §4.1–§4.3 describe the handler **as audited**, not as it is now. All three findings are closed: `StreamMovie` no longer opens the file itself but delegates to the shared `serveMediaFile` (`server/cmd/api/stream_file.go`), which sets a strong `ETag` (D5); `HEAD` is registered on every stream route (D4); and `sendfile(2)` is restored (D6, §4.4). The per-finding fixes are recorded in the callouts below and in §14.
+
 ### 4.1 The handler
 
 `StreamMovie` (`server/cmd/api/movie_handler.go:689-742`) is short and correct in structure: parse ID → `GetMovieForDirectStream` (three columns) → `os.Open` → `defer file.Close()` → `Stat` → set `Content-Type` → `http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)`.
@@ -339,7 +343,7 @@ Delegating to `http.ServeContent` is the project's preferred native Go pattern (
 | Behaviour | Status | Source |
 |---|---|---|
 | `GET` | ✅ | `routes.go:172` |
-| `HEAD` | ❌ **405** | Finding D4 |
+| `HEAD` | ❌ **405** → ✅ fixed | Finding D4 |
 | Range parsing | ✅ | `ServeContent` |
 | `206 Partial Content` | ✅ | `ServeContent` |
 | `200 OK` when no range | ✅ | `ServeContent` |
@@ -348,7 +352,7 @@ Delegating to `http.ServeContent` is the project's preferred native Go pattern (
 | `Content-Range` | ✅ | `ServeContent` |
 | `Content-Length` | ✅ | per-range, correct |
 | `Content-Type` | ⚠️ | set by the handler from `mime_type` — see D1 |
-| `ETag` | ❌ | never set — Finding D5 |
+| `ETag` | ❌ → ✅ fixed | never set — Finding D5 |
 | `Last-Modified` | ✅ | `stat.ModTime()` |
 | Conditional requests | ⚠️ | `If-Modified-Since` / `If-Unmodified-Since` / `If-Range` work on date only |
 | Cache headers | ❌ | no `Cache-Control` at all; browser heuristic caching applies |
@@ -371,9 +375,13 @@ Delegating to `http.ServeContent` is the project's preferred native Go pattern (
 
 The route is registered with `r.Get` only (`routes.go:172`) and `middleware.GetHead` is not installed anywhere in the router (`routes.go:10-26`). chi therefore rejects `HEAD` with 405 before `ServeContent` — which handles HEAD correctly — ever sees it. `docs/openapi.json` documents `get` only, so the spec and the implementation agree; both diverge from what media clients, link previewers, and download managers do. The browser `<video>` element does not HEAD-probe, so this does not break current playback; it will break anything else pointed at the URL.
 
+> **Fixed (fourth revision).** Explicit `r.Head` registrations sit beside every `r.Get` on the three stream routes (`routes.go:175-176`, `:219-220`, `:272-273`), with matching `head` operations in `docs/openapi.json`. `middleware.GetHead` was rejected because it registers nothing with chi, and the OpenAPI coverage test is bidirectional — see §14.
+
 ### 4.3 Finding D5 (low) — no `ETag`
 
 Validation is `Last-Modified` only, i.e. one-second granular. `If-Range` therefore cannot distinguish a file rewritten within the same second, and a client resuming a range after such a rewrite can splice bytes from two different files. For a media library this is a narrow window, but the fix is trivial and `ServeContent` will use a strong `ETag` if the handler sets one before calling it.
+
+> **Fixed (fourth revision).** `strongFileETag` derives a strong validator from the size and nanosecond mtime `ServeContent` already stats, and is set before the call. It now lives in the shared `serveMediaFile` (`server/cmd/api/stream_file.go:100-133`), so the movie, watch-room and music-track routes all get it from one place.
 
 ### 4.4 Finding D6 (low) — sendfile is defeated
 
@@ -869,7 +877,7 @@ Using `httptest` and a small temp file:
 - Open-ended `bytes=100-`, suffix `bytes=-100`, multi-range → `multipart/byteranges`.
 - Out-of-range → 416 + `Content-Range: bytes */N`.
 - `If-Modified-Since` → 304; `If-Range` behaviour once an ETag exists.
-- `HEAD` → 200 with headers and no body (fails today — guards D4).
+- `HEAD` → 200 with headers and no body (guards D4; covered by httptest cases since the fourth revision).
 - 401 for an unauthenticated request; 404 for a missing row; 404 for a row whose file is gone.
 
 **API integration**
@@ -982,6 +990,22 @@ The second revision (§14) was a verification pass, not a re-audit. What it did:
 What it did **not** do: drive a browser, start a server, or play a media file. That boundary is unchanged, which is why D11 was demoted rather than resolved, and why §5 was reframed rather than corrected.
 
 ## 14. Revision history
+
+**2026-07-28 (seventh revision) — review corrections on `fix/send-file-speed-up`.** Review of the sixth revision found two defects in the fixes themselves, plus a documentation inconsistency the fixes created.
+
+*The tightened segment poll leaked into a loop it was not meant to touch.* `hlsSegmentPoll` went from 250 ms to 25 ms to cut post-seek latency in `serveReadyHLSSegment`, but the same constant was the sleep in `waitForRemuxPreflight` (`hls_remux_safety.go`) — a loop that stats the init segment **plus every segment it is waiting on** on each pass, so the change multiplied its startup-path filesystem work by ten. The two cadences are now separate constants; `hlsRemuxPreflightPoll` keeps the original 250 ms.
+
+*The stream-file cache could outlive the row it describes.* A reader that missed the cache reads its row before its query returns, so a delete could land in between: the eviction ran, and then the in-flight reader published what it had already read, leaving a deleted movie streamable until the TTL expired. `movie_edit_handler.go` made this easier to hit by evicting *before* `DeleteMovie`, and the scanner evicted from inside `processMovieStreams`, i.e. before `tx.Commit()`. Three changes close it:
+
+- `streamFileCache` (`stream_file.go`) now owns the cache behind a generation counter. A read-through fill captures the generation before its query and `setIfCurrent` publishes only if nothing invalidated in between; `invalidate` bumps the counter. The counter is global rather than per-key — fills take microseconds and invalidations happen only on delete and rescan, so discarding a few unrelated in-flight fills costs nothing and keeps it allocation-free.
+- Every eviction moved to **after** its mutation commits: `DeleteMovie` in `movie_edit_handler.go`, and the scanner's pair moved out of `processMovieStreams` (where they were an unrelated side effect) into `persistResolvedMovie` after `tx.Commit()`, beside the `movieIndex` update that already documents the post-commit rule. `persistResolvedMovieTx` returns the movie ID for it.
+- The track side had **no** eviction at all and relied on the TTL alone. `DeleteAlbum` cascades to its tracks (`schema.sql`, `ON DELETE CASCADE`) so it calls `invalidateAll`; the music scanner's `persistResolvedTrack` invalidates its own key after commit.
+
+*§4 contradicted the status header.* The §11 register had marked D4/D5/D6 fixed, but §4.1's table still read `HEAD ❌ 405` and `ETag ❌`, and §4.2/§4.3 carried no resolution note while §4.4 did. §4 now opens with the same kind of status note §3 has, and §4.2/§4.3 carry §4.4's `> **Fixed**` callout.
+
+Unrelated to the server, from the same CI run: `movie-details-route.test.tsx` failed on `findByLabelText("Playback")` because opening `PlaybackSettingsDialog` awaits a `React.lazy` chunk whose first import pays a cold Vite transform — longer than testing-library's 1 s `asyncUtilTimeout` default on a CI runner, though it passes locally in under a second. `web/src/test/setup.ts` now sets `asyncUtilTimeout: 5000` globally, mirroring the `testTimeout` headroom `vite.config.ts` already documents for the same reason, and the one explicit per-call override this made redundant was removed.
+
+Still open after this revision: **D-EXT** only (a product feature, not a defect).
 
 **2026-07-27 (sixth revision) — D6, on `fix/send-file-speed-up`.** The last deferred finding is closed, together with the per-request database work that turned out to dominate it. Landed:
 

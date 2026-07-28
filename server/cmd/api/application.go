@@ -61,7 +61,7 @@ type Application struct {
 	AuthLimiter                   *rateLimiter
 	DeviceLastSeen                *cache.Cache
 	DeviceAuthCache               *cache.Cache
-	StreamFileCache               *cache.Cache
+	StreamFileCache               *streamFileCache
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
@@ -225,5 +225,5 @@ func (app *Application) initRuntimeCaches() {
 	app.DeviceAuthCache = cache.New(deviceAuthCacheTTL, deviceAuthCacheTTL)
 
 	// Keeps the per-range-request file lookup off SQLite.
-	app.StreamFileCache = cache.New(streamFileCacheTTL, streamFileCacheSweep)
+	app.StreamFileCache = newStreamFileCache(streamFileCacheTTL, streamFileCacheSweep)
 }

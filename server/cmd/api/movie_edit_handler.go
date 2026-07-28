@@ -265,14 +265,16 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.invalidateSubtitleVTTCache(id)
-	app.StreamFileCache.Delete(movieStreamFileKey(id))
-
 	if err = app.Queries.DeleteMovie(ctx, id); err != nil {
 		app.Logger.Error("failed to delete movie", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to delete movie"))
 		return
 	}
+
+	// After the delete, never before: a request that missed the cache while the
+	// row still existed would otherwise republish it behind the eviction.
+	app.invalidateSubtitleVTTCache(id)
+	app.StreamFileCache.invalidate(movieStreamFileKey(id))
 
 	if payload.DeleteFile {
 		if err := os.Remove(movie.FilePath); err != nil && !os.IsNotExist(err) {

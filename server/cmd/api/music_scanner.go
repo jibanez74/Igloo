@@ -733,6 +733,10 @@ func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicSca
 		return 0, fmt.Errorf("failed to commit music track transaction: %w", err)
 	}
 
+	// A rescan can move the file or change its type, so the cached lookup is
+	// dropped here, after the new row is committed.
+	app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
+
 	// trackIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a track whose transaction
 	// failed is never recorded as scanned/unchanged.

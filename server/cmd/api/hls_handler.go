@@ -24,7 +24,11 @@ const (
 	// is served, and that wait is on the startup and post-seek path. The check
 	// is one or two stats against page-cached directory entries, so polling
 	// tightly costs far less than the latency it removes.
-	hlsSegmentPoll            = 25 * time.Millisecond
+	hlsSegmentPoll = 25 * time.Millisecond
+	// waitForRemuxPreflight stats the init segment plus every segment it is
+	// waiting on, on every pass, so it keeps the relaxed cadence the tight
+	// single-segment availability check above can afford to drop.
+	hlsRemuxPreflightPoll     = 250 * time.Millisecond
 	hlsPlaylistContentType    = "application/vnd.apple.mpegurl"
 	hlsSegmentHTTPContentType = "video/mp4"
 )
