@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateWatchRoomDialog from "@/components/watch-room/CreateWatchRoomDialog";
 import {
   MOVIE_TECHNICAL_DETAILS_KEY,
+  PLAYBACK_SETTINGS_SUMMARY_LOADING,
   WATCH_ROOM_INVITE_USERS_KEY,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
@@ -86,6 +87,13 @@ function success<T extends Record<string, unknown>>(
   return {
     error: false,
     data,
+  };
+}
+
+function failure(message: string): ApiResponseType<never> {
+  return {
+    error: true,
+    message,
   };
 }
 
@@ -289,7 +297,8 @@ describe("CreateWatchRoomDialog", () => {
 
   // Before technical details resolve, getAvailableModes optimistically keeps
   // `direct`, so an early submit would post a mode the source may not support
-  // and the server would reject the room.
+  // and the server would reject the room. The presets section has to say why
+  // the button is disabled, or it reads as broken.
   it("cannot create a room until technical details resolve", async () => {
     const user = userEvent.setup();
     renderDialog({}, { seedTechnicalDetails: false });
@@ -301,7 +310,25 @@ describe("CreateWatchRoomDialog", () => {
     expect(
       screen.getByRole("button", { name: "Create and join room" }),
     ).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      PLAYBACK_SETTINGS_SUMMARY_LOADING,
+    );
     expect(createWatchRoomMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a technical-details failure instead of leaving the button silently disabled", async () => {
+    getMovieTechnicalDetailsMock.mockResolvedValue(
+      failure("Technical details are unavailable."),
+    );
+    renderDialog({}, { seedTechnicalDetails: false });
+
+    expect(
+      await screen.findByText("Technical details are unavailable."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create and join room" }),
+    ).toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("creates the room with resolved playback settings and navigates to it", async () => {
