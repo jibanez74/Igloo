@@ -7,7 +7,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -195,7 +194,7 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		app.DeviceLastSeen.Delete(strconv.FormatInt(auth.DeviceID, 10))
+		app.forgetDevice(auth.DeviceID)
 
 		app.Logger.Info("device revoked via logout", "user_id", auth.UserID, "device_id", auth.DeviceID)
 

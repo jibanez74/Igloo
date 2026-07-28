@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -107,11 +108,11 @@ func TestStreamMovieServesRanges(t *testing.T) {
 	size := len(content)
 
 	cases := []struct {
-		name         string
-		rangeHeader  string
-		wantStatus   int
-		wantRange    string
-		wantBody     []byte
+		name        string
+		rangeHeader string
+		wantStatus  int
+		wantRange   string
+		wantBody    []byte
 	}{
 		{
 			name:        "bounded range",
@@ -206,6 +207,76 @@ func TestStreamMovieHead(t *testing.T) {
 		}
 		if w.Body.Len() != 0 {
 			t.Errorf("body = %d bytes, want empty", w.Body.Len())
+		}
+	})
+}
+
+// TestStreamMovieOverSessionMiddleware exercises the delivery path a browser
+// actually takes. httptest.ResponseRecorder does not implement io.ReaderFrom,
+// so the tests above never reach the zero-copy branch that restoreSendfile
+// enables; this one runs over a real socket behind the same middleware pair
+// InitRouter installs.
+func TestStreamMovieOverSessionMiddleware(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	content := bytes.Repeat([]byte("0123456789"), 4096)
+	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
+
+	router := chi.NewRouter()
+	router.Use(app.LoadAndSaveSession)
+	router.Use(restoreSendfile)
+	router.Get("/api/movies/{id}/stream", app.StreamMovie)
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	streamURL := fmt.Sprintf("%s/api/movies/%d/stream", server.URL, movie.ID)
+
+	t.Run("full body", func(t *testing.T) {
+		res, err := http.Get(streamURL)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusOK)
+		}
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if !bytes.Equal(body, content) {
+			t.Errorf("body = %d bytes, want %d matching bytes", len(body), len(content))
+		}
+	})
+
+	t.Run("range", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, streamURL, nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Range", "bytes=10-19")
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusPartialContent {
+			t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusPartialContent)
+		}
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if !bytes.Equal(body, content[10:20]) {
+			t.Errorf("body = %q, want %q", body, content[10:20])
 		}
 	})
 }

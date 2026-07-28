@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 
 	"igloo/cmd/internal/helpers"
@@ -80,7 +79,7 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	movie, err := app.Queries.GetMovieForDirectStream(r.Context(), room.MovieID)
+	movie, err := app.movieStreamFile(r.Context(), room.MovieID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
@@ -92,28 +91,8 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	file, err := os.Open(movie.FilePath)
+	err = serveMediaFile(w, r, movie.Path, movie.Name, movie.ContentType)
 	if err != nil {
-		if os.IsNotExist(err) {
-			app.Logger.Error("watch room movie file not found on disk", "path", movie.FilePath, "room_id", room.ID, "movie_id", room.MovieID)
-			helpers.ErrorJSON(w, errors.New("movie file not found"), http.StatusNotFound)
-			return
-		}
-
-		app.Logger.Error("failed to open watch room movie file", "error", err, "path", movie.FilePath, "room_id", room.ID)
-		helpers.ErrorJSON(w, errors.New("failed to open movie file"))
-		return
+		app.Logger.Error("failed to stream watch room movie file", "error", err, "path", movie.Path, "room_id", room.ID, "movie_id", room.MovieID)
 	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		app.Logger.Error("failed to stat watch room movie file", "error", err, "path", movie.FilePath, "room_id", room.ID)
-		helpers.ErrorJSON(w, errors.New("failed to read movie file"))
-		return
-	}
-
-	w.Header().Set("Content-Type", movieContentType(movie.Container, movie.MimeType))
-	w.Header().Set("ETag", strongFileETag(stat))
-	http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)
 }

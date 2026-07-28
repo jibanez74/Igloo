@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+
+// Route and dialog tests await React.lazy chunks whose first import pays a cold
+// Vite transform, which on CI runners routinely outlasts testing-library's 1s
+// default for findBy*/waitFor. Mirrors the testTimeout headroom set for the
+// same reason in vite.config.ts.
+configure({ asyncUtilTimeout: 5000 });
 
 afterEach(() => {
   cleanup();

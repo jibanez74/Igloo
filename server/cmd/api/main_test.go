@@ -755,21 +755,15 @@ func setupTestApp(t *testing.T) *Application {
 		t.Fatalf("Failed to prepare queries: %v", err)
 	}
 
-	// Tests do not attach real FFmpeg processes to HLS cache entries.
+	// Share the production wiring so a cache added there is never missing here.
+	app.initRuntimeCaches()
+	app.WatchRoomHub = NewWatchRoomHub()
+
+	// Tests do not attach real FFmpeg processes to HLS cache entries, so the
+	// session cache is replaced with one that has no eviction hook.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
 	app.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
-	app.PersonalHLSReservations = make(map[int64]int)
 	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
-	app.RemuxSafetyCache = cache.New(
-		hlsRemuxSafetyCacheTTL,
-		hlsRemuxSafetyCacheSweep,
-	)
-	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
-	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
-	app.WatchRoomHub = NewWatchRoomHub()
-	app.QuickConnect = NewQuickConnectBroker()
-	app.AuthLimiter = newRateLimiter()
-	app.DeviceLastSeen = cache.New(deviceLastSeenTTL, deviceLastSeenTTL)
 
 	return app
 }

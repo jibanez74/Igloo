@@ -60,6 +60,8 @@ type Application struct {
 	QuickConnect                  *QuickConnectBroker
 	AuthLimiter                   *rateLimiter
 	DeviceLastSeen                *cache.Cache
+	DeviceAuthCache               *cache.Cache
+	StreamFileCache               *streamFileCache
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
@@ -218,4 +220,10 @@ func (app *Application) initRuntimeCaches() {
 
 	// Throttles devices.last_used_at writes to at most one per device per TTL.
 	app.DeviceLastSeen = cache.New(deviceLastSeenTTL, deviceLastSeenTTL)
+
+	// Keeps bearer-token resolution off SQLite on the media hot path.
+	app.DeviceAuthCache = cache.New(deviceAuthCacheTTL, deviceAuthCacheTTL)
+
+	// Keeps the per-range-request file lookup off SQLite.
+	app.StreamFileCache = newStreamFileCache(streamFileCacheTTL, streamFileCacheSweep)
 }

@@ -258,9 +258,19 @@ func TestRevokeDevice_InvalidatesToken(t *testing.T) {
 		t.Fatalf("lookup device: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/devices/%d", device.ID), nil)
-	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
+	// Authenticate once first so the token is resolved and cached; revocation
+	// has to invalidate that entry, not just the row.
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pre-revoke status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/devices/%d", device.ID), nil)
+	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
+	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("revoke status = %d, want 200, body = %s", w.Code, w.Body.String())
@@ -273,6 +283,42 @@ func TestRevokeDevice_InvalidatesToken(t *testing.T) {
 	app.Router.ServeHTTP(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("revoked token status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+}
+
+// Devices cascade away with their user, so the cached bearer resolution has to
+// go with them; otherwise a deleted user's token keeps authenticating.
+func TestDeleteUserAccount_InvalidatesDeviceTokens(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Leaving", "leaving@example.com", false)
+	token := createTestDevice(t, app, user.ID, "Phone", "android")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pre-delete status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/user/", nil)
+	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("post-delete status = %d, want 401, body = %s", w.Code, w.Body.String())
 	}
 }
 

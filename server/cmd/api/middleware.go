@@ -36,6 +36,10 @@ func deviceAuthFrom(ctx context.Context) *deviceAuth {
 // revoked token is rejected immediately rather than falling back to cookies.
 // The session is never written to, so bearer requests do not create session
 // rows.
+//
+// Resolved tokens are cached because a TV client re-authenticates on every HLS
+// segment, and the database runs on a single shared connection. Revocation
+// evicts the entry so a revoked token stops working immediately.
 func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
@@ -50,7 +54,19 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		device, err := app.Queries.GetDeviceByTokenHash(r.Context(), hashDeviceToken(token))
+		tokenHash := hashDeviceToken(token)
+
+		cached, hit := app.DeviceAuthCache.Get(tokenHash)
+		if hit {
+			auth, ok := cached.(*deviceAuth)
+			if ok {
+				app.touchDeviceLastUsed(r.Context(), auth.DeviceID)
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), deviceAuthKey, auth)))
+				return
+			}
+		}
+
+		device, err := app.Queries.GetDeviceByTokenHash(r.Context(), tokenHash)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
@@ -71,7 +87,7 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 			if err != nil && app.Logger != nil {
 				app.Logger.Error("failed to delete stale device", "error", err, "device_id", device.ID)
 			}
-			app.DeviceLastSeen.Delete(strconv.FormatInt(device.ID, 10))
+			app.forgetDevice(device.ID)
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return
 		}
@@ -79,6 +95,8 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 		app.touchDeviceLastUsed(r.Context(), device.ID)
 
 		auth := &deviceAuth{UserID: device.UserID, DeviceID: device.ID}
+		app.DeviceAuthCache.SetDefault(tokenHash, auth)
+
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), deviceAuthKey, auth)))
 	})
 }
@@ -186,6 +204,36 @@ func (app *Application) touchDeviceLastUsed(ctx context.Context, deviceID int64)
 	}
 
 	app.DeviceLastSeen.SetDefault(key, struct{}{})
+}
+
+// forgetDeviceAuth evicts every cached bearer resolution the predicate matches.
+// The cache is keyed by token hash, which no revocation path carries, so its
+// entries are found by what they resolved to.
+func (app *Application) forgetDeviceAuth(match func(*deviceAuth) bool) {
+	for key, item := range app.DeviceAuthCache.Items() {
+		auth, ok := item.Object.(*deviceAuth)
+		if ok && match(auth) {
+			app.DeviceAuthCache.Delete(key)
+		}
+	}
+}
+
+// forgetDevice drops the caches keyed on a device so a revoked device is
+// rejected on its next request.
+func (app *Application) forgetDevice(deviceID int64) {
+	app.DeviceLastSeen.Delete(strconv.FormatInt(deviceID, 10))
+	app.forgetDeviceAuth(func(auth *deviceAuth) bool {
+		return auth.DeviceID == deviceID
+	})
+}
+
+// forgetUserDevices drops cached bearer auth for every device belonging to a
+// user. Deleting the user cascades its device rows away, so without this a
+// token could keep authenticating until the cache entry expired.
+func (app *Application) forgetUserDevices(userID int64) {
+	app.forgetDeviceAuth(func(auth *deviceAuth) bool {
+		return auth.UserID == userID
+	})
 }
 
 // RequireAdmin rejects requests from non-admin users with 403.

@@ -572,7 +572,7 @@ func (app *Application) persistResolvedMovie(ctx context.Context, scan *movieSca
 	defer tx.Rollback()
 
 	qtx := app.Queries.WithTx(tx)
-	err = app.persistResolvedMovieTx(ctx, qtx, txScan, resolved)
+	movieID, err := app.persistResolvedMovieTx(ctx, qtx, txScan, resolved)
 	if err != nil {
 		return err
 	}
@@ -581,6 +581,12 @@ func (app *Application) persistResolvedMovie(ctx context.Context, scan *movieSca
 	if err != nil {
 		return fmt.Errorf("failed to commit movie: %w", err)
 	}
+
+	// Both caches describe the committed row, so they are dropped here rather
+	// than inside the transaction: evicting earlier lets a concurrent reader
+	// republish the pre-rescan file path after the new one commits.
+	app.invalidateSubtitleVTTCache(movieID)
+	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
 
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
@@ -591,63 +597,65 @@ func (app *Application) persistResolvedMovie(ctx context.Context, scan *movieSca
 	return nil
 }
 
-func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *database.Queries, scan *movieScanContext, resolved *resolvedMovie) error {
+// persistResolvedMovieTx returns the upserted movie ID so the caller can drop
+// the caches keyed on it once the transaction commits.
+func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *database.Queries, scan *movieScanContext, resolved *resolvedMovie) (int64, error) {
 	movie, err := qtx.UpsertMovie(ctx, resolved.params)
 	if err != nil {
-		return fmt.Errorf("upsert movie failed: %w", err)
+		return 0, fmt.Errorf("upsert movie failed: %w", err)
 	}
 
 	if resolved.tmdbMovie != nil {
 		err = qtx.DeleteMovieCast(ctx, movie.ID)
 		if err != nil {
-			return fmt.Errorf("delete existing cast failed: %w", err)
+			return 0, fmt.Errorf("delete existing cast failed: %w", err)
 		}
 
 		err = qtx.DeleteMovieCrew(ctx, movie.ID)
 		if err != nil {
-			return fmt.Errorf("delete existing crew failed: %w", err)
+			return 0, fmt.Errorf("delete existing crew failed: %w", err)
 		}
 
 		err = processProductionCompanies(ctx, qtx, movie.ID, resolved.tmdbMovie.ProductionCompanies)
 		if err != nil {
-			return fmt.Errorf("process production companies failed: %w", err)
+			return 0, fmt.Errorf("process production companies failed: %w", err)
 		}
 
 		err = processCast(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Cast)
 		if err != nil {
-			return fmt.Errorf("process cast failed: %w", err)
+			return 0, fmt.Errorf("process cast failed: %w", err)
 		}
 
 		err = processCrew(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Crew)
 		if err != nil {
-			return fmt.Errorf("process crew failed: %w", err)
+			return 0, fmt.Errorf("process crew failed: %w", err)
 		}
 
 		err = processMovieGenres(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Genres)
 		if err != nil {
-			return fmt.Errorf("process genres failed: %w", err)
+			return 0, fmt.Errorf("process genres failed: %w", err)
 		}
 
 		err = processExtraVideos(ctx, qtx, movie.ID, resolved.tmdbMovie.Videos.Results)
 		if err != nil {
-			return fmt.Errorf("process extra videos failed: %w", err)
+			return 0, fmt.Errorf("process extra videos failed: %w", err)
 		}
 	}
 
 	videoStreamCount, err := app.processMovieStreams(ctx, qtx, movie.ID, resolved.streams)
 	if err != nil {
-		return fmt.Errorf("process movie streams failed: %w", err)
+		return 0, fmt.Errorf("process movie streams failed: %w", err)
 	}
 	if videoStreamCount == 0 {
-		return fmt.Errorf("no video stream found - invalid movie file")
+		return 0, fmt.Errorf("no video stream found - invalid movie file")
 	}
 
 	err = processChapters(ctx, qtx, movie.ID, resolved.chapters)
 	if err != nil {
-		return fmt.Errorf("process chapters failed: %w", err)
+		return 0, fmt.Errorf("process chapters failed: %w", err)
 	}
 
-	return nil
+	return movie.ID, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -912,8 +920,6 @@ func (app *Application) processMovieStreams(
 	movieID int64,
 	streams []ffprobe.Stream,
 ) (videoStreamCount int, err error) {
-	app.invalidateSubtitleVTTCache(movieID)
-
 	err = qtx.DeleteMovieVideoStreams(ctx, movieID)
 	if err != nil {
 		return 0, fmt.Errorf("delete movie video streams failed: %w", err)

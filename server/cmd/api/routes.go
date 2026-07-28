@@ -19,6 +19,9 @@ func (app *Application) InitRouter() {
 
 	router.Group(func(r chi.Router) {
 		r.Use(app.LoadAndSaveSession)
+		// The session middleware is where io.ReaderFrom is lost, so the
+		// capability is restored immediately inside it.
+		r.Use(restoreSendfile)
 		app.registerSessionRoutes(r)
 	})
 

@@ -255,12 +255,9 @@ describe("settings route tab transitions", () => {
 
     await runContentFadeTransitionTimeout(setTimeoutSpy);
 
-    await waitFor(
-      () => {
-        expect(screen.getByText("Profile Information")).toBeInTheDocument();
-      },
-      { timeout: 5000 },
-    );
+    await waitFor(() => {
+      expect(screen.getByText("Profile Information")).toBeInTheDocument();
+    });
     expect(startViewTransition).not.toHaveBeenCalled();
   }, 10_000);
 

@@ -206,6 +206,11 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The album cascades to its tracks (schema.sql, tracks.album_id ON DELETE
+	// CASCADE), so which stream-file keys just died is unknown. Drop them all;
+	// after the delete, so no racing lookup can republish a removed track.
+	app.StreamFileCache.invalidateAll()
+
 	app.Logger.Info("album deleted successfully", "id", id, "title", album.Title)
 
 	res := helpers.JSONResponse{
