@@ -30,6 +30,9 @@ import {
 } from "@/lib/query-opts";
 import { buildMovieSubtitleTrackInfo } from "@/lib/movie-playback";
 import { watchRoomStreamUrl } from "@/lib/watch-room";
+import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
+import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
+import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import { Button } from "@/components/ui/button";
@@ -57,6 +60,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [streamReloadKey, setStreamReloadKey] = useState(0);
 
   const {
     isFullscreen,
@@ -70,8 +74,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const room = data?.error === false ? data.data.room : null;
   const currentRoomId = room?.id ?? null;
   const movieTitle = room?.movie_title ?? "";
+  const isHlsRoom = room ? room.playback_mode !== "direct" : false;
   const streamUrl = room
-    ? watchRoomStreamUrl(room.id, room.playback_mode)
+    ? watchRoomStreamUrl(room.id, room.playback_mode, streamReloadKey)
+    : "";
+  // Rooms have no per-client playback session, so the window is just the room,
+  // its mode, and the reload generation.
+  const streamWindowKey = room
+    ? `${room.id}:${room.playback_mode}:${streamReloadKey}`
     : "";
   const posterUrl =
     room?.movie_poster != null
@@ -115,6 +125,34 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
         subtitleStreams,
       })
     : null;
+
+  // Room HLS sessions can be evicted or refused exactly like personal ones, and
+  // until now a room had no recovery at all: a fragment 404 or a capacity 503
+  // went straight to a dead "Stream error" (audit H9). Recovery rebuilds the
+  // player; the WebSocket sync then pulls the playhead back to the host's
+  // position, so participants are not thrown back to the start.
+  const { waitingForCapacity, handleCapacityBusy } = useHlsCapacityRetry({
+    streamWindowKey,
+    onRetry: () => setStreamReloadKey(prev => prev + 1),
+    onMaxAttempts: () =>
+      setPlaybackError(
+        "The server is running at its transcoding limit. Try again shortly.",
+      ),
+  });
+
+  const { handleSessionLost } = useHlsSessionRecovery({
+    streamWindowKey,
+    onRecover: () => setStreamReloadKey(prev => prev + 1),
+    onMaxAttempts: () =>
+      setPlaybackError("The playback session expired. Reload to keep watching."),
+  });
+
+  // Rooms keep a long TTL but nothing refreshes it while every participant is
+  // paused, so without this a paused room can be evicted mid-film.
+  useHlsSessionKeepalive({
+    enabled: isHlsRoom && !playbackError,
+    streamUrl,
+  });
 
   const playVideo = async () => {
     const video = videoRef.current;
@@ -272,6 +310,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             room={room}
             streamUrl={streamUrl}
             subtitleTrack={subtitleTrack}
+            waitingForCapacity={waitingForCapacity}
+            onSessionLost={handleSessionLost}
+            onCapacityBusy={handleCapacityBusy}
             videoRef={videoRef}
             playing={playing}
             currentTime={currentTime}
@@ -469,6 +510,9 @@ type WatchRoomPlayerPanelProps = {
   playerFullscreenMode: boolean;
   isFullscreen: boolean;
   isImmersiveViewport: boolean;
+  waitingForCapacity: boolean;
+  onSessionLost: (currentTime: number) => void;
+  onCapacityBusy: (retryAfterSec: number) => void;
   onError: (error: string | null) => void;
   onPlayingChange: (playing: boolean) => void;
   onTimeUpdate: (time: number) => void;
@@ -493,6 +537,9 @@ function WatchRoomPlayerPanel({
   playerFullscreenMode,
   isFullscreen,
   isImmersiveViewport,
+  waitingForCapacity,
+  onSessionLost,
+  onCapacityBusy,
   onError,
   onPlayingChange,
   onTimeUpdate,
@@ -525,7 +572,18 @@ function WatchRoomPlayerPanel({
           onTimeUpdate={onTimeUpdate}
           onDurationChange={onDurationChange}
           subtitleTrack={subtitleTrack}
+          onSessionLost={onSessionLost}
+          onCapacityBusy={onCapacityBusy}
         />
+
+        {waitingForCapacity && (
+          <p
+            className="border-t border-border px-4 py-3 text-sm text-muted-foreground sm:px-5"
+            role="status"
+          >
+            Waiting for server capacity…
+          </p>
+        )}
 
         <div className="border-t border-border p-4 sm:p-5">
           <ProgressBar

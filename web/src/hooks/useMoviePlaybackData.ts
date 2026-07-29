@@ -167,6 +167,7 @@ export function useMoviePlaybackData({
     resolvedSubtitleTrack,
     techLoaded,
     subtitleStreams,
+    hlsStartSec,
   });
   const sessionWindowKey = `${movieId}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(hlsStartSec)}`;
 

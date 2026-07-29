@@ -159,16 +159,39 @@ describe("browser-safe H.264 gate", () => {
       "4:4:4 pixel format alone",
       { pixel_format: { String: "yuv444p", Valid: true } },
     ],
-  ])("refuses direct play for %s while keeping remux", (_name, overrides) => {
+  ])(
+    "refuses both direct play and remux for %s",
+    (_name, overrides) => {
+      const ids = modeIds(
+        getAvailableModes({
+          videoStreamsLoaded: true,
+          video: h264Video(overrides),
+          audioStreams: [aacAudio()],
+          mimeType: "video/mp4",
+        }),
+      );
+      expect(ids).not.toContain("direct");
+      // Remux copies the stream untouched, so the server refuses these for the
+      // same reason and falls back to a transcode. Offering remux here
+      // advertised a mode that never ran and left the badge reporting a stream
+      // copy while a full transcode was running (audit H3).
+      expect(ids).not.toContain("remux");
+      // A transcode path must still be offered, or the file becomes unplayable.
+      expect(ids.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("keeps remux for browser-safe H.264 that direct play also accepts", () => {
     const ids = modeIds(
       getAvailableModes({
         videoStreamsLoaded: true,
-        video: h264Video(overrides),
+        video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",
       }),
     );
-    expect(ids).not.toContain("direct");
+    // The direct ⊂ remux invariant that resolveModeForAudioTrack relies on.
+    expect(ids).toContain("direct");
     expect(ids).toContain("remux");
   });
 

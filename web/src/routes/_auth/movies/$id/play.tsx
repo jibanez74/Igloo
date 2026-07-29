@@ -20,6 +20,7 @@ import {
   playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import {
+  effectiveModeLabel,
   getAvailableModes,
   getDefaultPlaybackSettings,
   getPrimaryVideoStream,
@@ -203,6 +204,12 @@ function PlayMoviePage() {
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
+  // Tagged with the session it describes rather than cleared by an effect, so
+  // a rebase or mode change invalidates it by derivation.
+  const [reportedProfile, setReportedProfile] = useState<{
+    streamWindowKey: string;
+    profile: string;
+  } | null>(null);
   const playbackSessionId = useMemo(
     () => getOrCreateMovieHlsPlaybackSessionId(movieId),
     [movieId],
@@ -583,6 +590,13 @@ function PlayMoviePage() {
     durationRef.current = movieDurationSec;
   }, [isHlsPlayback, movieDurationSec]);
 
+  // The effective profile belongs to one session, so an answer carried over
+  // from a previous one is ignored rather than used to describe this one.
+  const effectiveProfile =
+    reportedProfile?.streamWindowKey === sessionWindowKey
+      ? reportedProfile.profile
+      : null;
+
   const handleNativePlaybackError = (code: number | null | undefined) => {
     if (handleDirectPlayFallbackError(code)) {
       fallbackConsumedErrorRef.current = true;
@@ -695,6 +709,9 @@ function PlayMoviePage() {
         handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
       onCapacityBusy={handleCapacityBusy}
+      onEffectiveProfile={profile =>
+        setReportedProfile({ streamWindowKey: sessionWindowKey, profile })
+      }
     />
   );
 
@@ -840,7 +857,11 @@ function PlayMoviePage() {
         duration={duration}
         displayedDuration={displayedDuration}
         playing={playing}
-        modeLabel={modeLabel}
+        modeLabel={
+          isHlsPlayback
+            ? effectiveModeLabel(resolvedMode, effectiveProfile)
+            : modeLabel
+        }
         chapters={chapters}
         videoRef={videoRef}
         onSeek={seek}

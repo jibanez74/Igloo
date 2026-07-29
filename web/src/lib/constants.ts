@@ -246,6 +246,13 @@ export const HLS_CAPACITY_RETRY_MAX_ATTEMPTS = 6;
 /** Retry delay when the server's 503 response carries no usable Retry-After header. */
 export const HLS_CAPACITY_RETRY_FALLBACK_SEC = 5;
 
+/**
+ * Manifest response header naming the profile the server actually ran. A remux
+ * request that fails the server's safety gate is still served from the
+ * /hls/remux/ path, so the URL alone cannot tell the client what it is getting.
+ */
+export const HLS_EFFECTIVE_PROFILE_HEADER = "X-Igloo-Effective-Profile";
+
 /** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
 export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;
 /** hls.js: manifest / level / fragment request timeout (ms). */

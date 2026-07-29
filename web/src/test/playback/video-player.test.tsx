@@ -10,6 +10,7 @@ import {
 type FakeHlsListener = (event: string, data: unknown) => void;
 
 const fakeHlsInstances = vi.hoisted(() => [] as FakeHlsInstance[]);
+const fakeHlsSupport = vi.hoisted(() => ({ supported: true }));
 
 type FakeHlsInstance = {
   listeners: Map<string, FakeHlsListener[]>;
@@ -19,11 +20,12 @@ type FakeHlsInstance = {
 vi.mock("hls.js/light", () => {
   class FakeHls implements FakeHlsInstance {
     static isSupported() {
-      return true;
+      return fakeHlsSupport.supported;
     }
     static Events = {
       ERROR: "hlsError",
       MANIFEST_PARSED: "hlsManifestParsed",
+      MANIFEST_LOADED: "hlsManifestLoaded",
     };
     static ErrorDetails = {
       FRAG_LOAD_ERROR: "fragLoadError",
@@ -101,6 +103,7 @@ afterAll(() => {
 afterEach(() => {
   vi.useRealTimers();
   fakeHlsInstances.length = 0;
+  fakeHlsSupport.supported = true;
 });
 
 function renderPlayer(
@@ -428,5 +431,64 @@ describe("VideoPlayer hls.js error routing", () => {
 
     expect(onSessionLost).toHaveBeenCalledOnce();
     expect(onCapacityBusy).not.toHaveBeenCalled();
+  });
+});
+
+describe("VideoPlayer HLS capability and effective profile", () => {
+  const hlsSrc = "/api/movies/1/hls/remux/playlist.m3u8";
+
+  async function renderHls(
+    props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
+  ) {
+    const result = renderPlayer({ src: hlsSrc, isHlsSource: true, ...props });
+    await act(async () => {});
+    return result;
+  }
+
+  // Without this the player sat blank with no error at all, so a browser
+  // lacking Media Source Extensions looked like a broken app (audit H11).
+  it("reports an error when hls.js is unsupported", async () => {
+    fakeHlsSupport.supported = false;
+    const onError = vi.fn();
+
+    await renderHls({ onError });
+
+    expect(fakeHlsInstances).toHaveLength(0);
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0]).toMatch(/cannot play streamed video/i);
+  });
+
+  // A remux request that fails the server's safety gate is still served from
+  // the /hls/remux/ path, so only the response header can report what actually
+  // ran (audit H3).
+  it("reports the effective profile from the manifest response header", async () => {
+    const onEffectiveProfile = vi.fn();
+    await renderHls({ onEffectiveProfile });
+
+    const hls = fakeHlsInstances[0];
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {
+        networkDetails: {
+          getResponseHeader: (name: string) =>
+            name === "X-Igloo-Effective-Profile" ? "2160p_16mbps" : null,
+        },
+      });
+    });
+
+    expect(onEffectiveProfile).toHaveBeenCalledWith("2160p_16mbps");
+  });
+
+  it("stays quiet when the manifest response has no effective-profile header", async () => {
+    const onEffectiveProfile = vi.fn();
+    await renderHls({ onEffectiveProfile });
+
+    const hls = fakeHlsInstances[0];
+    act(() => {
+      hls.trigger("hlsManifestLoaded", {
+        networkDetails: { getResponseHeader: () => null },
+      });
+    });
+
+    expect(onEffectiveProfile).not.toHaveBeenCalled();
   });
 });

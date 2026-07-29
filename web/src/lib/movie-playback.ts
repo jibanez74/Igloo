@@ -40,6 +40,8 @@ type SubtitleTrackInfoOptions = {
   resolvedSubtitleTrack: number | null;
   techLoaded: boolean;
   subtitleStreams: SubtitleType[];
+  /** Session start the cues must be rebased onto; 0 for direct play. */
+  hlsStartSec?: number;
 };
 
 type RebaseOptions = {
@@ -246,6 +248,7 @@ export function buildMovieSubtitleTrackInfo({
   resolvedSubtitleTrack,
   techLoaded,
   subtitleStreams,
+  hlsStartSec = 0,
 }: SubtitleTrackInfoOptions) {
   if (resolvedSubtitleTrack === null || !techLoaded) return null;
   if (
@@ -256,8 +259,18 @@ export function buildMovieSubtitleTrackInfo({
   }
 
   const sub = subtitleStreams[resolvedSubtitleTrack];
+  // Cues carry absolute source timestamps, but a rebased HLS session's media
+  // timeline starts at zero, so the server must shift them by the session
+  // start or every subtitle is out by that offset (audit H4). Direct play and
+  // sessions starting at zero need no shift.
+  const params = new URLSearchParams();
+  if (hlsStartSec > 0) {
+    params.set("start", String(Math.floor(hlsStartSec)));
+  }
+  const query = params.size > 0 ? `?${params}` : "";
+
   return {
-    url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt`,
+    url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt${query}`,
     label: formatSubtitleLabel(sub, resolvedSubtitleTrack),
     srclang: normalizeLang(unwrapStringOrUndefined(sub.language)) ?? "",
   };

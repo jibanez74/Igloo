@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,8 +19,11 @@ import (
 
 const (
 	hlsTranscodeBusyRetryAfterSec = 5
-	hlsPlaybackSessionIDPattern   = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
-	hlsSegmentWait                = 120 * time.Second
+	// A session that has not published its first segment yet is seconds away,
+	// not minutes, so it gets a shorter retry hint than a capacity refusal.
+	hlsPlaylistRetryAfterSec    = 1
+	hlsPlaybackSessionIDPattern = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+	hlsSegmentWait              = 120 * time.Second
 	// A segment that lands just after a check waits a full interval before it
 	// is served, and that wait is on the startup and post-seek path. The check
 	// is one or two stats against page-cached directory entries, so polling
@@ -28,14 +32,28 @@ const (
 	// waitForRemuxPreflight stats the init segment plus every segment it is
 	// waiting on, on every pass, so it keeps the relaxed cadence the tight
 	// single-segment availability check above can afford to drop.
-	hlsRemuxPreflightPoll     = 250 * time.Millisecond
+	hlsRemuxPreflightPoll = 250 * time.Millisecond
+	// Copy-video manifests are read back from FFmpeg rather than synthesized,
+	// so the first request for one waits for FFmpeg to publish a segment.
+	hlsLivePlaylistWait       = 30 * time.Second
 	hlsPlaylistContentType    = "application/vnd.apple.mpegurl"
 	hlsSegmentHTTPContentType = "video/mp4"
+	hlsEffectiveProfileHeader = "X-Igloo-Effective-Profile"
+	hlsActualStartHeader      = "X-Igloo-Actual-Start"
 )
 
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
 var errHLSSessionNotFound = errors.New("session not found")
+
+// errHLSPlaylistNotReady means FFmpeg has not published a usable playlist yet.
+// It is retryable: the session is healthy, it just has not produced output.
+var errHLSPlaylistNotReady = errors.New("playlist not ready")
+
+// errHLSSessionEmpty means FFmpeg finished without producing playable media,
+// which happens when a session starts past the end of a stream. Retrying the
+// same offset cannot help, so it is reported as not found rather than busy.
+var errHLSSessionEmpty = errors.New("no playable media at this position")
 
 type hlsRequestParams struct {
 	MovieID         int64
@@ -84,7 +102,15 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		Reload:          params.Reload,
 	})
 
-	playlist := buildHLSPlaylistBody(session, sessionPlaylistDurationSec(session), baseURL, querySuffix)
+	playlist, err := buildHLSPlaylistBody(r.Context(), session, sessionPlaylistDurationSec(session), baseURL, querySuffix)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		app.Logger.Error("hls playlist unavailable", "error", err, "movie_id", params.MovieID)
+		writeHLSSessionError(w, err)
+		return
+	}
 
 	refreshed := app.RefreshHLSSessionTTL(key, session)
 	if !refreshed {
@@ -92,10 +118,32 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", hlsPlaylistContentType)
-	w.Header().Set("Cache-Control", "no-store")
+	writeHLSPlaylistHeaders(w, session)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
+}
+
+// writeHLSPlaylistHeaders publishes the delivery shape the client cannot infer
+// from the request. The requested profile is in the URL, but the profile the
+// server actually ran may differ (remux falling back to a transcode), and a
+// copy-video session starts at the source keyframe at or before the requested
+// offset rather than at the offset itself.
+func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
+	w.Header().Set("Content-Type", hlsPlaylistContentType)
+	w.Header().Set("Cache-Control", "no-store")
+
+	if session == nil {
+		return
+	}
+
+	if session.EffectiveProfile != "" {
+		w.Header().Set(hlsEffectiveProfileHeader, session.EffectiveProfile)
+	}
+
+	actualStart := session.actualStartSec()
+	if actualStart >= 0 {
+		w.Header().Set(hlsActualStartHeader, strconv.FormatFloat(actualStart, 'f', 3, 64))
+	}
 }
 
 // FFmpeg writes segments asynchronously; serve only once complete.
@@ -141,16 +189,116 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	serveReadyHLSSegment(w, r, session, filename)
 }
 
-func buildHLSPlaylistBody(session *HLSSession, durationSec float64, baseURL, querySuffix string) string {
-	session.ExitMu.Lock()
-	finalPlaylist := session.FinalPlaylist
-	session.ExitMu.Unlock()
-
-	if finalPlaylist != "" {
-		return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix)
+// readLiveHLSPlaylist returns the playlist FFmpeg is currently writing. FFmpeg
+// renames a temporary file into place, so a successful read is never torn, and
+// it appends a segment only once that segment is closed.
+//
+// A playlist is only usable once it describes real media. A session that seeks
+// past the end of a stream still exits cleanly, having written one empty
+// segment declared as `#EXTINF:0.000000` under `#EXT-X-TARGETDURATION:0` —
+// which is not a valid playlist and is not playable. Serving that would trade
+// one bad manifest for another, so it is rejected here and the caller reports
+// the session as having produced nothing.
+func readLiveHLSPlaylist(tempDir string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME))
+	if err != nil {
+		return "", err
 	}
 
-	return generateVODPlaylist(durationSec, baseURL, querySuffix, session.CopyVideo)
+	playlist := string(raw)
+	if !hasPlayableSegment(playlist) {
+		return "", errHLSPlaylistNotReady
+	}
+
+	return playlist, nil
+}
+
+// hasPlayableSegment reports whether a playlist declares at least one segment
+// with a positive duration.
+func hasPlayableSegment(playlist string) bool {
+	for _, line := range strings.Split(playlist, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "#EXTINF:") {
+			continue
+		}
+
+		value := strings.TrimPrefix(trimmed, "#EXTINF:")
+		value = strings.TrimSuffix(strings.TrimSpace(value), ",")
+
+		duration, parseErr := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if parseErr == nil && duration > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// buildHLSPlaylistBody returns the media playlist for a session.
+//
+// Transcode sessions pin keyframes to the segment cadence, so a playlist
+// synthesized from the movie duration describes the output exactly. Copy-video
+// sessions can only split on source keyframes, so their segment durations and
+// count are whatever the source encode dictates: synthesizing those advertises
+// durations FFmpeg never produces and segments that will never exist. They are
+// read back from FFmpeg instead, and the request waits for the first one.
+func buildHLSPlaylistBody(
+	ctx context.Context,
+	session *HLSSession,
+	durationSec float64,
+	baseURL string,
+	querySuffix string,
+) (string, error) {
+	if session == nil {
+		return "", errHLSSessionNotFound
+	}
+
+	if !session.CopyVideo {
+		finalPlaylist := session.currentFinalPlaylist()
+		if finalPlaylist != "" {
+			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
+		}
+		return generateVODPlaylist(durationSec, baseURL, querySuffix, false), nil
+	}
+
+	ticker := time.NewTicker(hlsRemuxPreflightPoll)
+	defer ticker.Stop()
+
+	deadline := time.Now().Add(hlsLivePlaylistWait)
+	for {
+		// onExit publishes FinalPlaylist before it marks the session exited, so
+		// checking it first closes the race against a session finishing here.
+		finalPlaylist := session.currentFinalPlaylist()
+		if finalPlaylist != "" {
+			if !hasPlayableSegment(finalPlaylist) {
+				return "", errHLSSessionEmpty
+			}
+			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
+		}
+
+		livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
+		if readErr == nil {
+			return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+		}
+
+		exited, exitErr := session.exitStatus()
+		if exited {
+			if exitErr != nil {
+				return "", fmt.Errorf("transcoding stopped before publishing a playlist: %w", exitErr)
+			}
+			return "", errHLSSessionEmpty
+		}
+
+		if !time.Now().Before(deadline) {
+			return "", errHLSPlaylistNotReady
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSession, filename string) {
@@ -168,11 +316,7 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 			return
 		}
 
-		session.ExitMu.Lock()
-		exited := session.Exited
-		exitErr := session.ExitErr
-		session.ExitMu.Unlock()
-
+		exited, exitErr := session.exitStatus()
 		if exited && !fileReady(filePath) {
 			if exitErr != nil {
 				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
@@ -213,7 +357,7 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errHLSSessionNotFound) {
+	if errors.Is(err, errHLSSessionNotFound) || errors.Is(err, errHLSSessionEmpty) {
 		helpers.ErrorJSON(w, err, http.StatusNotFound)
 		return
 	}
@@ -231,8 +375,25 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
 		return
 	}
+
+	var storageErr *hlsStorageCapacityError
+	if errors.As(err, &storageErr) {
+		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
+		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
+		return
+	}
+
+	// The session is healthy, FFmpeg just has not published output yet, so the
+	// client should come back rather than treat this as a failed session.
+	if errors.Is(err, errHLSPlaylistNotReady) {
+		w.Header().Set("Retry-After", strconv.Itoa(hlsPlaylistRetryAfterSec))
+		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
+		return
+	}
+
 	helpers.ErrorJSON(w, err, http.StatusBadRequest)
 }
+
 func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {

@@ -6,6 +6,7 @@ import type { Events } from "hls.js";
 import { Spinner } from "@/components/ui/spinner";
 import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
+  HLS_EFFECTIVE_PROFILE_HEADER,
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
@@ -39,6 +40,11 @@ type VideoPlayerProps = {
   onStartApplied?: (time: number) => void;
   onSessionLost?: (currentTime: number) => void;
   onCapacityBusy?: (retryAfterSec: number) => void;
+  /**
+   * Reports the profile the server actually ran, which differs from the
+   * requested one whenever the remux safety gate forced a transcode.
+   */
+  onEffectiveProfile?: (profileId: string) => void;
 };
 
 function loadHlsLight() {
@@ -66,6 +72,7 @@ export default function VideoPlayer({
   onStartApplied,
   onSessionLost,
   onCapacityBusy,
+  onEffectiveProfile,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
 
@@ -134,6 +141,23 @@ export default function VideoPlayer({
     return true;
   });
 
+  // Reads the effective profile off the manifest response. Mirrors the
+  // XMLHttpRequest access `handleCapacityBusy` uses for Retry-After; hls.js
+  // types `networkDetails` as unknown because the loader is pluggable.
+  const reportEffectiveProfile = useEffectEvent((networkDetails: unknown) => {
+    if (!onEffectiveProfile) return;
+
+    try {
+      const xhr = networkDetails as XMLHttpRequest | null | undefined;
+      const profile = xhr?.getResponseHeader?.(HLS_EFFECTIVE_PROFILE_HEADER);
+      if (profile) {
+        onEffectiveProfile(profile);
+      }
+    } catch {
+      // Header unavailable on this loader; the badge keeps the requested mode.
+    }
+  });
+
   const handleHlsError = useEffectEvent(
     (
       video: HTMLVideoElement,
@@ -177,7 +201,15 @@ export default function VideoPlayer({
     void (async () => {
       try {
         const { default: Hls } = await loadHlsLight();
-        if (cancelled || !Hls.isSupported()) return;
+        if (cancelled) return;
+        if (!Hls.isSupported()) {
+          // Neither Media Source Extensions nor native HLS: without this the
+          // player would sit blank with no explanation at all.
+          reportError(
+            "This browser cannot play streamed video (no Media Source Extensions support).",
+          );
+          return;
+        }
 
         const hls = new Hls({
           xhrSetup(xhr: XMLHttpRequest) {
@@ -204,6 +236,13 @@ export default function VideoPlayer({
             handleStartApplied(startSec);
           });
         }
+
+        // The manifest response names the profile the server really ran. The
+        // request URL cannot: a remux request that fails the safety gate is
+        // still served from the /hls/remux/ path.
+        hls.once(Hls.Events.MANIFEST_LOADED, (_event, data) => {
+          reportEffectiveProfile(data.networkDetails);
+        });
 
         let mediaRecoveryAttempted = false;
         hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {

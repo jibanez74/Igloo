@@ -77,6 +77,7 @@ func testMusicMetadataWithTags(tags ffprobe.FormatTags) *ffprobe.FfprobeResult {
 }
 
 type countingMusicScannerFfprobe struct {
+	noKeyframeProbe
 	result *ffprobe.FfprobeResult
 	calls  int
 }
@@ -92,6 +93,7 @@ func (s *countingMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprob
 }
 
 type failingPathMusicScannerFfprobe struct {
+	noKeyframeProbe
 	result      *ffprobe.FfprobeResult
 	failingPath string
 	calls       int
@@ -116,6 +118,7 @@ func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffp
 }
 
 type musicScannerFfprobeByPath struct {
+	noKeyframeProbe
 	results       map[string]*ffprobe.FfprobeResult
 	errors        map[string]error
 	metadataCalls map[string]int

@@ -23,11 +23,21 @@ const showSuccessMock = vi.fn();
 type MockVideoPlayerProps = {
   videoRef: { current: HTMLVideoElement | null };
   title: string;
+  src?: string;
+  isHlsSource?: boolean;
   onPlay?: () => void;
   onPause?: () => void;
   onEnded?: () => void;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
+  onSessionLost?: (currentTime: number) => void;
+  onCapacityBusy?: (retryAfterSec: number) => void;
+};
+
+// Records what the room actually hands the player, so the recovery wiring can
+// be asserted rather than assumed (audit H9).
+const lastVideoPlayerProps: { current: MockVideoPlayerProps | null } = {
+  current: null,
 };
 
 const mockVideoController = {
@@ -185,15 +195,18 @@ vi.mock("@/lib/toast-helpers", async () => {
 });
 
 vi.mock("@/components/playback/VideoPlayer", () => ({
-  default: (props: MockVideoPlayerProps) => (
-    <video
-      data-testid="video-player"
-      aria-label={`Video player for ${props.title}`}
-      ref={node => {
-        mockVideoController.attach(node, props);
-      }}
-    />
-  ),
+  default: (props: MockVideoPlayerProps) => {
+    lastVideoPlayerProps.current = props;
+    return (
+      <video
+        data-testid="video-player"
+        aria-label={`Video player for ${props.title}`}
+        ref={node => {
+          mockVideoController.attach(node, props);
+        }}
+      />
+    );
+  },
 }));
 
 vi.mock("@/components/playback/ProgressBar", () => ({
@@ -337,6 +350,7 @@ describe("WatchRoomPageContent", () => {
     FakeWebSocket.instances = [];
     FakeWebSocket.autoOpen = true;
     mockVideoController.reset();
+    lastVideoPlayerProps.current = null;
     navigateMock.mockReset();
     useQueryMock.mockReset();
     joinWatchRoomMock.mockReset();
@@ -1139,5 +1153,27 @@ describe("WatchRoomPageContent", () => {
     expect(FakeWebSocket.instances[0]).toBe(firstSocket);
     expect(firstSocket.readyState).toBe(FakeWebSocket.OPEN);
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  // Before this the room passed no recovery props at all, so a fragment 404 or
+  // a capacity 503 went straight to a dead "Stream error" (audit H9).
+  it("wires HLS recovery for a transcoding room", async () => {
+    renderRoomPage(buildRoom({ playback_mode: "720p_3mbps" }));
+
+    await screen.findByTestId("video-player");
+
+    const props = lastVideoPlayerProps.current;
+    expect(props?.isHlsSource).toBe(true);
+    expect(props?.src).toContain("/hls/playlist.m3u8");
+    expect(typeof props?.onSessionLost).toBe("function");
+    expect(typeof props?.onCapacityBusy).toBe("function");
+  });
+
+  it("leaves HLS recovery off for a direct room", async () => {
+    renderRoomPage(buildRoom({ playback_mode: "direct" }));
+
+    await screen.findByTestId("video-player");
+
+    expect(lastVideoPlayerProps.current?.isHlsSource).toBe(false);
   });
 });

@@ -2307,6 +2307,9 @@
           },
           {
             "$ref": "#/components/parameters/TrackIndexPath"
+          },
+          {
+            "$ref": "#/components/parameters/SubtitleStartQuery"
           }
         ],
         "responses": {
@@ -4566,6 +4569,16 @@
         "schema": {
           "type": "string"
         }
+      },
+      "SubtitleStartQuery": {
+        "name": "start",
+        "in": "query",
+        "required": false,
+        "description": "HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero.",
+        "schema": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "requestBodies": {
@@ -5397,6 +5410,19 @@
             "schema": {
               "type": "string",
               "const": "no-store"
+            }
+          },
+          "X-Igloo-Effective-Profile": {
+            "description": "Profile FFmpeg actually ran. This differs from the requested profile in the path whenever the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Igloo-Actual-Start": {
+            "description": "Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured.",
+            "schema": {
+              "type": "number",
+              "minimum": 0
             }
           }
         },

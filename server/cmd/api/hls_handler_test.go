@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -140,18 +141,85 @@ func TestSessionPlaylistDurationSec(t *testing.T) {
 
 func TestBuildHLSPlaylistBody(t *testing.T) {
 	session := &HLSSession{DurationSec: 12, CopyVideo: false}
-	generated := buildHLSPlaylistBody(session, session.DurationSec, "/api/hls/", "?audio_track=0")
+	generated, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=0")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !strings.Contains(generated, "segment_0.m4s?audio_track=0") {
 		t.Fatalf("generated playlist did not include rewritten segment URL: %s", generated)
 	}
 
 	session.FinalPlaylist = "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\nsegment_0.m4s\n"
-	finalized := buildHLSPlaylistBody(session, session.DurationSec, "/api/hls/", "?audio_track=1")
+	finalized, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !strings.Contains(finalized, "/api/hls/init.mp4?audio_track=1") {
 		t.Fatalf("final playlist did not rewrite init URL: %s", finalized)
 	}
 	if !strings.Contains(finalized, "/api/hls/segment_0.m4s?audio_track=1") {
 		t.Fatalf("final playlist did not rewrite segment URL: %s", finalized)
+	}
+}
+
+// A copy-video session's segments split on source keyframes, so the playlist
+// has to come from FFmpeg. Synthesizing one advertises durations FFmpeg never
+// produced and segments that will never exist (audit H1/H2).
+func TestBuildHLSPlaylistBody_CopyVideoServesFFmpegPlaylist(t *testing.T) {
+	tempDir := t.TempDir()
+	livePlaylist := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:10\n" +
+		"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+		"#EXTINF:8.466792,\nsegment_0.m4s\n#EXTINF:6.006000,\nsegment_1.m4s\n"
+
+	writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(livePlaylist), 0o644)
+	if writeErr != nil {
+		t.Fatalf("failed to seed playlist: %v", writeErr)
+	}
+
+	session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: tempDir}
+
+	playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(playlist, "#EXTINF:8.466792,") {
+		t.Fatalf("real segment duration was not preserved: %s", playlist)
+	}
+	if strings.Contains(playlist, "#EXTINF:4.000000,") {
+		t.Fatalf("playlist still contains synthesized 4s durations: %s", playlist)
+	}
+	if strings.Count(playlist, ".m4s?start=0") != 2 {
+		t.Fatalf("expected exactly the two real segments, got: %s", playlist)
+	}
+	if strings.Contains(playlist, "#EXT-X-ENDLIST") {
+		t.Fatalf("a still-encoding session must not be advertised as complete: %s", playlist)
+	}
+}
+
+// Without a published playlist the request must not fall back to a synthesized
+// one; it retries instead.
+func TestBuildHLSPlaylistBody_CopyVideoWithoutPlaylistIsRetryable(t *testing.T) {
+	session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := buildHLSPlaylistBody(ctx, session, session.DurationSec, "/api/hls/", "")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected the abandoned request to stop waiting, got %v", err)
+	}
+}
+
+// A copy-video session that exits cleanly without output must 404 rather than
+// hand back a playlist describing segments that do not exist.
+func TestBuildHLSPlaylistBody_CopyVideoExitedWithoutPlaylist(t *testing.T) {
+	session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
+	session.Exited = true
+
+	_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+	if !errors.Is(err, errHLSSessionEmpty) {
+		t.Fatalf("expected an empty-session error, got %v", err)
 	}
 }
 
@@ -766,5 +834,52 @@ func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T
 	_, cached := app.HLSSessionCache.Get(key)
 	if cached {
 		t.Fatal("evicted personal session was reinserted")
+	}
+}
+
+// A session that seeks past the end of a stream exits cleanly having written
+// one empty segment, which FFmpeg declares as `#EXTINF:0.000000` under an
+// invalid `#EXT-X-TARGETDURATION:0`. Serving that would be a valid-looking
+// manifest for unplayable media.
+func TestBuildHLSPlaylistBody_CopyVideoRejectsEmptyOutput(t *testing.T) {
+	tempDir := t.TempDir()
+	degenerate := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:0\n" +
+		"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+		"#EXTINF:0.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
+
+	writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(degenerate), 0o644)
+	if writeErr != nil {
+		t.Fatalf("failed to seed playlist: %v", writeErr)
+	}
+
+	session := &HLSSession{DurationSec: 30, CopyVideo: true, TempDir: tempDir}
+	session.Exited = true
+
+	_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+	if !errors.Is(err, errHLSSessionEmpty) {
+		t.Fatalf("expected an empty session to be reported as producing nothing, got %v", err)
+	}
+}
+
+func TestHasPlayableSegment(t *testing.T) {
+	cases := []struct {
+		name     string
+		playlist string
+		want     bool
+	}{
+		{"real segment", "#EXTINF:8.466792,\nsegment_0.m4s\n", true},
+		{"zero duration only", "#EXTINF:0.000000,\nsegment_0.m4s\n", false},
+		{"no segments", "#EXTM3U\n#EXT-X-TARGETDURATION:4\n", false},
+		{"zero then real", "#EXTINF:0.000000,\nseg0\n#EXTINF:4.000000,\nseg1\n", true},
+		{"malformed duration", "#EXTINF:abc,\nsegment_0.m4s\n", false},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := hasPlayableSegment(testCase.playlist)
+			if got != testCase.want {
+				t.Fatalf("hasPlayableSegment = %v, want %v", got, testCase.want)
+			}
+		})
 	}
 }

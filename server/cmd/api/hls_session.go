@@ -36,6 +36,14 @@ const (
 	// hlsMaxPersonalSessionsPerUserDefault caps concurrent personal sessions per
 	// user so abandoned clients cannot pile up ffmpeg processes and temp dirs.
 	hlsMaxPersonalSessionsPerUserDefault = 3
+	// hlsUnknownActualStart marks a session whose real media start has not been
+	// measured; callers fall back to the requested start.
+	hlsUnknownActualStart = -1.0
+	hlsStartProbeTimeout  = 15 * time.Second
+	// A session generates the whole remaining movie, so it needs real headroom.
+	// This is a floor that keeps a home server from filling its disk mid-film,
+	// not an estimate of any particular session's output size.
+	hlsMinFreeTranscodeBytes = 2 << 30
 	// hlsIdlePermitReclaimThreshold is the minimum idle time before a session may
 	// be reclaimed to free a transcode permit. Active clients refresh the TTL on
 	// every segment fetch, so a session this idle is abandoned or backgrounded.
@@ -60,6 +68,49 @@ type HLSSession struct {
 	ExitMu           sync.Mutex
 	IsRoom           bool
 	CopyVideo        bool // true when FFmpeg uses -c:v copy for the effective session profile
+	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
+	// the requested one whenever the remux safety gate forced a transcode.
+	EffectiveProfile string
+	// ActualStartSec is where the session's media really begins. Input seeking
+	// is frame-accurate when re-encoding but can only land on a source keyframe
+	// when copying video, so a copy-video session can start before StartSec.
+	// Negative means unknown; callers then fall back to StartSec. Guarded by
+	// ExitMu along with the exit fields above.
+	ActualStartSec float64
+}
+
+// setActualStartSec records where the session's media really begins.
+func (s *HLSSession) setActualStartSec(startSec float64) {
+	s.ExitMu.Lock()
+	defer s.ExitMu.Unlock()
+
+	s.ActualStartSec = startSec
+}
+
+// actualStartSec returns the measured media start, or a negative value when it
+// is unknown and the caller should fall back to the requested start.
+func (s *HLSSession) actualStartSec() float64 {
+	s.ExitMu.Lock()
+	defer s.ExitMu.Unlock()
+
+	return s.ActualStartSec
+}
+
+// currentFinalPlaylist returns the finalized VOD playlist, or "" while FFmpeg
+// is still running.
+func (s *HLSSession) currentFinalPlaylist() string {
+	s.ExitMu.Lock()
+	defer s.ExitMu.Unlock()
+
+	return s.FinalPlaylist
+}
+
+// exitStatus reports whether FFmpeg has exited and, if so, with what error.
+func (s *HLSSession) exitStatus() (bool, error) {
+	s.ExitMu.Lock()
+	defer s.ExitMu.Unlock()
+
+	return s.Exited, s.ExitErr
 }
 
 type hlsSessionStartParams struct {
@@ -547,6 +598,69 @@ func normalizedHLSStartSec(startSec int, durationSec float64) int {
 	return clampedStart
 }
 
+// checkHLSTranscodeSpace refuses a new session when the transcode filesystem is
+// too full to hold its output. A failure to measure the filesystem is not
+// treated as a refusal: an unreadable statfs should not take playback down.
+func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
+	freeBytes, err := freeDiskBytes(transcodeRoot)
+	if err != nil {
+		app.Logger.Warn("could not measure transcode directory free space",
+			"path", transcodeRoot,
+			"error", err.Error(),
+		)
+		return nil
+	}
+
+	if freeBytes >= hlsMinFreeTranscodeBytes {
+		return nil
+	}
+
+	app.Logger.Error("refusing hls session: transcode directory is nearly full",
+		"path", transcodeRoot,
+		"free_bytes", freeBytes,
+		"required_bytes", uint64(hlsMinFreeTranscodeBytes),
+	)
+
+	return &hlsStorageCapacityError{
+		FreeBytes:     freeBytes,
+		RequiredBytes: hlsMinFreeTranscodeBytes,
+	}
+}
+
+// measureHLSSessionStart records where a copy-video session's media actually
+// begins. Stream copy cannot discard frames, so FFmpeg's input seek lands on
+// the source keyframe at or before the requested offset and the session starts
+// early by up to one GOP. Without this the client maps session time to absolute
+// movie time using the requested offset, so the clock and every watch-progress
+// write run ahead of the picture.
+//
+// It runs alongside FFmpeg rather than before it so it adds no startup latency.
+// It is advisory: on failure the start stays unknown and the session reports
+// nothing, leaving the client on its previous fallback.
+func (app *Application) measureHLSSessionStart(
+	session *HLSSession,
+	filePath string,
+	streamIndex int64,
+	requestedStartSec float64,
+) {
+	defer app.Wait.Done()
+
+	ctx, cancel := context.WithTimeout(context.Background(), hlsStartProbeTimeout)
+	defer cancel()
+
+	actualStartSec, err := app.Ffprobe.KeyframeAtOrBefore(ctx, filePath, streamIndex, requestedStartSec)
+	if err != nil {
+		app.Logger.Warn("hls actual start probe failed",
+			"movie_id", session.MovieID,
+			"requested_start_sec", requestedStartSec,
+			"error", err.Error(),
+		)
+		return
+	}
+
+	session.setActualStartSec(actualStartSec)
+}
+
 func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
@@ -568,8 +682,18 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	deviceDecision := ffmpeg.ResolveHLSDevice(hwDevice, ffmpegCaps)
 
 	transcodeRoot := app.hlsTranscodeRoot()
-	if err := os.MkdirAll(transcodeRoot, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create transcode directory %s: %w", transcodeRoot, err)
+
+	mkdirErr := os.MkdirAll(transcodeRoot, 0o755)
+	if mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create transcode directory %s: %w", transcodeRoot, mkdirErr)
+	}
+
+	// A session writes the whole remaining movie ahead of the playhead, so a
+	// nearly-full disk should refuse playback up front rather than fail
+	// mid-stream with a truncated stream and a confusing player error.
+	spaceErr := app.checkHLSTranscodeSpace(transcodeRoot)
+	if spaceErr != nil {
+		return nil, spaceErr
 	}
 
 	tempDir, err := os.MkdirTemp(transcodeRoot, "igloo-hls-*")
@@ -592,17 +716,29 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
-		MovieID:         params.Movie.ID,
-		PlaybackSession: params.PlaybackSession,
-		TempDir:         tempDir,
-		Cancel:          cancel,
-		DurationSec:     params.DurationSec,
-		StartSec:        startSec,
-		IsRoom:          params.IsRoom,
-		CopyVideo:       copyVideo,
+		MovieID:          params.Movie.ID,
+		PlaybackSession:  params.PlaybackSession,
+		TempDir:          tempDir,
+		Cancel:           cancel,
+		DurationSec:      params.DurationSec,
+		StartSec:         startSec,
+		IsRoom:           params.IsRoom,
+		CopyVideo:        copyVideo,
+		EffectiveProfile: params.EffectiveProfile,
+		// Re-encoding seeks accurately, so a transcode starts exactly where it
+		// was asked to. Copy-video cannot and is measured below.
+		ActualStartSec: startSec,
 	}
 
 	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
+
+	// Measuring the real start is advisory, so it is skipped rather than
+	// allowed to fail a session when the prober is unavailable.
+	if copyVideo && startSec > 0 && app.Ffprobe != nil && app.Wait != nil {
+		session.setActualStartSec(hlsUnknownActualStart)
+		app.Wait.Add(1)
+		go app.measureHLSSessionStart(session, params.Movie.FilePath, params.PrimaryVideo.StreamIndex, startSec)
+	}
 
 	app.Logger.Info("hls session starting",
 		"movie_id", params.Movie.ID,
