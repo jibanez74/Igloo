@@ -2151,6 +2151,9 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
           }

@@ -178,7 +178,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL := "/api/movies/1/hls/720p_3mbps/"
 			querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &tt.audioTrack})
-			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix, false)
+			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix)
 
 			if !strings.HasPrefix(got, "#EXTM3U\n") {
 				t.Error("playlist must start with #EXTM3U")
@@ -217,7 +217,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 }
 
 func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
-	got := generateVODPlaylist(0, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}), false)
+	got := generateVODPlaylist(0, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}))
 
 	if !strings.Contains(got, "#EXT-X-ENDLIST") {
 		t.Error("zero-duration playlist must still be valid with ENDLIST")
@@ -228,7 +228,7 @@ func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
 }
 
 func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testing.T) {
-	got := generateVODPlaylist(100, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}), false)
+	got := generateVODPlaylist(100, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}))
 
 	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC*2)
 	if !strings.Contains(got, want) {
@@ -236,20 +236,11 @@ func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testi
 	}
 }
 
-func TestGenerateVODPlaylist_CopyVideoUsesLargerTargetDuration(t *testing.T) {
-	got := generateVODPlaylist(100, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}), true)
-
-	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", hlsCopyVideoTargetDuration)
-	if !strings.Contains(got, want) {
-		t.Errorf("expected target duration %q for copy-video mode, got:\n%s", want, got)
-	}
-}
-
 func TestGenerateVODPlaylist_LastSegmentDurationCapped(t *testing.T) {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	totalDur := segDur + 1.5
 
-	got := generateVODPlaylist(totalDur, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}), false)
+	got := generateVODPlaylist(totalDur, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}))
 
 	lines := strings.Split(got, "\n")
 	var infDurations []string

@@ -42,10 +42,13 @@ absent features as broken ones.
    variant. There is no `#EXT-X-MEDIA:TYPE=AUDIO`, no `GROUP-ID`, no `CHANNELS`
    attribute. Changing audio track creates a new session rather than switching rendition.
 
-A consequence worth stating up front: because the delivered playlist is a plain VOD media
-playlist with `#EXT-X-ENDLIST`, **clients must not reload it** (RFC 8216 §6.2.1). Anything
-wrong in the first manifest a client receives stays wrong for the whole session. This is
-load-bearing for H1 and H2.
+A consequence worth stating up front: at the time of the audit the delivered playlist was
+always a plain VOD media playlist with `#EXT-X-ENDLIST`, so **clients must not reload it**
+(RFC 8216 §6.2.1) and anything wrong in the first manifest a client received stayed wrong
+for the whole session. This was load-bearing for H1 and H2. (Pre-remediation: since the
+H1/H2 fix in §23, a copy-video session still encoding serves an `EVENT` playlist that
+clients do reload; the VOD-with-`ENDLIST` description still holds for transcode sessions
+and finalized copy-video sessions.)
 
 ### 1.3 Method and evidence quality
 
@@ -125,9 +128,11 @@ to FFmpeg as I/O errors rather than hangs.
 5. **Process start.** `startHLSSession` (`:550`) creates `igloo-hls-*` under the transcode
    dir, acquires a CPU permit for non-copy sessions, and calls `RunHLS`
    (`ffmpeg_hls.go:333`) on `context.Background()` so FFmpeg outlives the request.
-6. **Playlist body.** `buildHLSPlaylistBody` (`hls_handler.go:144`) serves
-   `rewritePlaylistURLs(FinalPlaylist)` once FFmpeg has exited cleanly, otherwise
-   `generateVODPlaylist` (`hls_playlist.go:84`).
+6. **Playlist body.** At audit time, `buildHLSPlaylistBody` (`hls_handler.go:144`) served
+   `rewritePlaylistURLs(FinalPlaylist)` once FFmpeg had exited cleanly, otherwise
+   `generateVODPlaylist` (`hls_playlist.go:84`), for every session. (Pre-remediation: the
+   §23 fix keeps this shape for transcode sessions only; copy-video sessions now serve
+   FFmpeg's own playlist — `EVENT` while encoding, finalized VOD after a clean exit.)
 7. **Segments.** `HLSSegment` (`:102`) re-derives the cache key, checks ownership
    (`canAccessPersonalHLSSession`), refreshes the TTL, and calls `serveReadyHLSSegment`
    (`:156`), which polls `segmentComplete` (`:321`) every 25 ms up to 120 s.
@@ -1324,8 +1329,9 @@ cap and eviction behave correctly.
 
 ## 21. Diagnostic changes
 
-No production code was modified. `git status` shows only this new document plus the
-`docs/ffmpeg.md` corrections listed below.
+The audit experiments themselves modified no production code — their footprint was this
+document plus the `docs/ffmpeg.md` corrections listed below. The remediation that followed
+(§23) did change production code; those changes ship in the same branch as this document.
 
 **Repository side effects:**
 
@@ -1443,7 +1449,7 @@ P0 and P1 were fixed in the same session that produced this audit. P2 and P3 rem
 | **H1, H2** | Copy-video sessions now serve **FFmpeg's own playlist** (URLs rewritten, `EVENT` while encoding, finalized `VOD` after a clean exit) instead of a playlist synthesized from the movie duration. Transcodes keep the synthesized VOD playlist, which is exact for them. A manifest request for a copy-video session that has not published a segment yet waits, then returns `503` + `Retry-After: 1` — it never falls back to synthesizing. | `hls_handler.go` (`buildHLSPlaylistBody`, `readLiveHLSPlaylist`, `hasPlayableSegment`) |
 | **H3** | Two-part. The client no longer offers `remux` for video the server will refuse to copy — `getAvailableModes` now applies `isBrowserSafeH264` to the remux branch, closing the common 10-bit case at source. For the remaining dynamic-preflight case the manifest carries `X-Igloo-Effective-Profile`, read via hls.js `MANIFEST_LOADED` and shown in the player badge through `effectiveModeLabel`. | `lib/playback.ts`, `VideoPlayer.tsx`, `play.tsx`, `hls_handler.go`, `hls_session.go` |
 | **H4** | The WebVTT endpoint accepts `start` and shifts cue timings at serve time. The cache still holds one absolute-timestamp payload per (movie, stream), so there is no extra extraction and no cache multiplication. The client appends the session start to the subtitle URL. | `helpers/subtitle_shift.go`, `subtitle_handler.go`, `lib/movie-playback.ts` |
-| **H5** | Copy-video sessions with a non-zero start measure where the media really begins, with a bounded ffprobe keyframe lookup running alongside FFmpeg, published as `X-Igloo-Actual-Start`. Advisory: on failure the header is omitted. Transcodes are unaffected — input seek is frame-accurate when re-encoding. | `ffprobe_keyframes.go`, `hls_session.go`, `hls_handler.go` |
+| **H5** | Copy-video sessions with a non-zero start measure where the media really begins, with a bounded ffprobe keyframe lookup running alongside FFmpeg, published as `X-Igloo-Actual-Start`. Advisory: on failure the header is omitted. Transcodes are unaffected — the input seek still lands on a keyframe at or before the offset, but re-encoding discards the pre-roll frames, so the output timeline starts exactly where asked. | `ffprobe_keyframes.go`, `hls_session.go`, `hls_handler.go` |
 | **H8** | A session is refused with `503` when the transcode filesystem has under 2 GB free. A filesystem that cannot be measured is not treated as full. | `disk_space.go`, `hls_session.go` |
 | **H9** | The watch-room player is wired to `useHlsSessionRecovery`, `useHlsCapacityRetry` and `useHlsSessionKeepalive`, with a reload key that rebuilds the player; WebSocket sync then restores the host position. The keepalive also closes H17. | `WatchRoomPage.tsx`, `lib/watch-room.ts` |
 | **H11** | An unsupported browser now gets an explicit error instead of a blank player. | `VideoPlayer.tsx` |
@@ -1488,8 +1494,9 @@ Copy-video sessions are now seekable only across what FFmpeg has produced, becau
 playlist no longer claims segments that do not exist. In practice the encoder runs several
 times faster than realtime and any seek more than 120 s ahead already rebases the session
 (`shouldRebaseHlsMovieSession`), so the exposure is a forward seek inside the no-rebase
-window during a session's first seconds — where the previous behaviour was a blocking wait
-followed by a `503`.
+window during a session's first seconds — where the previous behaviour was a request that
+blocked while the segment was generated, ending in a `503` only if it never arrived within
+the deadline.
 
 ### 23.4 Still open
 

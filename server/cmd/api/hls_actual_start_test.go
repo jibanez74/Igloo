@@ -59,7 +59,7 @@ func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
-	app.measureHLSSessionStart(session, "/movies/example.mp4", 0, 600)
+	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
 
 	if prober.calls != 1 {
 		t.Fatalf("keyframe probe calls = %d, want 1", prober.calls)
@@ -85,7 +85,7 @@ func TestMeasureHLSSessionStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
-	app.measureHLSSessionStart(session, "/movies/example.mp4", 0, 600)
+	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
 
 	if got := session.actualStartSec(); got >= 0 {
 		t.Fatalf("actual start = %v, want it to stay unknown", got)

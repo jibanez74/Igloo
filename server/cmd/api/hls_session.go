@@ -52,22 +52,22 @@ const (
 
 // HLSSession holds state for one HLS transcode session.
 type HLSSession struct {
-	MovieID          int64
-	OwnerUserID      int64
-	PlaybackSession  string
-	TempDir          string
-	Cmd              *exec.Cmd
-	Cancel           context.CancelFunc
-	CleanupOnce      sync.Once
-	DurationSec      float64
-	StartSec         float64
-	Exited           bool
-	ExitErr          error
-	ExpectedStop     bool
-	FinalPlaylist    string
-	ExitMu           sync.Mutex
-	IsRoom           bool
-	CopyVideo        bool // true when FFmpeg uses -c:v copy for the effective session profile
+	MovieID         int64
+	OwnerUserID     int64
+	PlaybackSession string
+	TempDir         string
+	Cmd             *exec.Cmd
+	Cancel          context.CancelFunc
+	CleanupOnce     sync.Once
+	DurationSec     float64
+	StartSec        float64
+	Exited          bool
+	ExitErr         error
+	ExpectedStop    bool
+	FinalPlaylist   string
+	ExitMu          sync.Mutex
+	IsRoom          bool
+	CopyVideo       bool // true when FFmpeg uses -c:v copy for the effective session profile
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
 	EffectiveProfile string
@@ -638,6 +638,7 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 // It is advisory: on failure the start stays unknown and the session reports
 // nothing, leaving the client on its previous fallback.
 func (app *Application) measureHLSSessionStart(
+	parentCtx context.Context,
 	session *HLSSession,
 	filePath string,
 	streamIndex int64,
@@ -645,7 +646,7 @@ func (app *Application) measureHLSSessionStart(
 ) {
 	defer app.Wait.Done()
 
-	ctx, cancel := context.WithTimeout(context.Background(), hlsStartProbeTimeout)
+	ctx, cancel := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
 	defer cancel()
 
 	actualStartSec, err := app.Ffprobe.KeyframeAtOrBefore(ctx, filePath, streamIndex, requestedStartSec)
@@ -737,7 +738,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	if copyVideo && startSec > 0 && app.Ffprobe != nil && app.Wait != nil {
 		session.setActualStartSec(hlsUnknownActualStart)
 		app.Wait.Add(1)
-		go app.measureHLSSessionStart(session, params.Movie.FilePath, params.PrimaryVideo.StreamIndex, startSec)
+		go app.measureHLSSessionStart(runCtx, session, params.Movie.FilePath, params.PrimaryVideo.StreamIndex, startSec)
 	}
 
 	app.Logger.Info("hls session starting",

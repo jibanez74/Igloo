@@ -55,6 +55,10 @@ var errHLSPlaylistNotReady = errors.New("playlist not ready")
 // same offset cannot help, so it is reported as not found rather than busy.
 var errHLSSessionEmpty = errors.New("no playable media at this position")
 
+// errHLSSessionFailed means FFmpeg exited with an error before publishing a
+// playlist — a server-side failure, not a client error.
+var errHLSSessionFailed = errors.New("transcoding stopped before publishing a playlist")
+
 type hlsRequestParams struct {
 	MovieID         int64
 	Profile         string
@@ -258,7 +262,7 @@ func buildHLSPlaylistBody(
 		if finalPlaylist != "" {
 			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
 		}
-		return generateVODPlaylist(durationSec, baseURL, querySuffix, false), nil
+		return generateVODPlaylist(durationSec, baseURL, querySuffix), nil
 	}
 
 	ticker := time.NewTicker(hlsRemuxPreflightPoll)
@@ -284,7 +288,7 @@ func buildHLSPlaylistBody(
 		exited, exitErr := session.exitStatus()
 		if exited {
 			if exitErr != nil {
-				return "", fmt.Errorf("transcoding stopped before publishing a playlist: %w", exitErr)
+				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
 			}
 			return "", errHLSSessionEmpty
 		}
@@ -359,6 +363,11 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 func writeHLSSessionError(w http.ResponseWriter, err error) {
 	if errors.Is(err, errHLSSessionNotFound) || errors.Is(err, errHLSSessionEmpty) {
 		helpers.ErrorJSON(w, err, http.StatusNotFound)
+		return
+	}
+
+	if errors.Is(err, errHLSSessionFailed) {
+		helpers.ErrorJSON(w, err, http.StatusInternalServerError)
 		return
 	}
 

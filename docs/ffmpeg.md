@@ -110,7 +110,7 @@ The generated files match the HTTP handlers:
 
 fMP4 HLS is used because modern browser players handle it well and it works naturally with copied H.264 video, transcoded H.264 video, and AAC audio. A short 4-second target segment gives acceptable startup and seek behavior while keeping the number of segment files manageable. FFmpeg also receives `movflags=+frag_discont` for fMP4 segment output so independent fragments tolerate discontinuities across rebased sessions and copy-video boundaries.
 
-FFmpeg writes an event playlist while encoding. Igloo exposes a VOD-style playlist to clients. During encoding, Igloo generates a complete VOD playlist from the known movie duration so hls.js sees a seekable on-demand asset instead of a live/event stream. Generated VOD playlists use a target duration of 8 seconds for transcodes and 30 seconds for copy-video sessions, because copied video can only split on source keyframe boundaries. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
+FFmpeg writes an event playlist while encoding. For transcode sessions, Igloo generates a complete VOD playlist from the known movie duration during encoding so hls.js sees a seekable on-demand asset instead of a live/event stream; generated playlists use a target duration of 8 seconds. Copy-video sessions are served FFmpeg's own playlist instead, as described below. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
 
 Which playlist a client receives depends on whether the session copies video, because only one of the two can be described arithmetically:
 

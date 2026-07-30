@@ -17,7 +17,10 @@ type hlsStorageCapacityError struct {
 }
 
 func (e *hlsStorageCapacityError) Error() string {
-	return "not enough free space in the transcode directory to start playback"
+	return fmt.Sprintf(
+		"not enough free space in the transcode directory to start playback (free: %d bytes, required: %d bytes)",
+		e.FreeBytes, e.RequiredBytes,
+	)
 }
 
 const (

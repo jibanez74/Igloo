@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -156,6 +157,12 @@ func parseSubtitleStartSec(r *http.Request) (float64, error) {
 
 	startSec, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
+		return 0, errors.New("invalid start")
+	}
+
+	// ParseFloat accepts "NaN" and "Inf", which would corrupt the cue shifting
+	// math downstream.
+	if math.IsNaN(startSec) || math.IsInf(startSec, 0) {
 		return 0, errors.New("invalid start")
 	}
 
