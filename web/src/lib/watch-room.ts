@@ -1,12 +1,24 @@
 import type { WatchRoomServerEventType } from "@/types";
 import { WATCH_ROOM_EVENT_TYPES } from "@/lib/constants";
 
-export function watchRoomStreamUrl(roomId: number, playbackMode: string) {
+/**
+ * `reloadKey` is a client-side remount trigger, not a server parameter: the
+ * room manifest handler ignores unknown query values. Bumping it changes the
+ * `src` identity so the player rebuilds its hls.js instance after a lost
+ * session, mirroring the `reload` parameter personal playback uses.
+ */
+export function watchRoomStreamUrl(
+  roomId: number,
+  playbackMode: string,
+  reloadKey = 0,
+) {
   if (playbackMode === "direct") {
     return `/api/watch-rooms/${roomId}/stream`;
   }
 
-  return `/api/watch-rooms/${roomId}/hls/playlist.m3u8`;
+  const query = reloadKey > 0 ? `?reload=${reloadKey}` : "";
+
+  return `/api/watch-rooms/${roomId}/hls/playlist.m3u8${query}`;
 }
 
 export function watchRoomWebSocketUrl(roomId: number) {

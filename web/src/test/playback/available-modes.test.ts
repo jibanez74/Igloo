@@ -159,16 +159,39 @@ describe("browser-safe H.264 gate", () => {
       "4:4:4 pixel format alone",
       { pixel_format: { String: "yuv444p", Valid: true } },
     ],
-  ])("refuses direct play for %s while keeping remux", (_name, overrides) => {
+  ])(
+    "refuses both direct play and remux for %s",
+    (_name, overrides) => {
+      const ids = modeIds(
+        getAvailableModes({
+          videoStreamsLoaded: true,
+          video: h264Video(overrides),
+          audioStreams: [aacAudio()],
+          mimeType: "video/mp4",
+        }),
+      );
+      expect(ids).not.toContain("direct");
+      // Remux copies the stream untouched, so the server refuses these for the
+      // same reason and falls back to a transcode. Offering remux here
+      // advertised a mode that never ran and left the badge reporting a stream
+      // copy while a full transcode was running (audit H3).
+      expect(ids).not.toContain("remux");
+      // A transcode path must still be offered, or the file becomes unplayable.
+      expect(ids.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("keeps remux for browser-safe H.264 that direct play also accepts", () => {
     const ids = modeIds(
       getAvailableModes({
         videoStreamsLoaded: true,
-        video: h264Video(overrides),
+        video: h264Video(),
         audioStreams: [aacAudio()],
         mimeType: "video/mp4",
       }),
     );
-    expect(ids).not.toContain("direct");
+    // The direct ⊂ remux invariant that resolveModeForAudioTrack relies on.
+    expect(ids).toContain("direct");
     expect(ids).toContain("remux");
   });
 
@@ -201,6 +224,63 @@ describe("browser-safe H.264 gate", () => {
       canPlay,
     });
     expect(canPlay).not.toHaveBeenCalled();
+  });
+});
+
+describe("low-resolution transcode fallback", () => {
+  it.each([
+    [
+      "unsafe H.264",
+      h264Video({
+        height: 480,
+        bit_depth: { Int64: 10, Valid: true },
+      }),
+    ],
+    ["non-H.264 below 720p", h264Video({ codec: "hevc", height: 480 })],
+    ["unknown-height video", h264Video({ codec: "hevc", height: 0 })],
+  ])("offers only 720p when %s otherwise has no mode", (_case, video) => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        video,
+        audioStreams: [aacAudio()],
+        mimeType: "video/x-matroska",
+      }),
+    );
+
+    expect(ids).toEqual(["720p_3mbps"]);
+  });
+
+  it("keeps a confirmed video-less movie unavailable", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+
+    expect(ids).toEqual([]);
+  });
+
+  it("does not add or reorder modes when normal filtering found valid options", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+
+    expect(ids).toEqual([
+      "direct",
+      "remux",
+      "1080p_8mbps",
+      "1080p_6mbps",
+      "1080p_4mbps",
+      "720p_3mbps",
+    ]);
   });
 });
 

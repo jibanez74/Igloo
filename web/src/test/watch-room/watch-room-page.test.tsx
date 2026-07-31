@@ -5,6 +5,9 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { WatchRoomPage as WatchRoomPageContent } from "@/components/watch-room/WatchRoomPage";
 import { Route as WatchRoomRoute } from "@/routes/_auth/watch-rooms/$id";
 import {
+  HLS_CAPACITY_RETRY_MAX_ATTEMPTS,
+  HLS_SESSION_LOST_MAX_ATTEMPTS,
+  HLS_SESSION_LOST_MIN_INTERVAL_MS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   WATCH_ROOM_SEEK_STEP_SEC,
 } from "@/lib/constants";
@@ -23,11 +26,21 @@ const showSuccessMock = vi.fn();
 type MockVideoPlayerProps = {
   videoRef: { current: HTMLVideoElement | null };
   title: string;
+  src?: string;
+  isHlsSource?: boolean;
   onPlay?: () => void;
   onPause?: () => void;
   onEnded?: () => void;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
+  onSessionLost?: (currentTime: number) => void;
+  onCapacityBusy?: (retryAfterSec: number) => void;
+};
+
+// Records what the room actually hands the player, so the recovery wiring can
+// be asserted rather than assumed (audit H9).
+const lastVideoPlayerProps: { current: MockVideoPlayerProps | null } = {
+  current: null,
 };
 
 const mockVideoController = {
@@ -185,15 +198,18 @@ vi.mock("@/lib/toast-helpers", async () => {
 });
 
 vi.mock("@/components/playback/VideoPlayer", () => ({
-  default: (props: MockVideoPlayerProps) => (
-    <video
-      data-testid="video-player"
-      aria-label={`Video player for ${props.title}`}
-      ref={node => {
-        mockVideoController.attach(node, props);
-      }}
-    />
-  ),
+  default: (props: MockVideoPlayerProps) => {
+    lastVideoPlayerProps.current = props;
+    return (
+      <video
+        data-testid="video-player"
+        aria-label={`Video player for ${props.title}`}
+        ref={node => {
+          mockVideoController.attach(node, props);
+        }}
+      />
+    );
+  },
 }));
 
 vi.mock("@/components/playback/ProgressBar", () => ({
@@ -337,6 +353,7 @@ describe("WatchRoomPageContent", () => {
     FakeWebSocket.instances = [];
     FakeWebSocket.autoOpen = true;
     mockVideoController.reset();
+    lastVideoPlayerProps.current = null;
     navigateMock.mockReset();
     useQueryMock.mockReset();
     joinWatchRoomMock.mockReset();
@@ -351,6 +368,7 @@ describe("WatchRoomPageContent", () => {
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("does not send a redundant join message when the websocket opens", async () => {
@@ -1139,5 +1157,108 @@ describe("WatchRoomPageContent", () => {
     expect(FakeWebSocket.instances[0]).toBe(firstSocket);
     expect(firstSocket.readyState).toBe(FakeWebSocket.OPEN);
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  // Before this the room passed no recovery props at all, so a fragment 404 or
+  // a capacity 503 went straight to a dead "Stream error" (audit H9).
+  it("wires HLS recovery for a transcoding room", async () => {
+    renderRoomPage(buildRoom({ playback_mode: "720p_3mbps" }));
+
+    await screen.findByTestId("video-player");
+
+    const props = lastVideoPlayerProps.current;
+    expect(props?.isHlsSource).toBe(true);
+    expect(props?.src).toContain("/hls/playlist.m3u8");
+    expect(typeof props?.onSessionLost).toBe("function");
+    expect(typeof props?.onCapacityBusy).toBe("function");
+  });
+
+  it("exhausts the capacity budget across successive reload URLs", async () => {
+    renderRoomPage(buildRoom({ playback_mode: "720p_3mbps" }));
+
+    await screen.findByTestId("video-player");
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+    const socket = FakeWebSocket.instances[0];
+
+    for (let attempt = 1; attempt <= HLS_CAPACITY_RETRY_MAX_ATTEMPTS; attempt++) {
+      act(() => {
+        lastVideoPlayerProps.current?.onCapacityBusy?.(0);
+      });
+      await waitFor(() => {
+        expect(lastVideoPlayerProps.current?.src).toContain(
+          `reload=${attempt}`,
+        );
+      });
+    }
+
+    const exhaustedSrc = lastVideoPlayerProps.current?.src;
+    act(() => {
+      lastVideoPlayerProps.current?.onCapacityBusy?.(0);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "The server is running at its transcoding limit. Try again shortly.",
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(lastVideoPlayerProps.current?.src).toBe(exhaustedSrc);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0]).toBe(socket);
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+  });
+
+  it("exhausts fragment-loss recovery across successive reload URLs", async () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    let now = 10_000;
+    nowSpy.mockImplementation(() => now);
+    renderRoomPage(buildRoom({ playback_mode: "720p_3mbps" }));
+
+    await screen.findByTestId("video-player");
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+    const socket = FakeWebSocket.instances[0];
+
+    for (let attempt = 1; attempt <= HLS_SESSION_LOST_MAX_ATTEMPTS; attempt++) {
+      act(() => {
+        lastVideoPlayerProps.current?.onSessionLost?.(30);
+      });
+      await waitFor(() => {
+        expect(lastVideoPlayerProps.current?.src).toContain(
+          `reload=${attempt}`,
+        );
+      });
+      now += HLS_SESSION_LOST_MIN_INTERVAL_MS;
+    }
+
+    const exhaustedSrc = lastVideoPlayerProps.current?.src;
+    act(() => {
+      lastVideoPlayerProps.current?.onSessionLost?.(30);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "The playback session expired. Reload to keep watching.",
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(lastVideoPlayerProps.current?.src).toBe(exhaustedSrc);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0]).toBe(socket);
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    nowSpy.mockRestore();
+  });
+
+  it("leaves HLS recovery off for a direct room", async () => {
+    renderRoomPage(buildRoom({ playback_mode: "direct" }));
+
+    await screen.findByTestId("video-player");
+
+    expect(lastVideoPlayerProps.current?.isHlsSource).toBe(false);
   });
 });

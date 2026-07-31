@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,6 +43,16 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	trackIndex, err := strconv.Atoi(chi.URLParam(r, "trackIndex"))
 	if err != nil || trackIndex < 0 {
 		helpers.ErrorJSON(w, errors.New("invalid subtitle track index"), http.StatusBadRequest)
+		return
+	}
+
+	// An HLS session started with -ss has a media timeline that begins at zero,
+	// while these cues carry absolute source timestamps. `start` is that
+	// session's offset, so the cues can be rebased onto the timeline they will
+	// actually be played against.
+	startSec, err := parseSubtitleStartSec(r)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -86,10 +97,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 			)
 			app.SubtitleVTTCache.Delete(cacheKey)
 		} else {
-			w.Header().Set("Content-Type", subtitleWebVTTContentType)
-			w.Header().Set("Cache-Control", "no-cache")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(vtt)
+			writeSubtitleWebVTT(w, vtt, startSec)
 			return
 		}
 	}
@@ -136,8 +144,41 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeSubtitleWebVTT(w, out, startSec)
+}
+
+// parseSubtitleStartSec reads the optional `start` query parameter naming the
+// HLS session offset these cues will be played against.
+func parseSubtitleStartSec(r *http.Request) (float64, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get("start"))
+	if raw == "" {
+		return 0, nil
+	}
+
+	startSec, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, errors.New("invalid start")
+	}
+
+	// ParseFloat accepts "NaN" and "Inf", which would corrupt the cue shifting
+	// math downstream.
+	if math.IsNaN(startSec) || math.IsInf(startSec, 0) {
+		return 0, errors.New("invalid start")
+	}
+
+	if startSec < 0 {
+		return 0, errors.New("start must not be negative")
+	}
+
+	return startSec, nil
+}
+
+// writeSubtitleWebVTT serves the cached absolute-timestamp WebVTT, rebased onto
+// the requesting session's timeline. The cache stays keyed on movie and stream
+// alone, so shifting here costs no extra extraction and no extra cache entries.
+func writeSubtitleWebVTT(w http.ResponseWriter, vtt []byte, startSec float64) {
 	w.Header().Set("Content-Type", subtitleWebVTTContentType)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(out)
+	_, _ = w.Write(helpers.ShiftWebVTT(vtt, startSec))
 }

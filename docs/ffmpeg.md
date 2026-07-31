@@ -110,7 +110,16 @@ The generated files match the HTTP handlers:
 
 fMP4 HLS is used because modern browser players handle it well and it works naturally with copied H.264 video, transcoded H.264 video, and AAC audio. A short 4-second target segment gives acceptable startup and seek behavior while keeping the number of segment files manageable. FFmpeg also receives `movflags=+frag_discont` for fMP4 segment output so independent fragments tolerate discontinuities across rebased sessions and copy-video boundaries.
 
-FFmpeg writes an event playlist while encoding. Igloo exposes a VOD-style playlist to clients. During encoding, Igloo generates a complete VOD playlist from the known movie duration so hls.js sees a seekable on-demand asset instead of a live/event stream. Generated VOD playlists use a target duration of 8 seconds for transcodes and 30 seconds for copy-video sessions, because copied video can only split on source keyframe boundaries. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
+FFmpeg writes an event playlist while encoding. For transcode sessions, Igloo generates a complete VOD playlist from the known movie duration during encoding so hls.js sees a seekable on-demand asset instead of a live/event stream; generated playlists use a target duration of 8 seconds. Copy-video sessions are served FFmpeg's own playlist instead, as described below. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
+
+Which playlist a client receives depends on whether the session copies video, because only one of the two can be described arithmetically:
+
+- **Transcode sessions** get the synthesized playlist described above: `ceil(duration / 4)` entries each declared as 4 seconds. This is exact, because `-force_key_frames` pins every segment boundary to a 4-second mark (measured drift over 300 seconds of output: 8 ms). The whole movie is listed from the first request, so the asset is seekable end to end immediately.
+- **Copy-video (`remux`) sessions** are served FFmpeg's own playlist instead, with only the asset URLs rewritten. Copied segments can split only at source keyframes, so their durations are whatever the source encode dictates — 5.40 s mean (range 1.0–10.0) on one 1080p H.264 source, 9.24 s mean (range 1.2–12.4) on another. Synthesizing a playlist for these advertised durations FFmpeg never produced and segments that would never exist, and the surplus entries returned `404 segment does not exist` once the session finished, breaking playback near the end of the film (audit findings H1 and H2).
+
+While a copy-video session is still encoding, its playlist is served as `#EXT-X-PLAYLIST-TYPE:EVENT` with no `#EXT-X-ENDLIST`, so players may reload it and pick up new segments as FFmpeg publishes them. Once FFmpeg exits cleanly the finalized VOD playlist is served as before. A manifest request for a copy-video session that has not published its first segment yet waits briefly and then returns `503` with a short `Retry-After` rather than falling back to a synthesized playlist.
+
+The practical cost is that a copy-video session is seekable only across what FFmpeg has produced. During steady playback the encoder runs several times faster than realtime, and the web client rebases the session for any seek more than 120 seconds ahead, so this is narrower than it sounds.
 
 The manifest handler rewrites playlist asset URLs so each `init.mp4` and `segment_N.m4s` URL includes the selected audio track and session query parameters. The rewritten `start` is the effective normalized start used by the cache key and FFmpeg, not an out-of-range value from the original request. This keeps HLS asset requests tied to the same session configuration that created the manifest.
 
@@ -362,11 +371,19 @@ The poll interval is deliberately short. A segment that lands just after a check
 
 Segments and whole media files are served through the kernel's `sendfile(2)` path. The session middleware wraps the response writer in a type that does not implement `io.ReaderFrom`, which would silently force every byte through a userspace copy, so `restoreSendfile` re-exposes the capability for the whole router. See §4.4 of `docs/web-direct-playback-audit.md`.
 
+Initialization files and media segments for both personal and watch-room HLS sessions support HTTP byte ranges. A complete asset response uses `200 OK`; a satisfiable `Range` request uses `206 Partial Content` with `Accept-Ranges: bytes` and `Content-Range`; and an unsatisfiable range returns `416 Requested Range Not Satisfiable`.
+
 FFmpeg stderr is not streamed to clients. The HLS runner keeps the last 20 stderr lines and passes them to the session exit handler for logging. That gives enough context for server-side troubleshooting without storing unbounded FFmpeg output.
 
 ## Seeking and Resume Behavior
 
-The HLS manifest accepts a `start` query parameter. When `start` is greater than zero, FFmpeg starts from that source offset with `-ss`. A raw API start offset at or past the movie's duration — stale saved progress after a re-scan, or rounding at the very end — is clamped to five seconds before the end instead of failing (or to zero when the movie is shorter than five seconds). That effective start drives the singleflight/cache key, FFmpeg parameters, generated asset URLs, and subsequent segment lookup.
+The HLS manifest accepts a `start` query parameter. When `start` is greater than zero, FFmpeg starts from that source offset with `-ss`, placed before `-i`. Input seeking lands on the source keyframe at or before the requested time. When re-encoding, FFmpeg then discards frames up to the requested offset, so a transcode starts exactly where it was asked to; stream copy cannot discard frames, so a copy-video session really begins at that earlier keyframe — measured at 8.83 s early for a request at 600 s on one source. The output is rebased to start at zero either way by `-avoid_negative_ts make_zero`.
+
+For copy-video sessions Igloo measures where the media actually begins, with a bounded ffprobe keyframe lookup that runs alongside FFmpeg so it adds no startup latency, and publishes it as the `X-Igloo-Actual-Start` response header on the manifest. The client maps session time back to absolute movie time from that value, so the displayed clock and saved watch progress follow the picture rather than the request. The measurement is advisory: if it fails the header is omitted and the client falls back to the requested start.
+
+The manifest also carries `X-Igloo-Effective-Profile`, naming the profile FFmpeg actually ran. A `remux` request that fails the safety gate is still served from the `/hls/remux/` path, so without this the client cannot tell a stream copy from the full transcode it was silently given.
+
+Subtitles are rebased to match. The WebVTT endpoint stores cues with absolute source timestamps, and its `start` query parameter shifts them onto the requesting session's timeline when it is served. The cache stays keyed on movie and stream index alone, so shifting costs no extra extraction and no extra cache entries. A raw API start offset at or past the movie's duration — stale saved progress after a re-scan, or rounding at the very end — is clamped to five seconds before the end instead of failing (or to zero when the movie is shorter than five seconds). That effective start drives the singleflight/cache key, FFmpeg parameters, generated asset URLs, and subsequent segment lookup.
 
 When the web client knows the movie duration, it first clamps the requested absolute playback target to that duration. For HLS it then applies the 10-second resume rewind to the clamped target and uses the result consistently for the manifest URL, session-window key, local playback offset, and absolute-time mapping. Direct playback initialization uses the same clamped absolute target.
 
@@ -406,6 +423,8 @@ ffmpeg -v error -i <source> -map 0:<stream_index> -c:s webvtt -f webvtt pipe:1
 
 The output is returned directly from stdout and cached for one hour by movie ID and stream index. The request has a 60-second timeout so a difficult subtitle track cannot tie up a request indefinitely.
 
+The endpoint accepts an optional `start` query parameter giving the HLS session offset the cues will be played against. Cues are extracted and cached with absolute source timestamps; `start` shifts them at serve time so they line up with a rebased session's media timeline. Cues ending before the session start are dropped and a cue straddling it is clamped to zero. Direct play and sessions starting at zero omit the parameter and get the absolute cues unchanged.
+
 Bitmap subtitle codecs are rejected before FFmpeg runs:
 
 - `hdmv_pgs_subtitle`
@@ -421,7 +440,7 @@ After conversion, Igloo replaces escaped `\h` sequences with spaces. This handle
 For binary deployments:
 
 - `TRANSCODE_DIR` seeds the Settings transcode directory on first launch; after that, edit it from Settings.
-- HLS temp output is written below the Settings transcode directory.
+- HLS temp output is written below the Settings transcode directory. A session generates the whole remaining movie ahead of the playhead, so Igloo refuses to start one when that filesystem has less than 2 GB free, returning `503` rather than failing mid-stream. A filesystem it cannot measure is not treated as full.
 - `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS transcode sessions; copy-video (remux) sessions are not counted. It is not stored in Settings.
 - `HLS_MAX_SESSIONS_PER_USER` is read at startup and limits cached plus in-flight personal HLS sessions per user; remux and transcode sessions are both counted. The default is 3. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.

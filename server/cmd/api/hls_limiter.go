@@ -9,6 +9,20 @@ import (
 	"sync"
 )
 
+// hlsStorageCapacityError reports that the transcode directory is too full to
+// start another session.
+type hlsStorageCapacityError struct {
+	FreeBytes     uint64
+	RequiredBytes uint64
+}
+
+func (e *hlsStorageCapacityError) Error() string {
+	return fmt.Sprintf(
+		"not enough free space in the transcode directory to start playback (free: %d bytes, required: %d bytes)",
+		e.FreeBytes, e.RequiredBytes,
+	)
+}
+
 const (
 	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
 	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"

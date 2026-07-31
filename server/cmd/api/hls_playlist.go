@@ -10,10 +10,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-// Copy mode splits only at keyframes, so its target-duration ceiling is
-// intentionally larger than the regular HLS segment duration.
-const hlsCopyVideoTargetDuration = 30
-
 type hlsAssetQueryParams struct {
 	AudioTrack      *int
 	StartSec        *int
@@ -78,10 +74,12 @@ func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {
 // generateVODPlaylist builds a complete HLS VOD M3U8 playlist from the known
 // total duration. All segments are listed upfront with #EXT-X-ENDLIST so
 // hls.js treats it as on-demand (starts from 0, shows full duration, allows seeking).
+// Only transcode sessions use it: their -force_key_frames boundaries make the
+// arithmetic exact, while copy-video sessions serve FFmpeg's own playlist.
 //
 // FFmpeg produces the actual segment files in the background; the segment
 // handler waits for each file to appear on disk before serving.
-func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, copyVideo bool) string {
+func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string) string {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	segCount := int(math.Ceil(totalDurationSec / segDur))
 	if segCount < 1 {
@@ -91,12 +89,7 @@ func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, 
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
 	b.WriteString("#EXT-X-VERSION:7\n")
-	// Copy-video segments follow source keyframes, so they need a larger target duration.
-	targetDuration := helpers.HLS_SEGMENT_TIME_SEC * 2
-	if copyVideo {
-		targetDuration = hlsCopyVideoTargetDuration
-	}
-	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", targetDuration))
+	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", helpers.HLS_SEGMENT_TIME_SEC*2))
 	b.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")
 	b.WriteString(fmt.Sprintf("#EXT-X-MAP:URI=\"%s%s%s\"\n", baseURL, helpers.HLS_INIT_FILENAME, querySuffix))

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useMoviePlaybackData } from "@/hooks/useMoviePlaybackData";
@@ -12,7 +12,10 @@ import {
 } from "@/lib/constants";
 import {
   deriveMoviePlaybackStatus,
+  shouldRebaseHlsMovieSession,
+  toAbsoluteDuration,
   toAbsolutePlaybackTime,
+  toMediaPlaybackTime,
 } from "@/lib/movie-playback";
 import type {
   AuthUser,
@@ -260,7 +263,8 @@ describe("useMoviePlaybackData", () => {
     );
 
     expect(result.current.playbackStartSec).toBe(120);
-    expect(result.current.hlsStartSec).toBe(110);
+    expect(result.current.requestedHlsStartSec).toBe(110);
+    expect(result.current.actualHlsStartSec).toBe(110);
     expect(result.current.hlsPlaybackOffset).toBe(10);
     expect(result.current.streamUrl).toBe(
       `/api/movies/7/hls/720p_3mbps/playlist.m3u8?playback_session=${playbackSessionId}&start=110&audio_track=0&reload=3`,
@@ -271,6 +275,93 @@ describe("useMoviePlaybackData", () => {
     expect(result.current.sessionWindowKey).toBe(
       `7:720p_3mbps:0:${playbackSessionId}:110`,
     );
+  });
+
+  it("keeps requested session identity while mapping playback through the measured start", () => {
+    const movieId = 74;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedSettledPlaybackPreferences(queryClient);
+    const search = {
+      mode: "remux" as const,
+      audio_track: 0,
+      subtitle_track: 0,
+      start: 600,
+    };
+
+    const { result, rerender } = renderHook(
+      (props: { search: typeof search }) =>
+        useMoviePlaybackData({
+          movieId,
+          search: props.search,
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      {
+        initialProps: { search },
+        wrapper: wrapperFor(queryClient),
+      },
+    );
+
+    expect(result.current.requestedHlsStartSec).toBe(590);
+    expect(result.current.actualHlsStartSec).toBe(590);
+    expect(result.current.hlsPlaybackOffset).toBe(10);
+    expect(result.current.subtitleInfo?.url).toContain("start=590");
+
+    act(() => {
+      result.current.handleActualHlsStart(581);
+    });
+
+    expect(result.current.requestedHlsStartSec).toBe(590);
+    expect(result.current.actualHlsStartSec).toBe(581);
+    expect(result.current.hlsPlaybackOffset).toBe(19);
+    expect(result.current.streamUrl).toContain("start=590");
+    expect(result.current.streamUrl).not.toContain("start=581");
+    expect(result.current.sessionWindowKey).toBe(
+      `74:remux:0:${playbackSessionId}:590`,
+    );
+    expect(result.current.subtitleInfo?.url).toContain("start=581");
+    expect(
+      toAbsolutePlaybackTime(19, result.current.playbackTiming),
+    ).toBe(600);
+    expect(toMediaPlaybackTime(600, result.current.playbackTiming)).toBe(19);
+    expect(toAbsoluteDuration(19, result.current.playbackTiming)).toBe(600);
+    expect(
+      shouldRebaseHlsMovieSession({
+        isHlsPlayback: true,
+        targetTimeSec: 580,
+        actualHlsStartSec: result.current.actualHlsStartSec,
+        currentVideoTimeSec: 600,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRebaseHlsMovieSession({
+        isHlsPlayback: true,
+        targetTimeSec: 581,
+        actualHlsStartSec: result.current.actualHlsStartSec,
+        currentVideoTimeSec: 600,
+      }),
+    ).toBe(false);
+
+    const timingAfterMeasurement = result.current.playbackTiming;
+    act(() => {
+      result.current.handleActualHlsStart(581);
+    });
+    expect(result.current.playbackTiming).toBe(timingAfterMeasurement);
+
+    rerender({
+      search: {
+        ...search,
+        start: 500,
+      },
+    });
+    expect(result.current.requestedHlsStartSec).toBe(490);
+    expect(result.current.actualHlsStartSec).toBe(490);
+    expect(result.current.hlsPlaybackOffset).toBe(10);
+    expect(result.current.subtitleInfo?.url).toContain("start=490");
   });
 
   // Audit D9: while direct play is active the audible stream is always

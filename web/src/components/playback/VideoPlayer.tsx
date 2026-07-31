@@ -5,7 +5,9 @@ import type { ErrorData } from "hls.js";
 import type { Events } from "hls.js";
 import { Spinner } from "@/components/ui/spinner";
 import {
+  HLS_ACTUAL_START_HEADER,
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
+  HLS_EFFECTIVE_PROFILE_HEADER,
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
@@ -36,9 +38,18 @@ type VideoPlayerProps = {
   onNativeError?: (code: number | null | undefined) => void;
   subtitleTrack?: SubtitleTrackInfo | null;
   startSec?: number;
+  /** Requested absolute start that identifies the current HLS session. */
+  requestedStartSec?: number;
   onStartApplied?: (time: number) => void;
   onSessionLost?: (currentTime: number) => void;
   onCapacityBusy?: (retryAfterSec: number) => void;
+  /**
+   * Reports the profile the server actually ran, which differs from the
+   * requested one whenever the remux safety gate forced a transcode.
+   */
+  onEffectiveProfile?: (profileId: string) => void;
+  /** Reports the validated absolute start measured for the HLS media. */
+  onActualStart?: (startSec: number) => void;
 };
 
 function loadHlsLight() {
@@ -47,6 +58,92 @@ function loadHlsLight() {
 
 const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
 const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
+
+type ManifestHeaders = {
+  get: (name: string) => string | null;
+};
+
+type ManifestMetadata = {
+  effectiveProfile: string | null;
+  actualStartSec: number | null;
+};
+
+function readManifestHeader(
+  headers: ManifestHeaders | null,
+  name: string,
+): string | null {
+  if (!headers) return null;
+
+  try {
+    return headers.get(name);
+  } catch {
+    return null;
+  }
+}
+
+function manifestHeadersFromNetworkDetails(
+  networkDetails: unknown,
+): ManifestHeaders | null {
+  try {
+    const xhr = networkDetails as XMLHttpRequest | null | undefined;
+    if (typeof xhr?.getResponseHeader !== "function") return null;
+
+    return {
+      get: (name) => xhr.getResponseHeader(name),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseManifestMetadata(
+  headers: ManifestHeaders | null,
+  requestedStartSec: number | undefined,
+): ManifestMetadata {
+  const effectiveProfile =
+    readManifestHeader(headers, HLS_EFFECTIVE_PROFILE_HEADER)?.trim() || null;
+  const rawActualStart = readManifestHeader(
+    headers,
+    HLS_ACTUAL_START_HEADER,
+  )?.trim();
+
+  if (
+    !rawActualStart ||
+    requestedStartSec === undefined ||
+    !Number.isFinite(requestedStartSec) ||
+    requestedStartSec < 0
+  ) {
+    return { effectiveProfile, actualStartSec: null };
+  }
+
+  const parsedActualStart = Number(rawActualStart);
+  const validActualStart =
+    Number.isFinite(parsedActualStart) &&
+    parsedActualStart >= 0 &&
+    parsedActualStart <= requestedStartSec;
+
+  return {
+    effectiveProfile,
+    actualStartSec: validActualStart ? Math.max(0, parsedActualStart) : null,
+  };
+}
+
+function retryAfterSecFromHeaders(headers: ManifestHeaders | null): number {
+  const header = readManifestHeader(headers, "Retry-After");
+  const parsed = header ? Number.parseInt(header, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return HLS_CAPACITY_RETRY_FALLBACK_SEC;
+}
+
+async function releaseResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // The headers are still usable; body release is best-effort.
+  }
+}
 
 export default function VideoPlayer({
   videoRef,
@@ -63,9 +160,12 @@ export default function VideoPlayer({
   onNativeError,
   subtitleTrack = null,
   startSec = 0,
+  requestedStartSec,
   onStartApplied,
   onSessionLost,
   onCapacityBusy,
+  onEffectiveProfile,
+  onActualStart,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
 
@@ -115,24 +215,32 @@ export default function VideoPlayer({
 
   // Returns false when no onCapacityBusy consumer exists so the caller can
   // fall through to the regular fatal-error handling.
-  const handleCapacityBusy = useEffectEvent((data: ErrorData): boolean => {
-    if (!onCapacityBusy) return false;
+  const handleCapacityBusy = useEffectEvent(
+    (headers: ManifestHeaders | null): boolean => {
+      if (!onCapacityBusy) return false;
 
-    let retryAfterSec = HLS_CAPACITY_RETRY_FALLBACK_SEC;
-    try {
-      const xhr = data.networkDetails as XMLHttpRequest | null | undefined;
-      const header = xhr?.getResponseHeader?.("Retry-After");
-      const parsed = header ? Number.parseInt(header, 10) : NaN;
-      if (Number.isFinite(parsed) && parsed > 0) {
-        retryAfterSec = parsed;
+      onCapacityBusy(retryAfterSecFromHeaders(headers));
+      return true;
+    },
+  );
+
+  const reportManifestMetadata = useEffectEvent(
+    (headers: ManifestHeaders | null) => {
+      const metadata = parseManifestMetadata(headers, requestedStartSec);
+
+      if (metadata.effectiveProfile && onEffectiveProfile) {
+        onEffectiveProfile(metadata.effectiveProfile);
       }
-    } catch {
-      // Header unavailable on this loader; keep the fallback delay.
-    }
-
-    onCapacityBusy(retryAfterSec);
-    return true;
-  });
+      if (metadata.actualStartSec !== null && onActualStart) {
+        onActualStart(metadata.actualStartSec);
+      }
+    },
+  );
+  const needsNativeManifestPreflight =
+    isHlsSource &&
+    (onCapacityBusy !== undefined ||
+      onEffectiveProfile !== undefined ||
+      onActualStart !== undefined);
 
   const handleHlsError = useEffectEvent(
     (
@@ -177,7 +285,15 @@ export default function VideoPlayer({
     void (async () => {
       try {
         const { default: Hls } = await loadHlsLight();
-        if (cancelled || !Hls.isSupported()) return;
+        if (cancelled) return;
+        if (!Hls.isSupported()) {
+          // Neither Media Source Extensions nor native HLS: without this the
+          // player would sit blank with no explanation at all.
+          reportError(
+            "This browser cannot play streamed video (no Media Source Extensions support).",
+          );
+          return;
+        }
 
         const hls = new Hls({
           xhrSetup(xhr: XMLHttpRequest) {
@@ -205,6 +321,15 @@ export default function VideoPlayer({
           });
         }
 
+        // The manifest response names the profile the server really ran. The
+        // request URL cannot: a remux request that fails the safety gate is
+        // still served from the /hls/remux/ path.
+        hls.once(Hls.Events.MANIFEST_LOADED, (_event, data) => {
+          reportManifestMetadata(
+            manifestHeadersFromNetworkDetails(data.networkDetails),
+          );
+        });
+
         let mediaRecoveryAttempted = false;
         hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
           const isSessionLostError =
@@ -222,7 +347,12 @@ export default function VideoPlayer({
               data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) &&
             data.response?.code === 503;
 
-          if (isCapacityBusyError && handleCapacityBusy(data)) {
+          if (
+            isCapacityBusyError &&
+            handleCapacityBusy(
+              manifestHeadersFromNetworkDetails(data.networkDetails),
+            )
+          ) {
             return;
           }
 
@@ -258,12 +388,59 @@ export default function VideoPlayer({
     if (!video || !src) return;
     if (isHlsSource && !supportsNativeHLS) return;
 
-    video.src = src;
-    return () => {
+    const clearSource = () => {
       video.removeAttribute("src");
       video.load();
     };
-  }, [isHlsSource, src, videoRef]);
+    if (!needsNativeManifestPreflight) {
+      video.src = src;
+      return clearSource;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        // React Strict Mode immediately cleans up and re-runs effects once in
+        // development. Defer the request until that probe mount can cancel so
+        // it cannot issue a duplicate manifest preflight.
+        await Promise.resolve();
+        if (cancelled) return;
+
+        const response = await fetch(src, {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        await releaseResponseBody(response);
+        if (cancelled) return;
+
+        const handledCapacityFailure =
+          response.status === 503 &&
+          handleCapacityBusy(response.headers);
+        if (handledCapacityFailure) return;
+
+        if (response.ok) {
+          reportManifestMetadata(response.headers);
+        }
+        if (!cancelled) {
+          video.src = src;
+        }
+      } catch {
+        if (!cancelled) {
+          // Metadata is advisory. Let the native player use its existing
+          // loading and error behavior when the preflight itself fails.
+          video.src = src;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearSource();
+    };
+  }, [isHlsSource, needsNativeManifestPreflight, src, videoRef]);
 
   useEffect(() => {
     const video = videoRef.current;

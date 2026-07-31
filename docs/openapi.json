@@ -2151,6 +2151,9 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
           }
@@ -2175,6 +2178,9 @@
             "$ref": "#/components/parameters/HLSFilenamePath"
           },
           {
+            "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
             "$ref": "#/components/parameters/AudioTrackQuery"
           },
           {
@@ -2191,6 +2197,9 @@
           "200": {
             "$ref": "#/components/responses/HLSSegmentResponse"
           },
+          "206": {
+            "$ref": "#/components/responses/PartialHLSSegmentResponse"
+          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -2199,6 +2208,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2307,6 +2319,9 @@
           },
           {
             "$ref": "#/components/parameters/TrackIndexPath"
+          },
+          {
+            "$ref": "#/components/parameters/SubtitleStartQuery"
           }
         ],
         "responses": {
@@ -2981,11 +2996,17 @@
           },
           {
             "$ref": "#/components/parameters/HLSFilenamePath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
           }
         ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/HLSSegmentResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialHLSSegmentResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -2998,6 +3019,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -4566,6 +4590,16 @@
         "schema": {
           "type": "string"
         }
+      },
+      "SubtitleStartQuery": {
+        "name": "start",
+        "in": "query",
+        "required": false,
+        "description": "HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero.",
+        "schema": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "requestBodies": {
@@ -5398,6 +5432,19 @@
               "type": "string",
               "const": "no-store"
             }
+          },
+          "X-Igloo-Effective-Profile": {
+            "description": "Profile FFmpeg actually ran. This differs from the requested profile in the path whenever the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Igloo-Actual-Start": {
+            "description": "Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured.",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
           }
         },
         "content": {
@@ -5415,6 +5462,37 @@
             "schema": {
               "type": "string",
               "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "video/mp4": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      },
+      "PartialHLSSegmentResponse": {
+        "description": "Partial fragmented MP4 initialization file or media segment for a byte range.",
+        "headers": {
+          "Accept-Ranges": {
+            "schema": {
+              "type": "string",
+              "const": "bytes"
+            }
+          },
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          },
+          "Content-Range": {
+            "schema": {
+              "type": "string",
+              "example": "bytes 0-1048575/4194304"
             }
           }
         },

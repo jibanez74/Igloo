@@ -19,6 +19,7 @@ import (
 )
 
 type stubMovieScannerFfprobe struct {
+	noKeyframeProbe
 	result  *ffprobe.FfprobeResult
 	results []*ffprobe.FfprobeResult
 	errs    []error
@@ -39,6 +40,20 @@ func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.Ffprobe
 
 func (s *stubMovieScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
 	return s.GetMetadata(filePath)
+}
+
+// noKeyframeProbe completes ffprobe.FfprobeInterface for stubs that only
+// exercise scanning. Keyframe lookup is advisory on the playback path, so a
+// stub that never serves HLS refuses it rather than inventing an offset.
+type noKeyframeProbe struct{}
+
+func (noKeyframeProbe) KeyframeAtOrBefore(
+	_ context.Context,
+	_ string,
+	_ int64,
+	_ float64,
+) (float64, error) {
+	return 0, errors.New("keyframe probing is not stubbed")
 }
 
 type stubMovieScannerTmdb struct {

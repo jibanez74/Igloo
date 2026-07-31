@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -33,10 +34,17 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	audioTrack := int(room.AudioTrack)
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &audioTrack})
 
-	playlist := buildHLSPlaylistBody(session, session.DurationSec, baseURL, querySuffix)
+	playlist, err := buildHLSPlaylistBody(r.Context(), session, session.DurationSec, baseURL, querySuffix)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		app.Logger.Error("watch room hls playlist unavailable", "error", err, "room_id", room.ID)
+		writeHLSSessionError(w, err)
+		return
+	}
 
-	w.Header().Set("Content-Type", hlsPlaylistContentType)
-	w.Header().Set("Cache-Control", "no-store")
+	writeHLSPlaylistHeaders(w, session)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
 }

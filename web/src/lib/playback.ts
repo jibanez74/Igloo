@@ -196,7 +196,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
   const { video, audioStreams, mimeType } = args;
   const sourceHeight = video?.height ?? 0;
 
-  return STREAM_MODES.filter((m) => {
+  const availableModes = STREAM_MODES.filter((m) => {
     if (m.type === "direct") {
       if (!video) return !args.videoStreamsLoaded;
       const staticRulesPass =
@@ -216,10 +216,23 @@ export function getAvailableModes(args: AvailableModesArgs) {
     }
     if (m.type === "remux") {
       if (!video) return !args.videoStreamsLoaded;
-      return isVideoDirectPlayable(video.codec);
+      // Remux copies the video stream untouched, so it needs the same
+      // browser-safety rules as direct play: the server refuses to copy 10-bit,
+      // 4:2:2 and 4:4:4 H.264 and silently falls back to a full transcode.
+      // Offering remux for those advertises a mode the server never runs.
+      // This also keeps direct ⊂ remux, which the audio-track upgrade in
+      // `resolveModeForAudioTrack` depends on.
+      return isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
     }
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });
+
+  if (availableModes.length > 0 || !video) {
+    return availableModes;
+  }
+
+  const fallbackMode = STREAM_MODES.find((mode) => mode.id === "720p_3mbps");
+  return fallbackMode ? [fallbackMode] : availableModes;
 }
 
 /**
@@ -432,6 +445,36 @@ export function directPlayModeLabel(
   if (!langName) return fallback;
   const base = fallback.split(" — ")[0];
   return `${base} — ${langName} audio`;
+}
+
+/**
+ * Player-badge label for an HLS session, given the profile the server reports
+ * it actually ran. The requested profile is only a request: the remux safety
+ * gate can fall back to a transcode after the manifest URL is already fixed, so
+ * the badge must describe the effective profile or it misreports a full
+ * transcode as a stream copy (audit H3).
+ */
+export function effectiveModeLabel(
+  requestedMode: StreamModeId,
+  effectiveProfile: string | null,
+): string {
+  const requestedLabel =
+    STREAM_MODES.find(m => m.id === requestedMode)?.label ?? requestedMode;
+
+  if (!effectiveProfile || effectiveProfile === requestedMode) {
+    return requestedLabel;
+  }
+
+  const effectiveLabel = STREAM_MODES.find(
+    m => m.id === effectiveProfile,
+  )?.label;
+  if (!effectiveLabel) return requestedLabel;
+
+  if (requestedMode === "remux") {
+    return `${effectiveLabel} — remux unavailable`;
+  }
+
+  return effectiveLabel;
 }
 
 export function describePlaybackExperience(
