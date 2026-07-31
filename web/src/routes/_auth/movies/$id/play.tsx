@@ -259,13 +259,15 @@ function PlayMoviePage() {
     resolvedSubtitleTrack,
     isHlsPlayback,
     playbackStartSec,
-    hlsStartSec,
+    requestedHlsStartSec,
+    actualHlsStartSec,
     hlsPlaybackOffset,
     streamUrl,
     subtitleInfo,
     playbackTiming,
     movieDurationSec,
     sessionWindowKey,
+    handleActualHlsStart,
   } = useMoviePlaybackData({
     movieId,
     search,
@@ -492,7 +494,7 @@ function PlayMoviePage() {
     const shouldRebaseHlsSession = shouldRebaseHlsMovieSession({
       isHlsPlayback,
       targetTimeSec: t,
-      hlsStartSec,
+      actualHlsStartSec,
       currentVideoTimeSec: currentVideoTime,
     });
 
@@ -700,6 +702,7 @@ function PlayMoviePage() {
       onNativeError={handleNativePlaybackError}
       subtitleTrack={subtitleInfo}
       startSec={isHlsPlayback ? hlsPlaybackOffset : playbackStartSec}
+      requestedStartSec={requestedHlsStartSec}
       onStartApplied={(time) => {
         const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
         currentTimeRef.current = absoluteTime;
@@ -712,6 +715,7 @@ function PlayMoviePage() {
       onEffectiveProfile={profile =>
         setReportedProfile({ streamWindowKey: sessionWindowKey, profile })
       }
+      onActualStart={handleActualHlsStart}
     />
   );
 

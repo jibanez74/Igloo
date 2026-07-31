@@ -1,6 +1,12 @@
 package ffprobe
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestParseKeyframePacket(t *testing.T) {
 	tests := []struct {
@@ -36,5 +42,93 @@ func TestParseKeyframePacket(t *testing.T) {
 				t.Errorf("isKeyframe = %v, want %v", isKeyframe, tt.wantKey)
 			}
 		})
+	}
+}
+
+func TestKeyframeAtOrBeforeUsesAbsoluteBoundedInterval(t *testing.T) {
+	argsPath := filepath.Join(t.TempDir(), "args.log")
+	t.Setenv("FFPROBE_ARGS_LOG", argsPath)
+
+	binPath := filepath.Join(t.TempDir(), "ffprobe")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$FFPROBE_ARGS_LOG"
+printf '%s\n' '565.000000,K__'
+printf '%s\n' '599.000000,K__'
+printf '%s\n' '600.500000,K__'
+`
+	err := os.WriteFile(binPath, []byte(script), 0755)
+	if err != nil {
+		t.Fatalf("write fake ffprobe: %v", err)
+	}
+
+	probe := &ffprobe{bin: binPath}
+	keyframe, err := probe.KeyframeAtOrBefore(
+		context.Background(),
+		"/tmp/movie.mkv",
+		2,
+		600,
+	)
+	if err != nil {
+		t.Fatalf("KeyframeAtOrBefore failed: %v", err)
+	}
+	if keyframe != 599 {
+		t.Fatalf("keyframe = %.3f, want 599", keyframe)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read ffprobe arguments: %v", err)
+	}
+	args := strings.Split(strings.TrimSpace(string(argsData)), "\n")
+	for index, arg := range args {
+		if arg != "-read_intervals" {
+			continue
+		}
+		if index+1 >= len(args) {
+			t.Fatal("-read_intervals has no value")
+		}
+		if args[index+1] != "570.000%601.000" {
+			t.Fatalf("read interval = %q, want %q", args[index+1], "570.000%601.000")
+		}
+		return
+	}
+
+	t.Fatal("-read_intervals argument not found")
+}
+
+func TestKeyframeAtOrBeforeClampsNearZeroInterval(t *testing.T) {
+	argsPath := filepath.Join(t.TempDir(), "args.log")
+	t.Setenv("FFPROBE_ARGS_LOG", argsPath)
+
+	binPath := filepath.Join(t.TempDir(), "ffprobe")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$FFPROBE_ARGS_LOG"
+printf '%s\n' '0.000000,K__'
+`
+	err := os.WriteFile(binPath, []byte(script), 0755)
+	if err != nil {
+		t.Fatalf("write fake ffprobe: %v", err)
+	}
+
+	probe := &ffprobe{bin: binPath}
+	keyframe, err := probe.KeyframeAtOrBefore(
+		context.Background(),
+		"/tmp/movie.mkv",
+		0,
+		0.25,
+	)
+	if err != nil {
+		t.Fatalf("KeyframeAtOrBefore failed: %v", err)
+	}
+	if keyframe != 0 {
+		t.Fatalf("keyframe = %.3f, want 0", keyframe)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read ffprobe arguments: %v", err)
+	}
+	if !strings.Contains(string(argsData), "0.000%1.250") {
+		t.Fatalf("arguments do not contain clamped interval: %q", argsData)
 	}
 }

@@ -325,8 +325,7 @@ describe("PlaybackSettingsDialog", () => {
       const details = technicalDetails();
       details.data!.movie.mime_type = "video/x-matroska";
       details.data!.movie.container = "mkv";
-      details.data!.video_streams[0].codec = "hevc";
-      details.data!.video_streams[0].height = 480;
+      details.data!.video_streams = [];
       queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
       const onSave = vi.fn();
 

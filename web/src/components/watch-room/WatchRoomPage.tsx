@@ -78,10 +78,10 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const streamUrl = room
     ? watchRoomStreamUrl(room.id, room.playback_mode, streamReloadKey)
     : "";
-  // Rooms have no per-client playback session, so the window is just the room,
-  // its mode, and the reload generation.
+  // Reload changes only the source URL. Keeping it out of this key prevents a
+  // player rebuild from replenishing either recovery budget.
   const streamWindowKey = room
-    ? `${room.id}:${room.playback_mode}:${streamReloadKey}`
+    ? `${room.id}:${room.playback_mode}`
     : "";
   const posterUrl =
     room?.movie_poster != null

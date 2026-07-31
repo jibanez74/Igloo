@@ -26,7 +26,7 @@ describe("buildMovieSubtitleTrackInfo", () => {
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
-      hlsStartSec: 590,
+      actualHlsStartSec: 590,
     });
 
     expect(info?.url).toBe("/api/movies/7/subtitles/0/web.vtt?start=590");
@@ -41,7 +41,7 @@ describe("buildMovieSubtitleTrackInfo", () => {
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
-      hlsStartSec: 591.174,
+      actualHlsStartSec: 591.174,
     });
 
     expect(info?.url).toBe("/api/movies/7/subtitles/0/web.vtt?start=591.174");
@@ -53,7 +53,7 @@ describe("buildMovieSubtitleTrackInfo", () => {
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
-      hlsStartSec: 0,
+      actualHlsStartSec: 0,
     });
 
     expect(info?.url).toBe("/api/movies/7/subtitles/0/web.vtt");
@@ -80,8 +80,14 @@ describe("buildMovieSubtitleTrackInfo", () => {
       subtitleStreams: [subtitle()],
     };
 
-    const first = buildMovieSubtitleTrackInfo({ ...args, hlsStartSec: 0 });
-    const rebased = buildMovieSubtitleTrackInfo({ ...args, hlsStartSec: 900 });
+    const first = buildMovieSubtitleTrackInfo({
+      ...args,
+      actualHlsStartSec: 0,
+    });
+    const rebased = buildMovieSubtitleTrackInfo({
+      ...args,
+      actualHlsStartSec: 900,
+    });
 
     expect(first?.url).not.toBe(rebased?.url);
   });

@@ -24,6 +24,37 @@ async function openMoviePlayer(page: Page) {
   ).toBeVisible();
 }
 
+async function recordHlsManifestRequests(
+  page: Page,
+  manifestRequests: string[],
+) {
+  const usesNativeHls = await page.evaluate(() => {
+    const video = document.createElement("video");
+    return (
+      video.canPlayType("application/vnd.apple.mpegurl") !== "" ||
+      video.canPlayType("application/x-mpegURL") !== ""
+    );
+  });
+
+  await page.route(
+    "**/api/movies/101/hls/*/playlist.m3u8*",
+    async route => {
+      manifestRequests.push(route.request().url());
+      if (usesNativeHls && route.request().resourceType() === "fetch") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/vnd.apple.mpegurl",
+          body: "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:1\n#EXT-X-ENDLIST\n",
+        });
+      }
+    },
+  );
+
+  // Native HLS performs one metadata preflight, then one media load of the
+  // same URL. hls.js reads metadata from its single manifest request.
+  return usesNativeHls ? 2 : 1;
+}
+
 for (const {
   label,
   mode,
@@ -61,11 +92,9 @@ for (const {
     await page.route("**/api/movies/101/stream*", route => {
       mediaRequests.push(route.request().url());
     });
-    await page.route(
-      "**/api/movies/101/hls/*/playlist.m3u8*",
-      route => {
-        mediaRequests.push(route.request().url());
-      },
+    const expectedHlsRequestCount = await recordHlsManifestRequests(
+      page,
+      mediaRequests,
     );
 
     await page.goto(
@@ -79,8 +108,13 @@ for (const {
 
     releasePlaybackSettings();
 
-    await expect.poll(() => mediaRequests.length).toBe(1);
-    expect(mediaRequests[0]).toContain(expectedRequestPath);
+    const expectedRequestCount =
+      mode === "direct" ? 1 : expectedHlsRequestCount;
+    await expect.poll(() => mediaRequests.length).toBe(expectedRequestCount);
+    expect(mediaRequests).toHaveLength(expectedRequestCount);
+    for (const request of mediaRequests) {
+      expect(request).toContain(expectedRequestPath);
+    }
   });
 }
 
@@ -157,11 +191,9 @@ test("cold non-first audio waits for metadata and never requests the raw stream"
   await page.route("**/api/movies/101/stream*", route => {
     mediaRequests.push(route.request().url());
   });
-  await page.route(
-    "**/api/movies/101/hls/*/playlist.m3u8*",
-    route => {
-      mediaRequests.push(route.request().url());
-    },
+  const expectedRequestCount = await recordHlsManifestRequests(
+    page,
+    mediaRequests,
   );
 
   await page.goto(
@@ -175,12 +207,14 @@ test("cold non-first audio waits for metadata and never requests the raw stream"
 
   releaseTechnicalDetails();
 
-  await expect.poll(() => mediaRequests.length).toBe(1);
+  await expect.poll(() => mediaRequests.length).toBe(expectedRequestCount);
+  expect(mediaRequests).toHaveLength(expectedRequestCount);
   const requestUrl = new URL(mediaRequests[0]);
   expect(requestUrl.pathname).toBe(
     "/api/movies/101/hls/remux/playlist.m3u8",
   );
   expect(requestUrl.searchParams.get("audio_track")).toBe("1");
+  expect(mediaRequests.every(url => url === mediaRequests[0])).toBe(true);
   expect(
     mediaRequests.some(url => new URL(url).pathname.endsWith("/stream")),
   ).toBe(false);
@@ -221,11 +255,9 @@ test("cold direct deep link to an ineligible file never requests the raw stream"
   await page.route("**/api/movies/101/stream*", route => {
     mediaRequests.push(route.request().url());
   });
-  await page.route(
-    "**/api/movies/101/hls/*/playlist.m3u8*",
-    route => {
-      mediaRequests.push(route.request().url());
-    },
+  const expectedRequestCount = await recordHlsManifestRequests(
+    page,
+    mediaRequests,
   );
 
   await page.goto(
@@ -242,10 +274,12 @@ test("cold direct deep link to an ineligible file never requests the raw stream"
   await expect
     .poll(() => new URL(page.url()).searchParams.get("mode"))
     .toBe("remux");
-  await expect.poll(() => mediaRequests.length).toBe(1);
+  await expect.poll(() => mediaRequests.length).toBe(expectedRequestCount);
+  expect(mediaRequests).toHaveLength(expectedRequestCount);
   expect(new URL(mediaRequests[0]).pathname).toBe(
     "/api/movies/101/hls/remux/playlist.m3u8",
   );
+  expect(mediaRequests.every(url => url === mediaRequests[0])).toBe(true);
   expect(
     mediaRequests.some(url => new URL(url).pathname.endsWith("/stream")),
   ).toBe(false);

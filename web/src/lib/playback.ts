@@ -196,7 +196,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
   const { video, audioStreams, mimeType } = args;
   const sourceHeight = video?.height ?? 0;
 
-  return STREAM_MODES.filter((m) => {
+  const availableModes = STREAM_MODES.filter((m) => {
     if (m.type === "direct") {
       if (!video) return !args.videoStreamsLoaded;
       const staticRulesPass =
@@ -226,6 +226,13 @@ export function getAvailableModes(args: AvailableModesArgs) {
     }
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });
+
+  if (availableModes.length > 0 || !video) {
+    return availableModes;
+  }
+
+  const fallbackMode = STREAM_MODES.find((mode) => mode.id === "720p_3mbps");
+  return fallbackMode ? [fallbackMode] : availableModes;
 }
 
 /**

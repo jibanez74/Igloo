@@ -227,6 +227,63 @@ describe("browser-safe H.264 gate", () => {
   });
 });
 
+describe("low-resolution transcode fallback", () => {
+  it.each([
+    [
+      "unsafe H.264",
+      h264Video({
+        height: 480,
+        bit_depth: { Int64: 10, Valid: true },
+      }),
+    ],
+    ["non-H.264 below 720p", h264Video({ codec: "hevc", height: 480 })],
+    ["unknown-height video", h264Video({ codec: "hevc", height: 0 })],
+  ])("offers only 720p when %s otherwise has no mode", (_case, video) => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        video,
+        audioStreams: [aacAudio()],
+        mimeType: "video/x-matroska",
+      }),
+    );
+
+    expect(ids).toEqual(["720p_3mbps"]);
+  });
+
+  it("keeps a confirmed video-less movie unavailable", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+
+    expect(ids).toEqual([]);
+  });
+
+  it("does not add or reorder modes when normal filtering found valid options", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        video: h264Video(),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+
+    expect(ids).toEqual([
+      "direct",
+      "remux",
+      "1080p_8mbps",
+      "1080p_6mbps",
+      "1080p_4mbps",
+      "720p_3mbps",
+    ]);
+  });
+});
+
 describe("directPlayModeLabel", () => {
   const audioStream = (language: string | null): AudioStreamType => ({
     id: 1,

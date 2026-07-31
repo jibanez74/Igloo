@@ -544,6 +544,51 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 	}
 }
 
+func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.InitSession()
+	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
+	app.FFmpeg = ffmpegRunner
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	userID := int64(42)
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		app.HLSManifest(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(router)
+
+	manifestURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=590",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+	)
+	for requestNumber := 1; requestNumber <= 2; requestNumber++ {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(
+			recorder,
+			httptest.NewRequest(http.MethodGet, manifestURL, nil),
+		)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf(
+				"manifest request %d status = %d, want 200: %s",
+				requestNumber,
+				recorder.Code,
+				recorder.Body.String(),
+			)
+		}
+	}
+
+	if calls := ffmpegRunner.CallCount(); calls != 1 {
+		t.Fatalf("FFmpeg calls = %d, want 1 for repeated session URL", calls)
+	}
+}
+
 func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

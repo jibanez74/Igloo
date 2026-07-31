@@ -252,6 +252,8 @@ export const HLS_CAPACITY_RETRY_FALLBACK_SEC = 5;
  * /hls/remux/ path, so the URL alone cannot tell the client what it is getting.
  */
 export const HLS_EFFECTIVE_PROFILE_HEADER = "X-Igloo-Effective-Profile";
+/** Manifest response header reporting where rebased HLS media actually begins. */
+export const HLS_ACTUAL_START_HEADER = "X-Igloo-Actual-Start";
 
 /** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
 export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;

@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { STREAM_MODES, TMDB_POSTER_SIZE } from "@/lib/constants";
 import {
@@ -136,19 +136,31 @@ export function useMoviePlaybackData({
     0,
     movieDurationSec ?? 0,
   );
-  const hlsStartSec = hlsStartTimeSec(isHlsPlayback, playbackStartSec);
+  const streamAudioTrack =
+    techLoaded && audioStreams.length === 0 ? null : resolvedAudioTrack;
+  const requestedHlsStartSec = hlsStartTimeSec(
+    isHlsPlayback,
+    playbackStartSec,
+  );
+  const sessionWindowKey = `${movieId}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(requestedHlsStartSec)}`;
+  const [reportedActualStart, setReportedActualStart] = useState<{
+    sessionWindowKey: string;
+    startSec: number;
+  } | null>(null);
+  const actualHlsStartSec =
+    reportedActualStart?.sessionWindowKey === sessionWindowKey
+      ? reportedActualStart.startSec
+      : requestedHlsStartSec;
   const hlsPlaybackOffset = hlsPlaybackOffsetSec(
     isHlsPlayback,
     playbackStartSec,
-    hlsStartSec,
+    actualHlsStartSec,
   );
-  const streamAudioTrack =
-    techLoaded && audioStreams.length === 0 ? null : resolvedAudioTrack;
   const streamUrl = buildMovieStreamUrl(
     movieId,
     resolvedMode,
     streamAudioTrack,
-    hlsStartSec,
+    requestedHlsStartSec,
     streamReloadKey,
     playbackSessionId,
   );
@@ -161,15 +173,35 @@ export function useMoviePlaybackData({
     availableModes !== null && availableModes.length === 0;
   const directPlayAvailable =
     availableModes?.some((m) => m.id === "direct") ?? false;
-  const playbackTiming = { isHlsPlayback, hlsStartSec, movieDurationSec };
+  const playbackTiming = {
+    isHlsPlayback,
+    actualHlsStartSec,
+    movieDurationSec,
+  };
   const subtitleInfo = buildMovieSubtitleTrackInfo({
     movieId,
     resolvedSubtitleTrack,
     techLoaded,
     subtitleStreams,
-    hlsStartSec,
+    actualHlsStartSec,
   });
-  const sessionWindowKey = `${movieId}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(hlsStartSec)}`;
+
+  const handleActualHlsStart = (startSec: number) => {
+    const validStart =
+      Number.isFinite(startSec) &&
+      startSec >= 0 &&
+      startSec <= requestedHlsStartSec;
+    if (!validStart) return;
+
+    setReportedActualStart((previous) => {
+      const unchanged =
+        previous?.sessionWindowKey === sessionWindowKey &&
+        previous.startSec === startSec;
+      if (unchanged) return previous;
+
+      return { sessionWindowKey, startSec };
+    });
+  };
 
   const syncSearch = useEffectEvent((target: PlaybackSettings) => {
     onSyncSearch(target);
@@ -224,12 +256,14 @@ export function useMoviePlaybackData({
     resolvedSubtitleTrack,
     isHlsPlayback,
     playbackStartSec,
-    hlsStartSec,
+    requestedHlsStartSec,
+    actualHlsStartSec,
     hlsPlaybackOffset,
     streamUrl,
     subtitleInfo,
     playbackTiming,
     movieDurationSec,
     sessionWindowKey,
+    handleActualHlsStart,
   };
 }

@@ -40,14 +40,14 @@ func (f *ffprobe) KeyframeAtOrBefore(
 		from = 0
 	}
 
-	// Read from the lookback point up to just past the target: the keyframe we
-	// want is the last one at or before it.
-	window := targetSec - from + 1
+	// Read from the lookback point up to one second past the target: the
+	// keyframe we want is the last one at or before it.
+	to := targetSec + 1
 
 	args := []string{
 		"-v", "error",
 		"-select_streams", strconv.FormatInt(streamIndex, 10),
-		"-read_intervals", fmt.Sprintf("%.3f%%+%.3f", from, window),
+		"-read_intervals", fmt.Sprintf("%.3f%%%.3f", from, to),
 		"-show_entries", "packet=pts_time,flags",
 		"-of", "csv=p=0",
 		filePath,

@@ -31,7 +31,7 @@ type MoviePlaybackStatusArgs = {
 
 type PlaybackTimingOptions = {
   isHlsPlayback: boolean;
-  hlsStartSec: number;
+  actualHlsStartSec: number;
   movieDurationSec?: number;
 };
 
@@ -41,13 +41,13 @@ type SubtitleTrackInfoOptions = {
   techLoaded: boolean;
   subtitleStreams: SubtitleType[];
   /** Session start the cues must be rebased onto; 0 for direct play. */
-  hlsStartSec?: number;
+  actualHlsStartSec?: number;
 };
 
 type RebaseOptions = {
   isHlsPlayback: boolean;
   targetTimeSec: number;
-  hlsStartSec: number;
+  actualHlsStartSec: number;
   currentVideoTimeSec: number;
 };
 
@@ -203,34 +203,38 @@ export function hlsStartTimeSec(isHlsPlayback: boolean, startSec: number) {
 export function hlsPlaybackOffsetSec(
   isHlsPlayback: boolean,
   startSec: number,
-  hlsStartSec: number,
+  actualHlsStartSec: number,
 ) {
-  return isHlsPlayback ? Math.max(0, startSec - hlsStartSec) : 0;
+  return isHlsPlayback ? Math.max(0, startSec - actualHlsStartSec) : 0;
 }
 
 export function toAbsolutePlaybackTime(
   timeSec: number,
-  { isHlsPlayback, hlsStartSec }: PlaybackTimingOptions,
+  { isHlsPlayback, actualHlsStartSec }: PlaybackTimingOptions,
 ) {
-  return isHlsPlayback ? hlsStartSec + timeSec : timeSec;
+  return isHlsPlayback ? actualHlsStartSec + timeSec : timeSec;
 }
 
 export function toMediaPlaybackTime(
   timeSec: number,
-  { isHlsPlayback, hlsStartSec }: PlaybackTimingOptions,
+  { isHlsPlayback, actualHlsStartSec }: PlaybackTimingOptions,
 ) {
-  return isHlsPlayback ? Math.max(0, timeSec - hlsStartSec) : timeSec;
+  return isHlsPlayback ? Math.max(0, timeSec - actualHlsStartSec) : timeSec;
 }
 
 export function toAbsoluteDuration(
   durationSec: number,
-  { isHlsPlayback, hlsStartSec, movieDurationSec }: PlaybackTimingOptions,
+  {
+    isHlsPlayback,
+    actualHlsStartSec,
+    movieDurationSec,
+  }: PlaybackTimingOptions,
 ) {
   if (!isHlsPlayback) return durationSec;
   if (movieDurationSec && movieDurationSec > 0) {
     return movieDurationSec;
   }
-  return hlsStartSec + durationSec;
+  return actualHlsStartSec + durationSec;
 }
 
 export function displayedMovieDuration(
@@ -248,7 +252,7 @@ export function buildMovieSubtitleTrackInfo({
   resolvedSubtitleTrack,
   techLoaded,
   subtitleStreams,
-  hlsStartSec = 0,
+  actualHlsStartSec = 0,
 }: SubtitleTrackInfoOptions) {
   if (resolvedSubtitleTrack === null || !techLoaded) return null;
   if (
@@ -263,7 +267,8 @@ export function buildMovieSubtitleTrackInfo({
   // timeline starts at zero, so the server must shift them by the session
   // start or every subtitle is out by that offset (audit H4). Direct play and
   // sessions starting at zero need no shift.
-  const query = hlsStartSec > 0 ? `?start=${hlsStartSec}` : "";
+  const query =
+    actualHlsStartSec > 0 ? `?start=${actualHlsStartSec}` : "";
 
   return {
     url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt${query}`,
@@ -302,12 +307,12 @@ export function clampMoviePlaybackTime(
 export function shouldRebaseHlsMovieSession({
   isHlsPlayback,
   targetTimeSec,
-  hlsStartSec,
+  actualHlsStartSec,
   currentVideoTimeSec,
 }: RebaseOptions) {
   return (
     isHlsPlayback &&
-    (targetTimeSec < hlsStartSec ||
+    (targetTimeSec < actualHlsStartSec ||
       targetTimeSec >
         currentVideoTimeSec + MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC)
   );
