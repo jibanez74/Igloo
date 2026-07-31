@@ -32,6 +32,21 @@ describe("buildMovieSubtitleTrackInfo", () => {
     expect(info?.url).toBe("/api/movies/7/subtitles/0/web.vtt?start=590");
   });
 
+  // The measured actual start is fractional (a keyframe timestamp such as
+  // 591.174), and the server parses `start` as a float — flooring it would
+  // misalign every cue by up to a second.
+  it("preserves a fractional session start", () => {
+    const info = buildMovieSubtitleTrackInfo({
+      movieId: 7,
+      resolvedSubtitleTrack: 0,
+      techLoaded: true,
+      subtitleStreams: [subtitle()],
+      hlsStartSec: 591.174,
+    });
+
+    expect(info?.url).toBe("/api/movies/7/subtitles/0/web.vtt?start=591.174");
+  });
+
   it("omits the offset when the session starts at zero", () => {
     const info = buildMovieSubtitleTrackInfo({
       movieId: 7,

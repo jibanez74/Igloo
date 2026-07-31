@@ -263,7 +263,7 @@ export function buildMovieSubtitleTrackInfo({
   // timeline starts at zero, so the server must shift them by the session
   // start or every subtitle is out by that offset (audit H4). Direct play and
   // sessions starting at zero need no shift.
-  const query = hlsStartSec > 0 ? `?start=${Math.floor(hlsStartSec)}` : "";
+  const query = hlsStartSec > 0 ? `?start=${hlsStartSec}` : "";
 
   return {
     url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt${query}`,

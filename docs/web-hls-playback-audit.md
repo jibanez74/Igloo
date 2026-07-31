@@ -1364,8 +1364,9 @@ scan against the copy — expected, and confined to the copy.
 the §HLS Output Format and §Seeking and Resume Behavior sections stated the generated VOD
 playlist and `-ss` behaviour without noting that copy-video segment durations and counts
 are synthetic and diverge from the real output, or that `-ss` snaps backwards to a
-keyframe. Both now say what the code does, each cross-referencing the finding here. These
-notes should be revised again when H1/H2/H5 are fixed.
+keyframe. Both now say what the code does, each cross-referencing the finding here. Those
+notes were revised again alongside the H1/H2/H5 fixes (§23) and now describe the shipped
+behavior.
 
 ---
 
