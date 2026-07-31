@@ -104,6 +104,31 @@ function responsePath(response: Response) {
   return new URL(response.url()).pathname;
 }
 
+function isSuccessfulHlsAssetResponse(response: Response) {
+  return response.status() === 200 || response.status() === 206;
+}
+
+function assertSuccessfulHlsAssetResponse(response: Response) {
+  expect([200, 206]).toContain(response.status());
+
+  if (response.status() !== 206) return;
+
+  expect(response.request().headers()["range"]).toMatch(/^bytes=/i);
+  expect(response.headers()["accept-ranges"]).toBe("bytes");
+
+  const contentRange = response.headers()["content-range"];
+  const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(contentRange ?? "");
+  expect(match, "206 response must contain a valid Content-Range").not.toBeNull();
+
+  if (match) {
+    const start = Number.parseInt(match[1], 10);
+    const end = Number.parseInt(match[2], 10);
+    const size = Number.parseInt(match[3], 10);
+    expect(start).toBeLessThanOrEqual(end);
+    expect(end).toBeLessThan(size);
+  }
+}
+
 function segmentName(url: string) {
   const match = new URL(url).pathname.match(/\/(segment_\d+\.m4s)$/);
   return match?.[1] ?? null;
@@ -168,7 +193,7 @@ async function waitForUniqueSegments(
 
   const remember = (response: Response) => {
     if (!responsePath(response).startsWith(assetPath)) return;
-    if (response.status() !== 200) return;
+    if (!isSuccessfulHlsAssetResponse(response)) return;
 
     const name = segmentName(response.url());
     if (name) found.set(name, response);
@@ -180,7 +205,7 @@ async function waitForUniqueSegments(
     const response = await page.waitForResponse(
       candidate => {
         if (!responsePath(candidate).startsWith(assetPath)) return false;
-        if (candidate.status() !== 200) return false;
+        if (!isSuccessfulHlsAssetResponse(candidate)) return false;
 
         const name = segmentName(candidate.url());
         return !!name && !found.has(name);
@@ -285,9 +310,10 @@ test.describe("HLS transcoding playback", () => {
       const initResponse = await page.waitForResponse(
         response =>
           responsePath(response) === `${assetPath}init.mp4` &&
-          response.status() === 200,
+          isSuccessfulHlsAssetResponse(response),
         { timeout: hlsEnv!.responseTimeoutMs },
       );
+      assertSuccessfulHlsAssetResponse(initResponse);
       expect(initResponse.headers()["content-type"]).toContain("video/mp4");
       assertHlsQuery(initResponse, query);
 
@@ -299,6 +325,7 @@ test.describe("HLS transcoding playback", () => {
         hlsEnv!.responseTimeoutMs,
       );
       for (const response of segmentResponses) {
+        assertSuccessfulHlsAssetResponse(response);
         expect(response.headers()["content-type"]).toContain("video/mp4");
         assertHlsQuery(response, query);
       }

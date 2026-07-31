@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
 import { directPlayAudioSelectionEligible } from "../src/lib/playback";
@@ -257,7 +258,7 @@ test.describe("Direct-play eligibility with real media", () => {
         data: {
           progress_sec: resumeTargetSec,
           duration_sec: durationSec,
-          save_session_id: `e2e-subtitle-persistence-${Date.now()}`,
+          save_session_id: randomUUID(),
           save_sequence: 1,
         },
         failOnStatusCode: false,

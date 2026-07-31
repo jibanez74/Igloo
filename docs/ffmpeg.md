@@ -371,6 +371,8 @@ The poll interval is deliberately short. A segment that lands just after a check
 
 Segments and whole media files are served through the kernel's `sendfile(2)` path. The session middleware wraps the response writer in a type that does not implement `io.ReaderFrom`, which would silently force every byte through a userspace copy, so `restoreSendfile` re-exposes the capability for the whole router. See §4.4 of `docs/web-direct-playback-audit.md`.
 
+Initialization files and media segments for both personal and watch-room HLS sessions support HTTP byte ranges. A complete asset response uses `200 OK`; a satisfiable `Range` request uses `206 Partial Content` with `Accept-Ranges: bytes` and `Content-Range`; and an unsatisfiable range returns `416 Requested Range Not Satisfiable`.
+
 FFmpeg stderr is not streamed to clients. The HLS runner keeps the last 20 stderr lines and passes them to the session exit handler for logging. That gives enough context for server-side troubleshooting without storing unbounded FFmpeg output.
 
 ## Seeking and Resume Behavior

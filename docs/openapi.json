@@ -2178,6 +2178,9 @@
             "$ref": "#/components/parameters/HLSFilenamePath"
           },
           {
+            "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
             "$ref": "#/components/parameters/AudioTrackQuery"
           },
           {
@@ -2194,6 +2197,9 @@
           "200": {
             "$ref": "#/components/responses/HLSSegmentResponse"
           },
+          "206": {
+            "$ref": "#/components/responses/PartialHLSSegmentResponse"
+          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -2202,6 +2208,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2987,11 +2996,17 @@
           },
           {
             "$ref": "#/components/parameters/HLSFilenamePath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
           }
         ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/HLSSegmentResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialHLSSegmentResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -3004,6 +3019,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -5444,6 +5462,37 @@
             "schema": {
               "type": "string",
               "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "video/mp4": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      },
+      "PartialHLSSegmentResponse": {
+        "description": "Partial fragmented MP4 initialization file or media segment for a byte range.",
+        "headers": {
+          "Accept-Ranges": {
+            "schema": {
+              "type": "string",
+              "const": "bytes"
+            }
+          },
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          },
+          "Content-Range": {
+            "schema": {
+              "type": "string",
+              "example": "bytes 0-1048575/4194304"
             }
           }
         },

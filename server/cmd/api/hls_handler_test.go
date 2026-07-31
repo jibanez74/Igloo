@@ -224,22 +224,24 @@ func TestBuildHLSPlaylistBody_CopyVideoExitedWithoutPlaylist(t *testing.T) {
 }
 
 func TestServeReadyHLSSegment(t *testing.T) {
-	t.Run("serves completed segment with shared headers", func(t *testing.T) {
-		tempDir := t.TempDir()
-		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
-		nextFilename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "1" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
-		err := os.WriteFile(filepath.Join(tempDir, filename), []byte("segment payload"), 0o600)
-		if err != nil {
-			t.Fatalf("write segment: %v", err)
-		}
-		err = os.WriteFile(filepath.Join(tempDir, nextFilename), []byte("next segment"), 0o600)
-		if err != nil {
-			t.Fatalf("write next segment: %v", err)
-		}
+	tempDir := t.TempDir()
+	filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	nextFilename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "1" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	payload := []byte("segment payload")
+	err := os.WriteFile(filepath.Join(tempDir, filename), payload, 0o600)
+	if err != nil {
+		t.Fatalf("write segment: %v", err)
+	}
+	err = os.WriteFile(filepath.Join(tempDir, nextFilename), []byte("next segment"), 0o600)
+	if err != nil {
+		t.Fatalf("write next segment: %v", err)
+	}
+	session := &HLSSession{TempDir: tempDir}
 
+	t.Run("serves completed segment with shared headers", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
 		w := httptest.NewRecorder()
-		serveReadyHLSSegment(w, req, &HLSSession{TempDir: tempDir}, filename)
+		serveReadyHLSSegment(w, req, session, filename)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
@@ -252,6 +254,42 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		}
 		if w.Body.String() != "segment payload" {
 			t.Fatalf("body = %q, want segment payload", w.Body.String())
+		}
+	})
+
+	t.Run("serves a requested byte range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		req.Header.Set("Range", "bytes=0-6")
+		w := httptest.NewRecorder()
+		serveReadyHLSSegment(w, req, session, filename)
+
+		if w.Code != http.StatusPartialContent {
+			t.Fatalf("status = %d, want 206: %s", w.Code, w.Body.String())
+		}
+		if got := w.Header().Get("Accept-Ranges"); got != "bytes" {
+			t.Fatalf("Accept-Ranges = %q, want bytes", got)
+		}
+		wantContentRange := fmt.Sprintf("bytes 0-6/%d", len(payload))
+		if got := w.Header().Get("Content-Range"); got != wantContentRange {
+			t.Fatalf("Content-Range = %q, want %q", got, wantContentRange)
+		}
+		if w.Body.String() != "segment" {
+			t.Fatalf("body = %q, want segment", w.Body.String())
+		}
+	})
+
+	t.Run("rejects an unsatisfiable byte range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", len(payload)))
+		w := httptest.NewRecorder()
+		serveReadyHLSSegment(w, req, session, filename)
+
+		if w.Code != http.StatusRequestedRangeNotSatisfiable {
+			t.Fatalf("status = %d, want 416: %s", w.Code, w.Body.String())
+		}
+		wantContentRange := fmt.Sprintf("bytes */%d", len(payload))
+		if got := w.Header().Get("Content-Range"); got != wantContentRange {
+			t.Fatalf("Content-Range = %q, want %q", got, wantContentRange)
 		}
 	})
 
