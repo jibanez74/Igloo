@@ -2152,10 +2152,11 @@ export interface components {
             email: string;
             avatar: string | null;
         };
+        InviteUsersData: {
+            users: components["schemas"]["InviteUser"][];
+        };
         InviteUsersEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                users: components["schemas"]["InviteUser"][];
-            };
+            data: components["schemas"]["InviteUsersData"];
         };
         SettingsData: {
             music_dir: string | null;
@@ -2170,10 +2171,11 @@ export interface components {
         SettingsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["SettingsData"];
         };
+        UpdateLibrarySettingsData: {
+            settings: components["schemas"]["SettingsData"];
+        };
         UpdateLibrarySettingsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                settings: components["schemas"]["SettingsData"];
-            };
+            data: components["schemas"]["UpdateLibrarySettingsData"];
         };
         /** @enum {string} */
         HardwareAccelerationDevice: "cpu" | "apple" | "nvidia" | "intel";
@@ -2208,16 +2210,18 @@ export interface components {
             static_dir: string;
             transcode_dir: string;
         };
+        GeneralSettingsData: {
+            settings: components["schemas"]["GeneralSettings"];
+        };
         GeneralSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                settings: components["schemas"]["GeneralSettings"];
-            };
+            data: components["schemas"]["GeneralSettingsData"];
+        };
+        UpdateGeneralSettingsData: {
+            settings: components["schemas"]["GeneralSettings"];
+            restart_required: boolean;
         };
         UpdateGeneralSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                settings: components["schemas"]["GeneralSettings"];
-                restart_required: boolean;
-            };
+            data: components["schemas"]["UpdateGeneralSettingsData"];
         };
         PlaybackProfile: {
             id: string;
@@ -2253,15 +2257,17 @@ export interface components {
             preferred_audio_language: string | null;
             preferred_subtitle_language: string | null;
         };
+        PlaybackSettingsData: {
+            settings: components["schemas"]["PlaybackSettings"];
+        };
         PlaybackSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                settings: components["schemas"]["PlaybackSettings"];
-            };
+            data: components["schemas"]["PlaybackSettingsData"];
+        };
+        UpdatePlaybackSettingsData: {
+            settings: components["schemas"]["UpdatePlaybackSettings"];
         };
         UpdatePlaybackSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                settings: components["schemas"]["UpdatePlaybackSettings"];
-            };
+            data: components["schemas"]["UpdatePlaybackSettingsData"];
         };
         LatestMovie: {
             /** Format: int64 */
@@ -2847,23 +2853,26 @@ export interface components {
                 rooms: components["schemas"]["WatchRoomListItem"][];
             };
         };
+        CreateWatchRoomData: {
+            /** Format: int64 */
+            room_id: number;
+        };
         CreateWatchRoomEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** Format: int64 */
-                room_id: number;
-            };
+            data: components["schemas"]["CreateWatchRoomData"];
+        };
+        WatchRoomData: {
+            room: components["schemas"]["WatchRoomDetail"];
         };
         WatchRoomEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                room: components["schemas"]["WatchRoomDetail"];
-            };
+            data: components["schemas"]["WatchRoomData"];
+        };
+        JoinWatchRoomData: {
+            /** Format: int64 */
+            room_id: number;
+            joined: boolean;
         };
         JoinWatchRoomEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** Format: int64 */
-                room_id: number;
-                joined: boolean;
-            };
+            data: components["schemas"]["JoinWatchRoomData"];
         };
         DeleteWatchRoomEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -3355,12 +3364,13 @@ export interface components {
                 device?: components["schemas"]["Device"];
             };
         };
+        QuickConnectLookupData: {
+            device_name: string;
+            platform: string;
+            app_version: string | null;
+        };
         QuickConnectLookupEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                device_name: string;
-                platform: string;
-                app_version: string | null;
-            };
+            data: components["schemas"]["QuickConnectLookupData"];
         };
         QuickConnectApproveRequest: {
             code: string;
@@ -3381,10 +3391,11 @@ export interface components {
                 device: components["schemas"]["Device"];
             };
         };
+        DevicesListData: {
+            devices: components["schemas"]["Device"][];
+        };
         DevicesListEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                devices: components["schemas"]["Device"][];
-            };
+            data: components["schemas"]["DevicesListData"];
         };
         RenameDeviceRequest: {
             name: string;

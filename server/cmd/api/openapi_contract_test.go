@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,24 +13,36 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/legacy"
 )
 
+// newOpenAPIJSONRequest builds a request that a handler and then
+// assertOpenAPIExchange can both read. Serving the request drains its body, so
+// the assertion replays it through GetBody. Real clients always send the
+// content type the contract documents, so set it here too.
+func newOpenAPIJSONRequest(method, target, body string) *http.Request {
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(body)), nil
+	}
+	return request
+}
+
 // assertOpenAPIExchange validates the observable HTTP boundary rather than a
 // handler implementation detail. Call it from endpoint tests after the real
-// request has been served.
+// request has been served. Requests carrying a body must come from
+// newOpenAPIJSONRequest so the consumed body can be replayed.
 func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {
 	t.Helper()
 
-	document := loadOpenAPIContract(t)
-	router, err := legacy.NewRouter(document)
-	if err != nil {
-		t.Fatalf("create OpenAPI router: %v", err)
-	}
+	_, router := loadOpenAPIContract(t)
 
 	route, pathParams, err := router.FindRoute(request)
 	if err != nil {
@@ -38,10 +52,22 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 		t.Fatalf("operation ID = %q, want %q", route.Operation.OperationID, operationID)
 	}
 
+	if route.Operation.RequestBody != nil && request.GetBody == nil {
+		t.Fatalf("operation %s sends a request body; build the request with newOpenAPIJSONRequest so it can be replayed", operationID)
+	}
+	if request.GetBody != nil {
+		replayed, replayErr := request.GetBody()
+		if replayErr != nil {
+			t.Fatalf("replay request body for %s: %v", operationID, replayErr)
+		}
+		request.Body = replayed
+	}
+
 	requestInput := &openapi3filter.RequestValidationInput{
 		Request:    request,
 		PathParams: pathParams,
 		Route:      route,
+		Options:    openAPIValidationOptions,
 	}
 	err = openapi3filter.ValidateRequest(context.Background(), requestInput)
 	if err != nil {
@@ -61,11 +87,61 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 	}
 }
 
-func loadOpenAPIContract(t *testing.T) *openapi3.T {
+// The contract document is large, so parse, validate, and route-index it once
+// for the whole package rather than per assertion.
+var (
+	openAPIContractOnce   sync.Once
+	openAPIContractDoc    *openapi3.T
+	openAPIContractRouter routers.Router
+	openAPIContractErr    error
+)
+
+// openAPIValidationOptions checks that a request documented as authenticated
+// actually carries the credential its security scheme names. Whether that
+// credential grants access is the middleware's concern and is covered by the
+// handler tests; this helper only validates the documented HTTP boundary.
+var openAPIValidationOptions = &openapi3filter.Options{
+	AuthenticationFunc: assertOpenAPICredentialPresent,
+}
+
+func assertOpenAPICredentialPresent(_ context.Context, input *openapi3filter.AuthenticationInput) error {
+	scheme := input.SecurityScheme
+
+	isCookieScheme := scheme.Type == "apiKey" && scheme.In == "cookie"
+	if isCookieScheme {
+		_, err := input.RequestValidationInput.Request.Cookie(scheme.Name)
+		if err != nil {
+			return fmt.Errorf("security scheme %q requires cookie %q: %w", input.SecuritySchemeName, scheme.Name, err)
+		}
+		return nil
+	}
+
+	isBearerScheme := scheme.Type == "http" && strings.EqualFold(scheme.Scheme, "bearer")
+	if isBearerScheme {
+		header := input.RequestValidationInput.Request.Header.Get("Authorization")
+		if !strings.HasPrefix(header, "Bearer ") {
+			return fmt.Errorf("security scheme %q requires a Bearer Authorization header", input.SecuritySchemeName)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unsupported security scheme %q", input.SecuritySchemeName)
+}
+
+func loadOpenAPIContract(t *testing.T) (*openapi3.T, routers.Router) {
 	t.Helper()
+	openAPIContractOnce.Do(loadOpenAPIContractOnce)
+	if openAPIContractErr != nil {
+		t.Fatalf("load OpenAPI contract: %v", openAPIContractErr)
+	}
+	return openAPIContractDoc, openAPIContractRouter
+}
+
+func loadOpenAPIContractOnce() {
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("failed to locate OpenAPI contract test")
+		openAPIContractErr = errors.New("failed to locate OpenAPI contract test")
+		return
 	}
 
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
@@ -74,13 +150,24 @@ func loadOpenAPIContract(t *testing.T) *openapi3.T {
 	loader.IsExternalRefsAllowed = false
 	document, err := loader.LoadFromFile(documentPath)
 	if err != nil {
-		t.Fatalf("load OpenAPI document: %v", err)
+		openAPIContractErr = fmt.Errorf("load OpenAPI document: %w", err)
+		return
 	}
+
 	err = document.Validate(context.Background())
 	if err != nil {
-		t.Fatalf("validate OpenAPI document: %v", err)
+		openAPIContractErr = fmt.Errorf("validate OpenAPI document: %w", err)
+		return
 	}
-	return document
+
+	router, err := legacy.NewRouter(document)
+	if err != nil {
+		openAPIContractErr = fmt.Errorf("create OpenAPI router: %w", err)
+		return
+	}
+
+	openAPIContractDoc = document
+	openAPIContractRouter = router
 }
 
 func TestHealthCheckConformsToOpenAPI(t *testing.T) {
@@ -222,7 +309,7 @@ var openAPIJSONOperationAssertions = map[string]string{
 }
 
 func TestEveryJSONOpenAPIOperationHasConformanceAssertion(t *testing.T) {
-	document := loadOpenAPIContract(t)
+	document, _ := loadOpenAPIContract(t)
 	missing := make([]string, 0)
 	for _, pathItem := range document.Paths.Map() {
 		for _, operation := range pathItem.Operations() {

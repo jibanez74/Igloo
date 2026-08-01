@@ -165,6 +165,7 @@ func TestGetDevices_SessionListsOwnDevices(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getDevices", req, w)
 
 	var resp deviceListResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -396,13 +397,14 @@ func TestRenameDevice_RenamesOwnDevice(t *testing.T) {
 	}
 
 	body := `{"name":"Bedroom Phone"}`
-	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/devices/%d", device.ID), strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPatch, fmt.Sprintf("/api/devices/%d", device.ID), body)
 	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("rename status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "renameDevice", req, w)
 
 	renamed, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
 	if err != nil {

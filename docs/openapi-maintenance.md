@@ -31,6 +31,10 @@ serves it only at `http://127.0.0.1:8081`.
 Conventions:
 
 - JSON responses use the shared `{ "error": boolean, "message"?: string, "data"?: object }` envelope.
+- An envelope's `data` payload is a named `*Data` schema referenced by `$ref`, never an
+  inline object. `JsonSuccess.data` is an open object, so an inline payload leaks an index
+  signature into `Envelope["data"]` in generated TypeScript and produces anonymous inline
+  types in other generated clients. Frontend types should alias the `*Data` schema directly.
 - Session-protected routes use `cookieAuth`; public routes set `security: []`.
 - Admin-only routes still use `cookieAuth`, include `403`, and state the admin requirement in the description.
 - Streaming routes document `206` when range requests are supported.

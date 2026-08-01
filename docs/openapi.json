@@ -6614,6 +6614,21 @@
         },
         "additionalProperties": false
       },
+      "InviteUsersData": {
+        "type": "object",
+        "required": [
+          "users"
+        ],
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InviteUser"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "InviteUsersEnvelope": {
         "allOf": [
           {
@@ -6626,19 +6641,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "users"
-                ],
-                "properties": {
-                  "users": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/InviteUser"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/InviteUsersData"
               }
             }
           }
@@ -6720,6 +6723,18 @@
           }
         ]
       },
+      "UpdateLibrarySettingsData": {
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/SettingsData"
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdateLibrarySettingsEnvelope": {
         "allOf": [
           {
@@ -6732,16 +6747,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "settings"
-                ],
-                "properties": {
-                  "settings": {
-                    "$ref": "#/components/schemas/SettingsData"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/UpdateLibrarySettingsData"
               }
             }
           }
@@ -6888,6 +6894,18 @@
         },
         "additionalProperties": false
       },
+      "GeneralSettingsData": {
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/GeneralSettings"
+          }
+        },
+        "additionalProperties": false
+      },
       "GeneralSettingsEnvelope": {
         "allOf": [
           {
@@ -6900,20 +6918,27 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "settings"
-                ],
-                "properties": {
-                  "settings": {
-                    "$ref": "#/components/schemas/GeneralSettings"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/GeneralSettingsData"
               }
             }
           }
         ]
+      },
+      "UpdateGeneralSettingsData": {
+        "type": "object",
+        "required": [
+          "settings",
+          "restart_required"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/GeneralSettings"
+          },
+          "restart_required": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateGeneralSettingsEnvelope": {
         "allOf": [
@@ -6927,20 +6952,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "settings",
-                  "restart_required"
-                ],
-                "properties": {
-                  "settings": {
-                    "$ref": "#/components/schemas/GeneralSettings"
-                  },
-                  "restart_required": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/UpdateGeneralSettingsData"
               }
             }
           }
@@ -7112,6 +7124,18 @@
         },
         "additionalProperties": false
       },
+      "PlaybackSettingsData": {
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/PlaybackSettings"
+          }
+        },
+        "additionalProperties": false
+      },
       "PlaybackSettingsEnvelope": {
         "allOf": [
           {
@@ -7124,20 +7148,23 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "settings"
-                ],
-                "properties": {
-                  "settings": {
-                    "$ref": "#/components/schemas/PlaybackSettings"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/PlaybackSettingsData"
               }
             }
           }
         ]
+      },
+      "UpdatePlaybackSettingsData": {
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/UpdatePlaybackSettings"
+          }
+        },
+        "additionalProperties": false
       },
       "UpdatePlaybackSettingsEnvelope": {
         "allOf": [
@@ -7151,16 +7178,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "settings"
-                ],
-                "properties": {
-                  "settings": {
-                    "$ref": "#/components/schemas/UpdatePlaybackSettings"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/UpdatePlaybackSettingsData"
               }
             }
           }
@@ -9079,6 +9097,19 @@
           }
         ]
       },
+      "CreateWatchRoomData": {
+        "type": "object",
+        "required": [
+          "room_id"
+        ],
+        "properties": {
+          "room_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateWatchRoomEnvelope": {
         "allOf": [
           {
@@ -9091,21 +9122,23 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "room_id"
-                ],
-                "properties": {
-                  "room_id": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/CreateWatchRoomData"
               }
             }
           }
         ]
+      },
+      "WatchRoomData": {
+        "type": "object",
+        "required": [
+          "room"
+        ],
+        "properties": {
+          "room": {
+            "$ref": "#/components/schemas/WatchRoomDetail"
+          }
+        },
+        "additionalProperties": false
       },
       "WatchRoomEnvelope": {
         "allOf": [
@@ -9119,20 +9152,28 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "room"
-                ],
-                "properties": {
-                  "room": {
-                    "$ref": "#/components/schemas/WatchRoomDetail"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/WatchRoomData"
               }
             }
           }
         ]
+      },
+      "JoinWatchRoomData": {
+        "type": "object",
+        "required": [
+          "room_id",
+          "joined"
+        ],
+        "properties": {
+          "room_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "joined": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "JoinWatchRoomEnvelope": {
         "allOf": [
@@ -9146,21 +9187,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "room_id",
-                  "joined"
-                ],
-                "properties": {
-                  "room_id": {
-                    "type": "integer",
-                    "format": "int64"
-                  },
-                  "joined": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/JoinWatchRoomData"
               }
             }
           }
@@ -10788,6 +10815,29 @@
           }
         ]
       },
+      "QuickConnectLookupData": {
+        "type": "object",
+        "required": [
+          "device_name",
+          "platform",
+          "app_version"
+        ],
+        "properties": {
+          "device_name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "app_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "QuickConnectLookupEnvelope": {
         "allOf": [
           {
@@ -10800,27 +10850,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "device_name",
-                  "platform",
-                  "app_version"
-                ],
-                "properties": {
-                  "device_name": {
-                    "type": "string"
-                  },
-                  "platform": {
-                    "type": "string"
-                  },
-                  "app_version": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/QuickConnectLookupData"
               }
             }
           }
@@ -10899,6 +10929,21 @@
           }
         ]
       },
+      "DevicesListData": {
+        "type": "object",
+        "required": [
+          "devices"
+        ],
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "DevicesListEnvelope": {
         "allOf": [
           {
@@ -10911,19 +10956,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "devices"
-                ],
-                "properties": {
-                  "devices": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Device"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/DevicesListData"
               }
             }
           }

@@ -67,10 +67,11 @@ func approveQuickConnectForTest(t *testing.T, app *Application, code string, coo
 	t.Helper()
 
 	body := fmt.Sprintf(`{"code":%q}`, code)
-	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/approve", strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/quick-connect/approve", body)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "approveQuickConnect", req, w)
 	return w
 }
 
