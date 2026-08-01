@@ -56,3 +56,4 @@
 .playwright-mcp/
 AGENTS.md
 CLAUDE.md
+web/.openapi-docs/

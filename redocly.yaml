@@ -1,0 +1,15 @@
+extends:
+  - recommended
+
+rules:
+  # Chi intentionally has static siblings next to parameter routes. Route
+  # registration order resolves these paths before the parameter route.
+  no-ambiguous-paths: off
+  # /api/health is a liveness endpoint and does not accept client input.
+  operation-4xx-response: off
+  # WebSocket upgrades use HTTP 101 rather than a 2xx response.
+  operation-2xx-response: off
+  # The WebSocket event schema is referenced in the upgrade description.
+  no-unused-components: off
+  # Igloo is self-hosted and has no published license yet.
+  info-license: off

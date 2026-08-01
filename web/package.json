@@ -7,6 +7,9 @@
     "dev": "vite",
     "generate:openapi": "openapi-typescript ../docs/openapi.json -o src/types/openapi.gen.ts",
     "check:openapi": "bun run generate:openapi && git diff --exit-code -- src/types/openapi.gen.ts",
+    "lint:openapi": "redocly lint --config ../redocly.yaml ../docs/openapi.json",
+    "build:openapi": "redocly build-docs --config ../redocly.yaml ../docs/openapi.json -o .openapi-docs/index.html",
+    "preview:openapi": "bun run build:openapi && bun scripts/preview-openapi.mjs",
     "generate:theme": "bun scripts/generate-theme.ts",
     "typecheck": "tsc -b",
     "build": "bun run typecheck && vite build",
@@ -56,6 +59,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.62.0",
+    "@redocly/cli": "2.43.2",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-plugin": "1.168.19",
     "@testing-library/jest-dom": "^6.10.0",

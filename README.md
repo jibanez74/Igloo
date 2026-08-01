@@ -198,13 +198,17 @@ From the repository root:
 | `make start` | Build and run the full application in the background |
 | `make stop` | Stop the application started by `make start` |
 | `make clean` | Remove build artifacts while preserving `.env`, database, media, and runtime data |
-| `make check` | Run backend tests, web lint, web unit tests, and web build/type-check |
+| `make check` | Run OpenAPI checks, backend tests, web lint, web unit tests, and web build/type-check |
 | `make test` | Run backend and web unit tests |
 | `make test-server` | Run backend tests with the required build tags and placeholder web assets |
 | `make test-web` | Run Vitest |
 | `make lint-web` | Run ESLint |
 | `make build-web` | Build and type-check the web client |
-| `make test-openapi` | Run the OpenAPI route coverage test |
+| `make test-openapi` | Lint the OpenAPI contract and run the route coverage test |
+| `make lint-openapi` | Lint `docs/openapi.json` with Redocly |
+| `make generate-openapi` | Generate committed frontend TypeScript schemas from OpenAPI |
+| `make check-openapi` | Verify generated frontend schemas have no drift |
+| `make preview-openapi` | Build and serve a local OpenAPI reference at `127.0.0.1:8081` |
 
 From `web/`:
 
@@ -214,6 +218,10 @@ From `web/`:
 | `bun run build` | Build the production bundle and run TypeScript checking |
 | `bun run build:analyze` | Build with bundle visualizer output under `web/dist/` and run TypeScript checking |
 | `bun run lint` | Run ESLint |
+| `bun run generate:openapi` | Generate `src/types/openapi.gen.ts` from the authoritative OpenAPI contract |
+| `bun run check:openapi` | Regenerate schemas and fail when the committed output differs |
+| `bun run lint:openapi` | Lint the authoritative OpenAPI contract |
+| `bun run preview:openapi` | Build and serve temporary local API reference HTML |
 | `bun run test` | Run Vitest |
 | `bun run test:e2e` | Run all Playwright specs against an existing server |
 | `bun run test:e2e:login` | Run Playwright login screen checks against an existing server |

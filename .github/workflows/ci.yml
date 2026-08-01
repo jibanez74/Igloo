@@ -28,6 +28,26 @@ jobs:
           touch cmd/api/webdist/.keep
           go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
 
+  test-openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+          cache-dependency-path: server/go.sum
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install media tools and web dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          cd web && bun install --frozen-lockfile
+
+      - name: Lint contract, detect generated-type drift, and verify router coverage
+        run: make test-openapi check-openapi
+
   test-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -40,6 +60,9 @@ jobs:
 
       - name: Lint
         run: cd web && bun run lint
+
+      - name: Verify generated OpenAPI types
+        run: cd web && bun run check:openapi
 
       - name: Test
         run: cd web && bun run test

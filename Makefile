@@ -27,7 +27,7 @@ FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev build start stop clean help check test test-server test-web lint-web build-web test-openapi
+.PHONY: dev build start stop clean help check test test-server test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder
@@ -109,15 +109,19 @@ help:
 	@echo "  make start         Build and run the full application in the background"
 	@echo "  make stop          Stop the background application"
 	@echo "  make clean         Remove ignored build artifacts"
-	@echo "  make check         Run backend tests, web lint, web tests, and web build"
+	@echo "  make check         Run contract checks, backend tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
 	@echo "  make test-server   Run backend tests with required build tags"
 	@echo "  make test-web      Run frontend unit tests"
 	@echo "  make lint-web      Run frontend lint"
 	@echo "  make build-web     Build and type-check the frontend"
-	@echo "  make test-openapi  Run OpenAPI route coverage test"
+	@echo "  make test-openapi  Lint the OpenAPI contract and run route coverage tests"
+	@echo "  make lint-openapi  Lint docs/openapi.json with Redocly"
+	@echo "  make generate-openapi Generate web TypeScript schemas from OpenAPI"
+	@echo "  make check-openapi Verify committed generated OpenAPI schemas are current"
+	@echo "  make preview-openapi Build and serve local OpenAPI documentation on localhost"
 
-check: test-server lint-web test-web build-web
+check: test-openapi check-openapi test-server lint-web test-web build-web
 
 test: test-server test-web
 
@@ -133,8 +137,20 @@ lint-web: check-web-tools
 build-web: check-web-tools
 	@cd $(WEB_DIR) && bun run build
 
-test-openapi: check-server-test-tools prepare-webdist-placeholder
+test-openapi: lint-openapi check-server-test-tools prepare-webdist-placeholder
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -tags "$(TEST_TAGS)" ./cmd/api -run TestOpenAPIDocumentsRegisteredAPIRoutes -count=1
+
+lint-openapi: check-web-tools
+	@cd $(WEB_DIR) && bun run lint:openapi
+
+generate-openapi: check-web-tools
+	@cd $(WEB_DIR) && bun run generate:openapi
+
+check-openapi: check-web-tools
+	@cd $(WEB_DIR) && bun run check:openapi
+
+preview-openapi: check-web-tools
+	@cd $(WEB_DIR) && bun run preview:openapi
 
 check-go-tools:
 	@command -v go >/dev/null || (echo "go is required"; exit 1)
