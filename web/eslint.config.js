@@ -46,6 +46,7 @@ export default defineConfig([
     ".bun",
     "node_modules",
     "src/routeTree.gen.ts",
+    "src/types/openapi.gen.ts",
   ]),
 
   {

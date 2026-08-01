@@ -119,7 +119,7 @@ function notificationResponse(): ApiResponseType<CreateNotificationResponseType>
     notification: {
       id: 1,
       created_by_user_id: 9,
-      user_id: null,
+      user_id: { Int64: 0, Valid: false },
       title: "album_request",
       message: "Requester: Music Fan <music-fan@example.com>",
       is_admin: true,

@@ -134,7 +134,7 @@ function notificationResponse(): ApiResponseType<CreateNotificationResponseType>
     notification: {
       id: 1,
       created_by_user_id: 7,
-      user_id: null,
+      user_id: { Int64: 0, Valid: false },
       title: "movie_request",
       message: "Requester: Movie Fan <movie-fan@example.com>",
       is_admin: true,

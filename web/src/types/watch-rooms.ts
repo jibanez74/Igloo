@@ -1,83 +1,15 @@
-import type { StreamModeId } from "./playback";
-import type { WATCH_ROOM_EVENT_TYPES } from "@/lib/constants";
+import type { components } from "./openapi.gen";
 
-export type WatchRoomServerEventName =
-  (typeof WATCH_ROOM_EVENT_TYPES)[keyof typeof WATCH_ROOM_EVENT_TYPES];
+type Schema = components["schemas"];
 
-export type WatchRoomMemberType = {
-  id: number;
-  name: string;
-  avatar: string | null;
-};
-
-export type WatchRoomInviteUserType = {
-  id: number;
-  name: string;
-  email: string;
-  avatar: string | null;
-};
-
-export type WatchRoomType = {
-  id: number;
-  movie_id: number;
-  movie_title: string;
-  movie_poster: string | null;
-  owner: WatchRoomMemberType;
-  members: WatchRoomMemberType[];
-  playback_mode: StreamModeId;
-  is_owner: boolean;
-  created_at: string;
-};
-
-export type WatchRoomDetailType = {
-  id: number;
-  movie_id: number;
-  movie_title: string;
-  movie_poster: string | null;
-  owner: WatchRoomMemberType;
-  members: WatchRoomMemberType[];
-  playback_mode: StreamModeId;
-  audio_track: number;
-  subtitle_track: number | null;
-  is_owner: boolean;
-  created_at: string;
-};
-
-export type WatchRoomInviteUsersResponseType = {
-  users: WatchRoomInviteUserType[];
-};
-
-export type CreateWatchRoomRequestType = {
-  movie_id: number;
-  mode: StreamModeId;
-  audio_track: number;
-  subtitle_track: number | null;
-  invited_user_ids: number[];
-};
-
-export type CreateWatchRoomResponseType = {
-  room_id: number;
-};
-
-export type WatchRoomResponseType = {
-  room: WatchRoomDetailType;
-};
-
-export type JoinWatchRoomResponseType = {
-  room_id: number;
-  joined: boolean;
-};
-
-export type WatchRoomPlaybackStateType = {
-  paused: boolean;
-  position_sec: number;
-  updated_at: string;
-};
-
-export type WatchRoomServerEventType = {
-  type: WatchRoomServerEventName;
-  room_id: number;
-  playback?: WatchRoomPlaybackStateType;
-  member?: WatchRoomMemberType;
-  connected_user_ids?: number[];
-};
+export type WatchRoomMemberType = Schema["WatchRoomMember"];
+export type WatchRoomInviteUserType = Schema["InviteUser"];
+export type WatchRoomType = Schema["WatchRoomListItem"];
+export type WatchRoomDetailType = Schema["WatchRoomDetail"];
+export type WatchRoomInviteUsersResponseType = Schema["InviteUsersEnvelope"]["data"];
+export type CreateWatchRoomRequestType = Schema["CreateWatchRoomRequest"];
+export type CreateWatchRoomResponseType = Schema["CreateWatchRoomEnvelope"]["data"];
+export type WatchRoomResponseType = Schema["WatchRoomEnvelope"]["data"];
+export type JoinWatchRoomResponseType = Schema["JoinWatchRoomEnvelope"]["data"];
+export type WatchRoomPlaybackStateType = Schema["WatchRoomPlaybackState"];
+export type WatchRoomServerEventType = Schema["WatchRoomServerEvent"];

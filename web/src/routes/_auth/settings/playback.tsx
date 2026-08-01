@@ -419,7 +419,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
   const recommendedId = recommendedProfileId(
     settings.profiles,
-    form.download_mbps,
+    form.download_mbps ?? null,
     settings.is_admin
       ? (form.server_upload_mbps ?? null)
       : settings.server_upload_mbps,
