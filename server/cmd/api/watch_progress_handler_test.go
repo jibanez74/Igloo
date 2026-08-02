@@ -49,6 +49,35 @@ func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int
 	return user.ID, movie.ID
 }
 
+func TestWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	userID, movieID := createTestUserAndMovie(t, app)
+	app.InitSession()
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, userID)
+
+	assertRequest := func(operationID string, req *http.Request) {
+		t.Helper()
+		req.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		app.Router.ServeHTTP(response, req)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body = %s", operationID, response.Code, response.Body.String())
+		}
+		assertOpenAPIExchange(t, operationID, req, response)
+	}
+
+	progressPath := fmt.Sprintf("/api/movies/%d/watch-progress", movieID)
+	assertRequest("getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
+	assertRequest("getContinueWatchingMovies", httptest.NewRequest(http.MethodGet, "/api/movies/continue-watching", nil))
+	updateBody := `{"progress_sec":120,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`
+	assertRequest("updateMovieWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody))
+	watchedPath := fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID)
+	assertRequest("setMovieWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`))
+	assertRequest("deleteMovieWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil))
+}
+
 func TestWatchProgress_UpsertAndGet(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

@@ -91,9 +91,8 @@ func TestWatchRoom_OwnerInsertedAsMember(t *testing.T) {
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[]}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -151,8 +150,7 @@ func TestWatchRoom_InvitedUsersAddedAsMembers(t *testing.T) {
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d,%d]}`, movieID, guest1.ID, guest2.ID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -598,15 +596,15 @@ func TestCreateWatchRoom_HTTP_Success(t *testing.T) {
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[]}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
 	var resp helpers.JSONResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
@@ -1013,10 +1011,15 @@ func TestGetWatchRooms_HTTP_ProductionRouterResponseShape(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 
-	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, "/api/watch-rooms", "")
+	req := httptest.NewRequest(http.MethodGet, "/api/watch-rooms", nil)
+	req.AddCookie(newWatchRoomSessionCookie(t, app, ownerID))
+	w := httptest.NewRecorder()
+	app.InitRouter()
+	app.Router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getWatchRooms", req, w)
 
 	var resp helpers.JSONResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
@@ -1235,6 +1238,7 @@ func TestGetWatchRoom_HTTP_SuccessForMember(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getWatchRoom", req, w)
 }
 
 func TestJoinWatchRoom_HTTP_SuccessForMember(t *testing.T) {
@@ -1253,6 +1257,7 @@ func TestJoinWatchRoom_HTTP_SuccessForMember(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "joinWatchRoom", req, w)
 }
 
 func TestJoinWatchRoom_HTTP_ForbiddenForNonMember(t *testing.T) {
@@ -1299,6 +1304,7 @@ func TestDeleteWatchRoom_HTTP_SuccessForOwner(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "deleteWatchRoom", req, w)
 
 	_, err := app.Queries.GetWatchRoomByID(context.Background(), room.ID)
 	if err != sql.ErrNoRows {
@@ -1550,12 +1556,14 @@ func TestGetUsers_HTTP_ExcludesCurrentUser(t *testing.T) {
 	handler := app.SessionManager.LoadAndSave(r)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getUsers", req, w)
 
 	var resp helpers.JSONResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {

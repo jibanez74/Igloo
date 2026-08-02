@@ -41,15 +41,17 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	router.Post("/api/movies/{id}/tmdb-search", app.TmdbSearchMovies)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/movies/10/tmdb-search", strings.NewReader(`{
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/movies/10/tmdb-search", `{
 		"title": "Casino Royale",
 		"year": 2006
-	}`))
+	}`)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "tmdbSearchMovies", req, w)
 
 	var resp struct {
 		Error bool `json:"error"`
@@ -57,7 +59,7 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 			Results []tmdbSearchResult `json:"results"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if resp.Error {
@@ -102,15 +104,17 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	router.Post("/api/tmdb/movies/search", app.SearchTmdbMovies)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/tmdb/movies/search", strings.NewReader(`{
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/tmdb/movies/search", `{
 		"title": "The Matrix",
 		"year": 1999
-	}`))
+	}`)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "searchTmdbMovies", req, w)
 
 	var resp struct {
 		Error bool `json:"error"`
@@ -214,9 +218,25 @@ func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/603", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	assertOpenAPIExchange(t, "getMovieByTmdbID", req, w)
+
+	var rawResp struct {
+		Data struct {
+			Movie map[string]json.RawMessage `json:"movie"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &rawResp); err != nil {
+		t.Fatalf("decode sparse response: %v", err)
+	}
+	for _, field := range []string{"genre_ids", "production_companies", "genres"} {
+		if string(rawResp.Data.Movie[field]) != "null" {
+			t.Fatalf("sparse movie %s = %s, want null", field, rawResp.Data.Movie[field])
+		}
 	}
 
 	var resp struct {
@@ -249,10 +269,12 @@ func TestGetTmdbStatus_HTTP(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/status", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getTmdbStatus", req, w)
 
 	var unavailableResp struct {
 		Error bool `json:"error"`
@@ -420,31 +442,78 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	movies := make([]*tmdb.TmdbMovie, tmdbMaxItems+5)
-	for i := range movies {
-		movies[i] = &tmdb.TmdbMovie{TmdbID: i + 1, Title: "Movie " + strconv.Itoa(i+1)}
+	movies := make([]*tmdb.TmdbMovie, tmdbMaxItems+6)
+	for i := 1; i < len(movies); i++ {
+		movies[i] = &tmdb.TmdbMovie{
+			TmdbID:        i,
+			Title:         "Movie " + strconv.Itoa(i),
+			OriginalTitle: "Original " + strconv.Itoa(i),
+			Overview:      "Overview",
+			ReleaseDate:   "2026-01-01",
+			PosterPath:    "/poster.jpg",
+			BackdropPath:  "/backdrop.jpg",
+			Popularity:    12.5,
+			VoteAverage:   8.25,
+			VoteCount:     100,
+			OriginalLang:  "en",
+		}
 	}
 	app.Tmdb = &stubMovieScannerTmdb{theaterMovies: movies}
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/in-theaters", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	app.GetMoviesInTheaters(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getMoviesInTheaters", req, w)
 
 	var resp struct {
 		Error bool `json:"error"`
 		Data  struct {
-			Movies []tmdb.TmdbMovie `json:"movies"`
+			Movies []theaterMovieResponse `json:"movies"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(resp.Data.Movies) != tmdbMaxItems {
 		t.Fatalf("movie count = %d, want capped count %d", len(resp.Data.Movies), tmdbMaxItems)
+	}
+	if resp.Data.Movies[0].TmdbID != 1 || resp.Data.Movies[tmdbMaxItems-1].TmdbID != tmdbMaxItems {
+		t.Fatalf("movie order = first %d, last %d; want 1 through %d", resp.Data.Movies[0].TmdbID, resp.Data.Movies[tmdbMaxItems-1].TmdbID, tmdbMaxItems)
+	}
+
+	var rawResp struct {
+		Data struct {
+			Movies []map[string]json.RawMessage `json:"movies"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &rawResp); err != nil {
+		t.Fatalf("decode raw theater response: %v", err)
+	}
+	wantFields := []string{
+		"id", "title", "original_title", "overview", "release_date", "poster_path", "backdrop_path",
+		"popularity", "vote_average", "vote_count", "adult", "original_language", "genre_ids", "video",
+	}
+	first := rawResp.Data.Movies[0]
+	if len(first) != len(wantFields) {
+		t.Fatalf("theater movie fields = %v, want exactly %v", first, wantFields)
+	}
+	for _, field := range wantFields {
+		if _, ok := first[field]; !ok {
+			t.Errorf("theater movie missing field %q", field)
+		}
+	}
+	if string(first["genre_ids"]) != "[]" {
+		t.Errorf("genre_ids = %s, want []", first["genre_ids"])
+	}
+	for _, field := range []string{"runtime", "status", "tagline", "budget", "revenue", "homepage", "imdb_id", "production_companies", "genres", "credits", "videos", "release_dates"} {
+		if _, ok := first[field]; ok {
+			t.Errorf("theater movie unexpectedly includes detail field %q", field)
+		}
 	}
 }
 
@@ -503,12 +572,14 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 	router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(movie.ID, 10)+"/identify", strings.NewReader(`{"tmdb_id":603}`))
+	req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(movie.ID, 10)+"/identify", `{"tmdb_id":603}`)
+	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "identifyMovie", req, w)
 
 	updated, err := app.Queries.GetMovieByID(ctx, movie.ID)
 	if err != nil {
@@ -612,11 +683,13 @@ func TestUpdateMovieMetadata_DoesNotRequireRemovedLockFields(t *testing.T) {
 	router.Patch("/api/movies/{id}", app.UpdateMovieMetadata)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPatch, "/api/movies/"+strconv.FormatInt(movie.ID, 10), strings.NewReader(`{"title":"Updated"}`))
+	req := newOpenAPIJSONRequest(http.MethodPatch, "/api/movies/"+strconv.FormatInt(movie.ID, 10), `{"title":"Updated"}`)
+	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "updateMovieMetadata", req, w)
 
 	updated, err := app.Queries.GetMovieByID(ctx, movie.ID)
 	if err != nil {

@@ -87,6 +87,7 @@ func TestGetCurrentAuthUser_HTTPReturnsCurrentUser(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getCurrentAuthUser", req, w)
 
 	resp := decodeAuthUserResponse(t, w)
 	if resp.Error {
@@ -142,6 +143,7 @@ func TestLogout_DeviceTokenRevokesDevice(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("logout status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "destroySession", req, w)
 
 	if _, found := app.DeviceLastSeen.Get(lastSeenKey); found {
 		t.Fatal("DeviceLastSeen cache entry should be evicted after device logout")

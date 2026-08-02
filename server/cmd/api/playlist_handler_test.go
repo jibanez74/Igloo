@@ -646,3 +646,91 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 		t.Fatalf("removed collaborator movie access status = %d, want 403: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestPlaylistHandlers_ConformToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	owner := createTestUser(t, app, "Contract Owner", "contract-owner@example.com", false)
+	outsider := createTestUser(t, app, "Contract Outsider", "contract-outsider@example.com", false)
+	app.InitSession()
+	app.InitRouter()
+	cookies := playlistAuthCookies(t, app, owner.ID)
+
+	request := func(operationID, method, path, body string, wantStatus int) *httptest.ResponseRecorder {
+		t.Helper()
+		var req *http.Request
+		if body == "" {
+			req = httptest.NewRequest(method, path, nil)
+		} else {
+			req = newOpenAPIJSONRequest(method, path, body)
+		}
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
+		response := httptest.NewRecorder()
+		app.Router.ServeHTTP(response, req)
+		if response.Code != wantStatus {
+			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
+		}
+		assertOpenAPIExchange(t, operationID, req, response)
+		return response
+	}
+
+	request("getPlaylists", http.MethodGet, "/api/music/playlists", "", http.StatusOK)
+	request("getMoviePlaylists", http.MethodGet, "/api/movies/playlists", "", http.StatusOK)
+
+	musicianID := createSearchMusician(t, app, "Contract Playlist Artist")
+	albumID := createSearchAlbum(t, app, "Contract Playlist Album", "Contract Playlist Artist")
+	trackIDValue := createSearchTrack(t, app, "Contract Playlist Track", "/music/playlist-contract.flac", albumID, musicianID)
+	movieIDValue := createSearchMovie(t, app, "Contract Playlist Movie", "/movies/playlist-contract.mkv")
+	trackID := strconv.FormatInt(trackIDValue, 10)
+	movieID := strconv.FormatInt(movieIDValue, 10)
+	outsiderID := strconv.FormatInt(outsider.ID, 10)
+
+	createdTrackResponse := request("createPlaylist", http.MethodPost, "/api/music/playlists", `{"name":"Created Track Playlist"}`, http.StatusCreated)
+	var createdTrack struct {
+		Data struct {
+			Playlist database.Playlist `json:"playlist"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(createdTrackResponse.Body.Bytes(), &createdTrack)
+	if err != nil {
+		t.Fatalf("decode created track playlist: %v", err)
+	}
+	trackPlaylistID := strconv.FormatInt(createdTrack.Data.Playlist.ID, 10)
+
+	request("getPlaylist", http.MethodGet, "/api/music/playlists/"+trackPlaylistID, "", http.StatusOK)
+	request("getPlaylistTracks", http.MethodGet, "/api/music/playlists/"+trackPlaylistID+"/tracks", "", http.StatusOK)
+	request("getPlaylistCollaborators", http.MethodGet, "/api/music/playlists/"+trackPlaylistID+"/collaborators", "", http.StatusOK)
+
+	request("addTracksToPlaylist", http.MethodPost, "/api/music/playlists/"+trackPlaylistID+"/tracks", `{"track_ids":[`+trackID+`]}`, http.StatusOK)
+	request("reorderPlaylistTracks", http.MethodPut, "/api/music/playlists/"+trackPlaylistID+"/tracks/reorder", `{"track_ids":[`+trackID+`]}`, http.StatusOK)
+	request("removeTrackFromPlaylist", http.MethodDelete, "/api/music/playlists/"+trackPlaylistID+"/tracks/"+trackID, "", http.StatusOK)
+	request("addCollaborator", http.MethodPost, "/api/music/playlists/"+trackPlaylistID+"/collaborators", `{"user_id":`+outsiderID+`,"can_edit":true}`, http.StatusCreated)
+	request("removeCollaborator", http.MethodDelete, "/api/music/playlists/"+trackPlaylistID+"/collaborators/"+outsiderID, "", http.StatusOK)
+	request("updatePlaylist", http.MethodPut, "/api/music/playlists/"+trackPlaylistID, `{"name":"Updated Track Playlist"}`, http.StatusOK)
+
+	createdMovieResponse := request("createMoviePlaylist", http.MethodPost, "/api/movies/playlists", `{"name":"Created Movie Playlist"}`, http.StatusCreated)
+	var createdMovie struct {
+		Data struct {
+			Playlist database.Playlist `json:"playlist"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(createdMovieResponse.Body.Bytes(), &createdMovie)
+	if err != nil {
+		t.Fatalf("decode created movie playlist: %v", err)
+	}
+	moviePlaylistID := strconv.FormatInt(createdMovie.Data.Playlist.ID, 10)
+
+	request("getMoviePlaylist", http.MethodGet, "/api/movies/playlists/"+moviePlaylistID, "", http.StatusOK)
+	request("getMoviePlaylistMovies", http.MethodGet, "/api/movies/playlists/"+moviePlaylistID+"/movies", "", http.StatusOK)
+	request("getMoviePlaylistCollaborators", http.MethodGet, "/api/movies/playlists/"+moviePlaylistID+"/collaborators", "", http.StatusOK)
+	request("addMoviesToMoviePlaylist", http.MethodPost, "/api/movies/playlists/"+moviePlaylistID+"/movies", `{"movie_ids":[`+movieID+`]}`, http.StatusOK)
+	request("removeMovieFromMoviePlaylist", http.MethodDelete, "/api/movies/playlists/"+moviePlaylistID+"/movies/"+movieID, "", http.StatusOK)
+	request("addMoviePlaylistCollaborator", http.MethodPost, "/api/movies/playlists/"+moviePlaylistID+"/collaborators", `{"user_id":`+outsiderID+`,"can_edit":true}`, http.StatusCreated)
+	request("removeMoviePlaylistCollaborator", http.MethodDelete, "/api/movies/playlists/"+moviePlaylistID+"/collaborators/"+outsiderID, "", http.StatusOK)
+	request("updateMoviePlaylist", http.MethodPut, "/api/movies/playlists/"+moviePlaylistID, `{"name":"Updated Movie Playlist"}`, http.StatusOK)
+
+	request("deletePlaylist", http.MethodDelete, "/api/music/playlists/"+trackPlaylistID, "", http.StatusOK)
+	request("deleteMoviePlaylist", http.MethodDelete, "/api/movies/playlists/"+moviePlaylistID, "", http.StatusOK)
+}

@@ -1,91 +1,17 @@
-export type SettingsType = {
-  music_dir: string | null;
-  movies_dir: string | null;
-  shows_dir: string | null;
-};
+import type { components } from "./openapi.gen";
 
-export type UpdateLibrarySettingsRequest = SettingsType;
+type Schema = components["schemas"];
 
-export type UpdateLibrarySettingsResponseType = {
-  settings: SettingsType;
-};
-
-export type HardwareAccelerationDevice = "cpu" | "apple" | "nvidia" | "intel";
-
-export type GeneralSettingsType = {
-  tmdb_key: string | null;
-  immich_base_url: string | null;
-  immich_api_key: string | null;
-  jellyfin_base_url: string | null;
-  jellyfin_api_key: string | null;
-  spotify_client_id: string | null;
-  spotify_client_secret: string | null;
-  enable_watcher: boolean;
-  download_images: boolean;
-  static_dir: string;
-  transcode_dir: string;
-  restart_required?: boolean;
-};
-
-export type UpdateGeneralSettingsRequest = {
-  tmdb_key: string;
-  immich_base_url: string;
-  immich_api_key: string;
-  jellyfin_base_url: string;
-  jellyfin_api_key: string;
-  spotify_client_id: string;
-  spotify_client_secret: string;
-  enable_watcher: boolean;
-  download_images: boolean;
-  static_dir: string;
-  transcode_dir: string;
-};
-
-export type GeneralSettingsResponseType = {
-  settings: GeneralSettingsType;
-};
-
-export type UpdateGeneralSettingsResponseType = {
-  settings: GeneralSettingsType;
-  restart_required: boolean;
-};
-
-export type PlaybackProfileType = {
-  id: string;
-  label: string;
-  height: number;
-  video_mbps: number;
-};
-
-export type PlaybackSettingsType = {
-  profiles: PlaybackProfileType[];
-  preferred_profile: string | null;
-  download_mbps: number | null;
-  server_upload_mbps: number | null;
-  hardware_acceleration_device: HardwareAccelerationDevice;
-  is_admin: boolean;
-  preferred_audio_language: string | null;
-  preferred_subtitle_language: string | null;
-};
-
-export type UpdatePlaybackSettingsRequest = {
-  preferred_profile: string | null;
-  download_mbps: number | null;
-  preferred_audio_language: string | null;
-  preferred_subtitle_language: string | null;
-  server_upload_mbps?: number | null;
-  hardware_acceleration_device?: HardwareAccelerationDevice;
-};
-
-export type PlaybackSettingsResponseType = {
-  settings: PlaybackSettingsType;
-};
-
-export type UpdatePlaybackSettingsResponseType = {
-  settings: {
-    preferred_profile: string | null;
-    download_mbps: number | null;
-    preferred_audio_language: string | null;
-    preferred_subtitle_language: string | null;
-  };
-};
+export type SettingsType = Schema["SettingsData"];
+export type UpdateLibrarySettingsRequest = Schema["UpdateLibrarySettingsRequest"];
+export type UpdateLibrarySettingsResponseType = Schema["UpdateLibrarySettingsData"];
+export type HardwareAccelerationDevice = Schema["HardwareAccelerationDevice"];
+export type GeneralSettingsType = Schema["GeneralSettings"];
+export type UpdateGeneralSettingsRequest = Schema["UpdateGeneralSettingsRequest"];
+export type GeneralSettingsResponseType = Schema["GeneralSettingsData"];
+export type UpdateGeneralSettingsResponseType = Schema["UpdateGeneralSettingsData"];
+export type PlaybackProfileType = Schema["PlaybackProfile"];
+export type PlaybackSettingsType = Schema["PlaybackSettings"];
+export type UpdatePlaybackSettingsRequest = Schema["UpdatePlaybackSettingsRequest"];
+export type PlaybackSettingsResponseType = Schema["PlaybackSettingsData"];
+export type UpdatePlaybackSettingsResponseType = Schema["UpdatePlaybackSettingsData"];

@@ -36,13 +36,14 @@ func initiateQuickConnectForTest(t *testing.T, app *Application) (string, string
 	t.Helper()
 
 	body := `{"device_name":"Living Room TV","platform":"android_tv","app_version":"1.0.0"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/initiate", strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/quick-connect/initiate", body)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("initiate status = %d, want 201, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "initiateQuickConnect", req, w)
 
 	var resp quickConnectInitiateResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -67,10 +68,11 @@ func approveQuickConnectForTest(t *testing.T, app *Application, code string, coo
 	t.Helper()
 
 	body := fmt.Sprintf(`{"code":%q}`, code)
-	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/approve", strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/quick-connect/approve", body)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "approveQuickConnect", req, w)
 	return w
 }
 
@@ -86,10 +88,13 @@ func lookupQuickConnectForTest(t *testing.T, app *Application, code string, cook
 	t.Helper()
 
 	body := fmt.Sprintf(`{"code":%q}`, code)
-	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/lookup", strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/quick-connect/lookup", body)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
+	if w.Code == http.StatusOK {
+		assertOpenAPIExchange(t, "lookupQuickConnect", req, w)
+	}
 	return w
 }
 
@@ -97,9 +102,12 @@ func redeemQuickConnectForTest(t *testing.T, app *Application, code, secret stri
 	t.Helper()
 
 	body := fmt.Sprintf(`{"code":%q,"secret":%q}`, code, secret)
-	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/redeem", strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/quick-connect/redeem", body)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
+	if w.Code == http.StatusOK {
+		assertOpenAPIExchange(t, "redeemQuickConnect", req, w)
+	}
 	return w
 }
 

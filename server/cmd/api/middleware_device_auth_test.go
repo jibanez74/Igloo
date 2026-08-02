@@ -124,7 +124,7 @@ func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
 	}
 
 	body := `{"email":"login@example.com","password":"correct horse"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(body))
+	req = newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", body)
 	req.Header.Set("Authorization", stale)
 	w = httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
@@ -132,6 +132,7 @@ func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("login status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "authenticateUser", req, w)
 }
 
 func TestDeviceTokenAuth_ProtectedRouteRejectsUnknownToken(t *testing.T) {

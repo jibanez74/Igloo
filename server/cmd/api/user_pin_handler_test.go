@@ -136,6 +136,41 @@ func TestUpdateUserPin_SetViaSession(t *testing.T) {
 	}
 }
 
+func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
+	app := setupPinTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Contract User", "contract@example.com", false)
+	handler := mountPinRouter(app, user.ID)
+
+	updateReq := newOpenAPIJSONRequest(http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
+	addOpenAPITestCookie(updateReq)
+	updateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(updateResponse, updateReq)
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("update status = %d, body = %s", updateResponse.Code, updateResponse.Body.String())
+	}
+	assertOpenAPIExchange(t, "updateUserPin", updateReq, updateResponse)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/user/pin", nil)
+	addOpenAPITestCookie(getReq)
+	getResponse := httptest.NewRecorder()
+	handler.ServeHTTP(getResponse, getReq)
+	if getResponse.Code != http.StatusOK {
+		t.Fatalf("get status = %d, body = %s", getResponse.Code, getResponse.Body.String())
+	}
+	assertOpenAPIExchange(t, "getUserPin", getReq, getResponse)
+
+	verifyReq := newOpenAPIJSONRequest(http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
+	addOpenAPITestCookie(verifyReq)
+	verifyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(verifyResponse, verifyReq)
+	if verifyResponse.Code != http.StatusOK {
+		t.Fatalf("verify status = %d, body = %s", verifyResponse.Code, verifyResponse.Body.String())
+	}
+	assertOpenAPIExchange(t, "verifyUserPin", verifyReq, verifyResponse)
+}
+
 func TestUpdateUserPin_SetViaDeviceToken(t *testing.T) {
 	app := setupPinTestApp(t)
 	defer app.DB.Close()

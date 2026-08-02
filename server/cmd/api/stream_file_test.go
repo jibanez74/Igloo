@@ -186,7 +186,7 @@ func TestDeleteMovieEvictsStreamFileCache(t *testing.T) {
 		t.Fatalf("resolve movie: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/movies/%d", movie.ID), nil)
+	req := newOpenAPIJSONRequest(http.MethodDelete, fmt.Sprintf("/api/movies/%d", movie.ID), `{}`)
 	req.AddCookie(newAuthSessionCookie(t, app, admin.ID))
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
@@ -194,6 +194,7 @@ func TestDeleteMovieEvictsStreamFileCache(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "deleteMovie", req, w)
 
 	_, cached := app.StreamFileCache.get(movieStreamFileKey(movie.ID))
 	if cached {
@@ -241,6 +242,7 @@ func TestDeleteAlbumEvictsTrackStreamFileCache(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "deleteAlbum", req, w)
 
 	_, err = app.trackStreamFile(context.Background(), track.ID)
 	if err == nil {

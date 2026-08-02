@@ -79,13 +79,14 @@ func TestAuthenticateDevice_IssuesToken(t *testing.T) {
 	createTestUserWithPassword(t, app, "Device User", "device@example.com", "correct horse")
 
 	body := `{"email":"device@example.com","password":"correct horse","device_name":"Pixel","platform":"android"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/device-login", strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/device-login", body)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "authenticateDevice", req, w)
 
 	var resp quickConnectRedeemResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -165,6 +166,7 @@ func TestGetDevices_SessionListsOwnDevices(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getDevices", req, w)
 
 	var resp deviceListResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -275,6 +277,7 @@ func TestRevokeDevice_InvalidatesToken(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("revoke status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "revokeDevice", req, w)
 
 	// The revoked token no longer authenticates.
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
@@ -312,6 +315,7 @@ func TestDeleteUserAccount_InvalidatesDeviceTokens(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "deleteUserAccount", req, w)
 
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -396,13 +400,14 @@ func TestRenameDevice_RenamesOwnDevice(t *testing.T) {
 	}
 
 	body := `{"name":"Bedroom Phone"}`
-	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/devices/%d", device.ID), strings.NewReader(body))
+	req := newOpenAPIJSONRequest(http.MethodPatch, fmt.Sprintf("/api/devices/%d", device.ID), body)
 	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("rename status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "renameDevice", req, w)
 
 	renamed, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
 	if err != nil {

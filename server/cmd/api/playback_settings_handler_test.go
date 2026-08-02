@@ -89,12 +89,14 @@ func TestGetPlaybackSettings_ReturnsDefaultsForNewUser(t *testing.T) {
 	handler := mountPlaybackRouter(app, user.ID)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
+	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getPlaybackSettings", req, w)
 
 	settings := decodePlaybackResponse(t, w.Body.Bytes())
 	if settings.PreferredProfile != nil {
@@ -130,14 +132,15 @@ func TestUpdatePlaybackSettings_RoundTrips(t *testing.T) {
 	handler := mountPlaybackRouter(app, user.ID)
 
 	body := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/playback", body)
+	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "updatePlaybackSettings", req, w)
 
 	prefs, err := app.Queries.GetUserPlaybackPreferences(context.Background(), user.ID)
 	if err != nil {

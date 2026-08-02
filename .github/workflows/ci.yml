@@ -7,13 +7,19 @@ on:
     branches: [main]
   workflow_call:
 
+# No job publishes anything; read access is all the checkout needs.
+permissions:
+  contents: read
+
 jobs:
   test-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26.2'
           cache-dependency-path: server/go.sum
@@ -28,18 +34,45 @@ jobs:
           touch cmd/api/webdist/.keep
           go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
 
+  test-openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.2'
+          cache-dependency-path: server/go.sum
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Install media tools and web dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          cd web && bun install --frozen-lockfile
+
+      - name: Lint contract, detect generated-type drift, and verify router coverage
+        run: make test-openapi check-openapi
+
   test-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install dependencies
         run: cd web && bun install --frozen-lockfile
 
       - name: Lint
         run: cd web && bun run lint
+
+      - name: Verify generated OpenAPI types
+        run: cd web && bun run check:openapi
 
       - name: Test
         run: cd web && bun run test
