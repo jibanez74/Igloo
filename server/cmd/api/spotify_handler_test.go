@@ -62,10 +62,12 @@ func TestGetSpotifyStatus_HTTP(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/spotify/status", nil)
+	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "getSpotifyStatus", req, w)
 
 	var unavailableResp struct {
 		Error bool `json:"error"`
@@ -152,12 +154,14 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	router.Post("/api/spotify/albums/search", app.SearchSpotifyAlbums)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/spotify/albums/search", strings.NewReader(`{"title":"  Blue Record  "}`))
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/spotify/albums/search", `{"title":"  Blue Record  "}`)
+	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "searchSpotifyAlbums", req, w)
 
 	var resp struct {
 		Error bool `json:"error"`
@@ -211,6 +215,24 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	if len(stub.searchTitles) != 1 || stub.searchTitles[0] != "Blue Record" {
 		t.Fatalf("search titles = %+v, want trimmed Blue Record", stub.searchTitles)
 	}
+}
+
+func TestSearchSpotifyTracks_HTTPConformsToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Spotify = &spotifyHandlerStub{}
+
+	router := chi.NewRouter()
+	router.Post("/api/spotify/tracks/search", app.SearchSpotifyTracks)
+
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/spotify/tracks/search", `{"title":"Blue Train"}`)
+	addOpenAPITestCookie(req)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	assertOpenAPIExchange(t, "searchSpotifyTracks", req, response)
 }
 
 func TestSearchSpotifyAlbums_HTTPReturnsErrorWhenLibraryLookupFails(t *testing.T) {

@@ -8235,12 +8235,12 @@
         "type": "object",
         "required": ["id", "title", "original_title", "overview", "release_date", "poster_path", "backdrop_path", "popularity", "vote_average", "vote_count", "adult", "original_language", "genre_ids", "video", "runtime", "status", "tagline", "budget", "revenue", "homepage", "imdb_id", "production_companies", "genres", "credits", "videos", "release_dates"],
         "properties": {
-          "id": { "type": "integer" }, "title": { "type": "string" }, "original_title": { "type": "string" }, "overview": { "type": "string" }, "release_date": { "type": "string" }, "poster_path": { "type": "string" }, "backdrop_path": { "type": "string" }, "popularity": { "type": "number" }, "vote_average": { "type": "number" }, "vote_count": { "type": "integer" }, "adult": { "type": "boolean" }, "original_language": { "type": "string" }, "genre_ids": { "type": "array", "items": { "type": "integer" } }, "video": { "type": "boolean" }, "runtime": { "type": "integer" }, "status": { "type": "string" }, "tagline": { "type": "string" }, "budget": { "type": "integer", "format": "int64" }, "revenue": { "type": "integer", "format": "int64" }, "homepage": { "type": "string" }, "imdb_id": { "type": "string" },
-          "production_companies": { "type": "array", "items": { "type": "object", "required": ["id", "logo_path", "name", "origin_country"], "properties": { "id": { "type": "integer" }, "logo_path": { "type": "string" }, "name": { "type": "string" }, "origin_country": { "type": "string" } }, "additionalProperties": false } },
-          "genres": { "type": "array", "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" } }, "additionalProperties": false } },
-          "credits": { "type": "object", "required": ["cast", "crew"], "properties": { "cast": { "type": "array", "items": { "type": "object", "required": ["id", "name", "character", "profile_path", "order"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "character": { "type": "string" }, "profile_path": { "type": "string" }, "order": { "type": "integer" } }, "additionalProperties": false } }, "crew": { "type": "array", "items": { "type": "object", "required": ["id", "name", "job", "department", "profile_path"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "job": { "type": "string" }, "department": { "type": "string" }, "profile_path": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false },
-          "videos": { "type": "object", "required": ["results"], "properties": { "results": { "type": "array", "items": { "type": "object", "required": ["id", "key", "name", "site", "type", "official"], "properties": { "id": { "type": "string" }, "key": { "type": "string" }, "name": { "type": "string" }, "site": { "type": "string" }, "type": { "type": "string" }, "official": { "type": "boolean" } }, "additionalProperties": false } } }, "additionalProperties": false },
-          "release_dates": { "type": "object", "required": ["results"], "properties": { "results": { "type": "array", "items": { "type": "object", "required": ["iso_3166_1", "release_dates"], "properties": { "iso_3166_1": { "type": "string" }, "release_dates": { "type": "array", "items": { "type": "object", "required": ["certification"], "properties": { "certification": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false } } }, "additionalProperties": false }
+          "id": { "type": "integer" }, "title": { "type": "string" }, "original_title": { "type": "string" }, "overview": { "type": "string" }, "release_date": { "type": "string" }, "poster_path": { "type": "string" }, "backdrop_path": { "type": "string" }, "popularity": { "type": "number" }, "vote_average": { "type": "number" }, "vote_count": { "type": "integer" }, "adult": { "type": "boolean" }, "original_language": { "type": "string" }, "genre_ids": { "type": ["array", "null"], "items": { "type": "integer" } }, "video": { "type": "boolean" }, "runtime": { "type": "integer" }, "status": { "type": "string" }, "tagline": { "type": "string" }, "budget": { "type": "integer", "format": "int64" }, "revenue": { "type": "integer", "format": "int64" }, "homepage": { "type": "string" }, "imdb_id": { "type": "string" },
+          "production_companies": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "logo_path", "name", "origin_country"], "properties": { "id": { "type": "integer" }, "logo_path": { "type": "string" }, "name": { "type": "string" }, "origin_country": { "type": "string" } }, "additionalProperties": false } },
+          "genres": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" } }, "additionalProperties": false } },
+          "credits": { "type": "object", "required": ["cast", "crew"], "properties": { "cast": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "name", "character", "profile_path", "order"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "character": { "type": "string" }, "profile_path": { "type": "string" }, "order": { "type": "integer" } }, "additionalProperties": false } }, "crew": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "name", "job", "department", "profile_path"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "job": { "type": "string" }, "department": { "type": "string" }, "profile_path": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false },
+          "videos": { "type": "object", "required": ["results"], "properties": { "results": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "key", "name", "site", "type", "official"], "properties": { "id": { "type": "string" }, "key": { "type": "string" }, "name": { "type": "string" }, "site": { "type": "string" }, "type": { "type": "string" }, "official": { "type": "boolean" } }, "additionalProperties": false } } }, "additionalProperties": false },
+          "release_dates": { "type": "object", "required": ["results"], "properties": { "results": { "type": ["array", "null"], "items": { "type": "object", "required": ["iso_3166_1", "release_dates"], "properties": { "iso_3166_1": { "type": "string" }, "release_dates": { "type": ["array", "null"], "items": { "type": "object", "required": ["certification"], "properties": { "certification": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false } } }, "additionalProperties": false }
         },
         "additionalProperties": false
       },
@@ -8319,6 +8319,18 @@
         },
         "additionalProperties": false
       },
+      "CreateNotificationData": {
+        "type": "object",
+        "required": [
+          "notification"
+        ],
+        "properties": {
+          "notification": {
+            "$ref": "#/components/schemas/Notification"
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateNotificationEnvelope": {
         "allOf": [
           {
@@ -8331,16 +8343,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "notification"
-                ],
-                "properties": {
-                  "notification": {
-                    "$ref": "#/components/schemas/Notification"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/CreateNotificationData"
               }
             }
           }
@@ -8397,6 +8400,26 @@
         },
         "additionalProperties": false
       },
+      "NotificationsListData": {
+        "type": "object",
+        "required": [
+          "notifications",
+          "unread_count"
+        ],
+        "properties": {
+          "notifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationListItem"
+            }
+          },
+          "unread_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "NotificationsListEnvelope": {
         "allOf": [
           {
@@ -8409,24 +8432,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "notifications",
-                  "unread_count"
-                ],
-                "properties": {
-                  "notifications": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/NotificationListItem"
-                    }
-                  },
-                  "unread_count": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/NotificationsListData"
               }
             }
           }
@@ -8444,37 +8450,51 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "unread_count"
-                ],
-                "properties": {
-                  "unread_count": {
-                    "type": "integer",
-                    "format": "int64"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/UnreadNotificationCountData"
               }
             }
           }
         ]
+      },
+      "UnreadNotificationCountData": {
+        "type": "object",
+        "required": [
+          "unread_count"
+        ],
+        "properties": {
+          "unread_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "TheaterMovie": {
         "type": "object",
         "required": [
           "id",
           "title",
+          "original_title",
           "overview",
           "release_date",
           "poster_path",
-          "backdrop_path"
+          "backdrop_path",
+          "popularity",
+          "vote_average",
+          "vote_count",
+          "adult",
+          "original_language",
+          "genre_ids",
+          "video"
         ],
         "properties": {
           "id": {
             "type": "integer"
           },
           "title": {
+            "type": "string"
+          },
+          "original_title": {
             "type": "string"
           },
           "overview": {
@@ -8488,6 +8508,30 @@
           },
           "backdrop_path": {
             "type": "string"
+          },
+          "popularity": {
+            "type": "number"
+          },
+          "vote_average": {
+            "type": "number"
+          },
+          "vote_count": {
+            "type": "integer"
+          },
+          "adult": {
+            "type": "boolean"
+          },
+          "original_language": {
+            "type": "string"
+          },
+          "genre_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "video": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -8999,31 +9043,69 @@
         "additionalProperties": false
       },
       "WatchRoomDetail": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/WatchRoomListItem"
+        "type": "object",
+        "required": [
+          "id",
+          "movie_id",
+          "movie_title",
+          "movie_poster",
+          "owner",
+          "members",
+          "playback_mode",
+          "is_owner",
+          "created_at",
+          "audio_track",
+          "subtitle_track"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
           },
-          {
-            "type": "object",
-            "required": [
-              "audio_track",
-              "subtitle_track"
-            ],
-            "properties": {
-              "audio_track": {
-                "type": "integer",
-                "format": "int64"
-              },
-              "subtitle_track": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int64"
-              }
+          "movie_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "movie_title": {
+            "type": "string"
+          },
+          "movie_poster": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "$ref": "#/components/schemas/WatchRoomMember"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WatchRoomMember"
             }
+          },
+          "playback_mode": {
+            "$ref": "#/components/schemas/PlaybackMode"
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "audio_track": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subtitle_track": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
-        ]
+        },
+        "additionalProperties": false
       },
       "CreateWatchRoomRequest": {
         "type": "object",
@@ -9969,6 +10051,41 @@
         },
         "additionalProperties": false
       },
+      "PlaylistCollaboratorMutation": {
+        "type": "object",
+        "required": [
+          "id",
+          "playlist_id",
+          "user_id",
+          "can_edit",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "playlist_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "can_edit": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "CreatePlaylistRequest": {
         "type": "object",
         "required": [
@@ -10156,7 +10273,7 @@
                 ],
                 "properties": {
                   "playlist": {
-                    "$ref": "#/components/schemas/PlaylistSummary"
+                    "$ref": "#/components/schemas/Playlist"
                   }
                 },
                 "additionalProperties": false
@@ -10257,7 +10374,7 @@
                 ],
                 "properties": {
                   "collaborator": {
-                    "$ref": "#/components/schemas/PlaylistCollaborator"
+                    "$ref": "#/components/schemas/PlaylistCollaboratorMutation"
                   }
                 },
                 "additionalProperties": false

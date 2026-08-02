@@ -39,6 +39,8 @@ Conventions:
 - Admin-only routes still use `cookieAuth`, include `403`, and state the admin requirement in the description.
 - Streaming routes document `206` when range requests are supported.
 - HLS playlists, HLS segments, WebVTT subtitles, static assets, and WebSocket upgrades are documented even though they do not use the JSON envelope on success.
-- The server test suite validates selected live request/response exchanges with
-  the OpenAPI 3.1 contract. Keep the JSON operation assertion inventory in
-  `server/cmd/api/openapi_contract_test.go` current when adding operations.
+- The server test suite validates live request/response exchanges with the
+  OpenAPI 3.1 contract. Every operation with a JSON success response must call
+  `assertOpenAPIExchange` from a successful focused handler test. An unfiltered
+  API package test run fails at package completion if any such operation was not
+  observed; filtered `go test -run ...` commands skip that package-wide check.

@@ -412,6 +412,40 @@ func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID in
 	return w
 }
 
+func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	userID := createSearchUser(t, app)
+	app.InitSession()
+	app.InitRouter()
+	cookies := searchAuthCookies(t, app, userID)
+
+	tests := []struct {
+		operationID string
+		path        string
+	}{
+		{operationID: "searchAll", path: "/api/search?q=contract"},
+		{operationID: "searchMovies", path: "/api/search/movies?q=contract"},
+		{operationID: "searchAlbums", path: "/api/search/albums?q=contract"},
+		{operationID: "searchMusicians", path: "/api/search/musicians?q=contract"},
+		{operationID: "searchTracks", path: "/api/search/tracks?q=contract"},
+	}
+	for _, test := range tests {
+		t.Run(test.operationID, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, test.path, nil)
+			for _, cookie := range cookies {
+				req.AddCookie(cookie)
+			}
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, req)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+			}
+			assertOpenAPIExchange(t, test.operationID, req, response)
+		})
+	}
+}
+
 func searchAuthCookies(t *testing.T, app *Application, userID int64) []*http.Cookie {
 	t.Helper()
 

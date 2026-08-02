@@ -2597,7 +2597,7 @@ export interface components {
             vote_count: number;
             adult: boolean;
             original_language: string;
-            genre_ids: number[];
+            genre_ids: number[] | null;
             video: boolean;
             runtime: number;
             status: string;
@@ -2613,11 +2613,11 @@ export interface components {
                 logo_path: string;
                 name: string;
                 origin_country: string;
-            }[];
+            }[] | null;
             genres: {
                 id: number;
                 name: string;
-            }[];
+            }[] | null;
             credits: {
                 cast: {
                     id: number;
@@ -2625,14 +2625,14 @@ export interface components {
                     character: string;
                     profile_path: string;
                     order: number;
-                }[];
+                }[] | null;
                 crew: {
                     id: number;
                     name: string;
                     job: string;
                     department: string;
                     profile_path: string;
-                }[];
+                }[] | null;
             };
             videos: {
                 results: {
@@ -2642,15 +2642,15 @@ export interface components {
                     site: string;
                     type: string;
                     official: boolean;
-                }[];
+                }[] | null;
             };
             release_dates: {
                 results: {
                     iso_3166_1: string;
                     release_dates: {
                         certification: string;
-                    }[];
-                }[];
+                    }[] | null;
+                }[] | null;
             };
         };
         CreateNotificationRequest: {
@@ -2673,10 +2673,11 @@ export interface components {
             created_at: string;
             updated_at: string;
         };
+        CreateNotificationData: {
+            notification: components["schemas"]["Notification"];
+        };
         CreateNotificationEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                notification: components["schemas"]["Notification"];
-            };
+            data: components["schemas"]["CreateNotificationData"];
         };
         NotificationListItem: {
             /** Format: int64 */
@@ -2691,26 +2692,36 @@ export interface components {
             user_id: number | null;
             created_at: string;
         };
+        NotificationsListData: {
+            notifications: components["schemas"]["NotificationListItem"][];
+            /** Format: int64 */
+            unread_count: number;
+        };
         NotificationsListEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                notifications: components["schemas"]["NotificationListItem"][];
-                /** Format: int64 */
-                unread_count: number;
-            };
+            data: components["schemas"]["NotificationsListData"];
         };
         UnreadNotificationCountEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** Format: int64 */
-                unread_count: number;
-            };
+            data: components["schemas"]["UnreadNotificationCountData"];
+        };
+        UnreadNotificationCountData: {
+            /** Format: int64 */
+            unread_count: number;
         };
         TheaterMovie: {
             id: number;
             title: string;
+            original_title: string;
             overview: string;
             release_date: string;
             poster_path: string;
             backdrop_path: string;
+            popularity: number;
+            vote_average: number;
+            vote_count: number;
+            adult: boolean;
+            original_language: string;
+            genre_ids: number[];
+            video: boolean;
         };
         TmdbSearchResult: {
             tmdb_id: number;
@@ -2829,7 +2840,18 @@ export interface components {
             is_owner: boolean;
             created_at: string;
         };
-        WatchRoomDetail: components["schemas"]["WatchRoomListItem"] & {
+        WatchRoomDetail: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            movie_id: number;
+            movie_title: string;
+            movie_poster: string | null;
+            owner: components["schemas"]["WatchRoomMember"];
+            members: components["schemas"]["WatchRoomMember"][];
+            playback_mode: components["schemas"]["PlaybackMode"];
+            is_owner: boolean;
+            created_at: string;
             /** Format: int64 */
             audio_track: number;
             /** Format: int64 */
@@ -3158,6 +3180,17 @@ export interface components {
             username: string;
             email: string;
         };
+        PlaylistCollaboratorMutation: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            playlist_id: number;
+            /** Format: int64 */
+            user_id: number;
+            can_edit: boolean;
+            created_at: string;
+            updated_at: string;
+        };
         CreatePlaylistRequest: {
             name: string;
             description?: string;
@@ -3196,7 +3229,7 @@ export interface components {
         };
         MusicPlaylistMutationEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                playlist: components["schemas"]["PlaylistSummary"];
+                playlist: components["schemas"]["Playlist"];
             };
         };
         PlaylistTracksEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -3216,7 +3249,7 @@ export interface components {
         };
         PlaylistCollaboratorMutationEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                collaborator: components["schemas"]["PlaylistCollaborator"];
+                collaborator: components["schemas"]["PlaylistCollaboratorMutation"];
             };
         };
         RecordPlayEventRequest: {

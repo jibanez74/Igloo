@@ -41,6 +41,23 @@ type tmdbSearchResult struct {
 	LibraryMovieID   *int64 `json:"library_movie_id,omitempty"`
 }
 
+type theaterMovieResponse struct {
+	TmdbID        int     `json:"id"`
+	Title         string  `json:"title"`
+	OriginalTitle string  `json:"original_title"`
+	Overview      string  `json:"overview"`
+	ReleaseDate   string  `json:"release_date"`
+	PosterPath    string  `json:"poster_path"`
+	BackdropPath  string  `json:"backdrop_path"`
+	Popularity    float64 `json:"popularity"`
+	VoteAverage   float64 `json:"vote_average"`
+	VoteCount     int     `json:"vote_count"`
+	Adult         bool    `json:"adult"`
+	OriginalLang  string  `json:"original_language"`
+	GenreIDs      []int   `json:"genre_ids"`
+	Video         bool    `json:"video"`
+}
+
 var supportedTmdbImageSizes = map[string]bool{
 	tmdbImageSize:    true,
 	tmdbBackdropSize: true,
@@ -244,14 +261,42 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if len(movies) > tmdbMaxItems {
-		movies = movies[:tmdbMaxItems]
+	mapped := make([]theaterMovieResponse, 0, min(len(movies), tmdbMaxItems))
+	for _, movie := range movies {
+		if movie == nil {
+			continue
+		}
+
+		genreIDs := movie.GenreIDs
+		if genreIDs == nil {
+			genreIDs = []int{}
+		}
+
+		mapped = append(mapped, theaterMovieResponse{
+			TmdbID:        movie.TmdbID,
+			Title:         movie.Title,
+			OriginalTitle: movie.OriginalTitle,
+			Overview:      movie.Overview,
+			ReleaseDate:   movie.ReleaseDate,
+			PosterPath:    movie.PosterPath,
+			BackdropPath:  movie.BackdropPath,
+			Popularity:    movie.Popularity,
+			VoteAverage:   movie.VoteAverage,
+			VoteCount:     movie.VoteCount,
+			Adult:         movie.Adult,
+			OriginalLang:  movie.OriginalLang,
+			GenreIDs:      genreIDs,
+			Video:         movie.Video,
+		})
+		if len(mapped) == tmdbMaxItems {
+			break
+		}
 	}
 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"movies": movies,
+			"movies": mapped,
 		},
 	}
 

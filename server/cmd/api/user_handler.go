@@ -17,16 +17,20 @@ import (
 
 // userResponseMap is the canonical JSON shape for the authenticated user object
 // returned by the auth and user endpoints. It takes explicit fields because the
-// sqlc row types (GetUserRow, UpdateUserNameRow, ...) differ per query. Avatar is
-// kept as the raw sql.NullString to preserve the existing serialized shape. The
+// sqlc row types (GetUserRow, UpdateUserNameRow, ...) differ per query. The
 // plaintext PIN is never included — only whether one is set.
 func userResponseMap(id int64, name, email string, isAdmin bool, avatar, pin sql.NullString, createdAt, updatedAt string) map[string]any {
+	var avatarValue any
+	if avatar.Valid {
+		avatarValue = avatar.String
+	}
+
 	return map[string]any{
 		"id":         id,
 		"name":       name,
 		"email":      email,
 		"is_admin":   isAdmin,
-		"avatar":     avatar,
+		"avatar":     avatarValue,
 		"has_pin":    pin.Valid,
 		"created_at": createdAt,
 		"updated_at": updatedAt,

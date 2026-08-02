@@ -486,6 +486,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		fmt.Sprintf("/api/movies/%d/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=0", movieID, testPlaybackSessionID),
 		nil,
 	)
+	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
 	handler := app.SessionManager.LoadAndSave(router)
@@ -494,7 +495,6 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
-
 	body := recorder.Body.String()
 	if !strings.Contains(body, fmt.Sprintf(`/api/movies/%d/hls/remux/init.mp4?audio_track=0&playback_session=%s&start=0`, movieID, testPlaybackSessionID)) {
 		t.Fatalf("playlist body missing remux init path: %s", body)
@@ -663,6 +663,7 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
 		nil,
 	)
+	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
 	handler := app.SessionManager.LoadAndSave(router)
@@ -709,6 +710,7 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 		fmt.Sprintf("/api/movies/5/hls/session/stop?playback_session=%s", testPlaybackSessionID),
 		nil,
 	)
+	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, req)
@@ -716,6 +718,7 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
+	assertOpenAPIExchange(t, "stopPersonalHlsSession", req, recorder)
 	if _, ok := app.HLSSessionCache.Get(matchingKey); ok {
 		t.Fatal("expected matching personal HLS session to be removed")
 	}

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -42,6 +41,14 @@ func createAdminUser(t *testing.T, app *Application, name, email string, isAdmin
 
 func mountAdminUserRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
+	r.Get("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		app.AdminGetUsers(w, r)
+	})
+	r.Post("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		app.AdminCreateUser(w, r)
+	})
 	r.Patch("/api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.AdminUpdateUser(w, r)
@@ -50,8 +57,53 @@ func mountAdminUserRouter(app *Application, userID int64) http.Handler {
 		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.AdminDeleteUser(w, r)
 	})
+	r.Put("/api/admin/users/{id}/password", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		app.AdminResetUserPassword(w, r)
+	})
 
 	return app.SessionManager.LoadAndSave(r)
+}
+
+func TestAdminUserListCreateAndPasswordReset_ConformToOpenAPI(t *testing.T) {
+	app := setupAdminUserHTTPTestApp(t)
+	defer app.DB.Close()
+
+	admin := createAdminUser(t, app, "Admin", "admin@example.com", true)
+	handler := mountAdminUserRouter(app, admin.ID)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	addOpenAPITestCookie(listReq)
+	listResponse := httptest.NewRecorder()
+	handler.ServeHTTP(listResponse, listReq)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", listResponse.Code, listResponse.Body.String())
+	}
+	assertOpenAPIExchange(t, "adminGetUsers", listReq, listResponse)
+
+	createBody := `{"name":"New User","email":"new-user@example.com","password":"new password","is_admin":false}`
+	createReq := newOpenAPIJSONRequest(http.MethodPost, "/api/admin/users", createBody)
+	addOpenAPITestCookie(createReq)
+	createResponse := httptest.NewRecorder()
+	handler.ServeHTTP(createResponse, createReq)
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", createResponse.Code, createResponse.Body.String())
+	}
+	assertOpenAPIExchange(t, "adminCreateUser", createReq, createResponse)
+
+	created, err := app.Queries.GetUserByEmail(context.Background(), "new-user@example.com")
+	if err != nil {
+		t.Fatalf("get created user: %v", err)
+	}
+	passwordBody := `{"password":"replacement password"}`
+	passwordReq := newOpenAPIJSONRequest(http.MethodPut, "/api/admin/users/"+strconv.FormatInt(created.ID, 10)+"/password", passwordBody)
+	addOpenAPITestCookie(passwordReq)
+	passwordResponse := httptest.NewRecorder()
+	handler.ServeHTTP(passwordResponse, passwordReq)
+	if passwordResponse.Code != http.StatusOK {
+		t.Fatalf("password reset status = %d, body = %s", passwordResponse.Code, passwordResponse.Body.String())
+	}
+	assertOpenAPIExchange(t, "adminResetUserPassword", passwordReq, passwordResponse)
 }
 
 func TestAdminUpdateUser_RejectsDemotingLastAdmin(t *testing.T) {
@@ -62,8 +114,8 @@ func TestAdminUpdateUser_RejectsDemotingLastAdmin(t *testing.T) {
 	handler := mountAdminUserRouter(app, 999)
 
 	body := `{"name":"Solo Admin","email":"solo-admin@example.com","is_admin":false}`
-	req := httptest.NewRequest(http.MethodPatch, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := newOpenAPIJSONRequest(http.MethodPatch, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), body)
+	addOpenAPITestCookie(req)
 
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -90,8 +142,8 @@ func TestAdminUpdateUser_DemotesAdminWhenAnotherAdminExists(t *testing.T) {
 	handler := mountAdminUserRouter(app, 999)
 
 	body := `{"name":"Admin One","email":"admin-one@example.com","is_admin":false}`
-	req := httptest.NewRequest(http.MethodPatch, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := newOpenAPIJSONRequest(http.MethodPatch, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), body)
+	addOpenAPITestCookie(req)
 
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -99,6 +151,7 @@ func TestAdminUpdateUser_DemotesAdminWhenAnotherAdminExists(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "adminUpdateUser", req, w)
 
 	user, err := app.Queries.GetUser(context.Background(), target.ID)
 	if err != nil {
@@ -125,6 +178,7 @@ func TestAdminDeleteUser_RejectsDeletingLastAdmin(t *testing.T) {
 	handler := mountAdminUserRouter(app, 999)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), nil)
+	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -147,12 +201,14 @@ func TestAdminDeleteUser_DeletesAdminWhenAnotherAdminExists(t *testing.T) {
 	handler := mountAdminUserRouter(app, 999)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), nil)
+	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "adminDeleteUser", req, w)
 
 	_, err := app.Queries.GetUser(context.Background(), target.ID)
 	if err != sql.ErrNoRows {

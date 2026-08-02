@@ -58,7 +58,7 @@ function tmdbCrewToLibraryCrew(
 }
 
 function tmdbYouTubeResultsToLibraryExtras(
-  results: MovieDetailsType["videos"]["results"],
+  results: NonNullable<MovieDetailsType["videos"]["results"]>,
 ): LibraryMovieExtraVideoType[] {
   const mapped: LibraryMovieExtraVideoType[] = [];
   let id = 1;
@@ -85,7 +85,7 @@ function tmdbYouTubeResultsToLibraryExtras(
 }
 
 function tmdbProductionCompaniesToLibrary(
-  companies: MovieDetailsType["production_companies"],
+  companies: NonNullable<MovieDetailsType["production_companies"]>,
 ): LibraryMovieProductionCompanyType[] {
   return companies.map(pc => ({
     id: pc.id,

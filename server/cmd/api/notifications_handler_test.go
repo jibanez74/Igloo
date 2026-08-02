@@ -26,16 +26,18 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	handler := notificationTestServer(app, user.ID)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/notifications", `{
 		"title": "movie_request",
 		"message": "Requester: requester@example.com",
 		"isAdmin": true
-	}`))
+	}`)
+	addOpenAPITestCookie(req)
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "createNotification", req, w)
 
 	var resp struct {
 		Error bool `json:"error"`
@@ -246,10 +248,13 @@ func TestListNotifications_AcceptsCanonicalNoTrailingSlash(t *testing.T) {
 	seedAdminQueueNotification(t, app, requester.ID, "Requester: Requester")
 
 	w := httptest.NewRecorder()
-	notificationTestServer(app, admin.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications", nil))
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	addOpenAPITestCookie(req)
+	notificationTestServer(app, admin.ID).ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "listNotifications", req, w)
 
 	var resp notificationListResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -304,10 +309,13 @@ func TestMarkNotificationRead_DropsUnreadCount(t *testing.T) {
 	server := notificationTestServer(app, admin.ID)
 
 	w := httptest.NewRecorder()
-	server.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/notifications/"+strconv.FormatInt(n.ID, 10)+"/read", nil))
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications/"+strconv.FormatInt(n.ID, 10)+"/read", nil)
+	addOpenAPITestCookie(req)
+	server.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("mark read status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "markNotificationRead", req, w)
 
 	w = httptest.NewRecorder()
 	server.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications/", nil))
@@ -335,13 +343,19 @@ func TestMarkAllNotificationsRead_ZeroesUnread(t *testing.T) {
 	server := notificationTestServer(app, admin.ID)
 
 	w := httptest.NewRecorder()
-	server.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/notifications/read-all", nil))
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications/read-all", nil)
+	addOpenAPITestCookie(req)
+	server.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("mark all status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "markAllNotificationsRead", req, w)
 
 	w = httptest.NewRecorder()
-	server.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil))
+	req = httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil)
+	addOpenAPITestCookie(req)
+	server.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "getUnreadNotificationCount", req, w)
 	var resp struct {
 		Data struct {
 			UnreadCount int64 `json:"unread_count"`
@@ -367,10 +381,13 @@ func TestDeleteNotification_RemovesAndThen404(t *testing.T) {
 	idPath := "/api/notifications/" + strconv.FormatInt(n.ID, 10)
 
 	w := httptest.NewRecorder()
-	server.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, idPath, nil))
+	req := httptest.NewRequest(http.MethodDelete, idPath, nil)
+	addOpenAPITestCookie(req)
+	server.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "deleteNotification", req, w)
 
 	// Deleting again is a 404 — the row is gone.
 	w = httptest.NewRecorder()

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -104,6 +105,48 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if app.Settings.ImmichApiKey.String != "immich-api-key" || !app.Settings.ImmichApiKey.Valid {
 		t.Fatalf("expected app.Settings Immich API key to be saved, got %q valid=%v", app.Settings.ImmichApiKey.String, app.Settings.ImmichApiKey.Valid)
 	}
+}
+
+func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+	app.Wait = &sync.WaitGroup{}
+
+	assertRequest := func(operationID string, req *http.Request, serve func(http.ResponseWriter, *http.Request), wantStatus int) {
+		t.Helper()
+		addOpenAPITestCookie(req)
+		response := httptest.NewRecorder()
+		serve(response, req)
+		if response.Code != wantStatus {
+			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
+		}
+		assertOpenAPIExchange(t, operationID, req, response)
+	}
+
+	assertRequest("getSettings", httptest.NewRequest(http.MethodGet, "/api/settings", nil), app.GetSettings, http.StatusOK)
+	assertRequest("getGeneralSettings", httptest.NewRequest(http.MethodGet, "/api/settings/general", nil), app.GetGeneralSettings, http.StatusOK)
+
+	staticDir := filepath.Join(t.TempDir(), "static")
+	generalReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
+	assertRequest("updateGeneralSettings", generalReq, app.UpdateGeneralSettings, http.StatusOK)
+
+	mediaRoot := t.TempDir()
+	moviesDir := filepath.Join(mediaRoot, "movies")
+	showsDir := filepath.Join(mediaRoot, "shows")
+	musicDir := filepath.Join(mediaRoot, "music")
+	for _, dir := range []string{moviesDir, showsDir, musicDir} {
+		_, err := helpers.GetOrCreateDir(dir)
+		if err != nil {
+			t.Fatalf("create media directory: %v", err)
+		}
+	}
+	libraryBody := fmt.Sprintf(`{"movies_dir":%q,"shows_dir":%q,"music_dir":%q}`, moviesDir, showsDir, musicDir)
+	libraryReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/libraries", libraryBody)
+	assertRequest("updateLibrarySettings", libraryReq, app.UpdateLibrarySettings, http.StatusOK)
+
+	assertRequest("triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), app.TriggerMusicScan, http.StatusOK)
+	assertRequest("triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), app.TriggerMovieScan, http.StatusOK)
+	app.Wait.Wait()
 }
 
 func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
