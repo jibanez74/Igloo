@@ -10796,6 +10796,35 @@
         },
         "additionalProperties": false
       },
+      "QuickConnectInitiateData": {
+        "type": "object",
+        "required": [
+          "code",
+          "secret",
+          "expires_in_seconds",
+          "poll_interval_seconds"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
+            "pattern": "^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{6}$",
+            "description": "The only value to display to the user; they enter it in the web app to approve the device. Always six uppercase characters drawn from an alphabet that omits I, L, O, 0 and 1 so it stays unambiguous on a TV screen."
+          },
+          "secret": {
+            "type": "string",
+            "description": "Device-held secret required to redeem the code. Never shown to the user: keep it in memory and send it back in the redeem request body."
+          },
+          "expires_in_seconds": {
+            "type": "integer"
+          },
+          "poll_interval_seconds": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
       "QuickConnectInitiateEnvelope": {
         "allOf": [
           {
@@ -10808,30 +10837,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "code",
-                  "secret",
-                  "expires_in_seconds",
-                  "poll_interval_seconds"
-                ],
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "Short code to show the user; entered in the web app to approve the device."
-                  },
-                  "secret": {
-                    "type": "string",
-                    "description": "Device-held secret required to redeem the code. Never shown to the user."
-                  },
-                  "expires_in_seconds": {
-                    "type": "integer"
-                  },
-                  "poll_interval_seconds": {
-                    "type": "integer"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/QuickConnectInitiateData"
               }
             }
           }
@@ -10845,7 +10851,9 @@
         ],
         "properties": {
           "code": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 32,
+            "description": "The six-character code shown on the device. Case-insensitive; surrounding whitespace is trimmed, and spaces, tabs and dashes are ignored anywhere in the code."
           },
           "secret": {
             "type": "string"
@@ -10894,6 +10902,29 @@
         },
         "additionalProperties": false
       },
+      "QuickConnectRedeemData": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved"
+            ]
+          },
+          "token": {
+            "type": "string",
+            "description": "Bearer device token. Present only when status is approved; returned exactly once. Store it; never display it."
+          },
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          }
+        },
+        "additionalProperties": false
+      },
       "QuickConnectRedeemEnvelope": {
         "allOf": [
           {
@@ -10906,27 +10937,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "status"
-                ],
-                "properties": {
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "pending",
-                      "approved"
-                    ]
-                  },
-                  "token": {
-                    "type": "string",
-                    "description": "Bearer device token. Present only when status is approved; returned exactly once."
-                  },
-                  "device": {
-                    "$ref": "#/components/schemas/Device"
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/QuickConnectRedeemData"
               }
             }
           }
@@ -10980,7 +10991,9 @@
         ],
         "properties": {
           "code": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 32,
+            "description": "The six-character code shown on the device. Case-insensitive; surrounding whitespace is trimmed, and spaces, tabs and dashes are ignored anywhere in the code."
           }
         },
         "additionalProperties": false

@@ -229,8 +229,21 @@ func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request,
 	return token, device, true
 }
 
+// normalizeQuickConnectCode accepts a code the way a person reads it off a
+// screen: any casing, and with the spacing or dashes a client may use to make
+// it legible. Only separators are dropped. Removing every character outside the
+// alphabet would let a mistyped "ABC2340" collapse into a valid code.
 func normalizeQuickConnectCode(code string) string {
-	return strings.ToUpper(strings.TrimSpace(code))
+	stripSeparators := func(r rune) rune {
+		isSeparator := r == ' ' || r == '\t' || r == '-'
+		if isSeparator {
+			return -1
+		}
+
+		return r
+	}
+
+	return strings.Map(stripSeparators, strings.ToUpper(strings.TrimSpace(code)))
 }
 
 func deviceResponseMap(id int64, name, platform string, appVersion sql.NullString, createdAt, lastUsedAt string, isCurrent bool) map[string]any {

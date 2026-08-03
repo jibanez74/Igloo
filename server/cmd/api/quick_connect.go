@@ -236,16 +236,33 @@ func (b *QuickConnectBroker) purgeExpiredLocked() {
 }
 
 func generateQuickConnectCode() (string, error) {
+	// 256 is not a multiple of the alphabet length, so plain modulo would make
+	// the first 256%len symbols more likely. Bytes at or above the largest
+	// whole multiple are rejected instead, which keeps every symbol equally
+	// likely at the cost of redrawing ~3% of the time.
+	unbiasedLimit := 256 - (256 % len(quickConnectCodeAlphabet))
+
+	code := make([]byte, 0, quickConnectCodeLength)
 	buf := make([]byte, quickConnectCodeLength)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return "", err
+
+	for len(code) < quickConnectCodeLength {
+		_, err := rand.Read(buf)
+		if err != nil {
+			return "", err
+		}
+
+		for _, v := range buf {
+			if int(v) >= unbiasedLimit {
+				continue
+			}
+
+			code = append(code, quickConnectCodeAlphabet[int(v)%len(quickConnectCodeAlphabet)])
+			if len(code) == quickConnectCodeLength {
+				break
+			}
+		}
 	}
 
-	code := make([]byte, quickConnectCodeLength)
-	for i, v := range buf {
-		code[i] = quickConnectCodeAlphabet[int(v)%len(quickConnectCodeAlphabet)]
-	}
 	return string(code), nil
 }
 
