@@ -281,6 +281,41 @@ describe("QuickConnectApproveCard", () => {
     expect(lookupQuickConnectMock).toHaveBeenCalledWith("XK4T7P");
   });
 
+  it("keeps a trailing invalid character instead of truncating it away", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    const input = screen.getByRole("textbox", { name: "Quick Connect code" });
+    await user.click(input);
+    await user.paste("XK4T7P!");
+    expect(input).toHaveValue("XK4T7P!");
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    // Dropping the stray character would submit a code the user never entered
+    // and spend one of the ten approval attempts allowed per five minutes.
+    expect(lookupQuickConnectMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter the 6-character code",
+    );
+  });
+
+  it("accepts a code pasted with non-breaking spaces", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    // A code copied out of rendered markup can carry U+00A0 rather than a
+    // plain space, and unlike a newline the input keeps it.
+    const input = screen.getByRole("textbox", { name: "Quick Connect code" });
+    await user.click(input);
+    await user.paste("XK4 T7P");
+    expect(input).toHaveValue("XK4T7P");
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(lookupQuickConnectMock).toHaveBeenCalledWith("XK4T7P");
+  });
+
   it("rejects characters the code alphabet excludes without calling the API", async () => {
     const user = userEvent.setup();
     renderCard();

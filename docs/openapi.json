@@ -10853,7 +10853,7 @@
           "code": {
             "type": "string",
             "maxLength": 32,
-            "description": "The six-character code shown on the device. Case-insensitive; surrounding whitespace, spaces and dashes are ignored."
+            "description": "The six-character code shown on the device. Case-insensitive; surrounding whitespace is trimmed, and spaces, tabs and dashes are ignored anywhere in the code."
           },
           "secret": {
             "type": "string"
@@ -10993,7 +10993,7 @@
           "code": {
             "type": "string",
             "maxLength": 32,
-            "description": "The six-character code shown on the device. Case-insensitive; surrounding whitespace, spaces and dashes are ignored."
+            "description": "The six-character code shown on the device. Case-insensitive; surrounding whitespace is trimmed, and spaces, tabs and dashes are ignored anywhere in the code."
           }
         },
         "additionalProperties": false

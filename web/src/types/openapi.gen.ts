@@ -3375,7 +3375,7 @@ export interface components {
             data: components["schemas"]["QuickConnectInitiateData"];
         };
         QuickConnectRedeemRequest: {
-            /** @description The six-character code shown on the device. Case-insensitive; surrounding whitespace, spaces and dashes are ignored. */
+            /** @description The six-character code shown on the device. Case-insensitive; surrounding whitespace is trimmed, and spaces, tabs and dashes are ignored anywhere in the code. */
             code: string;
             secret: string;
         };
@@ -3409,7 +3409,7 @@ export interface components {
             data: components["schemas"]["QuickConnectLookupData"];
         };
         QuickConnectApproveRequest: {
-            /** @description The six-character code shown on the device. Case-insensitive; surrounding whitespace, spaces and dashes are ignored. */
+            /** @description The six-character code shown on the device. Case-insensitive; surrounding whitespace is trimmed, and spaces, tabs and dashes are ignored anywhere in the code. */
             code: string;
         };
         DeviceLoginRequest: {

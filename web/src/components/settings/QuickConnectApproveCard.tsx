@@ -27,12 +27,13 @@ const CODE_LENGTH = 6;
 const CODE_PATTERN = /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{6}$/;
 
 // Accepts the code however it arrives — typed, or pasted with the spacing a
-// device may use to make it legible. The server normalizes the same way.
+// device may use to make it legible. The server drops spaces, tabs and dashes;
+// this also drops the non-breaking spaces a rendered code can be copied with,
+// which only ever makes a paste succeed that the server would have accepted
+// anyway. Every other character is kept so a mistyped one reaches validation
+// instead of being silently dropped into a code the user never entered.
 function normalizeCode(value: string) {
-  return value
-    .replace(/[\s-]/g, "")
-    .toUpperCase()
-    .slice(0, CODE_LENGTH);
+  return value.replace(/[\s-]/g, "").toUpperCase();
 }
 
 // After approval the device row only appears once the device polls again;
