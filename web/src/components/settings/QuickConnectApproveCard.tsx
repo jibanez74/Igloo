@@ -21,6 +21,20 @@ import type {
 
 const CODE_LENGTH = 6;
 
+// The server draws codes from an alphabet without I, L, O, 0 or 1 so they stay
+// unambiguous on a TV screen. Anything else can only ever 404, and each lookup
+// spends one of the account's ten approval attempts per five minutes.
+const CODE_PATTERN = /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{6}$/;
+
+// Accepts the code however it arrives — typed, or pasted with the spacing a
+// device may use to make it legible. The server normalizes the same way.
+function normalizeCode(value: string) {
+  return value
+    .replace(/[\s-]/g, "")
+    .toUpperCase()
+    .slice(0, CODE_LENGTH);
+}
+
 // After approval the device row only appears once the device polls again;
 // stop watching for it after this long and show a softer confirmation.
 const WAIT_FOR_DEVICE_MS = 30_000;
@@ -203,13 +217,19 @@ export default function QuickConnectApproveCard() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const trimmed = code.trim().toUpperCase();
-    if (trimmed.length !== CODE_LENGTH) {
+    if (code.length !== CODE_LENGTH) {
       setError(`Enter the ${CODE_LENGTH}-character code shown on your device.`);
       return;
     }
 
-    lookupMutation.mutate(trimmed);
+    if (!CODE_PATTERN.test(code)) {
+      setError(
+        "Codes never contain I, L, O, 0 or 1. Check the code on your device.",
+      );
+      return;
+    }
+
+    lookupMutation.mutate(code);
   };
 
   const handleBack = () => {
@@ -247,10 +267,9 @@ export default function QuickConnectApproveCard() {
                 id={codeId}
                 value={code}
                 onChange={e => {
-                  setCode(e.target.value.toUpperCase());
+                  setCode(normalizeCode(e.target.value));
                   setError(null);
                 }}
-                maxLength={CODE_LENGTH}
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck={false}
@@ -269,6 +288,7 @@ export default function QuickConnectApproveCard() {
               </Button>
             </div>
             <p id={codeDescriptionId} className="text-xs text-muted-foreground">
+              {CODE_LENGTH} characters, never containing I, L, O, 0 or 1.
               You&apos;ll see which device is asking before it gets signed in.
             </p>
             {error && (
@@ -328,7 +348,7 @@ export default function QuickConnectApproveCard() {
                 type="button"
                 variant="accent"
                 disabled={approveMutation.isPending}
-                onClick={() => approveMutation.mutate(code.trim().toUpperCase())}
+                onClick={() => approveMutation.mutate(code)}
                 className="w-full sm:w-auto"
               >
                 {approveMutation.isPending ? "Approving..." : "Approve device"}

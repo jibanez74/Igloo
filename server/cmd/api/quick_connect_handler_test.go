@@ -638,3 +638,62 @@ func TestQuickConnectBroker_RejectsWhenAtCapacity(t *testing.T) {
 		t.Fatalf("initiate after expiry: %v", err)
 	}
 }
+
+func TestGenerateQuickConnectCode_UsesAlphabetAndLength(t *testing.T) {
+	const samples = 2000
+
+	seen := make(map[rune]bool, len(quickConnectCodeAlphabet))
+
+	for i := 0; i < samples; i++ {
+		code, err := generateQuickConnectCode()
+		if err != nil {
+			t.Fatalf("generate #%d: %v", i+1, err)
+		}
+
+		if len(code) != quickConnectCodeLength {
+			t.Fatalf("code %q length = %d, want %d", code, len(code), quickConnectCodeLength)
+		}
+
+		for _, symbol := range code {
+			if !strings.ContainsRune(quickConnectCodeAlphabet, symbol) {
+				t.Fatalf("code %q contains %q, which is outside the alphabet", code, symbol)
+			}
+
+			seen[symbol] = true
+		}
+	}
+
+	// Rejection sampling must still be able to reach every symbol; a sampling
+	// bug that drops the tail of the alphabet shows up here.
+	for _, symbol := range quickConnectCodeAlphabet {
+		if !seen[symbol] {
+			t.Fatalf("symbol %q never generated across %d codes", symbol, samples)
+		}
+	}
+}
+
+func TestNormalizeQuickConnectCode(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "lowercase", input: "xk4t7p", want: "XK4T7P"},
+		{name: "surrounding whitespace", input: "  XK4T7P\n", want: "XK4T7P"},
+		{name: "internal spaces", input: "XK4 T7P", want: "XK4T7P"},
+		{name: "dashes", input: "xk4-t7p", want: "XK4T7P"},
+		{name: "tabs", input: "XK4\tT7P", want: "XK4T7P"},
+		// Only separators are dropped, so a mistyped code cannot collapse into
+		// a valid one by losing characters the alphabet excludes.
+		{name: "keeps excluded characters", input: "abc2340", want: "ABC2340"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := normalizeQuickConnectCode(test.input)
+			if got != test.want {
+				t.Fatalf("normalizeQuickConnectCode(%q) = %q, want %q", test.input, got, test.want)
+			}
+		})
+	}
+}

@@ -267,6 +267,36 @@ describe("QuickConnectApproveCard", () => {
     expect(input).toHaveAttribute("aria-describedby", error.id);
   });
 
+  it("accepts a pasted code that carries whitespace or dashes", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    const input = screen.getByRole("textbox", { name: "Quick Connect code" });
+    await user.click(input);
+    await user.paste(" xk4-t7p ");
+    expect(input).toHaveValue("XK4T7P");
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(lookupQuickConnectMock).toHaveBeenCalledWith("XK4T7P");
+  });
+
+  it("rejects characters the code alphabet excludes without calling the API", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    const input = screen.getByRole("textbox", { name: "Quick Connect code" });
+    await user.type(input, "XK40OP");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(lookupQuickConnectMock).not.toHaveBeenCalled();
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("Codes never contain I, L, O, 0 or 1");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-describedby", error.id);
+  });
+
   it("shows an actionable message when the looked-up code is invalid or expired", async () => {
     lookupQuickConnectMock.mockResolvedValue({
       error: true,

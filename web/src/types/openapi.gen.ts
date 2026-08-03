@@ -3363,17 +3363,19 @@ export interface components {
             platform?: string;
             app_version?: string;
         };
+        QuickConnectInitiateData: {
+            /** @description The only value to display to the user; they enter it in the web app to approve the device. Always six uppercase characters drawn from an alphabet that omits I, L, O, 0 and 1 so it stays unambiguous on a TV screen. */
+            code: string;
+            /** @description Device-held secret required to redeem the code. Never shown to the user: keep it in memory and send it back in the redeem request body. */
+            secret: string;
+            expires_in_seconds: number;
+            poll_interval_seconds: number;
+        };
         QuickConnectInitiateEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** @description Short code to show the user; entered in the web app to approve the device. */
-                code: string;
-                /** @description Device-held secret required to redeem the code. Never shown to the user. */
-                secret: string;
-                expires_in_seconds: number;
-                poll_interval_seconds: number;
-            };
+            data: components["schemas"]["QuickConnectInitiateData"];
         };
         QuickConnectRedeemRequest: {
+            /** @description The six-character code shown on the device. Case-insensitive; surrounding whitespace, spaces and dashes are ignored. */
             code: string;
             secret: string;
         };
@@ -3388,14 +3390,15 @@ export interface components {
             /** @description True when the request was authenticated with this device's token. Always false in the device-list response, which is session-only. */
             is_current: boolean;
         };
+        QuickConnectRedeemData: {
+            /** @enum {string} */
+            status: "pending" | "approved";
+            /** @description Bearer device token. Present only when status is approved; returned exactly once. Store it; never display it. */
+            token?: string;
+            device?: components["schemas"]["Device"];
+        };
         QuickConnectRedeemEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                /** @enum {string} */
-                status: "pending" | "approved";
-                /** @description Bearer device token. Present only when status is approved; returned exactly once. */
-                token?: string;
-                device?: components["schemas"]["Device"];
-            };
+            data: components["schemas"]["QuickConnectRedeemData"];
         };
         QuickConnectLookupData: {
             device_name: string;
@@ -3406,6 +3409,7 @@ export interface components {
             data: components["schemas"]["QuickConnectLookupData"];
         };
         QuickConnectApproveRequest: {
+            /** @description The six-character code shown on the device. Case-insensitive; surrounding whitespace, spaces and dashes are ignored. */
             code: string;
         };
         DeviceLoginRequest: {
