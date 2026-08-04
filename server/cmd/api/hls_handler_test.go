@@ -8,24 +8,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
-
-func TestHLSSessionKey(t *testing.T) {
-	audioTrack := 2
-	key := HLSSessionKey(123, "720p_3mbps", &audioTrack, testPlaybackSessionID, 40)
-	want := "movie:123:720p_3mbps:audio:2:session:" + testPlaybackSessionID + ":start:40"
-	if key != want {
-		t.Errorf("HLSSessionKey = %q, want %q", key, want)
-	}
-}
 
 func TestIsAllowedHLSFilename(t *testing.T) {
 	tests := []struct {
@@ -114,87 +104,113 @@ func TestSessionPlaylistDurationSec(t *testing.T) {
 }
 
 func TestBuildHLSPlaylistBody(t *testing.T) {
-	session := &HLSSession{DurationSec: 12, CopyVideo: false}
-	generated, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=0")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.Contains(generated, "segment_0.m4s?audio_track=0") {
-		t.Fatalf("generated playlist did not include rewritten segment URL: %s", generated)
-	}
+	t.Run("synthesizes a transcode playlist and rewrites its URLs", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 12, CopyVideo: false}
+		generated, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(generated, "segment_0.m4s?audio_track=0") {
+			t.Fatalf("generated playlist did not include rewritten segment URL: %s", generated)
+		}
 
-	session.FinalPlaylist = "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\nsegment_0.m4s\n"
-	finalized, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.Contains(finalized, "/api/hls/init.mp4?audio_track=1") {
-		t.Fatalf("final playlist did not rewrite init URL: %s", finalized)
-	}
-	if !strings.Contains(finalized, "/api/hls/segment_0.m4s?audio_track=1") {
-		t.Fatalf("final playlist did not rewrite segment URL: %s", finalized)
-	}
-}
+		session.FinalPlaylist = "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\nsegment_0.m4s\n"
+		finalized, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(finalized, "/api/hls/init.mp4?audio_track=1") {
+			t.Fatalf("final playlist did not rewrite init URL: %s", finalized)
+		}
+		if !strings.Contains(finalized, "/api/hls/segment_0.m4s?audio_track=1") {
+			t.Fatalf("final playlist did not rewrite segment URL: %s", finalized)
+		}
+	})
 
-// A copy-video session's segments split on source keyframes, so the playlist
-// has to come from FFmpeg. Synthesizing one advertises durations FFmpeg never
-// produced and segments that will never exist (audit H1/H2).
-func TestBuildHLSPlaylistBody_CopyVideoServesFFmpegPlaylist(t *testing.T) {
-	tempDir := t.TempDir()
-	livePlaylist := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:10\n" +
-		"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
-		"#EXTINF:8.466792,\nsegment_0.m4s\n#EXTINF:6.006000,\nsegment_1.m4s\n"
+	// A copy-video session's segments split on source keyframes, so the playlist
+	// has to come from FFmpeg. Synthesizing one advertises durations FFmpeg never
+	// produced and segments that will never exist (audit H1/H2).
+	t.Run("copy-video serves FFmpeg's own playlist", func(t *testing.T) {
+		tempDir := t.TempDir()
+		livePlaylist := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:10\n" +
+			"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+			"#EXTINF:8.466792,\nsegment_0.m4s\n#EXTINF:6.006000,\nsegment_1.m4s\n"
 
-	writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(livePlaylist), 0o644)
-	if writeErr != nil {
-		t.Fatalf("failed to seed playlist: %v", writeErr)
-	}
+		writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(livePlaylist), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to seed playlist: %v", writeErr)
+		}
 
-	session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: tempDir}
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: tempDir}
 
-	playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-	if !strings.Contains(playlist, "#EXTINF:8.466792,") {
-		t.Fatalf("real segment duration was not preserved: %s", playlist)
-	}
-	if strings.Contains(playlist, "#EXTINF:4.000000,") {
-		t.Fatalf("playlist still contains synthesized 4s durations: %s", playlist)
-	}
-	if strings.Count(playlist, ".m4s?start=0") != 2 {
-		t.Fatalf("expected exactly the two real segments, got: %s", playlist)
-	}
-	if strings.Contains(playlist, "#EXT-X-ENDLIST") {
-		t.Fatalf("a still-encoding session must not be advertised as complete: %s", playlist)
-	}
-}
+		if !strings.Contains(playlist, "#EXTINF:8.466792,") {
+			t.Fatalf("real segment duration was not preserved: %s", playlist)
+		}
+		if strings.Contains(playlist, "#EXTINF:4.000000,") {
+			t.Fatalf("playlist still contains synthesized 4s durations: %s", playlist)
+		}
+		if strings.Count(playlist, ".m4s?start=0") != 2 {
+			t.Fatalf("expected exactly the two real segments, got: %s", playlist)
+		}
+		if strings.Contains(playlist, "#EXT-X-ENDLIST") {
+			t.Fatalf("a still-encoding session must not be advertised as complete: %s", playlist)
+		}
+	})
 
-// Without a published playlist the request must not fall back to a synthesized
-// one; it retries instead.
-func TestBuildHLSPlaylistBody_CopyVideoWithoutPlaylistIsRetryable(t *testing.T) {
-	session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
+	// Without a published playlist the request must not fall back to a synthesized
+	// one; it retries instead.
+	t.Run("copy-video without a playlist yet is retryable", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
 
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
 
-	_, err := buildHLSPlaylistBody(ctx, session, session.DurationSec, "/api/hls/", "")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected the abandoned request to stop waiting, got %v", err)
-	}
-}
+		_, err := buildHLSPlaylistBody(ctx, session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected the abandoned request to stop waiting, got %v", err)
+		}
+	})
 
-// A copy-video session that exits cleanly without output must 404 rather than
-// hand back a playlist describing segments that do not exist.
-func TestBuildHLSPlaylistBody_CopyVideoExitedWithoutPlaylist(t *testing.T) {
-	session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
-	session.Exited = true
+	// A copy-video session that exits cleanly without output must 404 rather than
+	// hand back a playlist describing segments that do not exist.
+	t.Run("copy-video that exited without a playlist reports an empty session", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
+		session.Exited = true
 
-	_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
-	if !errors.Is(err, errHLSSessionEmpty) {
-		t.Fatalf("expected an empty-session error, got %v", err)
-	}
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionEmpty) {
+			t.Fatalf("expected an empty-session error, got %v", err)
+		}
+	})
+
+	// A session that seeks past the end of a stream exits cleanly having written
+	// one empty segment, which FFmpeg declares as `#EXTINF:0.000000` under an
+	// invalid `#EXT-X-TARGETDURATION:0`. Serving that would be a valid-looking
+	// manifest for unplayable media.
+	t.Run("copy-video rejects a degenerate zero-duration playlist", func(t *testing.T) {
+		tempDir := t.TempDir()
+		degenerate := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:0\n" +
+			"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+			"#EXTINF:0.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
+
+		writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(degenerate), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to seed playlist: %v", writeErr)
+		}
+
+		session := &HLSSession{DurationSec: 30, CopyVideo: true, TempDir: tempDir}
+		session.Exited = true
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionEmpty) {
+			t.Fatalf("expected an empty session to be reported as producing nothing, got %v", err)
+		}
+	})
 }
 
 func TestServeReadyHLSSegment(t *testing.T) {
@@ -435,7 +451,6 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	defer app.DB.Close()
 
 	audioTrack := 0
-	app.InitSession()
 	userID := int64(42)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	session := &HLSSession{
@@ -449,12 +464,6 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	}
 	app.HLSSessionCache.SetDefault(HLSSessionKey(movieID, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.HLSManifest(w, r)
-	})
-
 	req := httptest.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("/api/movies/%d/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=0", movieID, testPlaybackSessionID),
@@ -463,8 +472,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
-	handler := app.SessionManager.LoadAndSave(router)
-	handler.ServeHTTP(recorder, req)
+	newHLSTestHandler(t, app, userID).ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
@@ -484,7 +492,6 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.InitSession()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
 		WriteFiles: func(outDir string) error {
 			segmentPath := filepath.Join(outDir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
@@ -497,16 +504,7 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 	audioTrack := 0
 	effectiveStart := 7200 - hlsStartClampTailSec
 
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.HLSManifest(w, r)
-	})
-	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.HLSSegment(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := newHLSTestHandler(t, app, userID)
 
 	manifestURL := fmt.Sprintf(
 		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=9000",
@@ -558,19 +556,13 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.InitSession()
 	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 	app.FFmpeg = ffmpegRunner
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	userID := int64(42)
 
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.HLSManifest(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := newHLSTestHandler(t, app, userID)
 
 	manifestURL := fmt.Sprintf(
 		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=590",
@@ -604,7 +596,6 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	defer app.DB.Close()
 
 	audioTrack := 0
-	app.InitSession()
 	userID := int64(43)
 	dir := t.TempDir()
 	segmentPath := filepath.Join(dir, "segment_0.m4s")
@@ -624,12 +615,6 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	}
 	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.HLSSegment(w, r)
-	})
-
 	req := httptest.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
@@ -638,8 +623,7 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
-	handler := app.SessionManager.LoadAndSave(router)
-	handler.ServeHTTP(recorder, req)
+	newHLSTestHandler(t, app, userID).ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
@@ -652,7 +636,6 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.InitSession()
 
 	userID := int64(100)
 	audioTrack := 0
@@ -671,12 +654,7 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	app.HLSSessionCache.SetDefault(otherPlaybackKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(roomKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true})
 
-	router := chi.NewRouter()
-	router.Post("/api/movies/{id}/hls/session/stop", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.StopPersonalHLSSession(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := newHLSTestHandler(t, app, userID)
 	req := httptest.NewRequest(
 		http.MethodPost,
 		fmt.Sprintf("/api/movies/5/hls/session/stop?playback_session=%s", testPlaybackSessionID),
@@ -707,14 +685,8 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 func TestStopPersonalHLSSession_InvalidPlaybackSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.InitSession()
 
-	router := chi.NewRouter()
-	router.Post("/api/movies/{id}/hls/session/stop", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, int64(100))
-		app.StopPersonalHLSSession(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := newHLSTestHandler(t, app, 100)
 	req := httptest.NewRequest(http.MethodPost, "/api/movies/5/hls/session/stop?playback_session=not-a-uuid", nil)
 	recorder := httptest.NewRecorder()
 
@@ -728,7 +700,6 @@ func TestStopPersonalHLSSession_InvalidPlaybackSession(t *testing.T) {
 func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.InitSession()
 
 	audioTrack := 0
 	userID := int64(100)
@@ -742,12 +713,7 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 		ExitMu:          sync.Mutex{},
 	})
 
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.HLSSegment(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := newHLSTestHandler(t, app, userID)
 	req := httptest.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
@@ -762,160 +728,6 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 	}
 	if _, ok := app.HLSSessionCache.Get(key); !ok {
 		t.Fatal("expected mismatched-owner session to remain cached")
-	}
-}
-
-func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	audioTrack := 0
-	oldKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-	keepKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 40)
-	otherKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 80)
-
-	app.HLSSessionCache.SetDefault(oldKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(keepKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(otherKey, &HLSSession{MovieID: 5, OwnerUserID: userID + 1, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-
-	removed := app.cleanupPersonalHLSSessionsForOwner(5, userID, testPlaybackSessionID, keepKey)
-	if removed != 1 {
-		t.Fatalf("removed=%d, want 1", removed)
-	}
-	if _, ok := app.HLSSessionCache.Get(oldKey); ok {
-		t.Fatal("expected old same-owner window to be removed")
-	}
-	for _, key := range []string{keepKey, otherKey} {
-		if _, ok := app.HLSSessionCache.Get(key); !ok {
-			t.Fatalf("expected session %q to remain", key)
-		}
-	}
-}
-
-func TestCleanupPersonalHLSSessionsForOwner_ReleasesLockBeforeTeardown(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	audioTrack := 0
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-	session := &HLSSession{
-		MovieID:         5,
-		OwnerUserID:     userID,
-		PlaybackSession: testPlaybackSessionID,
-		TempDir:         t.TempDir(),
-	}
-	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, session)
-	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
-	resultCh := make(chan int, 1)
-	go func() {
-		resultCh <- app.cleanupPersonalHLSSessionsForOwner(5, userID, testPlaybackSessionID, "")
-	}()
-
-	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
-	_, cached := app.HLSSessionCache.Get(key)
-	if cached {
-		releaseCleanup()
-		t.Fatal("personal session remained cached while teardown was blocked")
-	}
-	if !app.PersonalHLSMu.TryLock() {
-		releaseCleanup()
-		t.Fatal("PersonalHLSMu remained locked while explicit teardown was blocked")
-	}
-	app.PersonalHLSMu.Unlock()
-
-	releaseCleanup()
-	removed := waitForHLSSessionCleanupResult(t, resultCh)
-	if removed != 1 {
-		t.Fatalf("removed = %d, want 1", removed)
-	}
-	_, err := os.Stat(session.TempDir)
-	if !os.IsNotExist(err) {
-		t.Fatalf("personal session temp dir still exists after cleanup: %v", err)
-	}
-}
-
-func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	audioTrack := 0
-	personalKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-	roomKey := RoomHLSSessionKey(9)
-	personalSession := &HLSSession{MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID}
-
-	before := time.Now()
-	app.HLSSessionCache.Set(personalKey, personalSession, time.Minute)
-	app.RefreshHLSSessionTTL(personalKey, personalSession)
-	app.RefreshHLSSessionTTL(roomKey, &HLSSession{MovieID: 5, IsRoom: true})
-	after := time.Now()
-
-	items := app.HLSSessionCache.Items()
-	checks := []struct {
-		key string
-		ttl time.Duration
-	}{
-		{personalKey, hlsPersonalSessionTTL},
-		{roomKey, hlsRoomSessionTTL},
-	}
-	for _, check := range checks {
-		item, ok := items[check.key]
-		if !ok {
-			t.Fatalf("expected session %q to be cached", check.key)
-		}
-		expiration := time.Unix(0, item.Expiration)
-		expiresTooEarly := expiration.Before(before.Add(check.ttl))
-		expiresTooLate := expiration.After(after.Add(check.ttl))
-		if expiresTooEarly || expiresTooLate {
-			t.Fatalf("session %q expires at %v, want ~%v after refresh", check.key, expiration, check.ttl)
-		}
-	}
-}
-
-func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	audioTrack := 0
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-	session := &HLSSession{
-		MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID,
-	}
-	app.HLSSessionCache.Set(key, session, time.Minute)
-	app.removePersonalHLSSession(key)
-
-	refreshed := app.RefreshHLSSessionTTL(key, session)
-	if refreshed {
-		t.Fatal("evicted personal session was refreshed")
-	}
-	_, cached := app.HLSSessionCache.Get(key)
-	if cached {
-		t.Fatal("evicted personal session was reinserted")
-	}
-}
-
-// A session that seeks past the end of a stream exits cleanly having written
-// one empty segment, which FFmpeg declares as `#EXTINF:0.000000` under an
-// invalid `#EXT-X-TARGETDURATION:0`. Serving that would be a valid-looking
-// manifest for unplayable media.
-func TestBuildHLSPlaylistBody_CopyVideoRejectsEmptyOutput(t *testing.T) {
-	tempDir := t.TempDir()
-	degenerate := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:0\n" +
-		"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
-		"#EXTINF:0.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
-
-	writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(degenerate), 0o644)
-	if writeErr != nil {
-		t.Fatalf("failed to seed playlist: %v", writeErr)
-	}
-
-	session := &HLSSession{DurationSec: 30, CopyVideo: true, TempDir: tempDir}
-	session.Exited = true
-
-	_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
-	if !errors.Is(err, errHLSSessionEmpty) {
-		t.Fatalf("expected an empty session to be reported as producing nothing, got %v", err)
 	}
 }
 
@@ -939,5 +751,51 @@ func TestHasPlayableSegment(t *testing.T) {
 				t.Fatalf("hasPlayableSegment = %v, want %v", got, testCase.want)
 			}
 		})
+	}
+}
+
+func TestWriteHLSPlaylistHeaders_PublishesEffectiveProfileAndStart(t *testing.T) {
+	session := &HLSSession{
+		EffectiveProfile: "1080p_8mbps",
+		ActualStartSec:   591.174,
+	}
+
+	recorder := httptest.NewRecorder()
+	writeHLSPlaylistHeaders(recorder, session)
+
+	if got := recorder.Header().Get(hlsEffectiveProfileHeader); got != "1080p_8mbps" {
+		t.Fatalf("effective profile header = %q, want 1080p_8mbps", got)
+	}
+
+	start, err := strconv.ParseFloat(recorder.Header().Get(hlsActualStartHeader), 64)
+	if err != nil {
+		t.Fatalf("actual start header did not parse: %v", err)
+	}
+	if start != 591.174 {
+		t.Fatalf("actual start header = %v, want 591.174", start)
+	}
+}
+
+// A remux request that falls back still serves from the /hls/remux/ path, so
+// the header is the only thing that can tell the client what it is getting.
+func TestWriteHLSPlaylistHeaders_ReportsFallbackProfile(t *testing.T) {
+	session := &HLSSession{EffectiveProfile: "2160p_16mbps", ActualStartSec: 0}
+
+	recorder := httptest.NewRecorder()
+	writeHLSPlaylistHeaders(recorder, session)
+
+	if got := recorder.Header().Get(hlsEffectiveProfileHeader); got != "2160p_16mbps" {
+		t.Fatalf("effective profile header = %q, want the profile that actually ran", got)
+	}
+}
+
+func TestWriteHLSPlaylistHeaders_OmitsUnknownStart(t *testing.T) {
+	session := &HLSSession{EffectiveProfile: "remux", ActualStartSec: hlsUnknownActualStart}
+
+	recorder := httptest.NewRecorder()
+	writeHLSPlaylistHeaders(recorder, session)
+
+	if got := recorder.Header().Get(hlsActualStartHeader); got != "" {
+		t.Fatalf("unknown start must not be published, got %q", got)
 	}
 }

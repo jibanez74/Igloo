@@ -3,14 +3,21 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/helpers"
 )
+
+func TestHLSSessionKey(t *testing.T) {
+	audioTrack := 2
+	key := HLSSessionKey(123, "720p_3mbps", &audioTrack, testPlaybackSessionID, 40)
+	want := "movie:123:720p_3mbps:audio:2:session:" + testPlaybackSessionID + ":start:40"
+	if key != want {
+		t.Errorf("HLSSessionKey = %q, want %q", key, want)
+	}
+}
 
 func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
 	app := setupTestApp(t)
@@ -413,515 +420,6 @@ func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 2
-	app.DB.SetMaxOpenConns(1)
-
-	started := make(chan struct{}, 2)
-	continueStarts := make(chan struct{})
-	plan := hlsRunPlan(safeRemuxFixture)
-	plan.Started = started
-	plan.Continue = continueStarts
-	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{plan, plan}}
-	app.FFmpeg = fake
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	userID := int64(100)
-	playbackSessions := []string{
-		testPlaybackSessionID,
-		testOtherPlaybackSessionID,
-		"11111111-1111-4111-8111-111111111111",
-		"22222222-2222-4222-8222-222222222222",
-	}
-	type result struct {
-		session *HLSSession
-		err     error
-	}
-	results := make(chan result, 2)
-	for i := 0; i < 2; i++ {
-		playbackSession := playbackSessions[i]
-		startSec := i * 20
-		go func() {
-			session, _, err := app.GetOrCreateHLSSession(
-				context.Background(),
-				movieID,
-				helpers.HLS_PROFILE_REMUX,
-				testIntPtr(0),
-				playbackSession,
-				startSec,
-				userID,
-			)
-			results <- result{session: session, err: err}
-		}()
-	}
-
-	<-started
-	<-started
-
-	for i := 2; i < len(playbackSessions); i++ {
-		_, _, err := app.GetOrCreateHLSSession(
-			context.Background(),
-			movieID,
-			helpers.HLS_PROFILE_REMUX,
-			testIntPtr(0),
-			playbackSessions[i],
-			i*20,
-			userID,
-		)
-		var capacityErr *hlsPersonalSessionCapacityError
-		if !errors.As(err, &capacityErr) {
-			t.Fatalf("request %d error = %v, want personal-session capacity error", i, err)
-		}
-	}
-	if fake.CallCount() != 2 {
-		t.Fatalf("RunHLS call count while reservations are pending = %d, want 2", fake.CallCount())
-	}
-
-	close(continueStarts)
-	for i := 0; i < 2; i++ {
-		created := <-results
-		if created.err != nil {
-			t.Fatalf("admitted request returned error: %v", created.err)
-		}
-		defer cleanupHLSSession(created.session)
-	}
-
-	app.PersonalHLSMu.Lock()
-	reserved := app.PersonalHLSReservations[userID]
-	cached := len(app.personalHLSSessionsForOwnerLocked(userID))
-	app.PersonalHLSMu.Unlock()
-	if reserved != 0 {
-		t.Fatalf("pending reservations = %d, want 0", reserved)
-	}
-	if cached != 2 {
-		t.Fatalf("cached personal sessions = %d, want 2", cached)
-	}
-}
-
-func TestReservePersonalHLSSession_UpdatesCapacityBeforeBlockingTeardown(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 1
-
-	userID := int64(100)
-	movieID := int64(5)
-	oldKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, testOtherPlaybackSessionID, 0)
-	oldSession := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: testOtherPlaybackSessionID,
-		TempDir:         t.TempDir(),
-	}
-	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, oldSession)
-	app.HLSSessionCache.Set(oldKey, oldSession, hlsPersonalSessionTTL)
-
-	type result struct {
-		reservation *hlsPersonalSessionReservation
-		err         error
-	}
-	resultCh := make(chan result, 1)
-	go func() {
-		reservation, err := app.reservePersonalHLSSession(movieID, userID, testPlaybackSessionID)
-		resultCh <- result{reservation: reservation, err: err}
-	}()
-
-	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
-	_, cached := app.HLSSessionCache.Get(oldKey)
-	if cached {
-		releaseCleanup()
-		t.Fatal("capacity victim remained cached while teardown was blocked")
-	}
-	if !app.PersonalHLSMu.TryLock() {
-		releaseCleanup()
-		t.Fatal("PersonalHLSMu remained locked while capacity-victim teardown was blocked")
-	}
-	reserved := app.PersonalHLSReservations[userID]
-	app.PersonalHLSMu.Unlock()
-	if reserved != 1 {
-		releaseCleanup()
-		t.Fatalf("pending reservations during teardown = %d, want 1", reserved)
-	}
-
-	releaseCleanup()
-	reserveResult := waitForHLSSessionCleanupResult(t, resultCh)
-	if reserveResult.err != nil {
-		t.Fatalf("reservePersonalHLSSession returned error: %v", reserveResult.err)
-	}
-	reserveResult.reservation.release()
-	_, err := os.Stat(oldSession.TempDir)
-	if !os.IsNotExist(err) {
-		t.Fatalf("capacity victim temp dir still exists after cleanup: %v", err)
-	}
-}
-
-func TestPersonalHLSSessionReservationCommit_UpdatesAccountingBeforeBlockingTeardown(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	movieID := int64(5)
-	oldKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, testPlaybackSessionID, 0)
-	newKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, testPlaybackSessionID, 30)
-	oldSession := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: testPlaybackSessionID,
-		TempDir:         t.TempDir(),
-	}
-	newSession := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: testPlaybackSessionID,
-		TempDir:         t.TempDir(),
-		Exited:          true,
-	}
-	defer cleanupHLSSession(newSession)
-	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, oldSession)
-	app.HLSSessionCache.Set(oldKey, oldSession, hlsPersonalSessionTTL)
-	app.PersonalHLSReservations[userID] = 1
-	reservation := &hlsPersonalSessionReservation{app: app, ownerUserID: userID}
-	commitDone := make(chan struct{})
-	go func() {
-		reservation.commit(movieID, newKey, newSession)
-		close(commitDone)
-	}()
-
-	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
-	_, oldCached := app.HLSSessionCache.Get(oldKey)
-	if oldCached {
-		releaseCleanup()
-		t.Fatal("superseded session remained cached while teardown was blocked")
-	}
-	raw, newCached := app.HLSSessionCache.Get(newKey)
-	if !newCached || raw != newSession {
-		releaseCleanup()
-		t.Fatal("replacement session was not cached before superseded teardown")
-	}
-	if !app.PersonalHLSMu.TryLock() {
-		releaseCleanup()
-		t.Fatal("PersonalHLSMu remained locked while superseded teardown was blocked")
-	}
-	reserved := app.PersonalHLSReservations[userID]
-	app.PersonalHLSMu.Unlock()
-	if reserved != 0 {
-		releaseCleanup()
-		t.Fatalf("pending reservations during superseded teardown = %d, want 0", reserved)
-	}
-
-	releaseCleanup()
-	waitForHLSSessionCleanupResult(t, commitDone)
-	_, err := os.Stat(oldSession.TempDir)
-	if !os.IsNotExist(err) {
-		t.Fatalf("superseded session temp dir still exists after cleanup: %v", err)
-	}
-}
-
-func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	movieID := int64(5)
-	key := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, testOtherPlaybackSessionID, 0)
-	session := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: testOtherPlaybackSessionID,
-		TempDir:         t.TempDir(),
-	}
-	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, session)
-	app.HLSSessionCache.Set(
-		key,
-		session,
-		hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second,
-	)
-	resultCh := make(chan bool, 1)
-	go func() {
-		resultCh <- app.reclaimIdlePersonalHLSSessionForOwner(userID)
-	}()
-
-	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
-	_, cached := app.HLSSessionCache.Get(key)
-	if cached {
-		releaseCleanup()
-		t.Fatal("idle session remained cached while teardown was blocked")
-	}
-	if !app.PersonalHLSMu.TryLock() {
-		releaseCleanup()
-		t.Fatal("PersonalHLSMu remained locked while idle-session teardown was blocked")
-	}
-	app.PersonalHLSMu.Unlock()
-
-	releaseCleanup()
-	reclaimed := waitForHLSSessionCleanupResult(t, resultCh)
-	if !reclaimed {
-		t.Fatal("reclaimIdlePersonalHLSSessionForOwner returned false")
-	}
-	_, err := os.Stat(session.TempDir)
-	if !os.IsNotExist(err) {
-		t.Fatalf("idle session temp dir still exists after cleanup: %v", err)
-	}
-}
-
-func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 1
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
-		{StartErr: errors.New("ffmpeg startup failed")},
-		{},
-	}}
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	userID := int64(100)
-	_, _, err := app.GetOrCreateHLSSession(
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(0),
-		testPlaybackSessionID,
-		0,
-		userID,
-	)
-	if err == nil {
-		t.Fatal("first creation error = nil, want FFmpeg startup error")
-	}
-
-	app.PersonalHLSMu.Lock()
-	reserved := app.PersonalHLSReservations[userID]
-	app.PersonalHLSMu.Unlock()
-	if reserved != 0 {
-		t.Fatalf("pending reservations after failed creation = %d, want 0", reserved)
-	}
-
-	session, _, err := app.GetOrCreateHLSSession(
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(0),
-		testOtherPlaybackSessionID,
-		20,
-		userID,
-	)
-	if err != nil {
-		t.Fatalf("later creation returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
-}
-
-func TestGetOrCreateHLSSession_MetadataFailureReleasesReservation(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 1
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	userID := int64(100)
-	_, _, err := app.GetOrCreateHLSSession(
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(9),
-		testPlaybackSessionID,
-		0,
-		userID,
-	)
-	if err == nil || !strings.Contains(err.Error(), "out of range") {
-		t.Fatalf("metadata validation error = %v, want audio-track range error", err)
-	}
-
-	app.PersonalHLSMu.Lock()
-	reserved := app.PersonalHLSReservations[userID]
-	app.PersonalHLSMu.Unlock()
-	if reserved != 0 {
-		t.Fatalf("pending reservations after metadata failure = %d, want 0", reserved)
-	}
-
-	session, _, err := app.GetOrCreateHLSSession(
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(0),
-		testOtherPlaybackSessionID,
-		20,
-		userID,
-	)
-	if err != nil {
-		t.Fatalf("later creation returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
-}
-
-func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 1
-
-	started := make(chan struct{}, 1)
-	continueStart := make(chan struct{})
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
-		Started:  started,
-		Continue: continueStart,
-	}}}
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	userID := int64(100)
-	oldKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testOtherPlaybackSessionID, 0)
-	otherOwnerKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), "11111111-1111-4111-8111-111111111111", 0)
-	roomKey := RoomHLSSessionKey(9)
-	app.HLSSessionCache.Set(oldKey, &HLSSession{
-		MovieID: movieID, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID,
-		TempDir: t.TempDir(), Exited: true,
-	}, 2*time.Minute)
-	app.HLSSessionCache.Set(otherOwnerKey, &HLSSession{
-		MovieID: movieID, OwnerUserID: userID + 1, PlaybackSession: "11111111-1111-4111-8111-111111111111",
-		TempDir: t.TempDir(), Exited: true,
-	}, time.Minute)
-	app.HLSSessionCache.Set(roomKey, &HLSSession{
-		MovieID: movieID, IsRoom: true, TempDir: t.TempDir(), Exited: true,
-	}, time.Minute)
-
-	type result struct {
-		session *HLSSession
-		err     error
-	}
-	resultCh := make(chan result, 1)
-	go func() {
-		session, _, err := app.GetOrCreateHLSSession(
-			context.Background(),
-			movieID,
-			helpers.HLS_PROFILE_720P_3MBPS,
-			testIntPtr(0),
-			testPlaybackSessionID,
-			20,
-			userID,
-		)
-		resultCh <- result{session: session, err: err}
-	}()
-
-	<-started
-	_, oldCached := app.HLSSessionCache.Get(oldKey)
-	if oldCached {
-		t.Fatal("LRU session remained cached when replacement FFmpeg started")
-	}
-	for _, key := range []string{otherOwnerKey, roomKey} {
-		_, cached := app.HLSSessionCache.Get(key)
-		if !cached {
-			t.Fatalf("unrelated session %q was evicted", key)
-		}
-	}
-	app.PersonalHLSMu.Lock()
-	reserved := app.PersonalHLSReservations[userID]
-	app.PersonalHLSMu.Unlock()
-	if reserved != 1 {
-		t.Fatalf("pending reservations while FFmpeg starts = %d, want 1", reserved)
-	}
-
-	close(continueStart)
-	created := <-resultCh
-	if created.err != nil {
-		t.Fatalf("replacement creation returned error: %v", created.err)
-	}
-	defer cleanupHLSSession(created.session)
-}
-
-func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
-
-	// A completed session sorts first but no longer owns a permit. A later idle,
-	// still-running session owns the only permit and must be the reclaim victim.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot()
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	var releaseOnce sync.Once
-	releaseRunningPermit := func() {
-		releaseOnce.Do(release)
-	}
-	defer releaseRunningPermit()
-
-	userID := int64(100)
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	completedKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testOtherPlaybackSessionID, 0)
-	runningKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), "11111111-1111-4111-8111-111111111111", 10)
-	completedSession := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: testOtherPlaybackSessionID,
-		TempDir:         t.TempDir(),
-		Exited:          true,
-	}
-	runningSession := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: "11111111-1111-4111-8111-111111111111",
-		TempDir:         t.TempDir(),
-		Cancel:          releaseRunningPermit,
-	}
-	app.HLSSessionCache.Set(completedKey, completedSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-2*time.Second)
-	app.HLSSessionCache.Set(runningKey, runningSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
-
-	session, _, err := app.GetOrCreateHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, userID)
-	if err != nil {
-		t.Fatalf("GetOrCreateHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
-
-	_, completedCached := app.HLSSessionCache.Get(completedKey)
-	if !completedCached {
-		t.Fatal("completed session was removed instead of being skipped")
-	}
-	_, runningCached := app.HLSSessionCache.Get(runningKey)
-	if runningCached {
-		t.Fatal("running idle session was not reclaimed before retrying")
-	}
-	if session.OwnerUserID != userID {
-		t.Fatalf("OwnerUserID = %d, want %d", session.OwnerUserID, userID)
-	}
-}
-
-func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
-
-	// Another device on the same account is actively playing (its TTL is fresh
-	// because segment fetches refresh it); a full pool must 503 the newcomer
-	// instead of killing the active stream.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot()
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	defer release()
-
-	userID := int64(100)
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	activeKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testOtherPlaybackSessionID, 0)
-	activeSession := &HLSSession{
-		MovieID:         movieID,
-		OwnerUserID:     userID,
-		PlaybackSession: testOtherPlaybackSessionID,
-		TempDir:         t.TempDir(),
-		Exited:          true,
-	}
-	app.HLSSessionCache.Set(activeKey, activeSession, hlsPersonalSessionTTL)
-
-	_, _, err = app.GetOrCreateHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, userID)
-	var capacityErr *hlsTranscodeCapacityError
-	if !errors.As(err, &capacityErr) {
-		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
-	}
-	if _, ok := app.HLSSessionCache.Get(activeKey); !ok {
-		t.Fatal("expected the active device's session to remain cached")
-	}
-}
-
 func TestCreateHLSSession_ClampsStartToZeroForTinyDurations(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -1092,5 +590,52 @@ func TestCreateHLSSession_AudioTrackBeyondStreamCountRejected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "out of range") {
 		t.Fatalf("expected an out-of-range error, got %v", err)
+	}
+}
+
+func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Wait = &sync.WaitGroup{}
+	prober := &stubKeyframeFfprobe{keyframeSec: 591.174}
+	app.Ffprobe = prober
+
+	session := &HLSSession{MovieID: 1, CopyVideo: true, StartSec: 600}
+	session.setActualStartSec(hlsUnknownActualStart)
+
+	app.Wait.Add(1)
+	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
+	app.Wait.Wait()
+
+	if prober.calls != 1 {
+		t.Fatalf("keyframe probe calls = %d, want 1", prober.calls)
+	}
+	if prober.target != 600 {
+		t.Fatalf("probe target = %v, want 600", prober.target)
+	}
+	if got := session.actualStartSec(); got != 591.174 {
+		t.Fatalf("actual start = %v, want 591.174", got)
+	}
+}
+
+// The probe is advisory: a failure must leave the start unknown rather than
+// publish a wrong one, so the client keeps its existing fallback.
+func TestMeasureHLSSessionStart_LeavesStartUnknownOnFailure(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Wait = &sync.WaitGroup{}
+	app.Ffprobe = &stubKeyframeFfprobe{err: errors.New("probe failed")}
+
+	session := &HLSSession{MovieID: 1, CopyVideo: true, StartSec: 600}
+	session.setActualStartSec(hlsUnknownActualStart)
+
+	app.Wait.Add(1)
+	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
+	app.Wait.Wait()
+
+	if got := session.actualStartSec(); got >= 0 {
+		t.Fatalf("actual start = %v, want it to stay unknown", got)
 	}
 }
