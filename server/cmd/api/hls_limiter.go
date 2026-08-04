@@ -85,9 +85,6 @@ func configuredHLSMaxPersonalSessionsPerUser() int {
 }
 
 func (l *hlsTranscodeLimiter) tryAcquire() (func(), error) {
-	if l == nil {
-		return func() {}, nil
-	}
 	select {
 	case l.permits <- struct{}{}:
 		var releaseOnce sync.Once

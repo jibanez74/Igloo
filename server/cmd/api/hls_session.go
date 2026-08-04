@@ -332,10 +332,6 @@ type hlsPersonalSessionReservation struct {
 }
 
 func (reservation *hlsPersonalSessionReservation) release() {
-	if reservation == nil || reservation.app == nil {
-		return
-	}
-
 	reservation.once.Do(func() {
 		app := reservation.app
 		app.PersonalHLSMu.Lock()
@@ -473,16 +469,10 @@ func canAccessPersonalHLSSession(session *HLSSession, movieID int64, ownerUserID
 }
 
 func (app *Application) markRoomHLSSessionDeleted(roomID int64) {
-	if app.RoomHLSTombstone == nil {
-		return
-	}
 	app.RoomHLSTombstone.SetDefault(RoomHLSSessionKey(roomID), struct{}{})
 }
 
 func (app *Application) isRoomHLSSessionDeleted(roomID int64) bool {
-	if app.RoomHLSTombstone == nil {
-		return false
-	}
 	_, deleted := app.RoomHLSTombstone.Get(RoomHLSSessionKey(roomID))
 	return deleted
 }
@@ -559,9 +549,6 @@ func cleanupHLSSession(session *HLSSession) {
 }
 
 func (app *Application) hlsTranscodeRoot() string {
-	if app == nil {
-		return RuntimeConfig{}.effectiveTranscodeDir()
-	}
 	if app.Settings != nil && strings.TrimSpace(app.Settings.TranscodeDir) != "" {
 		return app.Settings.TranscodeDir
 	}
