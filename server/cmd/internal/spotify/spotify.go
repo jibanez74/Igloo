@@ -37,9 +37,6 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 		TokenURL:     "https://accounts.spotify.com/api/token",
 	}
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if ctx.Value(oauth2.HTTPClient) == nil {
 		httpClient := &http.Client{Timeout: spotifyHTTPTimeout}
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
@@ -62,9 +59,6 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 }
 
 func spotifyRequestContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if _, ok := ctx.Deadline(); ok {
 		return ctx, func() {}
 	}
