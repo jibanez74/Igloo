@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -60,16 +59,12 @@ func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
 	const roomID = int64(24)
 	key := RoomHLSSessionKey(roomID)
 
-	tempDir, err := os.MkdirTemp("", "igloo-room-hls-*")
-	if err != nil {
-		t.Fatalf("mkdir temp: %v", err)
-	}
-
+	tempDir := t.TempDir()
 	session := &HLSSession{TempDir: tempDir}
 
 	app.CleanupRoomHLSSession(roomID)
 
-	err = app.storeRoomHLSSessionIfActive(roomID, key, session)
+	err := app.storeRoomHLSSessionIfActive(roomID, key, session)
 	if err == nil {
 		t.Fatal("expected deleted room session storage to fail")
 	}
@@ -143,7 +138,6 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	ctx := context.Background()
 	_, err := app.DB.Exec(`
@@ -201,7 +195,6 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{

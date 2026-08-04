@@ -9,14 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
 
 func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	ctx := context.Background()
 	_, err := app.DB.Exec(`
@@ -44,7 +42,6 @@ func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
 func TestCreateHLSSession_ErrorsWhenNoVideoStream(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	ctx := context.Background()
 	_, err := app.DB.Exec(`
@@ -72,7 +69,6 @@ func TestCreateHLSSession_ErrorsWhenNoVideoStream(t *testing.T) {
 func TestCreateHLSSession_RemuxSafeStaysOnRemux(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -108,7 +104,6 @@ func TestCreateHLSSession_RemuxSafeStaysOnRemux(t *testing.T) {
 func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -166,7 +161,6 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -212,7 +206,6 @@ func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
 func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -265,7 +258,6 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -300,7 +292,6 @@ func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -341,7 +332,6 @@ func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -373,7 +363,6 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -406,7 +395,6 @@ func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
 func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{}
 
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
@@ -428,7 +416,6 @@ func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
 func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.HLSMaxPersonalSessionsPerUser = 2
 	app.DB.SetMaxOpenConns(1)
 
@@ -681,7 +668,6 @@ func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) 
 func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.HLSMaxPersonalSessionsPerUser = 1
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
 		{StartErr: errors.New("ffmpeg startup failed")},
@@ -728,7 +714,6 @@ func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 func TestGetOrCreateHLSSession_MetadataFailureReleasesReservation(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.HLSMaxPersonalSessionsPerUser = 1
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
@@ -772,7 +757,6 @@ func TestGetOrCreateHLSSession_MetadataFailureReleasesReservation(t *testing.T) 
 func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.HLSMaxPersonalSessionsPerUser = 1
 
 	started := make(chan struct{}, 1)
@@ -846,7 +830,6 @@ func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) 
 func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	// A completed session sorts first but no longer owns a permit. A later idle,
@@ -905,7 +888,6 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	// Another device on the same account is actively playing (its TTL is fresh
@@ -943,7 +925,6 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 func TestCreateHLSSession_ClampsStartToZeroForTinyDurations(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	ctx := context.Background()
@@ -1002,7 +983,6 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 		t.Run(tt.name, func(t *testing.T) {
 			app := setupTestApp(t)
 			defer app.DB.Close()
-			app.Settings = &database.Setting{}
 			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 			app.FFmpeg = fake
 
@@ -1061,7 +1041,6 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -1103,7 +1082,6 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 func TestCreateHLSSession_AudioTrackBeyondStreamCountRejected(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{}
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
@@ -485,7 +484,6 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.InitSession()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
 		WriteFiles: func(outDir string) error {
@@ -560,7 +558,6 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 	app.InitSession()
 	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 	app.FFmpeg = ffmpegRunner
