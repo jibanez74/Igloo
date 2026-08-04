@@ -2,7 +2,9 @@ package ffprobe
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +42,58 @@ func TestParseKeyframePacket(t *testing.T) {
 				t.Errorf("isKeyframe = %v, want %v", isKeyframe, tt.wantKey)
 			}
 		})
+	}
+}
+
+func TestKeyframeAtOrBeforeRejectsInvalidInput(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
+
+	tests := []struct {
+		name      string
+		filePath  string
+		targetSec float64
+		wantErr   string
+	}{
+		{name: "empty path", filePath: "", targetSec: 10, wantErr: "source path is required"},
+		{name: "whitespace path", filePath: "   ", targetSec: 10, wantErr: "source path is required"},
+		{name: "zero target", filePath: "/tmp/movie.mkv", targetSec: 0, wantErr: "target must be greater than zero"},
+		{name: "negative target", filePath: "/tmp/movie.mkv", targetSec: -1, wantErr: "target must be greater than zero"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := probe.KeyframeAtOrBefore(context.Background(), tt.filePath, 0, tt.targetSec)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestKeyframeAtOrBeforeNoKeyframeFound(t *testing.T) {
+	// A non-keyframe row before the target and a keyframe past it: neither may
+	// satisfy the lookup.
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: "599.000000,___\n601.500000,K__",
+	})}
+
+	_, err := probe.KeyframeAtOrBefore(context.Background(), "/tmp/movie.mkv", 0, 600)
+	if err == nil || !strings.Contains(err.Error(), "no keyframe found at or before 600.000") {
+		t.Fatalf("error = %v, want no keyframe found error", err)
+	}
+}
+
+func TestKeyframeAtOrBeforeReturnsContextError(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: "599.000000,K__",
+	})}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := probe.KeyframeAtOrBefore(ctx, "/tmp/movie.mkv", 0, 600)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
 	}
 }
 

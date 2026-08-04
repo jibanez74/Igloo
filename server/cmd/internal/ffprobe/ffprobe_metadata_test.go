@@ -84,6 +84,25 @@ func TestRunMetadataNonzeroExitSurfacesTrimmedStderr(t *testing.T) {
 	}
 }
 
+func TestRunMetadataNonzeroExitWithoutStderr(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		exitCode: 2,
+	})}
+
+	_, err := probe.GetMetadata("/tmp/fail.mp3")
+	if err == nil {
+		t.Fatal("Expected ffprobe failure")
+	}
+
+	errText := err.Error()
+	if !strings.Contains(errText, "ffprobe failed for /tmp/fail.mp3") {
+		t.Fatalf("error = %q, want ffprobe failure with file path", errText)
+	}
+	if !strings.Contains(errText, "exit status 2") {
+		t.Fatalf("error = %q, want the exit status", errText)
+	}
+}
+
 func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
 	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
 		stdout: `{"streams":[],"format":{},"chapters":[]}`,
@@ -155,6 +174,36 @@ func TestFormatTagsUnmarshalAliases(t *testing.T) {
 	}
 	if tags.SortArtist != "Artist Sort" {
 		t.Fatalf("SortArtist = %q, want %q", tags.SortArtist, "Artist Sort")
+	}
+}
+
+func TestFormatTagsAliasPrecedence(t *testing.T) {
+	var tags FormatTags
+	err := json.Unmarshal([]byte(`{
+		"track": "3",
+		"tracknumber": "9",
+		"disc": "1",
+		"discnumber": "5",
+		"date": "2001",
+		"year": "1999",
+		"sortname": "Canonical Sort",
+		"titlesort": "Alias Sort"
+	}`), &tags)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if tags.Track != "3" {
+		t.Fatalf("Track = %q, want canonical %q over alias", tags.Track, "3")
+	}
+	if tags.Disc != "1" {
+		t.Fatalf("Disc = %q, want canonical %q over alias", tags.Disc, "1")
+	}
+	if tags.Date != "2001" {
+		t.Fatalf("Date = %q, want canonical %q over alias", tags.Date, "2001")
+	}
+	if tags.SortName != "Canonical Sort" {
+		t.Fatalf("SortName = %q, want canonical %q over alias", tags.SortName, "Canonical Sort")
 	}
 }
 
