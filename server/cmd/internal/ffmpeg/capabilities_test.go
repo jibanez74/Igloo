@@ -7,139 +7,137 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-func TestParseFFmpegNamedRows(t *testing.T) {
-	output := `Encoders:
- V....D h264_nvenc           NVIDIA NVENC H.264 encoder
- V..... h264_qsv             H.264 QSV encoder
- ... scale_cuda        V->V       GPU accelerated video resizer
-`
-	found := parseFFmpegNamedRows(output)
-
-	for _, name := range []string{"h264_nvenc", "h264_qsv", "scale_cuda"} {
-		if !found[name] {
-			t.Fatalf("expected %q in parsed rows: %#v", name, found)
-		}
-	}
-}
-
-func TestResolveHLSDeviceFallsBackForUnavailableNvidia(t *testing.T) {
-	caps := Capabilities{
-		Probed:                 true,
-		Encoders:               map[string]bool{"h264_nvenc": true},
-		H264NVENCRuntimeUsable: false,
-		H264NVENCProbeError:    "no capable devices",
-	}
-
-	decision := ResolveHLSDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, caps)
-	if decision.Effective != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
-		t.Fatalf("Effective = %q, want cpu", decision.Effective)
-	}
-	if !strings.Contains(decision.Reason, "runtime probe failed") || !strings.Contains(decision.Reason, "no capable devices") {
-		t.Fatalf("unexpected fallback reason: %q", decision.Reason)
-	}
-}
-
-func TestResolveHLSDeviceFallsBackForUnavailableIntelQSV(t *testing.T) {
-	caps := Capabilities{
-		Probed:               true,
-		Encoders:             map[string]bool{"h264_qsv": true},
-		H264QSVRuntimeUsable: false,
-		H264QSVProbeError:    "no qsv device",
-	}
-
-	decision := ResolveHLSDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL, caps)
-	if decision.Effective != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
-		t.Fatalf("Effective = %q, want cpu", decision.Effective)
-	}
-	if !strings.Contains(decision.Reason, "runtime probe failed") || !strings.Contains(decision.Reason, "no qsv device") {
-		t.Fatalf("unexpected fallback reason: %q", decision.Reason)
-	}
-}
-
-func TestFFmpegFilterHelpHasOptionMatchesOptionName(t *testing.T) {
-	output := `Filter tonemap_cuda
+func TestFFmpegHelpHasOption(t *testing.T) {
+	filterHelp := `Filter tonemap_cuda
   Inputs:
      #0: default (video)
   tonemap_cuda AVOptions:
    format            <pix_fmt>    ..FV....... Output pixel format
    tonemap           <int>        ..FV....... Tonemap algorithm
 `
-
-	if !ffmpegHelpHasOption(output, "format") {
-		t.Fatal("expected format option")
-	}
-	if ffmpegHelpHasOption(output, "p") {
-		t.Fatal("single-letter option must not match arbitrary words in help output")
-	}
-}
-
-func TestFFmpegHelpHasOptionMatchesDashedOptionName(t *testing.T) {
-	output := `Encoder h264_qsv
+	encoderHelp := `Encoder h264_qsv
   h264_qsv AVOptions:
    -preset           <int>        E..V....... Encoding preset
    -look_ahead       <boolean>    E..V....... Use lookahead
 `
+	cliHelp := "\n   \n-readrate value\nreadrate_initial_burst value\n"
 
-	if !ffmpegHelpHasOption(output, "look_ahead") {
-		t.Fatal("expected look_ahead option")
+	tests := []struct {
+		name   string
+		output string
+		option string
+		want   bool
+	}{
+		{name: "filter option", output: filterHelp, option: "format", want: true},
+		// "p" appears inside several help words; only a whole option name counts.
+		{name: "single letter does not match arbitrary words", output: filterHelp, option: "p"},
+		{name: "dashed encoder option", output: encoderHelp, option: "look_ahead", want: true},
+		{name: "partial option name", output: encoderHelp, option: "look"},
+		{name: "blank option", output: cliHelp, option: ""},
+		{name: "dashed option is normalized", output: cliHelp, option: " READRATE ", want: true},
+		{name: "partial CLI option", output: cliHelp, option: "rate"},
 	}
-	if ffmpegHelpHasOption(output, "look") {
-		t.Fatal("partial option name must not match")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ffmpegHelpHasOption(tt.output, tt.option)
+			if got != tt.want {
+				t.Fatalf("ffmpegHelpHasOption(%q) = %v, want %v", tt.option, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestSupportsNvidiaCUDAFiltersRequiresToneMapOptions(t *testing.T) {
-	caps := Capabilities{
-		Probed:                       true,
-		Encoders:                     map[string]bool{"h264_nvenc": true},
-		HWAccels:                     map[string]bool{"cuda": true},
-		Filters:                      map[string]bool{"hwupload": true, "scale_cuda": true, "tonemap_cuda": true},
-		FilterOptions:                map[string]map[string]bool{"scale_cuda": {"format": true}, "tonemap_cuda": {"format": true}},
-		H264NVENCRuntimeUsable:       true,
-		NvidiaCUDAScaleRuntimeUsable: true,
+func TestSupportsNvidiaCUDAFilters(t *testing.T) {
+	base := func() Capabilities {
+		return Capabilities{
+			Probed:   true,
+			Encoders: map[string]bool{"h264_nvenc": true},
+			HWAccels: map[string]bool{"cuda": true},
+			Filters:  map[string]bool{"hwupload": true, "scale_cuda": true, "tonemap_cuda": true},
+			FilterOptions: map[string]map[string]bool{
+				"scale_cuda": {"format": true},
+				"tonemap_cuda": {
+					"format":  true,
+					"p":       true,
+					"t":       true,
+					"m":       true,
+					"tonemap": true,
+					"desat":   true,
+				},
+			},
+			H264NVENCRuntimeUsable:         true,
+			NvidiaCUDAScaleRuntimeUsable:   true,
+			NvidiaCUDATonemapRuntimeUsable: true,
+		}
 	}
 
-	if !caps.SupportsNvidiaCUDAFilters(false) {
-		t.Fatal("expected CUDA SDR scaling support")
-	}
-	if caps.SupportsNvidiaCUDAFilters(true) {
-		t.Fatal("expected CUDA HDR tone-map support to require p/t/m/tonemap/desat options")
+	tests := []struct {
+		name    string
+		tonemap bool
+		mutate  func(*Capabilities)
+		want    bool
+	}{
+		{name: "scale supported", want: true},
+		{name: "tone-map supported", tonemap: true, want: true},
+		{
+			name:   "not probed",
+			mutate: func(c *Capabilities) { c.Probed = false },
+		},
+		{
+			name:   "missing h264_nvenc encoder",
+			mutate: func(c *Capabilities) { delete(c.Encoders, "h264_nvenc") },
+		},
+		{
+			name:   "nvenc runtime failed",
+			mutate: func(c *Capabilities) { c.H264NVENCRuntimeUsable = false },
+		},
+		{
+			name:   "missing cuda hwaccel",
+			mutate: func(c *Capabilities) { c.HWAccels = map[string]bool{} },
+		},
+		{
+			name:   "missing hwupload filter",
+			mutate: func(c *Capabilities) { delete(c.Filters, "hwupload") },
+		},
+		{
+			name:   "missing scale_cuda format option",
+			mutate: func(c *Capabilities) { c.FilterOptions["scale_cuda"] = map[string]bool{} },
+		},
+		{
+			name:   "scale runtime probe failed",
+			mutate: func(c *Capabilities) { c.NvidiaCUDAScaleRuntimeUsable = false },
+		},
+		{
+			name:    "tone-map needs the tonemap_cuda filter",
+			tonemap: true,
+			mutate:  func(c *Capabilities) { delete(c.Filters, "tonemap_cuda") },
+		},
+		{
+			// tonemap_cuda must expose every option the filter string uses.
+			name:    "tone-map needs the full option set",
+			tonemap: true,
+			mutate:  func(c *Capabilities) { c.FilterOptions["tonemap_cuda"] = map[string]bool{"format": true} },
+		},
+		{
+			name:    "tone-map runtime probe failed",
+			tonemap: true,
+			mutate:  func(c *Capabilities) { c.NvidiaCUDATonemapRuntimeUsable = false },
+		},
 	}
 
-	caps.FilterOptions["tonemap_cuda"] = map[string]bool{
-		"format":  true,
-		"p":       true,
-		"t":       true,
-		"m":       true,
-		"tonemap": true,
-		"desat":   true,
-	}
-	if caps.SupportsNvidiaCUDAFilters(true) {
-		t.Fatal("expected CUDA HDR tone-map support to require a runtime probe")
-	}
-	caps.NvidiaCUDATonemapRuntimeUsable = true
-	if !caps.SupportsNvidiaCUDAFilters(true) {
-		t.Fatal("expected CUDA HDR tone-map support when required options are present")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			caps := base()
+			if tt.mutate != nil {
+				tt.mutate(&caps)
+			}
 
-func TestSupportsNvidiaCUDAFiltersRequiresRuntimeScaleProbe(t *testing.T) {
-	caps := Capabilities{
-		Probed:                 true,
-		Encoders:               map[string]bool{"h264_nvenc": true},
-		HWAccels:               map[string]bool{"cuda": true},
-		Filters:                map[string]bool{"hwupload": true, "scale_cuda": true},
-		FilterOptions:          map[string]map[string]bool{"scale_cuda": {"format": true}},
-		H264NVENCRuntimeUsable: true,
-	}
-
-	if caps.SupportsNvidiaCUDAFilters(false) {
-		t.Fatal("expected CUDA scale support to require a runtime probe")
-	}
-
-	caps.NvidiaCUDAScaleRuntimeUsable = true
-	if !caps.SupportsNvidiaCUDAFilters(false) {
-		t.Fatal("expected CUDA scale support when static support and runtime probe are present")
+			got := caps.SupportsNvidiaCUDAFilters(tt.tonemap)
+			if got != tt.want {
+				t.Fatalf("SupportsNvidiaCUDAFilters(%v) = %v, want %v", tt.tonemap, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -260,6 +258,19 @@ func TestResolveHLSDeviceScenarios(t *testing.T) {
 			wantReason:     "does not list h264_nvenc",
 		},
 		{
+			name:       "NVENC runtime probe failed",
+			configured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps: Capabilities{
+				Probed:                 true,
+				Encoders:               map[string]bool{"h264_nvenc": true},
+				H264NVENCRuntimeUsable: false,
+				H264NVENCProbeError:    "no capable devices",
+			},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:     "runtime probe failed: no capable devices",
+		},
+		{
 			name:       "usable NVENC",
 			configured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
 			caps: Capabilities{
@@ -277,6 +288,19 @@ func TestResolveHLSDeviceScenarios(t *testing.T) {
 			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
 			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
 			wantReason:     "does not list h264_qsv",
+		},
+		{
+			name:       "QSV runtime probe failed",
+			configured: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps: Capabilities{
+				Probed:               true,
+				Encoders:             map[string]bool{"h264_qsv": true},
+				H264QSVRuntimeUsable: false,
+				H264QSVProbeError:    "no qsv device",
+			},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:     "runtime probe failed: no qsv device",
 		},
 		{
 			name:       "usable QSV",
@@ -372,13 +396,16 @@ func TestCapabilityParsersHandleHeadersMalformedRowsAndCase(t *testing.T) {
 	named := parseFFmpegNamedRows(`
 Encoders:
  V..... H264_NVENC description
+ V..... h264_qsv Intel encoder
+ ... SCALE_CUDA V->V
  -bad rejected
  X
  .. name=value malformed
- ... SCALE_CUDA V->V
 `)
-	if !named["h264_nvenc"] || !named["scale_cuda"] {
-		t.Fatalf("parsed named rows = %#v", named)
+	for _, want := range []string{"h264_nvenc", "h264_qsv", "scale_cuda"} {
+		if !named[want] {
+			t.Fatalf("missing %q in parsed named rows: %#v", want, named)
+		}
 	}
 	if named["rejected"] || named["name=value"] {
 		t.Fatalf("malformed rows were accepted: %#v", named)
@@ -387,18 +414,5 @@ Encoders:
 	hwaccels := parseFFmpegHWAccels("Hardware acceleration methods:\n CUDA \nQSV\n\n")
 	if !hwaccels["cuda"] || !hwaccels["qsv"] || len(hwaccels) != 2 {
 		t.Fatalf("parsed hardware accelerators = %#v", hwaccels)
-	}
-}
-
-func TestFFmpegHelpHasOptionRejectsBlankAndMalformedLines(t *testing.T) {
-	output := "\n   \n-readrate value\nreadrate_initial_burst value\n"
-	if ffmpegHelpHasOption(output, "") {
-		t.Fatal("blank option matched")
-	}
-	if !ffmpegHelpHasOption(output, " READRATE ") {
-		t.Fatal("dashed option did not match after normalization")
-	}
-	if ffmpegHelpHasOption(output, "rate") {
-		t.Fatal("partial option matched")
 	}
 }
