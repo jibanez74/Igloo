@@ -650,3 +650,77 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 		t.Fatal("expected the active device's session to remain cached")
 	}
 }
+
+func TestHLSMaxPersonalSessionsPerUser_DefaultsWhenUnconfigured(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.HLSMaxPersonalSessionsPerUser = 0
+	if got := app.hlsMaxPersonalSessionsPerUser(); got != hlsMaxPersonalSessionsPerUserDefault {
+		t.Fatalf("hlsMaxPersonalSessionsPerUser() = %d, want %d", got, hlsMaxPersonalSessionsPerUserDefault)
+	}
+
+	app.HLSMaxPersonalSessionsPerUser = 7
+	if got := app.hlsMaxPersonalSessionsPerUser(); got != 7 {
+		t.Fatalf("hlsMaxPersonalSessionsPerUser() = %d, want the configured 7", got)
+	}
+}
+
+// Reclaim exists to free a transcode permit. A copy-video session never held
+// one, so killing it would interrupt playback and buy nothing.
+func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := int64(100)
+	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testOtherPlaybackSessionID, 0)
+	session := &HLSSession{
+		MovieID:         5,
+		OwnerUserID:     userID,
+		PlaybackSession: testOtherPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		CopyVideo:       true,
+	}
+	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
+
+	if app.reclaimIdlePersonalHLSSessionForOwner(userID) {
+		t.Fatal("an idle copy-video session was reclaimed")
+	}
+	if _, cached := app.HLSSessionCache.Get(key); !cached {
+		t.Fatal("expected the copy-video session to stay cached")
+	}
+}
+
+func TestDeleteHLSSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	t.Run("returns nil for a key that is not cached", func(t *testing.T) {
+		if session := app.deleteHLSSession("missing"); session != nil {
+			t.Fatalf("deleteHLSSession() = %v, want nil", session)
+		}
+	})
+
+	t.Run("removes an entry that is not a session", func(t *testing.T) {
+		app.HLSSessionCache.SetDefault("poisoned", "not a session")
+
+		if session := app.deleteHLSSession("poisoned"); session != nil {
+			t.Fatalf("deleteHLSSession() = %v, want nil", session)
+		}
+		if _, cached := app.HLSSessionCache.Get("poisoned"); cached {
+			t.Fatal("expected the unusable entry to be removed")
+		}
+	})
+
+	t.Run("returns and removes a cached session", func(t *testing.T) {
+		session := &HLSSession{MovieID: 5, TempDir: t.TempDir()}
+		app.HLSSessionCache.SetDefault("live", session)
+
+		if got := app.deleteHLSSession("live"); got != session {
+			t.Fatalf("deleteHLSSession() = %v, want the cached session", got)
+		}
+		if _, cached := app.HLSSessionCache.Get("live"); cached {
+			t.Fatal("expected the session to be removed from the cache")
+		}
+	})
+}

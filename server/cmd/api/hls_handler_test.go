@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"igloo/cmd/internal/helpers"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestIsAllowedHLSFilename(t *testing.T) {
@@ -41,18 +43,192 @@ func TestIsAllowedHLSFilename(t *testing.T) {
 	}
 }
 
-func TestWriteHLSSessionError_PersonalCapacityReturnsRetryable503(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	writeHLSSessionError(recorder, &hlsPersonalSessionCapacityError{MaxActive: 3})
+func TestWriteHLSSessionError(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            error
+		wantStatus     int
+		wantRetryAfter string
+	}{
+		{
+			name:       "a missing session is not found",
+			err:        errHLSSessionNotFound,
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "a session that produced nothing is not found",
+			err:        errHLSSessionEmpty,
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "a failed session is a server error",
+			err:        fmt.Errorf("%w: ffmpeg died", errHLSSessionFailed),
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:           "a full transcode pool is retryable",
+			err:            &hlsTranscodeCapacityError{MaxActive: 2},
+			wantStatus:     http.StatusServiceUnavailable,
+			wantRetryAfter: "5",
+		},
+		{
+			name:           "a user at their session cap is retryable",
+			err:            &hlsPersonalSessionCapacityError{MaxActive: 3},
+			wantStatus:     http.StatusServiceUnavailable,
+			wantRetryAfter: "5",
+		},
+		{
+			name:           "a full transcode disk is retryable",
+			err:            &hlsStorageCapacityError{FreeBytes: 1024, RequiredBytes: 2 << 30},
+			wantStatus:     http.StatusServiceUnavailable,
+			wantRetryAfter: "5",
+		},
+		{
+			// The session is healthy, so the client should come back sooner than
+			// it would for a capacity refusal.
+			name:           "a playlist that is not published yet retries sooner",
+			err:            errHLSPlaylistNotReady,
+			wantStatus:     http.StatusServiceUnavailable,
+			wantRetryAfter: "1",
+		},
+		{
+			name:       "anything else is a bad request",
+			err:        errors.New("movie 7 has no valid duration in the database"),
+			wantStatus: http.StatusBadRequest,
+		},
+	}
 
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503", recorder.Code)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			writeHLSSessionError(recorder, tt.err)
+
+			if recorder.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", recorder.Code, tt.wantStatus)
+			}
+			if got := recorder.Header().Get("Retry-After"); got != tt.wantRetryAfter {
+				t.Fatalf("Retry-After = %q, want %q", got, tt.wantRetryAfter)
+			}
+			if !strings.Contains(recorder.Body.String(), tt.err.Error()) {
+				t.Fatalf("body = %s, want it to carry %q", recorder.Body.String(), tt.err.Error())
+			}
+		})
 	}
-	if recorder.Header().Get("Retry-After") != "5" {
-		t.Fatalf("Retry-After = %q, want 5", recorder.Header().Get("Retry-After"))
+}
+
+func TestParseHLSParams(t *testing.T) {
+	const validQuery = "playback_session=" + testPlaybackSessionID + "&start=40"
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
+		params, ok := parseHLSParams(w, r)
+		if !ok {
+			return
+		}
+		audioTrack := "none"
+		if params.AudioTrack != nil {
+			audioTrack = strconv.Itoa(*params.AudioTrack)
+		}
+		fmt.Fprintf(w, "%d|%s|%s|%d|%s|%s",
+			params.MovieID, params.Profile, params.PlaybackSession, params.StartSec, audioTrack, params.Reload)
+	})
+
+	tests := []struct {
+		name       string
+		target     string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "accepts a full request",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?" + validQuery + "&audio_track=2&reload=9",
+			wantStatus: http.StatusOK,
+			wantBody:   "7|720p_3mbps|" + testPlaybackSessionID + "|40|2|9",
+		},
+		{
+			// An absent audio_track stays nil so the cache key can distinguish
+			// "no audio selected" from track 0.
+			name:       "omitted audio_track stays unset",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?" + validQuery,
+			wantStatus: http.StatusOK,
+			wantBody:   "7|720p_3mbps|" + testPlaybackSessionID + "|40|none|",
+		},
+		{
+			name:       "rejects a non-numeric movie id",
+			target:     "/api/movies/abc/hls/720p_3mbps/playlist.m3u8?" + validQuery,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid movie id",
+		},
+		{
+			name:       "rejects a zero movie id",
+			target:     "/api/movies/0/hls/720p_3mbps/playlist.m3u8?" + validQuery,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid movie id",
+		},
+		{
+			name:       "rejects an unknown quality profile",
+			target:     "/api/movies/7/hls/junk/playlist.m3u8?" + validQuery,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid quality profile",
+		},
+		{
+			name:       "rejects a missing playback_session",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?start=40",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid playback_session",
+		},
+		{
+			name:       "rejects a playback_session that is not a UUID",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?playback_session=not-a-uuid&start=40",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid playback_session",
+		},
+		{
+			// start keys the session cache, so an absent one would silently
+			// collapse every seek window onto the same session.
+			name:       "rejects a missing start",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?playback_session=" + testPlaybackSessionID,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "start parameter is required",
+		},
+		{
+			name:       "rejects a negative start",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?playback_session=" + testPlaybackSessionID + "&start=-1",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid start parameter",
+		},
+		{
+			name:       "rejects a non-numeric start",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?playback_session=" + testPlaybackSessionID + "&start=abc",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid start parameter",
+		},
+		{
+			name:       "rejects a negative audio_track",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?" + validQuery + "&audio_track=-1",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid audio_track",
+		},
+		{
+			name:       "rejects a non-numeric audio_track",
+			target:     "/api/movies/7/hls/720p_3mbps/playlist.m3u8?" + validQuery + "&audio_track=x",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "invalid audio_track",
+		},
 	}
-	if !strings.Contains(recorder.Body.String(), "personal HLS sessions") {
-		t.Fatalf("response does not distinguish personal-session capacity: %s", recorder.Body.String())
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tt.target, nil))
+
+			if recorder.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, tt.wantStatus, recorder.Body.String())
+			}
+			if !strings.Contains(recorder.Body.String(), tt.wantBody) {
+				t.Fatalf("body = %s, want it to contain %q", recorder.Body.String(), tt.wantBody)
+			}
+		})
 	}
 }
 
@@ -185,6 +361,56 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
 		if !errors.Is(err, errHLSSessionEmpty) {
 			t.Fatalf("expected an empty-session error, got %v", err)
+		}
+	})
+
+	// onExit publishes FinalPlaylist before it marks the session exited, so a
+	// session that finishes mid-request still serves its real playlist.
+	t.Run("copy-video prefers a published final playlist", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
+		session.FinalPlaylist = "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+			"#EXTINF:8.466792,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
+
+		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(playlist, "/api/hls/init.mp4?start=0") {
+			t.Fatalf("final playlist did not rewrite init URL: %s", playlist)
+		}
+		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
+			t.Fatalf("final playlist did not rewrite segment URL: %s", playlist)
+		}
+	})
+
+	t.Run("copy-video that exited with an error reports a failed session", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: t.TempDir()}
+		session.Exited = true
+		session.ExitErr = errors.New("ffmpeg exited 1")
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionFailed) {
+			t.Fatalf("expected a failed-session error, got %v", err)
+		}
+	})
+
+	t.Run("copy-video serves the playlist as soon as FFmpeg publishes it", func(t *testing.T) {
+		tempDir := t.TempDir()
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: tempDir}
+
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			livePlaylist := "#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+				"#EXTINF:8.466792,\nsegment_0.m4s\n"
+			_ = os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(livePlaylist), 0o644)
+		}()
+
+		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
+			t.Fatalf("late playlist was not served: %s", playlist)
 		}
 	})
 
@@ -729,6 +955,148 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 	if _, ok := app.HLSSessionCache.Get(key); !ok {
 		t.Fatal("expected mismatched-owner session to remain cached")
 	}
+}
+
+func TestHLSManifest_RejectsUnauthenticatedRequests(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, app.HLSManifest)
+	handler := app.SessionManager.LoadAndSave(router)
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/movies/7/hls/720p_3mbps/playlist.m3u8?playback_session="+testPlaybackSessionID+"&start=0",
+		nil,
+	))
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHLSManifest_SurfacesSessionCreationFailure(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.FFmpeg = &fakeFFmpeg{}
+
+	result, err := app.DB.Exec(`
+		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult)
+		VALUES ('No Duration', '/tmp/manifest-nodur.mkv', 'manifest-nodur.mkv', 1, 'mkv', 'video/x-matroska', 0)
+	`)
+	if err != nil {
+		t.Fatalf("insert movie: %v", err)
+	}
+	movieID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/movies/%d/hls/720p_3mbps/playlist.m3u8?playback_session=%s&start=0", movieID, testPlaybackSessionID),
+		nil,
+	))
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "no valid duration") {
+		t.Fatalf("body = %s, want the session failure reason", recorder.Body.String())
+	}
+}
+
+func TestHLSSegment_RejectsBadRequests(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	audioTrack := 0
+	userID := int64(100)
+	handler := newHLSTestHandler(t, app, userID)
+	segmentURL := func(filename string) string {
+		return fmt.Sprintf(
+			"/api/movies/5/hls/remux/%s?audio_track=0&playback_session=%s&start=0",
+			filename,
+			testPlaybackSessionID,
+		)
+	}
+
+	t.Run("rejects a filename outside the segment naming scheme", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, segmentURL("garbage.txt"), nil))
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), "invalid segment filename") {
+			t.Fatalf("body = %s, want the filename rejection", recorder.Body.String())
+		}
+	})
+
+	t.Run("reports an uncached session as not found", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, segmentURL("segment_0.m4s"), nil))
+
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404: %s", recorder.Code, recorder.Body.String())
+		}
+	})
+
+	// A cache entry of the wrong type can only come from a bug, but leaving it
+	// in place would make every later request for this key fail the same way.
+	t.Run("evicts a cache entry that is not a session", func(t *testing.T) {
+		key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+		app.HLSSessionCache.SetDefault(key, "not a session")
+
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, segmentURL("segment_0.m4s"), nil))
+
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404: %s", recorder.Code, recorder.Body.String())
+		}
+		if _, cached := app.HLSSessionCache.Get(key); cached {
+			t.Fatal("expected the unusable cache entry to be evicted")
+		}
+	})
+}
+
+func TestStopPersonalHLSSession_RejectsBadRequests(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	t.Run("rejects an unauthenticated caller", func(t *testing.T) {
+		app.InitSession()
+		router := chi.NewRouter()
+		router.Post("/api/movies/{id}/hls/session/stop", app.StopPersonalHLSSession)
+
+		recorder := httptest.NewRecorder()
+		app.SessionManager.LoadAndSave(router).ServeHTTP(recorder, httptest.NewRequest(
+			http.MethodPost,
+			"/api/movies/5/hls/session/stop?playback_session="+testPlaybackSessionID,
+			nil,
+		))
+
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401: %s", recorder.Code, recorder.Body.String())
+		}
+	})
+
+	t.Run("rejects a non-numeric movie id", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		newHLSTestHandler(t, app, 100).ServeHTTP(recorder, httptest.NewRequest(
+			http.MethodPost,
+			"/api/movies/abc/hls/session/stop?playback_session="+testPlaybackSessionID,
+			nil,
+		))
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+		}
+	})
 }
 
 func TestHasPlayableSegment(t *testing.T) {

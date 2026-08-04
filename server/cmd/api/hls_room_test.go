@@ -25,31 +25,36 @@ func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	}
 }
 
-func TestCleanupRoomHLSSession_NoopWhenNoSession(t *testing.T) {
+func TestCleanupRoomHLSSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.CleanupRoomHLSSession(99999)
-}
+	t.Run("removes the cached session and tombstones the room", func(t *testing.T) {
+		const roomID = int64(42)
+		key := RoomHLSSessionKey(roomID)
+		app.HLSSessionCache.SetDefault(key, &HLSSession{TempDir: t.TempDir()})
 
-func TestCleanupRoomHLSSession_RemovesSessionFromCache(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
+		app.CleanupRoomHLSSession(roomID)
 
-	const roomID = int64(42)
-	key := RoomHLSSessionKey(roomID)
+		if _, ok := app.HLSSessionCache.Get(key); ok {
+			t.Error("expected session to be removed from cache after cleanup")
+		}
+		if !app.isRoomHLSSessionDeleted(roomID) {
+			t.Error("expected cleanup to mark the room hls session as deleted")
+		}
+	})
 
-	dummy := &HLSSession{TempDir: ""}
-	app.HLSSessionCache.SetDefault(key, dummy)
+	// A room can be closed before anyone ever started playback. The tombstone
+	// still has to land, or a late warm-up would resurrect the deleted room.
+	t.Run("tombstones a room that never had a session", func(t *testing.T) {
+		const roomID = int64(99999)
 
-	app.CleanupRoomHLSSession(roomID)
+		app.CleanupRoomHLSSession(roomID)
 
-	if _, ok := app.HLSSessionCache.Get(key); ok {
-		t.Error("expected session to be removed from cache after cleanup")
-	}
-	if !app.isRoomHLSSessionDeleted(roomID) {
-		t.Error("expected cleanup to mark the room hls session as deleted")
-	}
+		if !app.isRoomHLSSessionDeleted(roomID) {
+			t.Error("expected cleanup to tombstone a room with no cached session")
+		}
+	})
 }
 
 func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
