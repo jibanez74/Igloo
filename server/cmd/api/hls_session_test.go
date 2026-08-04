@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -14,49 +12,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
-
-func blockHLSSessionCleanup(t *testing.T, session *HLSSession) (<-chan struct{}, func()) {
-	t.Helper()
-
-	started := make(chan struct{})
-	unblock := make(chan struct{})
-	var unblockOnce sync.Once
-	session.Cancel = func() {
-		close(started)
-		<-unblock
-	}
-	release := func() {
-		unblockOnce.Do(func() {
-			close(unblock)
-		})
-	}
-	t.Cleanup(release)
-	return started, release
-}
-
-func waitForHLSSessionCleanupToBlock(t *testing.T, started <-chan struct{}, release func()) {
-	t.Helper()
-
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		release()
-		t.Fatal("timed out waiting for HLS session cleanup to start")
-	}
-}
-
-func waitForHLSSessionCleanupResult[T any](t *testing.T, result <-chan T) T {
-	t.Helper()
-
-	select {
-	case value := <-result:
-		return value
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for HLS session cleanup to finish")
-		var zero T
-		return zero
-	}
-}
 
 func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
 	app := setupTestApp(t)
@@ -121,14 +76,7 @@ func TestCreateHLSSession_RemuxSafeStaysOnRemux(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
+			hlsRunPlan(safeRemuxFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -164,22 +112,8 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: false,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -236,30 +170,9 @@ func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: false,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -306,22 +219,8 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 			{
 				ExitErr: errors.New("ffmpeg exited before writing remux preflight output"),
 			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
+			hlsRunPlan(transcodeFixture),
+			hlsRunPlan(safeRemuxFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -370,14 +269,7 @@ func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -412,14 +304,7 @@ func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -460,14 +345,7 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -492,66 +370,6 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	}
 }
 
-func insertTestHLSMovieFixture(t *testing.T, app *Application, videoCodec string, height int64) int64 {
-	t.Helper()
-
-	path := fmt.Sprintf("/tmp/%s-%s.mkv", sanitizeTestPathComponent(t.Name()), sanitizeTestPathComponent(videoCodec))
-
-	result, err := app.DB.Exec(`
-		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult, duration)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		t.Name(),
-		path,
-		filepath.Base(path),
-		1_000_000,
-		"mkv",
-		"video/x-matroska",
-		0,
-		7200.0,
-	)
-	if err != nil {
-		t.Fatalf("insert movie: %v", err)
-	}
-
-	movieID, err := result.LastInsertId()
-	if err != nil {
-		t.Fatalf("movie last insert id: %v", err)
-	}
-
-	_, err = app.DB.Exec(`
-		INSERT INTO video_streams (movie_id, stream_index, codec, bit_rate, width, height, frame_rate)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`,
-		movieID,
-		0,
-		videoCodec,
-		5_000_000,
-		1920,
-		height,
-		23.976,
-	)
-	if err != nil {
-		t.Fatalf("insert video stream: %v", err)
-	}
-
-	_, err = app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels)
-		VALUES (?, ?, ?, ?, ?)
-	`,
-		movieID,
-		1,
-		"aac",
-		192000,
-		2,
-	)
-	if err != nil {
-		t.Fatalf("insert audio stream: %v", err)
-	}
-
-	return movieID
-}
-
 func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -559,14 +377,7 @@ func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
+			hlsRunPlan(safeRemuxFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -623,16 +434,9 @@ func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T
 
 	started := make(chan struct{}, 2)
 	continueStarts := make(chan struct{})
-	plan := fakeFFmpegRunPlan{
-		Started:  started,
-		Continue: continueStarts,
-		WriteFiles: func(outDir string) error {
-			return writeTestHLSFixture(outDir, testFMP4Fixture{
-				SafeVideo: true,
-				Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-			})
-		},
-	}
+	plan := hlsRunPlan(safeRemuxFixture)
+	plan.Started = started
+	plan.Continue = continueStarts
 	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{plan, plan}}
 	app.FFmpeg = fake
 
@@ -1251,12 +1055,6 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 	}
 }
 
-func sanitizeTestPathComponent(value string) string {
-	value = strings.ReplaceAll(value, "/", "_")
-	value = strings.ReplaceAll(value, " ", "_")
-	return value
-}
-
 // The audio_track parameter is an ordinal into the movie's audio streams while
 // ffmpeg's -map needs the absolute ffprobe index. Pin the translation with a
 // fixture where the two deliberately disagree.
@@ -1267,14 +1065,7 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake

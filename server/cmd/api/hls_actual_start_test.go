@@ -7,45 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-
-	"igloo/cmd/internal/ffprobe"
 )
-
-// stubKeyframeFfprobe answers the keyframe lookup that measures where a
-// copy-video session's media really begins.
-type stubKeyframeFfprobe struct {
-	keyframeSec float64
-	err         error
-
-	mu     sync.Mutex
-	target float64
-	calls  int
-}
-
-func (s *stubKeyframeFfprobe) GetMetadata(string) (*ffprobe.FfprobeResult, error) {
-	return nil, errors.New("not used")
-}
-
-func (s *stubKeyframeFfprobe) GetAudioMetadata(string) (*ffprobe.FfprobeResult, error) {
-	return nil, errors.New("not used")
-}
-
-func (s *stubKeyframeFfprobe) KeyframeAtOrBefore(
-	_ context.Context,
-	_ string,
-	_ int64,
-	targetSec float64,
-) (float64, error) {
-	s.mu.Lock()
-	s.target = targetSec
-	s.calls++
-	s.mu.Unlock()
-
-	if s.err != nil {
-		return 0, s.err
-	}
-	return s.keyframeSec, nil
-}
 
 func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T) {
 	app := setupTestApp(t)

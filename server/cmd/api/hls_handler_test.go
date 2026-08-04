@@ -19,11 +19,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const (
-	testPlaybackSessionID      = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4"
-	testOtherPlaybackSessionID = "b3c1f6d2-8a4e-4f0b-9c7d-1e2a3b4c5d6e"
-)
-
 func TestHLSSessionKey(t *testing.T) {
 	audioTrack := 2
 	key := HLSSessionKey(123, "720p_3mbps", &audioTrack, testPlaybackSessionID, 40)

@@ -8,10 +8,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-func testIntPtr(v int) *int {
-	return &v
-}
-
 func TestBuildHLSAssetQuerySuffix(t *testing.T) {
 	got := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      testIntPtr(2),

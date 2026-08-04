@@ -205,22 +205,8 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: false,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
