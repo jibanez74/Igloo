@@ -57,26 +57,6 @@ func TestIsAllowedHLSFilename(t *testing.T) {
 	}
 }
 
-func TestStartSegmentComputation(t *testing.T) {
-	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
-	tests := []struct {
-		startSec    float64
-		wantSegment int64
-	}{
-		{0, 0},
-		{segDur, 1},
-		{segDur * 900, 900},
-		{segDur*2 + 1, 2},
-		{0.5, 0},
-	}
-	for _, tt := range tests {
-		got := int64(tt.startSec / segDur)
-		if got != tt.wantSegment {
-			t.Errorf("startSec=%.1f -> segment=%d, want %d", tt.startSec, got, tt.wantSegment)
-		}
-	}
-}
-
 func TestWriteHLSSessionError_PersonalCapacityReturnsRetryable503(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	writeHLSSessionError(recorder, &hlsPersonalSessionCapacityError{MaxActive: 3})
