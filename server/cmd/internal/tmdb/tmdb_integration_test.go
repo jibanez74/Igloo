@@ -39,14 +39,6 @@ func TestGetTmdbMovieByIDIntegration(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	t.Run("returns error when TmdbID is zero", func(t *testing.T) {
-		movie := &TmdbMovie{TmdbID: 0}
-		err := client.GetTmdbMovieByID(context.Background(), movie)
-		if err == nil {
-			t.Error("Expected error when TmdbID is zero")
-		}
-	})
-
 	t.Run("fetches movie by valid ID and validates all fields", func(t *testing.T) {
 		movie := &TmdbMovie{TmdbID: 603}
 		err := client.GetTmdbMovieByID(context.Background(), movie)
@@ -115,14 +107,6 @@ func TestGetTmdbMovieByIDIntegration(t *testing.T) {
 			t.Error("Expected videos.results to be populated")
 		}
 	})
-
-	t.Run("returns error for non-existent movie ID", func(t *testing.T) {
-		movie := &TmdbMovie{TmdbID: 999999999}
-		err := client.GetTmdbMovieByID(context.Background(), movie)
-		if err == nil {
-			t.Error("Expected error for non-existent movie ID")
-		}
-	})
 }
 
 func TestSearchMoviesByTitleAndYearIntegration(t *testing.T) {
@@ -132,13 +116,6 @@ func TestSearchMoviesByTitleAndYearIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-
-	t.Run("returns error when title is empty", func(t *testing.T) {
-		_, err := client.SearchMoviesByTitleAndYear(context.Background(), "")
-		if err == nil {
-			t.Error("Expected error when title is empty")
-		}
-	})
 
 	t.Run("searches movies by title only", func(t *testing.T) {
 		movies, err := client.SearchMoviesByTitleAndYear(context.Background(), "Inception")

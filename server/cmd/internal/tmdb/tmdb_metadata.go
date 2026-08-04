@@ -200,9 +200,6 @@ func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, err
 }
 
 func (t *tmdbClient) requestURL(path string, params url.Values) string {
-	if params == nil {
-		params = url.Values{}
-	}
 	params.Set("api_key", t.key)
 	return fmt.Sprintf("%s%s?%s", t.baseURL, path, params.Encode())
 }
@@ -245,19 +242,12 @@ func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, in
 	}
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if ctx != nil {
-			err := ctx.Err()
-			if err != nil {
-				return nil, 0, err
-			}
+		err := ctx.Err()
+		if err != nil {
+			return nil, 0, err
 		}
 
-		reqCtx := ctx
-		if reqCtx == nil {
-			reqCtx = context.Background()
-		}
-
-		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, requestURL, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -306,14 +296,7 @@ func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, in
 
 func sleepWithContext(ctx context.Context, delay time.Duration) error {
 	if delay <= 0 {
-		if ctx != nil {
-			return ctx.Err()
-		}
-		return nil
-	}
-	if ctx == nil {
-		time.Sleep(delay)
-		return nil
+		return ctx.Err()
 	}
 
 	timer := time.NewTimer(delay)
