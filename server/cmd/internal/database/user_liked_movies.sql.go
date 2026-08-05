@@ -35,7 +35,9 @@ FROM user_liked_movies AS ulm
 INNER JOIN movies AS m
   ON m.id = ulm.movie_id
 WHERE ulm.user_id = ?
-ORDER BY LOWER(m.title) ASC
+ORDER BY
+  LOWER(m.title) ASC,
+  m.id ASC
 LIMIT ?
 OFFSET ?
 `
@@ -54,6 +56,7 @@ type GetLikedMoviesForUserAscRow struct {
 	Certification sql.NullString `json:"certification"`
 }
 
+// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 func (q *Queries) GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error) {
 	rows, err := q.query(ctx, q.getLikedMoviesForUserAscStmt, getLikedMoviesForUserAsc, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -94,7 +97,9 @@ FROM user_liked_movies AS ulm
 INNER JOIN movies AS m
   ON m.id = ulm.movie_id
 WHERE ulm.user_id = ?
-ORDER BY LOWER(m.title) DESC
+ORDER BY
+  LOWER(m.title) DESC,
+  m.id DESC
 LIMIT ?
 OFFSET ?
 `
@@ -113,6 +118,7 @@ type GetLikedMoviesForUserDescRow struct {
 	Certification sql.NullString `json:"certification"`
 }
 
+// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 func (q *Queries) GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error) {
 	rows, err := q.query(ctx, q.getLikedMoviesForUserDescStmt, getLikedMoviesForUserDesc, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {

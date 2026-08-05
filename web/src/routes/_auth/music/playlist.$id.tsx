@@ -106,7 +106,6 @@ type PlaylistContentProps = {
       description: { String: string; Valid: boolean };
       cover_image: { String: string; Valid: boolean };
       is_public: boolean;
-      folder_id: { Int64: number; Valid: boolean };
       created_at: string;
       updated_at: string;
     };

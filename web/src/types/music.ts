@@ -274,7 +274,6 @@ export type PlaylistSummaryType = {
   description: NullableString;
   cover_image: NullableString;
   is_public: boolean;
-  folder_id: NullableInt64;
   created_at: string;
   updated_at: string;
   track_count: number;
@@ -335,7 +334,6 @@ export type PlaylistType = {
   description: NullableString;
   cover_image: NullableString;
   is_public: boolean;
-  folder_id: NullableInt64;
   created_at: string;
   updated_at: string;
 };

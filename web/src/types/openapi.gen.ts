@@ -2525,7 +2525,6 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
-            folder_id: components["schemas"]["SqlNullInt64"];
             movie_id: components["schemas"]["SqlNullInt64"];
             /** @constant */
             content_type: "movie";
@@ -3120,7 +3119,6 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
-            folder_id: components["schemas"]["SqlNullInt64"];
             movie_id: components["schemas"]["SqlNullInt64"];
             content_type: string;
             created_at: string;
@@ -3135,7 +3133,6 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
-            folder_id: components["schemas"]["SqlNullInt64"];
             created_at: string;
             updated_at: string;
             /** Format: int64 */

@@ -117,7 +117,6 @@ SELECT
   p.description,
   p.cover_image,
   p.is_public,
-  p.folder_id,
   p.movie_id,
   p.content_type,
   p.created_at,

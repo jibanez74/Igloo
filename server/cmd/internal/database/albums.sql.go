@@ -269,7 +269,7 @@ INSERT INTO albums (
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (title, musician) DO UPDATE
+ON CONFLICT (title, COALESCE(musician, '')) DO UPDATE
 SET
   sort_title = excluded.sort_title,
   spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
@@ -294,6 +294,8 @@ type UpsertAlbumParams struct {
 	Cover             sql.NullString  `json:"cover"`
 }
 
+// Matches idx_albums_title_musician, which treats a missing musician as ” so an
+// untagged album cannot be inserted twice.
 func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error) {
 	row := q.queryRow(ctx, q.upsertAlbumStmt, upsertAlbum,
 		arg.Title,

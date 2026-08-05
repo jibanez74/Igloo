@@ -7948,7 +7948,6 @@
           "description",
           "cover_image",
           "is_public",
-          "folder_id",
           "movie_id",
           "content_type",
           "created_at",
@@ -7974,9 +7973,6 @@
           },
           "is_public": {
             "type": "boolean"
-          },
-          "folder_id": {
-            "$ref": "#/components/schemas/SqlNullInt64"
           },
           "movie_id": {
             "$ref": "#/components/schemas/SqlNullInt64"
@@ -9986,17 +9982,17 @@
       },
       "Playlist": {
         "type": "object",
-        "required": ["id", "user_id", "name", "description", "cover_image", "is_public", "folder_id", "movie_id", "content_type", "created_at", "updated_at"],
+        "required": ["id", "user_id", "name", "description", "cover_image", "is_public", "movie_id", "content_type", "created_at", "updated_at"],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "user_id": { "type": "integer", "format": "int64" }, "name": { "type": "string" }, "description": { "$ref": "#/components/schemas/SqlNullString" }, "cover_image": { "$ref": "#/components/schemas/SqlNullString" }, "is_public": { "type": "boolean" }, "folder_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "movie_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "content_type": { "type": "string" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": { "type": "integer", "format": "int64" }, "user_id": { "type": "integer", "format": "int64" }, "name": { "type": "string" }, "description": { "$ref": "#/components/schemas/SqlNullString" }, "cover_image": { "$ref": "#/components/schemas/SqlNullString" }, "is_public": { "type": "boolean" }, "movie_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "content_type": { "type": "string" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
         },
         "additionalProperties": false
       },
       "PlaylistSummary": {
         "type": "object",
-        "required": ["id", "user_id", "name", "description", "cover_image", "is_public", "folder_id", "created_at", "updated_at", "track_count", "total_duration", "is_owner", "can_edit"],
+        "required": ["id", "user_id", "name", "description", "cover_image", "is_public", "created_at", "updated_at", "track_count", "total_duration", "is_owner", "can_edit"],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "user_id": { "type": "integer", "format": "int64" }, "name": { "type": "string" }, "description": { "$ref": "#/components/schemas/SqlNullString" }, "cover_image": { "$ref": "#/components/schemas/SqlNullString" }, "is_public": { "type": "boolean" }, "folder_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }, "track_count": { "type": "integer", "format": "int64" }, "total_duration": { "type": "integer", "format": "int64" }, "is_owner": { "type": "boolean" }, "can_edit": { "type": "boolean" }
+          "id": { "type": "integer", "format": "int64" }, "user_id": { "type": "integer", "format": "int64" }, "name": { "type": "string" }, "description": { "$ref": "#/components/schemas/SqlNullString" }, "cover_image": { "$ref": "#/components/schemas/SqlNullString" }, "is_public": { "type": "boolean" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }, "track_count": { "type": "integer", "format": "int64" }, "total_duration": { "type": "integer", "format": "int64" }, "is_owner": { "type": "boolean" }, "can_edit": { "type": "boolean" }
         },
         "additionalProperties": false
       },

@@ -646,7 +646,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 		return
 	}
 
-	chapters, err := qtx.GetChaptersByMovieID(ctx, sql.NullInt64{Int64: id, Valid: true})
+	chapters, err := qtx.GetChaptersByMovieID(ctx, id)
 	if err != nil {
 		app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))

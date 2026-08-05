@@ -64,7 +64,7 @@ type Chapter struct {
 	Title     string         `json:"title"`
 	StartTime int64          `json:"start_time"`
 	Thumb     sql.NullString `json:"thumb"`
-	MovieID   sql.NullInt64  `json:"movie_id"`
+	MovieID   int64          `json:"movie_id"`
 }
 
 type Crew struct {
@@ -195,7 +195,6 @@ type Playlist struct {
 	Description sql.NullString `json:"description"`
 	CoverImage  sql.NullString `json:"cover_image"`
 	IsPublic    bool           `json:"is_public"`
-	FolderID    sql.NullInt64  `json:"folder_id"`
 	MovieID     sql.NullInt64  `json:"movie_id"`
 	ContentType string         `json:"content_type"`
 	CreatedAt   string         `json:"created_at"`

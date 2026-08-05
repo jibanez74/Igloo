@@ -1062,14 +1062,14 @@ func processChapters(
 	movieID int64,
 	chapters []ffprobe.Chapter,
 ) error {
-	err := qtx.DeleteMovieChapters(ctx, helpers.NullInt64(movieID))
+	err := qtx.DeleteMovieChapters(ctx, movieID)
 	if err != nil {
 		return fmt.Errorf("delete movie chapters failed: %w", err)
 	}
 
 	for _, chapter := range chapters {
 		_, err := qtx.InsertChapter(ctx, database.InsertChapterParams{
-			MovieID:   helpers.NullInt64(movieID),
+			MovieID:   movieID,
 			Title:     chapter.Tags.Title,
 			StartTime: chapterStartTimeSeconds(chapter),
 			Thumb:     sql.NullString{},

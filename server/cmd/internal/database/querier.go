@@ -51,7 +51,7 @@ type Querier interface {
 	// Remove all cast entries for a movie (used before re-identifying with TMDB).
 	DeleteMovieCast(ctx context.Context, movieID int64) error
 	// Delete all chapters for a movie
-	DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error
+	DeleteMovieChapters(ctx context.Context, movieID int64) error
 	// Remove all crew entries for a movie (used before re-identifying with TMDB).
 	DeleteMovieCrew(ctx context.Context, movieID int64) error
 	// Remove all extra-video links for a movie (e.g. before re-scanning).
@@ -94,7 +94,7 @@ type Querier interface {
 	// Cast for a movie with artist name and profile (for details view).
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
 	// Chapters for a movie (for technical details display).
-	GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error)
+	GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error)
 	// The 30-second floor must match the web client's
 	// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)
@@ -109,7 +109,9 @@ type Querier interface {
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
+	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)
+	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
@@ -158,6 +160,8 @@ type Querier interface {
 	GetTrack(ctx context.Context, id int64) (Track, error)
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error)
+	// Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
+	// the equivalent OR over tracks and track_musicians cannot use an index.
 	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
@@ -241,6 +245,8 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error)
 	UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error)
+	// Matches idx_albums_title_musician, which treats a missing musician as '' so an
+	// untagged album cannot be inserted twice.
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
 	// Creates a relationship between an album and a genre (idempotent)
 	UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error

@@ -939,7 +939,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 		t.Fatalf("subtitles = %+v, want one subrip subtitle", subtitles)
 	}
 
-	chapters, err := app.Queries.GetChaptersByMovieID(ctx, helpers.NullInt64(movie.ID))
+	chapters, err := app.Queries.GetChaptersByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get chapters: %v", err)
 	}
@@ -1116,7 +1116,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 		t.Fatalf("audio streams after rescan = %+v, want one new audio stream", audioStreams)
 	}
 
-	chapters, err := app.Queries.GetChaptersByMovieID(ctx, helpers.NullInt64(movie.ID))
+	chapters, err := app.Queries.GetChaptersByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get chapters: %v", err)
 	}

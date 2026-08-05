@@ -127,7 +127,7 @@ WHERE movie_id = ?
 `
 
 // Delete all chapters for a movie
-func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error {
+func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID int64) error {
 	_, err := q.exec(ctx, q.deleteMovieChaptersStmt, deleteMovieChapters, movieID)
 	return err
 }
@@ -312,7 +312,7 @@ ORDER BY start_time
 `
 
 // Chapters for a movie (for technical details display).
-func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error) {
+func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error) {
 	rows, err := q.query(ctx, q.getChaptersByMovieIDStmt, getChaptersByMovieID, movieID)
 	if err != nil {
 		return nil, err
@@ -1270,7 +1270,7 @@ RETURNING id, title, start_time, thumb, movie_id
 `
 
 type InsertChapterParams struct {
-	MovieID   sql.NullInt64  `json:"movie_id"`
+	MovieID   int64          `json:"movie_id"`
 	Title     string         `json:"title"`
 	StartTime int64          `json:"start_time"`
 	Thumb     sql.NullString `json:"thumb"`
