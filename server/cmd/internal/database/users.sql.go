@@ -161,7 +161,7 @@ SELECT
   email,
   is_admin,
   avatar,
-  pin,
+  CAST((pin IS NOT NULL) AS BOOLEAN) AS has_pin,
   created_at,
   updated_at
 FROM users
@@ -174,11 +174,13 @@ type GetAllUsersRow struct {
 	Email     string         `json:"email"`
 	IsAdmin   bool           `json:"is_admin"`
 	Avatar    sql.NullString `json:"avatar"`
-	Pin       sql.NullString `json:"pin"`
+	HasPin    bool           `json:"has_pin"`
 	CreatedAt string         `json:"created_at"`
 	UpdatedAt string         `json:"updated_at"`
 }
 
+// has_pin instead of the PIN itself: the admin listing only shows whether one
+// is set, so the values never leave the database.
 func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
 	rows, err := q.query(ctx, q.getAllUsersStmt, getAllUsers)
 	if err != nil {
@@ -194,7 +196,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
 			&i.Email,
 			&i.IsAdmin,
 			&i.Avatar,
-			&i.Pin,
+			&i.HasPin,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -284,6 +286,21 @@ func (q *Queries) GetUserIsAdmin(ctx context.Context, id int64) (bool, error) {
 	var is_admin bool
 	err := row.Scan(&is_admin)
 	return is_admin, err
+}
+
+const getUserPin = `-- name: GetUserPin :one
+SELECT
+  pin
+FROM users
+WHERE id = ?
+LIMIT 1
+`
+
+func (q *Queries) GetUserPin(ctx context.Context, id int64) (sql.NullString, error) {
+	row := q.queryRow(ctx, q.getUserPinStmt, getUserPin, id)
+	var pin sql.NullString
+	err := row.Scan(&pin)
+	return pin, err
 }
 
 const getUserPlaybackPreferences = `-- name: GetUserPlaybackPreferences :one
@@ -582,4 +599,20 @@ func (q *Queries) UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateU
 		&i.PreferredSubtitleLanguage,
 	)
 	return i, err
+}
+
+const userExists = `-- name: UserExists :one
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE id = ?
+  )
+`
+
+func (q *Queries) UserExists(ctx context.Context, id int64) (bool, error) {
+	row := q.queryRow(ctx, q.userExistsStmt, userExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

@@ -244,13 +244,13 @@ func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := app.Queries.GetUser(r.Context(), userID)
+		isAdmin, err := app.Queries.GetUserIsAdmin(r.Context(), userID)
 		if err != nil {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return
 		}
 
-		if !user.IsAdmin {
+		if !isAdmin {
 			helpers.ErrorJSON(w, errors.New("admin access required"), http.StatusForbidden)
 			return
 		}

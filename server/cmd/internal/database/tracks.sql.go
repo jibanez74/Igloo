@@ -337,6 +337,23 @@ func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrack
 	return items, nil
 }
 
+const trackExists = `-- name: TrackExists :one
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM tracks
+    WHERE id = ?
+  )
+`
+
+// Existence probe for handlers that only need to 404 on an unknown track.
+func (q *Queries) TrackExists(ctx context.Context, id int64) (bool, error) {
+	row := q.queryRow(ctx, q.trackExistsStmt, trackExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const upsertTrack = `-- name: UpsertTrack :one
 INSERT INTO tracks (
   title,

@@ -166,7 +166,6 @@ const getWatchRoomMembers = `-- name: GetWatchRoomMembers :many
 SELECT
   u.id,
   u.name,
-  u.email,
   u.avatar
 FROM watch_room_members AS wrm
 INNER JOIN users AS u
@@ -178,7 +177,6 @@ ORDER BY wrm.created_at ASC
 type GetWatchRoomMembersRow struct {
 	ID     int64          `json:"id"`
 	Name   string         `json:"name"`
-	Email  string         `json:"email"`
 	Avatar sql.NullString `json:"avatar"`
 }
 
@@ -191,12 +189,7 @@ func (q *Queries) GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetW
 	items := []GetWatchRoomMembersRow{}
 	for rows.Next() {
 		var i GetWatchRoomMembersRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Email,
-			&i.Avatar,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.Avatar); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -215,7 +208,6 @@ SELECT
   wrm.room_id,
   u.id,
   u.name,
-  u.email,
   u.avatar
 FROM watch_room_members AS wrm
 INNER JOIN users AS u
@@ -228,7 +220,6 @@ type GetWatchRoomMembersByRoomIDsRow struct {
 	RoomID int64          `json:"room_id"`
 	ID     int64          `json:"id"`
 	Name   string         `json:"name"`
-	Email  string         `json:"email"`
 	Avatar sql.NullString `json:"avatar"`
 }
 
@@ -255,7 +246,6 @@ func (q *Queries) GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []in
 			&i.RoomID,
 			&i.ID,
 			&i.Name,
-			&i.Email,
 			&i.Avatar,
 		); err != nil {
 			return nil, err

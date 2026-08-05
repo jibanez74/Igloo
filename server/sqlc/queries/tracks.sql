@@ -5,6 +5,15 @@ FROM tracks
 WHERE id = ?
 LIMIT 1;
 
+-- name: TrackExists :one
+-- Existence probe for handlers that only need to 404 on an unknown track.
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM tracks
+    WHERE id = ?
+  );
+
 -- name: ListMusicTrackScanIndex :many
 SELECT
   file_path,

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -36,14 +35,14 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	_, err := app.Queries.GetTrack(ctx, req.TrackID)
+	trackOK, err := app.Queries.TrackExists(ctx, req.TrackID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
-			return
-		}
 		app.Logger.Error("failed to get track for play event", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to record play event"))
+		return
+	}
+	if !trackOK {
+		helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
 		return
 	}
 

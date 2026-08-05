@@ -448,14 +448,14 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	_, err = app.Queries.GetMovieByID(ctx, movieID)
+	movieOK, err := app.Queries.MovieExists(ctx, movieID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
-			return
-		}
 		app.Logger.Error("failed to get movie for like toggle", "error", err, "id", movieID)
 		helpers.ErrorJSON(w, errors.New("failed to verify movie exists"))
+		return
+	}
+	if !movieOK {
+		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
 		return
 	}
 

@@ -91,6 +91,8 @@ type Querier interface {
 	// Sorted by release date (newest first), then by title
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	// has_pin instead of the PIN itself: the admin listing only shows whether one
+	// is set, so the values never leave the database.
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
@@ -130,7 +132,8 @@ type Querier interface {
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
-	GetMoviesByIDs(ctx context.Context, ids []int64) ([]Movie, error)
+	// Card-sized projection: the watch-room listing only renders title and poster.
+	GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
@@ -174,6 +177,7 @@ type Querier interface {
 	GetUserIsAdmin(ctx context.Context, id int64) (bool, error)
 	// Returns overall listening statistics for a user
 	GetUserListeningStats(ctx context.Context, arg GetUserListeningStatsParams) (GetUserListeningStatsRow, error)
+	GetUserPin(ctx context.Context, id int64) (sql.NullString, error)
 	GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
@@ -221,6 +225,9 @@ type Querier interface {
 	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
 	// Idempotent: marking an already-read or nonexistent notification is a no-op.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
+	// Existence probe for handlers that only need to 404 on an unknown movie;
+	// avoids shipping the full 27-column row.
+	MovieExists(ctx context.Context, id int64) (bool, error)
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
@@ -230,6 +237,8 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
+	// Existence probe for handlers that only need to 404 on an unknown track.
+	TrackExists(ctx context.Context, id int64) (bool, error)
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error)
 	UpdateDeviceLastUsed(ctx context.Context, id int64) error
@@ -271,6 +280,7 @@ type Querier interface {
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error
+	UserExists(ctx context.Context, id int64) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

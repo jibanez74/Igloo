@@ -674,14 +674,14 @@ func (app *Application) addCollaborator(
 		return
 	}
 
-	_, err = app.Queries.GetUser(r.Context(), req.UserId)
+	userOK, err := app.Queries.UserExists(r.Context(), req.UserId)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
-			return
-		}
 		app.Logger.Error("failed to verify user", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to add collaborator"))
+		return
+	}
+	if !userOK {
+		helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
 		return
 	}
 

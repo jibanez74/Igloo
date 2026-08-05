@@ -375,6 +375,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getUserListeningStatsStmt, err = db.PrepareContext(ctx, getUserListeningStats); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserListeningStats: %w", err)
 	}
+	if q.getUserPinStmt, err = db.PrepareContext(ctx, getUserPin); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserPin: %w", err)
+	}
 	if q.getUserPlaybackPreferencesStmt, err = db.PrepareContext(ctx, getUserPlaybackPreferences); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserPlaybackPreferences: %w", err)
 	}
@@ -474,6 +477,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.markNotificationReadForUserStmt, err = db.PrepareContext(ctx, markNotificationReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkNotificationReadForUser: %w", err)
 	}
+	if q.movieExistsStmt, err = db.PrepareContext(ctx, movieExists); err != nil {
+		return nil, fmt.Errorf("error preparing query MovieExists: %w", err)
+	}
 	if q.recordPlayEventStmt, err = db.PrepareContext(ctx, recordPlayEvent); err != nil {
 		return nil, fmt.Errorf("error preparing query RecordPlayEvent: %w", err)
 	}
@@ -488,6 +494,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.renameDeviceStmt, err = db.PrepareContext(ctx, renameDevice); err != nil {
 		return nil, fmt.Errorf("error preparing query RenameDevice: %w", err)
+	}
+	if q.trackExistsStmt, err = db.PrepareContext(ctx, trackExists); err != nil {
+		return nil, fmt.Errorf("error preparing query TrackExists: %w", err)
 	}
 	if q.unlikeTrackStmt, err = db.PrepareContext(ctx, unlikeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UnlikeTrack: %w", err)
@@ -584,6 +593,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertUserTrackStatsStmt, err = db.PrepareContext(ctx, upsertUserTrackStats); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertUserTrackStats: %w", err)
+	}
+	if q.userExistsStmt, err = db.PrepareContext(ctx, userExists); err != nil {
+		return nil, fmt.Errorf("error preparing query UserExists: %w", err)
 	}
 	return &q, nil
 }
@@ -1175,6 +1187,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUserListeningStatsStmt: %w", cerr)
 		}
 	}
+	if q.getUserPinStmt != nil {
+		if cerr := q.getUserPinStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserPinStmt: %w", cerr)
+		}
+	}
 	if q.getUserPlaybackPreferencesStmt != nil {
 		if cerr := q.getUserPlaybackPreferencesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserPlaybackPreferencesStmt: %w", cerr)
@@ -1340,6 +1357,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing markNotificationReadForUserStmt: %w", cerr)
 		}
 	}
+	if q.movieExistsStmt != nil {
+		if cerr := q.movieExistsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing movieExistsStmt: %w", cerr)
+		}
+	}
 	if q.recordPlayEventStmt != nil {
 		if cerr := q.recordPlayEventStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing recordPlayEventStmt: %w", cerr)
@@ -1363,6 +1385,11 @@ func (q *Queries) Close() error {
 	if q.renameDeviceStmt != nil {
 		if cerr := q.renameDeviceStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing renameDeviceStmt: %w", cerr)
+		}
+	}
+	if q.trackExistsStmt != nil {
+		if cerr := q.trackExistsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing trackExistsStmt: %w", cerr)
 		}
 	}
 	if q.unlikeTrackStmt != nil {
@@ -1525,6 +1552,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertUserTrackStatsStmt: %w", cerr)
 		}
 	}
+	if q.userExistsStmt != nil {
+		if cerr := q.userExistsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing userExistsStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -1681,6 +1713,7 @@ type Queries struct {
 	getUserByEmailStmt                          *sql.Stmt
 	getUserIsAdminStmt                          *sql.Stmt
 	getUserListeningStatsStmt                   *sql.Stmt
+	getUserPinStmt                              *sql.Stmt
 	getUserPlaybackPreferencesStmt              *sql.Stmt
 	getUserRecentlyPlayedStmt                   *sql.Stmt
 	getUserTopAlbumsStmt                        *sql.Stmt
@@ -1714,11 +1747,13 @@ type Queries struct {
 	markMovieWatchedStmt                        *sql.Stmt
 	markMovieWatchedFromProgressStmt            *sql.Stmt
 	markNotificationReadForUserStmt             *sql.Stmt
+	movieExistsStmt                             *sql.Stmt
 	recordPlayEventStmt                         *sql.Stmt
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
 	renameDeviceStmt                            *sql.Stmt
+	trackExistsStmt                             *sql.Stmt
 	unlikeTrackStmt                             *sql.Stmt
 	updateAlbumSpotifyCoverStmt                 *sql.Stmt
 	updateDeviceLastUsedStmt                    *sql.Stmt
@@ -1751,6 +1786,7 @@ type Queries struct {
 	upsertProductionCompanyStmt                 *sql.Stmt
 	upsertTrackStmt                             *sql.Stmt
 	upsertUserTrackStatsStmt                    *sql.Stmt
+	userExistsStmt                              *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -1874,6 +1910,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserByEmailStmt:                          q.getUserByEmailStmt,
 		getUserIsAdminStmt:                          q.getUserIsAdminStmt,
 		getUserListeningStatsStmt:                   q.getUserListeningStatsStmt,
+		getUserPinStmt:                              q.getUserPinStmt,
 		getUserPlaybackPreferencesStmt:              q.getUserPlaybackPreferencesStmt,
 		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,
 		getUserTopAlbumsStmt:                        q.getUserTopAlbumsStmt,
@@ -1907,11 +1944,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
 		markMovieWatchedFromProgressStmt:            q.markMovieWatchedFromProgressStmt,
 		markNotificationReadForUserStmt:             q.markNotificationReadForUserStmt,
+		movieExistsStmt:                             q.movieExistsStmt,
 		recordPlayEventStmt:                         q.recordPlayEventStmt,
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
 		renameDeviceStmt:                            q.renameDeviceStmt,
+		trackExistsStmt:                             q.trackExistsStmt,
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
 		updateAlbumSpotifyCoverStmt:                 q.updateAlbumSpotifyCoverStmt,
 		updateDeviceLastUsedStmt:                    q.updateDeviceLastUsedStmt,
@@ -1944,5 +1983,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertProductionCompanyStmt:                 q.upsertProductionCompanyStmt,
 		upsertTrackStmt:                             q.upsertTrackStmt,
 		upsertUserTrackStatsStmt:                    q.upsertUserTrackStatsStmt,
+		userExistsStmt:                              q.userExistsStmt,
 	}
 }

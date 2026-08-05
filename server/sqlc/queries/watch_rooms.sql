@@ -50,7 +50,6 @@ LIMIT 1;
 SELECT
   u.id,
   u.name,
-  u.email,
   u.avatar
 FROM watch_room_members AS wrm
 INNER JOIN users AS u
@@ -63,7 +62,6 @@ SELECT
   wrm.room_id,
   u.id,
   u.name,
-  u.email,
   u.avatar
 FROM watch_room_members AS wrm
 INNER JOIN users AS u

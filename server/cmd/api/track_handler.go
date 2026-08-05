@@ -27,15 +27,14 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	_, err = app.Queries.GetTrack(ctx, trackID)
+	trackOK, err := app.Queries.TrackExists(ctx, trackID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
-			return
-		}
-
 		app.Logger.Error("failed to get track for like toggle", "error", err, "id", trackID)
 		helpers.ErrorJSON(w, errors.New("failed to verify track exists"))
+		return
+	}
+	if !trackOK {
+		helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
 		return
 	}
 

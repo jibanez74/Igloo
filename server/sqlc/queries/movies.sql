@@ -15,6 +15,16 @@ FROM movies
 WHERE id = ?
 LIMIT 1;
 
+-- name: MovieExists :one
+-- Existence probe for handlers that only need to 404 on an unknown movie;
+-- avoids shipping the full 27-column row.
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM movies
+    WHERE id = ?
+  );
+
 -- name: GetMovieByTmdbID :one
 SELECT
   id,
@@ -25,8 +35,11 @@ WHERE tmdb_id = ?
 LIMIT 1;
 
 -- name: GetMoviesByIDs :many
+-- Card-sized projection: the watch-room listing only renders title and poster.
 SELECT
-  *
+  id,
+  title,
+  poster_path
 FROM movies
 WHERE id IN (sqlc.slice(ids));
 

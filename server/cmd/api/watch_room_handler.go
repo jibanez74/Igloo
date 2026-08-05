@@ -184,7 +184,7 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	movieByID := make(map[int64]database.Movie, len(movies))
+	movieByID := make(map[int64]database.GetMoviesByIDsRow, len(movies))
 	for _, movie := range movies {
 		movieByID[movie.ID] = movie
 	}

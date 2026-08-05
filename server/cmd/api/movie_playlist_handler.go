@@ -85,14 +85,14 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	var movieID sql.NullInt64
 	if req.MovieID != nil {
-		_, err := app.Queries.GetMovieByID(ctx, *req.MovieID)
+		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
-				return
-			}
 			app.Logger.Error("failed to verify movie for playlist", "error", err)
 			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			return
+		}
+		if !movieOK {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
 			return
 		}
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
@@ -226,14 +226,14 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	var movieID sql.NullInt64
 	if req.MovieID != nil {
-		_, err := app.Queries.GetMovieByID(ctx, *req.MovieID)
+		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
-				return
-			}
 			app.Logger.Error("failed to verify movie for playlist", "error", err)
 			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			return
+		}
+		if !movieOK {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
 			return
 		}
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
