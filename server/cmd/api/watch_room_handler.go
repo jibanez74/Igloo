@@ -513,7 +513,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 
 	// HLS rooms warm up immediately; failures roll back the room.
 	if req.Mode != watchRoomPlaybackModeDirect {
-		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack), &movie)
+		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack), &movie, audioStreams)
 		if warmErr != nil {
 			deleteErr := app.Queries.DeleteWatchRoom(background, room.ID)
 			if deleteErr != nil {

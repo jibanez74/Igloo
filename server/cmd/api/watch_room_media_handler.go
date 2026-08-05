@@ -23,7 +23,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack), nil)
+	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack), nil, nil)
 	if err != nil {
 		app.Logger.Error("watch room hls session failed", "error", err, "room_id", room.ID)
 		writeHLSSessionError(w, err)

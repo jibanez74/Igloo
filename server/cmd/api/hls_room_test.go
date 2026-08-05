@@ -125,7 +125,7 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 	app.HLSSessionCache.SetDefault(key, sentinel)
 	app.CleanupRoomHLSSession(roomID)
 
-	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0, nil)
+	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected deleted room cache hit to fail")
 	}
@@ -159,7 +159,7 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 		t.Fatalf("select movie id: %v", err)
 	}
 
-	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0, nil)
+	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from warm-up when movie has no video streams")
 	}
@@ -183,7 +183,7 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	sentinel := &HLSSession{TempDir: "sentinel"}
 	app.HLSSessionCache.SetDefault(key, sentinel)
 
-	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0, nil)
+	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error on second warm-up call: %v", err)
 	}
@@ -219,6 +219,7 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 		helpers.HLS_PROFILE_REMUX,
 		0,
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)
@@ -247,5 +248,64 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 	}
 	if cachedSession != session {
 		t.Fatal("expected cached room session to match returned session")
+	}
+}
+
+func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	_, err := app.DB.Exec(`
+		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, movieID, 3, "ac3", 448000, 6, "spa")
+	if err != nil {
+		t.Fatalf("insert second audio stream: %v", err)
+	}
+
+	movie, err := app.Queries.GetMovieByID(background, movieID)
+	if err != nil {
+		t.Fatalf("load movie: %v", err)
+	}
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(background, movieID)
+	if err != nil {
+		t.Fatalf("load audio streams: %v", err)
+	}
+
+	// Deleting the rows pins that the warm-up serves from the preloaded slice:
+	// a re-fetch would see zero audio streams and reject the audio track.
+	_, err = app.DB.Exec(`DELETE FROM audio_streams WHERE movie_id = ?`, movieID)
+	if err != nil {
+		t.Fatalf("delete audio streams: %v", err)
+	}
+
+	session, err := app.GetOrCreateRoomHLSSession(
+		background,
+		91,
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		1,
+		&movie,
+		audioStreams,
+	)
+	if err != nil {
+		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 RunHLS call, got %d", len(calls))
+	}
+	if calls[0].AudioStreamIndex != 3 {
+		t.Fatalf("AudioStreamIndex = %d, want 3 (absolute ffprobe index for ordinal 1)", calls[0].AudioStreamIndex)
 	}
 }

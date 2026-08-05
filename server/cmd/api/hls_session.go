@@ -907,6 +907,7 @@ func (app *Application) GetOrCreateHLSSession(
 			&movie,
 			profile,
 			audioTrack,
+			nil,
 			playbackSession,
 			effectiveStartSec,
 			false,
@@ -923,6 +924,7 @@ func (app *Application) GetOrCreateHLSSession(
 					&movie,
 					profile,
 					audioTrack,
+					nil,
 					playbackSession,
 					effectiveStartSec,
 					false,
@@ -954,6 +956,8 @@ func (app *Application) GetOrCreateHLSSession(
 // Always warms up from startSec=0 so participants start from the beginning.
 // preloaded, when non-nil, is a movie row the caller already fetched; it is
 // validated the same way loadHLSMovieForSession would and saves the re-fetch.
+// preloadedAudio, when non-nil, is the movie's audio streams the caller
+// already fetched and saves that re-fetch the same way.
 func (app *Application) WarmUpRoomHLSSession(
 	ctx context.Context,
 	roomID int64,
@@ -961,14 +965,16 @@ func (app *Application) WarmUpRoomHLSSession(
 	profile string,
 	audioTrack int,
 	preloaded *database.Movie,
+	preloadedAudio []database.AudioStream,
 ) error {
-	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack, preloaded)
+	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack, preloaded, preloadedAudio)
 	return err
 }
 
 // GetOrCreateRoomHLSSession returns a cached room-scoped HLS session or
 // creates a new one using the room-specific cache key. preloaded, when
 // non-nil, skips the movie fetch on a cache miss; nil loads it as before.
+// preloadedAudio does the same for the movie's audio streams.
 func (app *Application) GetOrCreateRoomHLSSession(
 	ctx context.Context,
 	roomID int64,
@@ -976,6 +982,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 	profile string,
 	audioTrack int,
 	preloaded *database.Movie,
+	preloadedAudio []database.AudioStream,
 ) (*HLSSession, error) {
 	key := RoomHLSSessionKey(roomID)
 
@@ -1016,7 +1023,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		}
 
 		audioTrackCopy := audioTrack
-		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, "", 0, true)
+		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, preloadedAudio, "", 0, true)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -1091,8 +1098,9 @@ func (app *Application) loadHLSMovieForSession(
 	return movie, effectiveStartSec, nil
 }
 
-// createHLSSession loads stream metadata from the database, creates a temp dir,
-// and starts FFmpeg. No runtime ffprobe call is made. The movie must come from
+// createHLSSession loads stream metadata from the database (audio streams may
+// be preloaded by the caller), creates a temp dir, and starts FFmpeg. No
+// runtime ffprobe call is made. The movie must come from
 // loadHLSMovieForSession, and startSec must already be normalized by it.
 //
 // FFmpeg runs on context.Background() so the process outlives the originating
@@ -1102,6 +1110,7 @@ func (app *Application) createHLSSession(
 	movie *database.Movie,
 	profile string,
 	audioTrack *int,
+	preloadedAudio []database.AudioStream,
 	playbackSession string,
 	startSec int,
 	isRoom bool,
@@ -1118,9 +1127,14 @@ func (app *Application) createHLSSession(
 		return nil, fmt.Errorf("no playable video track found for movie %d", movieID)
 	}
 
-	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, movieID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load audio streams: %w", err)
+	// nil means "not preloaded", not "no audio": sqlc returns a nil slice for
+	// zero rows, so a silent movie's preloaded slice degrades to a re-fetch.
+	audioStreams := preloadedAudio
+	if audioStreams == nil {
+		audioStreams, err = app.Queries.GetAudioStreamsByMovieID(ctx, movieID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load audio streams: %w", err)
+		}
 	}
 	var selectedAudio *database.AudioStream
 	if len(audioStreams) == 0 {
