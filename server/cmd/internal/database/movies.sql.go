@@ -1777,6 +1777,10 @@ SET
   overview = excluded.overview,
   tag_line = excluded.tag_line,
   certification = excluded.certification,
+  -- audience_rating is deliberately not updated: the scanner never supplies it
+  -- (only the manual edit path does), so refreshing it here would wipe manual
+  -- edits on every rescan. Guarded by
+  -- TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata.
   critic_rating = excluded.critic_rating,
   revenue = excluded.revenue,
   budget = excluded.budget,

@@ -79,6 +79,9 @@ type Querier interface {
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
+	// The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
+	// target exactly, so a NULL-musician lookup finds a row written with '' and
+	// vice versa.
 	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
 	// Returns all genres associated with an album
 	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
