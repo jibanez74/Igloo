@@ -1489,3 +1489,82 @@ func TestGetOrCreateArtist(t *testing.T) {
 		}
 	})
 }
+
+func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	moviesDir := t.TempDir()
+	matrixPath := filepath.Join(moviesDir, "The.Matrix.1999.mkv")
+	wickPath := filepath.Join(moviesDir, "John.Wick.2014.mkv")
+	for _, p := range []string{matrixPath, wickPath} {
+		if err := os.WriteFile(p, []byte("movie"), 0o644); err != nil {
+			t.Fatalf("write movie: %v", err)
+		}
+	}
+
+	sharedCast := `"credits": {
+		"cast": [
+			{"id": 6384, "name": "Keanu Reeves", "character": "Lead", "profile_path": "/keanu.jpg", "order": 0}
+		],
+		"crew": []
+	}`
+	matrixDetails := tmdbMovieFromJSON(t, `{
+		"id": 603,
+		"title": "The Matrix",
+		"original_title": "The Matrix",
+		"release_date": "1999-03-31",
+		"adult": false,
+		"runtime": 136,
+		`+sharedCast+`
+	}`)
+	wickDetails := tmdbMovieFromJSON(t, `{
+		"id": 245891,
+		"title": "John Wick",
+		"original_title": "John Wick",
+		"release_date": "2014-10-24",
+		"adult": false,
+		"runtime": 101,
+		`+sharedCast+`
+	}`)
+
+	app.Tmdb = &stubMovieScannerTmdb{
+		searchResults: []tmdb.TmdbMovie{
+			{TmdbID: 603, Title: "The Matrix", ReleaseDate: "1999-03-31"},
+			{TmdbID: 245891, Title: "John Wick", ReleaseDate: "2014-10-24"},
+		},
+		detailMovies: map[int]tmdb.TmdbMovie{603: matrixDetails, 245891: wickDetails},
+	}
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
+
+	scanned, skipped, errCount := app.processMoviesBatch(ctx, newMovieScanContext(nil), []helpers.ScanFile{
+		{Path: matrixPath, Ext: "mkv", Size: 5},
+		{Path: wickPath, Ext: "mkv", Size: 6},
+	})
+	if scanned != 2 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMovieScannerRows(t, app.DB, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
+		t.Fatalf("artist rows for shared actor = %d, want 1", got)
+	}
+
+	var name string
+	err := app.DB.QueryRowContext(ctx, "SELECT name FROM artist WHERE tmdb_id = 6384").Scan(&name)
+	if err != nil {
+		t.Fatalf("read shared artist: %v", err)
+	}
+	if name != "Keanu Reeves" {
+		t.Fatalf("shared artist name = %q, want Keanu Reeves", name)
+	}
+
+	// Both movies' cast rows must reference the single shared artist row.
+	if got := countMovieScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM cast AS c
+		INNER JOIN artist AS a ON a.id = c.artist_id
+		WHERE a.tmdb_id = 6384`); got != 2 {
+		t.Fatalf("cast rows referencing shared artist = %d, want 2", got)
+	}
+}
