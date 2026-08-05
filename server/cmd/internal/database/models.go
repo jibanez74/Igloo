@@ -209,24 +209,6 @@ type PlaylistCollaborator struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
-type PlaylistMovie struct {
-	ID         int64         `json:"id"`
-	PlaylistID int64         `json:"playlist_id"`
-	MovieID    int64         `json:"movie_id"`
-	Position   int64         `json:"position"`
-	AddedBy    sql.NullInt64 `json:"added_by"`
-	AddedAt    string        `json:"added_at"`
-}
-
-type PlaylistTrack struct {
-	ID         int64         `json:"id"`
-	PlaylistID int64         `json:"playlist_id"`
-	TrackID    int64         `json:"track_id"`
-	Position   int64         `json:"position"`
-	AddedBy    sql.NullInt64 `json:"added_by"`
-	AddedAt    string        `json:"added_at"`
-}
-
 type ProductionCompany struct {
 	ID        int64          `json:"id"`
 	Name      string         `json:"name"`

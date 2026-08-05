@@ -123,48 +123,37 @@ func (q *Queries) DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) 
 
 const getMoviePlaylistsWithCollaboratorAccess = `-- name: GetMoviePlaylistsWithCollaboratorAccess :many
 SELECT
-  p.id,
-  p.user_id,
-  p.name,
-  p.description,
-  p.cover_image,
-  p.is_public,
-  p.movie_id,
-  p.content_type,
-  p.created_at,
-  p.updated_at,
-  (
-    SELECT COUNT(*)
-    FROM playlist_movies AS pm
-    WHERE pm.playlist_id = p.id
-  ) AS movie_count,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = ?1
-  ) AS is_owner,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = ?1
-      OR EXISTS (
-        SELECT 1
-        FROM playlist_collaborators AS edit_pc
-        WHERE edit_pc.playlist_id = p.id
-          AND edit_pc.user_id = ?1
-          AND edit_pc.can_edit = true
-      )
-  ) AS can_edit
-FROM playlists AS p
-WHERE (
-    p.user_id = ?1
-    OR EXISTS (
-      SELECT 1
-      FROM playlist_collaborators AS access_pc
-      WHERE access_pc.playlist_id = p.id
-        AND access_pc.user_id = ?1
-    )
-  )
-  AND p.content_type = 'movie'
-ORDER BY p.updated_at DESC
+  accessible.id, accessible.user_id, accessible.name, accessible.description, accessible.cover_image, accessible.is_public, accessible.movie_id, accessible.content_type, accessible.created_at, accessible.updated_at, accessible.is_owner, accessible.can_edit,
+  COALESCE(agg.movie_count, 0) AS movie_count
+FROM (
+  SELECT
+    p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
+    CAST(1 AS BOOLEAN) AS is_owner,
+    CAST(1 AS BOOLEAN) AS can_edit
+  FROM playlists AS p
+  WHERE p.user_id = ?1
+    AND p.content_type = 'movie'
+  UNION ALL
+  SELECT
+    p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
+    CAST(0 AS BOOLEAN) AS is_owner,
+    pc.can_edit
+  FROM playlist_collaborators AS pc
+  INNER JOIN playlists AS p
+    ON p.id = pc.playlist_id
+  WHERE pc.user_id = ?1
+    AND p.content_type = 'movie'
+    AND p.user_id <> ?1
+) AS accessible
+LEFT JOIN (
+  SELECT
+    pm.playlist_id,
+    COUNT(*) AS movie_count
+  FROM playlist_movies AS pm
+  GROUP BY pm.playlist_id
+) AS agg
+  ON agg.playlist_id = accessible.id
+ORDER BY accessible.updated_at DESC
 `
 
 type GetMoviePlaylistsWithCollaboratorAccessRow struct {
@@ -178,11 +167,12 @@ type GetMoviePlaylistsWithCollaboratorAccessRow struct {
 	ContentType string         `json:"content_type"`
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
-	MovieCount  int64          `json:"movie_count"`
 	IsOwner     bool           `json:"is_owner"`
 	CanEdit     bool           `json:"can_edit"`
+	MovieCount  int64          `json:"movie_count"`
 }
 
+// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
@@ -203,9 +193,9 @@ func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, r
 			&i.ContentType,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.MovieCount,
 			&i.IsOwner,
 			&i.CanEdit,
+			&i.MovieCount,
 		); err != nil {
 			return nil, err
 		}
@@ -220,16 +210,44 @@ func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, r
 	return items, nil
 }
 
-const getPlaylistById = `-- name: GetPlaylistById :one
+const getPlaylistWithAccess = `-- name: GetPlaylistWithAccess :one
 SELECT
-  id, user_id, name, description, cover_image, is_public, movie_id, content_type, created_at, updated_at
-FROM playlists
-WHERE id = ?
+  p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
+  pc.can_edit AS collaborator_can_edit
+FROM playlists AS p
+LEFT JOIN playlist_collaborators AS pc
+  ON pc.playlist_id = p.id
+  AND pc.user_id = ?1
+WHERE p.id = ?2
 `
 
-func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, error) {
-	row := q.queryRow(ctx, q.getPlaylistByIdStmt, getPlaylistById, id)
-	var i Playlist
+type GetPlaylistWithAccessParams struct {
+	UserID     int64 `json:"user_id"`
+	PlaylistID int64 `json:"playlist_id"`
+}
+
+type GetPlaylistWithAccessRow struct {
+	ID                  int64          `json:"id"`
+	UserID              int64          `json:"user_id"`
+	Name                string         `json:"name"`
+	Description         sql.NullString `json:"description"`
+	CoverImage          sql.NullString `json:"cover_image"`
+	IsPublic            bool           `json:"is_public"`
+	MovieID             sql.NullInt64  `json:"movie_id"`
+	ContentType         string         `json:"content_type"`
+	CreatedAt           string         `json:"created_at"`
+	UpdatedAt           string         `json:"updated_at"`
+	CollaboratorCanEdit sql.NullBool   `json:"collaborator_can_edit"`
+}
+
+// One seek for every playlist authorization decision: the playlist row by
+// primary key plus this user's collaborator row (if any) by the
+// (playlist_id, user_id) unique index. collaborator_can_edit is NULL when the
+// user is not a collaborator; the handler derives owner/edit/view from that
+// and p.user_id/p.is_public.
+func (q *Queries) GetPlaylistWithAccess(ctx context.Context, arg GetPlaylistWithAccessParams) (GetPlaylistWithAccessRow, error) {
+	row := q.queryRow(ctx, q.getPlaylistWithAccessStmt, getPlaylistWithAccess, arg.UserID, arg.PlaylistID)
+	var i GetPlaylistWithAccessRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -241,52 +259,48 @@ func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, erro
 		&i.ContentType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CollaboratorCanEdit,
 	)
 	return i, err
 }
 
 const getPlaylistsWithCollaboratorAccess = `-- name: GetPlaylistsWithCollaboratorAccess :many
 SELECT
-  p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
-  (
-    SELECT COUNT(*)
-    FROM playlist_tracks AS pt
-    WHERE pt.playlist_id = p.id
-  ) AS track_count,
-  (
-    SELECT COALESCE(SUM(t.duration), 0)
-    FROM playlist_tracks AS pt
-    INNER JOIN tracks AS t
-      ON pt.track_id = t.id
-    WHERE pt.playlist_id = p.id
-  ) AS total_duration,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = ?1
-  ) AS is_owner,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = ?1
-      OR EXISTS (
-        SELECT 1
-        FROM playlist_collaborators AS edit_pc
-        WHERE edit_pc.playlist_id = p.id
-          AND edit_pc.user_id = ?1
-          AND edit_pc.can_edit = true
-      )
-  ) AS can_edit
-FROM playlists AS p
-WHERE (
-    p.user_id = ?1
-    OR EXISTS (
-      SELECT 1
-      FROM playlist_collaborators AS access_pc
-      WHERE access_pc.playlist_id = p.id
-        AND access_pc.user_id = ?1
-    )
-  )
-  AND p.content_type = 'track'
-ORDER BY p.updated_at DESC
+  accessible.id, accessible.user_id, accessible.name, accessible.description, accessible.cover_image, accessible.is_public, accessible.movie_id, accessible.content_type, accessible.created_at, accessible.updated_at, accessible.is_owner, accessible.can_edit,
+  COALESCE(agg.track_count, 0) AS track_count,
+  COALESCE(agg.total_duration, 0) AS total_duration
+FROM (
+  SELECT
+    p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
+    CAST(1 AS BOOLEAN) AS is_owner,
+    CAST(1 AS BOOLEAN) AS can_edit
+  FROM playlists AS p
+  WHERE p.user_id = ?1
+    AND p.content_type = 'track'
+  UNION ALL
+  SELECT
+    p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
+    CAST(0 AS BOOLEAN) AS is_owner,
+    pc.can_edit
+  FROM playlist_collaborators AS pc
+  INNER JOIN playlists AS p
+    ON p.id = pc.playlist_id
+  WHERE pc.user_id = ?1
+    AND p.content_type = 'track'
+    AND p.user_id <> ?1
+) AS accessible
+LEFT JOIN (
+  SELECT
+    pt.playlist_id,
+    COUNT(*) AS track_count,
+    COALESCE(SUM(t.duration), 0) AS total_duration
+  FROM playlist_tracks AS pt
+  INNER JOIN tracks AS t
+    ON pt.track_id = t.id
+  GROUP BY pt.playlist_id
+) AS agg
+  ON agg.playlist_id = accessible.id
+ORDER BY accessible.updated_at DESC
 `
 
 type GetPlaylistsWithCollaboratorAccessRow struct {
@@ -300,12 +314,19 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 	ContentType   string         `json:"content_type"`
 	CreatedAt     string         `json:"created_at"`
 	UpdatedAt     string         `json:"updated_at"`
-	TrackCount    int64          `json:"track_count"`
-	TotalDuration interface{}    `json:"total_duration"`
 	IsOwner       bool           `json:"is_owner"`
 	CanEdit       bool           `json:"can_edit"`
+	TrackCount    int64          `json:"track_count"`
+	TotalDuration interface{}    `json:"total_duration"`
 }
 
+// Playlists the user owns or collaborates on, newest-updated first. The two
+// access paths are separate indexed lookups (idx_playlist_user, then
+// idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
+// scan of every user's playlists -- and they are disjoint because the
+// collaborator branch excludes playlists the user owns. Track count and total
+// duration come from one grouped pass over playlist_tracks instead of two
+// correlated subqueries per row.
 func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {
@@ -326,10 +347,10 @@ func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, reques
 			&i.ContentType,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.TrackCount,
-			&i.TotalDuration,
 			&i.IsOwner,
 			&i.CanEdit,
+			&i.TrackCount,
+			&i.TotalDuration,
 		); err != nil {
 			return nil, err
 		}

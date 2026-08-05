@@ -1,4 +1,6 @@
--- name: AddTrackToPlaylist :one
+-- name: AddTrackToPlaylist :execrows
+-- Zero rows affected means the track was already in the playlist; the unique
+-- constraint replaces a separate membership pre-check.
 INSERT INTO playlist_tracks (
   playlist_id,
   track_id,
@@ -16,7 +18,7 @@ VALUES
     ),
     ?3
   )
-RETURNING *;
+ON CONFLICT (playlist_id, track_id) DO NOTHING;
 
 -- name: RemoveTrackFromPlaylist :exec
 DELETE FROM playlist_tracks
@@ -58,8 +60,10 @@ SELECT
 FROM playlist_tracks
 WHERE playlist_id = ?;
 
--- name: GetPlaylistDuration :one
+-- name: GetPlaylistTrackSummary :one
+-- Count and total duration in one pass; the playlist detail response needs both.
 SELECT
+  COUNT(*) AS track_count,
   COALESCE(SUM(t.duration), 0) AS total_duration
 FROM playlist_tracks AS pt
 INNER JOIN tracks AS t
@@ -71,12 +75,3 @@ UPDATE playlist_tracks
 SET position = ?
 WHERE playlist_id = ?
   AND track_id = ?;
-
--- name: IsTrackInPlaylist :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM playlist_tracks
-    WHERE playlist_id = ?
-      AND track_id = ?
-  ) AS is_in_playlist;

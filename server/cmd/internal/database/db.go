@@ -39,9 +39,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.adminUpdateUserStmt, err = db.PrepareContext(ctx, adminUpdateUser); err != nil {
 		return nil, fmt.Errorf("error preparing query AdminUpdateUser: %w", err)
 	}
-	if q.canUserEditPlaylistStmt, err = db.PrepareContext(ctx, canUserEditPlaylist); err != nil {
-		return nil, fmt.Errorf("error preparing query CanUserEditPlaylist: %w", err)
-	}
 	if q.countAdminsStmt, err = db.PrepareContext(ctx, countAdmins); err != nil {
 		return nil, fmt.Errorf("error preparing query CountAdmins: %w", err)
 	}
@@ -315,14 +312,8 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getOrCreateGenreStmt, err = db.PrepareContext(ctx, getOrCreateGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrCreateGenre: %w", err)
 	}
-	if q.getPlaylistByIdStmt, err = db.PrepareContext(ctx, getPlaylistById); err != nil {
-		return nil, fmt.Errorf("error preparing query GetPlaylistById: %w", err)
-	}
 	if q.getPlaylistCollaboratorsStmt, err = db.PrepareContext(ctx, getPlaylistCollaborators); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistCollaborators: %w", err)
-	}
-	if q.getPlaylistDurationStmt, err = db.PrepareContext(ctx, getPlaylistDuration); err != nil {
-		return nil, fmt.Errorf("error preparing query GetPlaylistDuration: %w", err)
 	}
 	if q.getPlaylistMoviesPaginatedAscStmt, err = db.PrepareContext(ctx, getPlaylistMoviesPaginatedAsc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistMoviesPaginatedAsc: %w", err)
@@ -330,8 +321,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getPlaylistMoviesPaginatedDescStmt, err = db.PrepareContext(ctx, getPlaylistMoviesPaginatedDesc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistMoviesPaginatedDesc: %w", err)
 	}
+	if q.getPlaylistTrackSummaryStmt, err = db.PrepareContext(ctx, getPlaylistTrackSummary); err != nil {
+		return nil, fmt.Errorf("error preparing query GetPlaylistTrackSummary: %w", err)
+	}
 	if q.getPlaylistTracksInfiniteStmt, err = db.PrepareContext(ctx, getPlaylistTracksInfinite); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistTracksInfinite: %w", err)
+	}
+	if q.getPlaylistWithAccessStmt, err = db.PrepareContext(ctx, getPlaylistWithAccess); err != nil {
+		return nil, fmt.Errorf("error preparing query GetPlaylistWithAccess: %w", err)
 	}
 	if q.getPlaylistsWithCollaboratorAccessStmt, err = db.PrepareContext(ctx, getPlaylistsWithCollaboratorAccess); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistsWithCollaboratorAccess: %w", err)
@@ -429,20 +426,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.insertVideoStreamStmt, err = db.PrepareContext(ctx, insertVideoStream); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertVideoStream: %w", err)
 	}
-	if q.isMovieInPlaylistStmt, err = db.PrepareContext(ctx, isMovieInPlaylist); err != nil {
-		return nil, fmt.Errorf("error preparing query IsMovieInPlaylist: %w", err)
-	}
 	if q.isMovieLikedStmt, err = db.PrepareContext(ctx, isMovieLiked); err != nil {
 		return nil, fmt.Errorf("error preparing query IsMovieLiked: %w", err)
 	}
-	if q.isTrackInPlaylistStmt, err = db.PrepareContext(ctx, isTrackInPlaylist); err != nil {
-		return nil, fmt.Errorf("error preparing query IsTrackInPlaylist: %w", err)
-	}
 	if q.isTrackLikedStmt, err = db.PrepareContext(ctx, isTrackLiked); err != nil {
 		return nil, fmt.Errorf("error preparing query IsTrackLiked: %w", err)
-	}
-	if q.isUserCollaboratorStmt, err = db.PrepareContext(ctx, isUserCollaborator); err != nil {
-		return nil, fmt.Errorf("error preparing query IsUserCollaborator: %w", err)
 	}
 	if q.isWatchRoomMemberStmt, err = db.PrepareContext(ctx, isWatchRoomMember); err != nil {
 		return nil, fmt.Errorf("error preparing query IsWatchRoomMember: %w", err)
@@ -625,11 +613,6 @@ func (q *Queries) Close() error {
 	if q.adminUpdateUserStmt != nil {
 		if cerr := q.adminUpdateUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing adminUpdateUserStmt: %w", cerr)
-		}
-	}
-	if q.canUserEditPlaylistStmt != nil {
-		if cerr := q.canUserEditPlaylistStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing canUserEditPlaylistStmt: %w", cerr)
 		}
 	}
 	if q.countAdminsStmt != nil {
@@ -1087,19 +1070,9 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getOrCreateGenreStmt: %w", cerr)
 		}
 	}
-	if q.getPlaylistByIdStmt != nil {
-		if cerr := q.getPlaylistByIdStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getPlaylistByIdStmt: %w", cerr)
-		}
-	}
 	if q.getPlaylistCollaboratorsStmt != nil {
 		if cerr := q.getPlaylistCollaboratorsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getPlaylistCollaboratorsStmt: %w", cerr)
-		}
-	}
-	if q.getPlaylistDurationStmt != nil {
-		if cerr := q.getPlaylistDurationStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getPlaylistDurationStmt: %w", cerr)
 		}
 	}
 	if q.getPlaylistMoviesPaginatedAscStmt != nil {
@@ -1112,9 +1085,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getPlaylistMoviesPaginatedDescStmt: %w", cerr)
 		}
 	}
+	if q.getPlaylistTrackSummaryStmt != nil {
+		if cerr := q.getPlaylistTrackSummaryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getPlaylistTrackSummaryStmt: %w", cerr)
+		}
+	}
 	if q.getPlaylistTracksInfiniteStmt != nil {
 		if cerr := q.getPlaylistTracksInfiniteStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getPlaylistTracksInfiniteStmt: %w", cerr)
+		}
+	}
+	if q.getPlaylistWithAccessStmt != nil {
+		if cerr := q.getPlaylistWithAccessStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getPlaylistWithAccessStmt: %w", cerr)
 		}
 	}
 	if q.getPlaylistsWithCollaboratorAccessStmt != nil {
@@ -1277,29 +1260,14 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing insertVideoStreamStmt: %w", cerr)
 		}
 	}
-	if q.isMovieInPlaylistStmt != nil {
-		if cerr := q.isMovieInPlaylistStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing isMovieInPlaylistStmt: %w", cerr)
-		}
-	}
 	if q.isMovieLikedStmt != nil {
 		if cerr := q.isMovieLikedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing isMovieLikedStmt: %w", cerr)
 		}
 	}
-	if q.isTrackInPlaylistStmt != nil {
-		if cerr := q.isTrackInPlaylistStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing isTrackInPlaylistStmt: %w", cerr)
-		}
-	}
 	if q.isTrackLikedStmt != nil {
 		if cerr := q.isTrackLikedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing isTrackLikedStmt: %w", cerr)
-		}
-	}
-	if q.isUserCollaboratorStmt != nil {
-		if cerr := q.isUserCollaboratorStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing isUserCollaboratorStmt: %w", cerr)
 		}
 	}
 	if q.isWatchRoomMemberStmt != nil {
@@ -1601,7 +1569,6 @@ type Queries struct {
 	addTrackToPlaylistStmt                      *sql.Stmt
 	addWatchRoomMemberStmt                      *sql.Stmt
 	adminUpdateUserStmt                         *sql.Stmt
-	canUserEditPlaylistStmt                     *sql.Stmt
 	countAdminsStmt                             *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
@@ -1693,12 +1660,12 @@ type Queries struct {
 	getMusiciansByAlbumIDStmt                   *sql.Stmt
 	getMusiciansCountStmt                       *sql.Stmt
 	getOrCreateGenreStmt                        *sql.Stmt
-	getPlaylistByIdStmt                         *sql.Stmt
 	getPlaylistCollaboratorsStmt                *sql.Stmt
-	getPlaylistDurationStmt                     *sql.Stmt
 	getPlaylistMoviesPaginatedAscStmt           *sql.Stmt
 	getPlaylistMoviesPaginatedDescStmt          *sql.Stmt
+	getPlaylistTrackSummaryStmt                 *sql.Stmt
 	getPlaylistTracksInfiniteStmt               *sql.Stmt
+	getPlaylistWithAccessStmt                   *sql.Stmt
 	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
 	getProductionCompaniesByMovieIDStmt         *sql.Stmt
 	getRandomTracksStmt                         *sql.Stmt
@@ -1731,11 +1698,8 @@ type Queries struct {
 	insertChapterStmt                           *sql.Stmt
 	insertSubtitleStmt                          *sql.Stmt
 	insertVideoStreamStmt                       *sql.Stmt
-	isMovieInPlaylistStmt                       *sql.Stmt
 	isMovieLikedStmt                            *sql.Stmt
-	isTrackInPlaylistStmt                       *sql.Stmt
 	isTrackLikedStmt                            *sql.Stmt
-	isUserCollaboratorStmt                      *sql.Stmt
 	isWatchRoomMemberStmt                       *sql.Stmt
 	isWatchRoomOwnerStmt                        *sql.Stmt
 	likeMovieStmt                               *sql.Stmt
@@ -1798,7 +1762,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addTrackToPlaylistStmt:                      q.addTrackToPlaylistStmt,
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
-		canUserEditPlaylistStmt:                     q.canUserEditPlaylistStmt,
 		countAdminsStmt:                             q.countAdminsStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
@@ -1890,12 +1853,12 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:                       q.getMusiciansCountStmt,
 		getOrCreateGenreStmt:                        q.getOrCreateGenreStmt,
-		getPlaylistByIdStmt:                         q.getPlaylistByIdStmt,
 		getPlaylistCollaboratorsStmt:                q.getPlaylistCollaboratorsStmt,
-		getPlaylistDurationStmt:                     q.getPlaylistDurationStmt,
 		getPlaylistMoviesPaginatedAscStmt:           q.getPlaylistMoviesPaginatedAscStmt,
 		getPlaylistMoviesPaginatedDescStmt:          q.getPlaylistMoviesPaginatedDescStmt,
+		getPlaylistTrackSummaryStmt:                 q.getPlaylistTrackSummaryStmt,
 		getPlaylistTracksInfiniteStmt:               q.getPlaylistTracksInfiniteStmt,
+		getPlaylistWithAccessStmt:                   q.getPlaylistWithAccessStmt,
 		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
 		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,
 		getRandomTracksStmt:                         q.getRandomTracksStmt,
@@ -1928,11 +1891,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		insertChapterStmt:                           q.insertChapterStmt,
 		insertSubtitleStmt:                          q.insertSubtitleStmt,
 		insertVideoStreamStmt:                       q.insertVideoStreamStmt,
-		isMovieInPlaylistStmt:                       q.isMovieInPlaylistStmt,
 		isMovieLikedStmt:                            q.isMovieLikedStmt,
-		isTrackInPlaylistStmt:                       q.isTrackInPlaylistStmt,
 		isTrackLikedStmt:                            q.isTrackLikedStmt,
-		isUserCollaboratorStmt:                      q.isUserCollaboratorStmt,
 		isWatchRoomMemberStmt:                       q.isWatchRoomMemberStmt,
 		isWatchRoomOwnerStmt:                        q.isWatchRoomOwnerStmt,
 		likeMovieStmt:                               q.likeMovieStmt,

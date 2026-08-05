@@ -1,4 +1,6 @@
--- name: AddMovieToPlaylist :one
+-- name: AddMovieToPlaylist :execrows
+-- Zero rows affected means the movie was already in the playlist; the unique
+-- constraint replaces a separate membership pre-check.
 INSERT INTO playlist_movies (
   playlist_id,
   movie_id,
@@ -16,16 +18,7 @@ VALUES
     ),
     ?3
   )
-RETURNING *;
-
--- name: IsMovieInPlaylist :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM playlist_movies
-    WHERE playlist_id = ?
-      AND movie_id = ?
-  ) AS is_in_playlist;
+ON CONFLICT (playlist_id, movie_id) DO NOTHING;
 
 -- name: RemoveMovieFromPlaylist :exec
 DELETE FROM playlist_movies

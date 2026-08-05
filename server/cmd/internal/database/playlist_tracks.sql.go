@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const addTrackToPlaylist = `-- name: AddTrackToPlaylist :one
+const addTrackToPlaylist = `-- name: AddTrackToPlaylist :execrows
 INSERT INTO playlist_tracks (
   playlist_id,
   track_id,
@@ -28,7 +28,7 @@ VALUES
     ),
     ?3
   )
-RETURNING id, playlist_id, track_id, position, added_by, added_at
+ON CONFLICT (playlist_id, track_id) DO NOTHING
 `
 
 type AddTrackToPlaylistParams struct {
@@ -37,18 +37,14 @@ type AddTrackToPlaylistParams struct {
 	AddedBy    sql.NullInt64 `json:"added_by"`
 }
 
-func (q *Queries) AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (PlaylistTrack, error) {
-	row := q.queryRow(ctx, q.addTrackToPlaylistStmt, addTrackToPlaylist, arg.PlaylistID, arg.TrackID, arg.AddedBy)
-	var i PlaylistTrack
-	err := row.Scan(
-		&i.ID,
-		&i.PlaylistID,
-		&i.TrackID,
-		&i.Position,
-		&i.AddedBy,
-		&i.AddedAt,
-	)
-	return i, err
+// Zero rows affected means the track was already in the playlist; the unique
+// constraint replaces a separate membership pre-check.
+func (q *Queries) AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (int64, error) {
+	result, err := q.exec(ctx, q.addTrackToPlaylistStmt, addTrackToPlaylist, arg.PlaylistID, arg.TrackID, arg.AddedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const countPlaylistTracks = `-- name: CountPlaylistTracks :one
@@ -65,8 +61,9 @@ func (q *Queries) CountPlaylistTracks(ctx context.Context, playlistID int64) (in
 	return count, err
 }
 
-const getPlaylistDuration = `-- name: GetPlaylistDuration :one
+const getPlaylistTrackSummary = `-- name: GetPlaylistTrackSummary :one
 SELECT
+  COUNT(*) AS track_count,
   COALESCE(SUM(t.duration), 0) AS total_duration
 FROM playlist_tracks AS pt
 INNER JOIN tracks AS t
@@ -74,11 +71,17 @@ INNER JOIN tracks AS t
 WHERE pt.playlist_id = ?
 `
 
-func (q *Queries) GetPlaylistDuration(ctx context.Context, playlistID int64) (interface{}, error) {
-	row := q.queryRow(ctx, q.getPlaylistDurationStmt, getPlaylistDuration, playlistID)
-	var total_duration interface{}
-	err := row.Scan(&total_duration)
-	return total_duration, err
+type GetPlaylistTrackSummaryRow struct {
+	TrackCount    int64       `json:"track_count"`
+	TotalDuration interface{} `json:"total_duration"`
+}
+
+// Count and total duration in one pass; the playlist detail response needs both.
+func (q *Queries) GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error) {
+	row := q.queryRow(ctx, q.getPlaylistTrackSummaryStmt, getPlaylistTrackSummary, playlistID)
+	var i GetPlaylistTrackSummaryRow
+	err := row.Scan(&i.TrackCount, &i.TotalDuration)
+	return i, err
 }
 
 const getPlaylistTracksInfinite = `-- name: GetPlaylistTracksInfinite :many
@@ -172,28 +175,6 @@ func (q *Queries) GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylist
 		return nil, err
 	}
 	return items, nil
-}
-
-const isTrackInPlaylist = `-- name: IsTrackInPlaylist :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM playlist_tracks
-    WHERE playlist_id = ?
-      AND track_id = ?
-  ) AS is_in_playlist
-`
-
-type IsTrackInPlaylistParams struct {
-	PlaylistID int64 `json:"playlist_id"`
-	TrackID    int64 `json:"track_id"`
-}
-
-func (q *Queries) IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (bool, error) {
-	row := q.queryRow(ctx, q.isTrackInPlaylistStmt, isTrackInPlaylist, arg.PlaylistID, arg.TrackID)
-	var is_in_playlist bool
-	err := row.Scan(&is_in_playlist)
-	return is_in_playlist, err
 }
 
 const removeTrackFromPlaylist = `-- name: RemoveTrackFromPlaylist :exec

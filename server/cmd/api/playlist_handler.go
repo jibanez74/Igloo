@@ -92,29 +92,7 @@ func validatePlaylistMetadata(name, description string) error {
 }
 
 func (app *Application) getPlaylistAccess(ctx context.Context, playlistID, userID int64) (database.Playlist, PlaylistPermission, error) {
-	playlist, err := app.Queries.GetPlaylistById(ctx, playlistID)
-	if err != nil {
-		return database.Playlist{}, PermissionNone, err
-	}
-
-	if playlist.UserID == userID {
-		return playlist, PermissionOwner, nil
-	}
-
-	canEdit, err := app.Queries.CanUserEditPlaylist(ctx, database.CanUserEditPlaylistParams{
-		ID:       playlistID,
-		UserID:   userID,
-		UserID_2: userID,
-	})
-	if err != nil {
-		return database.Playlist{}, PermissionNone, err
-	}
-
-	if canEdit {
-		return playlist, PermissionEdit, nil
-	}
-
-	isCollaborator, err := app.Queries.IsUserCollaborator(ctx, database.IsUserCollaboratorParams{
+	row, err := app.Queries.GetPlaylistWithAccess(ctx, database.GetPlaylistWithAccessParams{
 		PlaylistID: playlistID,
 		UserID:     userID,
 	})
@@ -122,15 +100,33 @@ func (app *Application) getPlaylistAccess(ctx context.Context, playlistID, userI
 		return database.Playlist{}, PermissionNone, err
 	}
 
-	if isCollaborator {
-		return playlist, PermissionView, nil
+	playlist := database.Playlist{
+		ID:          row.ID,
+		UserID:      row.UserID,
+		Name:        row.Name,
+		Description: row.Description,
+		CoverImage:  row.CoverImage,
+		IsPublic:    row.IsPublic,
+		MovieID:     row.MovieID,
+		ContentType: row.ContentType,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
 	}
 
-	if playlist.IsPublic {
+	// CollaboratorCanEdit is non-NULL exactly when the user has a collaborator
+	// row on this playlist.
+	switch {
+	case row.UserID == userID:
+		return playlist, PermissionOwner, nil
+	case row.CollaboratorCanEdit.Valid && row.CollaboratorCanEdit.Bool:
+		return playlist, PermissionEdit, nil
+	case row.CollaboratorCanEdit.Valid:
 		return playlist, PermissionView, nil
+	case row.IsPublic:
+		return playlist, PermissionView, nil
+	default:
+		return playlist, PermissionNone, nil
 	}
-
-	return playlist, PermissionNone, nil
 }
 
 func (app *Application) mustBeTrackPlaylist(w http.ResponseWriter, playlist database.Playlist) bool {

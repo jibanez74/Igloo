@@ -11,11 +11,14 @@ import (
 
 type Querier interface {
 	AddCollaborator(ctx context.Context, arg AddCollaboratorParams) (PlaylistCollaborator, error)
-	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error)
-	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (PlaylistTrack, error)
+	// Zero rows affected means the movie was already in the playlist; the unique
+	// constraint replaces a separate membership pre-check.
+	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (int64, error)
+	// Zero rows affected means the track was already in the playlist; the unique
+	// constraint replaces a separate membership pre-check.
+	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (int64, error)
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
-	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (bool, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
@@ -127,6 +130,7 @@ type Querier interface {
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
+	// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error)
@@ -149,13 +153,26 @@ type Querier interface {
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
-	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
-	GetPlaylistDuration(ctx context.Context, playlistID int64) (interface{}, error)
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
 	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
+	// Count and total duration in one pass; the playlist detail response needs both.
+	GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error)
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)
+	// One seek for every playlist authorization decision: the playlist row by
+	// primary key plus this user's collaborator row (if any) by the
+	// (playlist_id, user_id) unique index. collaborator_can_edit is NULL when the
+	// user is not a collaborator; the handler derives owner/edit/view from that
+	// and p.user_id/p.is_public.
+	GetPlaylistWithAccess(ctx context.Context, arg GetPlaylistWithAccessParams) (GetPlaylistWithAccessRow, error)
+	// Playlists the user owns or collaborates on, newest-updated first. The two
+	// access paths are separate indexed lookups (idx_playlist_user, then
+	// idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
+	// scan of every user's playlists -- and they are disjoint because the
+	// collaborator branch excludes playlists the user owns. Track count and total
+	// duration come from one grouped pass over playlist_tracks instead of two
+	// correlated subqueries per row.
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
@@ -204,11 +221,8 @@ type Querier interface {
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) (VideoStream, error)
-	IsMovieInPlaylist(ctx context.Context, arg IsMovieInPlaylistParams) (bool, error)
 	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
-	IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (bool, error)
 	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
-	IsUserCollaborator(ctx context.Context, arg IsUserCollaboratorParams) (bool, error)
 	IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (int64, error)
 	IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerParams) (int64, error)
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
