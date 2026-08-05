@@ -125,7 +125,7 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 	app.HLSSessionCache.SetDefault(key, sentinel)
 	app.CleanupRoomHLSSession(roomID)
 
-	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0)
+	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0, nil)
 	if err == nil {
 		t.Fatal("expected deleted room cache hit to fail")
 	}
@@ -159,7 +159,7 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 		t.Fatalf("select movie id: %v", err)
 	}
 
-	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0)
+	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0, nil)
 	if err == nil {
 		t.Fatal("expected error from warm-up when movie has no video streams")
 	}
@@ -183,7 +183,7 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	sentinel := &HLSSession{TempDir: "sentinel"}
 	app.HLSSessionCache.SetDefault(key, sentinel)
 
-	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0)
+	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0, nil)
 	if err != nil {
 		t.Fatalf("unexpected error on second warm-up call: %v", err)
 	}
@@ -218,6 +218,7 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 		movieID,
 		helpers.HLS_PROFILE_REMUX,
 		0,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)

@@ -952,25 +952,30 @@ func (app *Application) GetOrCreateHLSSession(
 // It uses RoomHLSSessionKey so the session is isolated from personal playback sessions.
 // If a session for this room already exists in the cache, it is a no-op.
 // Always warms up from startSec=0 so participants start from the beginning.
+// preloaded, when non-nil, is a movie row the caller already fetched; it is
+// validated the same way loadHLSMovieForSession would and saves the re-fetch.
 func (app *Application) WarmUpRoomHLSSession(
 	ctx context.Context,
 	roomID int64,
 	movieID int64,
 	profile string,
 	audioTrack int,
+	preloaded *database.Movie,
 ) error {
-	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack)
+	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack, preloaded)
 	return err
 }
 
 // GetOrCreateRoomHLSSession returns a cached room-scoped HLS session or
-// creates a new one using the room-specific cache key.
+// creates a new one using the room-specific cache key. preloaded, when
+// non-nil, skips the movie fetch on a cache miss; nil loads it as before.
 func (app *Application) GetOrCreateRoomHLSSession(
 	ctx context.Context,
 	roomID int64,
 	movieID int64,
 	profile string,
 	audioTrack int,
+	preloaded *database.Movie,
 ) (*HLSSession, error) {
 	key := RoomHLSSessionKey(roomID)
 
@@ -995,9 +1000,19 @@ func (app *Application) GetOrCreateRoomHLSSession(
 			return nil, fmt.Errorf("watch room %d was deleted", roomID)
 		}
 
-		movie, _, loadErr := app.loadHLSMovieForSession(ctx, movieID, 0)
-		if loadErr != nil {
-			return nil, loadErr
+		var movie database.Movie
+		if preloaded != nil {
+			validateErr := validateHLSMovieDuration(*preloaded, movieID)
+			if validateErr != nil {
+				return nil, validateErr
+			}
+			movie = *preloaded
+		} else {
+			var loadErr error
+			movie, _, loadErr = app.loadHLSMovieForSession(ctx, movieID, 0)
+			if loadErr != nil {
+				return nil, loadErr
+			}
 		}
 
 		audioTrackCopy := audioTrack
@@ -1036,6 +1051,15 @@ func (app *Application) CleanupRoomHLSSession(roomID int64) {
 	app.RoomHLSMu.Unlock()
 }
 
+// validateHLSMovieDuration is the duration check every HLS session creation
+// requires, shared by loadHLSMovieForSession and the preloaded-row path.
+func validateHLSMovieDuration(movie database.Movie, movieID int64) error {
+	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
+		return fmt.Errorf("movie %d has no valid duration in the database", movieID)
+	}
+	return nil
+}
+
 // loadHLSMovieForSession loads the movie, validates that it has a usable
 // duration, and normalizes the requested start into the duration tail.
 func (app *Application) loadHLSMovieForSession(
@@ -1047,8 +1071,9 @@ func (app *Application) loadHLSMovieForSession(
 	if err != nil {
 		return database.Movie{}, 0, fmt.Errorf("movie not found: %w", err)
 	}
-	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
-		return database.Movie{}, 0, fmt.Errorf("movie %d has no valid duration in the database", movieID)
+	err = validateHLSMovieDuration(movie, movieID)
+	if err != nil {
+		return database.Movie{}, 0, err
 	}
 	if startSec < 0 {
 		return database.Movie{}, 0, fmt.Errorf("start %d is outside movie duration %.3f", startSec, movie.Duration.Float64)
