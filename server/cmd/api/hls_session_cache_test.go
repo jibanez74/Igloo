@@ -724,3 +724,57 @@ func TestDeleteHLSSession(t *testing.T) {
 		}
 	})
 }
+
+func TestGetOrCreateHLSSession_WarmPathNeedsNoDatabase(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	userID := int64(100)
+
+	created, key, err := app.GetOrCreateHLSSession(
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_REMUX,
+		testIntPtr(0),
+		testPlaybackSessionID,
+		0,
+		userID,
+	)
+	if err != nil {
+		t.Fatalf("initial creation error: %v", err)
+	}
+	defer cleanupHLSSession(created)
+
+	// Deleting the movie row proves the warm path below never consults the
+	// database: an unclamped re-request must be served entirely from the
+	// session cache.
+	_, err = app.DB.Exec("DELETE FROM movies WHERE id = ?", movieID)
+	if err != nil {
+		t.Fatalf("delete movie row: %v", err)
+	}
+
+	cached, cachedKey, err := app.GetOrCreateHLSSession(
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_REMUX,
+		testIntPtr(0),
+		testPlaybackSessionID,
+		0,
+		userID,
+	)
+	if err != nil {
+		t.Fatalf("warm re-request error: %v", err)
+	}
+	if cached != created {
+		t.Fatal("warm re-request did not return the cached session")
+	}
+	if cachedKey != key {
+		t.Fatalf("warm re-request key = %q, want %q", cachedKey, key)
+	}
+	if fake.CallCount() != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", fake.CallCount())
+	}
+}

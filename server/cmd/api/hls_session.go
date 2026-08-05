@@ -835,22 +835,44 @@ func (app *Application) GetOrCreateHLSSession(
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
 	requestedKey := HLSSessionKey(movieID, profile, audioTrack, playbackSession, startSec)
+
+	// Warm path first, before touching the database. The stored key uses the
+	// normalized start, which equals the raw start whenever it was not clamped
+	// to the duration tail -- every keepalive and live-playlist re-fetch -- so
+	// this lookup hits without needing the movie row. A clamped start simply
+	// misses here and takes the load-and-normalize path below.
+	if raw, ok := app.HLSSessionCache.Get(requestedKey); ok {
+		session, typeOK := raw.(*HLSSession)
+		if !typeOK || session == nil {
+			app.removePersonalHLSSession(requestedKey)
+		} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
+			return nil, requestedKey, errHLSSessionNotFound
+		} else {
+			refreshed := app.RefreshHLSSessionTTL(requestedKey, session)
+			if refreshed {
+				return session, requestedKey, nil
+			}
+		}
+	}
+
 	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
 	if err != nil {
 		return nil, requestedKey, err
 	}
 	key := HLSSessionKey(movieID, profile, audioTrack, playbackSession, effectiveStartSec)
 
-	if raw, ok := app.HLSSessionCache.Get(key); ok {
-		session, typeOK := raw.(*HLSSession)
-		if !typeOK || session == nil {
-			app.removePersonalHLSSession(key)
-		} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
-			return nil, key, errHLSSessionNotFound
-		} else {
-			refreshed := app.RefreshHLSSessionTTL(key, session)
-			if refreshed {
-				return session, key, nil
+	if key != requestedKey {
+		if raw, ok := app.HLSSessionCache.Get(key); ok {
+			session, typeOK := raw.(*HLSSession)
+			if !typeOK || session == nil {
+				app.removePersonalHLSSession(key)
+			} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
+				return nil, key, errHLSSessionNotFound
+			} else {
+				refreshed := app.RefreshHLSSessionTTL(key, session)
+				if refreshed {
+					return session, key, nil
+				}
 			}
 		}
 	}
