@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
@@ -18,12 +18,16 @@ export function useHlsSessionRecovery({
   const attemptsRef = useRef(0);
   const lastAttemptAtRef = useRef(0);
   const trackedKeyRef = useRef("");
+  // Mirrors attemptsRef so consumers can announce each attempt to assistive
+  // tech; 0 means no recovery has run for the current stream window.
+  const [recoveryAttempt, setRecoveryAttempt] = useState(0);
 
   useEffect(() => {
     if (trackedKeyRef.current !== streamWindowKey) {
       trackedKeyRef.current = streamWindowKey;
       attemptsRef.current = 0;
       lastAttemptAtRef.current = 0;
+      setRecoveryAttempt(0);
     }
   }, [streamWindowKey]);
 
@@ -42,8 +46,9 @@ export function useHlsSessionRecovery({
 
     attemptsRef.current += 1;
     lastAttemptAtRef.current = now;
+    setRecoveryAttempt(attemptsRef.current);
     onRecover(currentTimeSec);
   };
 
-  return { handleSessionLost };
+  return { handleSessionLost, recoveryAttempt };
 }

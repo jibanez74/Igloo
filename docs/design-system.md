@@ -500,8 +500,13 @@ require the full playback test pass.
   `bg-background/95 backdrop-blur-lg`) and **auto-hides on idle**
   (`useIdleControls`), sliding back on pointer/touch/key input. A `sr-only`
   paragraph documents the keyboard map (Space/K, J/L, arrows, M, F, Esc);
-  `ResumeDialog` offers resume vs. start-over; announcements via two
-  `LiveAnnouncer`s.
+  `ResumeDialog` offers resume vs. start-over; announcements via five
+  `LiveAnnouncer`s (play/pause state, capacity waiting, chapter jumps,
+  direct-play fallback, and HLS session recovery — the watch room announces
+  recovery the same way). Fatal playback errors self-announce: the status
+  screen's non-loading variants and the watch-room error box carry
+  `role="alert"` because the player subtree (and its live regions) unmounts
+  before they appear.
 - **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`):
   playing a track opens the **fullscreen Now Playing** view
   (`DialogFullscreenContent`, gradient `from-background via-muted

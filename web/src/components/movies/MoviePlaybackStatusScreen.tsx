@@ -48,7 +48,13 @@ export default function MoviePlaybackStatusScreen({
       ref={containerRef}
       className="flex min-h-screen flex-col items-center justify-center bg-background px-4"
     >
-      <div className={isLoading ? "text-center" : "max-w-md text-center"}>
+      {/* The player subtree (and its live regions) unmounts before this
+          screen mounts, so error variants must self-announce; loading keeps
+          the role="status" spinner convention. */}
+      <div
+        role={isLoading ? undefined : "alert"}
+        className={isLoading ? "text-center" : "max-w-md text-center"}
+      >
         {isLoading ? (
           <Spinner className="mx-auto mb-6 size-10 text-primary" />
         ) : (
