@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -728,11 +729,18 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		go app.measureHLSSessionStart(runCtx, session, params.Movie.FilePath, params.PrimaryVideo.StreamIndex, startSec)
 	}
 
+	// AudioTrack is *int with nil meaning "video-only movie"; log the ordinal,
+	// not the pointer.
+	audioTrackLogValue := "none"
+	if params.AudioTrack != nil {
+		audioTrackLogValue = strconv.Itoa(*params.AudioTrack)
+	}
+
 	app.Logger.Info("hls session starting",
 		"movie_id", params.Movie.ID,
 		"requested_profile", params.RequestedProfile,
 		"effective_profile", params.EffectiveProfile,
-		"audio_track", params.AudioTrack,
+		"audio_track", audioTrackLogValue,
 		"start_sec", startSec,
 		"start_segment", startSegment,
 		"video_stream_index", videoStreamIndex,
