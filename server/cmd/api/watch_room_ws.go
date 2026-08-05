@@ -545,25 +545,15 @@ var watchRoomUpgrader = websocket.Upgrader{
 	},
 }
 
+// loadAuthorizedWatchRoom returns the room only when the user is a member.
+// This runs on every room media request including each HLS segment, so it is
+// a single joined query; sql.ErrNoRows means "no room or no access" and
+// callers do not distinguish the two.
 func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, userID int64) (database.WatchRoom, error) {
-	room, err := app.Queries.GetWatchRoomByID(ctx, roomID)
-	if err != nil {
-		return database.WatchRoom{}, err
-	}
-
-	isMember, err := app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
-		RoomID: roomID,
+	return app.Queries.GetWatchRoomForMember(ctx, database.GetWatchRoomForMemberParams{
+		ID:     roomID,
 		UserID: userID,
 	})
-	if err != nil {
-		return database.WatchRoom{}, err
-	}
-	if !isMember {
-		// Callers treat sql.ErrNoRows as "no access", matching the room lookup.
-		return database.WatchRoom{}, sql.ErrNoRows
-	}
-
-	return room, nil
 }
 
 func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter, r *http.Request) (database.WatchRoom, int64, bool) {

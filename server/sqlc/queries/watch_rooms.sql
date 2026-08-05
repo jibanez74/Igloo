@@ -69,6 +69,20 @@ INNER JOIN users AS u
 WHERE wrm.room_id IN (sqlc.slice(room_ids))
 ORDER BY wrm.room_id ASC, wrm.created_at ASC;
 
+-- name: GetWatchRoomForMember :one
+-- The room row, but only when the user is a member: the auth check every
+-- room media request (manifest, each segment, direct stream, websocket)
+-- performs. One PK seek plus one (room_id, user_id) unique-index seek;
+-- sql.ErrNoRows covers both "no such room" and "not a member", which callers
+-- deliberately do not distinguish.
+SELECT wr.*
+FROM watch_rooms AS wr
+INNER JOIN watch_room_members AS wrm
+  ON wrm.room_id = wr.id
+WHERE wr.id = ?
+  AND wrm.user_id = ?
+LIMIT 1;
+
 -- name: IsWatchRoomMember :one
 SELECT
   EXISTS (

@@ -131,6 +131,42 @@ func (q *Queries) GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, er
 	return i, err
 }
 
+const getWatchRoomForMember = `-- name: GetWatchRoomForMember :one
+SELECT wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.created_at, wr.updated_at
+FROM watch_rooms AS wr
+INNER JOIN watch_room_members AS wrm
+  ON wrm.room_id = wr.id
+WHERE wr.id = ?
+  AND wrm.user_id = ?
+LIMIT 1
+`
+
+type GetWatchRoomForMemberParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// The room row, but only when the user is a member: the auth check every
+// room media request (manifest, each segment, direct stream, websocket)
+// performs. One PK seek plus one (room_id, user_id) unique-index seek;
+// sql.ErrNoRows covers both "no such room" and "not a member", which callers
+// deliberately do not distinguish.
+func (q *Queries) GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomForMemberParams) (WatchRoom, error) {
+	row := q.queryRow(ctx, q.getWatchRoomForMemberStmt, getWatchRoomForMember, arg.ID, arg.UserID)
+	var i WatchRoom
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerUserID,
+		&i.MovieID,
+		&i.PlaybackMode,
+		&i.AudioTrack,
+		&i.SubtitleTrack,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getWatchRoomMemberByUserID = `-- name: GetWatchRoomMemberByUserID :one
 SELECT
   u.id,

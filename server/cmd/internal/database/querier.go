@@ -222,6 +222,12 @@ type Querier interface {
 	// Video streams for a movie (for technical details display).
 	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
 	GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, error)
+	// The room row, but only when the user is a member: the auth check every
+	// room media request (manifest, each segment, direct stream, websocket)
+	// performs. One PK seek plus one (room_id, user_id) unique-index seek;
+	// sql.ErrNoRows covers both "no such room" and "not a member", which callers
+	// deliberately do not distinguish.
+	GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomForMemberParams) (WatchRoom, error)
 	GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
