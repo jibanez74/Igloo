@@ -8272,7 +8272,6 @@
         "required": [
           "id",
           "created_by_user_id",
-          "user_id",
           "title",
           "message",
           "is_admin",
@@ -8287,9 +8286,6 @@
           "created_by_user_id": {
             "type": "integer",
             "format": "int64"
-          },
-          "user_id": {
-            "$ref": "#/components/schemas/SqlNullInt64"
           },
           "title": {
             "type": "string",
@@ -8354,7 +8350,6 @@
           "is_admin",
           "is_read",
           "created_by_name",
-          "user_id",
           "created_at"
         ],
         "properties": {
@@ -8382,13 +8377,6 @@
           },
           "created_by_name": {
             "type": "string"
-          },
-          "user_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
           },
           "created_at": {
             "type": "string"

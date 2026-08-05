@@ -269,6 +269,23 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUserIsAdmin = `-- name: GetUserIsAdmin :one
+SELECT
+  is_admin
+FROM users
+WHERE id = ?
+LIMIT 1
+`
+
+// Narrow admin check for hot paths (middleware, polled notification counts);
+// avoids shipping the full user row with its password hash.
+func (q *Queries) GetUserIsAdmin(ctx context.Context, id int64) (bool, error) {
+	row := q.queryRow(ctx, q.getUserIsAdminStmt, getUserIsAdmin, id)
+	var is_admin bool
+	err := row.Scan(&is_admin)
+	return is_admin, err
+}
+
 const getUserPlaybackPreferences = `-- name: GetUserPlaybackPreferences :one
 SELECT
   is_admin,

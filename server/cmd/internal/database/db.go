@@ -369,6 +369,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getUserByEmailStmt, err = db.PrepareContext(ctx, getUserByEmail); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserByEmail: %w", err)
 	}
+	if q.getUserIsAdminStmt, err = db.PrepareContext(ctx, getUserIsAdmin); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserIsAdmin: %w", err)
+	}
 	if q.getUserListeningStatsStmt, err = db.PrepareContext(ctx, getUserListeningStats); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserListeningStats: %w", err)
 	}
@@ -1162,6 +1165,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUserByEmailStmt: %w", cerr)
 		}
 	}
+	if q.getUserIsAdminStmt != nil {
+		if cerr := q.getUserIsAdminStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserIsAdminStmt: %w", cerr)
+		}
+	}
 	if q.getUserListeningStatsStmt != nil {
 		if cerr := q.getUserListeningStatsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserListeningStatsStmt: %w", cerr)
@@ -1671,6 +1679,7 @@ type Queries struct {
 	getTracksCountStmt                          *sql.Stmt
 	getUserStmt                                 *sql.Stmt
 	getUserByEmailStmt                          *sql.Stmt
+	getUserIsAdminStmt                          *sql.Stmt
 	getUserListeningStatsStmt                   *sql.Stmt
 	getUserPlaybackPreferencesStmt              *sql.Stmt
 	getUserRecentlyPlayedStmt                   *sql.Stmt
@@ -1863,6 +1872,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getTracksCountStmt:                          q.getTracksCountStmt,
 		getUserStmt:                                 q.getUserStmt,
 		getUserByEmailStmt:                          q.getUserByEmailStmt,
+		getUserIsAdminStmt:                          q.getUserIsAdminStmt,
 		getUserListeningStatsStmt:                   q.getUserListeningStatsStmt,
 		getUserPlaybackPreferencesStmt:              q.getUserPlaybackPreferencesStmt,
 		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,

@@ -1012,28 +1012,25 @@ END;
 
 -- Notifications
 
--- User-targeted and admin-queue notifications.
+-- Admin request-queue notifications (e.g. media requests), visible to every
+-- admin. There is no per-user targeting: visibility is admin-only and enforced
+-- by the handlers.
 CREATE TABLE
   IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_by_user_id INTEGER NOT NULL,
-    user_id INTEGER,
     title TEXT NOT NULL CHECK (title IN ('movie_request', 'album_request', 'track_request', 'other')),
     message TEXT NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (user_id IS NULL OR is_admin = false),
-    FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_created_by_user
 ON notifications (created_by_user_id);
 
-CREATE INDEX IF NOT EXISTS idx_notifications_user_created_at
-ON notifications (user_id, created_at DESC);
-
+-- Serves ListNotificationsForUser's filter and created_at ordering in one pass.
 CREATE INDEX IF NOT EXISTS idx_notifications_admin_created_at
 ON notifications (is_admin, created_at DESC);
 

@@ -28,9 +28,8 @@ type CreateNotificationReq struct {
 	IsAdmin bool   `json:"isAdmin"`
 }
 
-// notificationResponse is the client-facing shape of a notification. It avoids
-// leaking the raw sql.NullInt64 user_id and exposes the creator's display name
-// and the viewer's read state.
+// notificationResponse is the client-facing shape of a notification. It
+// exposes the creator's display name and the viewer's read state.
 type notificationResponse struct {
 	ID            int64  `json:"id"`
 	Title         string `json:"title"`
@@ -38,17 +37,10 @@ type notificationResponse struct {
 	IsAdmin       bool   `json:"is_admin"`
 	IsRead        bool   `json:"is_read"`
 	CreatedByName string `json:"created_by_name"`
-	UserID        *int64 `json:"user_id"`
 	CreatedAt     string `json:"created_at"`
 }
 
 func newNotificationResponse(row database.ListNotificationsForUserRow) notificationResponse {
-	var userID *int64
-	if row.UserID.Valid {
-		id := row.UserID.Int64
-		userID = &id
-	}
-
 	return notificationResponse{
 		ID:            row.ID,
 		Title:         row.Title,
@@ -56,7 +48,6 @@ func newNotificationResponse(row database.ListNotificationsForUserRow) notificat
 		IsAdmin:       row.IsAdmin,
 		IsRead:        row.IsRead,
 		CreatedByName: row.CreatedByName,
-		UserID:        userID,
 		CreatedAt:     row.CreatedAt,
 	}
 }
@@ -65,7 +56,7 @@ func newNotificationResponse(row database.ListNotificationsForUserRow) notificat
 // determines whether the shared admin request queue is visible to them. It
 // writes the error response and returns ok=false on failure.
 func (app *Application) notificationViewerIsAdmin(w http.ResponseWriter, r *http.Request, userID int64) (bool, bool) {
-	user, err := app.Queries.GetUser(r.Context(), userID)
+	isAdmin, err := app.Queries.GetUserIsAdmin(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			destroyErr := app.SessionManager.Destroy(r.Context())
@@ -81,7 +72,7 @@ func (app *Application) notificationViewerIsAdmin(w http.ResponseWriter, r *http
 		return false, false
 	}
 
-	return user.IsAdmin, true
+	return isAdmin, true
 }
 
 func parseNotificationID(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -128,7 +119,6 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 
 	notification, err := app.Queries.CreateNotification(r.Context(), database.CreateNotificationParams{
 		CreatedByUserID: userID,
-		UserID:          sql.NullInt64{},
 		Title:           req.Title,
 		Message:         req.Message,
 		IsAdmin:         req.IsAdmin,
@@ -160,9 +150,9 @@ func isValidNotificationTitle(title string) bool {
 	}
 }
 
-// ListNotifications returns the notifications visible to the current user
-// (their targeted notifications, plus the admin request queue for admins),
-// newest first, along with the unread count.
+// ListNotifications returns the admin request queue, newest first, along with
+// the unread count. Non-admins see an empty queue without touching the
+// notifications table.
 func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
@@ -174,12 +164,22 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !isAdmin {
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+			Error: false,
+			Data: map[string]any{
+				"notifications": []notificationResponse{},
+				"unread_count":  int64(0),
+			},
+		})
+		return
+	}
+
 	ctx := r.Context()
 
 	rows, err := app.Queries.ListNotificationsForUser(ctx, database.ListNotificationsForUserParams{
-		UserID:        userID,
-		ViewerIsAdmin: isAdmin,
-		RowLimit:      notificationListLimit,
+		UserID:   userID,
+		RowLimit: notificationListLimit,
 	})
 	if err != nil {
 		app.Logger.Error("failed to list notifications", "error", err, "user_id", userID)
@@ -187,10 +187,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	unreadCount, err := app.Queries.CountUnreadNotificationsForUser(ctx, database.CountUnreadNotificationsForUserParams{
-		UserID:        userID,
-		ViewerIsAdmin: isAdmin,
-	})
+	unreadCount, err := app.Queries.CountUnreadNotificationsForUser(ctx, userID)
 	if err != nil {
 		app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
@@ -224,14 +221,15 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 		return
 	}
 
-	unreadCount, err := app.Queries.CountUnreadNotificationsForUser(r.Context(), database.CountUnreadNotificationsForUserParams{
-		UserID:        userID,
-		ViewerIsAdmin: isAdmin,
-	})
-	if err != nil {
-		app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
+	var unreadCount int64
+	if isAdmin {
+		var err error
+		unreadCount, err = app.Queries.CountUnreadNotificationsForUser(r.Context(), userID)
+		if err != nil {
+			app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -261,15 +259,16 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	err := app.Queries.MarkNotificationReadForUser(r.Context(), database.MarkNotificationReadForUserParams{
-		UserID:         userID,
-		NotificationID: notificationID,
-		ViewerIsAdmin:  isAdmin,
-	})
-	if err != nil {
-		app.Logger.Error("failed to mark notification read", "error", err, "user_id", userID, "notification_id", notificationID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
+	if isAdmin {
+		err := app.Queries.MarkNotificationReadForUser(r.Context(), database.MarkNotificationReadForUserParams{
+			UserID:         userID,
+			NotificationID: notificationID,
+		})
+		if err != nil {
+			app.Logger.Error("failed to mark notification read", "error", err, "user_id", userID, "notification_id", notificationID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -291,14 +290,13 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err := app.Queries.MarkAllNotificationsReadForUser(r.Context(), database.MarkAllNotificationsReadForUserParams{
-		UserID:        userID,
-		ViewerIsAdmin: isAdmin,
-	})
-	if err != nil {
-		app.Logger.Error("failed to mark all notifications read", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
+	if isAdmin {
+		err := app.Queries.MarkAllNotificationsReadForUser(r.Context(), userID)
+		if err != nil {
+			app.Logger.Error("failed to mark all notifications read", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -326,15 +324,17 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	rowsAffected, err := app.Queries.DeleteNotificationForUser(r.Context(), database.DeleteNotificationForUserParams{
-		NotificationID: notificationID,
-		UserID:         sql.NullInt64{Int64: userID, Valid: true},
-		ViewerIsAdmin:  isAdmin,
-	})
-	if err != nil {
-		app.Logger.Error("failed to delete notification", "error", err, "user_id", userID, "notification_id", notificationID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
+	// Non-admins can never see a notification, so for them the delete is the
+	// same not-found it always was.
+	var rowsAffected int64
+	if isAdmin {
+		var err error
+		rowsAffected, err = app.Queries.DeleteNotificationForUser(r.Context(), notificationID)
+		if err != nil {
+			app.Logger.Error("failed to delete notification", "error", err, "user_id", userID, "notification_id", notificationID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
 	}
 
 	if rowsAffected == 0 {

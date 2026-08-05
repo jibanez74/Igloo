@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -183,7 +182,6 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 	t.Helper()
 	n, err := app.Queries.CreateNotification(context.Background(), database.CreateNotificationParams{
 		CreatedByUserID: requesterID,
-		UserID:          sql.NullInt64{},
 		Title:           notificationTitleMovieRequest,
 		Message:         message,
 		IsAdmin:         true,

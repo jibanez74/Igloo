@@ -20,7 +20,7 @@ type Querier interface {
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
-	CountUnreadNotificationsForUser(ctx context.Context, arg CountUnreadNotificationsForUserParams) (int64, error)
+	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
 	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
@@ -65,7 +65,7 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
-	DeleteNotificationForUser(ctx context.Context, arg DeleteNotificationForUserParams) (int64, error)
+	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	// Deletes all genre relationships for a track.
 	DeleteTrackGenres(ctx context.Context, trackID int64) error
@@ -169,6 +169,9 @@ type Querier interface {
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// Narrow admin check for hot paths (middleware, polled notification counts);
+	// avoids shipping the full user row with its password hash.
+	GetUserIsAdmin(ctx context.Context, id int64) (bool, error)
 	// Returns overall listening statistics for a user
 	GetUserListeningStats(ctx context.Context, arg GetUserListeningStatsParams) (GetUserListeningStatsRow, error)
 	GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error)
@@ -208,16 +211,15 @@ type Querier interface {
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
-	// Notifications visible to the viewer: those targeted at them, plus the admin
-	// request queue when the viewer is an admin. Read state comes from a left join
-	// against notification_reads for this viewer.
+	// The shared admin request queue, newest first. Visibility is admin-only and
+	// enforced by the handlers; user_id here only selects the viewer's read state
+	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
-	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) error
+	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
 	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
-	// Idempotent and relevance-gated: only records a read when the notification is
-	// actually visible to the viewer.
+	// Idempotent: marking an already-read or nonexistent notification is a no-op.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING

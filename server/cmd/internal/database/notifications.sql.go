@@ -7,30 +7,23 @@ package database
 
 import (
 	"context"
-	"database/sql"
 )
 
 const countUnreadNotificationsForUser = `-- name: CountUnreadNotificationsForUser :one
 SELECT
   COUNT(*) AS unread_count
 FROM notifications AS n
-LEFT JOIN notification_reads AS nr
-  ON nr.notification_id = n.id
-  AND nr.user_id = ?1
-WHERE nr.notification_id IS NULL
-  AND (
-    n.user_id = ?1
-    OR (?2 AND n.is_admin = true)
+WHERE n.is_admin = true
+  AND NOT EXISTS (
+    SELECT 1
+    FROM notification_reads AS nr
+    WHERE nr.notification_id = n.id
+      AND nr.user_id = ?1
   )
 `
 
-type CountUnreadNotificationsForUserParams struct {
-	UserID        int64       `json:"user_id"`
-	ViewerIsAdmin interface{} `json:"viewer_is_admin"`
-}
-
-func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, arg CountUnreadNotificationsForUserParams) (int64, error) {
-	row := q.queryRow(ctx, q.countUnreadNotificationsForUserStmt, countUnreadNotificationsForUser, arg.UserID, arg.ViewerIsAdmin)
+func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.queryRow(ctx, q.countUnreadNotificationsForUserStmt, countUnreadNotificationsForUser, userID)
 	var unread_count int64
 	err := row.Scan(&unread_count)
 	return unread_count, err
@@ -39,27 +32,24 @@ func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, arg Count
 const createNotification = `-- name: CreateNotification :one
 INSERT INTO notifications (
   created_by_user_id,
-  user_id,
   title,
   message,
   is_admin
 )
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, created_by_user_id, user_id, title, message, is_admin, created_at, updated_at
+VALUES (?, ?, ?, ?)
+RETURNING id, created_by_user_id, title, message, is_admin, created_at, updated_at
 `
 
 type CreateNotificationParams struct {
-	CreatedByUserID int64         `json:"created_by_user_id"`
-	UserID          sql.NullInt64 `json:"user_id"`
-	Title           string        `json:"title"`
-	Message         string        `json:"message"`
-	IsAdmin         bool          `json:"is_admin"`
+	CreatedByUserID int64  `json:"created_by_user_id"`
+	Title           string `json:"title"`
+	Message         string `json:"message"`
+	IsAdmin         bool   `json:"is_admin"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
 	row := q.queryRow(ctx, q.createNotificationStmt, createNotification,
 		arg.CreatedByUserID,
-		arg.UserID,
 		arg.Title,
 		arg.Message,
 		arg.IsAdmin,
@@ -68,7 +58,6 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedByUserID,
-		&i.UserID,
 		&i.Title,
 		&i.Message,
 		&i.IsAdmin,
@@ -81,20 +70,11 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 const deleteNotificationForUser = `-- name: DeleteNotificationForUser :execrows
 DELETE FROM notifications
 WHERE id = ?1
-  AND (
-    user_id = ?2
-    OR (?3 AND is_admin = true)
-  )
+  AND is_admin = true
 `
 
-type DeleteNotificationForUserParams struct {
-	NotificationID int64         `json:"notification_id"`
-	UserID         sql.NullInt64 `json:"user_id"`
-	ViewerIsAdmin  interface{}   `json:"viewer_is_admin"`
-}
-
-func (q *Queries) DeleteNotificationForUser(ctx context.Context, arg DeleteNotificationForUserParams) (int64, error) {
-	result, err := q.exec(ctx, q.deleteNotificationForUserStmt, deleteNotificationForUser, arg.NotificationID, arg.UserID, arg.ViewerIsAdmin)
+func (q *Queries) DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error) {
+	result, err := q.exec(ctx, q.deleteNotificationForUserStmt, deleteNotificationForUser, notificationID)
 	if err != nil {
 		return 0, err
 	}
@@ -105,7 +85,6 @@ const listNotificationsForUser = `-- name: ListNotificationsForUser :many
 SELECT
   n.id,
   n.created_by_user_id,
-  n.user_id,
   n.title,
   n.message,
   n.is_admin,
@@ -119,36 +98,33 @@ INNER JOIN users AS creator
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id
   AND nr.user_id = ?1
-WHERE n.user_id = ?1
-  OR (?2 AND n.is_admin = true)
+WHERE n.is_admin = true
 ORDER BY n.created_at DESC
-LIMIT ?3
+LIMIT ?2
 `
 
 type ListNotificationsForUserParams struct {
-	UserID        int64       `json:"user_id"`
-	ViewerIsAdmin interface{} `json:"viewer_is_admin"`
-	RowLimit      int64       `json:"row_limit"`
+	UserID   int64 `json:"user_id"`
+	RowLimit int64 `json:"row_limit"`
 }
 
 type ListNotificationsForUserRow struct {
-	ID              int64         `json:"id"`
-	CreatedByUserID int64         `json:"created_by_user_id"`
-	UserID          sql.NullInt64 `json:"user_id"`
-	Title           string        `json:"title"`
-	Message         string        `json:"message"`
-	IsAdmin         bool          `json:"is_admin"`
-	CreatedAt       string        `json:"created_at"`
-	UpdatedAt       string        `json:"updated_at"`
-	CreatedByName   string        `json:"created_by_name"`
-	IsRead          bool          `json:"is_read"`
+	ID              int64  `json:"id"`
+	CreatedByUserID int64  `json:"created_by_user_id"`
+	Title           string `json:"title"`
+	Message         string `json:"message"`
+	IsAdmin         bool   `json:"is_admin"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+	CreatedByName   string `json:"created_by_name"`
+	IsRead          bool   `json:"is_read"`
 }
 
-// Notifications visible to the viewer: those targeted at them, plus the admin
-// request queue when the viewer is an admin. Read state comes from a left join
-// against notification_reads for this viewer.
+// The shared admin request queue, newest first. Visibility is admin-only and
+// enforced by the handlers; user_id here only selects the viewer's read state
+// from notification_reads.
 func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error) {
-	rows, err := q.query(ctx, q.listNotificationsForUserStmt, listNotificationsForUser, arg.UserID, arg.ViewerIsAdmin, arg.RowLimit)
+	rows, err := q.query(ctx, q.listNotificationsForUserStmt, listNotificationsForUser, arg.UserID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +135,6 @@ func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotifica
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedByUserID,
-			&i.UserID,
 			&i.Title,
 			&i.Message,
 			&i.IsAdmin,
@@ -185,18 +160,12 @@ const markAllNotificationsReadForUser = `-- name: MarkAllNotificationsReadForUse
 INSERT INTO notification_reads (notification_id, user_id)
 SELECT n.id, ?1
 FROM notifications AS n
-WHERE n.user_id = ?1
-  OR (?2 AND n.is_admin = true)
+WHERE n.is_admin = true
 ON CONFLICT (notification_id, user_id) DO NOTHING
 `
 
-type MarkAllNotificationsReadForUserParams struct {
-	UserID        int64       `json:"user_id"`
-	ViewerIsAdmin interface{} `json:"viewer_is_admin"`
-}
-
-func (q *Queries) MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) error {
-	_, err := q.exec(ctx, q.markAllNotificationsReadForUserStmt, markAllNotificationsReadForUser, arg.UserID, arg.ViewerIsAdmin)
+func (q *Queries) MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error {
+	_, err := q.exec(ctx, q.markAllNotificationsReadForUserStmt, markAllNotificationsReadForUser, userID)
 	return err
 }
 
@@ -205,22 +174,17 @@ INSERT INTO notification_reads (notification_id, user_id)
 SELECT n.id, ?1
 FROM notifications AS n
 WHERE n.id = ?2
-  AND (
-    n.user_id = ?1
-    OR (?3 AND n.is_admin = true)
-  )
+  AND n.is_admin = true
 ON CONFLICT (notification_id, user_id) DO NOTHING
 `
 
 type MarkNotificationReadForUserParams struct {
-	UserID         int64       `json:"user_id"`
-	NotificationID int64       `json:"notification_id"`
-	ViewerIsAdmin  interface{} `json:"viewer_is_admin"`
+	UserID         int64 `json:"user_id"`
+	NotificationID int64 `json:"notification_id"`
 }
 
-// Idempotent and relevance-gated: only records a read when the notification is
-// actually visible to the viewer.
+// Idempotent: marking an already-read or nonexistent notification is a no-op.
 func (q *Queries) MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error {
-	_, err := q.exec(ctx, q.markNotificationReadForUserStmt, markNotificationReadForUser, arg.UserID, arg.NotificationID, arg.ViewerIsAdmin)
+	_, err := q.exec(ctx, q.markNotificationReadForUserStmt, markNotificationReadForUser, arg.UserID, arg.NotificationID)
 	return err
 }

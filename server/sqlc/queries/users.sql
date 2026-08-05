@@ -5,6 +5,15 @@ FROM users
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetUserIsAdmin :one
+-- Narrow admin check for hot paths (middleware, polled notification counts);
+-- avoids shipping the full user row with its password hash.
+SELECT
+  is_admin
+FROM users
+WHERE id = ?
+LIMIT 1;
+
 -- name: GetAdminUser :one
 SELECT
   *

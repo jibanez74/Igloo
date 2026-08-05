@@ -2664,7 +2664,6 @@ export interface components {
             id: number;
             /** Format: int64 */
             created_by_user_id: number;
-            user_id: components["schemas"]["SqlNullInt64"];
             /** @enum {string} */
             title: "movie_request" | "album_request" | "track_request" | "other";
             message: string;
@@ -2687,8 +2686,6 @@ export interface components {
             is_admin: boolean;
             is_read: boolean;
             created_by_name: string;
-            /** Format: int64 */
-            user_id: number | null;
             created_at: string;
         };
         NotificationsListData: {
