@@ -261,17 +261,17 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = app.Queries.IsWatchRoomMember(r.Context(), database.IsWatchRoomMemberParams{
+	isMember, err := app.Queries.IsWatchRoomMember(r.Context(), database.IsWatchRoomMemberParams{
 		RoomID: roomID,
 		UserID: userID,
 	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
-			return
-		}
 		app.Logger.Error("failed to check room membership", "error", err, "room_id", roomID, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+	if !isMember {
+		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
 		return
 	}
 
@@ -561,17 +561,17 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = app.Queries.IsWatchRoomMember(r.Context(), database.IsWatchRoomMemberParams{
+	isMember, err := app.Queries.IsWatchRoomMember(r.Context(), database.IsWatchRoomMemberParams{
 		RoomID: roomID,
 		UserID: userID,
 	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
-			return
-		}
 		app.Logger.Error("failed to check room membership for join", "error", err, "room_id", roomID, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+	if !isMember {
+		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
 		return
 	}
 
@@ -593,7 +593,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err = app.Queries.GetWatchRoomByID(r.Context(), roomID)
+	room, err := app.Queries.GetWatchRoomByID(r.Context(), roomID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
@@ -604,17 +604,9 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err = app.Queries.IsWatchRoomOwner(r.Context(), database.IsWatchRoomOwnerParams{
-		ID:          roomID,
-		OwnerUserID: userID,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("only the room owner can delete this room"), http.StatusForbidden)
-			return
-		}
-		app.Logger.Error("failed to verify room ownership for delete", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+	// The room row already carries the owner; no second query needed.
+	if room.OwnerUserID != userID {
+		helpers.ErrorJSON(w, errors.New("only the room owner can delete this room"), http.StatusForbidden)
 		return
 	}
 

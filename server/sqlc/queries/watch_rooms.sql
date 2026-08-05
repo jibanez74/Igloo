@@ -69,21 +69,14 @@ INNER JOIN users AS u
 WHERE wrm.room_id IN (sqlc.slice(room_ids))
 ORDER BY wrm.room_id ASC, wrm.created_at ASC;
 
--- name: IsWatchRoomOwner :one
-SELECT
-  1
-FROM watch_rooms
-WHERE id = ?
-  AND owner_user_id = ?
-LIMIT 1;
-
 -- name: IsWatchRoomMember :one
 SELECT
-  1
-FROM watch_room_members
-WHERE room_id = ?
-  AND user_id = ?
-LIMIT 1;
+  EXISTS (
+    SELECT 1
+    FROM watch_room_members
+    WHERE room_id = ?
+      AND user_id = ?
+  ) AS is_member;
 
 -- name: DeleteWatchRoom :exec
 DELETE FROM watch_rooms

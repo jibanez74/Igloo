@@ -23,6 +23,27 @@ func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getMusicLibraryCounts = `-- name: GetMusicLibraryCounts :one
+SELECT
+  (SELECT COUNT(*) FROM tracks) AS tracks_count,
+  (SELECT COUNT(*) FROM albums) AS albums_count,
+  (SELECT COUNT(*) FROM musicians) AS musicians_count
+`
+
+type GetMusicLibraryCountsRow struct {
+	TracksCount    int64 `json:"tracks_count"`
+	AlbumsCount    int64 `json:"albums_count"`
+	MusiciansCount int64 `json:"musicians_count"`
+}
+
+// The music stats endpoint needs all three; one round trip instead of three.
+func (q *Queries) GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error) {
+	row := q.queryRow(ctx, q.getMusicLibraryCountsStmt, getMusicLibraryCounts)
+	var i GetMusicLibraryCountsRow
+	err := row.Scan(&i.TracksCount, &i.AlbumsCount, &i.MusiciansCount)
+	return i, err
+}
+
 const getMusiciansCount = `-- name: GetMusiciansCount :one
 SELECT
   COUNT(*)
@@ -54,8 +75,13 @@ LEFT JOIN albums AS a
   ON t.album_id = a.id
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
+WHERE t.id IN (
+  SELECT id
+  FROM tracks
+  ORDER BY RANDOM()
+  LIMIT ?1
+)
 ORDER BY RANDOM()
-LIMIT ?
 `
 
 type GetRandomTracksRow struct {
@@ -72,6 +98,10 @@ type GetRandomTracksRow struct {
 	MusicianName sql.NullString `json:"musician_name"`
 }
 
+// The random pick happens over the bare tracks primary key, so the album and
+// musician joins run only for the chosen rows instead of the whole library.
+// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
+// stays random too.
 func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error) {
 	rows, err := q.query(ctx, q.getRandomTracksStmt, getRandomTracks, limit)
 	if err != nil {

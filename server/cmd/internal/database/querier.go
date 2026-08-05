@@ -91,7 +91,10 @@ type Querier interface {
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
 	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
-	// Sorted by release date (newest first), then by title
+	// Sorted by release date (newest first), then by title. Track counts come from
+	// one grouped pass over idx_track_album instead of a correlated subquery per
+	// album; this query has no LIMIT, so it runs for the artist's whole
+	// discography.
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
 	// has_pin instead of the PIN itself: the admin listing only shows whether one
@@ -143,6 +146,8 @@ type Querier interface {
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
+	// The music stats endpoint needs all three; one round trip instead of three.
+	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
 	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (MusicSpotifyMatch, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianByName(ctx context.Context, name string) (Musician, error)
@@ -176,6 +181,10 @@ type Querier interface {
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
+	// The random pick happens over the bare tracks primary key, so the album and
+	// musician joins run only for the chosen rows instead of the whole library.
+	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
+	// stays random too.
 	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	// Subtitle tracks for a movie (for technical details display).
@@ -193,7 +202,7 @@ type Querier interface {
 	// avoids shipping the full user row with its password hash.
 	GetUserIsAdmin(ctx context.Context, id int64) (bool, error)
 	// Returns overall listening statistics for a user
-	GetUserListeningStats(ctx context.Context, arg GetUserListeningStatsParams) (GetUserListeningStatsRow, error)
+	GetUserListeningStats(ctx context.Context, userID int64) (GetUserListeningStatsRow, error)
 	GetUserPin(ctx context.Context, id int64) (sql.NullString, error)
 	GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error)
 	// Returns the user's recently played tracks
@@ -222,9 +231,7 @@ type Querier interface {
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) (VideoStream, error)
 	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
-	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
-	IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (int64, error)
-	IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerParams) (int64, error)
+	IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (bool, error)
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
@@ -253,7 +260,8 @@ type Querier interface {
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
 	// Existence probe for handlers that only need to 404 on an unknown track.
 	TrackExists(ctx context.Context, id int64) (bool, error)
-	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
+	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) (int64, error)
+	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) (int64, error)
 	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error)
 	UpdateDeviceLastUsed(ctx context.Context, id int64) error
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)

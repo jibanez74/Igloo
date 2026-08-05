@@ -311,42 +311,6 @@ func TestWatchRoom_DeleteRemovesRoomAndMembers(t *testing.T) {
 	}
 }
 
-func TestWatchRoom_IsOwner(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-
-	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Guest",
-		Email:    "guest@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest: %v", err)
-	}
-
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-
-	_, err = app.Queries.IsWatchRoomOwner(ctx, database.IsWatchRoomOwnerParams{
-		ID:          room.ID,
-		OwnerUserID: ownerID,
-	})
-	if err != nil {
-		t.Errorf("expected owner check to succeed, got: %v", err)
-	}
-
-	_, err = app.Queries.IsWatchRoomOwner(ctx, database.IsWatchRoomOwnerParams{
-		ID:          room.ID,
-		OwnerUserID: guest.ID,
-	})
-	if err != sql.ErrNoRows {
-		t.Errorf("expected sql.ErrNoRows for non-owner, got: %v", err)
-	}
-}
-
 func TestWatchRoom_IsMember(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -375,20 +339,26 @@ func TestWatchRoom_IsMember(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 
-	_, err = app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
+	isMember, err := app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
 		RoomID: room.ID,
 		UserID: guest.ID,
 	})
 	if err != nil {
-		t.Errorf("expected guest to be a member, got: %v", err)
+		t.Fatalf("membership check for guest failed: %v", err)
+	}
+	if !isMember {
+		t.Error("expected guest to be a member")
 	}
 
-	_, err = app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
+	isMember, err = app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
 		RoomID: room.ID,
 		UserID: outsider.ID,
 	})
-	if err != sql.ErrNoRows {
-		t.Errorf("expected sql.ErrNoRows for outsider, got: %v", err)
+	if err != nil {
+		t.Fatalf("membership check for outsider failed: %v", err)
+	}
+	if isMember {
+		t.Error("expected outsider not to be a member")
 	}
 }
 

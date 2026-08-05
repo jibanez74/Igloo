@@ -288,6 +288,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMoviesLibraryDescStmt, err = db.PrepareContext(ctx, getMoviesLibraryDesc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesLibraryDesc: %w", err)
 	}
+	if q.getMusicLibraryCountsStmt, err = db.PrepareContext(ctx, getMusicLibraryCounts); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicLibraryCounts: %w", err)
+	}
 	if q.getMusicSpotifyMatchStmt, err = db.PrepareContext(ctx, getMusicSpotifyMatch); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicSpotifyMatch: %w", err)
 	}
@@ -429,14 +432,8 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.isMovieLikedStmt, err = db.PrepareContext(ctx, isMovieLiked); err != nil {
 		return nil, fmt.Errorf("error preparing query IsMovieLiked: %w", err)
 	}
-	if q.isTrackLikedStmt, err = db.PrepareContext(ctx, isTrackLiked); err != nil {
-		return nil, fmt.Errorf("error preparing query IsTrackLiked: %w", err)
-	}
 	if q.isWatchRoomMemberStmt, err = db.PrepareContext(ctx, isWatchRoomMember); err != nil {
 		return nil, fmt.Errorf("error preparing query IsWatchRoomMember: %w", err)
-	}
-	if q.isWatchRoomOwnerStmt, err = db.PrepareContext(ctx, isWatchRoomOwner); err != nil {
-		return nil, fmt.Errorf("error preparing query IsWatchRoomOwner: %w", err)
 	}
 	if q.likeMovieStmt, err = db.PrepareContext(ctx, likeMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query LikeMovie: %w", err)
@@ -485,6 +482,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.trackExistsStmt, err = db.PrepareContext(ctx, trackExists); err != nil {
 		return nil, fmt.Errorf("error preparing query TrackExists: %w", err)
+	}
+	if q.unlikeMovieStmt, err = db.PrepareContext(ctx, unlikeMovie); err != nil {
+		return nil, fmt.Errorf("error preparing query UnlikeMovie: %w", err)
 	}
 	if q.unlikeTrackStmt, err = db.PrepareContext(ctx, unlikeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UnlikeTrack: %w", err)
@@ -1030,6 +1030,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMoviesLibraryDescStmt: %w", cerr)
 		}
 	}
+	if q.getMusicLibraryCountsStmt != nil {
+		if cerr := q.getMusicLibraryCountsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicLibraryCountsStmt: %w", cerr)
+		}
+	}
 	if q.getMusicSpotifyMatchStmt != nil {
 		if cerr := q.getMusicSpotifyMatchStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicSpotifyMatchStmt: %w", cerr)
@@ -1265,19 +1270,9 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing isMovieLikedStmt: %w", cerr)
 		}
 	}
-	if q.isTrackLikedStmt != nil {
-		if cerr := q.isTrackLikedStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing isTrackLikedStmt: %w", cerr)
-		}
-	}
 	if q.isWatchRoomMemberStmt != nil {
 		if cerr := q.isWatchRoomMemberStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing isWatchRoomMemberStmt: %w", cerr)
-		}
-	}
-	if q.isWatchRoomOwnerStmt != nil {
-		if cerr := q.isWatchRoomOwnerStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing isWatchRoomOwnerStmt: %w", cerr)
 		}
 	}
 	if q.likeMovieStmt != nil {
@@ -1358,6 +1353,11 @@ func (q *Queries) Close() error {
 	if q.trackExistsStmt != nil {
 		if cerr := q.trackExistsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing trackExistsStmt: %w", cerr)
+		}
+	}
+	if q.unlikeMovieStmt != nil {
+		if cerr := q.unlikeMovieStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing unlikeMovieStmt: %w", cerr)
 		}
 	}
 	if q.unlikeTrackStmt != nil {
@@ -1652,6 +1652,7 @@ type Queries struct {
 	getMoviesCountStmt                          *sql.Stmt
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
+	getMusicLibraryCountsStmt                   *sql.Stmt
 	getMusicSpotifyMatchStmt                    *sql.Stmt
 	getMusicianByIDStmt                         *sql.Stmt
 	getMusicianByNameStmt                       *sql.Stmt
@@ -1699,9 +1700,7 @@ type Queries struct {
 	insertSubtitleStmt                          *sql.Stmt
 	insertVideoStreamStmt                       *sql.Stmt
 	isMovieLikedStmt                            *sql.Stmt
-	isTrackLikedStmt                            *sql.Stmt
 	isWatchRoomMemberStmt                       *sql.Stmt
-	isWatchRoomOwnerStmt                        *sql.Stmt
 	likeMovieStmt                               *sql.Stmt
 	likeTrackStmt                               *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
@@ -1718,6 +1717,7 @@ type Queries struct {
 	removeTrackFromPlaylistStmt                 *sql.Stmt
 	renameDeviceStmt                            *sql.Stmt
 	trackExistsStmt                             *sql.Stmt
+	unlikeMovieStmt                             *sql.Stmt
 	unlikeTrackStmt                             *sql.Stmt
 	updateAlbumSpotifyCoverStmt                 *sql.Stmt
 	updateDeviceLastUsedStmt                    *sql.Stmt
@@ -1845,6 +1845,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesCountStmt:                          q.getMoviesCountStmt,
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
+		getMusicLibraryCountsStmt:                   q.getMusicLibraryCountsStmt,
 		getMusicSpotifyMatchStmt:                    q.getMusicSpotifyMatchStmt,
 		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
 		getMusicianByNameStmt:                       q.getMusicianByNameStmt,
@@ -1892,9 +1893,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		insertSubtitleStmt:                          q.insertSubtitleStmt,
 		insertVideoStreamStmt:                       q.insertVideoStreamStmt,
 		isMovieLikedStmt:                            q.isMovieLikedStmt,
-		isTrackLikedStmt:                            q.isTrackLikedStmt,
 		isWatchRoomMemberStmt:                       q.isWatchRoomMemberStmt,
-		isWatchRoomOwnerStmt:                        q.isWatchRoomOwnerStmt,
 		likeMovieStmt:                               q.likeMovieStmt,
 		likeTrackStmt:                               q.likeTrackStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
@@ -1911,6 +1910,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
 		renameDeviceStmt:                            q.renameDeviceStmt,
 		trackExistsStmt:                             q.trackExistsStmt,
+		unlikeMovieStmt:                             q.unlikeMovieStmt,
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
 		updateAlbumSpotifyCoverStmt:                 q.updateAlbumSpotifyCoverStmt,
 		updateDeviceLastUsedStmt:                    q.updateDeviceLastUsedStmt,

@@ -8,12 +8,19 @@ VALUES
   (?, ?)
 ON CONFLICT (user_id, movie_id) DO NOTHING;
 
--- name: IsMovieLiked :one
-SELECT
-  COUNT(*) > 0 AS is_liked
-FROM user_liked_movies
+-- name: UnlikeMovie :execrows
+DELETE FROM user_liked_movies
 WHERE user_id = ?
   AND movie_id = ?;
+
+-- name: IsMovieLiked :one
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM user_liked_movies
+    WHERE user_id = ?
+      AND movie_id = ?
+  ) AS is_liked;
 
 -- name: CountUserLikedMovies :one
 SELECT

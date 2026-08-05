@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -38,47 +39,61 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	isLiked, err := app.Queries.IsTrackLiked(ctx, database.IsTrackLikedParams{
-		UserID:  userID,
-		TrackID: trackID,
-	})
+	isLiked, err := app.toggleTrackLike(ctx, userID, trackID)
 	if err != nil {
-		app.Logger.Error("failed to check if track is liked", "error", err, "trackID", trackID, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to check like status"))
+		app.Logger.Error("failed to toggle track like", "error", err, "trackID", trackID, "userID", userID)
+		helpers.ErrorJSON(w, errors.New("failed to update like"))
 		return
-	}
-
-	if isLiked {
-		err = app.Queries.UnlikeTrack(ctx, database.UnlikeTrackParams{
-			UserID:  userID,
-			TrackID: trackID,
-		})
-		if err != nil {
-			app.Logger.Error("failed to unlike track", "error", err, "trackID", trackID, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to unlike track"))
-			return
-		}
-	} else {
-		err = app.Queries.LikeTrack(ctx, database.LikeTrackParams{
-			UserID:  userID,
-			TrackID: trackID,
-		})
-		if err != nil {
-			app.Logger.Error("failed to like track", "error", err, "trackID", trackID, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to like track"))
-			return
-		}
 	}
 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
 			"track_id": trackID,
-			"is_liked": !isLiked,
+			"is_liked": isLiked,
 		},
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// toggleTrackLike flips like state in a single DB transaction, mirroring
+// toggleMovieLike: DELETE first, and only when nothing was removed INSERT
+// (LikeTrack is idempotent via ON CONFLICT DO NOTHING). No read-then-write
+// race.
+func (app *Application) toggleTrackLike(ctx context.Context, userID, trackID int64) (isLiked bool, err error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+
+	removed, err := qtx.UnlikeTrack(ctx, database.UnlikeTrackParams{
+		UserID:  userID,
+		TrackID: trackID,
+	})
+	if err != nil {
+		return false, err
+	}
+	if removed > 0 {
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	if err := qtx.LikeTrack(ctx, database.LikeTrackParams{
+		UserID:  userID,
+		TrackID: trackID,
+	}); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // GetLikedTrackIDsForUser returns the IDs of every track the authenticated user has liked.
@@ -318,25 +333,9 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	albumsCount, err := app.Queries.GetAlbumsCount(ctx)
+	counts, err := app.Queries.GetMusicLibraryCounts(r.Context())
 	if err != nil {
-		app.Logger.Error("failed to get albums count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
-		return
-	}
-
-	tracksCount, err := app.Queries.GetTracksCount(ctx)
-	if err != nil {
-		app.Logger.Error("failed to get tracks count", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
-		return
-	}
-
-	musiciansCount, err := app.Queries.GetMusiciansCount(ctx)
-	if err != nil {
-		app.Logger.Error("failed to get musicians count", "error", err)
+		app.Logger.Error("failed to get music library counts", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
 		return
 	}
@@ -344,9 +343,9 @@ func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"total_albums":    albumsCount,
-			"total_tracks":    tracksCount,
-			"total_musicians": musiciansCount,
+			"total_albums":    counts.AlbumsCount,
+			"total_tracks":    counts.TracksCount,
+			"total_musicians": counts.MusiciansCount,
 		},
 	}
 

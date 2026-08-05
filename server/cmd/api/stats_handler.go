@@ -80,10 +80,7 @@ func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	stats, err := app.Queries.GetUserListeningStats(r.Context(), database.GetUserListeningStatsParams{
-		UserID:   userID,
-		UserID_2: userID,
-	})
+	stats, err := app.Queries.GetUserListeningStats(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to get listening stats", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch listening stats"))

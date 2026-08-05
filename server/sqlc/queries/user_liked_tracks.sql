@@ -7,15 +7,8 @@ VALUES
   (?, ?)
 ON CONFLICT (user_id, track_id) DO NOTHING;
 
--- name: UnlikeTrack :exec
+-- name: UnlikeTrack :execrows
 DELETE FROM user_liked_tracks
-WHERE user_id = ?
-  AND track_id = ?;
-
--- name: IsTrackLiked :one
-SELECT
-  COUNT(*) > 0 AS is_liked
-FROM user_liked_tracks
 WHERE user_id = ?
   AND track_id = ?;
 

@@ -124,7 +124,18 @@ SELECT
   COUNT(*)
 FROM musicians;
 
+-- name: GetMusicLibraryCounts :one
+-- The music stats endpoint needs all three; one round trip instead of three.
+SELECT
+  (SELECT COUNT(*) FROM tracks) AS tracks_count,
+  (SELECT COUNT(*) FROM albums) AS albums_count,
+  (SELECT COUNT(*) FROM musicians) AS musicians_count;
+
 -- name: GetRandomTracks :many
+-- The random pick happens over the bare tracks primary key, so the album and
+-- musician joins run only for the chosen rows instead of the whole library.
+-- The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
+-- stays random too.
 SELECT
   t.id,
   t.title,
@@ -142,5 +153,10 @@ LEFT JOIN albums AS a
   ON t.album_id = a.id
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
-ORDER BY RANDOM()
-LIMIT ?;
+WHERE t.id IN (
+  SELECT id
+  FROM tracks
+  ORDER BY RANDOM()
+  LIMIT ?1
+)
+ORDER BY RANDOM();

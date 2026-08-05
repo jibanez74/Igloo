@@ -551,12 +551,16 @@ func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, use
 		return database.WatchRoom{}, err
 	}
 
-	_, err = app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
+	isMember, err := app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
 		RoomID: roomID,
 		UserID: userID,
 	})
 	if err != nil {
 		return database.WatchRoom{}, err
+	}
+	if !isMember {
+		// Callers treat sql.ErrNoRows as "no access", matching the room lookup.
+		return database.WatchRoom{}, sql.ErrNoRows
 	}
 
 	return room, nil

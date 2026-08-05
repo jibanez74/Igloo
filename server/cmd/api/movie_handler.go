@@ -406,24 +406,19 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.ExecContext(ctx,
-		`DELETE FROM user_liked_movies WHERE user_id = ? AND movie_id = ?`,
-		userID, movieID)
+	qtx := app.Queries.WithTx(tx)
+
+	removed, err := qtx.UnlikeMovie(ctx, database.UnlikeMovieParams{UserID: userID, MovieID: movieID})
 	if err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if n > 0 {
+	if removed > 0 {
 		if err := tx.Commit(); err != nil {
 			return false, err
 		}
 		return false, nil
 	}
 
-	qtx := app.Queries.WithTx(tx)
 	if err := qtx.LikeMovie(ctx, database.LikeMovieParams{UserID: userID, MovieID: movieID}); err != nil {
 		return false, err
 	}

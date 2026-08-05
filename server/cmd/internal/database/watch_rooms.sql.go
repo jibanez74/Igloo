@@ -305,11 +305,12 @@ func (q *Queries) GetWatchRoomsForUser(ctx context.Context, userID int64) ([]Wat
 
 const isWatchRoomMember = `-- name: IsWatchRoomMember :one
 SELECT
-  1
-FROM watch_room_members
-WHERE room_id = ?
-  AND user_id = ?
-LIMIT 1
+  EXISTS (
+    SELECT 1
+    FROM watch_room_members
+    WHERE room_id = ?
+      AND user_id = ?
+  ) AS is_member
 `
 
 type IsWatchRoomMemberParams struct {
@@ -317,30 +318,9 @@ type IsWatchRoomMemberParams struct {
 	UserID int64 `json:"user_id"`
 }
 
-func (q *Queries) IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (int64, error) {
+func (q *Queries) IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (bool, error) {
 	row := q.queryRow(ctx, q.isWatchRoomMemberStmt, isWatchRoomMember, arg.RoomID, arg.UserID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
-const isWatchRoomOwner = `-- name: IsWatchRoomOwner :one
-SELECT
-  1
-FROM watch_rooms
-WHERE id = ?
-  AND owner_user_id = ?
-LIMIT 1
-`
-
-type IsWatchRoomOwnerParams struct {
-	ID          int64 `json:"id"`
-	OwnerUserID int64 `json:"owner_user_id"`
-}
-
-func (q *Queries) IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerParams) (int64, error) {
-	row := q.queryRow(ctx, q.isWatchRoomOwnerStmt, isWatchRoomOwner, arg.ID, arg.OwnerUserID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+	var is_member bool
+	err := row.Scan(&is_member)
+	return is_member, err
 }
