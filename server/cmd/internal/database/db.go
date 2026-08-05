@@ -408,8 +408,8 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getWatchRoomForMemberStmt, err = db.PrepareContext(ctx, getWatchRoomForMember); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomForMember: %w", err)
 	}
-	if q.getWatchRoomMemberByUserIDStmt, err = db.PrepareContext(ctx, getWatchRoomMemberByUserID); err != nil {
-		return nil, fmt.Errorf("error preparing query GetWatchRoomMemberByUserID: %w", err)
+	if q.getWatchRoomForMemberWithSummaryStmt, err = db.PrepareContext(ctx, getWatchRoomForMemberWithSummary); err != nil {
+		return nil, fmt.Errorf("error preparing query GetWatchRoomForMemberWithSummary: %w", err)
 	}
 	if q.getWatchRoomMembersStmt, err = db.PrepareContext(ctx, getWatchRoomMembers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomMembers: %w", err)
@@ -1233,9 +1233,9 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getWatchRoomForMemberStmt: %w", cerr)
 		}
 	}
-	if q.getWatchRoomMemberByUserIDStmt != nil {
-		if cerr := q.getWatchRoomMemberByUserIDStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getWatchRoomMemberByUserIDStmt: %w", cerr)
+	if q.getWatchRoomForMemberWithSummaryStmt != nil {
+		if cerr := q.getWatchRoomForMemberWithSummaryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getWatchRoomForMemberWithSummaryStmt: %w", cerr)
 		}
 	}
 	if q.getWatchRoomMembersStmt != nil {
@@ -1700,7 +1700,7 @@ type Queries struct {
 	getVideoStreamsByMovieIDStmt                *sql.Stmt
 	getWatchRoomByIDStmt                        *sql.Stmt
 	getWatchRoomForMemberStmt                   *sql.Stmt
-	getWatchRoomMemberByUserIDStmt              *sql.Stmt
+	getWatchRoomForMemberWithSummaryStmt        *sql.Stmt
 	getWatchRoomMembersStmt                     *sql.Stmt
 	getWatchRoomMembersByRoomIDsStmt            *sql.Stmt
 	getWatchRoomsForUserStmt                    *sql.Stmt
@@ -1894,7 +1894,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getVideoStreamsByMovieIDStmt:                q.getVideoStreamsByMovieIDStmt,
 		getWatchRoomByIDStmt:                        q.getWatchRoomByIDStmt,
 		getWatchRoomForMemberStmt:                   q.getWatchRoomForMemberStmt,
-		getWatchRoomMemberByUserIDStmt:              q.getWatchRoomMemberByUserIDStmt,
+		getWatchRoomForMemberWithSummaryStmt:        q.getWatchRoomForMemberWithSummaryStmt,
 		getWatchRoomMembersStmt:                     q.getWatchRoomMembersStmt,
 		getWatchRoomMembersByRoomIDsStmt:            q.getWatchRoomMembersByRoomIDsStmt,
 		getWatchRoomsForUserStmt:                    q.getWatchRoomsForUserStmt,

@@ -228,7 +228,10 @@ type Querier interface {
 	// sql.ErrNoRows covers both "no such room" and "not a member", which callers
 	// deliberately do not distinguish.
 	GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomForMemberParams) (WatchRoom, error)
-	GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error)
+	// GetWatchRoomForMember plus the requesting member's presence summary
+	// (name, avatar), for the websocket upgrade only: it needs both and runs
+	// once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+	GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]WatchRoom, error)

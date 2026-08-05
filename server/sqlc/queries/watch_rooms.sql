@@ -34,18 +34,6 @@ INNER JOIN watch_room_members AS wrm
 WHERE wrm.user_id = ?
 ORDER BY wr.created_at DESC;
 
--- name: GetWatchRoomMemberByUserID :one
-SELECT
-  u.id,
-  u.name,
-  u.avatar
-FROM watch_room_members AS wrm
-INNER JOIN users AS u
-  ON wrm.user_id = u.id
-WHERE wrm.room_id = ?
-  AND wrm.user_id = ?
-LIMIT 1;
-
 -- name: GetWatchRoomMembers :many
 SELECT
   u.id,
@@ -79,6 +67,23 @@ SELECT wr.*
 FROM watch_rooms AS wr
 INNER JOIN watch_room_members AS wrm
   ON wrm.room_id = wr.id
+WHERE wr.id = ?
+  AND wrm.user_id = ?
+LIMIT 1;
+
+-- name: GetWatchRoomForMemberWithSummary :one
+-- GetWatchRoomForMember plus the requesting member's presence summary
+-- (name, avatar), for the websocket upgrade only: it needs both and runs
+-- once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+SELECT
+  wr.*,
+  u.name AS member_name,
+  u.avatar AS member_avatar
+FROM watch_rooms AS wr
+INNER JOIN watch_room_members AS wrm
+  ON wrm.room_id = wr.id
+INNER JOIN users AS u
+  ON u.id = wrm.user_id
 WHERE wr.id = ?
   AND wrm.user_id = ?
 LIMIT 1;

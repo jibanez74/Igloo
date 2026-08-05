@@ -167,34 +167,57 @@ func (q *Queries) GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomFor
 	return i, err
 }
 
-const getWatchRoomMemberByUserID = `-- name: GetWatchRoomMemberByUserID :one
+const getWatchRoomForMemberWithSummary = `-- name: GetWatchRoomForMemberWithSummary :one
 SELECT
-  u.id,
-  u.name,
-  u.avatar
-FROM watch_room_members AS wrm
+  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.created_at, wr.updated_at,
+  u.name AS member_name,
+  u.avatar AS member_avatar
+FROM watch_rooms AS wr
+INNER JOIN watch_room_members AS wrm
+  ON wrm.room_id = wr.id
 INNER JOIN users AS u
-  ON wrm.user_id = u.id
-WHERE wrm.room_id = ?
+  ON u.id = wrm.user_id
+WHERE wr.id = ?
   AND wrm.user_id = ?
 LIMIT 1
 `
 
-type GetWatchRoomMemberByUserIDParams struct {
-	RoomID int64 `json:"room_id"`
+type GetWatchRoomForMemberWithSummaryParams struct {
+	ID     int64 `json:"id"`
 	UserID int64 `json:"user_id"`
 }
 
-type GetWatchRoomMemberByUserIDRow struct {
-	ID     int64          `json:"id"`
-	Name   string         `json:"name"`
-	Avatar sql.NullString `json:"avatar"`
+type GetWatchRoomForMemberWithSummaryRow struct {
+	ID            int64          `json:"id"`
+	OwnerUserID   int64          `json:"owner_user_id"`
+	MovieID       int64          `json:"movie_id"`
+	PlaybackMode  string         `json:"playback_mode"`
+	AudioTrack    int64          `json:"audio_track"`
+	SubtitleTrack sql.NullInt64  `json:"subtitle_track"`
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
+	MemberName    string         `json:"member_name"`
+	MemberAvatar  sql.NullString `json:"member_avatar"`
 }
 
-func (q *Queries) GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error) {
-	row := q.queryRow(ctx, q.getWatchRoomMemberByUserIDStmt, getWatchRoomMemberByUserID, arg.RoomID, arg.UserID)
-	var i GetWatchRoomMemberByUserIDRow
-	err := row.Scan(&i.ID, &i.Name, &i.Avatar)
+// GetWatchRoomForMember plus the requesting member's presence summary
+// (name, avatar), for the websocket upgrade only: it needs both and runs
+// once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+func (q *Queries) GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error) {
+	row := q.queryRow(ctx, q.getWatchRoomForMemberWithSummaryStmt, getWatchRoomForMemberWithSummary, arg.ID, arg.UserID)
+	var i GetWatchRoomForMemberWithSummaryRow
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerUserID,
+		&i.MovieID,
+		&i.PlaybackMode,
+		&i.AudioTrack,
+		&i.SubtitleTrack,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MemberName,
+		&i.MemberAvatar,
+	)
 	return i, err
 }
 
