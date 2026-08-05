@@ -391,6 +391,26 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// subtitle_track is an ordinal too; validate it against the movie so a
+	// room can never be created pointing at a subtitle that does not exist.
+	var subtitleStreams []database.Subtitle
+	if req.SubtitleTrack != nil {
+		subtitleStreams, err = app.Queries.GetSubtitlesByMovieID(r.Context(), req.MovieID)
+		if err != nil {
+			app.Logger.Error("failed to load subtitles for watch room", "error", err, "movie_id", req.MovieID)
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
+		if len(subtitleStreams) == 0 {
+			helpers.ErrorJSON(w, errors.New("subtitle_track is not valid for a movie without subtitles"), http.StatusBadRequest)
+			return
+		}
+		if *req.SubtitleTrack >= int64(len(subtitleStreams)) {
+			helpers.ErrorJSON(w, fmt.Errorf("subtitle track %d out of range (0-%d)", *req.SubtitleTrack, len(subtitleStreams)-1), http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Direct playback serves the raw container, so every member hears its first
 	// audio track no matter what the room stores.
 	directWithNonFirstAudio := req.Mode == watchRoomPlaybackModeDirect && req.AudioTrack != 0
@@ -457,6 +477,25 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		subtitleTrack = sql.NullInt64{Int64: *req.SubtitleTrack, Valid: true}
 	}
 
+	// Pin the selected tracks' identity (absolute stream index + language) so
+	// a rescan of a replaced file is detected at playback time instead of
+	// silently playing a different track (audit H14).
+	var audioStreamIndex sql.NullInt64
+	var audioLanguage sql.NullString
+	if movieHasAudio {
+		selectedAudio := audioStreams[req.AudioTrack]
+		audioStreamIndex = sql.NullInt64{Int64: selectedAudio.StreamIndex, Valid: true}
+		audioLanguage = selectedAudio.Language
+	}
+
+	var subtitleStreamIndex sql.NullInt64
+	var subtitleLanguage sql.NullString
+	if req.SubtitleTrack != nil {
+		selectedSubtitle := subtitleStreams[*req.SubtitleTrack]
+		subtitleStreamIndex = sql.NullInt64{Int64: selectedSubtitle.StreamIndex, Valid: true}
+		subtitleLanguage = selectedSubtitle.Language
+	}
+
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		app.Logger.Error("failed to begin transaction for watch room creation", "error", err)
@@ -467,11 +506,15 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	qtx := app.Queries.WithTx(tx)
 
 	room, err := qtx.CreateWatchRoom(r.Context(), database.CreateWatchRoomParams{
-		OwnerUserID:   userID,
-		MovieID:       req.MovieID,
-		PlaybackMode:  req.Mode,
-		AudioTrack:    req.AudioTrack,
-		SubtitleTrack: subtitleTrack,
+		OwnerUserID:         userID,
+		MovieID:             req.MovieID,
+		PlaybackMode:        req.Mode,
+		AudioTrack:          req.AudioTrack,
+		SubtitleTrack:       subtitleTrack,
+		AudioStreamIndex:    audioStreamIndex,
+		AudioLanguage:       audioLanguage,
+		SubtitleStreamIndex: subtitleStreamIndex,
+		SubtitleLanguage:    subtitleLanguage,
 	})
 	if err != nil {
 		_ = tx.Rollback()

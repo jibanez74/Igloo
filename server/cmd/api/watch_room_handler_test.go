@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -1827,5 +1828,265 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 	}
 	if room.AudioTrack != 1 {
 		t.Fatalf("expected stored audio_track 1, got %d", room.AudioTrack)
+	}
+}
+
+func insertWatchRoomTestSubtitle(t *testing.T, app *Application, movieID int64, streamIndex int64, language string) {
+	t.Helper()
+
+	_, err := app.Queries.InsertSubtitle(context.Background(), database.InsertSubtitleParams{
+		MovieID:     movieID,
+		StreamIndex: streamIndex,
+		Codec:       "subrip",
+		Language:    sql.NullString{String: language, Valid: language != ""},
+	})
+	if err != nil {
+		t.Fatalf("insert subtitle: %v", err)
+	}
+}
+
+func TestCreateWatchRoom_HTTP_SubtitleTrackOutOfRangeRejected(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	postRoom := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w
+	}
+
+	noSubtitles := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0}`, movieID))
+	if noSubtitles.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a movie without subtitles, got %d: %s", noSubtitles.Code, noSubtitles.Body.String())
+	}
+
+	insertWatchRoomTestSubtitle(t, app, movieID, 2, "eng")
+	outOfRange := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":3}`, movieID))
+	if outOfRange.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for out-of-range subtitle_track, got %d: %s", outOfRange.Code, outOfRange.Body.String())
+	}
+
+	valid := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0}`, movieID))
+	if valid.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for in-range subtitle_track, got %d: %s", valid.Code, valid.Body.String())
+	}
+}
+
+func TestCreateWatchRoom_PersistsStreamPins(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	insertWatchRoomTestVideoStream(t, app, movieID, "High")
+	_, err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
+		MovieID:     movieID,
+		StreamIndex: 1,
+		Codec:       "aac",
+		Channels:    2,
+		Language:    sql.NullString{String: "eng", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("insert audio stream: %v", err)
+	}
+	insertWatchRoomTestSubtitle(t, app, movieID, 3, "spa")
+	handler := mountWatchRoomRouter(t, app, ownerID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0}`, movieID)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp helpers.JSONResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
+
+	room, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("load room: %v", err)
+	}
+	if !room.AudioStreamIndex.Valid || room.AudioStreamIndex.Int64 != 1 {
+		t.Errorf("audio_stream_index = %+v, want 1", room.AudioStreamIndex)
+	}
+	if !room.AudioLanguage.Valid || room.AudioLanguage.String != "eng" {
+		t.Errorf("audio_language = %+v, want eng", room.AudioLanguage)
+	}
+	if !room.SubtitleStreamIndex.Valid || room.SubtitleStreamIndex.Int64 != 3 {
+		t.Errorf("subtitle_stream_index = %+v, want 3", room.SubtitleStreamIndex)
+	}
+	if !room.SubtitleLanguage.Valid || room.SubtitleLanguage.String != "spa" {
+		t.Errorf("subtitle_language = %+v, want spa", room.SubtitleLanguage)
+	}
+}
+
+func TestVerifyWatchRoomStreamPins(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	_, movieID := createTestUserAndMovie(t, app)
+	ctx := context.Background()
+	_, err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+		MovieID:     movieID,
+		StreamIndex: 1,
+		Codec:       "aac",
+		Channels:    2,
+		Language:    sql.NullString{String: "eng", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("insert audio stream: %v", err)
+	}
+	insertWatchRoomTestSubtitle(t, app, movieID, 5, "eng")
+
+	pinInt := func(v int64) sql.NullInt64 { return sql.NullInt64{Int64: v, Valid: true} }
+	pinStr := func(v string) sql.NullString { return sql.NullString{String: v, Valid: true} }
+
+	cases := []struct {
+		name      string
+		room      database.WatchRoom
+		wantDrift bool
+	}{
+		{
+			name: "unpinned room skips every check",
+			room: database.WatchRoom{MovieID: movieID, AudioTrack: 9},
+		},
+		{
+			name: "matching pins pass",
+			room: database.WatchRoom{
+				MovieID: movieID, AudioTrack: 0,
+				AudioStreamIndex: pinInt(1), AudioLanguage: pinStr("eng"),
+				SubtitleTrack:       pinInt(0),
+				SubtitleStreamIndex: pinInt(5), SubtitleLanguage: pinStr("eng"),
+			},
+		},
+		{
+			name: "audio ordinal out of range drifts",
+			room: database.WatchRoom{
+				MovieID: movieID, AudioTrack: 4,
+				AudioStreamIndex: pinInt(1),
+			},
+			wantDrift: true,
+		},
+		{
+			name: "audio stream index mismatch drifts",
+			room: database.WatchRoom{
+				MovieID: movieID, AudioTrack: 0,
+				AudioStreamIndex: pinInt(2),
+			},
+			wantDrift: true,
+		},
+		{
+			name: "audio language mismatch drifts",
+			room: database.WatchRoom{
+				MovieID: movieID, AudioTrack: 0,
+				AudioStreamIndex: pinInt(1), AudioLanguage: pinStr("jpn"),
+			},
+			wantDrift: true,
+		},
+		{
+			name: "null pinned language is not checked",
+			room: database.WatchRoom{
+				MovieID: movieID, AudioTrack: 0,
+				AudioStreamIndex: pinInt(1),
+			},
+		},
+		{
+			name: "subtitle stream index mismatch drifts",
+			room: database.WatchRoom{
+				MovieID: movieID, AudioTrack: 0,
+				SubtitleTrack:       pinInt(0),
+				SubtitleStreamIndex: pinInt(9),
+			},
+			wantDrift: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := app.verifyWatchRoomStreamPins(ctx, tc.room)
+			if tc.wantDrift {
+				if !errors.Is(err, errWatchRoomStreamDrift) {
+					t.Fatalf("expected stream drift, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected pins to verify, got %v", err)
+			}
+		})
+	}
+}
+
+func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.FFmpeg = &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+
+	owner, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
+		Name:     "Drift Owner",
+		Email:    "drift-owner@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
+	handler := mountWatchRoomRouter(t, app, owner.ID)
+
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":0,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp helpers.JSONResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
+
+	manifestPath := fmt.Sprintf("/api/watch-rooms/%d/hls/playlist.m3u8", roomID)
+	healthy := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath, "")
+	if healthy.Code != http.StatusOK {
+		t.Fatalf("expected 200 before drift, got %d: %s", healthy.Code, healthy.Body.String())
+	}
+
+	// Simulate a rescan of a replaced file whose track layout differs: the
+	// ordinal still resolves, but to a different absolute stream index.
+	_, err = app.DB.Exec(`UPDATE audio_streams SET stream_index = 2 WHERE movie_id = ?`, movieID)
+	if err != nil {
+		t.Fatalf("shift audio stream index: %v", err)
+	}
+
+	drifted := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath, "")
+	if drifted.Code != http.StatusConflict {
+		t.Fatalf("expected 409 after drift, got %d: %s", drifted.Code, drifted.Body.String())
+	}
+	if !strings.Contains(drifted.Body.String(), "delete the room and create it again") {
+		t.Fatalf("expected actionable drift message, got %s", drifted.Body.String())
 	}
 }

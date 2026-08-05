@@ -1568,3 +1568,42 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 		t.Fatalf("cast rows referencing shared artist = %d, want 2", got)
 	}
 }
+
+func TestStreamIndexUniquePerMovie(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	result, err := app.DB.Exec(`
+		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult, duration)
+		VALUES ('Unique Index Movie', '/tmp/unique-index.mkv', 'unique-index.mkv', 1, 'mkv', 'video/x-matroska', 0, 3600.0)
+	`)
+	if err != nil {
+		t.Fatalf("insert movie: %v", err)
+	}
+	movieID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("movie id: %v", err)
+	}
+
+	tables := []struct {
+		name   string
+		insert string
+	}{
+		{"video_streams", `INSERT INTO video_streams (movie_id, stream_index, codec, bit_rate, width, height, frame_rate) VALUES (?, 0, 'h264', 5000000, 1920, 1080, 23.976)`},
+		{"audio_streams", `INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels) VALUES (?, 1, 'aac', 192000, 2)`},
+		{"subtitles", `INSERT INTO subtitles (movie_id, stream_index, codec) VALUES (?, 2, 'subrip')`},
+	}
+	for _, table := range tables {
+		_, err = app.DB.Exec(table.insert, movieID)
+		if err != nil {
+			t.Fatalf("first %s insert: %v", table.name, err)
+		}
+		_, err = app.DB.Exec(table.insert, movieID)
+		if err == nil {
+			t.Fatalf("expected duplicate (movie_id, stream_index) insert into %s to fail", table.name)
+		}
+		if !strings.Contains(err.Error(), "UNIQUE") {
+			t.Fatalf("expected UNIQUE constraint error for %s, got %v", table.name, err)
+		}
+	}
+}

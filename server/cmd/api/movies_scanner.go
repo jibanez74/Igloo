@@ -596,6 +596,9 @@ func (app *Application) persistResolvedMovie(ctx context.Context, scan *movieSca
 	// republish the pre-rescan file path after the new one commits.
 	app.invalidateSubtitleVTTCache(movieID)
 	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
+	// A re-persist only happens when the file changed, so any live HLS session
+	// is transcoding a replaced file with stale stream mappings.
+	app.invalidateHLSSessionsForMovie(movieID)
 
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction

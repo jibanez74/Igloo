@@ -2895,6 +2895,9 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
           "416": {
             "$ref": "#/components/responses/RangeNotSatisfiable"
           },
@@ -2940,6 +2943,9 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
           "416": {
             "$ref": "#/components/responses/RangeNotSatisfiable"
           },
@@ -2973,6 +2979,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"

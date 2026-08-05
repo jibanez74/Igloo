@@ -4,10 +4,14 @@ INSERT INTO watch_rooms (
   movie_id,
   playback_mode,
   audio_track,
-  subtitle_track
+  subtitle_track,
+  audio_stream_index,
+  audio_language,
+  subtitle_stream_index,
+  subtitle_language
 )
 VALUES
-  (?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: AddWatchRoomMember :exec

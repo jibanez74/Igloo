@@ -298,6 +298,55 @@ func cleanupRemovedHLSSessions(sessions []*HLSSession) {
 	}
 }
 
+// invalidateHLSSessionsForMovie removes every live HLS session (personal and
+// room) built from a movie whose stream rows were just rewritten by a rescan:
+// their ffmpeg mappings referenced the replaced file. The next manifest
+// request rebuilds them from the new rows, and rooms re-validate their stored
+// track pins there — so no room tombstone is set; the room still exists.
+// Teardown runs in app.Wait-tracked goroutines because the scanner calls this
+// while holding ScannerDBMu and cleanupHLSSession can block for seconds.
+func (app *Application) invalidateHLSSessionsForMovie(movieID int64) {
+	var removed []*HLSSession
+
+	app.PersonalHLSMu.Lock()
+	for key, item := range app.HLSSessionCache.Items() {
+		session, ok := item.Object.(*HLSSession)
+		if !ok || session == nil || session.IsRoom || session.MovieID != movieID {
+			continue
+		}
+		deleted := app.deleteHLSSession(key)
+		if deleted != nil {
+			removed = append(removed, deleted)
+		}
+	}
+	app.PersonalHLSMu.Unlock()
+
+	app.RoomHLSMu.Lock()
+	for key, item := range app.HLSSessionCache.Items() {
+		session, ok := item.Object.(*HLSSession)
+		if !ok || session == nil || !session.IsRoom || session.MovieID != movieID {
+			continue
+		}
+		deleted := app.deleteHLSSession(key)
+		if deleted != nil {
+			removed = append(removed, deleted)
+		}
+	}
+	app.RoomHLSMu.Unlock()
+
+	for _, session := range removed {
+		if app.Wait != nil {
+			app.Wait.Add(1)
+		}
+		go func(target *HLSSession) {
+			if app.Wait != nil {
+				defer app.Wait.Done()
+			}
+			cleanupHLSSession(target)
+		}(session)
+	}
+}
+
 // personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
 // session cache entries across all movies, sorted least-recently-used first.
 // Every access re-sets the entry with the full personal TTL, so ascending

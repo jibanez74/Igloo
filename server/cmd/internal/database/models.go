@@ -326,12 +326,16 @@ type VideoStream struct {
 }
 
 type WatchRoom struct {
-	ID            int64         `json:"id"`
-	OwnerUserID   int64         `json:"owner_user_id"`
-	MovieID       int64         `json:"movie_id"`
-	PlaybackMode  string        `json:"playback_mode"`
-	AudioTrack    int64         `json:"audio_track"`
-	SubtitleTrack sql.NullInt64 `json:"subtitle_track"`
-	CreatedAt     string        `json:"created_at"`
-	UpdatedAt     string        `json:"updated_at"`
+	ID                  int64          `json:"id"`
+	OwnerUserID         int64          `json:"owner_user_id"`
+	MovieID             int64          `json:"movie_id"`
+	PlaybackMode        string         `json:"playback_mode"`
+	AudioTrack          int64          `json:"audio_track"`
+	SubtitleTrack       sql.NullInt64  `json:"subtitle_track"`
+	AudioStreamIndex    sql.NullInt64  `json:"audio_stream_index"`
+	AudioLanguage       sql.NullString `json:"audio_language"`
+	SubtitleStreamIndex sql.NullInt64  `json:"subtitle_stream_index"`
+	SubtitleLanguage    sql.NullString `json:"subtitle_language"`
+	CreatedAt           string         `json:"created_at"`
+	UpdatedAt           string         `json:"updated_at"`
 }

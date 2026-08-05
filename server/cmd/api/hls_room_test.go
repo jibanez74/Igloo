@@ -309,3 +309,43 @@ func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.
 		t.Fatalf("AudioStreamIndex = %d, want 3 (absolute ffprobe index for ordinal 1)", calls[0].AudioStreamIndex)
 	}
 }
+
+func TestInvalidateHLSSessionsForMovie(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	const roomA = int64(41)
+	const roomB = int64(42)
+	personalKeyA := HLSSessionKey(1, "720p_3mbps", nil, "session-a", 0)
+	personalKeyB := HLSSessionKey(2, "720p_3mbps", nil, "session-b", 0)
+
+	app.HLSSessionCache.SetDefault(personalKeyA, &HLSSession{MovieID: 1, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomA), &HLSSession{MovieID: 1, IsRoom: true, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(personalKeyB, &HLSSession{MovieID: 2, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomB), &HLSSession{MovieID: 2, IsRoom: true, TempDir: t.TempDir()})
+
+	app.invalidateHLSSessionsForMovie(1)
+
+	if _, ok := app.HLSSessionCache.Get(personalKeyA); ok {
+		t.Error("expected movie 1 personal session to be removed")
+	}
+	if _, ok := app.HLSSessionCache.Get(RoomHLSSessionKey(roomA)); ok {
+		t.Error("expected movie 1 room session to be removed")
+	}
+	if _, ok := app.HLSSessionCache.Get(personalKeyB); !ok {
+		t.Error("expected movie 2 personal session to survive")
+	}
+	if _, ok := app.HLSSessionCache.Get(RoomHLSSessionKey(roomB)); !ok {
+		t.Error("expected movie 2 room session to survive")
+	}
+
+	// The room was not deleted, so no tombstone: the next manifest request
+	// must be able to recreate the session instead of erroring.
+	session, ok, err := app.getActiveRoomHLSSession(roomA, RoomHLSSessionKey(roomA))
+	if err != nil {
+		t.Fatalf("expected no tombstone error for invalidated room, got %v", err)
+	}
+	if ok || session != nil {
+		t.Fatal("expected invalidated room session to be absent, not active")
+	}
+}

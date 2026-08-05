@@ -362,7 +362,9 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_video_streams_index ON video_streams (movie_id, stream_index);
+-- Unique so a scanner defect that double-writes a stream fails loudly; the
+-- new name lets the startup schema create it on databases that predate it.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_video_streams_movie_stream ON video_streams (movie_id, stream_index);
 
 -- Audio streams discovered by ffprobe for track selection and transcoding.
 CREATE TABLE
@@ -384,7 +386,7 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_audio_streams_index ON audio_streams (movie_id, stream_index);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_audio_streams_movie_stream ON audio_streams (movie_id, stream_index);
 
 -- Subtitle streams discovered by ffprobe.
 CREATE TABLE
@@ -402,7 +404,7 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_subtitles_index ON subtitles (movie_id, stream_index);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_subtitles_movie_stream ON subtitles (movie_id, stream_index);
 
 -- Chapter markers and thumbnails for movie timelines.
 CREATE TABLE
@@ -693,6 +695,13 @@ CREATE TABLE
     ),
     audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),
     subtitle_track INTEGER CHECK (subtitle_track >= 0),
+    -- Identity of the tracks the ordinals selected at creation, so a rescan
+    -- that reorders a replaced file's streams is detected instead of silently
+    -- playing a different track. NULL means unpinned (no such track selected).
+    audio_stream_index INTEGER,
+    audio_language TEXT,
+    subtitle_stream_index INTEGER,
+    subtitle_language TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,

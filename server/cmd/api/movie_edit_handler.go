@@ -275,6 +275,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	// row still existed would otherwise republish it behind the eviction.
 	app.invalidateSubtitleVTTCache(id)
 	app.StreamFileCache.invalidate(movieStreamFileKey(id))
+	app.invalidateHLSSessionsForMovie(id)
 
 	if payload.DeleteFile {
 		if err := os.Remove(movie.FilePath); err != nil && !os.IsNotExist(err) {
