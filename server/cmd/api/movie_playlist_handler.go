@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -485,7 +484,14 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
 		})
 		if err != nil {
-			if strings.Contains(err.Error(), "FOREIGN KEY constraint failed") {
+			// An unknown movie id fails the movie_id foreign key. Confirm that is
+			// what happened instead of matching the driver's error text:
+			// playlist_movies also has foreign keys on playlist_id and added_by, so
+			// a playlist or user deleted mid-request must surface as an error
+			// rather than a silent skip. A constraint violation aborts only the
+			// failed statement, so the transaction is still usable for this probe.
+			movieOK, existsErr := qtx.MovieExists(ctx, movieID)
+			if existsErr == nil && !movieOK {
 				skippedCount++
 				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
 				continue
