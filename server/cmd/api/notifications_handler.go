@@ -107,8 +107,10 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Notifications are the shared admin request queue; there is no per-user
+	// targeting, so isAdmin must be true.
 	if !req.IsAdmin {
-		helpers.ErrorJSON(w, errors.New("non-admin notifications require a target user"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New("isAdmin must be true: notifications are the shared admin queue"), http.StatusBadRequest)
 		return
 	}
 

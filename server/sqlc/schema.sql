@@ -275,10 +275,13 @@ CREATE TABLE
 
 CREATE INDEX IF NOT EXISTS idx_movies_tmdb_id ON movies (tmdb_id);
 
--- Serves every title-ordered movie listing: GetMoviesLibraryAsc/Desc,
--- GetMoviesByGenreAsc/Desc, GetPlaylistMoviesPaginatedAsc/Desc and
--- GetLikedMoviesForUserAsc/Desc. The id column matches those queries' tie-breaker
--- so deep LIMIT/OFFSET pages read in order instead of sorting the whole table.
+-- Serves the unfiltered title-ordered library listings, GetMoviesLibraryAsc/Desc:
+-- the id column matches their tie-breaker, so deep LIMIT/OFFSET pages read in
+-- index order instead of sorting the whole table. The filtered listings
+-- (GetMoviesByGenreAsc/Desc, GetPlaylistMoviesPaginatedAsc/Desc,
+-- GetLikedMoviesForUserAsc/Desc) drive from their junction table and still sort
+-- their page with a temp b-tree -- verified with EXPLAIN QUERY PLAN. Those pages
+-- are small, so this index is not widened to cover them.
 CREATE INDEX IF NOT EXISTS idx_movies_title ON movies (LOWER(title), id);
 
 -- Serves GetLatestMovies (ORDER BY created_at DESC LIMIT 12) on the home page.

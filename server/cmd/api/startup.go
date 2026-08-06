@@ -149,9 +149,11 @@ func (app *Application) InitTables() error {
 // need it, and analysis_limit bounds how much of each index it samples, so this
 // stays cheap even on a large library.
 func (app *Application) RefreshQueryPlannerStats() error {
+	// Returned unwrapped: both callers already name this operation in their own
+	// error or log message, so wrapping here would repeat the same prefix twice.
 	_, err := app.DB.Exec("PRAGMA analysis_limit=400; PRAGMA optimize;")
 	if err != nil {
-		return fmt.Errorf("failed to refresh query planner statistics: %w", err)
+		return err
 	}
 
 	return nil
