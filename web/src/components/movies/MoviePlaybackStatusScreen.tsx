@@ -48,7 +48,18 @@ export default function MoviePlaybackStatusScreen({
       ref={containerRef}
       className="flex min-h-screen flex-col items-center justify-center bg-background px-4"
     >
-      <div className={isLoading ? "text-center" : "max-w-md text-center"}>
+      {/* The player subtree (and its live regions) unmounts before this
+          screen mounts, so error variants must self-announce; loading keeps
+          the role="status" spinner convention. The key remounts this element
+          across the loading -> error transition: every variant renders the same
+          component at the same position, so without it React would reuse the
+          node and add role="alert" to text that is already on screen, which
+          screen readers do not announce. */}
+      <div
+        key={isLoading ? "loading" : "alert"}
+        role={isLoading ? undefined : "alert"}
+        className={isLoading ? "text-center" : "max-w-md text-center"}
+      >
         {isLoading ? (
           <Spinner className="mx-auto mb-6 size-10 text-primary" />
         ) : (

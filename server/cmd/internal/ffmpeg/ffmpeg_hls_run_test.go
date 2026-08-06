@@ -2,11 +2,10 @@ package ffmpeg
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -77,15 +76,8 @@ func TestRunHLSDeliversExactlyOneCallbackForSuccessAndFailure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			script := writeFakeFFmpeg(t, "fake ffmpeg", tt.body)
-			results := make(chan hlsExitResult, 2)
 			f := &ffmpeg{bin: script}
-
-			_, err := f.RunHLS(context.Background(), basicHLSParams(t.TempDir()), func(exitErr error, stderrTail []string) {
-				results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-			})
-			if err != nil {
-				t.Fatalf("RunHLS: %v", err)
-			}
+			results := startFakeHLS(t, f, basicHLSParams(t.TempDir()))
 
 			result := waitForHLSExit(t, results)
 			gotFailure := result.exitErr != nil
@@ -149,16 +141,8 @@ while [ "$i" -le 25 ]; do
 done
 exit 3
 `)
-	results := make(chan hlsExitResult, 1)
 	f := &ffmpeg{bin: script}
-
-	_, err := f.RunHLS(context.Background(), basicHLSParams(t.TempDir()), func(exitErr error, stderrTail []string) {
-		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS: %v", err)
-	}
-	result := waitForHLSExit(t, results)
+	result := runFakeHLS(t, f, basicHLSParams(t.TempDir()))
 
 	if result.exitErr == nil {
 		t.Fatal("expected nonzero exit")
@@ -178,16 +162,9 @@ func TestRunHLSCapturesLongStderrLine(t *testing.T) {
 	longLine := strings.Repeat("x", 128*1024)
 	body := fmt.Sprintf("printf '%%s\\n' '%s' >&2\n", longLine)
 	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
-	results := make(chan hlsExitResult, 1)
 	f := &ffmpeg{bin: script}
 
-	_, err := f.RunHLS(context.Background(), basicHLSParams(t.TempDir()), func(exitErr error, stderrTail []string) {
-		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS: %v", err)
-	}
-	result := waitForHLSExit(t, results)
+	result := runFakeHLS(t, f, basicHLSParams(t.TempDir()))
 	if result.exitErr != nil {
 		t.Fatalf("exitErr = %v, want nil", result.exitErr)
 	}
@@ -201,20 +178,13 @@ func TestRunHLSCapturesLongStderrLine(t *testing.T) {
 
 func TestRunHLSReportsStderrScannerErrors(t *testing.T) {
 	script := writeFakeFFmpeg(t, "fake ffmpeg", "head -c 2000000 /dev/zero | tr '\\000' x >&2\nexit 1\n")
-	results := make(chan hlsExitResult, 1)
 	f := &ffmpeg{bin: script}
 
-	_, err := f.RunHLS(context.Background(), basicHLSParams(t.TempDir()), func(exitErr error, stderrTail []string) {
-		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS: %v", err)
-	}
-	result := waitForHLSExit(t, results)
+	result := runFakeHLS(t, f, basicHLSParams(t.TempDir()))
 	if result.exitErr == nil {
 		t.Fatal("expected nonzero exit")
 	}
-	hasScannerError := containsMatching(result.stderrTail, func(line string) bool {
+	hasScannerError := slices.ContainsFunc(result.stderrTail, func(line string) bool {
 		return strings.Contains(line, "stderr scan error:") && strings.Contains(line, "token too long")
 	})
 	if !hasScannerError {
@@ -238,25 +208,13 @@ printf '%s-last\n' "$tag" >&2
 exit 0
 `)
 	f := &ffmpeg{bin: script}
-	alphaResults := make(chan hlsExitResult, 1)
-	betaResults := make(chan hlsExitResult, 1)
 	alpha := basicHLSParams(t.TempDir())
 	alpha.SourcePath = "alpha source"
 	beta := basicHLSParams(t.TempDir())
 	beta.SourcePath = "beta source"
 
-	_, err := f.RunHLS(context.Background(), alpha, func(exitErr error, stderrTail []string) {
-		alphaResults <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS alpha: %v", err)
-	}
-	_, err = f.RunHLS(context.Background(), beta, func(exitErr error, stderrTail []string) {
-		betaResults <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS beta: %v", err)
-	}
+	alphaResults := startFakeHLS(t, f, alpha)
+	betaResults := startFakeHLS(t, f, beta)
 
 	alphaResult := waitForHLSExit(t, alphaResults)
 	betaResult := waitForHLSExit(t, betaResults)
@@ -286,21 +244,19 @@ func TestRunHLSUsesAbsoluteOutputDirectoryAndInternalCapabilities(t *testing.T) 
 	if err != nil {
 		t.Fatalf("relative output path: %v", err)
 	}
+
+	// The fake writes both files relative to its working directory, which is
+	// how the test confirms RunHLS resolved and entered the absolute out dir.
 	script := writeFakeFFmpeg(t, "fake ffmpeg", "printf '%s\\n' \"$PWD\" > pwd.txt\nprintf '%s\\n' \"$@\" > args.txt\n")
-	results := make(chan hlsExitResult, 1)
-	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
-	f := &ffmpeg{bin: script, capabilities: caps}
+	f := &ffmpeg{
+		bin:          script,
+		capabilities: hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
+	}
 	params := basicHLSParams(relativeOutDir)
 	params.HWDevice = helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA
 	params.Capabilities = Capabilities{}
 
-	_, err = f.RunHLS(context.Background(), params, func(exitErr error, stderrTail []string) {
-		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS: %v", err)
-	}
-	result := waitForHLSExit(t, results)
+	result := runFakeHLS(t, f, params)
 	if result.exitErr != nil {
 		t.Fatalf("exitErr = %v", result.exitErr)
 	}
@@ -312,25 +268,13 @@ func TestRunHLSUsesAbsoluteOutputDirectoryAndInternalCapabilities(t *testing.T) 
 	if strings.TrimSpace(string(pwdData)) != outDir {
 		t.Fatalf("command directory = %q, want %q", strings.TrimSpace(string(pwdData)), outDir)
 	}
-	argsData, err := os.ReadFile(filepath.Join(outDir, "args.txt"))
-	if err != nil {
-		t.Fatalf("read args: %v", err)
-	}
-	args := strings.Split(strings.TrimSpace(string(argsData)), "\n")
-	if !contains(args, "h264_nvenc") || !contains(args, "cuda") {
+
+	args := readArgumentLog(t, filepath.Join(outDir, "args.txt"))
+	if !slices.Contains(args, "h264_nvenc") || !slices.Contains(args, "cuda") {
 		t.Fatalf("internal capabilities were not used: %v", args)
 	}
 	requireArgumentValue(t, args, "-hls_segment_filename", filepath.Join(outDir, "segment_%d.m4s"))
-	if args[len(args)-1] != filepath.Join(outDir, "playlist.m3u8") {
+	if args[len(args)-1] != filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME) {
 		t.Fatalf("playlist path = %q", args[len(args)-1])
-	}
-}
-
-func TestIsExpectedHLSStderrClose(t *testing.T) {
-	if !isExpectedHLSStderrClose(os.ErrClosed) || !isExpectedHLSStderrClose(io.ErrClosedPipe) {
-		t.Fatal("expected closed stderr errors were not recognized")
-	}
-	if isExpectedHLSStderrClose(errors.New("different")) {
-		t.Fatal("unrelated stderr error was recognized as expected")
 	}
 }

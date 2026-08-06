@@ -84,10 +84,6 @@ function playlist(id: number, name: string, movieCount: number) {
     description: nullableString(),
     cover_image: nullableString(),
     is_public: false,
-    folder_id: {
-      Int64: 0,
-      Valid: false,
-    },
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     movie_count: movieCount,

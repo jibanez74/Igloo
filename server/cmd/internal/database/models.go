@@ -64,7 +64,7 @@ type Chapter struct {
 	Title     string         `json:"title"`
 	StartTime int64          `json:"start_time"`
 	Thumb     sql.NullString `json:"thumb"`
-	MovieID   sql.NullInt64  `json:"movie_id"`
+	MovieID   int64          `json:"movie_id"`
 }
 
 type Crew struct {
@@ -178,14 +178,13 @@ type Musician struct {
 }
 
 type Notification struct {
-	ID              int64         `json:"id"`
-	CreatedByUserID int64         `json:"created_by_user_id"`
-	UserID          sql.NullInt64 `json:"user_id"`
-	Title           string        `json:"title"`
-	Message         string        `json:"message"`
-	IsAdmin         bool          `json:"is_admin"`
-	CreatedAt       string        `json:"created_at"`
-	UpdatedAt       string        `json:"updated_at"`
+	ID              int64  `json:"id"`
+	CreatedByUserID int64  `json:"created_by_user_id"`
+	Title           string `json:"title"`
+	Message         string `json:"message"`
+	IsAdmin         bool   `json:"is_admin"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 type Playlist struct {
@@ -195,7 +194,6 @@ type Playlist struct {
 	Description sql.NullString `json:"description"`
 	CoverImage  sql.NullString `json:"cover_image"`
 	IsPublic    bool           `json:"is_public"`
-	FolderID    sql.NullInt64  `json:"folder_id"`
 	MovieID     sql.NullInt64  `json:"movie_id"`
 	ContentType string         `json:"content_type"`
 	CreatedAt   string         `json:"created_at"`
@@ -209,24 +207,6 @@ type PlaylistCollaborator struct {
 	CanEdit    bool   `json:"can_edit"`
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
-}
-
-type PlaylistMovie struct {
-	ID         int64         `json:"id"`
-	PlaylistID int64         `json:"playlist_id"`
-	MovieID    int64         `json:"movie_id"`
-	Position   int64         `json:"position"`
-	AddedBy    sql.NullInt64 `json:"added_by"`
-	AddedAt    string        `json:"added_at"`
-}
-
-type PlaylistTrack struct {
-	ID         int64         `json:"id"`
-	PlaylistID int64         `json:"playlist_id"`
-	TrackID    int64         `json:"track_id"`
-	Position   int64         `json:"position"`
-	AddedBy    sql.NullInt64 `json:"added_by"`
-	AddedAt    string        `json:"added_at"`
 }
 
 type ProductionCompany struct {
@@ -346,12 +326,16 @@ type VideoStream struct {
 }
 
 type WatchRoom struct {
-	ID            int64         `json:"id"`
-	OwnerUserID   int64         `json:"owner_user_id"`
-	MovieID       int64         `json:"movie_id"`
-	PlaybackMode  string        `json:"playback_mode"`
-	AudioTrack    int64         `json:"audio_track"`
-	SubtitleTrack sql.NullInt64 `json:"subtitle_track"`
-	CreatedAt     string        `json:"created_at"`
-	UpdatedAt     string        `json:"updated_at"`
+	ID                  int64          `json:"id"`
+	OwnerUserID         int64          `json:"owner_user_id"`
+	MovieID             int64          `json:"movie_id"`
+	PlaybackMode        string         `json:"playback_mode"`
+	AudioTrack          int64          `json:"audio_track"`
+	SubtitleTrack       sql.NullInt64  `json:"subtitle_track"`
+	AudioStreamIndex    sql.NullInt64  `json:"audio_stream_index"`
+	AudioLanguage       sql.NullString `json:"audio_language"`
+	SubtitleStreamIndex sql.NullInt64  `json:"subtitle_stream_index"`
+	SubtitleLanguage    sql.NullString `json:"subtitle_language"`
+	CreatedAt           string         `json:"created_at"`
+	UpdatedAt           string         `json:"updated_at"`
 }

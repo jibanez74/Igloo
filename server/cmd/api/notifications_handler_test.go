@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -112,7 +111,7 @@ func TestCreateNotification_HTTPRejectsEmptyMessage(t *testing.T) {
 	}
 }
 
-func TestCreateNotification_HTTPRejectsNonAdminWithoutTargetUser(t *testing.T) {
+func TestCreateNotification_HTTPRejectsIsAdminFalse(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	app.InitSession()
@@ -136,8 +135,8 @@ func TestCreateNotification_HTTPRejectsNonAdminWithoutTargetUser(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	if !resp.Error || resp.Message != "non-admin notifications require a target user" {
-		t.Fatalf("response = %+v, want non-admin target-user error", resp)
+	if !resp.Error || resp.Message != "isAdmin must be true: notifications are the shared admin queue" {
+		t.Fatalf("response = %+v, want isAdmin-required error", resp)
 	}
 }
 
@@ -183,7 +182,6 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 	t.Helper()
 	n, err := app.Queries.CreateNotification(context.Background(), database.CreateNotificationParams{
 		CreatedByUserID: requesterID,
-		UserID:          sql.NullInt64{},
 		Title:           notificationTitleMovieRequest,
 		Message:         message,
 		IsAdmin:         true,

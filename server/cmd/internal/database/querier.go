@@ -11,16 +11,19 @@ import (
 
 type Querier interface {
 	AddCollaborator(ctx context.Context, arg AddCollaboratorParams) (PlaylistCollaborator, error)
-	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error)
-	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (PlaylistTrack, error)
+	// Zero rows affected means the movie was already in the playlist; the unique
+	// constraint replaces a separate membership pre-check.
+	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (int64, error)
+	// Zero rows affected means the track was already in the playlist; the unique
+	// constraint replaces a separate membership pre-check.
+	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (int64, error)
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
-	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (bool, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
-	CountUnreadNotificationsForUser(ctx context.Context, arg CountUnreadNotificationsForUserParams) (int64, error)
+	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
 	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
@@ -51,7 +54,7 @@ type Querier interface {
 	// Remove all cast entries for a movie (used before re-identifying with TMDB).
 	DeleteMovieCast(ctx context.Context, movieID int64) error
 	// Delete all chapters for a movie
-	DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error
+	DeleteMovieChapters(ctx context.Context, movieID int64) error
 	// Remove all crew entries for a movie (used before re-identifying with TMDB).
 	DeleteMovieCrew(ctx context.Context, movieID int64) error
 	// Remove all extra-video links for a movie (e.g. before re-scanning).
@@ -65,7 +68,7 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
-	DeleteNotificationForUser(ctx context.Context, arg DeleteNotificationForUserParams) (int64, error)
+	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	// Deletes all genre relationships for a track.
 	DeleteTrackGenres(ctx context.Context, trackID int64) error
@@ -79,22 +82,30 @@ type Querier interface {
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
+	// The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
+	// target exactly, so a NULL-musician lookup finds a row written with '' and
+	// vice versa.
 	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
 	// Returns all genres associated with an album
 	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
 	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
-	// Sorted by release date (newest first), then by title
+	// Sorted by release date (newest first), then by title. Track counts come from
+	// one grouped pass over idx_track_album instead of a correlated subquery per
+	// album; this query has no LIMIT, so it runs for the artist's whole
+	// discography.
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	// has_pin instead of the PIN itself: the admin listing only shows whether one
+	// is set, so the values never leave the database.
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
 	// Chapters for a movie (for technical details display).
-	GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error)
+	GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error)
 	// The 30-second floor must match the web client's
 	// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)
@@ -109,7 +120,9 @@ type Querier interface {
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
+	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)
+	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
@@ -120,17 +133,21 @@ type Querier interface {
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
+	// The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
-	GetMoviesByIDs(ctx context.Context, ids []int64) ([]Movie, error)
+	// Card-sized projection: the watch-room listing only renders title and poster.
+	GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
+	// The music stats endpoint needs all three; one round trip instead of three.
+	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
 	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (MusicSpotifyMatch, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianByName(ctx context.Context, name string) (Musician, error)
@@ -141,16 +158,33 @@ type Querier interface {
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
-	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
-	GetPlaylistDuration(ctx context.Context, playlistID int64) (interface{}, error)
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
 	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
+	// Count and total duration in one pass; the playlist detail response needs both.
+	GetPlaylistTrackSummary(ctx context.Context, playlistID int64) (GetPlaylistTrackSummaryRow, error)
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)
+	// One seek for every playlist authorization decision: the playlist row by
+	// primary key plus this user's collaborator row (if any) by the
+	// (playlist_id, user_id) unique index. collaborator_can_edit is NULL when the
+	// user is not a collaborator; the handler derives owner/edit/view from that
+	// and p.user_id/p.is_public.
+	GetPlaylistWithAccess(ctx context.Context, arg GetPlaylistWithAccessParams) (GetPlaylistWithAccessRow, error)
+	// Playlists the user owns or collaborates on, newest-updated first. The two
+	// access paths are separate indexed lookups (idx_playlist_user, then
+	// idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
+	// scan of every user's playlists -- and they are disjoint because the
+	// collaborator branch excludes playlists the user owns. Track count and total
+	// duration come from one grouped pass over playlist_tracks instead of two
+	// correlated subqueries per row.
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
+	// The random pick happens over the bare tracks primary key, so the album and
+	// musician joins run only for the chosen rows instead of the whole library.
+	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
+	// stays random too.
 	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	// Subtitle tracks for a movie (for technical details display).
@@ -158,12 +192,18 @@ type Querier interface {
 	GetTrack(ctx context.Context, id int64) (Track, error)
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error)
+	// Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
+	// the equivalent OR over tracks and track_musicians cannot use an index.
 	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// Narrow admin check for hot paths (middleware, polled notification counts);
+	// avoids shipping the full user row with its password hash.
+	GetUserIsAdmin(ctx context.Context, id int64) (bool, error)
 	// Returns overall listening statistics for a user
-	GetUserListeningStats(ctx context.Context, arg GetUserListeningStatsParams) (GetUserListeningStatsRow, error)
+	GetUserListeningStats(ctx context.Context, userID int64) (GetUserListeningStatsRow, error)
+	GetUserPin(ctx context.Context, id int64) (sql.NullString, error)
 	GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
@@ -182,7 +222,16 @@ type Querier interface {
 	// Video streams for a movie (for technical details display).
 	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
 	GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, error)
-	GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error)
+	// The room row, but only when the user is a member: the auth check every
+	// room media request (manifest, each segment, direct stream, websocket)
+	// performs. One PK seek plus one (room_id, user_id) unique-index seek;
+	// sql.ErrNoRows covers both "no such room" and "not a member", which callers
+	// deliberately do not distinguish.
+	GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomForMemberParams) (WatchRoom, error)
+	// GetWatchRoomForMember plus the requesting member's presence summary
+	// (name, avatar), for the websocket upgrade only: it needs both and runs
+	// once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+	GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]WatchRoom, error)
@@ -190,28 +239,25 @@ type Querier interface {
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) (VideoStream, error)
-	IsMovieInPlaylist(ctx context.Context, arg IsMovieInPlaylistParams) (bool, error)
 	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
-	IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (bool, error)
-	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
-	IsUserCollaborator(ctx context.Context, arg IsUserCollaboratorParams) (bool, error)
-	IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (int64, error)
-	IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerParams) (int64, error)
+	IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (bool, error)
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
-	// Notifications visible to the viewer: those targeted at them, plus the admin
-	// request queue when the viewer is an admin. Read state comes from a left join
-	// against notification_reads for this viewer.
+	// The shared admin request queue, newest first. Visibility is admin-only and
+	// enforced by the handlers; user_id here only selects the viewer's read state
+	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
-	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) error
+	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
 	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
-	// Idempotent and relevance-gated: only records a read when the notification is
-	// actually visible to the viewer.
+	// Idempotent: marking an already-read or nonexistent notification is a no-op.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
+	// Existence probe for handlers that only need to 404 on an unknown movie;
+	// avoids shipping the full 27-column row.
+	MovieExists(ctx context.Context, id int64) (bool, error)
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
@@ -221,7 +267,10 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
-	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
+	// Existence probe for handlers that only need to 404 on an unknown track.
+	TrackExists(ctx context.Context, id int64) (bool, error)
+	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) (int64, error)
+	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) (int64, error)
 	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error)
 	UpdateDeviceLastUsed(ctx context.Context, id int64) error
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
@@ -241,6 +290,8 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error)
 	UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error)
+	// Matches idx_albums_title_musician, which treats a missing musician as '' so an
+	// untagged album cannot be inserted twice.
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
 	// Creates a relationship between an album and a genre (idempotent)
 	UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error
@@ -260,6 +311,7 @@ type Querier interface {
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error
+	UserExists(ctx context.Context, id int64) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

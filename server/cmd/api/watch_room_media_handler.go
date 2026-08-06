@@ -4,13 +4,92 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// errWatchRoomStreamDrift means the room's stored track ordinals no longer
+// select the streams they were validated against: the movie file was replaced
+// and rescanned since the room was created (audit H14).
+var errWatchRoomStreamDrift = errors.New("this room's movie file was replaced and its selected tracks changed; delete the room and create it again")
+
+// verifyWatchRoomAudioPin re-resolves the room's stored audio ordinal against
+// the movie's current streams and compares it with the identity pinned at
+// creation. A NULL pin (legacy room, silent movie) skips the check.
+func (app *Application) verifyWatchRoomAudioPin(ctx context.Context, room database.WatchRoom) error {
+	if !room.AudioStreamIndex.Valid {
+		return nil
+	}
+
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, room.MovieID)
+	if err != nil {
+		return fmt.Errorf("failed to load audio streams for pin check: %w", err)
+	}
+	if room.AudioTrack >= int64(len(audioStreams)) {
+		return errWatchRoomStreamDrift
+	}
+	current := audioStreams[room.AudioTrack]
+	if current.StreamIndex != room.AudioStreamIndex.Int64 {
+		return errWatchRoomStreamDrift
+	}
+	if room.AudioLanguage.Valid && current.Language.String != room.AudioLanguage.String {
+		return errWatchRoomStreamDrift
+	}
+	return nil
+}
+
+// verifyWatchRoomSubtitlePin is the subtitle counterpart of
+// verifyWatchRoomAudioPin. It is also the only pin a direct-mode room checks:
+// direct playback serves the container's own default audio, so only the
+// subtitle ordinal can silently repoint after a rescan.
+func (app *Application) verifyWatchRoomSubtitlePin(ctx context.Context, room database.WatchRoom) error {
+	if !room.SubtitleStreamIndex.Valid || !room.SubtitleTrack.Valid {
+		return nil
+	}
+
+	subtitles, err := app.Queries.GetSubtitlesByMovieID(ctx, room.MovieID)
+	if err != nil {
+		return fmt.Errorf("failed to load subtitles for pin check: %w", err)
+	}
+	if room.SubtitleTrack.Int64 >= int64(len(subtitles)) {
+		return errWatchRoomStreamDrift
+	}
+	current := subtitles[room.SubtitleTrack.Int64]
+	if current.StreamIndex != room.SubtitleStreamIndex.Int64 {
+		return errWatchRoomStreamDrift
+	}
+	if room.SubtitleLanguage.Valid && current.Language.String != room.SubtitleLanguage.String {
+		return errWatchRoomStreamDrift
+	}
+	return nil
+}
+
+func (app *Application) verifyWatchRoomStreamPins(ctx context.Context, room database.WatchRoom) error {
+	err := app.verifyWatchRoomAudioPin(ctx, room)
+	if err != nil {
+		return err
+	}
+	return app.verifyWatchRoomSubtitlePin(ctx, room)
+}
+
+func (app *Application) rejectDriftedWatchRoom(w http.ResponseWriter, room database.WatchRoom, err error) bool {
+	if errors.Is(err, errWatchRoomStreamDrift) {
+		helpers.ErrorJSON(w, err, http.StatusConflict)
+		return true
+	}
+	if err != nil {
+		app.Logger.Error("failed to verify watch room stream pins", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return true
+	}
+	return false
+}
 
 func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Request) {
 	room, _, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
@@ -23,7 +102,11 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack))
+	if app.rejectDriftedWatchRoom(w, room, app.verifyWatchRoomStreamPins(r.Context(), room)) {
+		return
+	}
+
+	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack), nil, nil)
 	if err != nil {
 		app.Logger.Error("watch room hls session failed", "error", err, "room_id", room.ID)
 		writeHLSSessionError(w, err)
@@ -84,6 +167,10 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 
 	if room.PlaybackMode != watchRoomPlaybackModeDirect {
 		helpers.ErrorJSON(w, errors.New("this room uses HLS playback"), http.StatusBadRequest)
+		return
+	}
+
+	if app.rejectDriftedWatchRoom(w, room, app.verifyWatchRoomSubtitlePin(r.Context(), room)) {
 		return
 	}
 

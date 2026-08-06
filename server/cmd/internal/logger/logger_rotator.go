@@ -130,19 +130,16 @@ func (w *rotatingWriter) rotate() error {
 		return err
 	}
 
-	w.buf.Reset(w.file)
-
-	var builder strings.Builder
-	builder.Grow(len(lines) * 100)
-
 	for _, line := range lines {
-		builder.WriteString(line)
-		builder.WriteByte('\n')
-	}
+		_, err = w.buf.WriteString(line)
+		if err != nil {
+			return err
+		}
 
-	_, err = w.buf.WriteString(builder.String())
-	if err != nil {
-		return err
+		err = w.buf.WriteByte('\n')
+		if err != nil {
+			return err
+		}
 	}
 
 	err = w.buf.Flush()

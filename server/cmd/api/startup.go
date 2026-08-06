@@ -65,6 +65,30 @@ func (app *Application) InitDB() error {
 		return fmt.Errorf("failed to enable WAL journal mode for database %s: %w", dbPath, err)
 	}
 
+	// These are connection-scoped, which is safe because the pool is pinned to a
+	// single connection above.
+	//
+	// synchronous=NORMAL is the standard pairing with WAL: a commit no longer waits
+	// on an fsync, and the scanners commit once per movie or track. WAL still
+	// guarantees the database survives a process crash; only an OS-level crash can
+	// lose the most recent commits.
+	//
+	// temp_store=MEMORY keeps the sorters and materialized subqueries the library
+	// listings build off the disk.
+	pragmas := []string{
+		"PRAGMA synchronous=NORMAL;",
+		"PRAGMA temp_store=MEMORY;",
+		"PRAGMA cache_size=-16000;",
+	}
+
+	for _, pragma := range pragmas {
+		_, err = db.Exec(pragma)
+		if err != nil {
+			db.Close()
+			return fmt.Errorf("failed to apply %q to database %s: %w", pragma, dbPath, err)
+		}
+	}
+
 	app.DB = db
 
 	return nil
@@ -115,6 +139,22 @@ func (app *Application) InitTables() error {
 	}
 
 	app.Logger.Info("database tables initialized successfully")
+
+	return nil
+}
+
+// RefreshQueryPlannerStats keeps sqlite_stat1 current so the planner picks the
+// library listing indexes on their real selectivity instead of on built-in
+// guesses. PRAGMA optimize only analyzes the tables that have changed enough to
+// need it, and analysis_limit bounds how much of each index it samples, so this
+// stays cheap even on a large library.
+func (app *Application) RefreshQueryPlannerStats() error {
+	// Returned unwrapped: both callers already name this operation in their own
+	// error or log message, so wrapping here would repeat the same prefix twice.
+	_, err := app.DB.Exec("PRAGMA analysis_limit=400; PRAGMA optimize;")
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

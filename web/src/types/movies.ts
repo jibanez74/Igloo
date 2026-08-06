@@ -55,7 +55,6 @@ export type MoviePlaylistRowType = {
   description: NullableString;
   cover_image: NullableString;
   is_public: boolean;
-  folder_id: NullableInt64;
   movie_id: NullableInt64;
   content_type: string;
   created_at: string;

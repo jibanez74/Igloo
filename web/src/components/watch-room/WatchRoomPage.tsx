@@ -140,7 +140,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       ),
   });
 
-  const { handleSessionLost } = useHlsSessionRecovery({
+  const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
     streamWindowKey,
     onRecover: () => setStreamReloadKey(prev => prev + 1),
     onMaxAttempts: () =>
@@ -278,6 +278,13 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       />
 
       <LiveAnnouncer message={syncAnnouncement} />
+      <LiveAnnouncer
+        message={
+          recoveryAttempt > 0 ? "Playback interrupted, reloading the stream…" : ""
+        }
+        announcementKey={recoveryAttempt}
+        politeness="assertive"
+      />
       <p className="sr-only">
         Keyboard shortcuts: Space or K to play or pause, J or Left Arrow to
         rewind, L or Right Arrow to fast-forward, Home or 0 to restart, F for
@@ -670,7 +677,10 @@ function WatchRoomPlayerPanel({
           </div>
 
           {playbackError && (
-            <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div
+              role="alert"
+              className="mt-4 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
               {playbackError}
             </div>
           )}

@@ -1,8 +1,6 @@
 package ffmpeg
 
 import (
-	"encoding/binary"
-	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -13,175 +11,52 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-func TestValidateRemuxSafety_SafeFragments(t *testing.T) {
-	dir := t.TempDir()
-	err := fmp4testutil.WriteHLSFixture(dir, fmp4testutil.Fixture{
-		SafeVideo: true,
-		Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-	})
-	if err != nil {
-		t.Fatalf("WriteHLSFixture: %v", err)
+func TestValidateRemuxSafetyAcceptsSafeFixtures(t *testing.T) {
+	tests := []struct {
+		name    string
+		fixture fmp4testutil.Fixture
+		wantErr bool
+	}{
+		{
+			name:    "safe fragments",
+			fixture: fmp4testutil.Fixture{SafeVideo: true, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS},
+		},
+		{
+			name:    "audio track noise is ignored",
+			fixture: fmp4testutil.Fixture{SafeVideo: true, AudioNoise: true, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS},
+		},
+		{
+			name:    "unsafe sync sample metadata",
+			fixture: fmp4testutil.Fixture{SafeVideo: false, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS},
+			wantErr: true,
+		},
 	}
 
-	summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	if err != nil {
-		t.Fatalf("ValidateRemuxSafety returned error: %v", err)
-	}
-	if summary.CheckedSegments != helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
-		t.Fatalf("CheckedSegments = %d, want %d", summary.CheckedSegments, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	}
-	if summary.CheckedSyncSamples != helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
-		t.Fatalf("CheckedSyncSamples = %d, want %d", summary.CheckedSyncSamples, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := fmp4testutil.WriteHLSFixture(dir, tt.fixture)
+			if err != nil {
+				t.Fatalf("WriteHLSFixture: %v", err)
+			}
 
-func TestValidateRemuxSafety_UnsafeSyncSampleMetadata(t *testing.T) {
-	dir := t.TempDir()
-	err := fmp4testutil.WriteHLSFixture(dir, fmp4testutil.Fixture{
-		SafeVideo: false,
-		Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-	})
-	if err != nil {
-		t.Fatalf("WriteHLSFixture: %v", err)
-	}
-
-	_, err = ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	if err == nil {
-		t.Fatal("expected unsafe remux validation error")
-	}
-}
-
-func TestValidateRemuxSafety_IgnoresAudioTrackNoise(t *testing.T) {
-	dir := t.TempDir()
-	err := fmp4testutil.WriteHLSFixture(dir, fmp4testutil.Fixture{
-		SafeVideo:  true,
-		AudioNoise: true,
-		Segments:   helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-	})
-	if err != nil {
-		t.Fatalf("WriteHLSFixture: %v", err)
-	}
-
-	summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	if err != nil {
-		t.Fatalf("ValidateRemuxSafety returned error: %v", err)
-	}
-	if summary.CheckedSegments != helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
-		t.Fatalf("CheckedSegments = %d, want %d", summary.CheckedSegments, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	}
-}
-
-func TestValidateRemuxSafety_MalformedFragmentsAreUnsafe(t *testing.T) {
-	dir := t.TempDir()
-
-	initData := fmp4testutil.BuildInitMP4()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init.mp4: %v", err)
-	}
-
-	for i := 0; i < helpers.HLS_REMUX_PREVALIDATE_SEGMENTS; i++ {
-		name := fmt.Sprintf(
-			"%s%d%s",
-			helpers.HLS_SEGMENT_FILENAME_PREFIX,
-			i,
-			helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-		)
-
-		data := []byte("not-a-valid-fragment")
-		if i == 0 {
-			data = fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
-		}
-
-		err = os.WriteFile(filepath.Join(dir, name), data, 0644)
-		if err != nil {
-			t.Fatalf("write segment %d: %v", i, err)
-		}
-	}
-
-	summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-	if err == nil {
-		t.Fatal("expected malformed fragment validation error")
-	}
-	if summary.CheckedSegments != 1 {
-		t.Fatalf("CheckedSegments = %d, want partial summary with 1 checked segment", summary.CheckedSegments)
-	}
-	if summary.CheckedSyncSamples != 1 {
-		t.Fatalf("CheckedSyncSamples = %d, want partial summary with 1 sync sample", summary.CheckedSyncSamples)
-	}
-}
-
-func TestValidateRemuxSafety_MissingLaterSegmentReturnsPartialSummary(t *testing.T) {
-	dir := t.TempDir()
-
-	initData := fmp4testutil.BuildInitMP4()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init.mp4: %v", err)
-	}
-
-	name := fmt.Sprintf(
-		"%s%d%s",
-		helpers.HLS_SEGMENT_FILENAME_PREFIX,
-		0,
-		helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-	)
-	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
-	err = os.WriteFile(filepath.Join(dir, name), segment, 0644)
-	if err != nil {
-		t.Fatalf("write segment 0: %v", err)
-	}
-
-	summary, err := ValidateRemuxSafety(dir, 2)
-	if err == nil {
-		t.Fatal("expected missing segment validation error")
-	}
-	if !strings.Contains(err.Error(), "read segment 1") {
-		t.Fatalf("error = %q, want read segment 1 failure", err.Error())
-	}
-	if summary.CheckedSegments != 1 {
-		t.Fatalf("CheckedSegments = %d, want partial summary with 1 checked segment", summary.CheckedSegments)
-	}
-	if summary.CheckedSyncSamples != 1 {
-		t.Fatalf("CheckedSyncSamples = %d, want partial summary with 1 sync sample", summary.CheckedSyncSamples)
-	}
-}
-
-func TestValidateRemuxSafety_ZeroSyncSamplesAreUnsafe(t *testing.T) {
-	dir := t.TempDir()
-
-	initData := fmp4testutil.BuildInitMP4()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init.mp4: %v", err)
-	}
-
-	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
-	setFirstTRUNSampleFlagsForTest(t, segment, 0x00010000)
-
-	name := fmt.Sprintf(
-		"%s%d%s",
-		helpers.HLS_SEGMENT_FILENAME_PREFIX,
-		0,
-		helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-	)
-	err = os.WriteFile(filepath.Join(dir, name), segment, 0644)
-	if err != nil {
-		t.Fatalf("write segment 0: %v", err)
-	}
-
-	summary, err := ValidateRemuxSafety(dir, 1)
-	if err == nil {
-		t.Fatal("expected zero-sync-sample validation error")
-	}
-	if !strings.Contains(err.Error(), "no sync samples") {
-		t.Fatalf("error = %q, want no sync samples failure", err.Error())
-	}
-	if summary.CheckedSegments != 1 {
-		t.Fatalf("CheckedSegments = %d, want checked zero-sync segment counted", summary.CheckedSegments)
-	}
-	if summary.CheckedSyncSamples != 0 {
-		t.Fatalf("CheckedSyncSamples = %d, want 0", summary.CheckedSyncSamples)
+			summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected unsafe remux validation error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ValidateRemuxSafety returned error: %v", err)
+			}
+			if summary.CheckedSegments != helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
+				t.Fatalf("CheckedSegments = %d, want %d", summary.CheckedSegments, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+			}
+			if summary.CheckedSyncSamples != helpers.HLS_REMUX_PREVALIDATE_SEGMENTS {
+				t.Fatalf("CheckedSyncSamples = %d, want %d", summary.CheckedSyncSamples, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+			}
+		})
 	}
 }
 
@@ -256,127 +131,106 @@ func TestValidateRemuxSafetyRejectsMissingVideoConfiguration(t *testing.T) {
 	}
 }
 
-func TestValidateRemuxSafetyRejectsAbsentVideoFragment(t *testing.T) {
-	dir := t.TempDir()
-	initData := fmp4testutil.BuildInitMP4()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init: %v", err)
-	}
-	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
-	setFirstTFHDTrackIDForTest(t, segment, 99)
-	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
-	if err != nil {
-		t.Fatalf("write segment: %v", err)
+// Each case corrupts one field of an otherwise valid single-segment fixture and
+// checks both the reported error and how much of the summary survived.
+func TestValidateRemuxSafetyRejectsCorruptFragments(t *testing.T) {
+	tests := []struct {
+		name            string
+		mutate          func(t *testing.T, segment []byte)
+		wantErr         string
+		wantSegments    int
+		wantSyncSamples int
+	}{
+		{
+			name: "video track absent from the fragment",
+			mutate: func(t *testing.T, segment []byte) {
+				patchTrafFieldForTest(t, segment, "tfhd", tfhdTrackIDOffset, 99)
+			},
+			wantErr: "missing video traf",
+		},
+		{
+			name: "sample size exceeds the segment",
+			mutate: func(t *testing.T, segment []byte) {
+				patchTrafFieldForTest(t, segment, "trun", trunFirstSampleSizeOffset, math.MaxUint32)
+			},
+			wantErr: "sample exceeds segment bounds",
+		},
+		{
+			// Point the run at the moof interior: the bytes stay inside the
+			// segment but outside any mdat payload.
+			name: "sample lands outside mdat",
+			mutate: func(t *testing.T, segment []byte) {
+				patchTrafFieldForTest(t, segment, "trun", trunDataOffsetOffset, 8)
+			},
+			wantErr: "sample outside mdat payload",
+		},
+		{
+			name: "no sync samples in the segment",
+			mutate: func(t *testing.T, segment []byte) {
+				patchTrafFieldForTest(t, segment, "trun", trunFirstSampleFlagsOffset, 0x00010000)
+			},
+			wantErr:      "no sync samples",
+			wantSegments: 1,
+		},
 	}
 
-	summary, err := ValidateRemuxSafety(dir, 1)
-	if err == nil || !strings.Contains(err.Error(), "missing video traf") {
-		t.Fatalf("error = %v, want missing video fragment", err)
-	}
-	if summary.CheckedSegments != 0 || summary.CheckedSyncSamples != 0 {
-		t.Fatalf("summary = %#v, want no completed segments", summary)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
+			tt.mutate(t, segment)
+			writeRemuxFixtureFiles(t, dir, fmp4testutil.BuildInitMP4(), segment)
+
+			summary, err := ValidateRemuxSafety(dir, 1)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
+			if summary.CheckedSegments != tt.wantSegments {
+				t.Fatalf("CheckedSegments = %d, want %d", summary.CheckedSegments, tt.wantSegments)
+			}
+			if summary.CheckedSyncSamples != tt.wantSyncSamples {
+				t.Fatalf("CheckedSyncSamples = %d, want %d", summary.CheckedSyncSamples, tt.wantSyncSamples)
+			}
+		})
 	}
 }
 
-func TestValidateRemuxSafetyRejectsSampleBoundsFailure(t *testing.T) {
-	dir := t.TempDir()
-	initData := fmp4testutil.BuildInitMP4()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init: %v", err)
-	}
-	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
-	setFirstTRUNSampleSizeForTest(t, segment, math.MaxUint32)
-	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
-	if err != nil {
-		t.Fatalf("write segment: %v", err)
+// A failure partway through must still report the segments already validated.
+func TestValidateRemuxSafetyReturnsPartialSummaryOnLaterSegmentFailure(t *testing.T) {
+	validSegment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
+
+	tests := []struct {
+		name         string
+		segments     [][]byte
+		requestCount int
+		wantErr      string
+	}{
+		{
+			name:         "later segment is malformed",
+			segments:     [][]byte{validSegment, []byte("not-a-valid-fragment")},
+			requestCount: 2,
+			wantErr:      "validate segment 1",
+		},
+		{
+			name:         "later segment is missing",
+			segments:     [][]byte{validSegment},
+			requestCount: 2,
+			wantErr:      "read segment 1",
+		},
 	}
 
-	summary, err := ValidateRemuxSafety(dir, 1)
-	if err == nil || !strings.Contains(err.Error(), "sample exceeds segment bounds") {
-		t.Fatalf("error = %v, want sample bounds failure", err)
-	}
-	if summary.CheckedSegments != 0 {
-		t.Fatalf("CheckedSegments = %d, want 0", summary.CheckedSegments)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeRemuxFixtureFiles(t, dir, fmp4testutil.BuildInitMP4(), tt.segments...)
 
-func TestValidateRemuxSafetyRejectsSampleOutsideMdat(t *testing.T) {
-	dir := t.TempDir()
-	initData := fmp4testutil.BuildInitMP4()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init: %v", err)
+			summary, err := ValidateRemuxSafety(dir, tt.requestCount)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
+			if summary.CheckedSegments != 1 || summary.CheckedSyncSamples != 1 {
+				t.Fatalf("summary = %#v, want 1 checked segment with 1 sync sample", summary)
+			}
+		})
 	}
-	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
-	// Point the run at the moof interior; the bytes stay inside the segment but
-	// outside any mdat payload.
-	setFirstTRUNDataOffsetForTest(t, segment, 8)
-	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
-	if err != nil {
-		t.Fatalf("write segment: %v", err)
-	}
-
-	summary, err := ValidateRemuxSafety(dir, 1)
-	if err == nil || !strings.Contains(err.Error(), "sample outside mdat payload") {
-		t.Fatalf("error = %v, want sample outside mdat payload", err)
-	}
-	if summary.CheckedSegments != 0 {
-		t.Fatalf("CheckedSegments = %d, want 0", summary.CheckedSegments)
-	}
-}
-
-func firstTRUNForTest(t *testing.T, segment []byte) mp4Box {
-	t.Helper()
-	moof, found, err := findDirectChildBox(segment, 0, len(segment), "moof")
-	if err != nil || !found {
-		t.Fatalf("find moof: found=%v err=%v", found, err)
-	}
-	traf, found, err := findDirectChildBox(segment, moof.PayloadStart, moof.End, "traf")
-	if err != nil || !found {
-		t.Fatalf("find traf: found=%v err=%v", found, err)
-	}
-	trun, found, err := findDirectChildBox(segment, traf.PayloadStart, traf.End, "trun")
-	if err != nil || !found {
-		t.Fatalf("find trun: found=%v err=%v", found, err)
-	}
-	return trun
-}
-
-func setFirstTRUNSampleSizeForTest(t *testing.T, segment []byte, size uint32) {
-	t.Helper()
-	trun := firstTRUNForTest(t, segment)
-	sampleSizeOffset := trun.PayloadStart + 12
-	if sampleSizeOffset+4 > trun.End {
-		t.Fatal("trun sample size exceeds box bounds")
-	}
-	binary.BigEndian.PutUint32(segment[sampleSizeOffset:sampleSizeOffset+4], size)
-}
-
-func setFirstTRUNDataOffsetForTest(t *testing.T, segment []byte, dataOffset int32) {
-	t.Helper()
-	trun := firstTRUNForTest(t, segment)
-	dataOffsetStart := trun.PayloadStart + 8
-	if dataOffsetStart+4 > trun.End {
-		t.Fatal("trun data offset exceeds box bounds")
-	}
-	binary.BigEndian.PutUint32(segment[dataOffsetStart:dataOffsetStart+4], uint32(dataOffset))
-}
-
-func setFirstTFHDTrackIDForTest(t *testing.T, segment []byte, trackID uint32) {
-	t.Helper()
-	moof, found, err := findDirectChildBox(segment, 0, len(segment), "moof")
-	if err != nil || !found {
-		t.Fatalf("find moof: found=%v err=%v", found, err)
-	}
-	traf, found, err := findDirectChildBox(segment, moof.PayloadStart, moof.End, "traf")
-	if err != nil || !found {
-		t.Fatalf("find traf: found=%v err=%v", found, err)
-	}
-	tfhd, found, err := findDirectChildBox(segment, traf.PayloadStart, traf.End, "tfhd")
-	if err != nil || !found {
-		t.Fatalf("find tfhd: found=%v err=%v", found, err)
-	}
-	binary.BigEndian.PutUint32(segment[tfhd.PayloadStart+4:tfhd.PayloadStart+8], trackID)
 }

@@ -5,6 +5,30 @@ FROM users
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetUserIsAdmin :one
+-- Narrow admin check for hot paths (middleware, polled notification counts);
+-- avoids shipping the full user row with its password hash.
+SELECT
+  is_admin
+FROM users
+WHERE id = ?
+LIMIT 1;
+
+-- name: UserExists :one
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM users
+    WHERE id = ?
+  );
+
+-- name: GetUserPin :one
+SELECT
+  pin
+FROM users
+WHERE id = ?
+LIMIT 1;
+
 -- name: GetAdminUser :one
 SELECT
   *
@@ -75,13 +99,15 @@ DELETE FROM users
 WHERE id = ?;
 
 -- name: GetAllUsers :many
+-- has_pin instead of the PIN itself: the admin listing only shows whether one
+-- is set, so the values never leave the database.
 SELECT
   id,
   name,
   email,
   is_admin,
   avatar,
-  pin,
+  CAST((pin IS NOT NULL) AS BOOLEAN) AS has_pin,
   created_at,
   updated_at
 FROM users

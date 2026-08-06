@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	gocache "github.com/patrickmn/go-cache"
 	spotifylib "github.com/zmb3/spotify/v2"
@@ -64,70 +65,45 @@ func writeSpotifyTokenResponse(w http.ResponseWriter, accessToken string) {
 }
 
 func artistSearchJSON(id, name string) interface{} {
-	return map[string]interface{}{
-		"artists": map[string]interface{}{
-			"items": []map[string]interface{}{
-				{
-					"id":            id,
-					"name":          name,
-					"type":          "artist",
-					"popularity":    82,
-					"followers":     map[string]interface{}{"total": 5000000, "href": nil},
-					"genres":        []string{"pop"},
-					"images":        []map[string]interface{}{{"url": "https://example.com/artist.jpg", "height": 640, "width": 640}},
-					"external_urls": map[string]interface{}{},
-					"href":          "",
-					"uri":           "",
-				},
-			},
-			"total": 1,
-			"limit": 1,
-		},
-	}
+	return artistSearchItemsJSON(artistItemJSON(id, name))
 }
 
 func emptyArtistSearchJSON() interface{} {
-	return map[string]interface{}{
-		"artists": map[string]interface{}{
-			"items": []interface{}{},
-			"total": 0,
-			"limit": 1,
-		},
-	}
+	return artistSearchItemsJSON()
 }
 
 func albumSearchJSON(id, name string) interface{} {
-	return map[string]interface{}{
-		"albums": map[string]interface{}{
-			"items": []map[string]interface{}{
-				{
-					"id":                     id,
-					"name":                   name,
-					"type":                   "album",
-					"album_type":             "album",
-					"release_date":           "2023-01-01",
-					"release_date_precision": "day",
-					"total_tracks":           12,
-					"images":                 []interface{}{},
-					"artists":                []interface{}{},
-					"external_urls":          map[string]interface{}{},
-					"href":                   "",
-					"uri":                    "",
-					"available_markets":      []interface{}{},
-				},
-			},
-			"total": 1,
-			"limit": 1,
-		},
-	}
+	return albumSearchItemsJSON(albumItemJSON(id, name))
 }
 
 func emptyAlbumSearchJSON() interface{} {
+	return albumSearchItemsJSON()
+}
+
+func trackItemJSON(id, name string) map[string]interface{} {
 	return map[string]interface{}{
-		"albums": map[string]interface{}{
-			"items": []interface{}{},
-			"total": 0,
-			"limit": 1,
+		"id":            id,
+		"name":          name,
+		"type":          "track",
+		"duration_ms":   200000,
+		"explicit":      false,
+		"popularity":    70,
+		"disc_number":   1,
+		"track_number":  1,
+		"artists":       []interface{}{},
+		"album":         albumItemJSON(id+"-album", name),
+		"external_urls": map[string]interface{}{},
+		"href":          "",
+		"uri":           "",
+	}
+}
+
+func trackSearchItemsJSON(items ...map[string]interface{}) interface{} {
+	return map[string]interface{}{
+		"tracks": map[string]interface{}{
+			"items": items,
+			"total": len(items),
+			"limit": len(items),
 		},
 	}
 }
@@ -164,6 +140,37 @@ func TestSearchArtistByName(t *testing.T) {
 		}
 	})
 
+	t.Run("returns error for whitespace-only artist name without calling the API", func(t *testing.T) {
+		callCount := 0
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+		}))
+		_, err := sc.SearchArtistByName(context.Background(), "   ")
+		if err == nil {
+			t.Fatal("expected error for whitespace-only artist name, got nil")
+		}
+		if callCount != 0 {
+			t.Fatalf("callCount = %d, want no API calls", callCount)
+		}
+	})
+
+	t.Run("returns error when response has no artists object", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, map[string]interface{}{})
+		}))
+		_, err := sc.SearchArtistByName(context.Background(), "John Mayer")
+		if err == nil {
+			t.Fatal("expected error for missing artists object, got nil")
+		}
+		matchErr, ok := AsMatchError(err)
+		if !ok {
+			t.Fatalf("expected MatchError, got %T", err)
+		}
+		if matchErr.Info.Reason != "no_results" {
+			t.Fatalf("reason = %q, want no_results", matchErr.Info.Reason)
+		}
+	})
+
 	t.Run("returns artist when name matches", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, artistSearchJSON("abc123", "Charlie Puth"))
@@ -181,8 +188,8 @@ func TestSearchArtistByName(t *testing.T) {
 	})
 
 	t.Run("accepts real band name containing ampersand", func(t *testing.T) {
-		// "Hall & Oates" is a real artist on Spotify. The returned name equals the query,
-		// so the one-directional validation passes and the band is not treated as a compound credit.
+		// "Hall & Oates" is a real artist on Spotify. The returned name normalizes to the
+		// same text as the query, so it scores as an exact match above the artist threshold.
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, artistSearchJSON("hallOatesID", "Hall & Oates"))
 		}))
@@ -197,8 +204,8 @@ func TestSearchArtistByName(t *testing.T) {
 
 	t.Run("rejects compound credit when Spotify returns only the primary artist", func(t *testing.T) {
 		// Spotify returns "Charlie Puth" for the query "Charlie Puth & Coco Jones".
-		// The one-directional check: "charlie puth" does not contain "charlie puth & coco jones",
-		// so validation fails. This is the discriminator that allows safe compound-credit splitting.
+		// The candidate covers only part of the query's tokens, so it scores below the
+		// artist threshold. This is the discriminator that allows safe compound-credit splitting.
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, artistSearchJSON("charliePuthID", "Charlie Puth"))
 		}))
@@ -452,7 +459,8 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 
 	t.Run("validation accepts when result name is contained in query title", func(t *testing.T) {
 		// Spotify returns "Abbey Road" but the file tag says "Abbey Road (Remastered)".
-		// Bidirectional check: "abbey road" is contained in "abbey road remastered" -> passes.
+		// "remastered" is an album noise token, so both base titles reduce to "abbey road"
+		// and the candidate scores above the album threshold.
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/search") {
 				writeJSON(w, albumSearchJSON("ar123", "Abbey Road"))
@@ -679,6 +687,44 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 	})
 
+	t.Run("returns error when field filter search request fails", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeSpotifyAPIError(w, http.StatusBadGateway, "field search failed")
+		}))
+
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		if err == nil {
+			t.Fatal("expected error when field filter search request fails, got nil")
+		}
+		matchErr, ok := AsMatchError(err)
+		if !ok {
+			t.Fatalf("expected MatchError, got %T", err)
+		}
+		if matchErr.Info.Reason != "search_failed" || matchErr.Info.Strategy != "album_field_search" {
+			t.Fatalf("info = %+v, want search_failed on album_field_search", matchErr.Info)
+		}
+	})
+
+	t.Run("returns error when fallback response has no albums object", func(t *testing.T) {
+		searchCallCount := 0
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			searchCallCount++
+			if searchCallCount == 1 {
+				writeJSON(w, emptyAlbumSearchJSON())
+				return
+			}
+			writeJSON(w, map[string]interface{}{})
+		}))
+
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		if err == nil {
+			t.Fatal("expected error when fallback response has no albums object, got nil")
+		}
+		if searchCallCount != 2 {
+			t.Fatalf("searchCallCount = %d, want 2", searchCallCount)
+		}
+	})
+
 	t.Run("returns error when fallback search request fails", func(t *testing.T) {
 		searchCallCount := 0
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -764,6 +810,91 @@ func TestSearchAlbums(t *testing.T) {
 			t.Fatalf("albums length = %d, want 0", len(albums))
 		}
 	})
+
+	t.Run("returns error when spotify search request fails", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeSpotifyAPIError(w, http.StatusInternalServerError, "search failed")
+		}))
+
+		_, err := sc.SearchAlbums(context.Background(), "Blue Record")
+		if err == nil {
+			t.Fatal("expected error when spotify search request fails, got nil")
+		}
+		if !strings.Contains(err.Error(), "spotify album search failed") {
+			t.Fatalf("error = %q, want wrapped album search failure", err.Error())
+		}
+	})
+}
+
+func TestSearchTracks(t *testing.T) {
+	t.Run("returns error for empty track title", func(t *testing.T) {
+		callCount := 0
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+		}))
+		_, err := sc.SearchTracks(context.Background(), "   ")
+		if err == nil {
+			t.Fatal("expected error for empty title, got nil")
+		}
+		if callCount != 0 {
+			t.Fatalf("callCount = %d, want no API calls", callCount)
+		}
+	})
+
+	t.Run("returns candidate tracks from Spotify search", func(t *testing.T) {
+		var capturedQuery string
+		var capturedLimit string
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/search") {
+				t.Fatalf("unexpected request path: %s", r.URL.Path)
+			}
+			capturedQuery = r.URL.Query().Get("q")
+			capturedLimit = r.URL.Query().Get("limit")
+			writeJSON(w, trackSearchItemsJSON(trackItemJSON("track123", "Attention")))
+		}))
+
+		tracks, err := sc.SearchTracks(context.Background(), "  Attention  ")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if capturedQuery != "Attention" {
+			t.Fatalf("query = %q, want trimmed track title", capturedQuery)
+		}
+		if capturedLimit != "10" {
+			t.Fatalf("limit = %q, want 10", capturedLimit)
+		}
+		if len(tracks) != 1 || tracks[0].ID.String() != "track123" || tracks[0].Name != "Attention" {
+			t.Fatalf("tracks = %+v, want Attention candidate", tracks)
+		}
+	})
+
+	t.Run("returns empty slice when response has no tracks object", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, map[string]interface{}{})
+		}))
+
+		tracks, err := sc.SearchTracks(context.Background(), "Unknown Track")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(tracks) != 0 {
+			t.Fatalf("tracks length = %d, want 0", len(tracks))
+		}
+	})
+
+	t.Run("returns error when spotify search request fails", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeSpotifyAPIError(w, http.StatusInternalServerError, "search failed")
+		}))
+
+		_, err := sc.SearchTracks(context.Background(), "Attention")
+		if err == nil {
+			t.Fatal("expected error when spotify search request fails, got nil")
+		}
+		if !strings.Contains(err.Error(), "spotify track search failed") {
+			t.Fatalf("error = %q, want wrapped track search failure", err.Error())
+		}
+	})
 }
 
 func TestSpotifyRequestsUseDeadlineWhenCallerHasNone(t *testing.T) {
@@ -777,6 +908,26 @@ func TestSpotifyRequestsUseDeadlineWhenCallerHasNone(t *testing.T) {
 	_, err := sc.SearchArtistByName(context.Background(), "John Mayer")
 	if err != nil {
 		t.Fatalf("SearchArtistByName failed: %v", err)
+	}
+}
+
+func TestSpotifyRequestsPreserveCallerDeadline(t *testing.T) {
+	callerDeadline := time.Now().Add(time.Minute)
+	var requestDeadline time.Time
+	sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestDeadline, _ = r.Context().Deadline()
+		writeJSON(w, artistSearchJSON("jm123", "John Mayer"))
+	}))
+
+	ctx, cancel := context.WithDeadline(context.Background(), callerDeadline)
+	defer cancel()
+
+	_, err := sc.SearchArtistByName(ctx, "John Mayer")
+	if err != nil {
+		t.Fatalf("SearchArtistByName failed: %v", err)
+	}
+	if !requestDeadline.Equal(callerDeadline) {
+		t.Fatalf("request deadline = %s, want caller deadline %s", requestDeadline, callerDeadline)
 	}
 }
 
@@ -850,7 +1001,7 @@ func TestNew(t *testing.T) {
 				writeSpotifyTokenResponse(w, "test-token")
 			})},
 		}
-		ctx := context.WithValue(context.Background(), interface{}(oauth2.HTTPClient), httpClient)
+		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
 		client, err := New(ctx, "client-id", "client-secret")
 		if err != nil {
@@ -881,7 +1032,7 @@ func TestNew(t *testing.T) {
 				}
 			})},
 		}
-		ctx := context.WithValue(context.Background(), interface{}(oauth2.HTTPClient), httpClient)
+		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
 		client, err := New(ctx, "client-id", "client-secret")
 		if err != nil {
@@ -918,7 +1069,7 @@ func TestNew(t *testing.T) {
 				w.Write(b)
 			})},
 		}
-		ctx := context.WithValue(context.Background(), interface{}(oauth2.HTTPClient), httpClient)
+		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
 		client, err := New(ctx, "client-id", "client-secret")
 		if err == nil {

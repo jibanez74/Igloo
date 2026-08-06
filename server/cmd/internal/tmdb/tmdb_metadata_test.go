@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,120 +18,23 @@ import (
 	cache "github.com/patrickmn/go-cache"
 )
 
+func newTestClient(baseURL string) *tmdbClient {
+	return &tmdbClient{
+		key:            "test-api-key",
+		baseURL:        baseURL,
+		httpClient:     &http.Client{Timeout: time.Second},
+		maxRetries:     3,
+		retryBaseDelay: time.Millisecond,
+		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
+	}
+}
+
 func TestNew(t *testing.T) {
-	t.Run("returns error when API key is empty", func(t *testing.T) {
-		_, err := New("")
-		if err == nil {
-			t.Error("Expected error when API key is empty")
-		}
-	})
-
-	t.Run("returns client when API key is provided", func(t *testing.T) {
-		client, err := New("test-api-key")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if client == nil {
-			t.Error("Expected client to be non-nil")
-		}
-	})
-}
-
-func TestGetTmdbMovieByID_RetriesRateLimitAndSucceeds(t *testing.T) {
-	var attempts atomic.Int32
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count := attempts.Add(1)
-		if count < 3 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix","release_date":"1999-03-30"}`))
-	}))
-	defer server.Close()
-
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     &http.Client{Timeout: 200 * time.Millisecond},
-		maxRetries:     3,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	movie := &TmdbMovie{TmdbID: 603}
-	err := client.GetTmdbMovieByID(context.Background(), movie)
-	if err != nil {
-		t.Fatalf("GetTmdbMovieByID returned error: %v", err)
-	}
-
-	if movie.Title != "The Matrix" {
-		t.Fatalf("expected title to be populated after retry, got %q", movie.Title)
-	}
-	if attempts.Load() != 3 {
-		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
-	}
-}
-
-func TestGetTmdbMovieByID_TimeoutReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(50 * time.Millisecond)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
-	}))
-	defer server.Close()
-
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     &http.Client{Timeout: 10 * time.Millisecond},
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	movie := &TmdbMovie{TmdbID: 603}
-	err := client.GetTmdbMovieByID(context.Background(), movie)
+	_, err := New("")
 	if err == nil {
-		t.Fatal("expected timeout error, got nil")
-	}
-}
-
-func TestGetTmdbMovieByID_RespectsCanceledContext(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
-	}))
-	defer server.Close()
-
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     &http.Client{Timeout: 500 * time.Millisecond},
-		maxRetries:     3,
-		retryBaseDelay: 50 * time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
+		t.Fatal("expected error when API key is empty")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	movie := &TmdbMovie{TmdbID: 603}
-	err := client.GetTmdbMovieByID(ctx, movie)
-	if err == nil {
-		t.Fatal("expected canceled context error, got nil")
-	}
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
-	}
-}
-
-func TestNew_ConfiguresSharedHTTPClient(t *testing.T) {
 	client, err := New("test-api-key")
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
@@ -149,30 +55,237 @@ func TestNew_ConfiguresSharedHTTPClient(t *testing.T) {
 	}
 }
 
-func TestGetTmdbMovieByID_UsesCacheAndClearCache(t *testing.T) {
+func TestGetTmdbMovieByID_RequiresTmdbID(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempt := attempts.Add(1)
-		if r.URL.Path != "/movie/603" {
-			t.Fatalf("path = %q, want /movie/603", r.URL.Path)
-		}
-		if r.URL.Query().Get("append_to_response") != "credits,videos,release_dates" {
-			t.Fatalf("append_to_response = %q", r.URL.Query().Get("append_to_response"))
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix ` + string(rune('0'+attempt)) + `"}`))
+		attempts.Add(1)
 	}))
 	defer server.Close()
 
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     server.Client(),
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{})
+	if err == nil {
+		t.Fatal("expected missing tmdb id to return error")
 	}
+	if attempts.Load() != 0 {
+		t.Fatalf("expected no HTTP requests, got %d", attempts.Load())
+	}
+}
+
+func TestGetTmdbMovieByID_RetriesRateLimitAndSucceeds(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) < 3 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix","release_date":"1999-03-30"}`))
+	}))
+	defer server.Close()
+
+	movie := &TmdbMovie{TmdbID: 603}
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), movie)
+	if err != nil {
+		t.Fatalf("GetTmdbMovieByID returned error: %v", err)
+	}
+
+	if movie.Title != "The Matrix" {
+		t.Fatalf("expected title to be populated after retry, got %q", movie.Title)
+	}
+	if attempts.Load() != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetTmdbMovieByID_RateLimitExhaustsRetries(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
+	}))
+	defer server.Close()
+
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
+	if err == nil {
+		t.Fatal("expected exhausted retries to return error")
+	}
+	if err.Error() != "rate limit exceeded for tmdb" {
+		t.Fatalf("error = %q, want rate limit exceeded for tmdb", err.Error())
+	}
+	if attempts.Load() != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetTmdbMovieByID_RetriesServerErrorAndSucceeds(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
+	}))
+	defer server.Close()
+
+	movie := &TmdbMovie{TmdbID: 603}
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), movie)
+	if err != nil {
+		t.Fatalf("GetTmdbMovieByID returned error: %v", err)
+	}
+	if movie.Title != "The Matrix" {
+		t.Fatalf("expected title after 500 retry, got %q", movie.Title)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetTmdbMovieByID_RetriesNetworkErrorAndSucceeds(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) == 1 {
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				panic("test server does not support hijacking")
+			}
+			conn, _, err := hj.Hijack()
+			if err == nil {
+				conn.Close()
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
+	}))
+	defer server.Close()
+
+	movie := &TmdbMovie{TmdbID: 603}
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), movie)
+	if err != nil {
+		t.Fatalf("GetTmdbMovieByID returned error: %v", err)
+	}
+	if movie.Title != "The Matrix" {
+		t.Fatalf("expected title after network-error retry, got %q", movie.Title)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetTmdbMovieByID_RetriesTruncatedBodyAndSucceeds(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.Header().Set("Content-Length", "100")
+			_, _ = w.Write([]byte(`{"id":603`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
+	}))
+	defer server.Close()
+
+	movie := &TmdbMovie{TmdbID: 603}
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), movie)
+	if err != nil {
+		t.Fatalf("GetTmdbMovieByID returned error: %v", err)
+	}
+	if movie.Title != "The Matrix" {
+		t.Fatalf("expected title after truncated-body retry, got %q", movie.Title)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetTmdbMovieByID_ContextExpiresDuringBackoff(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "2")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	err := newTestClient(server.URL).GetTmdbMovieByID(ctx, &TmdbMovie{TmdbID: 603})
+	if err == nil {
+		t.Fatal("expected context deadline error, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+	}
+}
+
+func TestGetTmdbMovieByID_TimeoutReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	client.httpClient = &http.Client{Timeout: 10 * time.Millisecond}
+	client.maxRetries = 1
+
+	err := client.GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+}
+
+func TestGetTmdbMovieByID_RespectsCanceledContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := newTestClient(server.URL).GetTmdbMovieByID(ctx, &TmdbMovie{TmdbID: 603})
+	if err == nil {
+		t.Fatal("expected canceled context error, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+func TestGetTmdbMovieByID_UsesCacheAndClearCache(t *testing.T) {
+	var (
+		attempts atomic.Int32
+		mu       sync.Mutex
+		queries  []url.Values
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := attempts.Add(1)
+		mu.Lock()
+		query := r.URL.Query()
+		query.Set("path", r.URL.Path)
+		queries = append(queries, query)
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"id":603,"title":"The Matrix %d"}`, attempt)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
 
 	first := &TmdbMovie{TmdbID: 603}
 	if err := client.GetTmdbMovieByID(context.Background(), first); err != nil {
@@ -197,6 +310,44 @@ func TestGetTmdbMovieByID_UsesCacheAndClearCache(t *testing.T) {
 	if attempts.Load() != 2 {
 		t.Fatalf("expected cache clear to force HTTP, got %d attempts", attempts.Load())
 	}
+
+	for i, query := range queries {
+		if query.Get("path") != "/movie/603" {
+			t.Fatalf("request %d path = %q, want /movie/603", i, query.Get("path"))
+		}
+		if query.Get("append_to_response") != "credits,videos,release_dates" {
+			t.Fatalf("request %d append_to_response = %q", i, query.Get("append_to_response"))
+		}
+	}
+}
+
+func TestGetTmdbMovieByID_CachedCopiesAreIsolated(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+
+	first := &TmdbMovie{TmdbID: 603}
+	if err := client.GetTmdbMovieByID(context.Background(), first); err != nil {
+		t.Fatalf("first GetTmdbMovieByID: %v", err)
+	}
+	first.Title = "mutated by caller"
+
+	second := &TmdbMovie{TmdbID: 603}
+	if err := client.GetTmdbMovieByID(context.Background(), second); err != nil {
+		t.Fatalf("cached GetTmdbMovieByID: %v", err)
+	}
+	if second.Title != "The Matrix" {
+		t.Fatalf("cached title = %q, want The Matrix after caller mutation", second.Title)
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("expected cached call to avoid HTTP, got %d attempts", attempts.Load())
+	}
 }
 
 func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
@@ -206,16 +357,7 @@ func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     server.Client(),
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	err := client.GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
 	if err == nil {
 		t.Fatal("expected non-OK response to return error")
 	}
@@ -224,19 +366,30 @@ func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
 	}
 }
 
-func TestSearchMoviesByTitleAndYear_RetriesWithoutYearWhenEmpty(t *testing.T) {
-	var requests []string
+func TestGetTmdbMovieByID_MalformedJSONReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests = append(requests, r.URL.RawQuery)
-		if r.URL.Path != "/search/movie" {
-			t.Fatalf("path = %q, want /search/movie", r.URL.Path)
-		}
-		if r.URL.Query().Get("query") != "The Matrix" {
-			t.Fatalf("query = %q, want The Matrix", r.URL.Query().Get("query"))
-		}
-		if r.URL.Query().Get("include_adult") != "false" {
-			t.Fatalf("include_adult = %q, want false", r.URL.Query().Get("include_adult"))
-		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":`))
+	}))
+	defer server.Close()
+
+	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
+	if err == nil {
+		t.Fatal("expected malformed JSON to return error")
+	}
+}
+
+func TestSearchMoviesByTitleAndYear_RetriesWithoutYearWhenEmpty(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		queries []url.Values
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		query := r.URL.Query()
+		query.Set("path", r.URL.Path)
+		queries = append(queries, query)
+		mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Query().Get("year") == "1850" {
@@ -247,78 +400,87 @@ func TestSearchMoviesByTitleAndYear_RetriesWithoutYearWhenEmpty(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     server.Client(),
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	results, err := client.SearchMoviesByTitleAndYear(context.Background(), "The Matrix", 1850)
+	results, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "The Matrix", 1850)
 	if err != nil {
 		t.Fatalf("SearchMoviesByTitleAndYear returned error: %v", err)
 	}
 	if len(results) != 1 || results[0].TmdbID != 603 {
 		t.Fatalf("results = %+v, want The Matrix fallback result", results)
 	}
-	if len(requests) != 2 {
-		t.Fatalf("request count = %d, want 2", len(requests))
+
+	if len(queries) != 2 {
+		t.Fatalf("request count = %d, want 2", len(queries))
+	}
+	for i, query := range queries {
+		if query.Get("path") != "/search/movie" {
+			t.Fatalf("request %d path = %q, want /search/movie", i, query.Get("path"))
+		}
+		if query.Get("query") != "The Matrix" {
+			t.Fatalf("request %d query = %q, want The Matrix", i, query.Get("query"))
+		}
+		if query.Get("include_adult") != "false" {
+			t.Fatalf("request %d include_adult = %q, want false", i, query.Get("include_adult"))
+		}
+	}
+	if queries[0].Get("year") != "1850" {
+		t.Fatalf("first request year = %q, want 1850", queries[0].Get("year"))
+	}
+	if queries[1].Has("year") {
+		t.Fatalf("fallback request should drop year, got %q", queries[1].Get("year"))
 	}
 }
 
-func TestSearchMoviesByTitleAndYear_RejectsEmptyAndNoResults(t *testing.T) {
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        "http://127.0.0.1",
-		httpClient:     &http.Client{Timeout: time.Millisecond},
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	if _, err := client.SearchMoviesByTitleAndYear(context.Background(), ""); err == nil {
+func TestSearchMoviesByTitleAndYear_RejectsEmptyTitle(t *testing.T) {
+	_, err := newTestClient("").SearchMoviesByTitleAndYear(context.Background(), "")
+	if err == nil {
 		t.Fatal("expected empty title to return error")
 	}
+}
 
+func TestSearchMoviesByTitleAndYear_NoResultsReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"results":[]}`))
 	}))
 	defer server.Close()
-	client.baseURL = server.URL
-	client.httpClient = server.Client()
 
-	if _, err := client.SearchMoviesByTitleAndYear(context.Background(), "No Results"); err == nil {
+	_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "No Results")
+	if err == nil {
 		t.Fatal("expected empty results to return error")
 	}
 }
 
-func TestGetMoviesInTheaters(t *testing.T) {
+func TestSearchMoviesByTitleAndYear_MalformedJSONReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/movie/now_playing" {
-			t.Fatalf("path = %q, want /movie/now_playing", r.URL.Path)
-		}
-		if r.URL.Query().Get("region") != "US" || r.URL.Query().Get("language") != "en-US" || r.URL.Query().Get("page") != "1" {
-			t.Fatalf("unexpected query: %s", r.URL.RawQuery)
-		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":`))
+	}))
+	defer server.Close()
+
+	_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "The Matrix")
+	if err == nil {
+		t.Fatal("expected malformed JSON to return error")
+	}
+}
+
+func TestGetMoviesInTheaters(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		queries []url.Values
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		query := r.URL.Query()
+		query.Set("path", r.URL.Path)
+		queries = append(queries, query)
+		mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"One"},{"id":2,"title":"Two"}]}`))
 	}))
 	defer server.Close()
 
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     server.Client(),
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	movies, err := client.GetMoviesInTheaters(context.Background())
+	movies, err := newTestClient(server.URL).GetMoviesInTheaters(context.Background())
 	if err != nil {
 		t.Fatalf("GetMoviesInTheaters returned error: %v", err)
 	}
@@ -329,6 +491,16 @@ func TestGetMoviesInTheaters(t *testing.T) {
 	if movies[1].Title == "Changed" {
 		t.Fatal("movie pointers should point to distinct slice elements")
 	}
+
+	if len(queries) != 1 {
+		t.Fatalf("request count = %d, want 1", len(queries))
+	}
+	if queries[0].Get("path") != "/movie/now_playing" {
+		t.Fatalf("path = %q, want /movie/now_playing", queries[0].Get("path"))
+	}
+	if queries[0].Get("region") != "US" || queries[0].Get("language") != "en-US" || queries[0].Get("page") != "1" {
+		t.Fatalf("unexpected query: %v", queries[0])
+	}
 }
 
 func TestGetMoviesInTheaters_EmptyResultsReturnsError(t *testing.T) {
@@ -338,16 +510,7 @@ func TestGetMoviesInTheaters_EmptyResultsReturnsError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        server.URL,
-		httpClient:     server.Client(),
-		maxRetries:     1,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-
-	if _, err := client.GetMoviesInTheaters(context.Background()); err == nil {
+	if _, err := newTestClient(server.URL).GetMoviesInTheaters(context.Background()); err == nil {
 		t.Fatal("expected empty now-playing results to return error")
 	}
 }
@@ -398,8 +561,26 @@ func TestRetryDelayHonorsRetryAfterAndCaps(t *testing.T) {
 		t.Fatalf("capped Retry-After delay = %s, want %s", got, tmdbHTTPRetryMaxDelay)
 	}
 
+	headers.Set("Retry-After", time.Now().Add(time.Minute).UTC().Format(http.TimeFormat))
+	if got := client.retryDelay(headers, 0); got != tmdbHTTPRetryMaxDelay {
+		t.Fatalf("capped Retry-After date delay = %s, want %s", got, tmdbHTTPRetryMaxDelay)
+	}
+
+	headers.Set("Retry-After", time.Now().Add(-time.Minute).UTC().Format(http.TimeFormat))
+	if got := client.retryDelay(headers, 0); got != 0 {
+		t.Fatalf("past Retry-After date delay = %s, want 0", got)
+	}
+
 	headers.Set("Retry-After", "not-a-date")
 	if got := client.retryDelay(headers, 2); got != 400*time.Millisecond {
 		t.Fatalf("exponential delay = %s, want 400ms", got)
+	}
+	if got := client.retryDelay(headers, 5); got != tmdbHTTPRetryMaxDelay {
+		t.Fatalf("capped exponential delay = %s, want %s", got, tmdbHTTPRetryMaxDelay)
+	}
+
+	zero := &tmdbClient{}
+	if got := zero.retryDelay(nil, 0); got != tmdbHTTPRetryBaseDelay {
+		t.Fatalf("zero-value base delay = %s, want %s", got, tmdbHTTPRetryBaseDelay)
 	}
 }

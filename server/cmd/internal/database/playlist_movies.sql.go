@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const addMovieToPlaylist = `-- name: AddMovieToPlaylist :one
+const addMovieToPlaylist = `-- name: AddMovieToPlaylist :execrows
 INSERT INTO playlist_movies (
   playlist_id,
   movie_id,
@@ -28,7 +28,7 @@ VALUES
     ),
     ?3
   )
-RETURNING id, playlist_id, movie_id, position, added_by, added_at
+ON CONFLICT (playlist_id, movie_id) DO NOTHING
 `
 
 type AddMovieToPlaylistParams struct {
@@ -37,18 +37,14 @@ type AddMovieToPlaylistParams struct {
 	AddedBy    sql.NullInt64 `json:"added_by"`
 }
 
-func (q *Queries) AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error) {
-	row := q.queryRow(ctx, q.addMovieToPlaylistStmt, addMovieToPlaylist, arg.PlaylistID, arg.MovieID, arg.AddedBy)
-	var i PlaylistMovie
-	err := row.Scan(
-		&i.ID,
-		&i.PlaylistID,
-		&i.MovieID,
-		&i.Position,
-		&i.AddedBy,
-		&i.AddedAt,
-	)
-	return i, err
+// Zero rows affected means the movie was already in the playlist; the unique
+// constraint replaces a separate membership pre-check.
+func (q *Queries) AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (int64, error) {
+	result, err := q.exec(ctx, q.addMovieToPlaylistStmt, addMovieToPlaylist, arg.PlaylistID, arg.MovieID, arg.AddedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const countPlaylistMovies = `-- name: CountPlaylistMovies :one
@@ -186,28 +182,6 @@ func (q *Queries) GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPla
 		return nil, err
 	}
 	return items, nil
-}
-
-const isMovieInPlaylist = `-- name: IsMovieInPlaylist :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM playlist_movies
-    WHERE playlist_id = ?
-      AND movie_id = ?
-  ) AS is_in_playlist
-`
-
-type IsMovieInPlaylistParams struct {
-	PlaylistID int64 `json:"playlist_id"`
-	MovieID    int64 `json:"movie_id"`
-}
-
-func (q *Queries) IsMovieInPlaylist(ctx context.Context, arg IsMovieInPlaylistParams) (bool, error) {
-	row := q.queryRow(ctx, q.isMovieInPlaylistStmt, isMovieInPlaylist, arg.PlaylistID, arg.MovieID)
-	var is_in_playlist bool
-	err := row.Scan(&is_in_playlist)
-	return is_in_playlist, err
 }
 
 const removeMovieFromPlaylist = `-- name: RemoveMovieFromPlaylist :exec

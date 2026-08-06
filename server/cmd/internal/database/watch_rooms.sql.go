@@ -60,19 +60,27 @@ INSERT INTO watch_rooms (
   movie_id,
   playback_mode,
   audio_track,
-  subtitle_track
+  subtitle_track,
+  audio_stream_index,
+  audio_language,
+  subtitle_stream_index,
+  subtitle_language
 )
 VALUES
-  (?, ?, ?, ?, ?)
-RETURNING id, owner_user_id, movie_id, playback_mode, audio_track, subtitle_track, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, owner_user_id, movie_id, playback_mode, audio_track, subtitle_track, audio_stream_index, audio_language, subtitle_stream_index, subtitle_language, created_at, updated_at
 `
 
 type CreateWatchRoomParams struct {
-	OwnerUserID   int64         `json:"owner_user_id"`
-	MovieID       int64         `json:"movie_id"`
-	PlaybackMode  string        `json:"playback_mode"`
-	AudioTrack    int64         `json:"audio_track"`
-	SubtitleTrack sql.NullInt64 `json:"subtitle_track"`
+	OwnerUserID         int64          `json:"owner_user_id"`
+	MovieID             int64          `json:"movie_id"`
+	PlaybackMode        string         `json:"playback_mode"`
+	AudioTrack          int64          `json:"audio_track"`
+	SubtitleTrack       sql.NullInt64  `json:"subtitle_track"`
+	AudioStreamIndex    sql.NullInt64  `json:"audio_stream_index"`
+	AudioLanguage       sql.NullString `json:"audio_language"`
+	SubtitleStreamIndex sql.NullInt64  `json:"subtitle_stream_index"`
+	SubtitleLanguage    sql.NullString `json:"subtitle_language"`
 }
 
 func (q *Queries) CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error) {
@@ -82,6 +90,10 @@ func (q *Queries) CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams
 		arg.PlaybackMode,
 		arg.AudioTrack,
 		arg.SubtitleTrack,
+		arg.AudioStreamIndex,
+		arg.AudioLanguage,
+		arg.SubtitleStreamIndex,
+		arg.SubtitleLanguage,
 	)
 	var i WatchRoom
 	err := row.Scan(
@@ -91,6 +103,10 @@ func (q *Queries) CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams
 		&i.PlaybackMode,
 		&i.AudioTrack,
 		&i.SubtitleTrack,
+		&i.AudioStreamIndex,
+		&i.AudioLanguage,
+		&i.SubtitleStreamIndex,
+		&i.SubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -109,7 +125,7 @@ func (q *Queries) DeleteWatchRoom(ctx context.Context, id int64) error {
 
 const getWatchRoomByID = `-- name: GetWatchRoomByID :one
 SELECT
-  id, owner_user_id, movie_id, playback_mode, audio_track, subtitle_track, created_at, updated_at
+  id, owner_user_id, movie_id, playback_mode, audio_track, subtitle_track, audio_stream_index, audio_language, subtitle_stream_index, subtitle_language, created_at, updated_at
 FROM watch_rooms
 WHERE id = ?
 LIMIT 1
@@ -125,40 +141,115 @@ func (q *Queries) GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, er
 		&i.PlaybackMode,
 		&i.AudioTrack,
 		&i.SubtitleTrack,
+		&i.AudioStreamIndex,
+		&i.AudioLanguage,
+		&i.SubtitleStreamIndex,
+		&i.SubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getWatchRoomMemberByUserID = `-- name: GetWatchRoomMemberByUserID :one
-SELECT
-  u.id,
-  u.name,
-  u.avatar
-FROM watch_room_members AS wrm
-INNER JOIN users AS u
-  ON wrm.user_id = u.id
-WHERE wrm.room_id = ?
+const getWatchRoomForMember = `-- name: GetWatchRoomForMember :one
+SELECT wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.audio_stream_index, wr.audio_language, wr.subtitle_stream_index, wr.subtitle_language, wr.created_at, wr.updated_at
+FROM watch_rooms AS wr
+INNER JOIN watch_room_members AS wrm
+  ON wrm.room_id = wr.id
+WHERE wr.id = ?
   AND wrm.user_id = ?
 LIMIT 1
 `
 
-type GetWatchRoomMemberByUserIDParams struct {
-	RoomID int64 `json:"room_id"`
+type GetWatchRoomForMemberParams struct {
+	ID     int64 `json:"id"`
 	UserID int64 `json:"user_id"`
 }
 
-type GetWatchRoomMemberByUserIDRow struct {
-	ID     int64          `json:"id"`
-	Name   string         `json:"name"`
-	Avatar sql.NullString `json:"avatar"`
+// The room row, but only when the user is a member: the auth check every
+// room media request (manifest, each segment, direct stream, websocket)
+// performs. One PK seek plus one (room_id, user_id) unique-index seek;
+// sql.ErrNoRows covers both "no such room" and "not a member", which callers
+// deliberately do not distinguish.
+func (q *Queries) GetWatchRoomForMember(ctx context.Context, arg GetWatchRoomForMemberParams) (WatchRoom, error) {
+	row := q.queryRow(ctx, q.getWatchRoomForMemberStmt, getWatchRoomForMember, arg.ID, arg.UserID)
+	var i WatchRoom
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerUserID,
+		&i.MovieID,
+		&i.PlaybackMode,
+		&i.AudioTrack,
+		&i.SubtitleTrack,
+		&i.AudioStreamIndex,
+		&i.AudioLanguage,
+		&i.SubtitleStreamIndex,
+		&i.SubtitleLanguage,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
-func (q *Queries) GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error) {
-	row := q.queryRow(ctx, q.getWatchRoomMemberByUserIDStmt, getWatchRoomMemberByUserID, arg.RoomID, arg.UserID)
-	var i GetWatchRoomMemberByUserIDRow
-	err := row.Scan(&i.ID, &i.Name, &i.Avatar)
+const getWatchRoomForMemberWithSummary = `-- name: GetWatchRoomForMemberWithSummary :one
+SELECT
+  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.audio_stream_index, wr.audio_language, wr.subtitle_stream_index, wr.subtitle_language, wr.created_at, wr.updated_at,
+  u.name AS member_name,
+  u.avatar AS member_avatar
+FROM watch_rooms AS wr
+INNER JOIN watch_room_members AS wrm
+  ON wrm.room_id = wr.id
+INNER JOIN users AS u
+  ON u.id = wrm.user_id
+WHERE wr.id = ?
+  AND wrm.user_id = ?
+LIMIT 1
+`
+
+type GetWatchRoomForMemberWithSummaryParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type GetWatchRoomForMemberWithSummaryRow struct {
+	ID                  int64          `json:"id"`
+	OwnerUserID         int64          `json:"owner_user_id"`
+	MovieID             int64          `json:"movie_id"`
+	PlaybackMode        string         `json:"playback_mode"`
+	AudioTrack          int64          `json:"audio_track"`
+	SubtitleTrack       sql.NullInt64  `json:"subtitle_track"`
+	AudioStreamIndex    sql.NullInt64  `json:"audio_stream_index"`
+	AudioLanguage       sql.NullString `json:"audio_language"`
+	SubtitleStreamIndex sql.NullInt64  `json:"subtitle_stream_index"`
+	SubtitleLanguage    sql.NullString `json:"subtitle_language"`
+	CreatedAt           string         `json:"created_at"`
+	UpdatedAt           string         `json:"updated_at"`
+	MemberName          string         `json:"member_name"`
+	MemberAvatar        sql.NullString `json:"member_avatar"`
+}
+
+// GetWatchRoomForMember plus the requesting member's presence summary
+// (name, avatar), for the websocket upgrade only: it needs both and runs
+// once per socket. HTTP media requests keep the leaner GetWatchRoomForMember.
+func (q *Queries) GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error) {
+	row := q.queryRow(ctx, q.getWatchRoomForMemberWithSummaryStmt, getWatchRoomForMemberWithSummary, arg.ID, arg.UserID)
+	var i GetWatchRoomForMemberWithSummaryRow
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerUserID,
+		&i.MovieID,
+		&i.PlaybackMode,
+		&i.AudioTrack,
+		&i.SubtitleTrack,
+		&i.AudioStreamIndex,
+		&i.AudioLanguage,
+		&i.SubtitleStreamIndex,
+		&i.SubtitleLanguage,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MemberName,
+		&i.MemberAvatar,
+	)
 	return i, err
 }
 
@@ -166,7 +257,6 @@ const getWatchRoomMembers = `-- name: GetWatchRoomMembers :many
 SELECT
   u.id,
   u.name,
-  u.email,
   u.avatar
 FROM watch_room_members AS wrm
 INNER JOIN users AS u
@@ -178,7 +268,6 @@ ORDER BY wrm.created_at ASC
 type GetWatchRoomMembersRow struct {
 	ID     int64          `json:"id"`
 	Name   string         `json:"name"`
-	Email  string         `json:"email"`
 	Avatar sql.NullString `json:"avatar"`
 }
 
@@ -191,12 +280,7 @@ func (q *Queries) GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetW
 	items := []GetWatchRoomMembersRow{}
 	for rows.Next() {
 		var i GetWatchRoomMembersRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Email,
-			&i.Avatar,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.Avatar); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -215,7 +299,6 @@ SELECT
   wrm.room_id,
   u.id,
   u.name,
-  u.email,
   u.avatar
 FROM watch_room_members AS wrm
 INNER JOIN users AS u
@@ -228,7 +311,6 @@ type GetWatchRoomMembersByRoomIDsRow struct {
 	RoomID int64          `json:"room_id"`
 	ID     int64          `json:"id"`
 	Name   string         `json:"name"`
-	Email  string         `json:"email"`
 	Avatar sql.NullString `json:"avatar"`
 }
 
@@ -255,7 +337,6 @@ func (q *Queries) GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []in
 			&i.RoomID,
 			&i.ID,
 			&i.Name,
-			&i.Email,
 			&i.Avatar,
 		); err != nil {
 			return nil, err
@@ -273,7 +354,7 @@ func (q *Queries) GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []in
 
 const getWatchRoomsForUser = `-- name: GetWatchRoomsForUser :many
 SELECT
-  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.created_at, wr.updated_at
+  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.audio_stream_index, wr.audio_language, wr.subtitle_stream_index, wr.subtitle_language, wr.created_at, wr.updated_at
 FROM watch_rooms AS wr
 INNER JOIN watch_room_members AS wrm
   ON wr.id = wrm.room_id
@@ -297,6 +378,10 @@ func (q *Queries) GetWatchRoomsForUser(ctx context.Context, userID int64) ([]Wat
 			&i.PlaybackMode,
 			&i.AudioTrack,
 			&i.SubtitleTrack,
+			&i.AudioStreamIndex,
+			&i.AudioLanguage,
+			&i.SubtitleStreamIndex,
+			&i.SubtitleLanguage,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -315,11 +400,12 @@ func (q *Queries) GetWatchRoomsForUser(ctx context.Context, userID int64) ([]Wat
 
 const isWatchRoomMember = `-- name: IsWatchRoomMember :one
 SELECT
-  1
-FROM watch_room_members
-WHERE room_id = ?
-  AND user_id = ?
-LIMIT 1
+  EXISTS (
+    SELECT 1
+    FROM watch_room_members
+    WHERE room_id = ?
+      AND user_id = ?
+  ) AS is_member
 `
 
 type IsWatchRoomMemberParams struct {
@@ -327,30 +413,9 @@ type IsWatchRoomMemberParams struct {
 	UserID int64 `json:"user_id"`
 }
 
-func (q *Queries) IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (int64, error) {
+func (q *Queries) IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (bool, error) {
 	row := q.queryRow(ctx, q.isWatchRoomMemberStmt, isWatchRoomMember, arg.RoomID, arg.UserID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
-const isWatchRoomOwner = `-- name: IsWatchRoomOwner :one
-SELECT
-  1
-FROM watch_rooms
-WHERE id = ?
-  AND owner_user_id = ?
-LIMIT 1
-`
-
-type IsWatchRoomOwnerParams struct {
-	ID          int64 `json:"id"`
-	OwnerUserID int64 `json:"owner_user_id"`
-}
-
-func (q *Queries) IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerParams) (int64, error) {
-	row := q.queryRow(ctx, q.isWatchRoomOwnerStmt, isWatchRoomOwner, arg.ID, arg.OwnerUserID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+	var is_member bool
+	err := row.Scan(&is_member)
+	return is_member, err
 }

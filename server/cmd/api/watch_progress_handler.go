@@ -55,12 +55,12 @@ func parseMovieID(r *http.Request) (int64, error) {
 }
 
 func (app *Application) ensureMovieExists(r *http.Request, movieID int64) error {
-	_, err := app.Queries.GetMovieByID(r.Context(), movieID)
+	exists, err := app.Queries.MovieExists(r.Context(), movieID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
-		}
 		return err
+	}
+	if !exists {
+		return sql.ErrNoRows
 	}
 	return nil
 }

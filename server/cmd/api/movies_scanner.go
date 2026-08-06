@@ -174,6 +174,12 @@ type movieScanContext struct {
 	// per-movie transaction (getOrCreateMovieGenreID), so clone/mergeFrom isolate
 	// it until commit to avoid caching ids from a rolled-back transaction.
 	genreIDs map[string]int64
+	// artistIDs memoizes TMDB person id -> artist.id within a scan, so a person
+	// appearing in many movies (or in several crew roles of one movie) is
+	// upserted once per scan instead of once per credit. Same clone/mergeFrom
+	// rollback isolation as genreIDs. Artist rows are never deleted, so cached
+	// ids stay valid for the whole scan.
+	artistIDs map[int64]int64
 }
 
 func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
@@ -186,6 +192,7 @@ func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
 	return &movieScanContext{
 		movieIndex: movieIndex,
 		genreIDs:   make(map[string]int64),
+		artistIDs:  make(map[int64]int64),
 	}
 }
 
@@ -193,11 +200,13 @@ func (scan *movieScanContext) clone() *movieScanContext {
 	return &movieScanContext{
 		movieIndex: scan.movieIndex, // shared; never written inside the transaction
 		genreIDs:   maps.Clone(scan.genreIDs),
+		artistIDs:  maps.Clone(scan.artistIDs),
 	}
 }
 
 func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
 	maps.Copy(scan.genreIDs, other.genreIDs)
+	maps.Copy(scan.artistIDs, other.artistIDs)
 }
 
 func (scan *movieScanContext) movieUnchanged(path string, size int64) bool {
@@ -587,6 +596,9 @@ func (app *Application) persistResolvedMovie(ctx context.Context, scan *movieSca
 	// republish the pre-rescan file path after the new one commits.
 	app.invalidateSubtitleVTTCache(movieID)
 	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
+	// A re-persist only happens when the file changed, so any live HLS session
+	// is transcoding a replaced file with stale stream mappings.
+	app.invalidateHLSSessionsForMovie(movieID)
 
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
@@ -621,12 +633,12 @@ func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("process production companies failed: %w", err)
 		}
 
-		err = processCast(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Cast)
+		err = processCast(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Cast)
 		if err != nil {
 			return 0, fmt.Errorf("process cast failed: %w", err)
 		}
 
-		err = processCrew(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Crew)
+		err = processCrew(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Crew)
 		if err != nil {
 			return 0, fmt.Errorf("process crew failed: %w", err)
 		}
@@ -704,6 +716,7 @@ func processProductionCompanies(
 func processCast(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	cast []struct {
 		ID          int    `json:"id"`
@@ -714,14 +727,14 @@ func processCast(
 	},
 ) error {
 	for _, castMember := range cast {
-		artist, err := getOrCreateArtist(ctx, qtx, castMember.ID, castMember.Name, castMember.ProfilePath)
+		artistID, err := getOrCreateArtistID(ctx, qtx, scan, castMember.ID, castMember.Name, castMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
 		_, err = qtx.UpsertCast(ctx, database.UpsertCastParams{
 			MovieID:   movieID,
-			ArtistID:  artist.ID,
+			ArtistID:  artistID,
 			Character: castMember.Character,
 			CastOrder: int64(castMember.Order),
 		})
@@ -737,6 +750,7 @@ func processCast(
 func processCrew(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	crew []struct {
 		ID          int    `json:"id"`
@@ -747,14 +761,14 @@ func processCrew(
 	},
 ) error {
 	for _, crewMember := range crew {
-		artist, err := getOrCreateArtist(ctx, qtx, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
+		artistID, err := getOrCreateArtistID(ctx, qtx, scan, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
 		_, err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
 			MovieID:    movieID,
-			ArtistID:   artist.ID,
+			ArtistID:   artistID,
 			Job:        crewMember.Job,
 			Department: crewMember.Department,
 		})
@@ -784,6 +798,36 @@ func getOrCreateArtist(
 	}
 
 	return &upserted, nil
+}
+
+// getOrCreateArtistID is the scan-cached form of getOrCreateArtist: the same
+// person credited across many movies (or several crew roles of one movie) hits
+// the database once per scan. The first sighting still runs the full upsert,
+// so name/profile refresh from TMDB once per scan instead of once per credit.
+// Nil-tolerant on scan, like getOrCreateMovieGenreID.
+func getOrCreateArtistID(
+	ctx context.Context,
+	qtx *database.Queries,
+	scan *movieScanContext,
+	tmdbID int,
+	name string,
+	profilePath string,
+) (int64, error) {
+	if scan != nil {
+		if artistID, ok := scan.artistIDs[int64(tmdbID)]; ok {
+			return artistID, nil
+		}
+	}
+
+	artist, err := getOrCreateArtist(ctx, qtx, tmdbID, name, profilePath)
+	if err != nil {
+		return 0, err
+	}
+
+	if scan != nil {
+		scan.artistIDs[int64(tmdbID)] = artist.ID
+	}
+	return artist.ID, nil
 }
 
 func processMovieGenres(
@@ -1062,14 +1106,14 @@ func processChapters(
 	movieID int64,
 	chapters []ffprobe.Chapter,
 ) error {
-	err := qtx.DeleteMovieChapters(ctx, helpers.NullInt64(movieID))
+	err := qtx.DeleteMovieChapters(ctx, movieID)
 	if err != nil {
 		return fmt.Errorf("delete movie chapters failed: %w", err)
 	}
 
 	for _, chapter := range chapters {
 		_, err := qtx.InsertChapter(ctx, database.InsertChapterParams{
-			MovieID:   helpers.NullInt64(movieID),
+			MovieID:   movieID,
 			Title:     chapter.Tags.Title,
 			StartTime: chapterStartTimeSeconds(chapter),
 			Thumb:     sql.NullString{},

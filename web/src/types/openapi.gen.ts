@@ -2525,7 +2525,6 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
-            folder_id: components["schemas"]["SqlNullInt64"];
             movie_id: components["schemas"]["SqlNullInt64"];
             /** @constant */
             content_type: "movie";
@@ -2665,7 +2664,6 @@ export interface components {
             id: number;
             /** Format: int64 */
             created_by_user_id: number;
-            user_id: components["schemas"]["SqlNullInt64"];
             /** @enum {string} */
             title: "movie_request" | "album_request" | "track_request" | "other";
             message: string;
@@ -2688,8 +2686,6 @@ export interface components {
             is_admin: boolean;
             is_read: boolean;
             created_by_name: string;
-            /** Format: int64 */
-            user_id: number | null;
             created_at: string;
         };
         NotificationsListData: {
@@ -3120,7 +3116,6 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
-            folder_id: components["schemas"]["SqlNullInt64"];
             movie_id: components["schemas"]["SqlNullInt64"];
             content_type: string;
             created_at: string;
@@ -3135,7 +3130,6 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
-            folder_id: components["schemas"]["SqlNullInt64"];
             created_at: string;
             updated_at: string;
             /** Format: int64 */
@@ -6239,6 +6233,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             416: components["responses"]["RangeNotSatisfiable"];
             500: components["responses"]["InternalServerError"];
         };
@@ -6264,6 +6259,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             416: components["responses"]["RangeNotSatisfiable"];
             500: components["responses"]["InternalServerError"];
         };
@@ -6283,6 +6279,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
             503: components["responses"]["ServiceUnavailable"];
         };

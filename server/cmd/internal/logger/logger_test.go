@@ -7,181 +7,109 @@ import (
 	"testing"
 )
 
-func TestNew(t *testing.T) {
-	t.Run("returns error for nil config", func(t *testing.T) {
-		_, _, err := New(nil)
-		if err == nil {
-			t.Fatal("expected error for nil config")
-		}
+func TestNewRejectsInvalidConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  func(t *testing.T) *LoggerConfig
+		wantErr string
+	}{
+		{
+			name:    "nil config",
+			config:  func(t *testing.T) *LoggerConfig { return nil },
+			wantErr: "logger config is required",
+		},
+		{
+			name:    "empty log directory",
+			config:  func(t *testing.T) *LoggerConfig { return &LoggerConfig{} },
+			wantErr: "log directory is required",
+		},
+		{
+			name: "log directory does not exist",
+			config: func(t *testing.T) *LoggerConfig {
+				return &LoggerConfig{LogDir: filepath.Join(t.TempDir(), "missing")}
+			},
+			wantErr: "log directory does not exist",
+		},
+		{
+			name: "log directory is a regular file",
+			config: func(t *testing.T) *LoggerConfig {
+				return &LoggerConfig{LogDir: writeRegularFile(t)}
+			},
+			wantErr: "log path is not a directory",
+		},
+		{
+			name: "log directory sits under a regular file",
+			config: func(t *testing.T) *LoggerConfig {
+				// Stat fails with ENOTDIR here, which is not a not-exist error.
+				return &LoggerConfig{LogDir: filepath.Join(writeRegularFile(t), "nested")}
+			},
+			wantErr: "failed to stat log directory",
+		},
+		{
+			name: "log file path is taken by a directory",
+			config: func(t *testing.T) *LoggerConfig {
+				dir := t.TempDir()
 
-		if !strings.Contains(err.Error(), "logger config is required") {
-			t.Errorf("expected config required error, got %v", err)
-		}
-	})
+				err := os.Mkdir(filepath.Join(dir, "app.log"), 0o755)
+				if err != nil {
+					t.Fatalf("create directory: %v", err)
+				}
 
-	t.Run("debug mode returns stdout logger", func(t *testing.T) {
-		cfg := &LoggerConfig{
-			Debug: true,
-		}
+				return &LoggerConfig{LogDir: dir}
+			},
+			wantErr: "failed to open log file",
+		},
+	}
 
-		logger, closer, err := New(cfg)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, closer, err := New(tt.config(t))
+			if err == nil {
+				t.Fatal("expected an error")
+			}
 
-		if logger == nil {
-			t.Fatal("expected logger to be non-nil")
-		}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want it to contain %q", err, tt.wantErr)
+			}
 
-		if closer == nil {
-			t.Fatal("expected closer to be non-nil")
-		}
+			if logger != nil {
+				t.Error("expected a nil logger on failure")
+			}
 
-		err = closer()
-		if err != nil {
-			t.Errorf("expected closer to not error, got %v", err)
-		}
-	})
+			if closer != nil {
+				t.Error("expected a nil closer on failure")
+			}
+		})
+	}
+}
 
-	t.Run("production mode creates file logger", func(t *testing.T) {
+func TestNewFileLogger(t *testing.T) {
+	t.Run("defaults the file name without mutating the config", func(t *testing.T) {
 		dir := t.TempDir()
+		cfg := &LoggerConfig{LogDir: dir}
 
-		cfg := &LoggerConfig{
-			Debug:   false,
-			LogDir:  dir,
-			LogFile: "test.log",
-		}
-
-		logger, closer, err := New(cfg)
+		_, closer, err := New(cfg)
 		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("New: %v", err)
 		}
 		defer closer()
 
-		if logger == nil {
-			t.Fatal("expected logger to be non-nil")
-		}
-
-		logPath := filepath.Join(dir, "test.log")
-		if _, err := os.Stat(logPath); os.IsNotExist(err) {
-			t.Error("expected log file to be created")
-		}
-	})
-
-	t.Run("production mode uses default log file name", func(t *testing.T) {
-		dir := t.TempDir()
-
-		cfg := &LoggerConfig{
-			Debug:   false,
-			LogDir:  dir,
-			LogFile: "",
-		}
-
-		logger, closer, err := New(cfg)
+		_, err = os.Stat(filepath.Join(dir, "app.log"))
 		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		defer closer()
-
-		if logger == nil {
-			t.Fatal("expected logger to be non-nil")
-		}
-
-		logPath := filepath.Join(dir, "app.log")
-		if _, err := os.Stat(logPath); os.IsNotExist(err) {
-			t.Error("expected default log file 'app.log' to be created")
+			t.Fatalf("expected app.log to be created: %v", err)
 		}
 
 		if cfg.LogFile != "" {
-			t.Errorf("expected config log file to stay empty, got %q", cfg.LogFile)
+			t.Errorf("cfg.LogFile = %q, want it to stay empty", cfg.LogFile)
 		}
 	})
 
-	t.Run("stdout mode does not require log directory", func(t *testing.T) {
-		cfg := &LoggerConfig{
-			Stdout: true,
-			LogDir: "",
-		}
-
-		logger, closer, err := New(cfg)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		defer closer()
-
-		if logger == nil {
-			t.Fatal("expected logger to be non-nil")
-		}
-	})
-
-	t.Run("returns error when log directory is empty in production mode", func(t *testing.T) {
-		cfg := &LoggerConfig{
-			Debug:  false,
-			LogDir: "",
-		}
-
-		_, _, err := New(cfg)
-		if err == nil {
-			t.Fatal("expected error for empty log directory")
-		}
-
-		if !strings.Contains(err.Error(), "log directory is required") {
-			t.Errorf("expected error about log directory required, got %v", err)
-		}
-	})
-
-	t.Run("returns error when log directory does not exist", func(t *testing.T) {
-		cfg := &LoggerConfig{
-			Debug:  false,
-			LogDir: "/nonexistent/directory/path",
-		}
-
-		_, _, err := New(cfg)
-		if err == nil {
-			t.Fatal("expected error for nonexistent log directory")
-		}
-
-		if !strings.Contains(err.Error(), "does not exist") {
-			t.Errorf("expected error about directory not existing, got %v", err)
-		}
-	})
-
-	t.Run("returns error when log path is a file not directory", func(t *testing.T) {
+	t.Run("writes info records as json and filters debug records", func(t *testing.T) {
 		dir := t.TempDir()
 
-		filePath := filepath.Join(dir, "notadir")
-		err := os.WriteFile(filePath, []byte("test"), 0o644)
+		logger, closer, err := New(&LoggerConfig{LogDir: dir, LogFile: "test.log"})
 		if err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
-
-		cfg := &LoggerConfig{
-			Debug:  false,
-			LogDir: filePath,
-		}
-
-		_, _, err = New(cfg)
-		if err == nil {
-			t.Fatal("expected error when log path is a file")
-		}
-
-		if !strings.Contains(err.Error(), "not a directory") {
-			t.Errorf("expected error about not being a directory, got %v", err)
-		}
-	})
-
-	t.Run("production logger writes info and filters debug records", func(t *testing.T) {
-		dir := t.TempDir()
-
-		cfg := &LoggerConfig{
-			Debug:   false,
-			LogDir:  dir,
-			LogFile: "test.log",
-		}
-
-		logger, closer, err := New(cfg)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("New: %v", err)
 		}
 
 		logger.Info("test message", "key", "value")
@@ -189,85 +117,115 @@ func TestNew(t *testing.T) {
 
 		err = closer()
 		if err != nil {
-			t.Fatalf("closer failed: %v", err)
+			t.Fatalf("closer: %v", err)
 		}
 
-		content, err := os.ReadFile(filepath.Join(dir, "test.log"))
-		if err != nil {
-			t.Fatalf("failed to read log file: %v", err)
+		lines := readLogLines(t, filepath.Join(dir, "test.log"))
+		if len(lines) != 1 {
+			t.Fatalf("got %d lines, want only the info record: %q", len(lines), lines)
 		}
 
-		if !strings.Contains(string(content), "test message") {
-			t.Errorf("expected log file to contain 'test message', got %s", string(content))
+		if !strings.Contains(lines[0], `"msg":"test message"`) {
+			t.Errorf("line = %q, want the info message", lines[0])
 		}
 
-		if !strings.Contains(string(content), `"key":"value"`) {
-			t.Errorf("expected log file to contain key-value pair, got %s", string(content))
-		}
-
-		if strings.Contains(string(content), "debug message") {
-			t.Errorf("expected debug log to be filtered, got %s", string(content))
+		if !strings.Contains(lines[0], `"key":"value"`) {
+			t.Errorf("line = %q, want the info attributes", lines[0])
 		}
 	})
 
-	t.Run("closer properly closes file", func(t *testing.T) {
-		dir := t.TempDir()
-
-		cfg := &LoggerConfig{
-			Debug:   false,
-			LogDir:  dir,
-			LogFile: "test.log",
-		}
-
-		_, closer, err := New(cfg)
+	t.Run("closer reports a repeated close", func(t *testing.T) {
+		_, closer, err := New(&LoggerConfig{LogDir: t.TempDir(), LogFile: "test.log"})
 		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("New: %v", err)
 		}
 
 		err = closer()
 		if err != nil {
-			t.Errorf("first close should succeed, got %v", err)
+			t.Fatalf("first close: %v", err)
 		}
 
 		err = closer()
 		if err == nil {
-			t.Error("expected error on second close (file already closed)")
+			t.Error("expected an error on the second close")
 		}
 	})
 }
 
-func TestLoggerConfig(t *testing.T) {
-	t.Run("debug mode ignores log directory", func(t *testing.T) {
-		cfg := &LoggerConfig{
-			Debug:  true,
-			LogDir: "",
-		}
+func TestNewStdoutLogger(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    LoggerConfig
+		wantText  bool
+		wantDebug bool
+	}{
+		{
+			name:      "debug mode writes text records at debug level",
+			config:    LoggerConfig{Debug: true},
+			wantText:  true,
+			wantDebug: true,
+		},
+		{
+			name:   "stdout mode writes json records at info level",
+			config: LoggerConfig{Stdout: true},
+		},
+		{
+			name:      "debug mode wins over stdout mode",
+			config:    LoggerConfig{Debug: true, Stdout: true},
+			wantText:  true,
+			wantDebug: true,
+		},
+	}
 
-		logger, closer, err := New(cfg)
-		if err != nil {
-			t.Fatalf("expected no error in debug mode with empty dir, got %v", err)
-		}
-		defer closer()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// LogDir stays empty: neither stdout path needs a log directory.
+			cfg := tt.config
 
-		if logger == nil {
-			t.Fatal("expected logger to be non-nil")
-		}
-	})
+			var closer func() error
+			var newErr error
 
-	t.Run("debug mode ignores log file", func(t *testing.T) {
-		cfg := &LoggerConfig{
-			Debug:   true,
-			LogFile: "",
-		}
+			output := captureStdout(t, func() {
+				logger, c, err := New(&cfg)
+				closer, newErr = c, err
+				if err != nil {
+					return
+				}
 
-		logger, closer, err := New(cfg)
-		if err != nil {
-			t.Fatalf("expected no error in debug mode with empty file, got %v", err)
-		}
-		defer closer()
+				logger.Info("info message")
+				logger.Debug("debug message")
+			})
 
-		if logger == nil {
-			t.Fatal("expected logger to be non-nil")
-		}
-	})
+			if newErr != nil {
+				t.Fatalf("New: %v", newErr)
+			}
+
+			if closer == nil {
+				t.Fatal("expected a non-nil closer")
+			}
+
+			err := closer()
+			if err != nil {
+				t.Errorf("closer: %v", err)
+			}
+
+			if !strings.Contains(output, "info message") {
+				t.Fatalf("output = %q, want the info record", output)
+			}
+
+			isText := strings.Contains(output, "level=INFO")
+			if isText != tt.wantText {
+				t.Errorf("text handler = %v, want %v (output %q)", isText, tt.wantText, output)
+			}
+
+			if !tt.wantText && !strings.Contains(output, `"level":"INFO"`) {
+				t.Errorf("output = %q, want json records", output)
+			}
+
+			hasDebug := strings.Contains(output, "debug message")
+			if hasDebug != tt.wantDebug {
+				t.Errorf("debug record = %v, want %v (output %q)", hasDebug, tt.wantDebug, output)
+			}
+		})
+	}
 }

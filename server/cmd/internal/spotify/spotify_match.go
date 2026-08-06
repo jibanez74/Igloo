@@ -250,13 +250,8 @@ func scoreArtistName(query, candidate string) int {
 		return 98
 	}
 
-	if len(queryTokens) == 1 {
-		if len(candidateTokens) == 1 && queryTokens[0] == candidateTokens[0] {
-			return 100
-		}
-		if candidateTokens[0] == queryTokens[0] {
-			return 68
-		}
+	if len(queryTokens) == 1 && candidateTokens[0] == queryTokens[0] {
+		return 68
 	}
 
 	if tokensContainedInOrder(queryTokens, candidateTokens) {

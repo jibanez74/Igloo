@@ -40,34 +40,6 @@ func (q *Queries) AddCollaborator(ctx context.Context, arg AddCollaboratorParams
 	return i, err
 }
 
-const canUserEditPlaylist = `-- name: CanUserEditPlaylist :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM playlists AS p
-    LEFT JOIN playlist_collaborators AS pc
-      ON p.id = pc.playlist_id
-    WHERE p.id = ?
-      AND (
-        p.user_id = ?
-        OR (pc.user_id = ? AND pc.can_edit = true)
-      )
-  ) AS can_edit
-`
-
-type CanUserEditPlaylistParams struct {
-	ID       int64 `json:"id"`
-	UserID   int64 `json:"user_id"`
-	UserID_2 int64 `json:"user_id_2"`
-}
-
-func (q *Queries) CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (bool, error) {
-	row := q.queryRow(ctx, q.canUserEditPlaylistStmt, canUserEditPlaylist, arg.ID, arg.UserID, arg.UserID_2)
-	var can_edit bool
-	err := row.Scan(&can_edit)
-	return can_edit, err
-}
-
 const getPlaylistCollaborators = `-- name: GetPlaylistCollaborators :many
 SELECT
   pc.id, pc.playlist_id, pc.user_id, pc.can_edit, pc.created_at, pc.updated_at,
@@ -121,28 +93,6 @@ func (q *Queries) GetPlaylistCollaborators(ctx context.Context, playlistID int64
 		return nil, err
 	}
 	return items, nil
-}
-
-const isUserCollaborator = `-- name: IsUserCollaborator :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM playlist_collaborators
-    WHERE playlist_id = ?
-      AND user_id = ?
-  ) AS is_collaborator
-`
-
-type IsUserCollaboratorParams struct {
-	PlaylistID int64 `json:"playlist_id"`
-	UserID     int64 `json:"user_id"`
-}
-
-func (q *Queries) IsUserCollaborator(ctx context.Context, arg IsUserCollaboratorParams) (bool, error) {
-	row := q.queryRow(ctx, q.isUserCollaboratorStmt, isUserCollaborator, arg.PlaylistID, arg.UserID)
-	var is_collaborator bool
-	err := row.Scan(&is_collaborator)
-	return is_collaborator, err
 }
 
 const removeCollaborator = `-- name: RemoveCollaborator :exec

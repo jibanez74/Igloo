@@ -13,7 +13,7 @@ import (
 
 func TestExtractSubtitleAsWebVTTMapsAbsoluteStreamAndNormalizesHardSpaces(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "arguments.log")
-	body := "printf '%s\\n' \"$@\" > " + formatShellPath(logPath) + `
+	body := writeArgumentLog(logPath) + `
 printf '%s\n' 'WEBVTT' '' '00:00.000 --> 00:01.000' 'hello\hworld'
 `
 	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
@@ -31,11 +31,7 @@ printf '%s\n' 'WEBVTT' '' '00:00.000 --> 00:01.000' 'hello\hworld'
 		t.Fatalf("hard-space normalization failed: %q", output)
 	}
 
-	argumentData, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read argument log: %v", err)
-	}
-	args := strings.Split(strings.TrimSpace(string(argumentData)), "\n")
+	args := readArgumentLog(t, logPath)
 	requireArgumentValue(t, args, "-i", sourcePath)
 	requireArgumentValue(t, args, "-map", "0:7")
 	requireArgumentValue(t, args, "-c:s", "webvtt")
