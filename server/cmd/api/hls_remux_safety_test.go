@@ -2,9 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 )
 
 func TestIsBrowserSafeH264RemuxCandidate_PixelFormats(t *testing.T) {
@@ -84,4 +91,139 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRemuxSafetyVerdictCache(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	t.Run("returns a stored verdict", func(t *testing.T) {
+		app.setRemuxSafetyVerdict("stored", false, "10-bit H.264")
+
+		verdict, ok := app.getRemuxSafetyVerdict("stored")
+		if !ok {
+			t.Fatal("stored verdict was not returned")
+		}
+		if verdict.Safe {
+			t.Fatal("Safe = true, want the stored unsafe verdict")
+		}
+		if verdict.Reason != "10-bit H.264" {
+			t.Fatalf("Reason = %q, want the stored reason", verdict.Reason)
+		}
+	})
+
+	t.Run("reports an unknown key as a miss", func(t *testing.T) {
+		_, ok := app.getRemuxSafetyVerdict("never-stored")
+		if ok {
+			t.Fatal("an unknown key was reported as a hit")
+		}
+	})
+
+	// An entry of the wrong type can only come from a bug, but leaving it cached
+	// would pin the movie to a permanent miss for the whole 24h TTL.
+	t.Run("evicts an entry that is not a verdict", func(t *testing.T) {
+		app.RemuxSafetyCache.SetDefault("poisoned", "not a verdict")
+
+		_, ok := app.getRemuxSafetyVerdict("poisoned")
+		if ok {
+			t.Fatal("a poisoned entry was reported as a hit")
+		}
+		if _, cached := app.RemuxSafetyCache.Get("poisoned"); cached {
+			t.Fatal("expected the poisoned entry to be evicted")
+		}
+	})
+}
+
+func TestWaitForRemuxPreflight(t *testing.T) {
+	const segmentCount = helpers.HLS_REMUX_PREVALIDATE_SEGMENTS
+
+	// segmentComplete treats a segment as done once the next one exists, so
+	// proving N segments complete needs N+1 files or an exited session.
+	writeSegments := func(t *testing.T, dir string, through int) {
+		t.Helper()
+		for i := 0; i <= through; i++ {
+			name := fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+			err := os.WriteFile(filepath.Join(dir, name), []byte{0x01}, 0o600)
+			if err != nil {
+				t.Fatalf("write %s: %v", name, err)
+			}
+		}
+	}
+	writeInit := func(t *testing.T, dir string) {
+		t.Helper()
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), []byte{0x01}, 0o600)
+		if err != nil {
+			t.Fatalf("write init: %v", err)
+		}
+	}
+
+	exitErr := errors.New("ffmpeg exited 1")
+
+	t.Run("accepts a complete preflight", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		writeSegments(t, dir, segmentCount-1)
+		session := &HLSSession{TempDir: dir, Exited: true}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		if err != nil {
+			t.Fatalf("waitForRemuxPreflight returned error: %v", err)
+		}
+	})
+
+	t.Run("reports a missing init segment", func(t *testing.T) {
+		session := &HLSSession{TempDir: t.TempDir(), Exited: true}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		if err == nil || !strings.Contains(err.Error(), "init segment was not generated") {
+			t.Fatalf("error = %v, want the missing-init message", err)
+		}
+	})
+
+	t.Run("wraps the ffmpeg error when init is missing", func(t *testing.T) {
+		session := &HLSSession{TempDir: t.TempDir(), Exited: true, ExitErr: exitErr}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		if !errors.Is(err, exitErr) {
+			t.Fatalf("error = %v, want it to wrap the ffmpeg exit error", err)
+		}
+	})
+
+	t.Run("names the segment that never completed", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		writeSegments(t, dir, segmentCount-2)
+		session := &HLSSession{TempDir: dir, Exited: true}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		wantName := fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, segmentCount-1, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+		if err == nil || !strings.Contains(err.Error(), wantName) {
+			t.Fatalf("error = %v, want it to name %q", err, wantName)
+		}
+	})
+
+	t.Run("wraps the ffmpeg error when a segment is missing", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		writeSegments(t, dir, segmentCount-2)
+		session := &HLSSession{TempDir: dir, Exited: true, ExitErr: exitErr}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		if !errors.Is(err, exitErr) {
+			t.Fatalf("error = %v, want it to wrap the ffmpeg exit error", err)
+		}
+	})
+
+	// A session that is still running has to be given up on eventually, or a
+	// stalled remux would hold the request open indefinitely.
+	t.Run("times out on a session that is still running", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		session := &HLSSession{TempDir: dir}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Millisecond)
+		if err == nil || !strings.Contains(err.Error(), "timed out waiting for") {
+			t.Fatalf("error = %v, want a timeout", err)
+		}
+	})
 }

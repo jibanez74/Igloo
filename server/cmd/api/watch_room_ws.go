@@ -545,21 +545,15 @@ var watchRoomUpgrader = websocket.Upgrader{
 	},
 }
 
+// loadAuthorizedWatchRoom returns the room only when the user is a member.
+// This runs on every room media request including each HLS segment, so it is
+// a single joined query; sql.ErrNoRows means "no room or no access" and
+// callers do not distinguish the two.
 func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, userID int64) (database.WatchRoom, error) {
-	room, err := app.Queries.GetWatchRoomByID(ctx, roomID)
-	if err != nil {
-		return database.WatchRoom{}, err
-	}
-
-	_, err = app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
-		RoomID: roomID,
+	return app.Queries.GetWatchRoomForMember(ctx, database.GetWatchRoomForMemberParams{
+		ID:     roomID,
 		UserID: userID,
 	})
-	if err != nil {
-		return database.WatchRoom{}, err
-	}
-
-	return room, nil
 }
 
 func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter, r *http.Request) (database.WatchRoom, int64, bool) {
@@ -588,47 +582,48 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 	return room, userID, true
 }
 
-func (app *Application) loadRoomMemberSummary(ctx context.Context, roomID, userID int64) (watchRoomMemberSummary, error) {
-	row, err := app.Queries.GetWatchRoomMemberByUserID(ctx, database.GetWatchRoomMemberByUserIDParams{
-		RoomID: roomID,
-		UserID: userID,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return watchRoomMemberSummary{}, errors.New("member not found")
-		}
-		return watchRoomMemberSummary{}, err
-	}
-
-	var avatar *string
-	if row.Avatar.Valid {
-		avatar = &row.Avatar.String
-	}
-
-	return watchRoomMemberSummary{
-		ID:     row.ID,
-		Name:   row.Name,
-		Avatar: avatar,
-	}, nil
-}
-
-// Only room members may upgrade.
+// Only room members may upgrade. One joined query authorizes the member and
+// returns the presence summary the socket broadcasts; sql.ErrNoRows means "no
+// room or no access", same as the HTTP media paths.
 func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Request) {
-	room, userID, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	member, err := app.loadRoomMemberSummary(r.Context(), room.ID, userID)
+	roomID, err := parseRoomID(r)
 	if err != nil {
-		app.Logger.Error("failed to load room member summary for websocket", "error", err, "room_id", room.ID, "user_id", userID)
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	row, err := app.Queries.GetWatchRoomForMemberWithSummary(r.Context(), database.GetWatchRoomForMemberWithSummaryParams{
+		ID:     roomID,
+		UserID: userID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+			return
+		}
+		app.Logger.Error("failed to authorize watch room websocket", "error", err, "room_id", roomID, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
+	var avatar *string
+	if row.MemberAvatar.Valid {
+		avatar = &row.MemberAvatar.String
+	}
+	member := watchRoomMemberSummary{
+		ID:     userID,
+		Name:   row.MemberName,
+		Avatar: avatar,
+	}
+
 	conn, err := watchRoomUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		app.Logger.Error("failed to upgrade watch room websocket", "error", err, "room_id", room.ID, "user_id", userID)
+		app.Logger.Error("failed to upgrade watch room websocket", "error", err, "room_id", row.ID, "user_id", userID)
 		return
 	}
 
@@ -636,14 +631,14 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 		app.Wait.Add(1)
 	}
 
-	client := newWatchRoomClient(conn, room.ID, member)
+	client := newWatchRoomClient(conn, row.ID, member)
 	go client.writePump()
 
-	snapshot, firstConnection := app.WatchRoomHub.connect(room.ID, client)
+	snapshot, firstConnection := app.WatchRoomHub.connect(row.ID, client)
 	client.enqueueEvent(snapshot)
 	if firstConnection {
-		if event := app.WatchRoomHub.memberJoinedEvent(room.ID, member); event != nil {
-			app.WatchRoomHub.broadcastToOthers(room.ID, client, *event)
+		if event := app.WatchRoomHub.memberJoinedEvent(row.ID, member); event != nil {
+			app.WatchRoomHub.broadcastToOthers(row.ID, client, *event)
 		}
 	}
 
@@ -652,7 +647,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 			app.Wait.Done()
 		}
 		if event := app.WatchRoomHub.disconnect(client); event != nil {
-			app.WatchRoomHub.broadcast(room.ID, *event)
+			app.WatchRoomHub.broadcast(row.ID, *event)
 		}
 		client.close()
 	}()
@@ -677,19 +672,19 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 
 		switch event.Type {
 		case "join":
-			if fresh := app.WatchRoomHub.currentSnapshot(room.ID); fresh != nil {
+			if fresh := app.WatchRoomHub.currentSnapshot(row.ID); fresh != nil {
 				client.enqueueEvent(*fresh)
 			}
 		case "ping":
-			client.enqueueEvent(watchRoomServerEvent{Type: "pong", RoomID: room.ID})
+			client.enqueueEvent(watchRoomServerEvent{Type: "pong", RoomID: row.ID})
 		case "play", "pause", "seek":
 			positionSec := -1.0
 			if event.PositionSec != nil {
 				positionSec = *event.PositionSec
 			}
-			update, ok := app.WatchRoomHub.applyPlaybackEvent(room.ID, event.Type, positionSec)
+			update, ok := app.WatchRoomHub.applyPlaybackEvent(row.ID, event.Type, positionSec)
 			if ok && update != nil {
-				app.WatchRoomHub.broadcast(room.ID, *update)
+				app.WatchRoomHub.broadcast(row.ID, *update)
 			}
 		}
 	}

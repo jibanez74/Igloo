@@ -90,12 +90,12 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		helpers.ErrorJSON(w, errors.New("failed to update production companies"))
 		return
 	}
-	if err = processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
+	if err = processCast(ctx, qtx, nil, movie.ID, tmdbMovie.Credits.Cast); err != nil {
 		app.Logger.Error("failed to process cast", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update cast"))
 		return
 	}
-	if err = processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
+	if err = processCrew(ctx, qtx, nil, movie.ID, tmdbMovie.Credits.Crew); err != nil {
 		app.Logger.Error("failed to process crew", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update crew"))
 		return
@@ -275,6 +275,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	// row still existed would otherwise republish it behind the eviction.
 	app.invalidateSubtitleVTTCache(id)
 	app.StreamFileCache.invalidate(movieStreamFileKey(id))
+	app.invalidateHLSSessionsForMovie(id)
 
 	if payload.DeleteFile {
 		if err := os.Remove(movie.FilePath); err != nil && !os.IsNotExist(err) {

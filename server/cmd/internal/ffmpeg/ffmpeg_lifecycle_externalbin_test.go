@@ -28,7 +28,7 @@ func versionOnlyFakeFFmpeg(t *testing.T, logPath string) string {
 	t.Helper()
 	body := ""
 	if logPath != "" {
-		body += "printf '%s\\n' \"$*\" >> " + formatShellPath(logPath) + "\n"
+		body += appendInvocationLog(logPath)
 	}
 	body += `
 if [ "$#" -eq 1 ] && [ "$1" = "-version" ]; then
@@ -268,11 +268,10 @@ func TestCapabilitiesReturnsIndependentSnapshot(t *testing.T) {
 	if !second.EncoderOptions["h264_qsv"]["preset"] {
 		t.Fatalf("nested encoder map was mutated through snapshot: %#v", second)
 	}
-}
 
-func TestCloneCapabilitiesPreservesNilMaps(t *testing.T) {
-	cloned := cloneCapabilities(Capabilities{Probed: true})
-	if cloned.Encoders != nil || cloned.FilterOptions != nil || cloned.EncoderOptions != nil {
-		t.Fatalf("nil maps changed while cloning: %#v", cloned)
+	// An unprobed instance must not gain empty maps through cloning.
+	empty := (&ffmpeg{}).Capabilities()
+	if empty.Encoders != nil || empty.FilterOptions != nil || empty.EncoderOptions != nil {
+		t.Fatalf("nil maps changed while cloning: %#v", empty)
 	}
 }

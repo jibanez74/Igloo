@@ -1,22 +1,20 @@
 -- name: CreateNotification :one
 INSERT INTO notifications (
   created_by_user_id,
-  user_id,
   title,
   message,
   is_admin
 )
-VALUES (?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?)
 RETURNING *;
 
 -- name: ListNotificationsForUser :many
--- Notifications visible to the viewer: those targeted at them, plus the admin
--- request queue when the viewer is an admin. Read state comes from a left join
--- against notification_reads for this viewer.
+-- The shared admin request queue, newest first. Visibility is admin-only and
+-- enforced by the handlers; user_id here only selects the viewer's read state
+-- from notification_reads.
 SELECT
   n.id,
   n.created_by_user_id,
-  n.user_id,
   n.title,
   n.message,
   n.is_admin,
@@ -30,8 +28,7 @@ INNER JOIN users AS creator
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id
   AND nr.user_id = sqlc.arg(user_id)
-WHERE n.user_id = sqlc.arg(user_id)
-  OR (sqlc.arg(viewer_is_admin) AND n.is_admin = true)
+WHERE n.is_admin = true
 ORDER BY n.created_at DESC
 LIMIT sqlc.arg(row_limit);
 
@@ -39,40 +36,31 @@ LIMIT sqlc.arg(row_limit);
 SELECT
   COUNT(*) AS unread_count
 FROM notifications AS n
-LEFT JOIN notification_reads AS nr
-  ON nr.notification_id = n.id
-  AND nr.user_id = sqlc.arg(user_id)
-WHERE nr.notification_id IS NULL
-  AND (
-    n.user_id = sqlc.arg(user_id)
-    OR (sqlc.arg(viewer_is_admin) AND n.is_admin = true)
+WHERE n.is_admin = true
+  AND NOT EXISTS (
+    SELECT 1
+    FROM notification_reads AS nr
+    WHERE nr.notification_id = n.id
+      AND nr.user_id = sqlc.arg(user_id)
   );
 
 -- name: MarkNotificationReadForUser :exec
--- Idempotent and relevance-gated: only records a read when the notification is
--- actually visible to the viewer.
+-- Idempotent: marking an already-read or nonexistent notification is a no-op.
 INSERT INTO notification_reads (notification_id, user_id)
 SELECT n.id, sqlc.arg(user_id)
 FROM notifications AS n
 WHERE n.id = sqlc.arg(notification_id)
-  AND (
-    n.user_id = sqlc.arg(user_id)
-    OR (sqlc.arg(viewer_is_admin) AND n.is_admin = true)
-  )
+  AND n.is_admin = true
 ON CONFLICT (notification_id, user_id) DO NOTHING;
 
 -- name: MarkAllNotificationsReadForUser :exec
 INSERT INTO notification_reads (notification_id, user_id)
 SELECT n.id, sqlc.arg(user_id)
 FROM notifications AS n
-WHERE n.user_id = sqlc.arg(user_id)
-  OR (sqlc.arg(viewer_is_admin) AND n.is_admin = true)
+WHERE n.is_admin = true
 ON CONFLICT (notification_id, user_id) DO NOTHING;
 
 -- name: DeleteNotificationForUser :execrows
 DELETE FROM notifications
 WHERE id = sqlc.arg(notification_id)
-  AND (
-    user_id = sqlc.arg(user_id)
-    OR (sqlc.arg(viewer_is_admin) AND is_admin = true)
-  );
+  AND is_admin = true;

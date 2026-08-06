@@ -94,10 +94,18 @@ func isOptionalHTTPBaseURL(value string) bool {
 	return parsed.Host != ""
 }
 
-func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// currentSettings returns the in-memory settings copy that every write path
+// refreshes -- the same source GetPlaybackSettings reads -- falling back to the
+// database only if it has somehow not been initialized.
+func (app *Application) currentSettings(r *http.Request) (database.Setting, error) {
+	if app.Settings != nil {
+		return *app.Settings, nil
+	}
+	return app.Queries.GetSettings(r.Context())
+}
 
-	settings, err := app.Queries.GetSettings(ctx)
+func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := app.currentSettings(r)
 	if err != nil {
 		app.Logger.Error("failed to get settings", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch settings"))
@@ -113,7 +121,7 @@ func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetGeneralSettings(w http.ResponseWriter, r *http.Request) {
-	settings, err := app.Queries.GetSettings(r.Context())
+	settings, err := app.currentSettings(r)
 	if err != nil {
 		app.Logger.Error("failed to get general settings", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch settings"))

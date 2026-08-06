@@ -104,6 +104,11 @@ func InitApp() (initializedApp *Application, err error) {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
 	}
 
+	err = app.RefreshQueryPlannerStats()
+	if err != nil {
+		return nil, fmt.Errorf("failed to refresh query planner statistics: %v", err)
+	}
+
 	app.Queries, err = database.Prepare(ctx, app.DB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare database queries: %v", err)

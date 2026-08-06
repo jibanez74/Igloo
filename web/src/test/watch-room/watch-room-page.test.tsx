@@ -531,9 +531,7 @@ describe("WatchRoomPageContent", () => {
 
     await waitFor(() => {
       expect(screen.getByText("2 connected now")).toBeInTheDocument();
-      expect(screen.getByTestId("live-announcer")).toHaveTextContent(
-        "Invited Guest joined the room",
-      );
+      expect(screen.getByText("Invited Guest joined the room")).toBeInTheDocument();
     });
     expect(within(guestRow).getByText("Connected")).toBeInTheDocument();
 
@@ -550,9 +548,7 @@ describe("WatchRoomPageContent", () => {
 
     await waitFor(() => {
       expect(screen.getByText("1 connected now")).toBeInTheDocument();
-      expect(screen.getByTestId("live-announcer")).toHaveTextContent(
-        "Invited Guest left the room",
-      );
+      expect(screen.getByText("Invited Guest left the room")).toBeInTheDocument();
     });
     expect(within(guestRow).getByText("Away")).toBeInTheDocument();
   });
@@ -1235,6 +1231,11 @@ describe("WatchRoomPageContent", () => {
       now += HLS_SESSION_LOST_MIN_INTERVAL_MS;
     }
 
+    const announcements = await screen.findAllByText(
+      "Playback interrupted, reloading the stream…",
+    );
+    expect(announcements.length).toBeGreaterThan(0);
+
     const exhaustedSrc = lastVideoPlayerProps.current?.src;
     act(() => {
       lastVideoPlayerProps.current?.onSessionLost?.(30);
@@ -1247,6 +1248,9 @@ describe("WatchRoomPageContent", () => {
         ),
       ).toBeInTheDocument();
     });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The playback session expired. Reload to keep watching.",
+    );
     expect(lastVideoPlayerProps.current?.src).toBe(exhaustedSrc);
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0]).toBe(socket);

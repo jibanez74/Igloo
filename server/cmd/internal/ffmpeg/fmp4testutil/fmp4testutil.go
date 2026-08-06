@@ -63,20 +63,20 @@ func WriteHLSFixture(outDir string, fixture Fixture) error {
 }
 
 func BuildInitMP4() []byte {
-	videoTrack := mp4TestBox(
+	videoTrack := Box(
 		"trak",
 		mp4TestTKHD(1),
-		mp4TestBox(
+		Box(
 			"mdia",
 			mp4TestHDLR("vide"),
-			mp4TestBox(
+			Box(
 				"minf",
-				mp4TestBox(
+				Box(
 					"stbl",
 					mp4TestSTSD(
 						mp4TestAVCSampleEntry(
 							"avc1",
-							mp4TestBox("avcC", []byte{1, 0x64, 0x00, 0x1f, 0xff}),
+							Box("avcC", []byte{1, 0x64, 0x00, 0x1f, 0xff}),
 						),
 					),
 				),
@@ -84,13 +84,13 @@ func BuildInitMP4() []byte {
 		),
 	)
 
-	audioTrack := mp4TestBox(
+	audioTrack := Box(
 		"trak",
 		mp4TestTKHD(2),
-		mp4TestBox("mdia", mp4TestHDLR("soun")),
+		Box("mdia", mp4TestHDLR("soun")),
 	)
 
-	moov := mp4TestBox("moov", mp4TestMVHD(), videoTrack, audioTrack)
+	moov := Box("moov", mp4TestMVHD(), videoTrack, audioTrack)
 	return append(mp4TestFTYP(), moov...)
 }
 
@@ -130,7 +130,7 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 	for _, track := range tracks {
 		sample := track.sample
 		sample.DataOffset = int32(currentOffset)
-		trafsWithOffsets = append(trafsWithOffsets, mp4TestBox(
+		trafsWithOffsets = append(trafsWithOffsets, Box(
 			"traf",
 			mp4TestTFHD(track.trackID),
 			mp4TestTFDT(0),
@@ -139,8 +139,8 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 		currentOffset += len(sample.Data)
 	}
 
-	moof := mp4TestBox("moof", append([][]byte{mfhd}, trafsWithOffsets...)...)
-	mdat := mp4TestBox("mdat", mdatPayload)
+	moof := Box("moof", append([][]byte{mfhd}, trafsWithOffsets...)...)
+	mdat := Box("mdat", mdatPayload)
 
 	return append(moof, mdat...)
 }
@@ -184,25 +184,24 @@ func mp4TestNALU(payload []byte) []byte {
 func mp4TestTKHD(trackID uint32) []byte {
 	payload := make([]byte, 20)
 	binary.BigEndian.PutUint32(payload[12:16], trackID)
-	return mp4TestBox("tkhd", payload)
+	return Box("tkhd", payload)
 }
 
 func mp4TestHDLR(handlerType string) []byte {
 	payload := make([]byte, 12)
 	copy(payload[8:12], []byte(handlerType))
-	return mp4TestBox("hdlr", payload)
+	return Box("hdlr", payload)
 }
 
 func mp4TestSTSD(entries ...[]byte) []byte {
-	payload := make([]byte, 8)
-	binary.BigEndian.PutUint32(payload[4:8], uint32(len(entries)))
-	return mp4TestBox("stsd", append([][]byte{payload}, entries...)...)
+	payload := FullBoxPayload(0, U32(uint32(len(entries))))
+	return Box("stsd", append([][]byte{payload}, entries...)...)
 }
 
 func mp4TestAVCSampleEntry(typ string, childBoxes ...[]byte) []byte {
 	header := make([]byte, 78)
 	binary.BigEndian.PutUint16(header[6:8], 1)
-	return mp4TestBox(typ, append([][]byte{header}, childBoxes...)...)
+	return Box(typ, append([][]byte{header}, childBoxes...)...)
 }
 
 func mp4TestFTYP() []byte {
@@ -211,7 +210,7 @@ func mp4TestFTYP() []byte {
 	binary.BigEndian.PutUint32(payload[4:8], 512)
 	copy(payload[8:12], []byte("iso2"))
 	copy(payload[12:16], []byte("avc1"))
-	return mp4TestBox("ftyp", payload)
+	return Box("ftyp", payload)
 }
 
 func mp4TestMVHD() []byte {
@@ -224,27 +223,19 @@ func mp4TestMVHD() []byte {
 	binary.BigEndian.PutUint32(payload[36:40], 0x00010000)
 	binary.BigEndian.PutUint32(payload[44:48], 0x40000000)
 	binary.BigEndian.PutUint32(payload[80:84], 3)
-	return mp4TestBox("mvhd", payload)
+	return Box("mvhd", payload)
 }
 
 func mp4TestMFHD(sequenceNumber uint32) []byte {
-	payload := make([]byte, 8)
-	payload[0] = 0
-	binary.BigEndian.PutUint32(payload[4:8], sequenceNumber)
-	return mp4TestBox("mfhd", payload)
+	return Box("mfhd", FullBoxPayload(0, U32(sequenceNumber)))
 }
 
 func mp4TestTFDT(baseMediaDecodeTime uint32) []byte {
-	payload := make([]byte, 8)
-	payload[0] = 0
-	binary.BigEndian.PutUint32(payload[4:8], baseMediaDecodeTime)
-	return mp4TestBox("tfdt", payload)
+	return Box("tfdt", FullBoxPayload(0, U32(baseMediaDecodeTime)))
 }
 
 func mp4TestTFHD(trackID uint32) []byte {
-	payload := make([]byte, 8)
-	binary.BigEndian.PutUint32(payload[4:8], trackID)
-	return mp4TestBox("tfhd", payload)
+	return Box("tfhd", FullBoxPayload(0, U32(trackID)))
 }
 
 func mp4TestVideoSampleFlags(sample []byte) uint32 {
@@ -274,31 +265,18 @@ func mp4TestVideoSampleFlags(sample []byte) uint32 {
 
 func mp4TestTRUN(samples []sampleSpec) []byte {
 	flags := uint32(0x000001 | 0x000200 | 0x000400)
-	payload := make([]byte, 8)
-	payload[1] = byte(flags >> 16)
-	payload[2] = byte(flags >> 8)
-	payload[3] = byte(flags)
-	binary.BigEndian.PutUint32(payload[4:8], uint32(len(samples)))
 
 	dataOffset := int32(0)
 	if len(samples) > 0 {
 		dataOffset = samples[0].DataOffset
 	}
-	offsetBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(offsetBytes, uint32(dataOffset))
-	payload = append(payload, offsetBytes...)
 
+	parts := [][]byte{U32(uint32(len(samples))), U32(uint32(dataOffset))}
 	for _, sample := range samples {
-		sizeBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(sizeBytes, uint32(len(sample.Data)))
-		payload = append(payload, sizeBytes...)
-
-		flagBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(flagBytes, sample.Flags)
-		payload = append(payload, flagBytes...)
+		parts = append(parts, U32(uint32(len(sample.Data))), U32(sample.Flags))
 	}
 
-	return mp4TestBox("trun", payload)
+	return Box("trun", FullBoxPayload(flags, parts...))
 }
 
 func mp4TestTRUNSize(sampleCount int) int {
@@ -309,7 +287,32 @@ func mp4TestTrafSize(sampleCount int) int {
 	return mp4TestBoxHeaderSize + len(mp4TestTFHD(0)) + len(mp4TestTFDT(0)) + mp4TestTRUNSize(sampleCount)
 }
 
-func mp4TestBox(typ string, payloadParts ...[]byte) []byte {
+// FullBoxPayload builds an ISO-BMFF full-box payload: a zero version byte, the
+// 24-bit flags field, then the supplied fields.
+func FullBoxPayload(flags uint32, payloadParts ...[]byte) []byte {
+	out := []byte{0, byte(flags >> 16), byte(flags >> 8), byte(flags)}
+	for _, part := range payloadParts {
+		out = append(out, part...)
+	}
+	return out
+}
+
+// U32 encodes value as a big-endian 32-bit field.
+func U32(value uint32) []byte {
+	out := make([]byte, 4)
+	binary.BigEndian.PutUint32(out, value)
+	return out
+}
+
+// U64 encodes value as a big-endian 64-bit field.
+func U64(value uint64) []byte {
+	out := make([]byte, 8)
+	binary.BigEndian.PutUint64(out, value)
+	return out
+}
+
+// Box builds an ISO-BMFF box with a 32-bit size header of the given type.
+func Box(typ string, payloadParts ...[]byte) []byte {
 	payloadLen := 0
 	for _, part := range payloadParts {
 		payloadLen += len(part)

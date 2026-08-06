@@ -14,20 +14,17 @@ const getUserListeningStats = `-- name: GetUserListeningStats :one
 SELECT
   COALESCE(SUM(uts.play_count), 0) AS total_plays,
   COALESCE(SUM(uts.total_time_played), 0) AS total_time_listened,
-  COUNT(DISTINCT uts.track_id) AS unique_tracks_played,
+  -- COUNT(*): (user_id, track_id) is the primary key, so track_id is already
+  -- distinct within a user.
+  COUNT(*) AS unique_tracks_played,
   (
     SELECT COUNT(*)
     FROM user_liked_tracks AS ult
-    WHERE ult.user_id = ?
+    WHERE ult.user_id = ?1
   ) AS liked_tracks_count
 FROM user_track_stats AS uts
-WHERE uts.user_id = ?
+WHERE uts.user_id = ?1
 `
-
-type GetUserListeningStatsParams struct {
-	UserID   int64 `json:"user_id"`
-	UserID_2 int64 `json:"user_id_2"`
-}
 
 type GetUserListeningStatsRow struct {
 	TotalPlays         interface{} `json:"total_plays"`
@@ -37,8 +34,8 @@ type GetUserListeningStatsRow struct {
 }
 
 // Returns overall listening statistics for a user
-func (q *Queries) GetUserListeningStats(ctx context.Context, arg GetUserListeningStatsParams) (GetUserListeningStatsRow, error) {
-	row := q.queryRow(ctx, q.getUserListeningStatsStmt, getUserListeningStats, arg.UserID, arg.UserID_2)
+func (q *Queries) GetUserListeningStats(ctx context.Context, userID int64) (GetUserListeningStatsRow, error) {
+	row := q.queryRow(ctx, q.getUserListeningStatsStmt, getUserListeningStats, userID)
 	var i GetUserListeningStatsRow
 	err := row.Scan(
 		&i.TotalPlays,
@@ -140,7 +137,8 @@ SELECT
   a.year,
   SUM(uts.play_count) AS total_play_count,
   SUM(uts.total_time_played) AS total_time_listened,
-  COUNT(DISTINCT t.id) AS unique_tracks_played
+  -- COUNT(*): same reasoning as GetUserTopMusicians.
+  COUNT(*) AS unique_tracks_played
 FROM user_track_stats AS uts
 INNER JOIN tracks AS t
   ON uts.track_id = t.id
@@ -281,7 +279,10 @@ SELECT
   m.thumb,
   SUM(uts.play_count) AS total_play_count,
   SUM(uts.total_time_played) AS total_time_listened,
-  COUNT(DISTINCT t.id) AS unique_tracks_played
+  -- COUNT(*): the (user_id, track_id) primary key and the 1:1 tracks join
+  -- guarantee each track appears once per group, so DISTINCT would only add a
+  -- per-group sort.
+  COUNT(*) AS unique_tracks_played
 FROM user_track_stats AS uts
 INNER JOIN tracks AS t
   ON uts.track_id = t.id

@@ -11,54 +11,65 @@ VALUES
   (?, ?, ?, ?, ?, 'track')
 RETURNING *;
 
--- name: GetPlaylistById :one
-SELECT
-  *
-FROM playlists
-WHERE id = ?;
-
--- name: GetPlaylistsWithCollaboratorAccess :many
+-- name: GetPlaylistWithAccess :one
+-- One seek for every playlist authorization decision: the playlist row by
+-- primary key plus this user's collaborator row (if any) by the
+-- (playlist_id, user_id) unique index. collaborator_can_edit is NULL when the
+-- user is not a collaborator; the handler derives owner/edit/view from that
+-- and p.user_id/p.is_public.
 SELECT
   p.*,
-  (
-    SELECT COUNT(*)
-    FROM playlist_tracks AS pt
-    WHERE pt.playlist_id = p.id
-  ) AS track_count,
-  (
-    SELECT COALESCE(SUM(t.duration), 0)
-    FROM playlist_tracks AS pt
-    INNER JOIN tracks AS t
-      ON pt.track_id = t.id
-    WHERE pt.playlist_id = p.id
-  ) AS total_duration,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = sqlc.arg(requesting_user_id)
-  ) AS is_owner,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = sqlc.arg(requesting_user_id)
-      OR EXISTS (
-        SELECT 1
-        FROM playlist_collaborators AS edit_pc
-        WHERE edit_pc.playlist_id = p.id
-          AND edit_pc.user_id = sqlc.arg(requesting_user_id)
-          AND edit_pc.can_edit = true
-      )
-  ) AS can_edit
+  pc.can_edit AS collaborator_can_edit
 FROM playlists AS p
-WHERE (
-    p.user_id = sqlc.arg(requesting_user_id)
-    OR EXISTS (
-      SELECT 1
-      FROM playlist_collaborators AS access_pc
-      WHERE access_pc.playlist_id = p.id
-        AND access_pc.user_id = sqlc.arg(requesting_user_id)
-    )
-  )
-  AND p.content_type = 'track'
-ORDER BY p.updated_at DESC;
+LEFT JOIN playlist_collaborators AS pc
+  ON pc.playlist_id = p.id
+  AND pc.user_id = sqlc.arg(user_id)
+WHERE p.id = sqlc.arg(playlist_id);
+
+-- name: GetPlaylistsWithCollaboratorAccess :many
+-- Playlists the user owns or collaborates on, newest-updated first. The two
+-- access paths are separate indexed lookups (idx_playlist_user, then
+-- idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
+-- scan of every user's playlists -- and they are disjoint because the
+-- collaborator branch excludes playlists the user owns. Track count and total
+-- duration come from one grouped pass over playlist_tracks instead of two
+-- correlated subqueries per row.
+SELECT
+  accessible.*,
+  COALESCE(agg.track_count, 0) AS track_count,
+  COALESCE(agg.total_duration, 0) AS total_duration
+FROM (
+  SELECT
+    p.*,
+    CAST(1 AS BOOLEAN) AS is_owner,
+    CAST(1 AS BOOLEAN) AS can_edit
+  FROM playlists AS p
+  WHERE p.user_id = sqlc.arg(requesting_user_id)
+    AND p.content_type = 'track'
+  UNION ALL
+  SELECT
+    p.*,
+    CAST(0 AS BOOLEAN) AS is_owner,
+    pc.can_edit
+  FROM playlist_collaborators AS pc
+  INNER JOIN playlists AS p
+    ON p.id = pc.playlist_id
+  WHERE pc.user_id = sqlc.arg(requesting_user_id)
+    AND p.content_type = 'track'
+    AND p.user_id <> sqlc.arg(requesting_user_id)
+) AS accessible
+LEFT JOIN (
+  SELECT
+    pt.playlist_id,
+    COUNT(*) AS track_count,
+    COALESCE(SUM(t.duration), 0) AS total_duration
+  FROM playlist_tracks AS pt
+  INNER JOIN tracks AS t
+    ON pt.track_id = t.id
+  GROUP BY pt.playlist_id
+) AS agg
+  ON agg.playlist_id = accessible.id
+ORDER BY accessible.updated_at DESC;
 
 -- name: UpdatePlaylist :one
 UPDATE playlists
@@ -110,47 +121,36 @@ WHERE id = ?
 RETURNING *;
 
 -- name: GetMoviePlaylistsWithCollaboratorAccess :many
+-- The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 SELECT
-  p.id,
-  p.user_id,
-  p.name,
-  p.description,
-  p.cover_image,
-  p.is_public,
-  p.folder_id,
-  p.movie_id,
-  p.content_type,
-  p.created_at,
-  p.updated_at,
-  (
-    SELECT COUNT(*)
-    FROM playlist_movies AS pm
-    WHERE pm.playlist_id = p.id
-  ) AS movie_count,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = sqlc.arg(requesting_user_id)
-  ) AS is_owner,
-  EXISTS (
-    SELECT 1
-    WHERE p.user_id = sqlc.arg(requesting_user_id)
-      OR EXISTS (
-        SELECT 1
-        FROM playlist_collaborators AS edit_pc
-        WHERE edit_pc.playlist_id = p.id
-          AND edit_pc.user_id = sqlc.arg(requesting_user_id)
-          AND edit_pc.can_edit = true
-      )
-  ) AS can_edit
-FROM playlists AS p
-WHERE (
-    p.user_id = sqlc.arg(requesting_user_id)
-    OR EXISTS (
-      SELECT 1
-      FROM playlist_collaborators AS access_pc
-      WHERE access_pc.playlist_id = p.id
-        AND access_pc.user_id = sqlc.arg(requesting_user_id)
-    )
-  )
-  AND p.content_type = 'movie'
-ORDER BY p.updated_at DESC;
+  accessible.*,
+  COALESCE(agg.movie_count, 0) AS movie_count
+FROM (
+  SELECT
+    p.*,
+    CAST(1 AS BOOLEAN) AS is_owner,
+    CAST(1 AS BOOLEAN) AS can_edit
+  FROM playlists AS p
+  WHERE p.user_id = sqlc.arg(requesting_user_id)
+    AND p.content_type = 'movie'
+  UNION ALL
+  SELECT
+    p.*,
+    CAST(0 AS BOOLEAN) AS is_owner,
+    pc.can_edit
+  FROM playlist_collaborators AS pc
+  INNER JOIN playlists AS p
+    ON p.id = pc.playlist_id
+  WHERE pc.user_id = sqlc.arg(requesting_user_id)
+    AND p.content_type = 'movie'
+    AND p.user_id <> sqlc.arg(requesting_user_id)
+) AS accessible
+LEFT JOIN (
+  SELECT
+    pm.playlist_id,
+    COUNT(*) AS movie_count
+  FROM playlist_movies AS pm
+  GROUP BY pm.playlist_id
+) AS agg
+  ON agg.playlist_id = accessible.id
+ORDER BY accessible.updated_at DESC;

@@ -390,7 +390,7 @@ function PlayMoviePage() {
     });
   };
 
-  const { handleSessionLost } = useHlsSessionRecovery({
+  const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
     streamWindowKey: sessionWindowKey,
     onRecover: (currentTimeSec) =>
       navigateToPlaybackPosition(currentTimeSec, { forceReload: true }),
@@ -783,6 +783,13 @@ function PlayMoviePage() {
       <LiveAnnouncer
         message={fallbackAnnouncement.text}
         announcementKey={fallbackAnnouncement.key}
+        politeness="assertive"
+      />
+      <LiveAnnouncer
+        message={
+          recoveryAttempt > 0 ? "Playback interrupted, reloading the stream…" : ""
+        }
+        announcementKey={recoveryAttempt}
         politeness="assertive"
       />
       <ResumeDialog

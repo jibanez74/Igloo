@@ -38,10 +38,6 @@ func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) 
 }
 
 func (app *Application) getRemuxSafetyVerdict(key string) (remuxSafetyVerdict, bool) {
-	if app.RemuxSafetyCache == nil {
-		return remuxSafetyVerdict{}, false
-	}
-
 	raw, ok := app.RemuxSafetyCache.Get(key)
 	if !ok || raw == nil {
 		return remuxSafetyVerdict{}, false
@@ -57,10 +53,6 @@ func (app *Application) getRemuxSafetyVerdict(key string) (remuxSafetyVerdict, b
 }
 
 func (app *Application) setRemuxSafetyVerdict(key string, safe bool, reason string) {
-	if app.RemuxSafetyCache == nil {
-		return
-	}
-
 	app.RemuxSafetyCache.SetDefault(key, remuxSafetyVerdict{
 		Safe:   safe,
 		Reason: reason,
@@ -68,13 +60,6 @@ func (app *Application) setRemuxSafetyVerdict(key string, safe bool, reason stri
 }
 
 func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.Duration) error {
-	if session == nil {
-		return fmt.Errorf("missing HLS session")
-	}
-	if segmentCount <= 0 {
-		return fmt.Errorf("segment count must be positive")
-	}
-
 	initPath := filepath.Join(session.TempDir, helpers.HLS_INIT_FILENAME)
 	deadline := time.Now().Add(timeout)
 

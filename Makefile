@@ -27,7 +27,7 @@ FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev build start stop clean help check test test-server test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
+.PHONY: dev build start stop clean help check test test-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder
@@ -112,6 +112,7 @@ help:
 	@echo "  make check         Run contract checks, backend tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
 	@echo "  make test-server   Run backend tests with required build tags"
+	@echo "  make test-tmdb-integration Run live TMDB API tests (requires TMDB_API_KEY)"
 	@echo "  make test-web      Run frontend unit tests"
 	@echo "  make lint-web      Run frontend lint"
 	@echo "  make build-web     Build and type-check the frontend"
@@ -127,6 +128,9 @@ test: test-server test-web
 
 test-server: check-server-test-tools prepare-webdist-placeholder
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS)" ./...
+
+test-tmdb-integration: check-go-tools
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/tmdb/
 
 test-web: check-web-tools
 	@cd $(WEB_DIR) && bun run test

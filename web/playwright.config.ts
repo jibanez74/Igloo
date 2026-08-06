@@ -9,7 +9,8 @@ function envInt(name: string, fallback: number) {
 }
 
 const hasExternalBaseURL = Boolean(process.env.E2E_BASE_URL);
-const defaultBaseURL = "http://127.0.0.1:3000";
+const webPort = envInt("E2E_WEB_PORT", 3000);
+const defaultBaseURL = `http://127.0.0.1:${webPort}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -37,7 +38,7 @@ export default defineConfig({
         },
         {
           command:
-            "bun run dev --host 127.0.0.1 --port 3000 --strictPort --open=false",
+            `bun run dev --host 127.0.0.1 --port ${webPort} --strictPort --open=false`,
           url: defaultBaseURL,
           reuseExistingServer: false,
           timeout: 60_000,

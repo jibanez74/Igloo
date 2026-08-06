@@ -406,24 +406,19 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.ExecContext(ctx,
-		`DELETE FROM user_liked_movies WHERE user_id = ? AND movie_id = ?`,
-		userID, movieID)
+	qtx := app.Queries.WithTx(tx)
+
+	removed, err := qtx.UnlikeMovie(ctx, database.UnlikeMovieParams{UserID: userID, MovieID: movieID})
 	if err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if n > 0 {
+	if removed > 0 {
 		if err := tx.Commit(); err != nil {
 			return false, err
 		}
 		return false, nil
 	}
 
-	qtx := app.Queries.WithTx(tx)
 	if err := qtx.LikeMovie(ctx, database.LikeMovieParams{UserID: userID, MovieID: movieID}); err != nil {
 		return false, err
 	}
@@ -448,14 +443,14 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	_, err = app.Queries.GetMovieByID(ctx, movieID)
+	movieOK, err := app.Queries.MovieExists(ctx, movieID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
-			return
-		}
 		app.Logger.Error("failed to get movie for like toggle", "error", err, "id", movieID)
 		helpers.ErrorJSON(w, errors.New("failed to verify movie exists"))
+		return
+	}
+	if !movieOK {
+		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
 		return
 	}
 
@@ -646,7 +641,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 		return
 	}
 
-	chapters, err := qtx.GetChaptersByMovieID(ctx, sql.NullInt64{Int64: id, Valid: true})
+	chapters, err := qtx.GetChaptersByMovieID(ctx, id)
 	if err != nil {
 		app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))

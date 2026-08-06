@@ -93,6 +93,19 @@ CREATE TABLE
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
+-- Serves GetMusiciansAlphabetical's ORDER BY (letter bucket, then sort_name) so
+-- the paginated musicians listing reads rows in index order. Without it the whole
+-- table is materialized and its per-row track/album count subqueries run for every
+-- musician instead of only the page. Expression must match the ORDER BY in
+-- sqlc/queries/musicians.sql exactly.
+CREATE INDEX IF NOT EXISTS idx_musicians_alpha ON musicians (
+  CASE
+    WHEN UPPER(SUBSTR(sort_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(sort_name, 1, 1))
+    ELSE '#'
+  END,
+  sort_name
+);
+
 -- Albums imported from local tags and optional Spotify metadata.
 CREATE TABLE
   IF NOT EXISTS albums (
@@ -107,9 +120,30 @@ CREATE TABLE
     total_tracks INTEGER,
     cover TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (title, musician)
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+
+-- Identity of an album. This is an expression index rather than a table-level
+-- UNIQUE (title, musician) because musician is nullable and SQLite treats NULLs as
+-- distinct: a file with no album-artist tag would otherwise slip past UpsertAlbum's
+-- ON CONFLICT and add a duplicate album on every rescan. The conflict target in
+-- sqlc/queries/albums.sql must match this expression exactly.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_title_musician
+ON albums (title, COALESCE(musician, ''));
+
+-- Serves GetAlbumsAlphabetical's ORDER BY (letter bucket, then UPPER(title)), the
+-- albums twin of idx_track_alpha. Expression must match the ORDER BY in
+-- sqlc/queries/albums.sql exactly.
+CREATE INDEX IF NOT EXISTS idx_albums_alpha ON albums (
+  CASE
+    WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(title, 1, 1))
+    ELSE '#'
+  END,
+  UPPER(title)
+);
+
+-- Serves GetLatestAlbums (ORDER BY created_at DESC LIMIT 12) on the home page.
+CREATE INDEX IF NOT EXISTS idx_albums_created_at ON albums (created_at DESC);
 
 -- Audio files and probe metadata used for playback and library views.
 CREATE TABLE
@@ -145,7 +179,9 @@ CREATE TABLE
     FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE SET NULL ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_track_album ON tracks (album_id);
+-- Serves GetTracksByAlbumID's filter and its (disc, track_index) ordering in one
+-- pass, and backs the albums -> tracks delete cascade.
+CREATE INDEX IF NOT EXISTS idx_track_album ON tracks (album_id, disc, track_index);
 
 CREATE INDEX IF NOT EXISTS idx_track_musician ON tracks (musician_id);
 
@@ -173,6 +209,8 @@ CREATE TABLE
     FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
+-- Drives the credited-musician half of GetTracksByMusicianID and of
+-- GetMusiciansAlphabetical's track_count.
 CREATE INDEX IF NOT EXISTS idx_track_musicians_musician ON track_musicians (musician_id);
 
 -- Spotify match cache for music scan decisions that should survive rescans.
@@ -236,6 +274,18 @@ CREATE TABLE
   );
 
 CREATE INDEX IF NOT EXISTS idx_movies_tmdb_id ON movies (tmdb_id);
+
+-- Serves the unfiltered title-ordered library listings, GetMoviesLibraryAsc/Desc:
+-- the id column matches their tie-breaker, so deep LIMIT/OFFSET pages read in
+-- index order instead of sorting the whole table. The filtered listings
+-- (GetMoviesByGenreAsc/Desc, GetPlaylistMoviesPaginatedAsc/Desc,
+-- GetLikedMoviesForUserAsc/Desc) drive from their junction table and still sort
+-- their page with a temp b-tree -- verified with EXPLAIN QUERY PLAN. Those pages
+-- are small, so this index is not widened to cover them.
+CREATE INDEX IF NOT EXISTS idx_movies_title ON movies (LOWER(title), id);
+
+-- Serves GetLatestMovies (ORDER BY created_at DESC LIMIT 12) on the home page.
+CREATE INDEX IF NOT EXISTS idx_movies_created_at ON movies (created_at DESC);
 
 -- Production companies from TMDB metadata.
 CREATE TABLE
@@ -315,7 +365,9 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_video_streams_index ON video_streams (movie_id, stream_index);
+-- Unique so a scanner defect that double-writes a stream fails loudly; the
+-- new name lets the startup schema create it on databases that predate it.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_video_streams_movie_stream ON video_streams (movie_id, stream_index);
 
 -- Audio streams discovered by ffprobe for track selection and transcoding.
 CREATE TABLE
@@ -337,9 +389,7 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_audio_streams_index ON audio_streams (movie_id, stream_index);
-
-CREATE INDEX IF NOT EXISTS idx_audio_streams_language ON audio_streams (movie_id, language);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_audio_streams_movie_stream ON audio_streams (movie_id, stream_index);
 
 -- Subtitle streams discovered by ffprobe.
 CREATE TABLE
@@ -357,9 +407,7 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_subtitles_index ON subtitles (movie_id, stream_index);
-
-CREATE INDEX IF NOT EXISTS idx_subtitles_language ON subtitles (movie_id, language);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_subtitles_movie_stream ON subtitles (movie_id, stream_index);
 
 -- Chapter markers and thumbnails for movie timelines.
 CREATE TABLE
@@ -368,9 +416,13 @@ CREATE TABLE
     title TEXT NOT NULL,
     start_time INTEGER NOT NULL,
     thumb TEXT,
-    movie_id INTEGER,
+    movie_id INTEGER NOT NULL,
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
+
+-- Serves GetChaptersByMovieID's filter and start_time ordering, and backs the
+-- movies -> chapters delete cascade.
+CREATE INDEX IF NOT EXISTS idx_chapters_movie ON chapters (movie_id, start_time);
 
 -- Movie cast credits.
 CREATE TABLE
@@ -386,8 +438,6 @@ CREATE TABLE
     FOREIGN KEY (artist_id) REFERENCES artist (id) ON DELETE CASCADE ON UPDATE CASCADE,
     UNIQUE (movie_id, artist_id, cast_order)
   );
-
-CREATE INDEX IF NOT EXISTS idx_cast_artist ON cast (artist_id);
 
 CREATE INDEX IF NOT EXISTS idx_cast_order ON cast (movie_id, cast_order);
 
@@ -406,11 +456,16 @@ CREATE TABLE
     UNIQUE (movie_id, artist_id, job, department)
   );
 
-CREATE INDEX IF NOT EXISTS idx_crew_artist ON crew (artist_id);
-
 CREATE INDEX IF NOT EXISTS idx_crew_department ON crew (movie_id, department);
 
 -- Shared catalog relationships
+
+-- Note on the reverse-direction indexes below: a junction table's primary key
+-- already indexes the owning-entity column, so the second column only needs its own
+-- index when something either queries by it or deletes the parent it points at.
+-- Nothing in the codebase ever deletes from artist, production_companies,
+-- extra_videos, genres, or musicians, so those reverse indexes would be pure write
+-- cost on every library scan. Only the ones that earn their keep are declared.
 
 CREATE TABLE
   IF NOT EXISTS movie_production_companies (
@@ -422,8 +477,6 @@ CREATE TABLE
     FOREIGN KEY (production_company_id) REFERENCES production_companies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_movie_production_companies_company ON movie_production_companies (production_company_id);
-
 CREATE TABLE
   IF NOT EXISTS movie_genres (
     movie_id INTEGER NOT NULL,
@@ -434,6 +487,7 @@ CREATE TABLE
     FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
+-- Drives GetMoviesByGenreAsc/Desc and CountMoviesForGenre.
 CREATE INDEX IF NOT EXISTS idx_movie_genres_genre ON movie_genres (genre_id);
 
 -- Many-to-many between movies and extra_videos. One extra_video row may be
@@ -448,8 +502,6 @@ CREATE TABLE
     FOREIGN KEY (extra_video_id) REFERENCES extra_videos (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_movie_extra_videos_extra ON movie_extra_videos (extra_video_id);
-
 CREATE TABLE
   IF NOT EXISTS musician_genres (
     musician_id INTEGER NOT NULL,
@@ -460,8 +512,6 @@ CREATE TABLE
     FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
-
-CREATE INDEX IF NOT EXISTS idx_musician_genres_genre ON musician_genres (genre_id);
 
 CREATE TABLE
   IF NOT EXISTS musician_albums (
@@ -474,6 +524,7 @@ CREATE TABLE
     FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
+-- Drives GetMusiciansByAlbumID and backs the albums -> musician_albums cascade.
 CREATE INDEX IF NOT EXISTS idx_musician_albums_album ON musician_albums (album_id);
 
 CREATE TABLE
@@ -487,8 +538,6 @@ CREATE TABLE
     FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_track_genres_genre ON track_genres (genre_id);
-
 CREATE TABLE
   IF NOT EXISTS album_genres (
     album_id INTEGER NOT NULL,
@@ -499,8 +548,6 @@ CREATE TABLE
     FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
-
-CREATE INDEX IF NOT EXISTS idx_album_genres_genre ON album_genres (genre_id);
 
 -- User activity, playlists, and watch rooms
 
@@ -524,6 +571,10 @@ CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_user_updated_at
 ON movie_watch_progress (user_id, updated_at DESC)
 WHERE watched = false;
 
+-- Backs the movies -> movie_watch_progress delete cascade. The primary key leads
+-- with user_id, so movie_id needs its own index.
+CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_movie ON movie_watch_progress (movie_id);
+
 CREATE TABLE
   IF NOT EXISTS user_liked_tracks (
     user_id INTEGER NOT NULL,
@@ -535,6 +586,10 @@ CREATE TABLE
   );
 
 CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_track ON user_liked_tracks (track_id);
+
+-- Serves GetLikedTracksForUser's ORDER BY created_at DESC within a user.
+CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_user_created
+ON user_liked_tracks (user_id, created_at DESC);
 
 CREATE TABLE
   IF NOT EXISTS user_liked_movies (
@@ -557,7 +612,6 @@ CREATE TABLE
     description TEXT,
     cover_image TEXT,
     is_public BOOLEAN NOT NULL DEFAULT false,
-    folder_id INTEGER,
     movie_id INTEGER,
     content_type TEXT NOT NULL DEFAULT 'track',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -570,6 +624,9 @@ CREATE TABLE
 CREATE INDEX IF NOT EXISTS idx_playlist_user ON playlists (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_playlist_content_type ON playlists (content_type);
+
+-- Backs the movies -> playlists (movie_id SET NULL) cascade.
+CREATE INDEX IF NOT EXISTS idx_playlists_movie ON playlists (movie_id);
 
 CREATE TABLE
   IF NOT EXISTS playlist_tracks (
@@ -587,6 +644,12 @@ CREATE TABLE
 
 CREATE INDEX IF NOT EXISTS idx_playlist_tracks_position ON playlist_tracks (playlist_id, position);
 
+-- Back the tracks -> playlist_tracks cascade and the users -> added_by SET NULL.
+-- UNIQUE (playlist_id, track_id) leads with playlist_id, so neither is covered.
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks (track_id);
+
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_added_by ON playlist_tracks (added_by);
+
 -- Movie playlist items; use with playlists.content_type = 'movie'.
 CREATE TABLE
   IF NOT EXISTS playlist_movies (
@@ -603,6 +666,11 @@ CREATE TABLE
   );
 
 CREATE INDEX IF NOT EXISTS idx_playlist_movies_position ON playlist_movies (playlist_id, position);
+
+-- Back the movies -> playlist_movies cascade and the users -> added_by SET NULL.
+CREATE INDEX IF NOT EXISTS idx_playlist_movies_movie ON playlist_movies (movie_id);
+
+CREATE INDEX IF NOT EXISTS idx_playlist_movies_added_by ON playlist_movies (added_by);
 
 CREATE TABLE
   IF NOT EXISTS playlist_collaborators (
@@ -630,6 +698,13 @@ CREATE TABLE
     ),
     audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),
     subtitle_track INTEGER CHECK (subtitle_track >= 0),
+    -- Identity of the tracks the ordinals selected at creation, so a rescan
+    -- that reorders a replaced file's streams is detected instead of silently
+    -- playing a different track. NULL means unpinned (no such track selected).
+    audio_stream_index INTEGER,
+    audio_language TEXT,
+    subtitle_stream_index INTEGER,
+    subtitle_language TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -688,7 +763,10 @@ CREATE TABLE
 
 CREATE INDEX IF NOT EXISTS idx_user_track_stats_play_count ON user_track_stats (user_id, play_count DESC);
 
-CREATE INDEX IF NOT EXISTS idx_user_track_stats_last_played ON user_track_stats (user_id, last_played_at DESC);
+-- Backs the tracks -> user_track_stats delete cascade. The primary key leads with
+-- user_id, so track_id needs its own index; an album delete cascades through every
+-- one of its tracks.
+CREATE INDEX IF NOT EXISTS idx_user_track_stats_track ON user_track_stats (track_id);
 
 -- Search infrastructure
 
@@ -727,7 +805,10 @@ CREATE TRIGGER IF NOT EXISTS movies_ad AFTER DELETE ON movies BEGIN
   VALUES ('delete', old.id, old.title, old.overview, old.tag_line);
 END;
 
-CREATE TRIGGER IF NOT EXISTS movies_au AFTER UPDATE ON movies BEGIN
+-- Scoped to the indexed columns: an FTS index only needs rebuilding when a column
+-- it indexes changes, and unscoped triggers made every unrelated movie update pay
+-- for a full delete + reinsert. Matches the search_vocab_*_au triggers below.
+CREATE TRIGGER IF NOT EXISTS movies_au AFTER UPDATE OF title, overview, tag_line ON movies BEGIN
   INSERT INTO movies_fts (movies_fts, rowid, title, overview, tag_line)
   VALUES ('delete', old.id, old.title, old.overview, old.tag_line);
   INSERT INTO movies_fts (rowid, title, overview, tag_line)
@@ -752,7 +833,9 @@ CREATE TRIGGER IF NOT EXISTS albums_ad AFTER DELETE ON albums BEGIN
   VALUES ('delete', old.id, old.title, old.musician);
 END;
 
-CREATE TRIGGER IF NOT EXISTS albums_au AFTER UPDATE ON albums BEGIN
+-- Scoped so UpdateAlbumSpotifyCover, which runs for every album during Spotify
+-- enrichment, no longer reindexes an entry whose terms cannot have changed.
+CREATE TRIGGER IF NOT EXISTS albums_au AFTER UPDATE OF title, musician ON albums BEGIN
   INSERT INTO albums_fts (albums_fts, rowid, title, musician)
   VALUES ('delete', old.id, old.title, old.musician);
   INSERT INTO albums_fts (rowid, title, musician)
@@ -777,7 +860,8 @@ CREATE TRIGGER IF NOT EXISTS musicians_ad AFTER DELETE ON musicians BEGIN
   VALUES ('delete', old.id, old.name, old.sort_name);
 END;
 
-CREATE TRIGGER IF NOT EXISTS musicians_au AFTER UPDATE ON musicians BEGIN
+-- Scoped so UpdateMusicianSpotifyThumb does not reindex on a thumbnail change.
+CREATE TRIGGER IF NOT EXISTS musicians_au AFTER UPDATE OF name, sort_name ON musicians BEGIN
   INSERT INTO musicians_fts (musicians_fts, rowid, name, sort_name)
   VALUES ('delete', old.id, old.name, old.sort_name);
   INSERT INTO musicians_fts (rowid, name, sort_name)
@@ -807,7 +891,9 @@ CREATE TRIGGER IF NOT EXISTS tracks_search_ad AFTER DELETE ON tracks BEGIN
   DELETE FROM tracks_search_fts WHERE rowid = old.id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS tracks_search_au AFTER UPDATE ON tracks BEGIN
+-- title, album_id and musician_id are the only inputs to this index; album and
+-- musician renames are handled by the two triggers below.
+CREATE TRIGGER IF NOT EXISTS tracks_search_au AFTER UPDATE OF title, album_id, musician_id ON tracks BEGIN
   DELETE FROM tracks_search_fts WHERE rowid = old.id;
   INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
   SELECT
@@ -938,28 +1024,25 @@ END;
 
 -- Notifications
 
--- User-targeted and admin-queue notifications.
+-- Admin request-queue notifications (e.g. media requests), visible to every
+-- admin. There is no per-user targeting: visibility is admin-only and enforced
+-- by the handlers.
 CREATE TABLE
   IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_by_user_id INTEGER NOT NULL,
-    user_id INTEGER,
     title TEXT NOT NULL CHECK (title IN ('movie_request', 'album_request', 'track_request', 'other')),
     message TEXT NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (user_id IS NULL OR is_admin = false),
-    FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_created_by_user
 ON notifications (created_by_user_id);
 
-CREATE INDEX IF NOT EXISTS idx_notifications_user_created_at
-ON notifications (user_id, created_at DESC);
-
+-- Serves ListNotificationsForUser's filter and created_at ordering in one pass.
 CREATE INDEX IF NOT EXISTS idx_notifications_admin_created_at
 ON notifications (is_admin, created_at DESC);
 

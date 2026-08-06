@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -26,31 +25,36 @@ func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	}
 }
 
-func TestCleanupRoomHLSSession_NoopWhenNoSession(t *testing.T) {
+func TestCleanupRoomHLSSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.CleanupRoomHLSSession(99999)
-}
+	t.Run("removes the cached session and tombstones the room", func(t *testing.T) {
+		const roomID = int64(42)
+		key := RoomHLSSessionKey(roomID)
+		app.HLSSessionCache.SetDefault(key, &HLSSession{TempDir: t.TempDir()})
 
-func TestCleanupRoomHLSSession_RemovesSessionFromCache(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
+		app.CleanupRoomHLSSession(roomID)
 
-	const roomID = int64(42)
-	key := RoomHLSSessionKey(roomID)
+		if _, ok := app.HLSSessionCache.Get(key); ok {
+			t.Error("expected session to be removed from cache after cleanup")
+		}
+		if !app.isRoomHLSSessionDeleted(roomID) {
+			t.Error("expected cleanup to mark the room hls session as deleted")
+		}
+	})
 
-	dummy := &HLSSession{TempDir: ""}
-	app.HLSSessionCache.SetDefault(key, dummy)
+	// A room can be closed before anyone ever started playback. The tombstone
+	// still has to land, or a late warm-up would resurrect the deleted room.
+	t.Run("tombstones a room that never had a session", func(t *testing.T) {
+		const roomID = int64(99999)
 
-	app.CleanupRoomHLSSession(roomID)
+		app.CleanupRoomHLSSession(roomID)
 
-	if _, ok := app.HLSSessionCache.Get(key); ok {
-		t.Error("expected session to be removed from cache after cleanup")
-	}
-	if !app.isRoomHLSSessionDeleted(roomID) {
-		t.Error("expected cleanup to mark the room hls session as deleted")
-	}
+		if !app.isRoomHLSSessionDeleted(roomID) {
+			t.Error("expected cleanup to tombstone a room with no cached session")
+		}
+	})
 }
 
 func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
@@ -60,16 +64,12 @@ func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
 	const roomID = int64(24)
 	key := RoomHLSSessionKey(roomID)
 
-	tempDir, err := os.MkdirTemp("", "igloo-room-hls-*")
-	if err != nil {
-		t.Fatalf("mkdir temp: %v", err)
-	}
-
+	tempDir := t.TempDir()
 	session := &HLSSession{TempDir: tempDir}
 
 	app.CleanupRoomHLSSession(roomID)
 
-	err = app.storeRoomHLSSessionIfActive(roomID, key, session)
+	err := app.storeRoomHLSSessionIfActive(roomID, key, session)
 	if err == nil {
 		t.Fatal("expected deleted room session storage to fail")
 	}
@@ -125,7 +125,7 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 	app.HLSSessionCache.SetDefault(key, sentinel)
 	app.CleanupRoomHLSSession(roomID)
 
-	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0)
+	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected deleted room cache hit to fail")
 	}
@@ -143,7 +143,6 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	ctx := context.Background()
 	_, err := app.DB.Exec(`
@@ -160,7 +159,7 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 		t.Fatalf("select movie id: %v", err)
 	}
 
-	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0)
+	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from warm-up when movie has no video streams")
 	}
@@ -184,7 +183,7 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	sentinel := &HLSSession{TempDir: "sentinel"}
 	app.HLSSessionCache.SetDefault(key, sentinel)
 
-	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0)
+	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error on second warm-up call: %v", err)
 	}
@@ -201,26 +200,11 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: false,
-						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-					})
-				},
-			},
-			{
-				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
-						SafeVideo: true,
-						Segments:  1,
-					})
-				},
-			},
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
 		},
 	}
 	app.FFmpeg = fake
@@ -234,6 +218,8 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 		movieID,
 		helpers.HLS_PROFILE_REMUX,
 		0,
+		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)
@@ -241,14 +227,14 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 	defer cleanupHLSSession(session)
 
 	calls := fake.Calls()
-	if len(calls) == 0 || calls[len(calls)-1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("RunHLS calls = %+v, want final profile %q", calls, helpers.HLS_PROFILE_1080P_8MBPS)
+	if len(calls) != 2 {
+		t.Fatalf("RunHLS call count = %d, want 2", len(calls))
+	}
+	if calls[1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("fallback RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
 	}
 	if session.CopyVideo {
 		t.Fatal("CopyVideo = true, want false after room fallback")
-	}
-	if fake.CallCount() != 2 {
-		t.Fatalf("RunHLS call count = %d, want 2", fake.CallCount())
 	}
 
 	key := RoomHLSSessionKey(roomID)
@@ -262,5 +248,104 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 	}
 	if cachedSession != session {
 		t.Fatal("expected cached room session to match returned session")
+	}
+}
+
+func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	_, err := app.DB.Exec(`
+		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, movieID, 3, "ac3", 448000, 6, "spa")
+	if err != nil {
+		t.Fatalf("insert second audio stream: %v", err)
+	}
+
+	movie, err := app.Queries.GetMovieByID(background, movieID)
+	if err != nil {
+		t.Fatalf("load movie: %v", err)
+	}
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(background, movieID)
+	if err != nil {
+		t.Fatalf("load audio streams: %v", err)
+	}
+
+	// Deleting the rows pins that the warm-up serves from the preloaded slice:
+	// a re-fetch would see zero audio streams and reject the audio track.
+	_, err = app.DB.Exec(`DELETE FROM audio_streams WHERE movie_id = ?`, movieID)
+	if err != nil {
+		t.Fatalf("delete audio streams: %v", err)
+	}
+
+	session, err := app.GetOrCreateRoomHLSSession(
+		background,
+		91,
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		1,
+		&movie,
+		audioStreams,
+	)
+	if err != nil {
+		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 RunHLS call, got %d", len(calls))
+	}
+	if calls[0].AudioStreamIndex != 3 {
+		t.Fatalf("AudioStreamIndex = %d, want 3 (absolute ffprobe index for ordinal 1)", calls[0].AudioStreamIndex)
+	}
+}
+
+func TestInvalidateHLSSessionsForMovie(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	const roomA = int64(41)
+	const roomB = int64(42)
+	personalKeyA := HLSSessionKey(1, "720p_3mbps", nil, "session-a", 0)
+	personalKeyB := HLSSessionKey(2, "720p_3mbps", nil, "session-b", 0)
+
+	app.HLSSessionCache.SetDefault(personalKeyA, &HLSSession{MovieID: 1, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomA), &HLSSession{MovieID: 1, IsRoom: true, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(personalKeyB, &HLSSession{MovieID: 2, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomB), &HLSSession{MovieID: 2, IsRoom: true, TempDir: t.TempDir()})
+
+	app.invalidateHLSSessionsForMovie(1)
+
+	if _, ok := app.HLSSessionCache.Get(personalKeyA); ok {
+		t.Error("expected movie 1 personal session to be removed")
+	}
+	if _, ok := app.HLSSessionCache.Get(RoomHLSSessionKey(roomA)); ok {
+		t.Error("expected movie 1 room session to be removed")
+	}
+	if _, ok := app.HLSSessionCache.Get(personalKeyB); !ok {
+		t.Error("expected movie 2 personal session to survive")
+	}
+	if _, ok := app.HLSSessionCache.Get(RoomHLSSessionKey(roomB)); !ok {
+		t.Error("expected movie 2 room session to survive")
+	}
+
+	// The room was not deleted, so no tombstone: the next manifest request
+	// must be able to recreate the session instead of erroring.
+	session, ok, err := app.getActiveRoomHLSSession(roomA, RoomHLSSessionKey(roomA))
+	if err != nil {
+		t.Fatalf("expected no tombstone error for invalidated room, got %v", err)
+	}
+	if ok || session != nil {
+		t.Fatal("expected invalidated room session to be absent, not active")
 	}
 }

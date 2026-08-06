@@ -6,7 +6,9 @@ export type E2EEnv = {
 
 export function readE2EEnv(): E2EEnv {
   return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000",
+    baseURL:
+      process.env.E2E_BASE_URL ??
+      `http://127.0.0.1:${process.env.E2E_WEB_PORT ?? "3000"}`,
     email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
     password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
   };

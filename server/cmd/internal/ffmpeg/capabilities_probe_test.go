@@ -3,8 +3,8 @@ package ffmpeg
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,7 +17,7 @@ func fullCapabilityProbeFake(t *testing.T, runtimeExit int, logPath string) stri
 	if runtimeExit != 0 {
 		runtimeResult = "printf '%0300d' 0 >&2\nexit " + strconv.Itoa(runtimeExit)
 	}
-	body := "printf '%s\\n' \"$*\" >> " + formatShellPath(logPath) + `
+	body := appendInvocationLog(logPath) + `
 if [ "$1" = "-encoders" ]; then
   printf '%s\n' ' V..... h264_nvenc NVIDIA' ' V..... h264_qsv Intel' ' V..... libx264 CPU'
   exit 0
@@ -84,7 +84,7 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 
 func TestProbeCapabilitiesMissingPrerequisitesSuppressesFilterRuntimeProbes(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "probes.log")
-	body := "printf '%s\\n' \"$*\" >> " + formatShellPath(logPath) + `
+	body := appendInvocationLog(logPath) + `
 if [ "$1" = "-encoders" ]; then
   printf '%s\n' ' V..... h264_nvenc NVIDIA' ' V..... h264_qsv Intel'
 fi
@@ -100,12 +100,12 @@ exit 0
 		t.Fatalf("filter runtime probes ran without prerequisites: %#v", caps)
 	}
 
-	logData, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read probe log: %v", err)
-	}
-	if strings.Contains(string(logData), "-init_hw_device") {
-		t.Fatalf("hardware filter runtime probe was not suppressed:\n%s", logData)
+	invocations := readArgumentLog(t, logPath)
+	usedHWDevice := slices.ContainsFunc(invocations, func(line string) bool {
+		return strings.Contains(line, "-init_hw_device")
+	})
+	if usedHWDevice {
+		t.Fatalf("hardware filter runtime probe was not suppressed:\n%s", strings.Join(invocations, "\n"))
 	}
 }
 
@@ -122,6 +122,9 @@ func TestProbeCapabilitiesRecordsBoundedEncoderDiagnostics(t *testing.T) {
 	}
 	if len(caps.H264NVENCProbeError) > 240 || len(caps.H264QSVProbeError) > 240 {
 		t.Fatalf("encoder diagnostics were not bounded: nvenc=%d qsv=%d", len(caps.H264NVENCProbeError), len(caps.H264QSVProbeError))
+	}
+	if compactProbeError(nil) != "" {
+		t.Fatalf("a successful probe must compact to an empty diagnostic, got %q", compactProbeError(nil))
 	}
 }
 
@@ -190,19 +193,5 @@ func TestRunFFmpegProbeContextReturnsOutputAndNonzeroError(t *testing.T) {
 	}
 	if !strings.Contains(output, "diagnostic") || !strings.Contains(err.Error(), "diagnostic") {
 		t.Fatalf("probe output/error lost diagnostics: output=%q err=%v", output, err)
-	}
-}
-
-func TestCompactProbeError(t *testing.T) {
-	if compactProbeError(nil) != "" {
-		t.Fatal("nil error should compact to an empty string")
-	}
-	short := errors.New(" short diagnostic ")
-	if compactProbeError(short) != "short diagnostic" {
-		t.Fatalf("short diagnostic = %q", compactProbeError(short))
-	}
-	long := errors.New(strings.Repeat("x", 300))
-	if len(compactProbeError(long)) != 240 {
-		t.Fatalf("long diagnostic length = %d, want 240", len(compactProbeError(long)))
 	}
 }

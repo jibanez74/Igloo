@@ -2,7 +2,7 @@ package ffprobe
 
 import (
 	"context"
-	"os"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,23 +45,65 @@ func TestParseKeyframePacket(t *testing.T) {
 	}
 }
 
-func TestKeyframeAtOrBeforeUsesAbsoluteBoundedInterval(t *testing.T) {
-	argsPath := filepath.Join(t.TempDir(), "args.log")
-	t.Setenv("FFPROBE_ARGS_LOG", argsPath)
+func TestKeyframeAtOrBeforeRejectsInvalidInput(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
 
-	binPath := filepath.Join(t.TempDir(), "ffprobe")
-	script := `#!/bin/sh
-printf '%s\n' "$@" > "$FFPROBE_ARGS_LOG"
-printf '%s\n' '565.000000,K__'
-printf '%s\n' '599.000000,K__'
-printf '%s\n' '600.500000,K__'
-`
-	err := os.WriteFile(binPath, []byte(script), 0755)
-	if err != nil {
-		t.Fatalf("write fake ffprobe: %v", err)
+	tests := []struct {
+		name      string
+		filePath  string
+		targetSec float64
+		wantErr   string
+	}{
+		{name: "empty path", filePath: "", targetSec: 10, wantErr: "source path is required"},
+		{name: "whitespace path", filePath: "   ", targetSec: 10, wantErr: "source path is required"},
+		{name: "zero target", filePath: "/tmp/movie.mkv", targetSec: 0, wantErr: "target must be greater than zero"},
+		{name: "negative target", filePath: "/tmp/movie.mkv", targetSec: -1, wantErr: "target must be greater than zero"},
 	}
 
-	probe := &ffprobe{bin: binPath}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := probe.KeyframeAtOrBefore(context.Background(), tt.filePath, 0, tt.targetSec)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestKeyframeAtOrBeforeNoKeyframeFound(t *testing.T) {
+	// A non-keyframe row before the target and a keyframe past it: neither may
+	// satisfy the lookup.
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: "599.000000,___\n601.500000,K__",
+	})}
+
+	_, err := probe.KeyframeAtOrBefore(context.Background(), "/tmp/movie.mkv", 0, 600)
+	if err == nil || !strings.Contains(err.Error(), "no keyframe found at or before 600.000") {
+		t.Fatalf("error = %v, want no keyframe found error", err)
+	}
+}
+
+func TestKeyframeAtOrBeforeReturnsContextError(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: "599.000000,K__",
+	})}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := probe.KeyframeAtOrBefore(ctx, "/tmp/movie.mkv", 0, 600)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+}
+
+func TestKeyframeAtOrBeforeUsesAbsoluteBoundedInterval(t *testing.T) {
+	argsLog := filepath.Join(t.TempDir(), "args.log")
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout:  "565.000000,K__\n599.000000,K__\n600.500000,K__",
+		argsLog: argsLog,
+	})}
+
 	keyframe, err := probe.KeyframeAtOrBefore(
 		context.Background(),
 		"/tmp/movie.mkv",
@@ -75,42 +117,16 @@ printf '%s\n' '600.500000,K__'
 		t.Fatalf("keyframe = %.3f, want 599", keyframe)
 	}
 
-	argsData, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read ffprobe arguments: %v", err)
-	}
-	args := strings.Split(strings.TrimSpace(string(argsData)), "\n")
-	for index, arg := range args {
-		if arg != "-read_intervals" {
-			continue
-		}
-		if index+1 >= len(args) {
-			t.Fatal("-read_intervals has no value")
-		}
-		if args[index+1] != "570.000%601.000" {
-			t.Fatalf("read interval = %q, want %q", args[index+1], "570.000%601.000")
-		}
-		return
-	}
-
-	t.Fatal("-read_intervals argument not found")
+	requireArgumentValue(t, readArgumentLog(t, argsLog), "-read_intervals", "570.000%601.000")
 }
 
 func TestKeyframeAtOrBeforeClampsNearZeroInterval(t *testing.T) {
-	argsPath := filepath.Join(t.TempDir(), "args.log")
-	t.Setenv("FFPROBE_ARGS_LOG", argsPath)
+	argsLog := filepath.Join(t.TempDir(), "args.log")
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout:  "0.000000,K__",
+		argsLog: argsLog,
+	})}
 
-	binPath := filepath.Join(t.TempDir(), "ffprobe")
-	script := `#!/bin/sh
-printf '%s\n' "$@" > "$FFPROBE_ARGS_LOG"
-printf '%s\n' '0.000000,K__'
-`
-	err := os.WriteFile(binPath, []byte(script), 0755)
-	if err != nil {
-		t.Fatalf("write fake ffprobe: %v", err)
-	}
-
-	probe := &ffprobe{bin: binPath}
 	keyframe, err := probe.KeyframeAtOrBefore(
 		context.Background(),
 		"/tmp/movie.mkv",
@@ -124,11 +140,5 @@ printf '%s\n' '0.000000,K__'
 		t.Fatalf("keyframe = %.3f, want 0", keyframe)
 	}
 
-	argsData, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read ffprobe arguments: %v", err)
-	}
-	if !strings.Contains(string(argsData), "0.000%1.250") {
-		t.Fatalf("arguments do not contain clamped interval: %q", argsData)
-	}
+	requireArgumentValue(t, readArgumentLog(t, argsLog), "-read_intervals", "0.000%1.250")
 }

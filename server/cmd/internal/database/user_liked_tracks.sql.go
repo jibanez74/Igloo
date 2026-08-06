@@ -132,26 +132,6 @@ func (q *Queries) GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksF
 	return items, nil
 }
 
-const isTrackLiked = `-- name: IsTrackLiked :one
-SELECT
-  COUNT(*) > 0 AS is_liked
-FROM user_liked_tracks
-WHERE user_id = ?
-  AND track_id = ?
-`
-
-type IsTrackLikedParams struct {
-	UserID  int64 `json:"user_id"`
-	TrackID int64 `json:"track_id"`
-}
-
-func (q *Queries) IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error) {
-	row := q.queryRow(ctx, q.isTrackLikedStmt, isTrackLiked, arg.UserID, arg.TrackID)
-	var is_liked bool
-	err := row.Scan(&is_liked)
-	return is_liked, err
-}
-
 const likeTrack = `-- name: LikeTrack :exec
 INSERT INTO user_liked_tracks (
   user_id,
@@ -172,7 +152,7 @@ func (q *Queries) LikeTrack(ctx context.Context, arg LikeTrackParams) error {
 	return err
 }
 
-const unlikeTrack = `-- name: UnlikeTrack :exec
+const unlikeTrack = `-- name: UnlikeTrack :execrows
 DELETE FROM user_liked_tracks
 WHERE user_id = ?
   AND track_id = ?
@@ -183,7 +163,10 @@ type UnlikeTrackParams struct {
 	TrackID int64 `json:"track_id"`
 }
 
-func (q *Queries) UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error {
-	_, err := q.exec(ctx, q.unlikeTrackStmt, unlikeTrack, arg.UserID, arg.TrackID)
-	return err
+func (q *Queries) UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) (int64, error) {
+	result, err := q.exec(ctx, q.unlikeTrackStmt, unlikeTrack, arg.UserID, arg.TrackID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

@@ -85,14 +85,14 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	var movieID sql.NullInt64
 	if req.MovieID != nil {
-		_, err := app.Queries.GetMovieByID(ctx, *req.MovieID)
+		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
-				return
-			}
 			app.Logger.Error("failed to verify movie for playlist", "error", err)
 			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			return
+		}
+		if !movieOK {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
 			return
 		}
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
@@ -226,14 +226,14 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	var movieID sql.NullInt64
 	if req.MovieID != nil {
-		_, err := app.Queries.GetMovieByID(ctx, *req.MovieID)
+		movieOK, err := app.Queries.MovieExists(ctx, *req.MovieID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
-				return
-			}
 			app.Logger.Error("failed to verify movie for playlist", "error", err)
 			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			return
+		}
+		if !movieOK {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
 			return
 		}
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
@@ -459,56 +459,68 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	}
 
 	ctx := r.Context()
+
+	// One transaction for the whole batch. ON CONFLICT DO NOTHING replaces the
+	// per-movie membership pre-check, and the movie_id foreign key replaces the
+	// per-movie existence lookup -- an unknown id surfaces as an FK violation
+	// and is counted as skipped, exactly as before.
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		app.Logger.Error("failed to begin add-movies transaction", "error", err, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+
 	addedCount := 0
 	skippedCount := 0
 
 	for _, movieID := range req.MovieIds {
-		_, err := app.Queries.GetMovieByID(ctx, movieID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				skippedCount++
-				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
-				continue
-			}
-			app.Logger.Error("failed to look up movie", "error", err, "movie_id", movieID)
-			helpers.ErrorJSON(w, errors.New("failed to verify movies"), http.StatusInternalServerError)
-			return
-		}
-
-		inPl, err := app.Queries.IsMovieInPlaylist(ctx, database.IsMovieInPlaylistParams{
-			PlaylistID: playlistID,
-			MovieID:    movieID,
-		})
-		if err != nil {
-			app.Logger.Error("failed to check movie in playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
-			helpers.ErrorJSON(w, errors.New("failed to update playlist"), http.StatusInternalServerError)
-			return
-		}
-		if inPl {
-			skippedCount++
-			continue
-		}
-
-		_, err = app.Queries.AddMovieToPlaylist(ctx, database.AddMovieToPlaylistParams{
+		rowsAffected, err := qtx.AddMovieToPlaylist(ctx, database.AddMovieToPlaylistParams{
 			PlaylistID: playlistID,
 			MovieID:    movieID,
 			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
 		})
 		if err != nil {
+			// An unknown movie id fails the movie_id foreign key. Confirm that is
+			// what happened instead of matching the driver's error text:
+			// playlist_movies also has foreign keys on playlist_id and added_by, so
+			// a playlist or user deleted mid-request must surface as an error
+			// rather than a silent skip. A constraint violation aborts only the
+			// failed statement, so the transaction is still usable for this probe.
+			movieOK, existsErr := qtx.MovieExists(ctx, movieID)
+			if existsErr == nil && !movieOK {
+				skippedCount++
+				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
+				continue
+			}
 			app.Logger.Error("failed to add movie to playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
 			helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
 			return
+		}
+		if rowsAffected == 0 {
+			skippedCount++
+			continue
 		}
 		addedCount++
 	}
 
 	if addedCount > 0 {
-		timestampErr := app.Queries.UpdatePlaylistTimestamp(ctx, playlistID)
+		timestampErr := qtx.UpdatePlaylistTimestamp(ctx, playlistID)
 		if timestampErr != nil {
 			app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistID)
 			helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
 			return
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		app.Logger.Error("failed to commit add-movies transaction", "error", err, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+		return
 	}
 
 	res := helpers.JSONResponse{

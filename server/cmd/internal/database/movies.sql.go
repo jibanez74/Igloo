@@ -127,7 +127,7 @@ WHERE movie_id = ?
 `
 
 // Delete all chapters for a movie
-func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error {
+func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID int64) error {
 	_, err := q.exec(ctx, q.deleteMovieChaptersStmt, deleteMovieChapters, movieID)
 	return err
 }
@@ -312,7 +312,7 @@ ORDER BY start_time
 `
 
 // Chapters for a movie (for technical details display).
-func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error) {
+func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error) {
 	rows, err := q.query(ctx, q.getChaptersByMovieIDStmt, getChaptersByMovieID, movieID)
 	if err != nil {
 		return nil, err
@@ -844,12 +844,21 @@ func (q *Queries) GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenre
 
 const getMoviesByIDs = `-- name: GetMoviesByIDs :many
 SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
+  id,
+  title,
+  poster_path
 FROM movies
 WHERE id IN (/*SLICE:ids*/?)
 `
 
-func (q *Queries) GetMoviesByIDs(ctx context.Context, ids []int64) ([]Movie, error) {
+type GetMoviesByIDsRow struct {
+	ID         int64          `json:"id"`
+	Title      string         `json:"title"`
+	PosterPath sql.NullString `json:"poster_path"`
+}
+
+// Card-sized projection: the watch-room listing only renders title and poster.
+func (q *Queries) GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error) {
 	query := getMoviesByIDs
 	var queryParams []interface{}
 	if len(ids) > 0 {
@@ -865,37 +874,10 @@ func (q *Queries) GetMoviesByIDs(ctx context.Context, ids []int64) ([]Movie, err
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Movie{}
+	items := []GetMoviesByIDsRow{}
 	for rows.Next() {
-		var i Movie
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.FilePath,
-			&i.FileName,
-			&i.Size,
-			&i.Container,
-			&i.MimeType,
-			&i.Adult,
-			&i.TmdbID,
-			&i.ImdbID,
-			&i.PosterPath,
-			&i.BackdropPath,
-			&i.Language,
-			&i.Year,
-			&i.ReleaseDate,
-			&i.Overview,
-			&i.TagLine,
-			&i.Certification,
-			&i.CriticRating,
-			&i.AudienceRating,
-			&i.Revenue,
-			&i.Budget,
-			&i.RunTime,
-			&i.Duration,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
+		var i GetMoviesByIDsRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.PosterPath); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1270,7 +1252,7 @@ RETURNING id, title, start_time, thumb, movie_id
 `
 
 type InsertChapterParams struct {
-	MovieID   sql.NullInt64  `json:"movie_id"`
+	MovieID   int64          `json:"movie_id"`
 	Title     string         `json:"title"`
 	StartTime int64          `json:"start_time"`
 	Thumb     sql.NullString `json:"thumb"`
@@ -1450,6 +1432,24 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const movieExists = `-- name: MovieExists :one
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM movies
+    WHERE id = ?
+  )
+`
+
+// Existence probe for handlers that only need to 404 on an unknown movie;
+// avoids shipping the full 27-column row.
+func (q *Queries) MovieExists(ctx context.Context, id int64) (bool, error) {
+	row := q.queryRow(ctx, q.movieExistsStmt, movieExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const updateMovie = `-- name: UpdateMovie :one
@@ -1777,6 +1777,10 @@ SET
   overview = excluded.overview,
   tag_line = excluded.tag_line,
   certification = excluded.certification,
+  -- audience_rating is deliberately not updated: the scanner never supplies it
+  -- (only the manual edit path does), so refreshing it here would wipe manual
+  -- edits on every rescan. Guarded by
+  -- TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata.
   critic_rating = excluded.critic_rating,
   revenue = excluded.revenue,
   budget = excluded.budget,

@@ -67,16 +67,21 @@ SELECT
     FROM musician_albums AS ma
     WHERE ma.musician_id = m.id
   ) AS album_count,
+  -- Counts tracks credited to this musician either as the primary musician or via
+  -- track_musicians. A UNION of two indexed lookups rather than an OR over both
+  -- tables: the OR form cannot use an index and scans every track per musician.
+  -- UNION (not UNION ALL) preserves the distinct-track count.
   (
-    SELECT COUNT(DISTINCT t.id)
-    FROM tracks AS t
-    WHERE t.musician_id = m.id
-      OR EXISTS (
-        SELECT 1
-        FROM track_musicians AS tm
-        WHERE tm.track_id = t.id
-          AND tm.musician_id = m.id
-      )
+    SELECT COUNT(*)
+    FROM (
+      SELECT t.id
+      FROM tracks AS t
+      WHERE t.musician_id = m.id
+      UNION
+      SELECT tm.track_id
+      FROM track_musicians AS tm
+      WHERE tm.musician_id = m.id
+    )
   ) AS track_count
 FROM musicians AS m
 ORDER BY
@@ -96,21 +101,28 @@ WHERE id = ?
 LIMIT 1;
 
 -- name: GetAlbumsByMusicianID :many
--- Sorted by release date (newest first), then by title
+-- Sorted by release date (newest first), then by title. Track counts come from
+-- one grouped pass over idx_track_album instead of a correlated subquery per
+-- album; this query has no LIMIT, so it runs for the artist's whole
+-- discography.
 SELECT
   a.id,
   a.title,
   a.cover,
   a.year,
   a.release_date,
-  (
-    SELECT COUNT(*)
-    FROM tracks AS t
-    WHERE t.album_id = a.id
-  ) AS track_count
+  COALESCE(tc.track_count, 0) AS track_count
 FROM albums AS a
 INNER JOIN musician_albums AS ma
   ON a.id = ma.album_id
+LEFT JOIN (
+  SELECT
+    album_id,
+    COUNT(*) AS track_count
+  FROM tracks
+  GROUP BY album_id
+) AS tc
+  ON tc.album_id = a.id
 WHERE ma.musician_id = ?
 ORDER BY
   a.release_date DESC,
@@ -134,11 +146,15 @@ SELECT
 FROM tracks AS t
 LEFT JOIN albums AS a
   ON t.album_id = a.id
-WHERE t.musician_id = sqlc.arg(musician_id)
-  OR EXISTS (
-    SELECT 1
-    FROM track_musicians AS tm
-    WHERE tm.track_id = t.id
-      AND tm.musician_id = sqlc.arg(musician_id)
-  )
+-- Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
+-- the equivalent OR over tracks and track_musicians cannot use an index.
+WHERE t.id IN (
+  SELECT primary_t.id
+  FROM tracks AS primary_t
+  WHERE primary_t.musician_id = sqlc.arg(musician_id)
+  UNION
+  SELECT credited_tm.track_id
+  FROM track_musicians AS credited_tm
+  WHERE credited_tm.musician_id = sqlc.arg(musician_id)
+)
 ORDER BY t.sort_title ASC;

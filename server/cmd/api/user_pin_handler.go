@@ -68,7 +68,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	currentUser, err := app.Queries.GetUser(r.Context(), userID)
+	currentPin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
@@ -79,7 +79,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if currentUser.Pin.Valid {
+	if currentPin.Valid {
 		if !app.allowPinAttempt(userID) {
 			helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
 			return
@@ -90,7 +90,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if req.CurrentPin != currentUser.Pin.String {
+		if req.CurrentPin != currentPin.String {
 			helpers.ErrorJSON(w, errors.New(currentPinIncorrectMessage), http.StatusUnauthorized)
 			return
 		}
@@ -132,7 +132,7 @@ func (app *Application) GetUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := app.Queries.GetUser(r.Context(), userID)
+	pin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
@@ -147,7 +147,7 @@ func (app *Application) GetUserPin(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"pin": helpers.StringPtrFromNull(user.Pin),
+			"pin": helpers.StringPtrFromNull(pin),
 		},
 	})
 }
@@ -176,7 +176,7 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := app.Queries.GetUser(r.Context(), userID)
+	pin, err := app.Queries.GetUserPin(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
@@ -187,7 +187,7 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !user.Pin.Valid {
+	if !pin.Valid {
 		helpers.ErrorJSON(w, errors.New("no PIN is set for this account"), http.StatusBadRequest)
 		return
 	}
@@ -197,7 +197,7 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	valid := req.Pin == user.Pin.String
+	valid := req.Pin == pin.String
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,

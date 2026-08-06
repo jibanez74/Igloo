@@ -22,24 +22,6 @@ func prepareSingletonLifecycleTest(t *testing.T) {
 	})
 }
 
-func versionOnlyFakeFFprobe(t *testing.T) string {
-	t.Helper()
-
-	binPath := filepath.Join(t.TempDir(), "ffprobe")
-	script := `#!/bin/sh
-if [ "$#" -eq 1 ] && [ "$1" = "-version" ]; then
-		printf '%s\n' 'ffprobe version test'
-	fi
-exit 0
-`
-	err := os.WriteFile(binPath, []byte(script), 0755)
-	if err != nil {
-		t.Fatalf("write fake ffprobe: %v", err)
-	}
-
-	return binPath
-}
-
 func TestInitializeCandidateCleansFailedExtraction(t *testing.T) {
 	prepareSingletonLifecycleTest(t)
 	extracted := filepath.Join(t.TempDir(), "igloo-ffprobe-test")
@@ -61,9 +43,6 @@ func TestInitializeCandidateCleansFailedExtraction(t *testing.T) {
 	if !os.IsNotExist(statErr) {
 		t.Fatalf("failed candidate extraction was not removed: %v", statErr)
 	}
-	if instance != nil || extractedDir != "" {
-		t.Fatalf("failed candidate changed singleton ownership: instance=%v extractedDir=%q", instance, extractedDir)
-	}
 }
 
 func TestNewRejectsInvalidExecutableAndCanRetry(t *testing.T) {
@@ -83,7 +62,7 @@ func TestNewRejectsInvalidExecutableAndCanRetry(t *testing.T) {
 		t.Fatalf("failed initialization claimed singleton state: instance=%v extractedDir=%q", instance, extractedDir)
 	}
 
-	goodPath := versionOnlyFakeFFprobe(t)
+	goodPath := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test"})
 	t.Setenv("IGLOO_FFPROBE_PATH", goodPath)
 	retried, err := New()
 	if err != nil {

@@ -68,8 +68,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	trackCount, _ := app.Queries.CountPlaylistTracks(r.Context(), playlistId)
-	duration, _ := app.Queries.GetPlaylistDuration(r.Context(), playlistId)
+	summary, _ := app.Queries.GetPlaylistTrackSummary(r.Context(), playlistId)
 
 	var collaborators []database.GetPlaylistCollaboratorsRow
 	if permission == PermissionOwner {
@@ -80,8 +79,8 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		Error: false,
 		Data: map[string]any{
 			"playlist":      playlist,
-			"track_count":   trackCount,
-			"duration":      duration,
+			"track_count":   summary.TrackCount,
+			"duration":      summary.TotalDuration,
 			"is_owner":      permission == PermissionOwner,
 			"can_edit":      permission >= PermissionEdit,
 			"collaborators": collaborators,
@@ -384,20 +383,24 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// One transaction for the whole batch: the inserts commit together instead
+	// of once per track, and ON CONFLICT DO NOTHING replaces the per-track
+	// membership pre-check (zero rows affected means it was already there).
+	tx, err := app.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		app.Logger.Error("failed to begin add-tracks transaction", "error", err, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to add tracks"))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+
 	addedCount := 0
 	skippedCount := 0
 
 	for _, trackId := range req.TrackIds {
-		inPlaylist, _ := app.Queries.IsTrackInPlaylist(r.Context(), database.IsTrackInPlaylistParams{
-			PlaylistID: playlistId,
-			TrackID:    trackId,
-		})
-		if inPlaylist {
-			skippedCount++
-			continue
-		}
-
-		_, err := app.Queries.AddTrackToPlaylist(r.Context(), database.AddTrackToPlaylistParams{
+		rowsAffected, err := qtx.AddTrackToPlaylist(r.Context(), database.AddTrackToPlaylistParams{
 			PlaylistID: playlistId,
 			TrackID:    trackId,
 			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
@@ -406,10 +409,21 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 			app.Logger.Warn("failed to add track to playlist", "error", err, "track_id", trackId, "playlist_id", playlistId)
 			continue
 		}
+		if rowsAffected == 0 {
+			skippedCount++
+			continue
+		}
 		addedCount++
 	}
 
-	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	_ = qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+
+	err = tx.Commit()
+	if err != nil {
+		app.Logger.Error("failed to commit add-tracks transaction", "error", err, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to add tracks"))
+		return
+	}
 
 	app.Logger.Info("tracks added to playlist", "playlist_id", playlistId, "added", addedCount, "skipped", skippedCount)
 
@@ -674,14 +688,14 @@ func (app *Application) addCollaborator(
 		return
 	}
 
-	_, err = app.Queries.GetUser(r.Context(), req.UserId)
+	userOK, err := app.Queries.UserExists(r.Context(), req.UserId)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
-			return
-		}
 		app.Logger.Error("failed to verify user", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to add collaborator"))
+		return
+	}
+	if !userOK {
+		helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
 		return
 	}
 
