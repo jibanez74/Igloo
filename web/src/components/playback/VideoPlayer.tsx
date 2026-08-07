@@ -309,7 +309,11 @@ export default function VideoPlayer({
         hlsRef.current = hls;
         disposeHls = () => {
           hls.destroy();
-          hlsRef.current = null;
+          // A late dispose must not clobber a newer instance a subsequent
+          // effect run already put in the ref.
+          if (hlsRef.current === hls) {
+            hlsRef.current = null;
+          }
         };
 
         hls.loadSource(src);

@@ -373,8 +373,12 @@ export function useYouTubePlayer(
     },
   );
 
-  const clearPlayerRef = useEffectEvent(() => {
-    playerRef.current = null;
+  // Takes the instance being disposed so a late cleanup cannot clobber a
+  // newer player a subsequent effect run already put in the ref.
+  const clearPlayerRef = useEffectEvent((player: YT.Player) => {
+    if (playerRef.current === player) {
+      playerRef.current = null;
+    }
   });
 
   const handlePlayerError = useEffectEvent((event: YT.OnErrorEvent) => {
@@ -520,9 +524,8 @@ export function useYouTubePlayer(
         } catch {
           // Player might already be destroyed.
         }
+        clearPlayerRef(createdPlayer);
       }
-
-      clearPlayerRef();
     };
   }, [videoId, autoplay, controls, containerReady, reloadKey]);
 

@@ -30,7 +30,7 @@ Changing audio track, subtitles, or quality mid-playback tears down the player a
 
 ## Client-side stragglers
 
-- **H10 (verified in code review, not reproduced):** a late `disposeHls` callback can null `hlsRef.current` while it already holds a newer hls.js instance (`web/src/components/movies/VideoPlayer.tsx`); guard the dispose with an identity check.
+- ~~**H10:**~~ (CLOSED 2026-08-07) `disposeHls` now nulls `hlsRef.current` only when it still points at the instance being disposed (`web/src/components/playback/VideoPlayer.tsx` — the register's `components/movies` path was stale). The race was defensive rather than reproducible with the current single call site, but the guard makes the invariant local. The same fix was applied to the reachable variant in `useYouTubePlayer.ts`, whose cleanup nulled `playerRef` unconditionally across `reloadKey` rebuilds.
 - **H4 browser confirmation:** the subtitle rebase fix (`helpers.ShiftWebVTT` serving cues shifted by `?start=`) has passing unit tests but has never been verified against a real browser on a rebased (resume/seek) session with sidecar subtitles.
 
 ## First-frame latency measurement (instrumentation)
