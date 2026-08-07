@@ -16,6 +16,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
+	applogger "igloo/cmd/internal/logger"
 )
 
 const (
@@ -60,6 +61,9 @@ type HLSSession struct {
 	Cmd             *exec.Cmd
 	Cancel          context.CancelFunc
 	CleanupOnce     sync.Once
+	// Logger lets cleanupHLSSession report teardown failures; nil (as in tests
+	// that build bare sessions) suppresses the reporting, never the cleanup.
+	Logger applogger.LoggerInterface
 	DurationSec     float64
 	StartSec        float64
 	Exited          bool
@@ -593,7 +597,16 @@ func cleanupHLSSession(session *HLSSession) {
 		}
 
 		if session.TempDir != "" {
-			_ = os.RemoveAll(session.TempDir)
+			removeErr := os.RemoveAll(session.TempDir)
+			if removeErr != nil && session.Logger != nil {
+				// A leaked dir survives until the next boot sweep, so at least
+				// leave a trace of it.
+				session.Logger.Warn("failed to remove hls session temp dir",
+					"movie_id", session.MovieID,
+					"temp_dir", session.TempDir,
+					"error", removeErr,
+				)
+			}
 		}
 	})
 }
@@ -745,7 +758,14 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	if !copyVideo {
 		releaseTranscode, err = app.acquireHLSTranscodeSlot()
 		if err != nil {
-			_ = os.RemoveAll(tempDir)
+			removeErr := os.RemoveAll(tempDir)
+			if removeErr != nil {
+				app.Logger.Warn("failed to remove hls temp dir after transcode limiter rejection",
+					"movie_id", params.Movie.ID,
+					"temp_dir", tempDir,
+					"error", removeErr,
+				)
+			}
 			return nil, err
 		}
 	}
@@ -758,6 +778,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		PlaybackSession:  params.PlaybackSession,
 		TempDir:          tempDir,
 		Cancel:           cancel,
+		Logger:           app.Logger,
 		DurationSec:      params.DurationSec,
 		StartSec:         startSec,
 		IsRoom:           params.IsRoom,
@@ -1213,13 +1234,15 @@ func (app *Application) createHLSSession(
 	requestedProfile := profile
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
-	safetyCacheKey := remuxSafetyFingerprint(movie, primaryVideo)
+	fingerprint := remuxSafetyFingerprint(movie, primaryVideo)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
 		if ok, fallbackReason := isBrowserSafeH264RemuxCandidate(primaryVideo); !ok {
+			// No verdict is persisted here: the static gate is deterministic
+			// from stored stream rows and must stay ahead of the verdict
+			// lookup below, which never sees statically-unsafe streams.
 			effectiveProfile = fallbackProfile
-			app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
 			app.Logger.Warn("remux safety fallback engaged",
 				"movie_id", movieID,
 				"requested_profile", requestedProfile,
@@ -1228,10 +1251,10 @@ func (app *Application) createHLSSession(
 				"fallback_reason", fallbackReason,
 			)
 		} else {
-			verdict, ok := app.getRemuxSafetyVerdict(safetyCacheKey)
+			verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, primaryVideo.StreamIndex, fingerprint)
 			if ok {
 				if verdict.Safe {
-					app.Logger.Info("remux safety cache hit",
+					app.Logger.Info("remux safety verdict hit",
 						"movie_id", movieID,
 						"requested_profile", requestedProfile,
 						"effective_profile", requestedProfile,
@@ -1307,7 +1330,7 @@ func (app *Application) createHLSSession(
 	)
 	if err != nil {
 		fallbackReason := err.Error()
-		app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
+		app.setRemuxSafetyVerdict(movieID, primaryVideo.StreamIndex, fingerprint, false, fallbackReason)
 		app.Logger.Warn("remux safety fallback engaged",
 			"movie_id", movieID,
 			"requested_profile", requestedProfile,
@@ -1323,7 +1346,7 @@ func (app *Application) createHLSSession(
 		return app.startHLSSession(&fp)
 	}
 
-	app.setRemuxSafetyVerdict(safetyCacheKey, true, "validated safe remux")
+	app.setRemuxSafetyVerdict(movieID, primaryVideo.StreamIndex, fingerprint, true, "validated safe remux")
 	app.Logger.Info("remux safety validated",
 		"movie_id", movieID,
 		"requested_profile", requestedProfile,

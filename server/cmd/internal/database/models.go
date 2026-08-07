@@ -219,6 +219,16 @@ type ProductionCompany struct {
 	UpdatedAt string         `json:"updated_at"`
 }
 
+type RemuxSafetyVerdict struct {
+	MovieID     int64  `json:"movie_id"`
+	StreamIndex int64  `json:"stream_index"`
+	Fingerprint string `json:"fingerprint"`
+	Safe        bool   `json:"safe"`
+	Reason      string `json:"reason"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
 type Setting struct {
 	ID                         int64           `json:"id"`
 	TmdbKey                    sql.NullString  `json:"tmdb_key"`

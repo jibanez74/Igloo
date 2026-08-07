@@ -89,6 +89,10 @@ func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string) 
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
 	b.WriteString("#EXT-X-VERSION:7\n")
+	// Accurate because -force_key_frames pins an IDR to every segment boundary.
+	// hls.js ignores the tag in media playlists; native HLS players (Safari)
+	// use it to start decoding from any segment.
+	b.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
 	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", helpers.HLS_SEGMENT_TIME_SEC*2))
 	b.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")

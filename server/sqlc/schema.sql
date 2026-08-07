@@ -409,6 +409,24 @@ CREATE TABLE
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_subtitles_movie_stream ON subtitles (movie_id, stream_index);
 
+-- Persisted remux-safety verdicts, one per movie video stream. The fingerprint
+-- captures file identity (size, updated_at) plus the stream properties the
+-- safety gate reads; a mismatch on lookup means the file changed and the
+-- verdict is recomputed. Only definitive preflight validation results are
+-- stored, never transient preflight timeouts.
+CREATE TABLE
+  IF NOT EXISTS remux_safety_verdicts (
+    movie_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    fingerprint TEXT NOT NULL,
+    safe BOOLEAN NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (movie_id, stream_index),
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
 -- Chapter markers and thumbnails for movie timelines.
 CREATE TABLE
   IF NOT EXISTS chapters (

@@ -1233,6 +1233,28 @@ func setupTestApp(t *testing.T) *Application {
 	return app
 }
 
+// restartTestApp simulates a server restart: a fresh Application with fresh
+// in-memory caches over the same database, so only state persisted in the
+// database survives the boundary.
+func restartTestApp(t *testing.T, app *Application) *Application {
+	t.Helper()
+
+	restarted := &Application{
+		DB:      app.DB,
+		Queries: app.Queries,
+		Config:  app.Config,
+	}
+	setupTestLogger(t, restarted)
+
+	restarted.initRuntimeCaches()
+	restarted.WatchRoomHub = NewWatchRoomHub()
+	restarted.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
+	restarted.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
+	restarted.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
+
+	return restarted
+}
+
 func clearSettingsEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{

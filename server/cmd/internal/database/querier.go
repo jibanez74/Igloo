@@ -186,6 +186,9 @@ type Querier interface {
 	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
 	// stays random too.
 	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
+	// Persisted remux-safety verdict for one video stream; the caller compares
+	// the stored fingerprint and treats a mismatch as a miss.
+	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (RemuxSafetyVerdict, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
@@ -308,6 +311,7 @@ type Querier interface {
 	// Creates a relationship between a musician and a genre (idempotent)
 	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (ProductionCompany, error)
+	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error

@@ -149,7 +149,6 @@ func TestListenForShutdown_CleansUpCachesWebSocketsLoggerAndHLSSessions(t *testi
 	cacheResult := strings.TrimSpace(string(cacheData))
 	for _, expected := range []string{
 		"hls_cache_empty=true",
-		"remux_cache_empty=true",
 		"subtitle_cache_empty=true",
 		"room_tombstone_empty=true",
 		"spotify_cache_cleared=true",
@@ -181,7 +180,6 @@ func runListenForShutdownHelper(t *testing.T) {
 		defer app.Wait.Done()
 		app.runDeviceExpirySweeper(deviceExpiryCtx)
 	}()
-	app.RemuxSafetyCache.SetDefault("shutdown-test-remux", struct{}{})
 	app.SubtitleVTTCache.SetDefault("shutdown-test-subtitle", []byte("subtitle"))
 	app.RoomHLSTombstone.SetDefault("room:shutdown-test", struct{}{})
 
@@ -403,9 +401,8 @@ func writeShutdownCacheMarker(markerPath string, app *Application) error {
 	}
 
 	content := fmt.Sprintf(
-		"hls_cache_empty=%t remux_cache_empty=%t subtitle_cache_empty=%t room_tombstone_empty=%t spotify_cache_cleared=%t tmdb_cache_cleared=%t\n",
+		"hls_cache_empty=%t subtitle_cache_empty=%t room_tombstone_empty=%t spotify_cache_cleared=%t tmdb_cache_cleared=%t\n",
 		cacheIsEmpty(app.HLSSessionCache),
-		cacheIsEmpty(app.RemuxSafetyCache),
 		cacheIsEmpty(app.SubtitleVTTCache),
 		cacheIsEmpty(app.RoomHLSTombstone),
 		spotifyCleared,

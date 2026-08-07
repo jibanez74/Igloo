@@ -110,6 +110,8 @@ The generated files match the HTTP handlers:
 
 fMP4 HLS is used because modern browser players handle it well and it works naturally with copied H.264 video, transcoded H.264 video, and AAC audio. A short 4-second target segment gives acceptable startup and seek behavior while keeping the number of segment files manageable. FFmpeg also receives `movflags=+frag_discont` for fMP4 segment output so independent fragments tolerate discontinuities across rebased sessions and copy-video boundaries.
 
+Both playlist flavors carry `#EXT-X-INDEPENDENT-SEGMENTS`: the synthesized transcode playlist writes it directly (accurate because `-force_key_frames` pins an IDR to every segment boundary), and copy-video sessions get it from FFmpeg via `-hls_flags independent_segments` (accurate because the remux validator only admits copy output whose sync samples are IDR frames). hls.js ignores the tag in media playlists, so its practical beneficiary is native HLS playback (Safari) plus spec conformance. `#EXT-X-START` is deliberately not emitted: every session is rebased to zero and the web client passes an explicit `startPosition` to hls.js, which would override the tag anyway.
+
 FFmpeg writes an event playlist while encoding. For transcode sessions, Igloo generates a complete VOD playlist from the known movie duration during encoding so hls.js sees a seekable on-demand asset instead of a live/event stream; generated playlists use a target duration of 8 seconds. Copy-video sessions are served FFmpeg's own playlist instead, as described below. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
 
 Which playlist a client receives depends on whether the session copies video, because only one of the two can be described arithmetically:
@@ -148,9 +150,9 @@ Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples 
 - wait for the first 4 complete segments
 - inspect the generated fMP4 fragments
 - verify sync samples in the video track start with IDR frames
-- cache the safe or unsafe verdict for 24 hours
+- persist the safe or unsafe verdict in the database (`remux_safety_verdicts`), keyed by movie and stream with a fingerprint of the file (size, update timestamp) and the stream properties the safety gate reads
 
-If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without caching an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo caches the unsafe verdict and falls back immediately for later sessions using the same movie, stream index, file size, and update timestamp.
+Persisted verdicts survive server restarts, so the preflight cost is paid once per file rather than once per process. A verdict is recomputed only when its fingerprint changes — the file was replaced or rescanned with a new size or timestamp, or its stream properties changed. If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without persisting an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo persists the unsafe verdict and falls back immediately for later sessions on the same fingerprint.
 
 The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the highest configured transcode profile whose target height fits within the source height. If the source is smaller than every configured profile, it falls back to `720p_3mbps` so playback still has a reliable transcode path.
 
@@ -467,7 +469,7 @@ For failures:
 When changing FFmpeg or ffprobe behavior:
 
 - Check the embedded payload version with `ffmpeg -version` and `ffprobe -version` after refreshing binaries. Prefer the current stable Jellyfin FFmpeg release line for release payloads; do not switch to a generic upstream FFmpeg build or Jellyfin prerelease branch without a specific reason.
-- Keep argument construction covered by the tests in `server/cmd/internal/ffmpeg/` (`ffmpeg_hls_args_test.go`, `ffmpeg_hls_args_additional_test.go`, `ffmpeg_hls_hardware_args_test.go`, `ffmpeg_hls_run_test.go`).
+- Keep argument construction covered by the tests in `server/cmd/internal/ffmpeg/` (`ffmpeg_hls_args_test.go`, `ffmpeg_hls_hardware_args_test.go`, `ffmpeg_hls_run_test.go`).
 - Keep remux validation covered by `remux_validator` tests when changing fMP4 safety behavior.
 - Keep HLS handler and playlist tests updated when changing playlist shape, filenames, query parameters, readiness rules, or resume behavior.
 - Update `docs/openapi.json` when adding or changing HLS, subtitle, or playback settings endpoints.

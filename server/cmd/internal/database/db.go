@@ -342,6 +342,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getRandomTracksStmt, err = db.PrepareContext(ctx, getRandomTracks); err != nil {
 		return nil, fmt.Errorf("error preparing query GetRandomTracks: %w", err)
 	}
+	if q.getRemuxSafetyVerdictStmt, err = db.PrepareContext(ctx, getRemuxSafetyVerdict); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRemuxSafetyVerdict: %w", err)
+	}
 	if q.getSettingsStmt, err = db.PrepareContext(ctx, getSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSettings: %w", err)
 	}
@@ -578,6 +581,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertProductionCompanyStmt, err = db.PrepareContext(ctx, upsertProductionCompany); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertProductionCompany: %w", err)
+	}
+	if q.upsertRemuxSafetyVerdictStmt, err = db.PrepareContext(ctx, upsertRemuxSafetyVerdict); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertRemuxSafetyVerdict: %w", err)
 	}
 	if q.upsertTrackStmt, err = db.PrepareContext(ctx, upsertTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertTrack: %w", err)
@@ -1123,6 +1129,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getRandomTracksStmt: %w", cerr)
 		}
 	}
+	if q.getRemuxSafetyVerdictStmt != nil {
+		if cerr := q.getRemuxSafetyVerdictStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRemuxSafetyVerdictStmt: %w", cerr)
+		}
+	}
 	if q.getSettingsStmt != nil {
 		if cerr := q.getSettingsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getSettingsStmt: %w", cerr)
@@ -1518,6 +1529,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertProductionCompanyStmt: %w", cerr)
 		}
 	}
+	if q.upsertRemuxSafetyVerdictStmt != nil {
+		if cerr := q.upsertRemuxSafetyVerdictStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertRemuxSafetyVerdictStmt: %w", cerr)
+		}
+	}
 	if q.upsertTrackStmt != nil {
 		if cerr := q.upsertTrackStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertTrackStmt: %w", cerr)
@@ -1678,6 +1694,7 @@ type Queries struct {
 	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
 	getProductionCompaniesByMovieIDStmt         *sql.Stmt
 	getRandomTracksStmt                         *sql.Stmt
+	getRemuxSafetyVerdictStmt                   *sql.Stmt
 	getSettingsStmt                             *sql.Stmt
 	getSubtitlesByMovieIDStmt                   *sql.Stmt
 	getTrackStmt                                *sql.Stmt
@@ -1757,6 +1774,7 @@ type Queries struct {
 	upsertMusicianStmt                          *sql.Stmt
 	upsertMusicianGenreStmt                     *sql.Stmt
 	upsertProductionCompanyStmt                 *sql.Stmt
+	upsertRemuxSafetyVerdictStmt                *sql.Stmt
 	upsertTrackStmt                             *sql.Stmt
 	upsertUserTrackStatsStmt                    *sql.Stmt
 	userExistsStmt                              *sql.Stmt
@@ -1872,6 +1890,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
 		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,
 		getRandomTracksStmt:                         q.getRandomTracksStmt,
+		getRemuxSafetyVerdictStmt:                   q.getRemuxSafetyVerdictStmt,
 		getSettingsStmt:                             q.getSettingsStmt,
 		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                                q.getTrackStmt,
@@ -1951,6 +1970,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertMusicianStmt:                          q.upsertMusicianStmt,
 		upsertMusicianGenreStmt:                     q.upsertMusicianGenreStmt,
 		upsertProductionCompanyStmt:                 q.upsertProductionCompanyStmt,
+		upsertRemuxSafetyVerdictStmt:                q.upsertRemuxSafetyVerdictStmt,
 		upsertTrackStmt:                             q.upsertTrackStmt,
 		upsertUserTrackStatsStmt:                    q.upsertUserTrackStatsStmt,
 		userExistsStmt:                              q.userExistsStmt,

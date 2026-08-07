@@ -215,6 +215,11 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-hls_segment_type", "fmp4",
 		"-hls_segment_options", "movflags=+frag_discont",
 		"-hls_playlist_type", "event",
+		// Only emits #EXT-X-INDEPENDENT-SEGMENTS in the playlist; segmentation
+		// is unaffected. Copy-video sessions serve this playlist directly, and
+		// the remux validator guarantees the claim (every sync sample is an
+		// IDR). Transcode playlists are synthesized, so the flag is inert there.
+		"-hls_flags", "independent_segments",
 		"-hls_list_size", "0",
 		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
 		"-hls_segment_filename", segmentPattern,

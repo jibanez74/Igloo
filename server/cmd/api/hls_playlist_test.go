@@ -72,6 +72,7 @@ func TestRewritePlaylistURLs(t *testing.T) {
 	playlist := strings.Join([]string{
 		"#EXTM3U",
 		"#EXT-X-VERSION:7",
+		"#EXT-X-INDEPENDENT-SEGMENTS",
 		"#EXT-X-TARGETDURATION:8",
 		"#EXT-X-MEDIA-SEQUENCE:0",
 		"#EXT-X-PLAYLIST-TYPE:VOD",
@@ -92,6 +93,7 @@ func TestRewritePlaylistURLs(t *testing.T) {
 	want := strings.Join([]string{
 		"#EXTM3U",
 		"#EXT-X-VERSION:7",
+		"#EXT-X-INDEPENDENT-SEGMENTS",
 		"#EXT-X-TARGETDURATION:8",
 		"#EXT-X-MEDIA-SEQUENCE:0",
 		"#EXT-X-PLAYLIST-TYPE:VOD",
@@ -190,6 +192,14 @@ func TestGenerateVODPlaylist(t *testing.T) {
 			}
 			if !strings.Contains(got, "#EXT-X-ENDLIST") {
 				t.Error("VOD playlist must include #EXT-X-ENDLIST")
+			}
+			// Keyframes are forced onto every segment boundary, so the playlist
+			// must advertise independently decodable segments.
+			if strings.Count(got, "#EXT-X-INDEPENDENT-SEGMENTS\n") != 1 {
+				t.Errorf("expected exactly one #EXT-X-INDEPENDENT-SEGMENTS tag, got:\n%s", got)
+			}
+			if strings.Index(got, "#EXT-X-INDEPENDENT-SEGMENTS") > strings.Index(got, "#EXTINF:") {
+				t.Errorf("#EXT-X-INDEPENDENT-SEGMENTS must precede the first #EXTINF, got:\n%s", got)
 			}
 
 			// Transcode sessions force keyframes on segment boundaries, so the

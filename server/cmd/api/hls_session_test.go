@@ -240,6 +240,15 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 		t.Fatal("first session CopyVideo = true, want false after preflight fallback")
 	}
 
+	// The transient failure must leave no persisted verdict behind.
+	_, err = app.Queries.GetRemuxSafetyVerdict(context.Background(), database.GetRemuxSafetyVerdictParams{
+		MovieID:     movieID,
+		StreamIndex: 0,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetRemuxSafetyVerdict error = %v, want sql.ErrNoRows after a transient preflight failure", err)
+	}
+
 	secondSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("second createHLSSession returned error: %v", err)
@@ -262,6 +271,101 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 	}
 	if calls[2].Profile != helpers.HLS_PROFILE_REMUX {
 		t.Fatalf("third RunHLS profile = %q, want remux retry", calls[2].Profile)
+	}
+}
+
+// A verdict must outlive the process: before persistence, every server restart
+// re-paid the multi-second remux preflight for every file (audit H6).
+func TestCreateHLSSession_UnsafeVerdictSurvivesRestart(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(firstSession)
+
+	restarted := restartTestApp(t, app)
+	restartedFake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	restarted.FFmpeg = restartedFake
+
+	session, err := createTestHLSSession(restarted, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession after restart returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want the persisted unsafe verdict to force a transcode")
+	}
+	calls := restartedFake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count after restart = %d, want 1 (no remux attempt)", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("RunHLS profile after restart = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+}
+
+func TestCreateHLSSession_SafeVerdictSurvivesRestart(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(safeRemuxFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(firstSession)
+
+	restarted := restartTestApp(t, app)
+	restartedFake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			// One segment is not enough to pass preflight, so a restarted server
+			// that still ran it would fall back to a transcode.
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	restarted.FFmpeg = restartedFake
+
+	session, err := createTestHLSSession(restarted, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession after restart returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if !session.CopyVideo {
+		t.Fatal("CopyVideo = false, want the persisted safe verdict to skip the preflight")
+	}
+	calls := restartedFake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count after restart = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("RunHLS profile after restart = %q, want remux", calls[0].Profile)
 	}
 }
 

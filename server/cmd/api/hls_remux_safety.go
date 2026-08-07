@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -9,20 +12,18 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-const (
-	hlsRemuxSafetyCacheTTL   = 24 * time.Hour
-	hlsRemuxSafetyCacheSweep = time.Hour
-)
-
 type remuxSafetyVerdict struct {
 	Safe   bool
 	Reason string
 }
 
-// remuxSafetyFingerprint keys the cached remux-safety verdict. Beyond file
+// remuxSafetyFingerprint keys the persisted remux-safety verdict. Beyond file
 // identity it includes the stream properties the safety decision reads
 // (isBrowserSafeH264RemuxCandidate), so a rescan that changes stream rows
-// without touching the file invalidates the verdict.
+// without touching the file invalidates the verdict. movie.UpdatedAt bumps on
+// scanner metadata upserts for re-processed files too, which re-pays one
+// preflight per file — acceptable, since re-processing implies the file's
+// size or path changed.
 func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) string {
 	return fmt.Sprintf(
 		"%d:%d:%d:%s:%s:%s:%d:%s",
@@ -37,26 +38,66 @@ func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) 
 	)
 }
 
-func (app *Application) getRemuxSafetyVerdict(key string) (remuxSafetyVerdict, bool) {
-	raw, ok := app.RemuxSafetyCache.Get(key)
-	if !ok || raw == nil {
+// getRemuxSafetyVerdict reads the persisted verdict for one video stream. Any
+// miss — no row, stale fingerprint, or a read error — fails open into a fresh
+// preflight, which rewrites the row with a current verdict.
+func (app *Application) getRemuxSafetyVerdict(
+	ctx context.Context,
+	movieID int64,
+	streamIndex int64,
+	fingerprint string,
+) (remuxSafetyVerdict, bool) {
+	row, err := app.Queries.GetRemuxSafetyVerdict(ctx, database.GetRemuxSafetyVerdictParams{
+		MovieID:     movieID,
+		StreamIndex: streamIndex,
+	})
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			app.Logger.Warn("failed to read remux safety verdict",
+				"movie_id", movieID,
+				"stream_index", streamIndex,
+				"error", err,
+			)
+		}
 		return remuxSafetyVerdict{}, false
 	}
 
-	verdict, typeOK := raw.(remuxSafetyVerdict)
-	if !typeOK {
-		app.RemuxSafetyCache.Delete(key)
+	if row.Fingerprint != fingerprint {
 		return remuxSafetyVerdict{}, false
 	}
 
-	return verdict, true
+	return remuxSafetyVerdict{
+		Safe:   row.Safe,
+		Reason: row.Reason,
+	}, true
 }
 
-func (app *Application) setRemuxSafetyVerdict(key string, safe bool, reason string) {
-	app.RemuxSafetyCache.SetDefault(key, remuxSafetyVerdict{
-		Safe:   safe,
-		Reason: reason,
+// setRemuxSafetyVerdict persists a definitive validation result. It runs on
+// context.Background() because the verdict just cost a multi-second FFmpeg
+// preflight and must not be lost to a client disconnect (FFmpeg itself already
+// runs on a background context for the same reason). A write failure only
+// means the verdict is recomputed on the next play.
+func (app *Application) setRemuxSafetyVerdict(
+	movieID int64,
+	streamIndex int64,
+	fingerprint string,
+	safe bool,
+	reason string,
+) {
+	err := app.Queries.UpsertRemuxSafetyVerdict(context.Background(), database.UpsertRemuxSafetyVerdictParams{
+		MovieID:     movieID,
+		StreamIndex: streamIndex,
+		Fingerprint: fingerprint,
+		Safe:        safe,
+		Reason:      reason,
 	})
+	if err != nil {
+		app.Logger.Warn("failed to persist remux safety verdict",
+			"movie_id", movieID,
+			"stream_index", streamIndex,
+			"error", err,
+		)
+	}
 }
 
 func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.Duration) error {

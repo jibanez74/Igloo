@@ -109,6 +109,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 				"-c:a aac", "-ac 2", "-b:a 320k",
 				"-avoid_negative_ts make_zero", "-fflags +genpts",
 				"-hls_segment_type fmp4", "-hls_playlist_type event",
+				"-hls_flags independent_segments",
 			},
 			// No explicit thread cap: libx264 auto-detects its thread count and
 			// the concurrency limiter bounds total CPU pressure. A stray
@@ -429,6 +430,7 @@ func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 	requireArgumentValue(t, args, "-f", "hls")
 	requireArgumentValue(t, args, "-hls_segment_type", "fmp4")
 	requireArgumentValue(t, args, "-hls_playlist_type", "event")
+	requireArgumentValue(t, args, "-hls_flags", "independent_segments")
 	requireArgumentValue(t, args, "-hls_list_size", "0")
 	requireArgumentValue(t, args, "-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC))
 	requireArgumentValue(t, args, "-hls_fmp4_init_filename", helpers.HLS_INIT_FILENAME)
