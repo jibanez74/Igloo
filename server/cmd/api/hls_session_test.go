@@ -725,6 +725,81 @@ func TestIsHDRStream(t *testing.T) {
 	}
 }
 
+func TestIsCopySafeAACStream(t *testing.T) {
+	tests := []struct {
+		name    string
+		codec   string
+		profile sql.NullString
+		want    bool
+	}{
+		{name: "confirmed LC copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, want: true},
+		// ffprobe reports the profile verbatim; case and padding must not matter.
+		{name: "profile matched case-insensitively", codec: "aac", profile: sql.NullString{String: "lc", Valid: true}, want: true},
+		{name: "profile trimmed", codec: "aac", profile: sql.NullString{String: " LC ", Valid: true}, want: true},
+		{name: "codec matched case-insensitively", codec: "AAC", profile: sql.NullString{String: "LC", Valid: true}, want: true},
+		{name: "HE-AAC transcodes", codec: "aac", profile: sql.NullString{String: "HE-AAC", Valid: true}},
+		{name: "HE-AACv2 transcodes", codec: "aac", profile: sql.NullString{String: "HE-AACv2", Valid: true}},
+		{name: "unknown profile cannot prove safety", codec: "aac", profile: sql.NullString{}},
+		{name: "empty profile cannot prove safety", codec: "aac", profile: sql.NullString{String: "", Valid: true}},
+		{name: "non-AAC never copies", codec: "ac3", profile: sql.NullString{String: "LC", Valid: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isCopySafeAACStream(&database.AudioStream{Codec: tt.codec, CodecProfile: tt.profile})
+			if got != tt.want {
+				t.Fatalf("isCopySafeAACStream(%q, %q) = %v, want %v", tt.codec, tt.profile.String, got, tt.want)
+			}
+		})
+	}
+}
+
+// The copy gate must read the scanned profile end to end: the fixture's AAC-LC
+// track copies, and the same track with its profile wiped (a row scanned
+// before profiles were persisted) transcodes.
+func TestCreateHLSSession_AACProfileGatesAudioCopy(t *testing.T) {
+	tests := []struct {
+		name          string
+		clearProfile  bool
+		wantCopyAudio bool
+	}{
+		{name: "confirmed LC copies", wantCopyAudio: true},
+		{name: "unknown profile transcodes", clearProfile: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+			app.FFmpeg = fake
+
+			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			if tt.clearProfile {
+				_, err := app.DB.Exec(`UPDATE audio_streams SET codec_profile = NULL WHERE movie_id = ?`, movieID)
+				if err != nil {
+					t.Fatalf("clear codec_profile: %v", err)
+				}
+			}
+
+			session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+
+			calls := fake.Calls()
+			if len(calls) != 1 {
+				t.Fatalf("expected 1 RunHLS call, got %d", len(calls))
+			}
+			if calls[0].CopyAudio != tt.wantCopyAudio {
+				t.Fatalf("CopyAudio = %v, want %v", calls[0].CopyAudio, tt.wantCopyAudio)
+			}
+		})
+	}
+}
+
 func TestHLSTranscodeRoot(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

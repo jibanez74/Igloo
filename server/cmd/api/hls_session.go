@@ -141,6 +141,20 @@ func isHDRStream(stream *database.VideoStream) bool {
 	return ct == hdrTransferPQ || ct == hdrTransferHLG
 }
 
+// isCopySafeAACStream returns true when the audio stream is AAC with a
+// confirmed LC profile. HE-AAC and xHE-AAC (SBR/PS) support inside fMP4 HLS
+// is spotty across browsers, and an unknown profile cannot prove safety, so
+// anything but a confirmed "LC" falls back to the stereo AAC transcode.
+func isCopySafeAACStream(stream *database.AudioStream) bool {
+	if !strings.EqualFold(strings.TrimSpace(stream.Codec), "aac") {
+		return false
+	}
+	if !stream.CodecProfile.Valid {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(stream.CodecProfile.String), "LC")
+}
+
 func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string) {
 	if !helpers.IsBrowserCompatibleH264(stream.Codec) {
 		return false, fmt.Sprintf("requested remux is not supported for codec %q", stream.Codec)
@@ -680,11 +694,13 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
+	audioCodecProfile := ""
 	copyAudio := false
 	audioStreamIndex := -1
 	if params.SelectedAudio != nil {
 		audioCodec = strings.ToLower(params.SelectedAudio.Codec)
-		copyAudio = audioCodec == "aac"
+		audioCodecProfile = params.SelectedAudio.CodecProfile.String
+		copyAudio = isCopySafeAACStream(params.SelectedAudio)
 		// ffmpeg's -map 0:N addresses the container's global stream numbering,
 		// so hand it the absolute ffprobe index rather than the ordinal.
 		audioStreamIndex = int(params.SelectedAudio.StreamIndex)
@@ -810,6 +826,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		"audio_stream_index", audioStreamIndex,
 		"video_codec", videoCodec,
 		"audio_codec", audioCodec,
+		"audio_codec_profile", audioCodecProfile,
 		"copy_video", copyVideo,
 		"copy_audio", copyAudio,
 		"source_is_hdr", sourceIsHDR,

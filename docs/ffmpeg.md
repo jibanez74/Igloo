@@ -229,19 +229,19 @@ HLS sessions always map one video stream and map one audio stream when the movie
 
 For video-only movies, Igloo omits the audio map and audio codec options. The stream indices are absolute ffprobe stream indices stored during scanning. Igloo does not rely on FFmpeg's relative stream numbering at playback time.
 
-If the selected audio codec is AAC, Igloo copies it:
+If the selected audio codec is AAC with a scanned `codec_profile` confirmed as `LC` (`isCopySafeAACStream` in `server/cmd/api/hls_session.go`), Igloo copies it:
 
 ```text
 -c:a copy
 ```
 
-Otherwise, Igloo converts audio to stereo AAC at `320k`:
+Otherwise — non-AAC codecs, HE-AAC/xHE-AAC profiles, or AAC whose profile was never scanned — Igloo converts audio to stereo AAC at `320k`:
 
 ```text
 -c:a aac -ac 2 -b:a 320k
 ```
 
-AAC is the safest baseline for browser HLS playback. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
+AAC-LC is the safest baseline for browser HLS playback; browser support for SBR/PS profiles inside fMP4 HLS is spotty, and an unknown profile cannot prove safety. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
 
 ### Audio Track Selection and Direct Play
 

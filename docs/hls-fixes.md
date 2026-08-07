@@ -12,9 +12,9 @@ Implemented as a **persisted, on-demand** index rather than the scan-time pass t
 
 The transcode filter chain (`hlsVideoFilter`, `server/cmd/internal/ffmpeg/ffmpeg_hls.go`) only scales, converts pixel format, and tone-maps. Interlaced sources are not deinterlaced (combing artifacts), rotation metadata is not applied (sideways phone video), and variable-frame-rate sources get no fps normalization. Sketch: persist `field_order` and rotation side data at scan time (`video_streams` in `server/sqlc/schema.sql` has neither today), then conditionally prepend `yadif` (or the hardware equivalent), apply `transpose`, and consider `fps=` for pathological VFR. Needs careful per-device testing across the CPU/NVENC/QSV/VideoToolbox paths; see `docs/ffmpeg.md` for the chain variants.
 
-## H15 — audio-copy gate ignores AAC profile (hypothesis)
+## ~~H15 — audio-copy gate ignores AAC profile~~ (CLOSED 2026-08-07)
 
-The decision to copy audio is literally `copyAudio := audioCodec == "aac"` (`startHLSSession`, `server/cmd/api/hls_session.go`), so an HE-AAC or xHE-AAC stream would be copied even though browser support for those profiles inside fMP4 HLS is spotty. Unreproducible in the current library — every scanned AAC stream is LC — but the gate should read the stored `codec_profile` and only copy `LC` (falling back to the stereo AAC transcode otherwise) before a file with SBR/PS audio arrives. One-line fix plus tests.
+Audio copy is now gated by `isCopySafeAACStream` (`server/cmd/api/hls_session.go`): AAC is copied only when the scanned `codec_profile` is a confirmed `LC` (case-insensitive); HE-AAC/xHE-AAC and unknown/NULL profiles fall back to the stereo AAC transcode. Deliberately strict — an unknown profile cannot prove safety, so the handful of library rows scanned without a profile now transcode instead of copy. The session-start log gained `audio_codec_profile` so a copy refusal is explainable.
 
 ## H16 — dialnorm ignored on downmix (hypothesis)
 

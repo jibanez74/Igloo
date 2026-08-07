@@ -324,13 +324,16 @@ func insertTestHLSMovieFixtureAt(
 		t.Fatalf("insert video stream: %v", err)
 	}
 
+	// codec_profile LC keeps the fixture on the audio-copy path: the copy gate
+	// requires a confirmed AAC-LC profile.
 	_, err = app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO audio_streams (movie_id, stream_index, codec, codec_profile, bit_rate, channels)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`,
 		movieID,
 		1,
 		"aac",
+		"LC",
 		192000,
 		2,
 	)
