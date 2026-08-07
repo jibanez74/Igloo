@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -106,6 +107,169 @@ func TestExternalFFmpegCPUHLSRemuxAndSubtitles(t *testing.T) {
 			t.Fatalf("real subtitle output = %q", output)
 		}
 	})
+}
+
+// The argument tests pin where yadif lands in each chain; this proves the
+// deinterlace chain actually runs against real FFmpeg, and that autorotation
+// (which Igloo relies on instead of explicit transpose filters) applies a
+// source's display matrix during transcode. Both sources also validate the
+// field_order/side_data_list parse in the ffprobe package against a real
+// binary.
+func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatalf("resolve external FFmpeg: %v", err)
+	}
+	prober, err := ffprobe.New()
+	if err != nil {
+		t.Fatalf("resolve external ffprobe: %v", err)
+	}
+	workspace := t.TempDir()
+
+	f := &ffmpeg{
+		bin:          candidate.path,
+		capabilities: Capabilities{Probed: true},
+	}
+
+	t.Run("interlaced source transcodes through yadif", func(t *testing.T) {
+		sourcePath := filepath.Join(workspace, "interlaced source.mkv")
+		generateInterlacedH264AACSource(t, candidate.path, sourcePath)
+
+		sourceVideo := probeExternalVideoStream(t, prober, sourcePath)
+		if !isInterlacedFieldOrder(sourceVideo.FieldOrder) {
+			t.Fatalf("generated source field_order = %q, want an interlaced value", sourceVideo.FieldOrder)
+		}
+
+		outDir := filepath.Join(workspace, "deinterlaced HLS")
+		err := os.Mkdir(outDir, 0755)
+		if err != nil {
+			t.Fatalf("mkdir output: %v", err)
+		}
+		params := HLSParams{
+			SourcePath:       sourcePath,
+			OutDir:           outDir,
+			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			Deinterlace:      true,
+			SourceFrameRate:  25,
+			Capabilities:     Capabilities{Probed: true},
+		}
+		runExternalHLSAndWait(t, f, params)
+		assertCompleteSequentialHLSOutput(t, outDir)
+
+		outVideo := probeExternalVideoStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME))
+		if isInterlacedFieldOrder(outVideo.FieldOrder) {
+			t.Fatalf("output field_order = %q, want progressive after yadif", outVideo.FieldOrder)
+		}
+		// yadif's default send_frame mode must keep the frame rate; a doubled
+		// rate would break the GOP math in appendHLSKeyframeArgs.
+		outRate := helpers.ParseFrameRate(outVideo.AvgFrameRate)
+		if outRate < 24 || outRate > 26 {
+			t.Fatalf("output avg frame rate = %v (%q), want ~25 (send_frame must not double fps)", outRate, outVideo.AvgFrameRate)
+		}
+	})
+
+	t.Run("rotated source is autorotated during transcode", func(t *testing.T) {
+		plainPath := filepath.Join(workspace, "plain source.mp4")
+		generateTinyH264AACSource(t, candidate.path, plainPath)
+		rotatedPath := filepath.Join(workspace, "rotated source.mp4")
+		runExternalFFmpegCommand(t, candidate.path,
+			"-y", "-v", "error",
+			"-display_rotation", "90", "-i", plainPath,
+			"-c", "copy", rotatedPath,
+		)
+
+		sourceVideo := probeExternalVideoStream(t, prober, rotatedPath)
+		rotationDeg, hasMatrix := sourceVideo.Rotation()
+		if !hasMatrix || rotationDeg%180 == 0 {
+			t.Fatalf("rotated source Rotation() = (%d, %v), want a quarter-turn display matrix", rotationDeg, hasMatrix)
+		}
+
+		outDir := filepath.Join(workspace, "rotated HLS")
+		err := os.Mkdir(outDir, 0755)
+		if err != nil {
+			t.Fatalf("mkdir output: %v", err)
+		}
+		params := HLSParams{
+			SourcePath:       rotatedPath,
+			OutDir:           outDir,
+			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			CopyAudio:        true,
+			SourceFrameRate:  24,
+			Capabilities:     Capabilities{Probed: true},
+		}
+		runExternalHLSAndWait(t, f, params)
+		assertCompleteSequentialHLSOutput(t, outDir)
+
+		// The landscape source carries a 90-degree matrix, so a transcode that
+		// honors it produces portrait output with the matrix consumed; a
+		// leftover matrix would rotate the already-rotated frames again in the
+		// player.
+		outVideo := probeExternalVideoStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME))
+		if outVideo.Width >= outVideo.Height {
+			t.Fatalf("output = %dx%d, want portrait after autorotation of a landscape source", outVideo.Width, outVideo.Height)
+		}
+		_, outHasMatrix := outVideo.Rotation()
+		if outHasMatrix {
+			t.Fatal("output still carries a display matrix, want it consumed by autorotation")
+		}
+	})
+}
+
+func isInterlacedFieldOrder(fieldOrder string) bool {
+	switch fieldOrder {
+	case "tt", "bb", "tb", "bt":
+		return true
+	}
+	return false
+}
+
+func probeExternalVideoStream(t *testing.T, prober ffprobe.FfprobeInterface, path string) ffprobe.Stream {
+	t.Helper()
+	meta, err := prober.GetMetadata(path)
+	if err != nil {
+		t.Fatalf("probe %s: %v", path, err)
+	}
+	for _, stream := range meta.Streams {
+		if stream.CodecType == "video" {
+			return stream
+		}
+	}
+	t.Fatalf("no video stream in %s", path)
+	return ffprobe.Stream{}
+}
+
+func generateInterlacedH264AACSource(t *testing.T, binary string, destination string) {
+	t.Helper()
+	// tinterlace weaves frame pairs (50fps in, 25fps interlaced out) and the
+	// +ildct+ilme flags make x264 mark the stream interlaced in the container.
+	args := []string{
+		"-y", "-v", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=320x360:rate=50:duration=5.2",
+		"-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration=5.2",
+		"-vf", "tinterlace=mode=interleave_top,setfield=tff",
+		"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+		"-flags", "+ildct+ilme",
+		"-c:a", "aac", "-shortest",
+		destination,
+	}
+	runExternalFFmpegCommand(t, binary, args...)
+}
+
+func runExternalFFmpegCommand(t *testing.T, binary string, args ...string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binary, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("external FFmpeg %v: %v: %s", args, err, strings.TrimSpace(string(output)))
+	}
 }
 
 func generateTinyH264AACSource(t *testing.T, binary string, destination string) {

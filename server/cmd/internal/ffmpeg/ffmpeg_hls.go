@@ -49,6 +49,7 @@ type HLSParams struct {
 	CopyAudio        bool
 	StartSec         float64
 	TonemapHDR       bool // true when source is HDR and the profile requires SDR output
+	Deinterlace      bool // true when the scanned field_order marks the source interlaced
 	SourceFrameRate  float64
 	Capabilities     Capabilities
 }
@@ -186,7 +187,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			"-bufsize", cfg.Bufsize,
 		)
 
-		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, useNvidiaCUDAFilters, useIntelQSVScale))
+		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, p.Deinterlace, useNvidiaCUDAFilters, useIntelQSVScale))
 		if shouldSetHLSPixelFormat(encoder, useNvidiaCUDAFilters) {
 			args = append(args, "-pix_fmt", "yuv420p")
 		}
@@ -261,42 +262,62 @@ func hlsVideoFilter(
 	cfg helpers.HLSProfileConfig,
 	hwDevice string,
 	tonemapHDR bool,
+	deinterlace bool,
 	useNvidiaCUDAFilters bool,
 	useIntelQSVScale bool,
 ) string {
 	switch {
 	case tonemapHDR && useNvidiaCUDAFilters:
-		return fmt.Sprintf(
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"format=p010le,hwupload,scale_cuda=w=-2:h=%d:format=p010,"+
 				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 			cfg.Height,
-		)
+		))
 	case useNvidiaCUDAFilters:
-		return fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
+		return hlsMaybeDeinterlace(deinterlace,
+			fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height))
 	case useIntelQSVScale:
-		return fmt.Sprintf(
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",
 			cfg.Height,
-		)
-	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+		))
+	// scale_vt consumes hardware frames, so a software yadif cannot be
+	// prepended; interlaced HDR sources (vanishingly rare — interlacing is
+	// legacy broadcast SDR) fall through to the software tonemap chain.
+	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE && !deinterlace:
 		return fmt.Sprintf(
 			"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
 			cfg.Height,
 		)
 	case tonemapHDR:
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
-		return fmt.Sprintf(
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
 				"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
 				"zscale=t=bt709:m=bt709:r=tv,format=%s,%s",
 			cfg.Height,
 			outputFormat,
 			hlsSDRColorParams,
-		)
+		))
 	default:
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
-		return fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, hlsSDRColorParams)
+		return hlsMaybeDeinterlace(deinterlace,
+			fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, hlsSDRColorParams))
 	}
+}
+
+// hlsMaybeDeinterlace prepends a software yadif (send_frame, so the output
+// frame rate — and with it the GOP math in appendHLSKeyframeArgs — is
+// unchanged) ahead of the chain. Deinterlacing must happen at native
+// resolution before any scaling, and decoded frames are in system memory at
+// the head of every chain that reaches here: no path sets
+// -hwaccel_output_format, and the CUDA/QSV chains hwupload from system
+// memory.
+func hlsMaybeDeinterlace(deinterlace bool, chain string) string {
+	if deinterlace {
+		return "yadif," + chain
+	}
+	return chain
 }
 
 func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []string {

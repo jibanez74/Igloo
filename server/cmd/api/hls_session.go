@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -141,6 +142,39 @@ func isHDRStream(stream *database.VideoStream) bool {
 	return ct == hdrTransferPQ || ct == hdrTransferHLG
 }
 
+// isInterlacedStream returns true when the scanned field_order marks the
+// stream interlaced (tt/bb/tb/bt). "progressive", NULL, and unrecognized
+// values are treated as progressive: rows scanned before field_order was
+// persisted are NULL and must not be punished.
+func isInterlacedStream(stream *database.VideoStream) bool {
+	if !stream.FieldOrder.Valid {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(stream.FieldOrder.String)) {
+	case "tt", "bb", "tb", "bt":
+		return true
+	}
+	return false
+}
+
+// hlsVFRRelativeTolerance separates real VFR from the rounding noise between
+// a container's nominal and average frame rates (e.g. 23.976 vs 24000/1001).
+const hlsVFRRelativeTolerance = 0.005
+
+// isVFRStream reports whether the container's average frame rate diverges
+// from its nominal rate, the standard variable-frame-rate signal. Detection
+// only feeds the session log today; no filter acts on it.
+func isVFRStream(stream *database.VideoStream) bool {
+	if !stream.AvgFrameRate.Valid || stream.FrameRate <= 0 {
+		return false
+	}
+	avg := helpers.ParseFrameRate(stream.AvgFrameRate.String)
+	if avg <= 0 {
+		return false
+	}
+	return math.Abs(avg-stream.FrameRate)/stream.FrameRate > hlsVFRRelativeTolerance
+}
+
 // isCopySafeAACStream returns true when the audio stream is AAC with a
 // confirmed LC profile. HE-AAC and xHE-AAC (SBR/PS) support inside fMP4 HLS
 // is spotty across browsers, and an unknown profile cannot prove safety, so
@@ -170,6 +204,12 @@ func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string
 
 	if stream.CodecProfile.Valid && isNonBrowserH264Profile(stream.CodecProfile.String) {
 		return false, fmt.Sprintf("requested remux is not supported for H.264 profile %q", stream.CodecProfile.String)
+	}
+
+	// Browsers do not deinterlace, so a copied interlaced stream displays
+	// combed; only the transcode path can apply yadif.
+	if isInterlacedStream(stream) {
+		return false, fmt.Sprintf("requested remux is not supported for interlaced content (field_order %q)", stream.FieldOrder.String)
 	}
 
 	return true, ""
@@ -708,6 +748,8 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
+	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
+	vfrDetected := isVFRStream(params.PrimaryVideo)
 
 	hwDevice := hardwareAccelerationDeviceOrDefault(app.Settings)
 	ffmpegCaps := app.FFmpeg.Capabilities()
@@ -815,6 +857,13 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		audioTrackLogValue = strconv.Itoa(*params.AudioTrack)
 	}
 
+	// Rotation is nullable: "none" means no display matrix, while an explicit
+	// 0-degree matrix logs as "0".
+	rotationLogValue := "none"
+	if params.PrimaryVideo.Rotation.Valid {
+		rotationLogValue = strconv.FormatInt(params.PrimaryVideo.Rotation.Int64, 10)
+	}
+
 	app.Logger.Info("hls session starting",
 		"movie_id", params.Movie.ID,
 		"requested_profile", params.RequestedProfile,
@@ -831,6 +880,10 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		"copy_audio", copyAudio,
 		"source_is_hdr", sourceIsHDR,
 		"tonemap_hdr", tonemapHDR,
+		"deinterlace", deinterlace,
+		"field_order", params.PrimaryVideo.FieldOrder.String,
+		"rotation", rotationLogValue,
+		"vfr_detected", vfrDetected,
 		"configured_hw_device", deviceDecision.Configured,
 		"effective_hw_device", deviceDecision.Effective,
 		"hw_fallback_reason", deviceDecision.Reason,
@@ -898,6 +951,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		CopyAudio:        copyAudio,
 		StartSec:         startSec,
 		TonemapHDR:       tonemapHDR,
+		Deinterlace:      deinterlace,
 		SourceFrameRate:  params.PrimaryVideo.FrameRate,
 		Capabilities:     ffmpegCaps,
 	}, onExit)

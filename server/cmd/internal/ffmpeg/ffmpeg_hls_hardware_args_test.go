@@ -26,15 +26,16 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 	sdrScale := fmt.Sprintf("scale=-2:%d", helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS].Height)
 
 	tests := []struct {
-		name      string
-		device    string
-		profile   string
-		tonemap   bool
-		caps      Capabilities
-		want      []string
-		notWant   []string
-		notFlags  []string
-		wantOrder [][2]string
+		name        string
+		device      string
+		profile     string
+		tonemap     bool
+		deinterlace bool
+		caps        Capabilities
+		want        []string
+		notWant     []string
+		notFlags    []string
+		wantOrder   [][2]string
 	}{
 		// --- SDR, no probed hardware filter support ---
 		{
@@ -188,6 +189,67 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			want:     []string{"h264_qsv"},
 			notFlags: []string{"-preset", "-look_ahead", "-forced_idr"},
 		},
+
+		// --- deinterlacing: software yadif prepends at the chain head, where
+		// decoded frames are in system memory on every path (no chain sets
+		// -hwaccel_output_format; CUDA/QSV hwupload from system memory) ---
+		{
+			name:        "cpu deinterlaces before scaling",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			deinterlace: true,
+			want:        []string{"yadif," + sdrScale + ",format=yuv420p", "libx264"},
+		},
+		{
+			name:        "cpu deinterlaces before the software tone-map",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			profile:     helpers.HLS_PROFILE_1080P_8MBPS,
+			tonemap:     true,
+			deinterlace: true,
+			want:        []string{"yadif,zscale", "tonemap=tonemap=hable"},
+		},
+		{
+			name:        "apple SDR deinterlaces on the software chain",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			deinterlace: true,
+			caps:        hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE),
+			want:        []string{"yadif," + sdrScale, "h264_videotoolbox"},
+		},
+		{
+			// scale_vt consumes hardware frames, so interlaced HDR sources are
+			// routed to the software zscale chain instead.
+			name:        "apple HDR deinterlace falls back to the software tone-map",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			profile:     helpers.HLS_PROFILE_1080P_8MBPS,
+			tonemap:     true,
+			deinterlace: true,
+			want:        []string{"yadif,zscale", "tonemap=tonemap=hable", "h264_videotoolbox"},
+			notWant:     []string{"scale_vt"},
+		},
+		{
+			name:        "nvidia deinterlaces before hwupload",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			deinterlace: true,
+			caps:        hlsTestNvidiaCapabilities(false),
+			want:        []string{"yadif,format=nv12,hwupload,scale_cuda=w=-2:h=720:format=yuv420p"},
+		},
+		{
+			name:        "nvidia deinterlaces before the GPU tone-map",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			tonemap:     true,
+			deinterlace: true,
+			caps:        hlsTestNvidiaCapabilities(true),
+			want: []string{
+				"yadif,format=p010le,hwupload,scale_cuda=w=-2:h=720:format=p010",
+				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
+			},
+		},
+		{
+			name:        "intel deinterlaces before hwupload",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			deinterlace: true,
+			caps:        hlsTestIntelQSVScaleCapabilities(),
+			want:        []string{"yadif,format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=720:format=nv12"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -204,6 +266,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 				AudioStreamIndex: 1,
 				HWDevice:         tt.device,
 				TonemapHDR:       tt.tonemap,
+				Deinterlace:      tt.deinterlace,
 				Capabilities:     tt.caps,
 			})
 

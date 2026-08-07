@@ -78,6 +78,11 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 		{"pixel format", func(_ *database.Movie, v *database.VideoStream) {
 			v.PixelFormat = sql.NullString{String: "yuv420p10le", Valid: true}
 		}},
+		// A rescan that newly discovers interlacing must kill a stale safe
+		// verdict, since the gate now rejects interlaced streams.
+		{"field order", func(_ *database.Movie, v *database.VideoStream) {
+			v.FieldOrder = sql.NullString{String: "tt", Valid: true}
+		}},
 		{"movie size", func(m *database.Movie, _ *database.VideoStream) { m.Size = 2_000_000 }},
 		{"updated at", func(m *database.Movie, _ *database.VideoStream) { m.UpdatedAt = "2026-07-02" }},
 	}

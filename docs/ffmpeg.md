@@ -43,6 +43,7 @@ For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each mo
 - video, audio, and subtitle stream rows
 - chapter information
 - video dimensions, codec names, profiles, bit depth, pixel formats, frame rates, and color metadata
+- video field order (interlacing) and display-matrix rotation side data; an explicit 0-degree matrix persists as `0` while a stream without a matrix persists as `NULL`
 - audio codecs, language tags, channel layout, sample rate, bitrate, and the `default` disposition
 - subtitle codecs, language tags, stream indices, titles, and the `default`/`forced` dispositions
 
@@ -142,7 +143,7 @@ Remux is only attempted for browser-compatible H.264 codec names:
 - `avc`
 - `avc1`
 
-If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. The pixel-format rule is an allowlist of the 8-bit 4:2:0 formats browsers decode (`yuv420p`, `yuvj420p`, `nv12`, `nv21`), so an unrecognised format falls back rather than being assumed safe. This avoids serving copied video that browsers are unlikely to play through HLS.
+If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. The pixel-format rule is an allowlist of the 8-bit 4:2:0 formats browsers decode (`yuv420p`, `yuvj420p`, `nv12`, `nv21`), so an unrecognised format falls back rather than being assumed safe. Interlaced sources (scanned `field_order` of `tt`/`bb`/`tb`/`bt`) also fall back: browsers do not deinterlace, so a copied interlaced stream displays combed, while the transcode path applies `yadif`. Rows scanned before `field_order` was persisted are `NULL` and are treated as progressive. This avoids serving copied video that browsers are unlikely to play through HLS.
 
 Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples that are not independently decodable by browser players. To avoid that, Igloo preflights remux output before committing to it:
 
@@ -161,7 +162,7 @@ The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the
 Direct play serves the original file over HTTP range requests with no FFmpeg process. Whether the web client offers it is decided from the scanned metadata plus one browser probe (`web/src/lib/playback.ts`, `getAvailableModes`; background in `docs/web-direct-playback-audit.md`):
 
 - **Container.** Only MP4 (`mp4`/`m4v`) is eligible. The container→MIME mapping is pinned in `helpers.VideoMimeTypes` — never derived from the host's MIME tables — and MKV must never be added: Chrome and Firefox fail Matroska in a `<video>` element silently at 0ms with no `MediaError`.
-- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2 and 4:4:4 sources are refused using the same profile / bit-depth / pixel-format rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`). Pixel formats are checked against an allowlist of the 8-bit 4:2:0 formats (`yuv420p`, `yuvj420p`, `nv12`, `nv21`) — the two copies of the list must stay in sync.
+- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2, 4:4:4, and interlaced sources are refused using the same profile / bit-depth / pixel-format / field-order rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`). Pixel formats are checked against an allowlist of the 8-bit 4:2:0 formats (`yuv420p`, `yuvj420p`, `nv12`, `nv21`) and interlacing against the `tt`/`bb`/`tb`/`bt` field orders — the two copies of both lists must stay in sync.
 - **Audio.** The first audio stream's codec must be browser-playable, and the stream the browser will pick must be unambiguous: with two or more audio streams, a `default` disposition on a non-first stream or multiple `default` flags refuse direct play (no flags at all stays eligible — browsers follow container track order). Selecting any non-first track resolves the mode to `remux` (see Audio Handling).
 - **Browser probe.** After the static rules pass, the client asks `canPlayType` with an RFC 6381 string built from the stored codec profile and level. The probe can only narrow eligibility, never widen it: watch-room creation enforces the same rules server-side and cannot probe.
 
@@ -213,6 +214,14 @@ FFmpeg also runs with:
 - `-max_muxing_queue_size 1024` to tolerate sources with stream timing that would otherwise overflow FFmpeg's muxing queue.
 
 Transcodes also tag output color explicitly: the output gets `-color_primaries bt709 -color_trc bt709 -colorspace bt709`, every video filter chain ends with a matching `setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709`, and `-pix_fmt yuv420p` is set for all encoders except `h264_qsv` and the CUDA filter paths, which control their pixel format inside the filter chain.
+
+### Interlacing, Rotation, and VFR
+
+When the scanned `field_order` marks the source interlaced (`tt`/`bb`/`tb`/`bt` — see `isInterlacedStream`), transcode sessions prepend a software `yadif` (default `send_frame` mode, so the frame rate and the GOP math above are unchanged) at the head of the video filter chain. Deinterlacing must happen at native resolution before any scaling, and decoded frames are in system memory at the chain head on every path — no chain sets `-hwaccel_output_format`, and the CUDA/QSV chains `hwupload` from system memory — so the same prepend works for the CPU, NVIDIA, and Intel chains. The one exception is the Apple HDR `scale_vt` chain, which consumes hardware frames: interlaced HDR sources (vanishingly rare — interlacing is legacy broadcast SDR) are routed to the software zscale tone-map chain instead. Copy-video sessions never filter; the remux gate keeps interlaced sources off the copy paths entirely.
+
+Rotation needs no filter work: FFmpeg's CLI applies display-matrix rotation automatically during transcode (verified against a real rotated source in `ffmpeg_integration_externalbin_test.go` — the output is rotated and the matrix consumed), and copy/direct paths pass the matrix through untouched, which browsers honor for MP4. Igloo persists the rotation only for visibility and logs it at session start.
+
+Variable frame rate is detected (`isVFRStream` compares the stored average and nominal frame rates) and logged at session start as `vfr_detected`, but no `fps` filter is applied: forcing a rate can introduce judder on healthy content, and `-force_key_frames` already keeps segmentation correct on VFR sources.
 
 Igloo does not pass `-threads` to FFmpeg. libx264 and the hardware encoders choose their own per-process thread behavior. CPU encoding pressure on a home server is bounded by the HLS transcode limiter: `HLS_MAX_CPU_TRANSCODES` sets the maximum number of concurrent HLS transcode sessions, and the default is `max(1, runtime.NumCPU()/4)`. Copy-video (remux) sessions bypass this CPU limiter because they do not encode video, but they still require a per-user personal-session reservation.
 

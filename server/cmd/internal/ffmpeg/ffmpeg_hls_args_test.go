@@ -236,6 +236,23 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 	}
 }
 
+// Copy-video sessions cannot filter, so a deinterlace request must not leak a
+// -vf into the remux command; the gate keeps interlaced sources off remux in
+// the first place.
+func TestBuildHLSArgs_RemuxIgnoresDeinterlace(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_REMUX,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		Deinterlace:      true,
+	})
+
+	requireArgSubstrings(t, args, []string{"-c:v copy"}, []string{"yadif"}, []string{"-vf"})
+}
+
 func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 	tests := []struct {
 		name      string

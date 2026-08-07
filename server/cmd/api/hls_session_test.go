@@ -443,6 +443,47 @@ func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 	}
 }
 
+// Browsers do not deinterlace, so an interlaced source must be rejected from
+// remux and the fallback transcode must carry the deinterlace flag.
+func TestCreateHLSSession_InterlacedFallsBackToTranscodeWithDeinterlace(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	_, err := app.DB.Exec(`UPDATE video_streams SET field_order = ? WHERE movie_id = ?`, "tt", movieID)
+	if err != nil {
+		t.Fatalf("update video stream: %v", err)
+	}
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want false for an interlaced source")
+	}
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS || calls[0].CopyVideo {
+		t.Fatalf("RunHLS call = profile %q copyVideo %v, want fallback transcode", calls[0].Profile, calls[0].CopyVideo)
+	}
+	if !calls[0].Deinterlace {
+		t.Fatal("Deinterlace = false, want true for an interlaced source transcode")
+	}
+}
+
 func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -720,6 +761,61 @@ func TestIsHDRStream(t *testing.T) {
 			got := isHDRStream(&database.VideoStream{ColorTransfer: tt.colorTransfer})
 			if got != tt.want {
 				t.Fatalf("isHDRStream(%q) = %v, want %v", tt.colorTransfer.String, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsInterlacedStream(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldOrder sql.NullString
+		want       bool
+	}{
+		// NULL rows predate the field_order column and must stay eligible for
+		// everything progressive content is.
+		{name: "unset field order is progressive", fieldOrder: sql.NullString{}},
+		{name: "progressive", fieldOrder: sql.NullString{String: "progressive", Valid: true}},
+		{name: "empty string is progressive", fieldOrder: sql.NullString{String: "", Valid: true}},
+		{name: "unrecognized value is progressive", fieldOrder: sql.NullString{String: "unknown", Valid: true}},
+		{name: "top field first", fieldOrder: sql.NullString{String: "tt", Valid: true}, want: true},
+		{name: "bottom field first", fieldOrder: sql.NullString{String: "bb", Valid: true}, want: true},
+		{name: "top coded first displayed first", fieldOrder: sql.NullString{String: "tb", Valid: true}, want: true},
+		{name: "bottom coded first displayed first", fieldOrder: sql.NullString{String: "bt", Valid: true}, want: true},
+		{name: "matched case-insensitively", fieldOrder: sql.NullString{String: " TT ", Valid: true}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isInterlacedStream(&database.VideoStream{FieldOrder: tt.fieldOrder})
+			if got != tt.want {
+				t.Fatalf("isInterlacedStream(%q) = %v, want %v", tt.fieldOrder.String, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsVFRStream(t *testing.T) {
+	tests := []struct {
+		name         string
+		frameRate    float64
+		avgFrameRate sql.NullString
+		want         bool
+	}{
+		{name: "matching rates are constant", frameRate: 23.976, avgFrameRate: sql.NullString{String: "24000/1001", Valid: true}},
+		{name: "rounding noise is constant", frameRate: 23.976, avgFrameRate: sql.NullString{String: "23976/1000", Valid: true}},
+		{name: "diverging average is VFR", frameRate: 30, avgFrameRate: sql.NullString{String: "18574/1000", Valid: true}, want: true},
+		{name: "unset average cannot prove VFR", frameRate: 23.976, avgFrameRate: sql.NullString{}},
+		{name: "zero average cannot prove VFR", frameRate: 23.976, avgFrameRate: sql.NullString{String: "0/0", Valid: true}},
+		{name: "unparseable average cannot prove VFR", frameRate: 23.976, avgFrameRate: sql.NullString{String: "garbage", Valid: true}},
+		{name: "zero nominal rate cannot prove VFR", frameRate: 0, avgFrameRate: sql.NullString{String: "24/1", Valid: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isVFRStream(&database.VideoStream{FrameRate: tt.frameRate, AvgFrameRate: tt.avgFrameRate})
+			if got != tt.want {
+				t.Fatalf("isVFRStream(rate=%v, avg=%q) = %v, want %v", tt.frameRate, tt.avgFrameRate.String, got, tt.want)
 			}
 		})
 	}

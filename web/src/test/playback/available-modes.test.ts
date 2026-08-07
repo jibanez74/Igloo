@@ -19,6 +19,7 @@ const h264Video = (
   height: 1080,
   bit_depth: { Int64: 8, Valid: true },
   pixel_format: { String: "yuv420p", Valid: true },
+  field_order: nullString,
   ...overrides,
 });
 
@@ -213,6 +214,43 @@ describe("browser-safe H.264 gate", () => {
       expect(ids).toContain("direct");
     },
   );
+
+  // Browsers do not deinterlace, so both copy modes must refuse interlaced
+  // sources; only a transcode (which applies yadif server-side) can play them.
+  // Mirrors the server's isBrowserSafeH264RemuxCandidate rule.
+  it.each(["tt", "bb", "tb", "bt"])(
+    "refuses direct play and remux for interlaced field_order %s",
+    fieldOrder => {
+      const ids = modeIds(
+        getAvailableModes({
+          videoStreamsLoaded: true,
+          video: h264Video({
+            field_order: { String: fieldOrder, Valid: true },
+          }),
+          audioStreams: [aacAudio()],
+          mimeType: "video/mp4",
+        }),
+      );
+      expect(ids).not.toContain("direct");
+      expect(ids).not.toContain("remux");
+      expect(ids.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("keeps both copy modes for progressive field_order", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        videoStreamsLoaded: true,
+        video: h264Video({
+          field_order: { String: "progressive", Valid: true },
+        }),
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+      }),
+    );
+    expect(ids).toContain("direct");
+    expect(ids).toContain("remux");
+  });
 
   it("does not consult the probe when the static rules refuse", () => {
     const canPlay = vi.fn().mockReturnValue("probably");

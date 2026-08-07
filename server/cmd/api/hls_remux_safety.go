@@ -32,12 +32,13 @@ func movieStreamFingerprintBase(movie *database.Movie, streamIndex int64) string
 // without touching the file invalidates the verdict.
 func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) string {
 	return fmt.Sprintf(
-		"%s:%s:%s:%d:%s",
+		"%s:%s:%s:%d:%s:%s",
 		movieStreamFingerprintBase(movie, video.StreamIndex),
 		video.Codec,
 		video.CodecProfile.String,
 		video.BitDepth.Int64,
 		video.PixelFormat.String,
+		video.FieldOrder.String,
 	)
 }
 
