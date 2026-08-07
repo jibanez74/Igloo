@@ -108,6 +108,16 @@ type Genre struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type KeyframeIndex struct {
+	MovieID     int64   `json:"movie_id"`
+	StreamIndex int64   `json:"stream_index"`
+	Fingerprint string  `json:"fingerprint"`
+	DurationSec float64 `json:"duration_sec"`
+	Keyframes   string  `json:"keyframes"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
 type Movie struct {
 	ID             int64           `json:"id"`
 	Title          string          `json:"title"`

@@ -63,16 +63,16 @@ type HLSSession struct {
 	CleanupOnce     sync.Once
 	// Logger lets cleanupHLSSession report teardown failures; nil (as in tests
 	// that build bare sessions) suppresses the reporting, never the cleanup.
-	Logger applogger.LoggerInterface
-	DurationSec     float64
-	StartSec        float64
-	Exited          bool
-	ExitErr         error
-	ExpectedStop    bool
-	FinalPlaylist   string
-	ExitMu          sync.Mutex
-	IsRoom          bool
-	CopyVideo       bool // true when FFmpeg uses -c:v copy for the effective session profile
+	Logger        applogger.LoggerInterface
+	DurationSec   float64
+	StartSec      float64
+	Exited        bool
+	ExitErr       error
+	ExpectedStop  bool
+	FinalPlaylist string
+	ExitMu        sync.Mutex
+	IsRoom        bool
+	CopyVideo     bool // true when FFmpeg uses -c:v copy for the effective session profile
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
 	EffectiveProfile string
@@ -677,41 +677,6 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 	}
 }
 
-// measureHLSSessionStart records where a copy-video session's media actually
-// begins. Stream copy cannot discard frames, so FFmpeg's input seek lands on
-// the source keyframe at or before the requested offset and the session starts
-// early by up to one GOP. Without this the client maps session time to absolute
-// movie time using the requested offset, so the clock and every watch-progress
-// write run ahead of the picture.
-//
-// It runs alongside FFmpeg rather than before it so it adds no startup latency.
-// It is advisory: on failure the start stays unknown and the session reports
-// nothing, leaving the client on its previous fallback.
-func (app *Application) measureHLSSessionStart(
-	parentCtx context.Context,
-	session *HLSSession,
-	filePath string,
-	streamIndex int64,
-	requestedStartSec float64,
-) {
-	defer app.Wait.Done()
-
-	ctx, cancel := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
-	defer cancel()
-
-	actualStartSec, err := app.Ffprobe.KeyframeAtOrBefore(ctx, filePath, streamIndex, requestedStartSec)
-	if err != nil {
-		app.Logger.Warn("hls actual start probe failed",
-			"movie_id", session.MovieID,
-			"requested_start_sec", requestedStartSec,
-			"error", err.Error(),
-		)
-		return
-	}
-
-	session.setActualStartSec(actualStartSec)
-}
-
 func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
@@ -791,12 +756,40 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 
 	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
 
-	// Measuring the real start is advisory, so it is skipped rather than
-	// allowed to fail a session when the prober is unavailable.
-	if copyVideo && startSec > 0 && app.Ffprobe != nil && app.Wait != nil {
-		session.setActualStartSec(hlsUnknownActualStart)
-		app.Wait.Add(1)
-		go app.measureHLSSessionStart(runCtx, session, params.Movie.FilePath, params.PrimaryVideo.StreamIndex, startSec)
+	// Resolving the real start is advisory, so it is skipped rather than
+	// allowed to fail a session. A persisted keyframe index answers a seek
+	// synchronously (so the first manifest response carries the header); a
+	// miss extracts the index in the background, falling back to the bounded
+	// ffprobe probe for files without a usable container index. Misses launch
+	// even at start 0 to prefetch the index for later seeks.
+	if copyVideo && app.Wait != nil {
+		fingerprint := keyframeIndexFingerprint(params.Movie, params.PrimaryVideo)
+		idx, hit := app.getKeyframeIndex(runCtx, params.Movie.ID, params.PrimaryVideo.StreamIndex, fingerprint)
+		switch {
+		case hit && startSec > 0:
+			keyframe, ok := keyframeAtOrBefore(idx.KeyframeSec, startSec)
+			if ok {
+				session.setActualStartSec(keyframe)
+			} else {
+				session.setActualStartSec(hlsUnknownActualStart)
+			}
+		case hit:
+			// A start of 0 is already exact.
+		default:
+			if startSec > 0 {
+				session.setActualStartSec(hlsUnknownActualStart)
+			}
+			app.Wait.Add(1)
+			go app.resolveHLSActualStart(runCtx, hlsActualStartParams{
+				Session:           session,
+				FilePath:          params.Movie.FilePath,
+				Container:         params.Movie.Container,
+				MovieID:           params.Movie.ID,
+				StreamIndex:       params.PrimaryVideo.StreamIndex,
+				Fingerprint:       fingerprint,
+				RequestedStartSec: startSec,
+			})
+		}
 	}
 
 	// AudioTrack is *int with nil meaning "video-only movie"; log the ordinal,

@@ -883,7 +883,9 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 	}
 }
 
-func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T) {
+// A file the extractor cannot open (nonexistent path) must fall back to the
+// bounded ffprobe probe exactly as before the keyframe index existed.
+func TestResolveHLSActualStart_FallsBackToProbeWithoutContainerIndex(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -895,7 +897,14 @@ func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
-	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
+	app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
+		Session:           session,
+		FilePath:          "/movies/example.mp4",
+		Container:         "mp4",
+		MovieID:           1,
+		StreamIndex:       0,
+		RequestedStartSec: 600,
+	})
 	app.Wait.Wait()
 
 	if prober.calls != 1 {
@@ -909,9 +918,10 @@ func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T
 	}
 }
 
-// The probe is advisory: a failure must leave the start unknown rather than
-// publish a wrong one, so the client keeps its existing fallback.
-func TestMeasureHLSSessionStart_LeavesStartUnknownOnFailure(t *testing.T) {
+// The resolver is advisory: a failure must leave the start unknown rather
+// than publish a wrong one, so the client keeps its existing fallback. A
+// failed extraction must also persist nothing.
+func TestResolveHLSActualStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -922,10 +932,25 @@ func TestMeasureHLSSessionStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
-	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
+	app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
+		Session:           session,
+		FilePath:          "/movies/example.mp4",
+		Container:         "mp4",
+		MovieID:           1,
+		StreamIndex:       0,
+		RequestedStartSec: 600,
+	})
 	app.Wait.Wait()
 
 	if got := session.actualStartSec(); got >= 0 {
 		t.Fatalf("actual start = %v, want it to stay unknown", got)
+	}
+
+	_, err := app.Queries.GetKeyframeIndex(context.Background(), database.GetKeyframeIndexParams{
+		MovieID:     1,
+		StreamIndex: 0,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetKeyframeIndex error = %v, want sql.ErrNoRows after a failed extraction", err)
 	}
 }

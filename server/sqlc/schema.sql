@@ -427,6 +427,24 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 
+-- Persisted keyframe indexes, one per movie video stream, extracted from the
+-- container's own seek tables (Matroska Cues, MP4 sample tables) on first
+-- copy-video playback. The fingerprint captures file identity; a mismatch on
+-- lookup means the file changed and the index is re-extracted. keyframes is a
+-- JSON array of ascending keyframe presentation times in seconds.
+CREATE TABLE
+  IF NOT EXISTS keyframe_indexes (
+    movie_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    fingerprint TEXT NOT NULL,
+    duration_sec REAL NOT NULL,
+    keyframes TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (movie_id, stream_index),
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
 -- Chapter markers and thumbnails for movie timelines.
 CREATE TABLE
   IF NOT EXISTS chapters (

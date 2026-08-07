@@ -17,20 +17,23 @@ type remuxSafetyVerdict struct {
 	Reason string
 }
 
+// movieStreamFingerprintBase captures file identity for one video stream:
+// movie, stream, size, and update timestamp. movie.UpdatedAt bumps on scanner
+// metadata upserts for re-processed files too, which re-pays one computation
+// per file — acceptable, since re-processing implies the file's size or path
+// changed. Shared by every per-stream persistence fingerprint.
+func movieStreamFingerprintBase(movie *database.Movie, streamIndex int64) string {
+	return fmt.Sprintf("%d:%d:%d:%s", movie.ID, streamIndex, movie.Size, movie.UpdatedAt)
+}
+
 // remuxSafetyFingerprint keys the persisted remux-safety verdict. Beyond file
 // identity it includes the stream properties the safety decision reads
 // (isBrowserSafeH264RemuxCandidate), so a rescan that changes stream rows
-// without touching the file invalidates the verdict. movie.UpdatedAt bumps on
-// scanner metadata upserts for re-processed files too, which re-pays one
-// preflight per file — acceptable, since re-processing implies the file's
-// size or path changed.
+// without touching the file invalidates the verdict.
 func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) string {
 	return fmt.Sprintf(
-		"%d:%d:%d:%s:%s:%s:%d:%s",
-		movie.ID,
-		video.StreamIndex,
-		movie.Size,
-		movie.UpdatedAt,
+		"%s:%s:%s:%d:%s",
+		movieStreamFingerprintBase(movie, video.StreamIndex),
 		video.Codec,
 		video.CodecProfile.String,
 		video.BitDepth.Int64,

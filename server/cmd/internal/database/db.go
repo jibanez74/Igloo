@@ -228,6 +228,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getGenresByMusicianIDStmt, err = db.PrepareContext(ctx, getGenresByMusicianID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByMusicianID: %w", err)
 	}
+	if q.getKeyframeIndexStmt, err = db.PrepareContext(ctx, getKeyframeIndex); err != nil {
+		return nil, fmt.Errorf("error preparing query GetKeyframeIndex: %w", err)
+	}
 	if q.getLatestAlbumsStmt, err = db.PrepareContext(ctx, getLatestAlbums); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLatestAlbums: %w", err)
 	}
@@ -563,6 +566,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertExtraVideoStmt, err = db.PrepareContext(ctx, upsertExtraVideo); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertExtraVideo: %w", err)
+	}
+	if q.upsertKeyframeIndexStmt, err = db.PrepareContext(ctx, upsertKeyframeIndex); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertKeyframeIndex: %w", err)
 	}
 	if q.upsertMovieStmt, err = db.PrepareContext(ctx, upsertMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMovie: %w", err)
@@ -937,6 +943,11 @@ func (q *Queries) Close() error {
 	if q.getGenresByMusicianIDStmt != nil {
 		if cerr := q.getGenresByMusicianIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getGenresByMusicianIDStmt: %w", cerr)
+		}
+	}
+	if q.getKeyframeIndexStmt != nil {
+		if cerr := q.getKeyframeIndexStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getKeyframeIndexStmt: %w", cerr)
 		}
 	}
 	if q.getLatestAlbumsStmt != nil {
@@ -1499,6 +1510,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertExtraVideoStmt: %w", cerr)
 		}
 	}
+	if q.upsertKeyframeIndexStmt != nil {
+		if cerr := q.upsertKeyframeIndexStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertKeyframeIndexStmt: %w", cerr)
+		}
+	}
 	if q.upsertMovieStmt != nil {
 		if cerr := q.upsertMovieStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertMovieStmt: %w", cerr)
@@ -1656,6 +1672,7 @@ type Queries struct {
 	getGenresByAlbumIDStmt                      *sql.Stmt
 	getGenresByMovieIDStmt                      *sql.Stmt
 	getGenresByMusicianIDStmt                   *sql.Stmt
+	getKeyframeIndexStmt                        *sql.Stmt
 	getLatestAlbumsStmt                         *sql.Stmt
 	getLatestMoviesStmt                         *sql.Stmt
 	getLikedMoviesForUserAscStmt                *sql.Stmt
@@ -1768,6 +1785,7 @@ type Queries struct {
 	upsertCastStmt                              *sql.Stmt
 	upsertCrewStmt                              *sql.Stmt
 	upsertExtraVideoStmt                        *sql.Stmt
+	upsertKeyframeIndexStmt                     *sql.Stmt
 	upsertMovieStmt                             *sql.Stmt
 	upsertMovieWatchProgressStmt                *sql.Stmt
 	upsertMusicSpotifyMatchStmt                 *sql.Stmt
@@ -1852,6 +1870,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getGenresByAlbumIDStmt:                      q.getGenresByAlbumIDStmt,
 		getGenresByMovieIDStmt:                      q.getGenresByMovieIDStmt,
 		getGenresByMusicianIDStmt:                   q.getGenresByMusicianIDStmt,
+		getKeyframeIndexStmt:                        q.getKeyframeIndexStmt,
 		getLatestAlbumsStmt:                         q.getLatestAlbumsStmt,
 		getLatestMoviesStmt:                         q.getLatestMoviesStmt,
 		getLikedMoviesForUserAscStmt:                q.getLikedMoviesForUserAscStmt,
@@ -1964,6 +1983,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertCastStmt:                              q.upsertCastStmt,
 		upsertCrewStmt:                              q.upsertCrewStmt,
 		upsertExtraVideoStmt:                        q.upsertExtraVideoStmt,
+		upsertKeyframeIndexStmt:                     q.upsertKeyframeIndexStmt,
 		upsertMovieStmt:                             q.upsertMovieStmt,
 		upsertMovieWatchProgressStmt:                q.upsertMovieWatchProgressStmt,
 		upsertMusicSpotifyMatchStmt:                 q.upsertMusicSpotifyMatchStmt,
