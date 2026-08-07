@@ -289,6 +289,36 @@ describe("VideoPlayer source lifecycle on start changes", () => {
     expect(fakeHlsInstances[1].destroyed).toBe(true);
   });
 
+  // The fallback seek effect used to gate on hlsRef, which is assigned
+  // asynchronously and still null when the effect runs on a fresh hls.js
+  // mount — so its loadedmetadata listener competed with hls.js's own
+  // startPosition seek. The gate is by source type now.
+  it("does not compete with hls.js startPosition on a fresh mount", async () => {
+    const onStartApplied = vi.fn();
+    const videoRef = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        videoRef={videoRef}
+        src="/api/movies/1/hls/remux/playlist.m3u8?playback_session=a&start=30"
+        isHlsSource
+        title="Test Movie"
+        onError={vi.fn()}
+        startSec={30}
+        onStartApplied={onStartApplied}
+      />,
+    );
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(1);
+    const video = screen.getByLabelText(
+      "Video player for Test Movie",
+    ) as HTMLVideoElement;
+
+    fireEvent(video, new Event("loadedmetadata"));
+
+    expect(onStartApplied).not.toHaveBeenCalled();
+    expect(video.currentTime).toBe(0);
+  });
+
   // Lock-in: for hls.js the URL can stay identical while startSec changes (a
   // resume target inside the rewind buffer keeps start=0 in the URL), and the
   // rebuild with startPosition is what applies that seek. It must survive.

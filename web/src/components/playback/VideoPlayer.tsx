@@ -450,7 +450,10 @@ export default function VideoPlayer({
     const video = videoRef.current;
     if (!video || startSec <= 0) return;
     // HLS.js owns the initial seek via its startPosition config and fires
-    // onStartApplied via MANIFEST_PARSED; don't compete with it.
+    // onStartApplied via MANIFEST_PARSED; don't compete with it. Gated on
+    // source type because hlsRef is assigned asynchronously and is still
+    // null when this effect runs on a fresh hls.js mount.
+    if (isHlsSource && !supportsNativeHLS) return;
     if (hlsRef.current) return;
 
     if (video.readyState >= 1) {
@@ -466,7 +469,7 @@ export default function VideoPlayer({
     return () => {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
-  }, [startSec, src, videoRef]);
+  }, [isHlsSource, startSec, src, videoRef]);
 
   // The subtitleTrack object gets a new reference on every parent render;
   // key on the URL which uniquely identifies the active subtitle so the
