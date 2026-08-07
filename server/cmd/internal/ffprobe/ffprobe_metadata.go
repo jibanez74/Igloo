@@ -29,23 +29,42 @@ type Stream struct {
 	ChannelLayout string `json:"channel_layout"`
 
 	// Video-specific fields
-	Width          int    `json:"width"`
-	Height         int    `json:"height"`
-	CodedWidth     int    `json:"coded_width"`
-	CodedHeight    int    `json:"coded_height"`
-	AspectRatio    string `json:"display_aspect_ratio"`
-	Level          int    `json:"level"`
-	AvgFrameRate   string `json:"avg_frame_rate"`
-	FrameRate      string `json:"r_frame_rate"`
-	BitDepth       string `json:"bits_per_raw_sample"`
-	PixelFormat    string `json:"pix_fmt"`
-	ColorRange     string `json:"color_range"`
-	ColorTransfer  string `json:"color_transfer"`
-	ColorPrimaries string `json:"color_primaries"`
-	ColorSpace     string `json:"color_space"`
+	Width          int              `json:"width"`
+	Height         int              `json:"height"`
+	CodedWidth     int              `json:"coded_width"`
+	CodedHeight    int              `json:"coded_height"`
+	AspectRatio    string           `json:"display_aspect_ratio"`
+	Level          int              `json:"level"`
+	AvgFrameRate   string           `json:"avg_frame_rate"`
+	FrameRate      string           `json:"r_frame_rate"`
+	BitDepth       string           `json:"bits_per_raw_sample"`
+	PixelFormat    string           `json:"pix_fmt"`
+	ColorRange     string           `json:"color_range"`
+	ColorTransfer  string           `json:"color_transfer"`
+	ColorPrimaries string           `json:"color_primaries"`
+	ColorSpace     string           `json:"color_space"`
+	FieldOrder     string           `json:"field_order"`
+	SideDataList   []StreamSideData `json:"side_data_list"`
 
 	Tags        StreamTags        `json:"tags"`
 	Disposition StreamDisposition `json:"disposition"`
+}
+
+type StreamSideData struct {
+	SideDataType string `json:"side_data_type"`
+	Rotation     int64  `json:"rotation"`
+}
+
+// Rotation returns the display-matrix rotation in degrees and whether a
+// display matrix was present at all, so callers can distinguish an explicit
+// 0-degree matrix from no rotation side data.
+func (s Stream) Rotation() (int64, bool) {
+	for _, sideData := range s.SideDataList {
+		if sideData.SideDataType == "Display Matrix" {
+			return sideData.Rotation, true
+		}
+	}
+	return 0, false
 }
 
 type StreamDisposition struct {

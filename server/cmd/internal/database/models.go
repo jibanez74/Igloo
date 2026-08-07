@@ -339,6 +339,8 @@ type VideoStream struct {
 	ColorSpace     sql.NullString `json:"color_space"`
 	ColorPrimaries sql.NullString `json:"color_primaries"`
 	ColorTransfer  sql.NullString `json:"color_transfer"`
+	FieldOrder     sql.NullString `json:"field_order"`
+	Rotation       sql.NullInt64  `json:"rotation"`
 	Language       sql.NullString `json:"language"`
 	Title          sql.NullString `json:"title"`
 	CreatedAt      string         `json:"created_at"`

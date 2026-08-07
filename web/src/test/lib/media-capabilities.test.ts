@@ -42,6 +42,8 @@ function videoStream(overrides: Partial<VideoStreamType>): VideoStreamType {
     color_space: nullableString(),
     color_primaries: nullableString(),
     color_transfer: nullableString(),
+    field_order: nullableString(),
+    rotation: nullableInt64(),
     language: nullableString(),
     title: nullableString(),
     ...overrides,

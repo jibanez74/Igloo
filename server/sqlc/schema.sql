@@ -358,6 +358,12 @@ CREATE TABLE
     color_space TEXT,
     color_primaries TEXT,
     color_transfer TEXT,
+    -- ffprobe field_order (tt/bb/tb/bt = interlaced); NULL on rows scanned
+    -- before the column existed, which playback treats as progressive.
+    field_order TEXT,
+    -- Display-matrix rotation in degrees; NULL when the stream has no
+    -- display matrix (an explicit 0-degree matrix persists as 0).
+    rotation INTEGER,
     language TEXT,
     title TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
