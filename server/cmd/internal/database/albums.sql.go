@@ -22,7 +22,7 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
 
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
-  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, album_key, album_artist_id, musician, is_compilation, mb_release_group_id, mb_release_id, audiodb_album_id, release_date, year, total_tracks, cover, cover_source, created_at, updated_at
 FROM albums
 WHERE id = ?
 LIMIT 1
@@ -35,78 +35,51 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 		&i.ID,
 		&i.Title,
 		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
+		&i.AlbumKey,
+		&i.AlbumArtistID,
 		&i.Musician,
+		&i.IsCompilation,
+		&i.MbReleaseGroupID,
+		&i.MbReleaseID,
+		&i.AudiodbAlbumID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.TotalTracks,
 		&i.Cover,
+		&i.CoverSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
+const getAlbumByKey = `-- name: GetAlbumByKey :one
 SELECT
-  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, album_key, album_artist_id, musician, is_compilation, mb_release_group_id, mb_release_id, audiodb_album_id, release_date, year, total_tracks, cover, cover_source, created_at, updated_at
 FROM albums
-WHERE spotify_id = ?
+WHERE album_key = ?
 LIMIT 1
 `
 
-func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error) {
-	row := q.queryRow(ctx, q.getAlbumBySpotifyIDStmt, getAlbumBySpotifyID, spotifyID)
+func (q *Queries) GetAlbumByKey(ctx context.Context, albumKey string) (Album, error) {
+	row := q.queryRow(ctx, q.getAlbumByKeyStmt, getAlbumByKey, albumKey)
 	var i Album
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
+		&i.AlbumKey,
+		&i.AlbumArtistID,
 		&i.Musician,
+		&i.IsCompilation,
+		&i.MbReleaseGroupID,
+		&i.MbReleaseID,
+		&i.AudiodbAlbumID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.TotalTracks,
 		&i.Cover,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getAlbumByTitleAndMusician = `-- name: GetAlbumByTitleAndMusician :one
-SELECT
-  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
-FROM albums
-WHERE title = ?
-  AND COALESCE(musician, '') = COALESCE(?2, '')
-LIMIT 1
-`
-
-type GetAlbumByTitleAndMusicianParams struct {
-	Title    string         `json:"title"`
-	Musician sql.NullString `json:"musician"`
-}
-
-// The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
-// target exactly, so a NULL-musician lookup finds a row written with ” and
-// vice versa.
-func (q *Queries) GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error) {
-	row := q.queryRow(ctx, q.getAlbumByTitleAndMusicianStmt, getAlbumByTitleAndMusician, arg.Title, arg.Musician)
-	var i Album
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.Musician,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.TotalTracks,
-		&i.Cover,
+		&i.CoverSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -224,105 +197,88 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 	return items, nil
 }
 
-const updateAlbumSpotifyCover = `-- name: UpdateAlbumSpotifyCover :one
-UPDATE albums
-SET
-  cover = ?,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-RETURNING id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
-`
-
-type UpdateAlbumSpotifyCoverParams struct {
-	Cover sql.NullString `json:"cover"`
-	ID    int64          `json:"id"`
-}
-
-func (q *Queries) UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error) {
-	row := q.queryRow(ctx, q.updateAlbumSpotifyCoverStmt, updateAlbumSpotifyCover, arg.Cover, arg.ID)
-	var i Album
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.Musician,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.TotalTracks,
-		&i.Cover,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const upsertAlbum = `-- name: UpsertAlbum :one
 INSERT INTO albums (
   title,
   sort_title,
-  spotify_id,
-  spotify_popularity,
+  album_key,
+  album_artist_id,
   musician,
+  is_compilation,
+  mb_release_group_id,
+  mb_release_id,
   release_date,
   year,
-  total_tracks,
-  cover
+  total_tracks
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (title, COALESCE(musician, '')) DO UPDATE
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (album_key) DO UPDATE
 SET
   sort_title = excluded.sort_title,
-  spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),
+  album_artist_id = COALESCE(albums.album_artist_id, excluded.album_artist_id),
+  is_compilation = albums.is_compilation OR excluded.is_compilation,
+  mb_release_group_id = COALESCE(albums.mb_release_group_id, excluded.mb_release_group_id),
+  mb_release_id = COALESCE(albums.mb_release_id, excluded.mb_release_id),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
-  cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+RETURNING id, title, sort_title, album_key, album_artist_id, musician, is_compilation, mb_release_group_id, mb_release_id, audiodb_album_id, release_date, year, total_tracks, cover, cover_source, created_at, updated_at
 `
 
 type UpsertAlbumParams struct {
-	Title             string          `json:"title"`
-	SortTitle         string          `json:"sort_title"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	Musician          sql.NullString  `json:"musician"`
-	ReleaseDate       sql.NullString  `json:"release_date"`
-	Year              sql.NullInt64   `json:"year"`
-	TotalTracks       sql.NullInt64   `json:"total_tracks"`
-	Cover             sql.NullString  `json:"cover"`
+	Title            string         `json:"title"`
+	SortTitle        string         `json:"sort_title"`
+	AlbumKey         string         `json:"album_key"`
+	AlbumArtistID    sql.NullInt64  `json:"album_artist_id"`
+	Musician         sql.NullString `json:"musician"`
+	IsCompilation    bool           `json:"is_compilation"`
+	MbReleaseGroupID sql.NullString `json:"mb_release_group_id"`
+	MbReleaseID      sql.NullString `json:"mb_release_id"`
+	ReleaseDate      sql.NullString `json:"release_date"`
+	Year             sql.NullInt64  `json:"year"`
+	TotalTracks      sql.NullInt64  `json:"total_tracks"`
 }
 
-// Matches idx_albums_title_musician, which treats a missing musician as ” so an
-// untagged album cannot be inserted twice.
+// Tag-owned fields only; enrichment columns (cover, audiodb id) are written by
+// UpdateAlbumEnrichment. title and musician are display strings, deliberately
+// absent from the update list (first scanned spelling wins); identity lives
+// entirely in album_key. Date and track-count fields prefer the incoming tag
+// but keep an existing value when the new track lacks one, since only some
+// tracks of an album carry them. is_compilation is sticky-true so an
+// enrichment pass that flags a compilation is never undone by a rescan.
 func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error) {
 	row := q.queryRow(ctx, q.upsertAlbumStmt, upsertAlbum,
 		arg.Title,
 		arg.SortTitle,
-		arg.SpotifyID,
-		arg.SpotifyPopularity,
+		arg.AlbumKey,
+		arg.AlbumArtistID,
 		arg.Musician,
+		arg.IsCompilation,
+		arg.MbReleaseGroupID,
+		arg.MbReleaseID,
 		arg.ReleaseDate,
 		arg.Year,
 		arg.TotalTracks,
-		arg.Cover,
 	)
 	var i Album
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
+		&i.AlbumKey,
+		&i.AlbumArtistID,
 		&i.Musician,
+		&i.IsCompilation,
+		&i.MbReleaseGroupID,
+		&i.MbReleaseID,
+		&i.AudiodbAlbumID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.TotalTracks,
 		&i.Cover,
+		&i.CoverSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

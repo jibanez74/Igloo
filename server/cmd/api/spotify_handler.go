@@ -185,18 +185,30 @@ func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []s
 			SpotifyURL:  album.ExternalURLs["spotify"],
 		}
 
-		existingAlbum, err := app.Queries.GetAlbumBySpotifyID(r.Context(), helpers.NullString(spotifyID))
+		// The library check keys on the tag-derived identity, so a local rip of
+		// the same album matches even though it never came from Spotify.
+		albumKey := albumIdentityKey(album.Name, firstSpotifyAlbumArtistName(album.Artists), false)
+		existingAlbum, err := app.Queries.GetAlbumByKey(r.Context(), albumKey)
 		if err == nil {
 			result.AlreadyInLibrary = true
 			result.LibraryAlbumID = &existingAlbum.ID
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to look up existing album by spotify id %q: %w", spotifyID, err)
+			return nil, fmt.Errorf("failed to look up existing album by key %q: %w", albumKey, err)
 		}
 
 		mapped = append(mapped, result)
 	}
 
 	return mapped, nil
+}
+
+func firstSpotifyAlbumArtistName(artists []spotifylib.SimpleArtist) string {
+	names := spotifyAlbumArtistNames(artists)
+	if len(names) == 0 {
+		return ""
+	}
+
+	return names[0]
 }
 
 func spotifyAlbumArtistNames(artists []spotifylib.SimpleArtist) []string {

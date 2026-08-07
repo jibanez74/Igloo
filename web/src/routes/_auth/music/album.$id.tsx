@@ -20,7 +20,7 @@ import {
   authUserQueryOpts,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
-import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
+import { unwrapString, unwrapInt } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,6 @@ import MediaNotFound from "@/components/shared/MediaNotFound";
 import AlbumDetailsBackdrop from "@/components/music/AlbumDetailsBackdrop";
 import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
 import AlbumDetailsSkipLinks from "@/components/music/AlbumDetailsSkipLinks";
-import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
@@ -55,7 +54,6 @@ import {
   LATEST_ALBUMS_KEY,
   MUSIC_STATS_KEY,
   MOTION_LOADING_STATE_CLASS,
-  SPOTIFY_BRAND_TEXT_CLASS,
   TRACKS_INFINITE_KEY,
   MOTION_MICRO_COLORS_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
@@ -206,7 +204,6 @@ function AlbumDetailsContent({
   const coverUrl = getMediaImageUrl(unwrapString(album.cover));
   const releaseYear = unwrapInt(album.year);
   const musicianName = unwrapString(album.musician);
-  const spotifyPopularity = unwrapFloat(album.spotify_popularity);
 
   // The album artist links to the musician page when it matches one of the
   // album's artists (which are musician rows server-side). A non-match (e.g.
@@ -500,9 +497,6 @@ function AlbumDetailsContent({
                 </ul>
               )}
 
-              {spotifyPopularity != null && (
-                <SpotifyPopularityMeter score={spotifyPopularity} />
-              )}
 
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
                 {tracks.length > 0 && (
@@ -757,24 +751,6 @@ function AlbumDetailsContent({
                     Audio Quality
                   </dt>
                   <dd className="mt-1 text-foreground">{audioQuality}</dd>
-                </div>
-              )}
-              {spotifyPopularity != null && (
-                <div>
-                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
-                    Spotify popularity
-                  </dt>
-                  <dd className="mt-1 flex items-baseline gap-2 text-foreground">
-                    <span
-                      className={cn(
-                        "text-lg font-semibold tabular-nums",
-                        SPOTIFY_BRAND_TEXT_CLASS,
-                      )}
-                    >
-                      {Math.round(spotifyPopularity)}
-                    </span>
-                    <span className="text-muted-foreground">/ 100</span>
-                  </dd>
                 </div>
               )}
             </dl>

@@ -7,7 +7,6 @@ import {
 
 type NullableString = { String: string; Valid: boolean };
 type NullableInt64 = { Int64: number; Valid: boolean };
-type NullableFloat64 = { Float64: number; Valid: boolean };
 
 function nullableString(value = ""): NullableString {
   return { String: value, Valid: value.length > 0 };
@@ -15,10 +14,6 @@ function nullableString(value = ""): NullableString {
 
 function nullableInt64(value: number | null = null): NullableInt64 {
   return { Int64: value ?? 0, Valid: value != null };
-}
-
-function nullableFloat64(value: number | null = null): NullableFloat64 {
-  return { Float64: value ?? 0, Valid: value != null };
 }
 
 function apiResponse(data: unknown) {
@@ -64,8 +59,6 @@ const albumDetails = {
     title: "Glacier Sessions",
     sort_title: "Glacier Sessions",
     musician: nullableString("Aurora Pines"),
-    spotify_id: nullableString("spotify-glacier"),
-    spotify_popularity: nullableFloat64(73),
     release_date: nullableString("2026-02-14"),
     year: nullableInt64(2026),
     total_tracks: nullableInt64(3),
@@ -79,7 +72,7 @@ const albumDetails = {
     makeTrack({ id: 103, title: "Second Disc Opener", track_index: 1, disc: 2, duration: 245_000 }),
   ],
   artists: [
-    { id: 7, name: "Aurora Pines", thumb: nullableString(), spotify_id: nullableString("sp-aurora") },
+    { id: 7, name: "Aurora Pines", thumb: nullableString() },
   ],
   track_genres: [
     { track_id: 101, genre_id: 1, tag: "Ambient" },
@@ -112,9 +105,6 @@ const musicianDetails = {
     name: "Aurora Pines",
     sort_name: "Aurora Pines",
     summary: nullableString("Aurora Pines makes ambient music."),
-    spotify_popularity: nullableFloat64(null),
-    spotify_followers: nullableInt64(null),
-    spotify_id: nullableString("sp-aurora"),
     thumb: nullableString(),
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
@@ -267,9 +257,8 @@ test("album details renders hero, tracklist, and details without console issues"
   await expect(page.getByRole("button", { name: "Remove Northern Drift from liked" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Cold Current to liked" })).toBeVisible();
 
-  // Album details section + Spotify popularity.
+  // Album details section.
   await expect(page.getByRole("heading", { name: "Album Details" })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Spotify popularity 73 out of 100" })).toBeVisible();
 
   await expectPageHasNoHorizontalScroll(page);
   expect(unexpectedApiRequests).toEqual([]);

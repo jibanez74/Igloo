@@ -49,7 +49,9 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 	}
 
 	httpClient := oauth2.NewClient(ctx, oauth2.ReuseTokenSource(token, tokenSource))
-	client := spotify.New(httpClient)
+	// WithRetry makes the client honor 429 Retry-After instead of surfacing the
+	// rate limit as a hard error.
+	client := spotify.New(httpClient, spotify.WithRetry(true))
 
 	return &spotifyClient{
 		client:      client,

@@ -99,6 +99,20 @@ type FormatTags struct {
 	SortName    string `json:"sort_name"`
 	SortAlbum   string `json:"sort_album"`
 	SortArtist  string `json:"sort_artist"`
+
+	// Compilation is the ID3v2 TCMP / Vorbis COMPILATION / MP4 cpil flag,
+	// surfaced by ffmpeg as "0"/"1".
+	Compilation string `json:"compilation"`
+	// MusicBrainz identifiers written by taggers like Picard and beets. MP3
+	// recording MBIDs live in an ID3v2 UFID frame that ffmpeg does not surface,
+	// so MbRecordingID is only populated for FLAC and M4A.
+	MbReleaseID      string `json:"musicbrainz_albumid"`
+	MbReleaseGroupID string `json:"musicbrainz_releasegroupid"`
+	MbArtistID       string `json:"musicbrainz_artistid"`
+	MbAlbumArtistID  string `json:"musicbrainz_albumartistid"`
+	MbRecordingID    string `json:"musicbrainz_trackid"`
+	TotalTracks      string `json:"totaltracks"`
+	TotalDiscs       string `json:"totaldiscs"`
 }
 
 func (t *FormatTags) UnmarshalJSON(data []byte) error {
@@ -120,6 +134,14 @@ func (t *FormatTags) UnmarshalJSON(data []byte) error {
 	t.SortName = firstTagValue(values, "sortname", "titlesort")
 	t.SortAlbum = firstTagValue(values, "sortalbum", "albumsort")
 	t.SortArtist = firstTagValue(values, "sortartist", "artistsort")
+	t.Compilation = firstTagValue(values, "compilation")
+	t.MbReleaseID = firstTagValue(values, "musicbrainzalbumid")
+	t.MbReleaseGroupID = firstTagValue(values, "musicbrainzreleasegroupid")
+	t.MbArtistID = firstTagValue(values, "musicbrainzartistid")
+	t.MbAlbumArtistID = firstTagValue(values, "musicbrainzalbumartistid")
+	t.MbRecordingID = firstTagValue(values, "musicbrainztrackid")
+	t.TotalTracks = firstTagValue(values, "totaltracks", "tracktotal")
+	t.TotalDiscs = firstTagValue(values, "totaldiscs", "disctotal")
 
 	return nil
 }
@@ -156,6 +178,16 @@ func normalizedTagValues(data []byte) (map[string]string, error) {
 
 func normalizeTagKey(key string) string {
 	key = strings.ToLower(strings.TrimSpace(key))
+	// Some M4A writers keep the freeform-atom mean as a key prefix
+	// ("com.apple.iTunes:MusicBrainz Album Id"). Strip it before folding so
+	// those tags land on the same normalized key as every other container's
+	// spelling. The separator collapse below does not touch '.' or ':'.
+	for _, prefix := range []string{"com.apple.itunes:", "com.apple.itunes."} {
+		if strings.HasPrefix(key, prefix) {
+			key = key[len(prefix):]
+			break
+		}
+	}
 	key = strings.ReplaceAll(key, "_", "")
 	key = strings.ReplaceAll(key, "-", "")
 	key = strings.ReplaceAll(key, " ", "")
@@ -184,7 +216,7 @@ type Chapter struct {
 }
 
 func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
-	return f.runMetadata(filePath,
+	return f.runMetadata(context.Background(), filePath,
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_streams",
@@ -194,29 +226,32 @@ func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
 	)
 }
 
-func (f *ffprobe) GetAudioMetadata(filePath string) (*FfprobeResult, error) {
-	return f.runMetadata(filePath,
+func (f *ffprobe) GetAudioMetadata(ctx context.Context, filePath string) (*FfprobeResult, error) {
+	return f.runMetadata(ctx, filePath,
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
-		"-show_entries", "format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language",
+		"-show_entries", "format=duration,bit_rate:format_tags:stream=index,codec_name,codec_type,profile,channels,channel_layout,sample_rate:stream_disposition=attached_pic:stream_tags=language",
 		filePath,
 	)
 }
 
-func (f *ffprobe) runMetadata(filePath string, args ...string) (*FfprobeResult, error) {
+func (f *ffprobe) runMetadata(parent context.Context, filePath string, args ...string) (*FfprobeResult, error) {
 	if strings.TrimSpace(filePath) == "" {
 		return nil, fmt.Errorf("file path is required")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), metadataTimeout)
+	ctx, cancel := context.WithTimeout(parent, metadataTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
 
 	output, err := cmd.Output()
 	if err != nil {
+		if parent.Err() != nil {
+			return nil, fmt.Errorf("ffprobe canceled for %s: %w", filePath, parent.Err())
+		}
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("ffprobe timed out for %s after %s: %w", filePath, metadataTimeout, ctx.Err())
 		}

@@ -73,12 +73,6 @@ function nullableInt64(value: number | null = null) {
   };
 }
 
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function albumTrack(
   id: number,
@@ -101,6 +95,7 @@ function albumTrack(
     disc: 1,
     channels: "2",
     channel_layout: "stereo",
+    sample_rate: nullableInt64(44100),
     bit_rate: 900000,
     profile: "",
     release_date: nullableString("2026-01-01"),
@@ -126,13 +121,18 @@ function albumDetailsResponse(
       id,
       title,
       sort_title: title,
+      album_key: `${title.toLowerCase()}${artistName.toLowerCase()}`,
+      album_artist_id: nullableInt64(id + 100),
       musician: nullableString(artistName),
-      spotify_id: nullableString(`spotify-${id}`),
-      spotify_popularity: nullableFloat64(76),
+      is_compilation: false,
+      mb_release_group_id: nullableString(""),
+      mb_release_id: nullableString(""),
+      audiodb_album_id: nullableString(""),
       release_date: nullableString("2026-01-01"),
       year: nullableInt64(2026),
       total_tracks: nullableInt64(1),
       cover: nullableString(`/covers/${id}.jpg`),
+      cover_source: nullableString(""),
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
     },
@@ -142,7 +142,6 @@ function albumDetailsResponse(
         id: id + 100,
         name: artistName,
         thumb: nullableString(""),
-        spotify_id: nullableString(`artist-${id}`),
       },
     ],
     track_genres: [

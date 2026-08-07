@@ -139,7 +139,7 @@ func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandom
 
 const getTrack = `-- name: GetTrack :one
 SELECT
-  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, sample_rate, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
 FROM tracks
 WHERE id = ?
 LIMIT 1
@@ -163,6 +163,7 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
 		&i.Disc,
 		&i.Channels,
 		&i.ChannelLayout,
+		&i.SampleRate,
 		&i.BitRate,
 		&i.Profile,
 		&i.ReleaseDate,
@@ -262,7 +263,7 @@ func (q *Queries) GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphab
 
 const getTracksByAlbumID = `-- name: GetTracksByAlbumID :many
 SELECT
-  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, sample_rate, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
 FROM tracks
 WHERE album_id = ?
 ORDER BY
@@ -294,6 +295,7 @@ func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64)
 			&i.Disc,
 			&i.Channels,
 			&i.ChannelLayout,
+			&i.SampleRate,
 			&i.BitRate,
 			&i.Profile,
 			&i.ReleaseDate,
@@ -399,6 +401,7 @@ INSERT INTO tracks (
   disc,
   channels,
   channel_layout,
+  sample_rate,
   bit_rate,
   profile,
   release_date,
@@ -410,7 +413,7 @@ INSERT INTO tracks (
   musician_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
   title = excluded.title,
@@ -425,6 +428,7 @@ SET
   disc = excluded.disc,
   channels = excluded.channels,
   channel_layout = excluded.channel_layout,
+  sample_rate = excluded.sample_rate,
   bit_rate = excluded.bit_rate,
   profile = excluded.profile,
   release_date = excluded.release_date,
@@ -435,7 +439,7 @@ SET
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+RETURNING id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, sample_rate, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
 `
 
 type UpsertTrackParams struct {
@@ -452,6 +456,7 @@ type UpsertTrackParams struct {
 	Disc          int64          `json:"disc"`
 	Channels      string         `json:"channels"`
 	ChannelLayout string         `json:"channel_layout"`
+	SampleRate    sql.NullInt64  `json:"sample_rate"`
 	BitRate       int64          `json:"bit_rate"`
 	Profile       string         `json:"profile"`
 	ReleaseDate   sql.NullString `json:"release_date"`
@@ -478,6 +483,7 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track
 		arg.Disc,
 		arg.Channels,
 		arg.ChannelLayout,
+		arg.SampleRate,
 		arg.BitRate,
 		arg.Profile,
 		arg.ReleaseDate,
@@ -504,6 +510,7 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track
 		&i.Disc,
 		&i.Channels,
 		&i.ChannelLayout,
+		&i.SampleRate,
 		&i.BitRate,
 		&i.Profile,
 		&i.ReleaseDate,

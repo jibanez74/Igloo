@@ -222,6 +222,7 @@ func TestDeleteAlbumEvictsTrackStreamFileCache(t *testing.T) {
 	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Stream Test Album",
 		SortTitle: "stream test album",
+		AlbumKey:  albumIdentityKey("Stream Test Album", "Stream Test Artist", false),
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)

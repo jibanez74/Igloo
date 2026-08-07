@@ -31,6 +31,9 @@ CREATE TABLE
     jellyfin_api_key TEXT,
     spotify_client_id TEXT,
     spotify_client_secret TEXT,
+    audiodb_api_key TEXT,
+    fanart_tv_api_key TEXT,
+    music_metadata_enabled BOOLEAN NOT NULL DEFAULT true,
     hardware_acceleration_device TEXT CHECK (
       hardware_acceleration_device IN ('cpu', 'apple', 'nvidia', 'intel')
     ),
@@ -78,20 +81,31 @@ CREATE INDEX IF NOT EXISTS idx_devices_last_used_at ON devices (last_used_at);
 
 -- Music catalog
 
--- Music artists imported from local tags and optional Spotify metadata.
+-- Music artists imported from local tags and enriched from metadata providers.
+-- name_key is the normalized identity key (helpers.NormalizeComparisonText), so
+-- case, diacritic, and punctuation variants of a name collapse into one row.
+-- name is display-only, written by the first scan that sees the artist and never
+-- overwritten by a later spelling or a provider. mb_artist_id is deliberately
+-- not UNIQUE: name-distinct rows can legitimately share an MBID (aliases, split
+-- credits).
 CREATE TABLE
   IF NOT EXISTS musicians (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL UNIQUE,
     sort_name TEXT NOT NULL,
     summary TEXT,
-    spotify_id TEXT UNIQUE,
-    spotify_popularity REAL,
-    spotify_followers INTEGER,
+    mb_artist_id TEXT,
+    audiodb_artist_id TEXT,
     thumb TEXT,
+    thumb_source TEXT CHECK (
+      thumb_source IN ('embedded', 'folder', 'coverart', 'audiodb', 'fanart', 'remote')
+    ),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+
+CREATE INDEX IF NOT EXISTS idx_musicians_mb_artist_id ON musicians (mb_artist_id);
 
 -- Serves GetMusiciansAlphabetical's ORDER BY (letter bucket, then sort_name) so
 -- the paginated musicians listing reads rows in index order. Without it the whole
@@ -106,30 +120,39 @@ CREATE INDEX IF NOT EXISTS idx_musicians_alpha ON musicians (
   sort_name
 );
 
--- Albums imported from local tags and optional Spotify metadata.
+-- Albums imported from local tags and enriched from metadata providers.
+-- album_key is the identity key, computed exclusively from local tags
+-- (normalized title + normalized album artist, or a Various Artists sentinel
+-- for compilations) so a metadata provider can never change which tracks
+-- belong to which album. musician is a denormalized display string and is
+-- part of no key. is_compilation may be flipped false -> true by enrichment
+-- (MusicBrainz secondary types), never the reverse, and never changes album_key.
 CREATE TABLE
   IF NOT EXISTS albums (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     sort_title TEXT NOT NULL,
-    spotify_id TEXT UNIQUE,
-    spotify_popularity REAL,
+    album_key TEXT NOT NULL UNIQUE,
+    album_artist_id INTEGER,
     musician TEXT,
+    is_compilation BOOLEAN NOT NULL DEFAULT false,
+    mb_release_group_id TEXT,
+    mb_release_id TEXT,
+    audiodb_album_id TEXT,
     release_date TEXT,
     year INTEGER,
     total_tracks INTEGER,
     cover TEXT,
+    cover_source TEXT CHECK (
+      cover_source IN ('embedded', 'folder', 'coverart', 'audiodb', 'fanart', 'remote')
+    ),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (album_artist_id) REFERENCES musicians (id) ON DELETE SET NULL ON UPDATE CASCADE
   );
 
--- Identity of an album. This is an expression index rather than a table-level
--- UNIQUE (title, musician) because musician is nullable and SQLite treats NULLs as
--- distinct: a file with no album-artist tag would otherwise slip past UpsertAlbum's
--- ON CONFLICT and add a duplicate album on every rescan. The conflict target in
--- sqlc/queries/albums.sql must match this expression exactly.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_title_musician
-ON albums (title, COALESCE(musician, ''));
+-- FK-child index: keeps musician deletes from scanning albums.
+CREATE INDEX IF NOT EXISTS idx_albums_album_artist_id ON albums (album_artist_id);
 
 -- Serves GetAlbumsAlphabetical's ORDER BY (letter bucket, then UPPER(title)), the
 -- albums twin of idx_track_alpha. Expression must match the ORDER BY in
@@ -164,6 +187,7 @@ CREATE TABLE
     disc INTEGER NOT NULL,
     channels TEXT NOT NULL,
     channel_layout TEXT NOT NULL,
+    sample_rate INTEGER,
     bit_rate INTEGER NOT NULL,
     profile TEXT NOT NULL,
     release_date TEXT,
@@ -213,31 +237,42 @@ CREATE TABLE
 -- GetMusiciansAlphabetical's track_count.
 CREATE INDEX IF NOT EXISTS idx_track_musicians_musician ON track_musicians (musician_id);
 
--- Spotify match cache for music scan decisions that should survive rescans.
+-- Per-provider metadata match cache for music scan decisions that should
+-- survive rescans. matched/unmatched are final answers; failed rows are
+-- retried after next_retry_at (backoff grows with attempts); skipped marks a
+-- provider that was disabled or unkeyed, picked up again when re-enabled.
 CREATE TABLE
-  IF NOT EXISTS music_spotify_matches (
+  IF NOT EXISTS music_metadata_matches (
     entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician')),
     entity_id INTEGER NOT NULL,
-    spotify_id TEXT,
-    status TEXT NOT NULL CHECK (status IN ('matched', 'failed', 'unmatched')),
+    provider TEXT NOT NULL CHECK (
+      provider IN ('musicbrainz', 'coverart', 'audiodb', 'fanart')
+    ),
+    external_id TEXT,
+    status TEXT NOT NULL CHECK (
+      status IN ('matched', 'failed', 'unmatched', 'skipped')
+    ),
     reason TEXT,
     score INTEGER,
+    provider_score INTEGER,
     threshold_value INTEGER,
     candidate_name TEXT,
     candidate_artist TEXT,
     search_query TEXT,
     strategy TEXT,
     error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    next_retry_at TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (entity_type, entity_id)
+    PRIMARY KEY (entity_type, entity_id, provider)
   );
 
-CREATE TRIGGER IF NOT EXISTS music_spotify_matches_album_ad AFTER DELETE ON albums BEGIN
-  DELETE FROM music_spotify_matches WHERE entity_type = 'album' AND entity_id = old.id;
+CREATE TRIGGER IF NOT EXISTS music_metadata_matches_album_ad AFTER DELETE ON albums BEGIN
+  DELETE FROM music_metadata_matches WHERE entity_type = 'album' AND entity_id = old.id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS music_spotify_matches_musician_ad AFTER DELETE ON musicians BEGIN
-  DELETE FROM music_spotify_matches WHERE entity_type = 'musician' AND entity_id = old.id;
+CREATE TRIGGER IF NOT EXISTS music_metadata_matches_musician_ad AFTER DELETE ON musicians BEGIN
+  DELETE FROM music_metadata_matches WHERE entity_type = 'musician' AND entity_id = old.id;
 END;
 
 -- Movie catalog and media metadata
@@ -833,8 +868,8 @@ CREATE TRIGGER IF NOT EXISTS albums_ad AFTER DELETE ON albums BEGIN
   VALUES ('delete', old.id, old.title, old.musician);
 END;
 
--- Scoped so UpdateAlbumSpotifyCover, which runs for every album during Spotify
--- enrichment, no longer reindexes an entry whose terms cannot have changed.
+-- Scoped so enrichment writes (cover, summary, provider ids), which run for
+-- every album, never reindex an entry whose terms cannot have changed.
 CREATE TRIGGER IF NOT EXISTS albums_au AFTER UPDATE OF title, musician ON albums BEGIN
   INSERT INTO albums_fts (albums_fts, rowid, title, musician)
   VALUES ('delete', old.id, old.title, old.musician);
@@ -860,7 +895,7 @@ CREATE TRIGGER IF NOT EXISTS musicians_ad AFTER DELETE ON musicians BEGIN
   VALUES ('delete', old.id, old.name, old.sort_name);
 END;
 
--- Scoped so UpdateMusicianSpotifyThumb does not reindex on a thumbnail change.
+-- Scoped so enrichment writes (thumb, summary, provider ids) do not reindex.
 CREATE TRIGGER IF NOT EXISTS musicians_au AFTER UPDATE OF name, sort_name ON musicians BEGIN
   INSERT INTO musicians_fts (musicians_fts, rowid, name, sort_name)
   VALUES ('delete', old.id, old.name, old.sort_name);

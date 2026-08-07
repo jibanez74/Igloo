@@ -111,10 +111,12 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	defer app.DB.Close()
 
 	ctx := context.Background()
+	// The picker flags library matches by the tag-derived identity key, so the
+	// seed must use the same key the handler computes for the search result.
 	existingAlbum, err := app.Queries.UpsertAlbum(ctx, database.UpsertAlbumParams{
 		Title:     "Blue Record",
 		SortTitle: "Blue Record",
-		SpotifyID: helpers.NullString("album123"),
+		AlbumKey:  albumIdentityKey("Blue Record", "The Band", false),
 		Musician:  helpers.NullString("The Band"),
 	})
 	if err != nil {

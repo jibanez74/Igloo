@@ -111,7 +111,7 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.Queries, err = database.Prepare(ctx, app.DB)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
+		return nil, fmt.Errorf("failed to prepare database queries (if this install upgraded across a schema change, delete the database file and restart to rebuild it): %v", err)
 	}
 
 	err = app.InitSettings(ctx)

@@ -2924,13 +2924,18 @@ export interface components {
             id: number;
             title: string;
             sort_title: string;
-            spotify_id: components["schemas"]["SqlNullString"];
-            spotify_popularity: components["schemas"]["SqlNullFloat64"];
+            album_key: string;
+            album_artist_id: components["schemas"]["SqlNullInt64"];
             musician: components["schemas"]["SqlNullString"];
+            is_compilation: boolean;
+            mb_release_group_id: components["schemas"]["SqlNullString"];
+            mb_release_id: components["schemas"]["SqlNullString"];
+            audiodb_album_id: components["schemas"]["SqlNullString"];
             release_date: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             total_tracks: components["schemas"]["SqlNullInt64"];
             cover: components["schemas"]["SqlNullString"];
+            cover_source: components["schemas"]["SqlNullString"];
             created_at: string;
             updated_at: string;
         };
@@ -2954,6 +2959,7 @@ export interface components {
             disc: number;
             channels: string;
             channel_layout: string;
+            sample_rate: components["schemas"]["SqlNullInt64"];
             /** Format: int64 */
             bit_rate: number;
             profile: string;

@@ -123,12 +123,6 @@ const mockMusicianDetails = {
     name: "Aurora Pines",
     sort_name: "Aurora Pines",
     summary: nullableString("Layered ambient pop with long descriptive copy for the tablet hero layout."),
-    spotify_popularity: {
-      Float64: 82,
-      Valid: true,
-    },
-    spotify_followers: nullableInt64(42000),
-    spotify_id: nullableString("spotify-aurora-pines"),
     thumb: nullableString(),
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
@@ -140,10 +134,6 @@ const mockMusicianDetails = {
       cover: nullableString(),
       year: nullableInt64(2026),
       release_date: nullableString("2026-01-01"),
-      spotify_popularity: {
-        Float64: 70,
-        Valid: true,
-      },
       track_count: 2,
     },
   ],

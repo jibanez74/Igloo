@@ -9,18 +9,23 @@ import (
 )
 
 type Album struct {
-	ID                int64           `json:"id"`
-	Title             string          `json:"title"`
-	SortTitle         string          `json:"sort_title"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	Musician          sql.NullString  `json:"musician"`
-	ReleaseDate       sql.NullString  `json:"release_date"`
-	Year              sql.NullInt64   `json:"year"`
-	TotalTracks       sql.NullInt64   `json:"total_tracks"`
-	Cover             sql.NullString  `json:"cover"`
-	CreatedAt         string          `json:"created_at"`
-	UpdatedAt         string          `json:"updated_at"`
+	ID               int64          `json:"id"`
+	Title            string         `json:"title"`
+	SortTitle        string         `json:"sort_title"`
+	AlbumKey         string         `json:"album_key"`
+	AlbumArtistID    sql.NullInt64  `json:"album_artist_id"`
+	Musician         sql.NullString `json:"musician"`
+	IsCompilation    bool           `json:"is_compilation"`
+	MbReleaseGroupID sql.NullString `json:"mb_release_group_id"`
+	MbReleaseID      sql.NullString `json:"mb_release_id"`
+	AudiodbAlbumID   sql.NullString `json:"audiodb_album_id"`
+	ReleaseDate      sql.NullString `json:"release_date"`
+	Year             sql.NullInt64  `json:"year"`
+	TotalTracks      sql.NullInt64  `json:"total_tracks"`
+	Cover            sql.NullString `json:"cover"`
+	CoverSource      sql.NullString `json:"cover_source"`
+	CreatedAt        string         `json:"created_at"`
+	UpdatedAt        string         `json:"updated_at"`
 }
 
 type Artist struct {
@@ -148,33 +153,38 @@ type MovieWatchProgress struct {
 	UpdatedAt     string  `json:"updated_at"`
 }
 
-type MusicSpotifyMatch struct {
+type MusicMetadataMatch struct {
 	EntityType      string         `json:"entity_type"`
 	EntityID        int64          `json:"entity_id"`
-	SpotifyID       sql.NullString `json:"spotify_id"`
+	Provider        string         `json:"provider"`
+	ExternalID      sql.NullString `json:"external_id"`
 	Status          string         `json:"status"`
 	Reason          sql.NullString `json:"reason"`
 	Score           sql.NullInt64  `json:"score"`
+	ProviderScore   sql.NullInt64  `json:"provider_score"`
 	ThresholdValue  sql.NullInt64  `json:"threshold_value"`
 	CandidateName   sql.NullString `json:"candidate_name"`
 	CandidateArtist sql.NullString `json:"candidate_artist"`
 	SearchQuery     sql.NullString `json:"search_query"`
 	Strategy        sql.NullString `json:"strategy"`
 	Error           sql.NullString `json:"error"`
+	Attempts        int64          `json:"attempts"`
+	NextRetryAt     sql.NullString `json:"next_retry_at"`
 	UpdatedAt       string         `json:"updated_at"`
 }
 
 type Musician struct {
-	ID                int64           `json:"id"`
-	Name              string          `json:"name"`
-	SortName          string          `json:"sort_name"`
-	Summary           sql.NullString  `json:"summary"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
-	Thumb             sql.NullString  `json:"thumb"`
-	CreatedAt         string          `json:"created_at"`
-	UpdatedAt         string          `json:"updated_at"`
+	ID              int64          `json:"id"`
+	Name            string         `json:"name"`
+	NameKey         string         `json:"name_key"`
+	SortName        string         `json:"sort_name"`
+	Summary         sql.NullString `json:"summary"`
+	MbArtistID      sql.NullString `json:"mb_artist_id"`
+	AudiodbArtistID sql.NullString `json:"audiodb_artist_id"`
+	Thumb           sql.NullString `json:"thumb"`
+	ThumbSource     sql.NullString `json:"thumb_source"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
 }
 
 type Notification struct {
@@ -228,6 +238,9 @@ type Setting struct {
 	JellyfinApiKey             sql.NullString  `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
+	AudiodbApiKey              sql.NullString  `json:"audiodb_api_key"`
+	FanartTvApiKey             sql.NullString  `json:"fanart_tv_api_key"`
+	MusicMetadataEnabled       bool            `json:"music_metadata_enabled"`
 	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
 	EnableWatcher              bool            `json:"enable_watcher"`
 	DownloadImages             bool            `json:"download_images"`
@@ -269,6 +282,7 @@ type Track struct {
 	Disc          int64          `json:"disc"`
 	Channels      string         `json:"channels"`
 	ChannelLayout string         `json:"channel_layout"`
+	SampleRate    sql.NullInt64  `json:"sample_rate"`
 	BitRate       int64          `json:"bit_rate"`
 	Profile       string         `json:"profile"`
 	ReleaseDate   sql.NullString `json:"release_date"`

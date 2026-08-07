@@ -12,17 +12,13 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
-import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
+import { unwrapString, unwrapInt } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import MusicianDetailsSkipLinks from "@/components/music/MusicianDetailsSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
-import {
-  SpotifyGlyph,
-  SpotifyPopularityMeter,
-} from "@/components/music/SpotifyPopularity";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
@@ -33,8 +29,6 @@ import {
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
-  SPOTIFY_BRAND_ICON_CLASS,
-  SPOTIFY_BRAND_TEXT_CLASS,
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -202,27 +196,10 @@ function MusicianDetailsContent({
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
   const showThumb = thumbUrl && !thumbFailed;
   const summary = unwrapString(musician.summary);
-  const spotifyPopularityRaw = unwrapFloat(musician.spotify_popularity);
-  const spotifyPopularity =
-    spotifyPopularityRaw !== null ? Math.round(spotifyPopularityRaw) : null;
-  const spotifyFollowers = unwrapInt(musician.spotify_followers);
 
   // React 19 document metadata - dynamic based on musician
   const pageTitle = `${musician.name} - Igloo`;
   const pageDescription = `Listen to ${musician.name} - ${albums.length} albums, ${tracks.length} tracks in your Igloo music library.`;
-
-  // Format follower count for display
-  const formatFollowers = (count: number) => {
-    if (count >= 1_000_000) {
-      return `${(count / 1_000_000).toFixed(1)}M`;
-    }
-
-    if (count >= 1_000) {
-      return `${Math.floor(count / 1_000)}K`;
-    }
-
-    return count.toString();
-  };
 
   const convertTracksForPlayer = (musicianTracks: MusicianTrackType[]) => {
     return musicianTracks.map((track) =>
@@ -461,30 +438,6 @@ function MusicianDetailsContent({
                 </div>
               )}
 
-              {/* Spotify stats */}
-              {(spotifyPopularity !== null || spotifyFollowers !== null) && (
-                <div className="mt-4">
-                  {spotifyPopularity !== null && (
-                    <SpotifyPopularityMeter score={spotifyPopularity} />
-                  )}
-                  {spotifyFollowers !== null && (
-                    <div className="mt-3 flex items-center justify-center gap-1.5 text-sm text-muted-foreground lg:justify-start">
-                      <SpotifyGlyph
-                        className={cn("size-4 shrink-0", SPOTIFY_BRAND_ICON_CLASS)}
-                      />
-                      <span>Followers</span>
-                      <span
-                        className={cn(
-                          "font-semibold tabular-nums",
-                          SPOTIFY_BRAND_TEXT_CLASS,
-                        )}
-                      >
-                        {formatFollowers(spotifyFollowers)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </header>
         </div>

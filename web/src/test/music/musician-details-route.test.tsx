@@ -64,12 +64,6 @@ function nullableInt64(value: number | null = null) {
   };
 }
 
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function musicianTrack(
   id: number,
@@ -129,12 +123,13 @@ function musicianDetailsResponse({
     musician: {
       id,
       name,
+      name_key: name.toLowerCase(),
       sort_name: sortName,
       summary: nullableString(summary),
-      spotify_popularity: nullableFloat64(74),
-      spotify_followers: nullableInt64(12000),
-      spotify_id: nullableString(`spotify-${id}`),
+      mb_artist_id: nullableString(""),
+      audiodb_artist_id: nullableString(""),
       thumb: nullableString(""),
+      thumb_source: nullableString(""),
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
     },
@@ -145,7 +140,6 @@ function musicianDetailsResponse({
         cover: nullableString(""),
         year: nullableInt64(2026),
         release_date: nullableString("2026-01-01"),
-        spotify_popularity: nullableFloat64(70),
         track_count: tracks.length,
       },
     ],

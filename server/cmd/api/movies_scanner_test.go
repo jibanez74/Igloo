@@ -38,7 +38,7 @@ func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.Ffprobe
 	return s.result, nil
 }
 
-func (s *stubMovieScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *stubMovieScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	return s.GetMetadata(filePath)
 }
 

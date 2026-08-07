@@ -349,6 +349,7 @@ func createSearchMusician(t *testing.T, app *Application, name string) int64 {
 
 	musician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:     name,
+		NameKey:  normalizedKeyPart(name),
 		SortName: strings.ToLower(name),
 	})
 	if err != nil {
@@ -363,6 +364,7 @@ func createSearchAlbum(t *testing.T, app *Application, title, musician string) i
 	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     title,
 		SortTitle: strings.ToLower(title),
+		AlbumKey:  albumIdentityKey(title, musician, false),
 		Musician:  sql.NullString{String: musician, Valid: true},
 	})
 	if err != nil {

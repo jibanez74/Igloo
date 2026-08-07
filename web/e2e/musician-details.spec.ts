@@ -7,7 +7,6 @@ import {
 
 type NullableString = { String: string; Valid: boolean };
 type NullableInt64 = { Int64: number; Valid: boolean };
-type NullableFloat64 = { Float64: number; Valid: boolean };
 
 function nullableString(value = ""): NullableString {
   return { String: value, Valid: value.length > 0 };
@@ -15,10 +14,6 @@ function nullableString(value = ""): NullableString {
 
 function nullableInt64(value: number | null = null): NullableInt64 {
   return { Int64: value ?? 0, Valid: value != null };
-}
-
-function nullableFloat64(value: number | null = null): NullableFloat64 {
-  return { Float64: value ?? 0, Valid: value != null };
 }
 
 function apiResponse(data: unknown) {
@@ -52,9 +47,6 @@ const musicianDetails = {
     name: "Aurora Pines",
     sort_name: "Aurora Pines",
     summary: nullableString("Aurora Pines makes ambient music."),
-    spotify_popularity: nullableFloat64(82),
-    spotify_followers: nullableInt64(1_234_567),
-    spotify_id: nullableString("sp-aurora"),
     thumb: nullableString(),
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
@@ -66,7 +58,6 @@ const musicianDetails = {
       cover: nullableString(),
       year: nullableInt64(2026),
       release_date: nullableString("2026-02-14"),
-      spotify_popularity: nullableFloat64(73),
       track_count: 2,
     },
   ],
@@ -87,8 +78,6 @@ const emptyMusicianDetails = {
     name: "Silent Pines",
     sort_name: "Silent Pines",
     summary: nullableString(),
-    spotify_popularity: nullableFloat64(null),
-    spotify_followers: nullableInt64(null),
   },
   albums: [],
   tracks: [],
@@ -102,8 +91,6 @@ const albumDetails = {
     title: "Glacier Sessions",
     sort_title: "Glacier Sessions",
     musician: nullableString("Aurora Pines"),
-    spotify_id: nullableString("spotify-glacier"),
-    spotify_popularity: nullableFloat64(73),
     release_date: nullableString("2026-02-14"),
     year: nullableInt64(2026),
     total_tracks: nullableInt64(0),
@@ -113,7 +100,7 @@ const albumDetails = {
   },
   tracks: [],
   artists: [
-    { id: MUSICIAN_ID, name: "Aurora Pines", thumb: nullableString(), spotify_id: nullableString("sp-aurora") },
+    { id: MUSICIAN_ID, name: "Aurora Pines", thumb: nullableString() },
   ],
   track_genres: [],
   album_genres: [],
@@ -211,10 +198,6 @@ test("musician details renders hero, discography, and tracks without console iss
   await expect(page.getByRole("button", { name: "Shuffle play all 2 tracks by Aurora Pines" })).toBeVisible();
   await playAll.focus();
   await expect(playAll).toBeFocused();
-
-  // Spotify block renders when the fields are populated.
-  await expect(page.getByRole("group", { name: "Spotify popularity 82 out of 100" })).toBeVisible();
-  await expect(page.getByText("1.2M")).toBeVisible();
 
   // Discography uses the shared album card: full label, link, and play overlay.
   await expect(page.getByRole("heading", { name: "Discography" })).toBeVisible();

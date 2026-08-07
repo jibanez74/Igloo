@@ -718,8 +718,6 @@ function albumDetails(id: number) {
       title: album.title,
       sort_title: album.title,
       musician: album.musician,
-      spotify_id: nullableString(null),
-      spotify_popularity: nullableFloat(null),
       release_date: nullableString("2024-01-19"),
       year: album.year,
       total_tracks: nullableInt(albumTracks.length),
@@ -754,7 +752,6 @@ function albumDetails(id: number) {
         thumb:
           albumMusician?.thumb ??
           nullableString("/api/static/musicians/the-signals.svg"),
-        spotify_id: nullableString(null),
       },
     ],
     track_genres: [],
@@ -773,9 +770,6 @@ function musicianDetails(id: number) {
       name: musician.name,
       sort_name: musician.sort_name,
       summary: nullableString(`${musician.name} is part of the E2E mock library.`),
-      spotify_popularity: nullableFloat(82),
-      spotify_followers: nullableInt(1234567),
-      spotify_id: nullableString(null),
       thumb: musician.thumb,
       created_at: startedAt,
       updated_at: startedAt,
@@ -788,7 +782,6 @@ function musicianDetails(id: number) {
         cover: album.cover,
         year: album.year,
         release_date: nullableString("2024-01-19"),
-        spotify_popularity: nullableFloat(null),
         track_count: tracks.filter(track => track.album_id.Int64 === album.id).length,
       })),
     tracks: musicianTracks.map((track, index) => ({

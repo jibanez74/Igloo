@@ -307,19 +307,6 @@ export const SETTINGS_SELECT_ITEM_CLASS = "focus:bg-muted focus:text-foreground"
 export const SETTINGS_RESET_BUTTON_CLASS =
   "border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground";
 
-/**
- * Spotify brand accent (the recognizable Spotify green). This is a deliberate
- * *brand* color, not a semantic design token — it identifies Spotify-sourced data
- * (the popularity meter/glyph) and intentionally sits outside the OKLCH token system.
- * The light-theme shades are darkened so the green stays readable on light surfaces.
- */
-// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
-export const SPOTIFY_BRAND_TEXT_CLASS = "text-green-600 dark:text-green-400";
-// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
-export const SPOTIFY_BRAND_ICON_CLASS = "text-green-600 dark:text-green-500";
-// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
-export const SPOTIFY_BRAND_FILL_CLASS = "bg-green-500";
-
 // Subtitle and language constants used to choose supported subtitle behavior
 // and format audio/subtitle labels.
 export const BITMAP_SUBTITLE_CODECS = [

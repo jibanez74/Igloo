@@ -5,22 +5,11 @@ FROM albums
 WHERE id = ?
 LIMIT 1;
 
--- name: GetAlbumBySpotifyID :one
+-- name: GetAlbumByKey :one
 SELECT
   *
 FROM albums
-WHERE spotify_id = ?
-LIMIT 1;
-
--- name: GetAlbumByTitleAndMusician :one
--- The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
--- target exactly, so a NULL-musician lookup finds a row written with '' and
--- vice versa.
-SELECT
-  *
-FROM albums
-WHERE title = ?
-  AND COALESCE(musician, '') = COALESCE(sqlc.arg(musician), '')
+WHERE album_key = ?
 LIMIT 1;
 
 -- name: GetLatestAlbums :many
@@ -53,39 +42,39 @@ ORDER BY
 LIMIT ?
 OFFSET ?;
 
--- name: UpdateAlbumSpotifyCover :one
-UPDATE albums
-SET
-  cover = ?,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-RETURNING *;
-
 -- name: UpsertAlbum :one
+-- Tag-owned fields only; enrichment columns (cover, audiodb id) are written by
+-- UpdateAlbumEnrichment. title and musician are display strings, deliberately
+-- absent from the update list (first scanned spelling wins); identity lives
+-- entirely in album_key. Date and track-count fields prefer the incoming tag
+-- but keep an existing value when the new track lacks one, since only some
+-- tracks of an album carry them. is_compilation is sticky-true so an
+-- enrichment pass that flags a compilation is never undone by a rescan.
 INSERT INTO albums (
   title,
   sort_title,
-  spotify_id,
-  spotify_popularity,
+  album_key,
+  album_artist_id,
   musician,
+  is_compilation,
+  mb_release_group_id,
+  mb_release_id,
   release_date,
   year,
-  total_tracks,
-  cover
+  total_tracks
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?)
--- Matches idx_albums_title_musician, which treats a missing musician as '' so an
--- untagged album cannot be inserted twice.
-ON CONFLICT (title, COALESCE(musician, '')) DO UPDATE
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (album_key) DO UPDATE
 SET
   sort_title = excluded.sort_title,
-  spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),
+  album_artist_id = COALESCE(albums.album_artist_id, excluded.album_artist_id),
+  is_compilation = albums.is_compilation OR excluded.is_compilation,
+  mb_release_group_id = COALESCE(albums.mb_release_group_id, excluded.mb_release_group_id),
+  mb_release_id = COALESCE(albums.mb_release_id, excluded.mb_release_id),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
-  cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 

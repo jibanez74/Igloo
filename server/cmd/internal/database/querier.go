@@ -81,11 +81,7 @@ type Querier interface {
 	DeleteWatchRoom(ctx context.Context, id int64) error
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
-	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
-	// The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
-	// target exactly, so a NULL-musician lookup finds a row written with '' and
-	// vice versa.
-	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
+	GetAlbumByKey(ctx context.Context, albumKey string) (Album, error)
 	// Returns all genres associated with an album
 	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
 	// Returns albums sorted alphabetically by title with pagination.
@@ -148,10 +144,9 @@ type Querier interface {
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	// The music stats endpoint needs all three; one round trip instead of three.
 	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
-	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (MusicSpotifyMatch, error)
+	GetMusicMetadataMatch(ctx context.Context, arg GetMusicMetadataMatchParams) (MusicMetadataMatch, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
-	GetMusicianByName(ctx context.Context, name string) (Musician, error)
-	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
+	GetMusicianByNameKey(ctx context.Context, nameKey string) (Musician, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
 	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
@@ -271,7 +266,6 @@ type Querier interface {
 	TrackExists(ctx context.Context, id int64) (bool, error)
 	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) (int64, error)
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) (int64, error)
-	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error)
 	UpdateDeviceLastUsed(ctx context.Context, id int64) error
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
 	UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySettingsParams) (Setting, error)
@@ -279,7 +273,6 @@ type Querier interface {
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
-	UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (Musician, error)
 	UpdatePlaybackServerSettings(ctx context.Context, arg UpdatePlaybackServerSettingsParams) (Setting, error)
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error
@@ -290,8 +283,13 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error)
 	UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error)
-	// Matches idx_albums_title_musician, which treats a missing musician as '' so an
-	// untagged album cannot be inserted twice.
+	// Tag-owned fields only; enrichment columns (cover, audiodb id) are written by
+	// UpdateAlbumEnrichment. title and musician are display strings, deliberately
+	// absent from the update list (first scanned spelling wins); identity lives
+	// entirely in album_key. Date and track-count fields prefer the incoming tag
+	// but keep an existing value when the new track lacks one, since only some
+	// tracks of an album carry them. is_compilation is sticky-true so an
+	// enrichment pass that flags a compilation is never undone by a rescan.
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
 	// Creates a relationship between an album and a genre (idempotent)
 	UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error
@@ -303,7 +301,15 @@ type Querier interface {
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (ExtraVideo, error)
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
-	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
+	// attempts counts consecutive failures for backoff: it grows while the status
+	// stays 'failed' and resets on any other outcome.
+	UpsertMusicMetadataMatch(ctx context.Context, arg UpsertMusicMetadataMatchParams) error
+	// Tag-owned fields only; enrichment columns (summary, thumb, audiodb id) are
+	// written by UpdateMusicianEnrichment. name is display-only and deliberately
+	// absent from the update list: the first scanned spelling wins so a later
+	// ASCII variant cannot degrade a name with diacritics. mb_artist_id is
+	// fill-only so an already-established identity is never rewritten by a track
+	// carrying a different tag.
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
 	// Creates a relationship between a musician and a genre (idempotent)
 	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error

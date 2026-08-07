@@ -87,6 +87,7 @@ function track(overrides: Partial<TrackType> = {}): TrackType {
     disc: 1,
     channels: "2",
     channel_layout: "stereo",
+    sample_rate: nullableInt64(44100),
     bit_rate: 900000,
     profile: "",
     release_date: nullableString("2026-01-01"),

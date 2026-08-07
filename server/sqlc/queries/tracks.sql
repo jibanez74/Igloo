@@ -35,6 +35,7 @@ INSERT INTO tracks (
   disc,
   channels,
   channel_layout,
+  sample_rate,
   bit_rate,
   profile,
   release_date,
@@ -46,7 +47,7 @@ INSERT INTO tracks (
   musician_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
   title = excluded.title,
@@ -61,6 +62,7 @@ SET
   disc = excluded.disc,
   channels = excluded.channels,
   channel_layout = excluded.channel_layout,
+  sample_rate = excluded.sample_rate,
   bit_rate = excluded.bit_rate,
   profile = excluded.profile,
   release_date = excluded.release_date,

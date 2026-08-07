@@ -125,7 +125,10 @@ func ParseDate(s string) (time.Time, error) {
 	formats := []string{
 		"2006-01-02",          // ISO 8601
 		"2006-1-2",            // ISO 8601 without leading zeros (e.g. TMDB-style)
-		"2006-01-02T15:04:05", // ISO 8601 with time
+		"2006-01-02T15:04:05", // ISO 8601 with time, no zone
+		time.RFC3339,          // ISO 8601 with time and zone (iTunes m4a "date")
+		"2006-01-02 15:04:05", // ISO 8601 with time, space separator
+		"2006-01",             // Year and month
 		"2006",                // Year only
 		"01/02/2006",          // US format
 		"02-01-2006",          // European format

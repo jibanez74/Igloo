@@ -1080,3 +1080,36 @@ func TestNew(t *testing.T) {
 		}
 	})
 }
+
+func TestSearchArtistByNameRetriesRateLimit(t *testing.T) {
+	// Production clients are built with spotifylib.WithRetry(true) (spotify.go),
+	// so a 429 with Retry-After must be retried instead of surfaced as an error.
+	callCount := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			w.Header().Set("Retry-After", "0")
+			writeSpotifyAPIError(w, http.StatusTooManyRequests, "rate limited")
+			return
+		}
+		writeJSON(w, artistSearchJSON("retryID", "John Mayer"))
+	})
+
+	client := spotifylib.New(&http.Client{Transport: &mockTransport{handler: handler}}, spotifylib.WithRetry(true))
+	sc := &spotifyClient{
+		client:      client,
+		artistCache: gocache.New(spotifyArtistCacheTTL, spotifyCacheCleanup),
+		albumCache:  gocache.New(spotifyAlbumCacheTTL, spotifyCacheCleanup),
+	}
+
+	artist, err := sc.SearchArtistByName(context.Background(), "John Mayer")
+	if err != nil {
+		t.Fatalf("SearchArtistByName after 429 = %v, want retried success", err)
+	}
+	if artist == nil || artist.Name != "John Mayer" {
+		t.Fatalf("artist = %+v, want John Mayer", artist)
+	}
+	if callCount != 2 {
+		t.Errorf("HTTP calls = %d, want 2 (429 then success)", callCount)
+	}
+}

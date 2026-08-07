@@ -213,3 +213,45 @@ func TestParseBitRate(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDate(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantYear  int
+		wantMonth int
+		wantDay   int
+	}{
+		{"iso date", "2004-06-17", 2004, 6, 17},
+		{"iso without leading zeros", "2004-6-7", 2004, 6, 7},
+		{"iso with naive time", "2004-06-17T12:00:00", 2004, 6, 17},
+		{"rfc3339 utc", "2004-06-17T12:00:00Z", 2004, 6, 17},
+		{"rfc3339 offset", "2004-06-17T12:00:00-05:00", 2004, 6, 17},
+		{"iso with space time", "2004-06-17 12:00:00", 2004, 6, 17},
+		{"year and month", "2004-06", 2004, 6, 1},
+		{"year only", "2004", 2004, 1, 1},
+		{"us format", "06/17/2004", 2004, 6, 17},
+		{"european format", "17-06-2004", 2004, 6, 17},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDate(tt.input)
+			if err != nil {
+				t.Fatalf("ParseDate(%q) error = %v", tt.input, err)
+			}
+			if got.Year() != tt.wantYear || int(got.Month()) != tt.wantMonth || got.Day() != tt.wantDay {
+				t.Errorf("ParseDate(%q) = %v, want %04d-%02d-%02d", tt.input, got, tt.wantYear, tt.wantMonth, tt.wantDay)
+			}
+		})
+	}
+}
+
+func TestParseDateRejectsUnparseable(t *testing.T) {
+	for _, input := range []string{"", "not a date", "17th of June 2004"} {
+		_, err := ParseDate(input)
+		if err == nil {
+			t.Errorf("ParseDate(%q) = nil error, want failure", input)
+		}
+	}
+}

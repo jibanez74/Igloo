@@ -559,8 +559,8 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_playlist_movies_movie",
 		"idx_playlist_movies_added_by",
 		"idx_user_track_stats_track",
-		// Album identity, which must tolerate a NULL musician.
-		"idx_albums_title_musician",
+		// Album-artist FK child, so musician deletes never scan albums.
+		"idx_albums_album_artist_id",
 	}
 
 	for _, indexName := range expectedIndexes {
@@ -1148,8 +1148,8 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO musicians (name, sort_name) 
-		VALUES ('Test Artist', 'test artist')
+		INSERT INTO musicians (name, name_key, sort_name)
+		VALUES ('Test Artist', 'test artist', 'test artist')
 	`)
 
 	if err != nil {
@@ -1157,8 +1157,8 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO albums (title, sort_title) 
-		VALUES ('Test Album', 'test album')
+		INSERT INTO albums (title, sort_title, album_key)
+		VALUES ('Test Album', 'test album', 'test album')
 	`)
 	if err != nil {
 		t.Fatalf("Failed to insert album: %v", err)

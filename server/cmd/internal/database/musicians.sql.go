@@ -81,7 +81,7 @@ func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) (
 
 const getMusicianByID = `-- name: GetMusicianByID :one
 SELECT
-  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+  id, name, name_key, sort_name, summary, mb_artist_id, audiodb_artist_id, thumb, thumb_source, created_at, updated_at
 FROM musicians
 WHERE id = ?
 LIMIT 1
@@ -93,64 +93,40 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.NameKey,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
+		&i.MbArtistID,
+		&i.AudiodbArtistID,
 		&i.Thumb,
+		&i.ThumbSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getMusicianByName = `-- name: GetMusicianByName :one
+const getMusicianByNameKey = `-- name: GetMusicianByNameKey :one
 SELECT
-  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+  id, name, name_key, sort_name, summary, mb_artist_id, audiodb_artist_id, thumb, thumb_source, created_at, updated_at
 FROM musicians
-WHERE name = ?
+WHERE name_key = ?
 LIMIT 1
 `
 
-func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician, error) {
-	row := q.queryRow(ctx, q.getMusicianByNameStmt, getMusicianByName, name)
+func (q *Queries) GetMusicianByNameKey(ctx context.Context, nameKey string) (Musician, error) {
+	row := q.queryRow(ctx, q.getMusicianByNameKeyStmt, getMusicianByNameKey, nameKey)
 	var i Musician
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.NameKey,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
+		&i.MbArtistID,
+		&i.AudiodbArtistID,
 		&i.Thumb,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT
-  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
-FROM musicians
-WHERE spotify_id = ?
-LIMIT 1
-`
-
-func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error) {
-	row := q.queryRow(ctx, q.getMusicianBySpotifyIDStmt, getMusicianBySpotifyID, spotifyID)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
+		&i.ThumbSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -364,92 +340,54 @@ func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.Null
 	return items, nil
 }
 
-const updateMusicianSpotifyThumb = `-- name: UpdateMusicianSpotifyThumb :one
-UPDATE musicians
-SET
-  thumb = ?,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-RETURNING id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
-`
-
-type UpdateMusicianSpotifyThumbParams struct {
-	Thumb sql.NullString `json:"thumb"`
-	ID    int64          `json:"id"`
-}
-
-func (q *Queries) UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (Musician, error) {
-	row := q.queryRow(ctx, q.updateMusicianSpotifyThumbStmt, updateMusicianSpotifyThumb, arg.Thumb, arg.ID)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const upsertMusician = `-- name: UpsertMusician :one
 INSERT INTO musicians (
   name,
+  name_key,
   sort_name,
-  summary,
-  spotify_id,
-  spotify_popularity,
-  spotify_followers,
-  thumb
+  mb_artist_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (name) DO UPDATE
+  (?, ?, ?, ?)
+ON CONFLICT (name_key) DO UPDATE
 SET
   sort_name = excluded.sort_name,
-  summary = COALESCE(excluded.summary, musicians.summary),
-  spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
-  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
-  thumb = COALESCE(excluded.thumb, musicians.thumb),
+  mb_artist_id = COALESCE(musicians.mb_artist_id, excluded.mb_artist_id),
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+RETURNING id, name, name_key, sort_name, summary, mb_artist_id, audiodb_artist_id, thumb, thumb_source, created_at, updated_at
 `
 
 type UpsertMusicianParams struct {
-	Name              string          `json:"name"`
-	SortName          string          `json:"sort_name"`
-	Summary           sql.NullString  `json:"summary"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
-	Thumb             sql.NullString  `json:"thumb"`
+	Name       string         `json:"name"`
+	NameKey    string         `json:"name_key"`
+	SortName   string         `json:"sort_name"`
+	MbArtistID sql.NullString `json:"mb_artist_id"`
 }
 
+// Tag-owned fields only; enrichment columns (summary, thumb, audiodb id) are
+// written by UpdateMusicianEnrichment. name is display-only and deliberately
+// absent from the update list: the first scanned spelling wins so a later
+// ASCII variant cannot degrade a name with diacritics. mb_artist_id is
+// fill-only so an already-established identity is never rewritten by a track
+// carrying a different tag.
 func (q *Queries) UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error) {
 	row := q.queryRow(ctx, q.upsertMusicianStmt, upsertMusician,
 		arg.Name,
+		arg.NameKey,
 		arg.SortName,
-		arg.Summary,
-		arg.SpotifyID,
-		arg.SpotifyPopularity,
-		arg.SpotifyFollowers,
-		arg.Thumb,
+		arg.MbArtistID,
 	)
 	var i Musician
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.NameKey,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
+		&i.MbArtistID,
+		&i.AudiodbArtistID,
 		&i.Thumb,
+		&i.ThumbSource,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

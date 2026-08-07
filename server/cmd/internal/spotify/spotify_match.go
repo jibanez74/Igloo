@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode"
+
+	"igloo/cmd/internal/helpers"
 
 	spotifylib "github.com/zmb3/spotify/v2"
-	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -116,38 +116,7 @@ func newMatchError(info MatchDebugInfo, err error) error {
 }
 
 func normalizeComparisonText(value string) string {
-	decomposed := norm.NFD.String(strings.TrimSpace(value))
-	var builder strings.Builder
-	lastWasSpace := true
-
-	for _, r := range decomposed {
-		switch {
-		case unicode.Is(unicode.Mn, r):
-			continue
-		case r == '&' || r == '+':
-			if !lastWasSpace {
-				builder.WriteByte(' ')
-			}
-			builder.WriteString("and")
-			builder.WriteByte(' ')
-			lastWasSpace = true
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			builder.WriteRune(unicode.ToLower(r))
-			lastWasSpace = false
-		case unicode.IsSpace(r):
-			if !lastWasSpace {
-				builder.WriteByte(' ')
-				lastWasSpace = true
-			}
-		default:
-			if !lastWasSpace {
-				builder.WriteByte(' ')
-				lastWasSpace = true
-			}
-		}
-	}
-
-	return strings.Join(strings.Fields(builder.String()), " ")
+	return helpers.NormalizeComparisonText(value)
 }
 
 func tokenizeComparisonText(value string, stopWords map[string]struct{}) []string {

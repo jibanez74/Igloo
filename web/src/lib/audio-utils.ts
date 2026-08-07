@@ -40,6 +40,7 @@ export function convertToAudioTrack(track: PlayableTrackData) {
     disc: 1,
     channels: "",
     channel_layout: "",
+    sample_rate: { Int64: 0, Valid: false },
     bit_rate: track.bit_rate,
     profile: "",
     release_date: { String: "", Valid: false },

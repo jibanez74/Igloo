@@ -1,6 +1,7 @@
 package ffprobe
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ func TestRunMetadataRejectsEmptyPath(t *testing.T) {
 		t.Fatalf("GetMetadata(\"\") error = %v, want missing file path error", err)
 	}
 
-	_, err = probe.GetAudioMetadata("   ")
+	_, err = probe.GetAudioMetadata(context.Background(), "   ")
 	if err == nil || !strings.Contains(err.Error(), "file path is required") {
 		t.Fatalf("GetAudioMetadata(blank) error = %v, want missing file path error", err)
 	}
@@ -121,11 +122,11 @@ func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
 func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 	argsLog := filepath.Join(t.TempDir(), "args.log")
 	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
-		stdout:  `{"streams":[{"codec_name":"aac","codec_type":"audio","channels":2}],"format":{"duration":"12.34","bit_rate":"256000","tags":{"title":"Song Title"}}}`,
+		stdout:  `{"streams":[{"index":0,"codec_name":"aac","codec_type":"audio","channels":2,"sample_rate":"44100"},{"index":1,"codec_name":"mjpeg","codec_type":"video","disposition":{"attached_pic":1}}],"format":{"duration":"12.34","bit_rate":"256000","tags":{"title":"Song Title"}}}`,
 		argsLog: argsLog,
 	})}
 
-	_, err := probe.GetAudioMetadata("/tmp/song.mp3")
+	result, err := probe.GetAudioMetadata(context.Background(), "/tmp/song.mp3")
 	if err != nil {
 		t.Fatalf("GetAudioMetadata failed: %v", err)
 	}
@@ -133,9 +134,33 @@ func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 	args := readArgumentLog(t, argsLog)
 	requireArgumentValue(t, args, "-print_format", "json")
 	requireArgumentValue(t, args, "-show_entries",
-		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language")
+		"format=duration,bit_rate:format_tags:stream=index,codec_name,codec_type,profile,channels,channel_layout,sample_rate:stream_disposition=attached_pic:stream_tags=language")
 	if args[len(args)-1] != "/tmp/song.mp3" {
 		t.Fatalf("last argument = %q, want the probed file path", args[len(args)-1])
+	}
+
+	if result.Streams[0].SampleRate != "44100" {
+		t.Fatalf("SampleRate = %q, want %q", result.Streams[0].SampleRate, "44100")
+	}
+	if result.Streams[1].Disposition.AttachedPic != 1 {
+		t.Fatalf("Disposition.AttachedPic = %d, want 1", result.Streams[1].Disposition.AttachedPic)
+	}
+}
+
+func TestGetAudioMetadataHonorsCanceledContext(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: `{"streams":[{"codec_name":"aac","codec_type":"audio"}],"format":{}}`,
+	})}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := probe.GetAudioMetadata(ctx, "/tmp/song.mp3")
+	if err == nil {
+		t.Fatal("Expected cancellation error")
+	}
+	if !strings.Contains(err.Error(), "ffprobe canceled for /tmp/song.mp3") {
+		t.Fatalf("error = %q, want cancellation error with file path", err.Error())
 	}
 }
 

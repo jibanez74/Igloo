@@ -1,11 +1,7 @@
 // MUSIC LIBRARY TYPES
 // Types for albums, tracks, artists, and related music data
 
-import type {
-  NullableFloat64,
-  NullableInt64,
-  NullableString,
-} from "./nullable";
+import type { NullableInt64, NullableString } from "./nullable";
 
 export type { NullableFloat64, NullableInt64, NullableString } from "./nullable";
 
@@ -20,18 +16,23 @@ export type SimpleAlbumType = {
   year: NullableInt64;
 };
 
-// Full album details including Spotify metadata
+// Full album details
 export type AlbumType = {
   id: number;
   title: string;
   sort_title: string;
+  album_key: string;
+  album_artist_id: NullableInt64;
   musician: NullableString;
-  spotify_id: NullableString;
-  spotify_popularity: NullableFloat64;
+  is_compilation: boolean;
+  mb_release_group_id: NullableString;
+  mb_release_id: NullableString;
+  audiodb_album_id: NullableString;
   release_date: NullableString;
   year: NullableInt64;
   total_tracks: NullableInt64;
   cover: NullableString;
+  cover_source: NullableString;
   created_at: string;
   updated_at: string;
 };
@@ -52,6 +53,7 @@ export type TrackType = {
   disc: number;
   channels: string;
   channel_layout: string;
+  sample_rate: NullableInt64;
   bit_rate: number;
   profile: string;
   release_date: NullableString;
@@ -70,7 +72,6 @@ export type ArtistType = {
   id: number;
   name: string;
   thumb: NullableString;
-  spotify_id: NullableString;
 };
 
 // Association between a track and a genre
@@ -214,16 +215,17 @@ export type VirtualItemTrack = {
 
 export type VirtualItem = VirtualItemLetter | VirtualItemTrack;
 
-// Full musician details including Spotify metadata
+// Full musician details
 export type MusicianType = {
   id: number;
   name: string;
+  name_key: string;
   sort_name: string;
   summary: NullableString;
-  spotify_popularity: NullableFloat64;
-  spotify_followers: NullableInt64;
-  spotify_id: NullableString;
+  mb_artist_id: NullableString;
+  audiodb_artist_id: NullableString;
   thumb: NullableString;
+  thumb_source: NullableString;
   created_at: string;
   updated_at: string;
 };
@@ -235,7 +237,6 @@ export type MusicianAlbumType = {
   cover: NullableString;
   year: NullableInt64;
   release_date: NullableString;
-  spotify_popularity: NullableFloat64;
   track_count: number;
 };
 

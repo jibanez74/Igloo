@@ -6,15 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
-	spotifyapi "igloo/cmd/internal/spotify"
 	"maps"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 // ---------------------------------------------------------------------------
@@ -110,6 +108,11 @@ func (app *Application) runMusicScan() {
 
 	flushBatch()
 
+	if ctx.Err() != nil {
+		app.Logger.Info("music library scan canceled")
+		return
+	}
+
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
@@ -125,15 +128,18 @@ func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanCo
 			continue
 		}
 
-		resolved, err := app.resolveTrackFile(ctx, scan, file)
+		resolved, err := app.resolveTrackFile(ctx, file)
 		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.Path, err.Error()))
+			}
 			errCount++
 			continue
 		}
 
 		_, err = app.persistResolvedTrack(ctx, scan, resolved)
 		if err != nil {
-			app.Logger.Warn("failed to persist music track", "path", file.Path, "error", err)
+			app.Logger.Error("failed to persist music track", "path", file.Path, "error", err)
 			errCount++
 			continue
 		}
@@ -229,14 +235,6 @@ type musicScanContext struct {
 	musicianGenres scanCache[string, struct{}]
 	albumGenres    scanCache[string, struct{}]
 	trackGenres    scanCache[string, struct{}]
-	// spotifyArtistMisses and spotifyAlbumMisses cache unmatched/failed Spotify
-	// lookups so a scan queries Spotify at most once per artist or album.
-	spotifyArtistMisses scanCache[string, resolvedSpotifyMatch]
-	spotifyAlbumMisses  scanCache[string, resolvedSpotifyMatch]
-	// spotifyMusicianGenresHandled and spotifyAlbumGenresHandled record entities
-	// whose Spotify genres were fully written, so later tracks skip the work.
-	spotifyMusicianGenresHandled scanCache[int64, struct{}]
-	spotifyAlbumGenresHandled    scanCache[int64, struct{}]
 }
 
 func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
@@ -247,35 +245,27 @@ func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
 	// Take ownership of trackIndex: loadMusicScanIndex already cleaned its keys
 	// and the caller discards its reference, so no defensive copy is needed.
 	return &musicScanContext{
-		trackIndex:                   trackIndex,
-		musicianIDs:                  newScanCache[string, int64](),
-		albumIDs:                     newScanCache[string, int64](),
-		genreIDs:                     newScanCache[string, int64](),
-		musicianAlbums:               newScanCache[string, struct{}](),
-		musicianGenres:               newScanCache[string, struct{}](),
-		albumGenres:                  newScanCache[string, struct{}](),
-		trackGenres:                  newScanCache[string, struct{}](),
-		spotifyArtistMisses:          newScanCache[string, resolvedSpotifyMatch](),
-		spotifyAlbumMisses:           newScanCache[string, resolvedSpotifyMatch](),
-		spotifyMusicianGenresHandled: newScanCache[int64, struct{}](),
-		spotifyAlbumGenresHandled:    newScanCache[int64, struct{}](),
+		trackIndex:     trackIndex,
+		musicianIDs:    newScanCache[string, int64](),
+		albumIDs:       newScanCache[string, int64](),
+		genreIDs:       newScanCache[string, int64](),
+		musicianAlbums: newScanCache[string, struct{}](),
+		musicianGenres: newScanCache[string, struct{}](),
+		albumGenres:    newScanCache[string, struct{}](),
+		trackGenres:    newScanCache[string, struct{}](),
 	}
 }
 
 func (scan *musicScanContext) clone() *musicScanContext {
 	return &musicScanContext{
-		trackIndex:                   scan.trackIndex, // shared; never written inside the transaction
-		musicianIDs:                  scan.musicianIDs.overlay(),
-		albumIDs:                     scan.albumIDs.overlay(),
-		genreIDs:                     scan.genreIDs.overlay(),
-		musicianAlbums:               scan.musicianAlbums.overlay(),
-		musicianGenres:               scan.musicianGenres.overlay(),
-		albumGenres:                  scan.albumGenres.overlay(),
-		trackGenres:                  scan.trackGenres.overlay(),
-		spotifyArtistMisses:          scan.spotifyArtistMisses.overlay(),
-		spotifyAlbumMisses:           scan.spotifyAlbumMisses.overlay(),
-		spotifyMusicianGenresHandled: scan.spotifyMusicianGenresHandled.overlay(),
-		spotifyAlbumGenresHandled:    scan.spotifyAlbumGenresHandled.overlay(),
+		trackIndex:     scan.trackIndex, // shared; never written inside the transaction
+		musicianIDs:    scan.musicianIDs.overlay(),
+		albumIDs:       scan.albumIDs.overlay(),
+		genreIDs:       scan.genreIDs.overlay(),
+		musicianAlbums: scan.musicianAlbums.overlay(),
+		musicianGenres: scan.musicianGenres.overlay(),
+		albumGenres:    scan.albumGenres.overlay(),
+		trackGenres:    scan.trackGenres.overlay(),
 	}
 }
 
@@ -287,10 +277,6 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 	scan.musicianGenres.mergeFrom(other.musicianGenres)
 	scan.albumGenres.mergeFrom(other.albumGenres)
 	scan.trackGenres.mergeFrom(other.trackGenres)
-	scan.spotifyArtistMisses.mergeFrom(other.spotifyArtistMisses)
-	scan.spotifyAlbumMisses.mergeFrom(other.spotifyAlbumMisses)
-	scan.spotifyMusicianGenresHandled.mergeFrom(other.spotifyMusicianGenresHandled)
-	scan.spotifyAlbumGenresHandled.mergeFrom(other.spotifyAlbumGenresHandled)
 }
 
 func (scan *musicScanContext) trackUnchanged(path string, size int64) bool {
@@ -315,34 +301,36 @@ type resolvedTrack struct {
 }
 
 type resolvedMusician struct {
-	name          string
-	sortName      string
-	existingID    int64
-	hasExistingID bool
-	// existing carries the row findExistingMusician already fetched, so the
-	// Spotify-matched persist path can skip re-reading it when the spotify_id
-	// matches.
-	existing               *database.Musician
-	spotifyArtist          *spotifylib.FullArtist
-	spotifyMatch           *resolvedSpotifyMatch
-	splitCompoundOnNoMatch bool
+	name     string
+	sortName string
+	// nameKey is the normalized identity key (musicians.name_key); persistence
+	// and the scan cache key on it, so spelling variants collapse to one row.
+	nameKey string
+	// mbArtistID is the tag-provided MusicBrainz artist id, set only when the
+	// credit resolved to a single artist so a compound credit cannot claim one
+	// member's id.
+	mbArtistID string
 }
 
 type resolvedAlbum struct {
-	title         string
-	sortTitle     string
-	albumArtist   string
-	existingID    int64
-	hasExistingID bool
-	// existing carries the row findExistingAlbum already fetched; see
-	// resolvedMusician.existing.
-	existing     *database.Album
-	spotifyAlbum *spotifylib.FullAlbum
-	spotifyMatch *resolvedSpotifyMatch
+	title       string
+	sortTitle   string
+	albumArtist string // display string; part of no key
+	// albumKey is the tag-derived identity key (albums.album_key).
+	albumKey      string
+	isCompilation bool
+	// albumArtistKey is the normalized first credit of the album artist, used
+	// to link albums.album_artist_id when it matches a resolved track musician.
+	albumArtistKey   string
+	mbReleaseGroupID string
+	mbReleaseID      string
+	totalTracks      int64
+	releaseDate      sql.NullString
+	year             sql.NullInt64
 }
 
-func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file helpers.ScanFile) (*resolvedTrack, error) {
-	info, err := app.Ffprobe.GetAudioMetadata(file.Path)
+func (app *Application) resolveTrackFile(ctx context.Context, file helpers.ScanFile) (*resolvedTrack, error) {
+	info, err := app.Ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
@@ -358,7 +346,7 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	if tags.Title != "" {
 		params.Title = tags.Title
 	} else {
-		params.Title = fileName
+		params.Title = strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	}
 
 	if tags.SortName != "" {
@@ -417,12 +405,18 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 		params.Codec = stream.CodecName
 		params.Profile = stream.Profile
 
+		params.Channels = strconv.Itoa(stream.Channels)
 		if stream.ChannelLayout != "" {
-			params.Channels = stream.ChannelLayout
 			params.ChannelLayout = stream.ChannelLayout
 		} else {
-			params.Channels = strconv.Itoa(stream.Channels)
 			params.ChannelLayout = strconv.Itoa(stream.Channels)
+		}
+
+		if stream.SampleRate != "" {
+			sampleRate, parseErr := strconv.ParseInt(stream.SampleRate, 10, 64)
+			if parseErr == nil {
+				params.SampleRate = helpers.NullInt64(sampleRate)
+			}
 		}
 
 		if stream.Tags.Language != "" {
@@ -440,25 +434,11 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	}
 
 	if tags.Artist != "" {
-		musicians, resolveErr := app.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist)
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-		resolved.musicians = musicians
+		resolved.musicians = resolveTrackMusicians(tags.Artist, tags.SortArtist, tags.MbArtistID)
 	}
 
 	if tags.Album != "" {
-		sortAlbum := tags.SortAlbum
-		if sortAlbum == "" {
-			sortAlbum = tags.Album
-		}
-
-		effectiveAlbumArtist := tags.AlbumArtist
-		if effectiveAlbumArtist == "" {
-			effectiveAlbumArtist = tags.Artist
-		}
-
-		album, resolveErr := app.resolveAlbum(ctx, scan, tags.Album, sortAlbum, effectiveAlbumArtist)
+		album, resolveErr := resolveAlbumFromTags(tags, params.ReleaseDate, params.Year)
 		if resolveErr != nil {
 			return nil, fmt.Errorf("album failed: %w", resolveErr)
 		}
@@ -468,301 +448,269 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	return resolved, nil
 }
 
-func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string) ([]resolvedMusician, error) {
-	if sortArtist == "" {
-		sortArtist = artistTag
-	}
+// resolveTrackMusicians turns an artist credit into entity inputs. Splitting is
+// deliberately conservative (see artistCreditDelimiters): the tag MBID is only
+// claimed by a single-artist credit, since a compound string's MBID list cannot
+// be attributed to one member.
+func resolveTrackMusicians(artistTag, sortArtist, artistMBID string) []resolvedMusician {
+	credits := splitArtistCredits(artistTag)
 
-	credits := parseCompoundArtistCredits(artistTag)
-	if !shouldSplitCompoundArtistCreditsLocally(credits) {
-		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
-		if err != nil {
-			return nil, fmt.Errorf("musician failed: %w", err)
+	if len(credits) == 1 {
+		name := credits[0]
+		if sortArtist == "" {
+			sortArtist = name
 		}
-
-		if len(credits.parts) < 2 || !credits.hasDelimiter || !musician.splitCompoundOnNoMatch {
-			return []resolvedMusician{*musician}, nil
-		}
+		mbid, _ := helpers.NormalizeMBID(artistMBID)
+		return []resolvedMusician{{
+			name:       name,
+			sortName:   sortArtist,
+			nameKey:    normalizedKeyPart(name),
+			mbArtistID: mbid,
+		}}
 	}
 
-	musicians := make([]resolvedMusician, 0, len(credits.parts))
-	for _, part := range credits.parts {
-		musician, err := app.resolveMusician(ctx, scan, part, part)
-		if err != nil {
-			app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
-			return nil, fmt.Errorf("compound musician failed for %q: %w", part, err)
-		}
-		musicians = append(musicians, *musician)
-	}
-
-	return musicians, nil
-}
-
-func (app *Application) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(name, sortName)
-	if musicianID, ok := scan.musicianIDs.get(cacheKey); ok {
-		return &resolvedMusician{
-			name:          name,
-			sortName:      sortName,
-			existingID:    musicianID,
-			hasExistingID: true,
-		}, nil
-	}
-
-	resolved := &resolvedMusician{name: name, sortName: sortName}
-
-	existing, found, err := app.findExistingMusician(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		resolved.existingID = existing.ID
-		resolved.hasExistingID = true
-		resolved.existing = &existing
-
-		persisted, matchErr := app.Queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
-			EntityType: musicSpotifyEntityMusician,
-			EntityID:   existing.ID,
+	musicians := make([]resolvedMusician, 0, len(credits))
+	for _, part := range credits {
+		musicians = append(musicians, resolvedMusician{
+			name:     part,
+			sortName: part,
+			nameKey:  normalizedKeyPart(part),
 		})
-		if matchErr == nil {
-			if musicSpotifyMatchStatusIsFinal(persisted.Status) {
-				resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(persisted.Status, persisted.Reason)
-				scan.musicianIDs.set(cacheKey, existing.ID)
-				return resolved, nil
-			}
-		} else if !errors.Is(matchErr, sql.ErrNoRows) {
-			return nil, matchErr
-		}
 	}
 
-	spotifyKey := helpers.NormalizedScanCacheKey(name)
-	if cachedMiss, ok := scan.spotifyArtistMisses.get(spotifyKey); ok {
-		resolved.spotifyMatch = &cachedMiss
-		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
-		return resolved, nil
-	}
-
-	if app.Spotify == nil {
-		if found {
-			scan.musicianIDs.set(cacheKey, existing.ID)
-		}
-		return resolved, nil
-	}
-
-	artist, err := app.Spotify.SearchArtistByName(ctx, name)
-	if err != nil {
-		match := resolvedSpotifyMatchFromError(err)
-		scan.spotifyArtistMisses.set(spotifyKey, match)
-		resolved.spotifyMatch = &match
-		resolved.splitCompoundOnNoMatch = shouldSplitCompoundArtistCredits(err)
-		return resolved, nil
-	}
-
-	if artist != nil {
-		resolved.spotifyArtist = artist
-		match := resolvedSpotifyMatch{
-			status:    musicSpotifyStatusMatched,
-			spotifyID: sql.NullString{String: artist.ID.String(), Valid: true},
-		}
-		resolved.spotifyMatch = &match
-	}
-
-	return resolved, nil
+	return musicians
 }
 
-func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(title, albumArtist)
-	if albumID, ok := scan.albumIDs.get(cacheKey); ok {
-		return &resolvedAlbum{
-			title:         title,
-			sortTitle:     sortTitle,
-			albumArtist:   albumArtist,
-			existingID:    albumID,
-			hasExistingID: true,
-		}, nil
+func resolveAlbumFromTags(tags ffprobe.FormatTags, releaseDate sql.NullString, year sql.NullInt64) (*resolvedAlbum, error) {
+	sortAlbum := tags.SortAlbum
+	if sortAlbum == "" {
+		sortAlbum = tags.Album
+	}
+
+	albumArtist := strings.TrimSpace(tags.AlbumArtist)
+	isCompilation := false
+	switch {
+	case albumArtist != "" && !isVariousArtistsName(albumArtist):
+		// A concrete album_artist tag always wins, even over compilation=1:
+		// single-artist greatest-hits records are routinely filed under
+		// Compilations by iTunes but must stay grouped under their artist.
+	case tags.Compilation == "1" || albumArtist != "":
+		isCompilation = true
+		albumArtist = variousArtistsDisplay
+	default:
+		albumArtist = strings.TrimSpace(tags.Artist)
+	}
+
+	if normalizedKeyPart(tags.Album) == "" {
+		return nil, fmt.Errorf("album title %q normalizes to an empty key", tags.Album)
 	}
 
 	resolved := &resolvedAlbum{
-		title:       title,
-		sortTitle:   sortTitle,
-		albumArtist: albumArtist,
+		title:         tags.Album,
+		sortTitle:     sortAlbum,
+		albumArtist:   albumArtist,
+		albumKey:      albumIdentityKey(tags.Album, albumArtist, isCompilation),
+		isCompilation: isCompilation,
+		totalTracks:   parseTrackTotal(tags.TotalTracks, tags.Track),
+		releaseDate:   releaseDate,
+		year:          year,
 	}
 
-	existing, found, err := app.findExistingAlbum(ctx, title, albumArtist)
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		resolved.existingID = existing.ID
-		resolved.hasExistingID = true
-		resolved.existing = &existing
-
-		persisted, matchErr := app.Queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
-			EntityType: musicSpotifyEntityAlbum,
-			EntityID:   existing.ID,
-		})
-		if matchErr == nil {
-			if musicSpotifyMatchStatusIsFinal(persisted.Status) {
-				scan.albumIDs.set(cacheKey, existing.ID)
-				return resolved, nil
-			}
-		} else if !errors.Is(matchErr, sql.ErrNoRows) {
-			return nil, matchErr
-		}
+	if !isCompilation && albumArtist != "" {
+		// Keyed on the first credit, mirroring albumIdentityKey, so the FK can
+		// match the lead artist when the tag carries a full credit list.
+		resolved.albumArtistKey = normalizedKeyPart(firstArtistCredit(albumArtist))
 	}
 
-	spotifyKey := helpers.NormalizedScanCacheKey(title, albumArtist)
-	if cachedMiss, ok := scan.spotifyAlbumMisses.get(spotifyKey); ok {
-		resolved.spotifyMatch = &cachedMiss
-		return resolved, nil
+	if mbid, ok := helpers.NormalizeMBID(tags.MbReleaseGroupID); ok {
+		resolved.mbReleaseGroupID = mbid
 	}
-
-	if app.Spotify == nil {
-		if found {
-			scan.albumIDs.set(cacheKey, existing.ID)
-		}
-		return resolved, nil
-	}
-
-	albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
-	if err != nil {
-		match := resolvedSpotifyMatchFromError(err)
-		scan.spotifyAlbumMisses.set(spotifyKey, match)
-		resolved.spotifyMatch = &match
-		return resolved, nil
-	}
-
-	if albumDetails != nil {
-		resolved.spotifyAlbum = albumDetails
-		match := resolvedSpotifyMatch{
-			status:    musicSpotifyStatusMatched,
-			spotifyID: sql.NullString{String: albumDetails.ID.String(), Valid: true},
-		}
-		resolved.spotifyMatch = &match
+	if mbid, ok := helpers.NormalizeMBID(tags.MbReleaseID); ok {
+		resolved.mbReleaseID = mbid
 	}
 
 	return resolved, nil
 }
 
-func (app *Application) findExistingMusician(ctx context.Context, name string) (database.Musician, bool, error) {
-	musician, err := app.Queries.GetMusicianByName(ctx, name)
-	if err == nil {
-		return musician, true, nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return database.Musician{}, false, nil
-	}
-	return database.Musician{}, false, err
-}
-
-func (app *Application) findExistingAlbum(ctx context.Context, title, albumArtist string) (database.Album, bool, error) {
-	album, err := app.Queries.GetAlbumByTitleAndMusician(ctx, database.GetAlbumByTitleAndMusicianParams{
-		Title:    title,
-		Musician: helpers.NullString(albumArtist),
-	})
-	if err == nil {
-		return album, true, nil
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return database.Album{}, false, nil
-	}
-	return database.Album{}, false, err
-}
-
 // ---------------------------------------------------------------------------
-// Compound artist credits
+// Identity keys and artist credits
 // ---------------------------------------------------------------------------
 
-type compoundArtistCredits struct {
-	parts        []string
-	hasDelimiter bool
-	hasComma     bool
-	hasDuplicate bool
+const (
+	albumKeySeparator     = "\x1f"
+	variousArtistsDisplay = "Various Artists"
+	variousArtistsKeyPart = "various artists"
+)
+
+// albumIdentityKey builds the stable identity key for an album row. It is
+// derived exclusively from local tags so that a metadata provider can never
+// change which tracks belong to which album. The artist part uses only the
+// first credit of a compound album-artist string, because taggers write the
+// full credit list on some tracks and the lead name on others (cast
+// recordings, soundtracks) and both spellings must land on one album.
+func albumIdentityKey(title, albumArtist string, isCompilation bool) string {
+	artistPart := variousArtistsKeyPart
+	if !isCompilation {
+		artistPart = normalizedKeyPart(firstArtistCredit(albumArtist))
+	}
+
+	return normalizedKeyPart(title) + albumKeySeparator + artistPart
 }
 
-func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
-	rawCommaParts := strings.Split(artistTag, ",")
-	commaParts := make([]string, 0, len(rawCommaParts))
+// normalizedKeyPart returns the comparison key for a display string, falling
+// back to the lowercased raw string for values that normalize to nothing (the
+// band "!!!"), so distinct punctuation-only names cannot collapse into one
+// empty key.
+func normalizedKeyPart(value string) string {
+	key := helpers.NormalizeComparisonText(value)
+	if key == "" {
+		key = strings.ToLower(strings.TrimSpace(value))
+	}
 
-	for _, rawPart := range rawCommaParts {
-		part := strings.TrimSpace(rawPart)
+	return key
+}
+
+func isVariousArtistsName(name string) bool {
+	switch helpers.NormalizeComparisonText(name) {
+	case "various artists", "various", "va":
+		return true
+	default:
+		return false
+	}
+}
+
+// artistCreditDelimiters are the unambiguous collaboration markers used to
+// split a credit into artist entities. "," and " & " are deliberately absent:
+// they appear inside single-act names (Earth, Wind & Fire; Brooks & Dunn), and
+// a wrongly-split artist is structurally destructive while an unsplit
+// collaboration is only cosmetic. MusicBrainz artist-credit data can refine
+// this later; a background scan must not guess.
+var artistCreditDelimiters = []string{
+	" feat. ", " feat ", " ft. ", " ft ", " featuring ", " with ", " vs. ", " vs ", ";", " / ",
+	// Parenthesized collaboration markers ("Beyoncé (feat. JAY-Z)") — the
+	// spaced forms above cannot match them because "(" sits where the leading
+	// space would be. cleanArtistCreditPart trims the orphaned ")".
+	"(feat. ", "(feat ", "(ft. ", "(ft ", "(featuring ", "(with ",
+}
+
+// firstArtistCreditDelimiters additionally cuts at "," and " & ". It is used
+// only for album identity (albumIdentityKey), never to create artist entities.
+var firstArtistCreditDelimiters = append([]string{",", " & "}, artistCreditDelimiters...)
+
+func splitArtistCredits(artistTag string) []string {
+	parts := []string{artistTag}
+	for _, delimiter := range artistCreditDelimiters {
+		split := make([]string, 0, len(parts))
+		for _, part := range parts {
+			split = append(split, splitASCIIFold(part, delimiter)...)
+		}
+		parts = split
+	}
+
+	seen := make(map[string]struct{}, len(parts))
+	credits := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = cleanArtistCreditPart(part)
 		if part == "" {
 			continue
 		}
-
-		if isArtistSuffix(part) && len(commaParts) > 0 {
-			lastIndex := len(commaParts) - 1
-			commaParts[lastIndex] = commaParts[lastIndex] + ", " + part
+		key := normalizedKeyPart(part)
+		if _, exists := seen[key]; exists {
 			continue
 		}
-
-		commaParts = append(commaParts, part)
-	}
-
-	credits := compoundArtistCredits{
-		hasDelimiter: strings.Contains(artistTag, " & ") || strings.Contains(artistTag, ","),
-		hasComma:     strings.Contains(artistTag, ","),
-	}
-	seen := make(map[string]struct{}, len(commaParts))
-
-	for _, commaPart := range commaParts {
-		ampersandParts := strings.Split(commaPart, " & ")
-		for _, rawPart := range ampersandParts {
-			part := strings.TrimSpace(rawPart)
-			if part == "" {
-				continue
-			}
-
-			cacheKey := helpers.NormalizedScanCacheKey(part)
-			if _, exists := seen[cacheKey]; exists {
-				credits.hasDuplicate = true
-				continue
-			}
-
-			seen[cacheKey] = struct{}{}
-			credits.parts = append(credits.parts, part)
-		}
+		seen[key] = struct{}{}
+		credits = append(credits, part)
 	}
 
 	return credits
 }
 
-func shouldSplitCompoundArtistCreditsLocally(credits compoundArtistCredits) bool {
-	if len(credits.parts) < 2 || !credits.hasComma {
-		return false
-	}
-
-	if credits.hasDuplicate {
-		return true
-	}
-
-	for _, part := range credits.parts {
-		if len(strings.Fields(part)) < 2 {
-			return false
+// firstArtistCredit returns the leading credit of a compound artist string.
+func firstArtistCredit(credit string) string {
+	cut := len(credit)
+	for _, delimiter := range firstArtistCreditDelimiters {
+		if idx := indexASCIIFold(credit, delimiter); idx >= 0 && idx < cut {
+			cut = idx
 		}
 	}
 
-	return true
+	return cleanArtistCreditPart(credit[:cut])
 }
 
-func shouldSplitCompoundArtistCredits(err error) bool {
-	matchErr, ok := spotifyapi.AsMatchError(err)
-	if !ok {
-		return false
+// cleanArtistCreditPart trims whitespace and the stray parenthesis a split
+// leaves behind when the delimiter sat inside one ("A (feat. B)"), without
+// touching balanced parens that are part of a name.
+func cleanArtistCreditPart(part string) string {
+	part = strings.TrimSpace(part)
+	part = strings.TrimSuffix(part, "(")
+	if !strings.Contains(part, "(") {
+		part = strings.TrimSuffix(part, ")")
 	}
 
-	return musicSpotifyReasonSplitsCompound(matchErr.Info.Reason)
+	return strings.TrimSpace(part)
 }
 
-func isArtistSuffix(value string) bool {
-	suffix := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
-
-	switch suffix {
-	case "jr", "sr", "ii", "iii", "iv", "v", "vi":
-		return true
-	default:
-		return false
+// splitASCIIFold splits value on an ASCII delimiter, ignoring the delimiter's
+// case. Byte-indexed on purpose: strings.ToLower can change byte offsets for
+// some Unicode input, and artist names are arbitrary Unicode.
+func splitASCIIFold(value, delimiter string) []string {
+	var parts []string
+	for {
+		idx := indexASCIIFold(value, delimiter)
+		if idx < 0 {
+			return append(parts, value)
+		}
+		parts = append(parts, value[:idx])
+		value = value[idx+len(delimiter):]
 	}
+}
+
+// indexASCIIFold reports the first ASCII-case-insensitive occurrence of
+// delimiter in value, or -1. delimiter must be ASCII.
+func indexASCIIFold(value, delimiter string) int {
+	if delimiter == "" || len(value) < len(delimiter) {
+		return -1
+	}
+
+	for i := 0; i+len(delimiter) <= len(value); i++ {
+		match := true
+		for j := 0; j < len(delimiter); j++ {
+			c := value[i+j]
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != delimiter[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// parseTrackTotal extracts an album's track count from the totaltracks tag,
+// falling back to the "/total" half of a "1/10"-style track tag.
+func parseTrackTotal(totalTag, trackTag string) int64 {
+	if totalTag != "" {
+		total, err := helpers.ParseSlashNumber(totalTag)
+		if err == nil {
+			return total
+		}
+	}
+
+	parts := strings.Split(trackTag, "/")
+	if len(parts) == 2 {
+		total, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+		if err == nil {
+			return total
+		}
+	}
+
+	return 0
 }
 
 // ---------------------------------------------------------------------------
@@ -809,6 +757,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 	params := resolved.params
 	musicianIDs := make([]int64, 0, len(resolved.musicians))
 	seenMusicianIDs := make(map[int64]struct{}, len(resolved.musicians))
+	musicianIDsByKey := make(map[string]int64, len(resolved.musicians))
 
 	for _, musicianInput := range resolved.musicians {
 		musicianID, err := app.persistMusician(ctx, qtx, scan, musicianInput)
@@ -818,6 +767,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 		if !params.MusicianID.Valid {
 			params.MusicianID = sql.NullInt64{Int64: musicianID, Valid: true}
 		}
+		musicianIDsByKey[musicianInput.nameKey] = musicianID
 		if _, exists := seenMusicianIDs[musicianID]; exists {
 			continue
 		}
@@ -827,7 +777,17 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 
 	var albumID sql.NullInt64
 	if resolved.album != nil {
-		id, err := app.persistAlbum(ctx, qtx, scan, *resolved.album)
+		// The album-artist FK is only linked when the album artist is one of
+		// the track's resolved musicians; a compound credit list that matches
+		// no single artist stays unlinked rather than creating a junk row.
+		var albumArtistID sql.NullInt64
+		if resolved.album.albumArtistKey != "" {
+			if id, ok := musicianIDsByKey[resolved.album.albumArtistKey]; ok {
+				albumArtistID = sql.NullInt64{Int64: id, Valid: true}
+			}
+		}
+
+		id, err := app.persistAlbum(ctx, qtx, scan, *resolved.album, albumArtistID)
 		if err != nil {
 			return 0, fmt.Errorf("album failed: %w", err)
 		}
@@ -908,203 +868,63 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 	return track.ID, nil
 }
 
+// persistMusician upserts an artist by identity key. The upsert always runs
+// (outside the per-scan cache), so a retagged sort name or a newly tagged MBID
+// refreshes on rescan; name stays first-writer-wins in the query itself.
 func (app *Application) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(input.name, input.sortName)
-	if musicianID, ok := scan.musicianIDs.get(cacheKey); ok {
+	if input.nameKey == "" {
+		return 0, fmt.Errorf("artist %q resolved to an empty identity key", input.name)
+	}
+
+	if musicianID, ok := scan.musicianIDs.get(input.nameKey); ok {
 		return musicianID, nil
 	}
 
-	var musician database.Musician
-	var err error
-
-	if input.spotifyArtist != nil {
-		spotifyID := sql.NullString{String: input.spotifyArtist.ID.String(), Valid: true}
-		if input.existing != nil && input.existing.SpotifyID == spotifyID {
-			// The row fetched during resolution is this Spotify artist; no
-			// need to read it again. Only this scan writes musicians.
-			musician, err = *input.existing, nil
-		} else {
-			musician, err = qtx.GetMusicianBySpotifyID(ctx, spotifyID)
-		}
-		if err == nil {
-			musician, err = app.updateMusicianThumbIfChanged(ctx, qtx, musician, firstImageURL(input.spotifyArtist.Images))
-			if err != nil {
-				return 0, err
-			}
-			app.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
-			err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
-			if err != nil {
-				return 0, err
-			}
-			return musician.ID, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return 0, err
-		}
-
-		params := database.UpsertMusicianParams{
-			Name:              input.name,
-			SortName:          input.sortName,
-			Summary:           sql.NullString{String: generateMusicianSummary(input.spotifyArtist), Valid: true},
-			SpotifyPopularity: helpers.NullFloat64(float64(input.spotifyArtist.Popularity)),
-			SpotifyFollowers:  helpers.NullInt64(int64(input.spotifyArtist.Followers.Count)),
-			SpotifyID:         spotifyID,
-			Thumb:             helpers.NullString(firstImageURL(input.spotifyArtist.Images)),
-		}
-		musician, err = qtx.UpsertMusician(ctx, params)
-		if err != nil {
-			return 0, err
-		}
-		app.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
-		if err != nil {
-			return 0, err
-		}
-		return musician.ID, nil
-	}
-
-	if input.hasExistingID {
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, input.existingID, input.spotifyMatch, scan.musicianIDs, cacheKey)
-		if err != nil {
-			return 0, err
-		}
-		return input.existingID, nil
-	}
-
-	musician, err = qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
-		Name:     input.name,
-		SortName: input.sortName,
+	musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
+		Name:       input.name,
+		NameKey:    input.nameKey,
+		SortName:   input.sortName,
+		MbArtistID: helpers.NullString(input.mbArtistID),
 	})
 	if err != nil {
 		return 0, err
 	}
 
-	err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
-	if err != nil {
-		return 0, err
-	}
-
+	scan.musicianIDs.set(input.nameKey, musician.ID)
 	return musician.ID, nil
 }
 
-func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(input.title, input.albumArtist)
-	if albumID, ok := scan.albumIDs.get(cacheKey); ok {
+// persistAlbum upserts an album by identity key; see persistMusician for the
+// refresh semantics. Display strings (title, musician) are first-writer-wins
+// in the query itself.
+func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum, albumArtistID sql.NullInt64) (int64, error) {
+	if input.albumKey == "" {
+		return 0, fmt.Errorf("album %q resolved to an empty identity key", input.title)
+	}
+
+	if albumID, ok := scan.albumIDs.get(input.albumKey); ok {
 		return albumID, nil
 	}
 
-	var album database.Album
-	var err error
-
-	if input.spotifyAlbum != nil {
-		spotifyID := sql.NullString{String: input.spotifyAlbum.ID.String(), Valid: true}
-		if input.existing != nil && input.existing.SpotifyID == spotifyID {
-			// See persistMusician: the resolution-phase row is this album.
-			album, err = *input.existing, nil
-		} else {
-			album, err = qtx.GetAlbumBySpotifyID(ctx, spotifyID)
-		}
-		if err == nil {
-			album, err = app.updateAlbumCoverIfChanged(ctx, qtx, album, firstImageURL(input.spotifyAlbum.Images))
-			if err != nil {
-				return 0, err
-			}
-			app.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
-			err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
-			if err != nil {
-				return 0, err
-			}
-			return album.ID, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return 0, err
-		}
-
-		params := database.UpsertAlbumParams{
-			Title:             input.title,
-			SortTitle:         input.sortTitle,
-			SpotifyID:         spotifyID,
-			SpotifyPopularity: helpers.NullFloat64(float64(input.spotifyAlbum.Popularity)),
-			TotalTracks:       helpers.NullInt64(int64(input.spotifyAlbum.TotalTracks)),
-			Cover:             helpers.NullString(firstImageURL(input.spotifyAlbum.Images)),
-		}
-
-		releaseDate := input.spotifyAlbum.ReleaseDateTime()
-		if !releaseDate.IsZero() {
-			params.ReleaseDate = sql.NullString{String: releaseDate.Format("2006-01-02"), Valid: true}
-			params.Year = sql.NullInt64{Int64: int64(releaseDate.Year()), Valid: true}
-		}
-		if input.albumArtist != "" {
-			params.Musician = sql.NullString{String: input.albumArtist, Valid: true}
-		}
-
-		album, err = qtx.UpsertAlbum(ctx, params)
-		if err != nil {
-			return 0, err
-		}
-		app.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
-		if err != nil {
-			return 0, err
-		}
-		return album.ID, nil
-	}
-
-	if input.hasExistingID {
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, input.existingID, input.spotifyMatch, scan.albumIDs, cacheKey)
-		if err != nil {
-			return 0, err
-		}
-		return input.existingID, nil
-	}
-
-	params := database.UpsertAlbumParams{
-		Title:     input.title,
-		SortTitle: input.sortTitle,
-	}
-	if input.albumArtist != "" {
-		params.Musician = sql.NullString{String: input.albumArtist, Valid: true}
-	}
-
-	album, err = qtx.UpsertAlbum(ctx, params)
+	album, err := qtx.UpsertAlbum(ctx, database.UpsertAlbumParams{
+		Title:            input.title,
+		SortTitle:        input.sortTitle,
+		AlbumKey:         input.albumKey,
+		AlbumArtistID:    albumArtistID,
+		Musician:         helpers.NullString(input.albumArtist),
+		IsCompilation:    input.isCompilation,
+		MbReleaseGroupID: helpers.NullString(input.mbReleaseGroupID),
+		MbReleaseID:      helpers.NullString(input.mbReleaseID),
+		ReleaseDate:      input.releaseDate,
+		Year:             input.year,
+		TotalTracks:      helpers.NullInt64(input.totalTracks),
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
-	if err != nil {
-		return 0, err
-	}
-
+	scan.albumIDs.set(input.albumKey, album.ID)
 	return album.ID, nil
-}
-
-func (app *Application) updateMusicianThumbIfChanged(ctx context.Context, qtx *database.Queries, musician database.Musician, thumbURL string) (database.Musician, error) {
-	if thumbURL == "" {
-		return musician, nil
-	}
-	if musician.Thumb.Valid && musician.Thumb.String == thumbURL {
-		return musician, nil
-	}
-
-	return qtx.UpdateMusicianSpotifyThumb(ctx, database.UpdateMusicianSpotifyThumbParams{
-		ID:    musician.ID,
-		Thumb: sql.NullString{String: thumbURL, Valid: true},
-	})
-}
-
-func (app *Application) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Queries, album database.Album, coverURL string) (database.Album, error) {
-	if coverURL == "" {
-		return album, nil
-	}
-	if album.Cover.Valid && album.Cover.String == coverURL {
-		return album, nil
-	}
-
-	return qtx.UpdateAlbumSpotifyCover(ctx, database.UpdateAlbumSpotifyCoverParams{
-		ID:    album.ID,
-		Cover: sql.NullString{String: coverURL, Valid: true},
-	})
 }
 
 func (app *Application) syncTrackMusicians(ctx context.Context, qtx *database.Queries, trackID int64, musicianIDs []int64) error {
@@ -1136,77 +956,6 @@ func (app *Application) syncTrackMusicians(ctx context.Context, qtx *database.Qu
 // ---------------------------------------------------------------------------
 // Genres and relationships
 // ---------------------------------------------------------------------------
-
-func (app *Application) processSpotifyGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID int64, spotifyGenres []string) {
-	app.processSpotifyEntityGenres(ctx, qtx, scan, musicianID, spotifyGenres, scan.spotifyMusicianGenresHandled, spotifyGenreProcessor{
-		getGenreLogMessage:      "failed to get/create Spotify genre",
-		relationshipLogMessage:  "failed to create musician-genre relationship for Spotify genre",
-		createGenreRelationship: func(genreID int64) error { return app.createMusicianGenreIfNeeded(ctx, qtx, scan, musicianID, genreID) },
-		genreRelationshipLogContext: func(genreID int64, genreTag string) []any {
-			return []any{"musician_id", musicianID, "genre_id", genreID, "genre", genreTag}
-		},
-	})
-}
-
-func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, albumID int64, spotifyGenres []string) {
-	app.processSpotifyEntityGenres(ctx, qtx, scan, albumID, spotifyGenres, scan.spotifyAlbumGenresHandled, spotifyGenreProcessor{
-		getGenreLogMessage:      "failed to get/create Spotify genre for album",
-		relationshipLogMessage:  "failed to create album-genre relationship for Spotify genre",
-		createGenreRelationship: func(genreID int64) error { return app.createAlbumGenreIfNeeded(ctx, qtx, scan, albumID, genreID) },
-		genreRelationshipLogContext: func(genreID int64, genreTag string) []any {
-			return []any{"album_id", albumID, "genre_id", genreID, "genre", genreTag}
-		},
-	})
-}
-
-type spotifyGenreProcessor struct {
-	getGenreLogMessage          string
-	relationshipLogMessage      string
-	createGenreRelationship     func(genreID int64) error
-	genreRelationshipLogContext func(genreID int64, genreTag string) []any
-}
-
-func (app *Application) processSpotifyEntityGenres(
-	ctx context.Context,
-	qtx *database.Queries,
-	scan *musicScanContext,
-	entityID int64,
-	spotifyGenres []string,
-	handled scanCache[int64, struct{}],
-	processor spotifyGenreProcessor,
-) {
-	if len(spotifyGenres) == 0 {
-		return
-	}
-	if handled.has(entityID) {
-		return
-	}
-
-	hadError := false
-	for _, genreTag := range spotifyGenres {
-		genreID, err := app.getOrCreateMusicGenreID(ctx, qtx, scan, genreTag)
-		if err != nil {
-			hadError = true
-			app.Logger.Warn(processor.getGenreLogMessage,
-				"error", err,
-				"genre", genreTag,
-			)
-			continue
-		}
-
-		err = processor.createGenreRelationship(genreID)
-		if err != nil {
-			hadError = true
-			args := []any{"error", err}
-			args = append(args, processor.genreRelationshipLogContext(genreID, genreTag)...)
-			app.Logger.Warn(processor.relationshipLogMessage, args...)
-		}
-	}
-
-	if !hadError {
-		handled.set(entityID, struct{}{})
-	}
-}
 
 func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
 	cacheKey := helpers.NormalizedScanCacheKey(tag, "music")
@@ -1275,171 +1024,4 @@ func createCachedMusicRelationshipIfNeeded(cache scanCache[string, struct{}], le
 
 	cache.set(cacheKey, struct{}{})
 	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Spotify match bookkeeping
-// ---------------------------------------------------------------------------
-
-const (
-	musicSpotifyEntityAlbum               = "album"
-	musicSpotifyEntityMusician            = "musician"
-	musicSpotifyStatusMatched             = "matched"
-	musicSpotifyStatusFailed              = "failed"
-	musicSpotifyStatusUnmatched           = "unmatched"
-	musicSpotifyReasonNoResults           = "no_results"
-	musicSpotifyReasonScoreBelowThreshold = "score_below_threshold"
-	musicSpotifyReasonEmpty               = "empty_query"
-)
-
-type resolvedSpotifyMatch struct {
-	status          string
-	spotifyID       sql.NullString
-	reason          sql.NullString
-	score           sql.NullInt64
-	thresholdValue  sql.NullInt64
-	candidateName   sql.NullString
-	candidateArtist sql.NullString
-	searchQuery     sql.NullString
-	strategy        sql.NullString
-	errorText       sql.NullString
-}
-
-func (app *Application) upsertMusicSpotifyMatchAndCacheID(
-	ctx context.Context,
-	qtx *database.Queries,
-	entityType string,
-	entityID int64,
-	match *resolvedSpotifyMatch,
-	cache scanCache[string, int64],
-	cacheKey string,
-) error {
-	if match != nil {
-		err := qtx.UpsertMusicSpotifyMatch(ctx, database.UpsertMusicSpotifyMatchParams{
-			EntityType:      entityType,
-			EntityID:        entityID,
-			SpotifyID:       match.spotifyID,
-			Status:          match.status,
-			Reason:          match.reason,
-			Score:           match.score,
-			ThresholdValue:  match.thresholdValue,
-			CandidateName:   match.candidateName,
-			CandidateArtist: match.candidateArtist,
-			SearchQuery:     match.searchQuery,
-			Strategy:        match.strategy,
-			Error:           match.errorText,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	cache.set(cacheKey, entityID)
-	return nil
-}
-
-func resolvedSpotifyMatchFromError(err error) resolvedSpotifyMatch {
-	match := resolvedSpotifyMatch{
-		status:    musicSpotifyStatusFailed,
-		errorText: helpers.NullString(err.Error()),
-	}
-
-	matchErr, ok := spotifyapi.AsMatchError(err)
-	if !ok {
-		return match
-	}
-
-	info := matchErr.Info
-	if musicSpotifyReasonIsUnmatched(info.Reason) {
-		match.status = musicSpotifyStatusUnmatched
-		match.errorText = sql.NullString{}
-	}
-
-	match.reason = helpers.NullString(info.Reason)
-	match.candidateName = helpers.NullString(info.CandidateName)
-	match.candidateArtist = helpers.NullString(info.CandidateArtist)
-	match.searchQuery = helpers.NullString(info.SearchQuery)
-	match.strategy = helpers.NullString(info.Strategy)
-
-	if info.Score > 0 {
-		match.score = sql.NullInt64{Int64: int64(info.Score), Valid: true}
-	}
-	if info.Threshold > 0 {
-		match.thresholdValue = sql.NullInt64{Int64: int64(info.Threshold), Valid: true}
-	}
-	if matchErr.Err != nil && match.status == musicSpotifyStatusFailed {
-		match.errorText = helpers.NullString(matchErr.Err.Error())
-	}
-
-	return match
-}
-
-func musicSpotifyMatchSplitsCompound(status string, reason sql.NullString) bool {
-	if status != musicSpotifyStatusUnmatched || !reason.Valid {
-		return false
-	}
-
-	return musicSpotifyReasonSplitsCompound(reason.String)
-}
-
-func musicSpotifyMatchStatusIsFinal(status string) bool {
-	return status == musicSpotifyStatusMatched || status == musicSpotifyStatusUnmatched
-}
-
-func musicSpotifyReasonIsUnmatched(reason string) bool {
-	return reason == musicSpotifyReasonNoResults || reason == musicSpotifyReasonScoreBelowThreshold || reason == musicSpotifyReasonEmpty
-}
-
-func musicSpotifyReasonSplitsCompound(reason string) bool {
-	return reason == musicSpotifyReasonNoResults || reason == musicSpotifyReasonScoreBelowThreshold
-}
-
-func generateMusicianSummary(artist *spotifylib.FullArtist) string {
-	var parts []string
-
-	parts = append(parts, artist.Name)
-
-	if len(artist.Genres) > 0 {
-		maxGenres := min(len(artist.Genres), 3)
-		genreStr := strings.Join(artist.Genres[:maxGenres], ", ")
-		parts = append(parts, fmt.Sprintf("known for %s", genreStr))
-	}
-
-	pop := artist.Popularity
-	switch {
-	case pop >= 80:
-		parts = append(parts, "is a globally recognized artist")
-	case pop >= 60:
-		parts = append(parts, "is a popular artist")
-	case pop >= 40:
-		parts = append(parts, "has a dedicated following")
-	case pop >= 20:
-		parts = append(parts, "is an emerging artist")
-	default:
-		parts = append(parts, "is an independent artist")
-	}
-
-	followers := artist.Followers.Count
-	switch {
-	case followers >= 10_000_000:
-		parts = append(parts, fmt.Sprintf("with over %dM followers on Spotify", followers/1_000_000))
-	case followers >= 1_000_000:
-		parts = append(parts, fmt.Sprintf("with %.1fM followers on Spotify", float64(followers)/1_000_000))
-	case followers >= 100_000:
-		parts = append(parts, fmt.Sprintf("with %dK followers on Spotify", followers/1_000))
-	case followers >= 1_000:
-		parts = append(parts, fmt.Sprintf("with %.1fK followers on Spotify", float64(followers)/1_000))
-	default:
-		parts = append(parts, fmt.Sprintf("with %d followers on Spotify", followers))
-	}
-
-	return strings.Join(parts, " ") + "."
-}
-
-func firstImageURL(images []spotifylib.Image) string {
-	if len(images) == 0 {
-		return ""
-	}
-
-	return images[0].URL
 }

@@ -14,9 +14,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
-	spotifyapi "igloo/cmd/internal/spotify"
-
-	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func (app *Application) processMusicBatchForTest(ctx context.Context, files []helpers.ScanFile) (scanned, skipped, errCount int) {
@@ -87,7 +84,7 @@ func (s *countingMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.Ffp
 	return s.result, nil
 }
 
-func (s *countingMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *countingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	return s.result, nil
 }
@@ -108,7 +105,7 @@ func (s *failingPathMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.
 	return s.result, nil
 }
 
-func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	if filePath == s.failingPath {
 		return nil, errors.New("ffprobe failed")
@@ -139,7 +136,7 @@ func (s *musicScannerFfprobeByPath) GetMetadata(filePath string) (*ffprobe.Ffpro
 	return s.resultForPath(filePath)
 }
 
-func (s *musicScannerFfprobeByPath) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *musicScannerFfprobeByPath) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.audioCalls[filePath]++
 	return s.resultForPath(filePath)
 }
@@ -171,46 +168,6 @@ func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
 		total += calls
 	}
 	return total
-}
-
-type musicScannerSpotifyStub struct {
-	artist      *spotifylib.FullArtist
-	artistErr   error
-	artistCalls int
-	album       *spotifylib.FullAlbum
-	albumErr    error
-	albumCalls  int
-	clearCalls  int
-}
-
-func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, _ string) (*spotifylib.FullArtist, error) {
-	s.artistCalls++
-	if s.artistErr != nil {
-		return nil, s.artistErr
-	}
-
-	return s.artist, nil
-}
-
-func (s *musicScannerSpotifyStub) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifylib.FullAlbum, error) {
-	s.albumCalls++
-	if s.albumErr != nil {
-		return nil, s.albumErr
-	}
-
-	return s.album, nil
-}
-
-func (s *musicScannerSpotifyStub) SearchAlbums(_ context.Context, _ string) ([]spotifylib.SimpleAlbum, error) {
-	return nil, nil
-}
-
-func (s *musicScannerSpotifyStub) SearchTracks(_ context.Context, _ string) ([]spotifylib.FullTrack, error) {
-	return nil, nil
-}
-
-func (s *musicScannerSpotifyStub) ClearAllCaches() {
-	s.clearCalls++
 }
 
 func runMusicScanForTest(t *testing.T, app *Application) {
@@ -468,324 +425,33 @@ func TestMusicScanGuardPreventsConcurrentScans(t *testing.T) {
 	}
 }
 
-func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
-				Name: "Test Artist",
-			},
-			Images: []spotifylib.Image{
-				{URL: "https://i.scdn.co/artist-first.jpg"},
-				{URL: "https://i.scdn.co/artist-second.jpg"},
-			},
-		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:          spotifylib.ID("album123"),
-				Name:        "Test Album",
-				TotalTracks: 10,
-				Images: []spotifylib.Image{
-					{URL: "https://i.scdn.co/album-first.jpg"},
-					{URL: "https://i.scdn.co/album-second.jpg"},
-				},
-			},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var albumCover sql.NullString
-	err := app.DB.QueryRow("SELECT cover FROM albums WHERE spotify_id = ?", "album123").Scan(&albumCover)
-	if err != nil {
-		t.Fatalf("get album cover: %v", err)
-	}
-	if !albumCover.Valid || albumCover.String != "https://i.scdn.co/album-first.jpg" {
-		t.Fatalf("album cover = %#v, want first Spotify album image", albumCover)
-	}
-
-	var musicianThumb sql.NullString
-	err = app.DB.QueryRow("SELECT thumb FROM musicians WHERE spotify_id = ?", "artist123").Scan(&musicianThumb)
-	if err != nil {
-		t.Fatalf("get musician thumb: %v", err)
-	}
-	if !musicianThumb.Valid || musicianThumb.String != "https://i.scdn.co/artist-first.jpg" {
-		t.Fatalf("musician thumb = %#v, want first Spotify artist image", musicianThumb)
-	}
-}
-
-func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	seededMusician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "file:///music/artist.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-
-	seededAlbum, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
-				Name: "Test Artist",
-			},
-			Images: []spotifylib.Image{{URL: "https://i.scdn.co/refreshed-artist.jpg"}},
-		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:     spotifylib.ID("album123"),
-				Name:   "Test Album",
-				Images: []spotifylib.Image{{URL: "https://i.scdn.co/refreshed-album.jpg"}},
-			},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var albumCover sql.NullString
-	err = app.DB.QueryRow("SELECT cover FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumCover)
-	if err != nil {
-		t.Fatalf("get album cover: %v", err)
-	}
-	if !albumCover.Valid || albumCover.String != "https://i.scdn.co/refreshed-album.jpg" {
-		t.Fatalf("album cover = %#v, want refreshed Spotify album image", albumCover)
-	}
-
-	var musicianThumb sql.NullString
-	err = app.DB.QueryRow("SELECT thumb FROM musicians WHERE id = ?", seededMusician.ID).Scan(&musicianThumb)
-	if err != nil {
-		t.Fatalf("get musician thumb: %v", err)
-	}
-	if !musicianThumb.Valid || musicianThumb.String != "https://i.scdn.co/refreshed-artist.jpg" {
-		t.Fatalf("musician thumb = %#v, want refreshed Spotify artist image", musicianThumb)
-	}
-}
-
-func TestProcessMusicBatchPreservesExistingImagesWithoutSpotifyMatch(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	_, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     "Test Artist",
-		SortName: "Test Artist",
-		Thumb:    sql.NullString{String: "file:///music/artist.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-
-	_, err = app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Test Album",
-		SortTitle: "Test Album",
-		Musician:  sql.NullString{String: "Test Artist", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-
-	noSpotifyMatch := errors.New("no spotify match")
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artistErr: noSpotifyMatch,
-		albumErr:  noSpotifyMatch,
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var albumCover sql.NullString
-	err = app.DB.QueryRow("SELECT cover FROM albums WHERE title = ? AND musician = ?", "Test Album", "Test Artist").Scan(&albumCover)
-	if err != nil {
-		t.Fatalf("get album cover: %v", err)
-	}
-	if !albumCover.Valid || albumCover.String != "file:///music/cover.jpg" {
-		t.Fatalf("album cover = %#v, want preserved existing cover", albumCover)
-	}
-
-	var musicianThumb sql.NullString
-	err = app.DB.QueryRow("SELECT thumb FROM musicians WHERE name = ?", "Test Artist").Scan(&musicianThumb)
-	if err != nil {
-		t.Fatalf("get musician thumb: %v", err)
-	}
-	if !musicianThumb.Valid || musicianThumb.String != "file:///music/artist.jpg" {
-		t.Fatalf("musician thumb = %#v, want preserved existing thumb", musicianThumb)
-	}
-}
-
-func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	seededMusician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "file:///music/artist.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-
-	seededAlbum, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
-				Name: "Test Artist",
-			},
-		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:   spotifylib.ID("album123"),
-				Name: "Test Album",
-			},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var albumCover sql.NullString
-	err = app.DB.QueryRow("SELECT cover FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumCover)
-	if err != nil {
-		t.Fatalf("get album cover: %v", err)
-	}
-	if !albumCover.Valid || albumCover.String != "file:///music/cover.jpg" {
-		t.Fatalf("album cover = %#v, want preserved existing cover", albumCover)
-	}
-
-	var musicianThumb sql.NullString
-	err = app.DB.QueryRow("SELECT thumb FROM musicians WHERE id = ?", seededMusician.ID).Scan(&musicianThumb)
-	if err != nil {
-		t.Fatalf("get musician thumb: %v", err)
-	}
-	if !musicianThumb.Valid || musicianThumb.String != "file:///music/artist.jpg" {
-		t.Fatalf("musician thumb = %#v, want preserved existing thumb", musicianThumb)
-	}
-}
-
-func TestProcessMusicBatchIgnoresEmbeddedArtworkWithoutSpotifyMatch(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	metadata := testMusicMetadata()
-	metadata.Streams = append(metadata.Streams, ffprobe.Stream{
-		Index:     1,
-		CodecName: "mjpeg",
-		CodecType: "video",
-		Disposition: ffprobe.StreamDisposition{
-			AttachedPic: 1,
-		},
-	})
-	app.Ffprobe = &countingMusicScannerFfprobe{result: metadata}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var albumCover sql.NullString
-	err := app.DB.QueryRow("SELECT cover FROM albums WHERE title = ?", "Test Album").Scan(&albumCover)
-	if err != nil {
-		t.Fatalf("get album cover: %v", err)
-	}
-	if albumCover.Valid {
-		t.Fatalf("album cover = %#v, want no embedded artwork assigned", albumCover)
-	}
-
-	var musicianThumb sql.NullString
-	err = app.DB.QueryRow("SELECT thumb FROM musicians WHERE name = ?", "Test Artist").Scan(&musicianThumb)
-	if err != nil {
-		t.Fatalf("get musician thumb: %v", err)
-	}
-	if musicianThumb.Valid {
-		t.Fatalf("musician thumb = %#v, want no embedded artwork assigned", musicianThumb)
-	}
-}
-
 func TestProcessMusicBatchUsesScanLocalEntityCaches(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	spotifyStub := &musicScannerSpotifyStub{
-		artistErr: errors.New("artist unavailable"),
-		albumErr:  errors.New("album unavailable"),
+	// Every UpsertMusician/UpsertAlbum that hits an existing row fires the
+	// conflict UPDATE. The per-scan caches must short-circuit the second track's
+	// upserts entirely, so no UPDATE may fire during the batch.
+	_, err := app.DB.Exec(`CREATE TABLE music_upsert_probe (event TEXT NOT NULL)`)
+	if err != nil {
+		t.Fatalf("create probe table: %v", err)
 	}
+	_, err = app.DB.Exec(`CREATE TRIGGER probe_musician_update AFTER UPDATE ON musicians
+		BEGIN
+			INSERT INTO music_upsert_probe (event) VALUES ('musician_update');
+		END;`)
+	if err != nil {
+		t.Fatalf("create musician trigger: %v", err)
+	}
+	_, err = app.DB.Exec(`CREATE TRIGGER probe_album_update AFTER UPDATE ON albums
+		BEGIN
+			INSERT INTO music_upsert_probe (event) VALUES ('album_update');
+		END;`)
+	if err != nil {
+		t.Fatalf("create album trigger: %v", err)
+	}
+
 	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = spotifyStub
 
 	dir := t.TempDir()
 	files := []helpers.ScanFile{
@@ -805,258 +471,15 @@ func TestProcessMusicBatchUsesScanLocalEntityCaches(t *testing.T) {
 	if scanned != 2 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
 	}
-	if spotifyStub.artistCalls != 1 {
-		t.Fatalf("artist calls = %d, want 1", spotifyStub.artistCalls)
-	}
-	if spotifyStub.albumCalls != 1 {
-		t.Fatalf("album calls = %d, want 1", spotifyStub.albumCalls)
-	}
-}
 
-func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	musician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     "Test Artist",
-		SortName: "Test Artist",
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians"); got != 1 {
+		t.Fatalf("musician count = %d, want 1", got)
 	}
-
-	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Test Album",
-		SortTitle: "Test Album",
-		Musician:  sql.NullString{String: "Test Artist", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM albums"); got != 1 {
+		t.Fatalf("album count = %d, want 1", got)
 	}
-
-	err = app.Queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
-		EntityType: musicSpotifyEntityMusician,
-		EntityID:   musician.ID,
-		Status:     musicSpotifyStatusUnmatched,
-		Reason:     sql.NullString{String: "no_results", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician spotify match: %v", err)
-	}
-
-	err = app.Queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
-		EntityType: musicSpotifyEntityAlbum,
-		EntityID:   album.ID,
-		Status:     musicSpotifyStatusUnmatched,
-		Reason:     sql.NullString{String: "score_below_threshold", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album spotify match: %v", err)
-	}
-
-	spotifyStub := &musicScannerSpotifyStub{
-		artistErr: errors.New("should not search artist"),
-		albumErr:  errors.New("should not search album"),
-	}
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = spotifyStub
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-	if spotifyStub.artistCalls != 0 {
-		t.Fatalf("artist calls = %d, want 0", spotifyStub.artistCalls)
-	}
-	if spotifyStub.albumCalls != 0 {
-		t.Fatalf("album calls = %d, want 0", spotifyStub.albumCalls)
-	}
-}
-
-func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	musician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     "Test Artist",
-		SortName: "Test Artist",
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-
-	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Test Album",
-		SortTitle: "Test Album",
-		Musician:  sql.NullString{String: "Test Artist", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-
-	err = app.Queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
-		EntityType: musicSpotifyEntityMusician,
-		EntityID:   musician.ID,
-		Status:     musicSpotifyStatusFailed,
-		Error:      sql.NullString{String: "temporary artist error", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician spotify match: %v", err)
-	}
-
-	err = app.Queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
-		EntityType: musicSpotifyEntityAlbum,
-		EntityID:   album.ID,
-		Status:     musicSpotifyStatusFailed,
-		Error:      sql.NullString{String: "temporary album error", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album spotify match: %v", err)
-	}
-
-	spotifyStub := &musicScannerSpotifyStub{
-		artistErr: errors.New("artist still unavailable"),
-		albumErr:  errors.New("album still unavailable"),
-	}
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = spotifyStub
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-	if spotifyStub.artistCalls != 1 {
-		t.Fatalf("artist calls = %d, want 1", spotifyStub.artistCalls)
-	}
-	if spotifyStub.albumCalls != 1 {
-		t.Fatalf("album calls = %d, want 1", spotifyStub.albumCalls)
-	}
-}
-
-func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	seededMusician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "https://i.scdn.co/artist.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-
-	seededAlbum, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "https://i.scdn.co/album.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-
-	var seededMusicianUpdatedAt string
-	err = app.DB.QueryRow("SELECT updated_at FROM musicians WHERE id = ?", seededMusician.ID).Scan(&seededMusicianUpdatedAt)
-	if err != nil {
-		t.Fatalf("get seeded musician updated_at: %v", err)
-	}
-
-	var seededAlbumUpdatedAt string
-	err = app.DB.QueryRow("SELECT updated_at FROM albums WHERE id = ?", seededAlbum.ID).Scan(&seededAlbumUpdatedAt)
-	if err != nil {
-		t.Fatalf("get seeded album updated_at: %v", err)
-	}
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
-				Name: "Test Artist",
-			},
-			Images: []spotifylib.Image{{URL: "https://i.scdn.co/artist.jpg"}},
-		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:     spotifylib.ID("album123"),
-				Name:   "Test Album",
-				Images: []spotifylib.Image{{URL: "https://i.scdn.co/album.jpg"}},
-			},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var musicianUpdatedAt string
-	err = app.DB.QueryRow("SELECT updated_at FROM musicians WHERE id = ?", seededMusician.ID).Scan(&musicianUpdatedAt)
-	if err != nil {
-		t.Fatalf("get musician updated_at: %v", err)
-	}
-	if musicianUpdatedAt != seededMusicianUpdatedAt {
-		t.Fatalf("musician updated_at = %q, want unchanged %q", musicianUpdatedAt, seededMusicianUpdatedAt)
-	}
-
-	var albumUpdatedAt string
-	err = app.DB.QueryRow("SELECT updated_at FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumUpdatedAt)
-	if err != nil {
-		t.Fatalf("get album updated_at: %v", err)
-	}
-	if albumUpdatedAt != seededAlbumUpdatedAt {
-		t.Fatalf("album updated_at = %q, want unchanged %q", albumUpdatedAt, seededAlbumUpdatedAt)
-	}
-}
-
-func TestRunMusicScanDoesNotClearSpotifyRuntimeCache(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	musicDir := t.TempDir()
-	trackPath := filepath.Join(musicDir, "Test Track.m4a")
-	err := os.WriteFile(trackPath, []byte("test"), 0644)
-	if err != nil {
-		t.Fatalf("write track file: %v", err)
-	}
-
-	spotifyStub := &musicScannerSpotifyStub{}
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = spotifyStub
-	app.Settings = &database.Setting{
-		MusicDir: sql.NullString{String: musicDir, Valid: true},
-	}
-
-	musicScanGuard.Finish()
-	if !musicScanGuard.TryBegin() {
-		t.Fatal("failed to acquire music scan guard")
-	}
-
-	app.runMusicScan()
-
-	if spotifyStub.clearCalls != 0 {
-		t.Fatalf("spotify cache clear calls = %d, want 0", spotifyStub.clearCalls)
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM music_upsert_probe"); got != 0 {
+		t.Fatalf("entity upsert updates during one batch = %d, want 0 (scan cache not used)", got)
 	}
 }
 
@@ -1190,6 +613,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 				Profile:       "Lossless",
 				Channels:      6,
 				ChannelLayout: "5.1",
+				SampleRate:    "44100",
 				Tags: ffprobe.StreamTags{
 					Language: "jpn",
 				},
@@ -1200,7 +624,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 		trackPath: metadata,
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(map[string]int64{}), helpers.ScanFile{
+	resolved, err := app.resolveTrackFile(context.Background(), helpers.ScanFile{
 		Path: trackPath,
 		Ext:  "flac",
 		Size: 42,
@@ -1222,9 +646,12 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 	if params.BitRate != 1411200 {
 		t.Fatalf("bit rate = %d, want 1411200", params.BitRate)
 	}
-	if params.Codec != "flac" || params.Profile != "Lossless" || params.Channels != "5.1" || params.ChannelLayout != "5.1" {
-		t.Fatalf("audio fields = codec %q profile %q channels %q layout %q, want flac/Lossless/5.1/5.1",
+	if params.Codec != "flac" || params.Profile != "Lossless" || params.Channels != "6" || params.ChannelLayout != "5.1" {
+		t.Fatalf("audio fields = codec %q profile %q channels %q layout %q, want flac/Lossless/6/5.1",
 			params.Codec, params.Profile, params.Channels, params.ChannelLayout)
+	}
+	if !params.SampleRate.Valid || params.SampleRate.Int64 != 44100 {
+		t.Fatalf("sample rate = %#v, want 44100", params.SampleRate)
 	}
 	if !params.Language.Valid || params.Language.String != "jpn" {
 		t.Fatalf("language = %#v, want jpn", params.Language)
@@ -1247,11 +674,24 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 	if len(resolved.musicians) != 1 || resolved.musicians[0].name != "Mapped Artist" || resolved.musicians[0].sortName != "Mapped Sort Artist" {
 		t.Fatalf("resolved musicians = %#v, want mapped artist and sort artist", resolved.musicians)
 	}
+	if resolved.musicians[0].nameKey != "mapped artist" {
+		t.Fatalf("musician name key = %q, want %q", resolved.musicians[0].nameKey, "mapped artist")
+	}
 	if resolved.album == nil {
 		t.Fatal("expected resolved album")
 	}
 	if resolved.album.title != "Mapped Album" || resolved.album.sortTitle != "Mapped Sort Album" || resolved.album.albumArtist != "Mapped Album Artist" {
 		t.Fatalf("resolved album = %#v, want mapped album tags", resolved.album)
+	}
+	wantAlbumKey := albumIdentityKey("Mapped Album", "Mapped Album Artist", false)
+	if resolved.album.albumKey != wantAlbumKey {
+		t.Fatalf("album key = %q, want %q", resolved.album.albumKey, wantAlbumKey)
+	}
+	if resolved.album.isCompilation {
+		t.Fatal("album resolved as compilation, want regular album")
+	}
+	if resolved.album.totalTracks != 12 {
+		t.Fatalf("album total tracks = %d, want 12 from track tag", resolved.album.totalTracks)
 	}
 }
 
@@ -1276,7 +716,7 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 		},
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(map[string]int64{}), helpers.ScanFile{
+	resolved, err := app.resolveTrackFile(context.Background(), helpers.ScanFile{
 		Path: trackPath,
 		Ext:  "mp3",
 		Size: 7,
@@ -1286,8 +726,8 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 	}
 
 	params := resolved.params
-	if params.Title != "No Tags.mp3" || params.SortTitle != "No Tags.mp3" {
-		t.Fatalf("title/sort_title = %q/%q, want filename fallback", params.Title, params.SortTitle)
+	if params.Title != "No Tags" || params.SortTitle != "No Tags" {
+		t.Fatalf("title/sort_title = %q/%q, want filename fallback without extension", params.Title, params.SortTitle)
 	}
 	if params.MimeType != "audio/mpeg" {
 		t.Fatalf("mime type = %q, want audio/mpeg", params.MimeType)
@@ -1297,6 +737,9 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 	}
 	if params.Channels != "2" || params.ChannelLayout != "2" {
 		t.Fatalf("channels/layout = %q/%q, want numeric fallback", params.Channels, params.ChannelLayout)
+	}
+	if params.SampleRate.Valid {
+		t.Fatalf("sample rate = %#v, want null without stream sample_rate", params.SampleRate)
 	}
 	if len(resolved.musicians) != 0 {
 		t.Fatalf("musicians = %#v, want none without artist tag", resolved.musicians)
@@ -1569,355 +1012,6 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 	}
 }
 
-func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist123"),
-				Name: "Test Artist",
-			},
-		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:   spotifylib.ID("album123"),
-				Name: "Test Album",
-			},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var musicianStatus string
-	var musicianSpotifyID sql.NullString
-	err := app.DB.QueryRow(`
-		SELECT msm.status, msm.spotify_id
-		FROM music_spotify_matches AS msm
-		INNER JOIN musicians AS m ON m.id = msm.entity_id
-		WHERE msm.entity_type = ? AND m.name = ?
-	`, musicSpotifyEntityMusician, "Test Artist").Scan(&musicianStatus, &musicianSpotifyID)
-	if err != nil {
-		t.Fatalf("get musician spotify match: %v", err)
-	}
-	if musicianStatus != musicSpotifyStatusMatched || !musicianSpotifyID.Valid || musicianSpotifyID.String != "artist123" {
-		t.Fatalf("musician match = %s/%#v, want matched/artist123", musicianStatus, musicianSpotifyID)
-	}
-
-	var albumStatus string
-	var albumSpotifyID sql.NullString
-	err = app.DB.QueryRow(`
-		SELECT msm.status, msm.spotify_id
-		FROM music_spotify_matches AS msm
-		INNER JOIN albums AS a ON a.id = msm.entity_id
-		WHERE msm.entity_type = ? AND a.title = ?
-	`, musicSpotifyEntityAlbum, "Test Album").Scan(&albumStatus, &albumSpotifyID)
-	if err != nil {
-		t.Fatalf("get album spotify match: %v", err)
-	}
-	if albumStatus != musicSpotifyStatusMatched || !albumSpotifyID.Valid || albumSpotifyID.String != "album123" {
-		t.Fatalf("album match = %s/%#v, want matched/album123", albumStatus, albumSpotifyID)
-	}
-}
-
-func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artist: &spotifylib.FullArtist{
-			SimpleArtist: spotifylib.SimpleArtist{
-				ID:   spotifylib.ID("artist-meta-123"),
-				Name: "Test Artist",
-			},
-			Popularity: 76,
-			Genres:     []string{"dream pop", "indie rock"},
-			Followers: spotifylib.Followers{
-				Count: 1500000,
-			},
-			Images: []spotifylib.Image{
-				{URL: "https://i.scdn.co/artist-meta.jpg"},
-			},
-		},
-		album: &spotifylib.FullAlbum{
-			SimpleAlbum: spotifylib.SimpleAlbum{
-				ID:                   spotifylib.ID("album-meta-123"),
-				Name:                 "Test Album",
-				ReleaseDate:          "2024-04-12",
-				ReleaseDatePrecision: "day",
-				TotalTracks:          10,
-				Images: []spotifylib.Image{
-					{URL: "https://i.scdn.co/album-meta.jpg"},
-				},
-			},
-			Popularity: 64,
-			Genres:     []string{"dream pop", "shoegaze"},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var musicianSpotifyID sql.NullString
-	var musicianPopularity sql.NullFloat64
-	var musicianFollowers sql.NullInt64
-	var musicianSummary sql.NullString
-	var musicianThumb sql.NullString
-	err := app.DB.QueryRow(`
-		SELECT spotify_id, spotify_popularity, spotify_followers, summary, thumb
-		FROM musicians
-		WHERE name = ?
-	`, "Test Artist").Scan(&musicianSpotifyID, &musicianPopularity, &musicianFollowers, &musicianSummary, &musicianThumb)
-	if err != nil {
-		t.Fatalf("get musician metadata: %v", err)
-	}
-	if !musicianSpotifyID.Valid || musicianSpotifyID.String != "artist-meta-123" {
-		t.Fatalf("musician spotify_id = %#v, want artist-meta-123", musicianSpotifyID)
-	}
-	if !musicianPopularity.Valid || musicianPopularity.Float64 != 76 {
-		t.Fatalf("musician popularity = %#v, want 76", musicianPopularity)
-	}
-	if !musicianFollowers.Valid || musicianFollowers.Int64 != 1500000 {
-		t.Fatalf("musician followers = %#v, want 1500000", musicianFollowers)
-	}
-	wantSummary := "Test Artist known for dream pop, indie rock is a popular artist with 1.5M followers on Spotify."
-	if !musicianSummary.Valid || musicianSummary.String != wantSummary {
-		t.Fatalf("musician summary = %#v, want %q", musicianSummary, wantSummary)
-	}
-	if !musicianThumb.Valid || musicianThumb.String != "https://i.scdn.co/artist-meta.jpg" {
-		t.Fatalf("musician thumb = %#v, want Spotify artist image", musicianThumb)
-	}
-
-	var albumSpotifyID sql.NullString
-	var albumPopularity sql.NullFloat64
-	var totalTracks sql.NullInt64
-	var releaseDate sql.NullString
-	var year sql.NullInt64
-	var cover sql.NullString
-	err = app.DB.QueryRow(`
-		SELECT spotify_id, spotify_popularity, total_tracks, release_date, year, cover
-		FROM albums
-		WHERE title = ? AND musician = ?
-	`, "Test Album", "Test Artist").Scan(&albumSpotifyID, &albumPopularity, &totalTracks, &releaseDate, &year, &cover)
-	if err != nil {
-		t.Fatalf("get album metadata: %v", err)
-	}
-	if !albumSpotifyID.Valid || albumSpotifyID.String != "album-meta-123" {
-		t.Fatalf("album spotify_id = %#v, want album-meta-123", albumSpotifyID)
-	}
-	if !albumPopularity.Valid || albumPopularity.Float64 != 64 {
-		t.Fatalf("album popularity = %#v, want 64", albumPopularity)
-	}
-	if !totalTracks.Valid || totalTracks.Int64 != 10 {
-		t.Fatalf("album total_tracks = %#v, want 10", totalTracks)
-	}
-	if !releaseDate.Valid || releaseDate.String != "2024-04-12" {
-		t.Fatalf("album release_date = %#v, want 2024-04-12", releaseDate)
-	}
-	if !year.Valid || year.Int64 != 2024 {
-		t.Fatalf("album year = %#v, want 2024", year)
-	}
-	if !cover.Valid || cover.String != "https://i.scdn.co/album-meta.jpg" {
-		t.Fatalf("album cover = %#v, want Spotify album image", cover)
-	}
-
-	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag IN (?, ?, ?)", "music", "dream pop", "indie rock", "shoegaze"); got != 3 {
-		t.Fatalf("Spotify genre count = %d, want 3", got)
-	}
-	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag = ?", "music", "dream pop"); got != 1 {
-		t.Fatalf("shared dream pop genre rows = %d, want 1", got)
-	}
-	if got := countMusicScannerRows(t, app.DB, `
-		SELECT COUNT(*)
-		FROM musician_genres AS mg
-		INNER JOIN musicians AS m ON m.id = mg.musician_id
-		INNER JOIN genres AS g ON g.id = mg.genre_id
-		WHERE m.name = ? AND g.tag IN (?, ?)
-	`, "Test Artist", "dream pop", "indie rock"); got != 2 {
-		t.Fatalf("musician_genres count = %d, want 2", got)
-	}
-	if got := countMusicScannerRows(t, app.DB, `
-		SELECT COUNT(*)
-		FROM album_genres AS ag
-		INNER JOIN albums AS a ON a.id = ag.album_id
-		INNER JOIN genres AS g ON g.id = ag.genre_id
-		WHERE a.title = ? AND a.musician = ? AND g.tag IN (?, ?)
-	`, "Test Album", "Test Artist", "dream pop", "shoegaze"); got != 2 {
-		t.Fatalf("album_genres count = %d, want 2", got)
-	}
-	if got := countMusicScannerRows(t, app.DB, `
-		SELECT COUNT(*)
-		FROM musician_genres AS mg
-		INNER JOIN musicians AS m ON m.id = mg.musician_id
-		INNER JOIN album_genres AS ag ON ag.genre_id = mg.genre_id
-		INNER JOIN albums AS a ON a.id = ag.album_id
-		INNER JOIN genres AS g ON g.id = mg.genre_id
-		WHERE m.name = ? AND a.title = ? AND a.musician = ? AND g.tag = ?
-	`, "Test Artist", "Test Album", "Test Artist", "dream pop"); got != 1 {
-		t.Fatalf("shared dream pop relationship count = %d, want 1", got)
-	}
-}
-
-func TestProcessMusicBatchPersistsSpotifyUnmatchedDetails(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artistErr: &spotifyapi.MatchError{
-			Info: spotifyapi.MatchDebugInfo{
-				Lookup:        "artist",
-				Input:         "Test Artist",
-				SearchQuery:   "test artist",
-				Strategy:      "normalized",
-				CandidateName: "Best Guess",
-				Score:         52,
-				Threshold:     78,
-				Reason:        "score_below_threshold",
-			},
-		},
-		albumErr: &spotifyapi.MatchError{
-			Info: spotifyapi.MatchDebugInfo{
-				Lookup:          "album",
-				Input:           "Test Album",
-				SearchQuery:     "album:test album artist:test artist",
-				Strategy:        "album_artist",
-				CandidateName:   "Wrong Album",
-				CandidateArtist: "Wrong Artist",
-				Reason:          "no_results",
-			},
-		},
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var status string
-	var reason sql.NullString
-	var score sql.NullInt64
-	var threshold sql.NullInt64
-	var candidateName sql.NullString
-	var searchQuery sql.NullString
-	var strategy sql.NullString
-	var errorText sql.NullString
-	err := app.DB.QueryRow(`
-		SELECT msm.status, msm.reason, msm.score, msm.threshold_value, msm.candidate_name, msm.search_query, msm.strategy, msm.error
-		FROM music_spotify_matches AS msm
-		INNER JOIN musicians AS m ON m.id = msm.entity_id
-		WHERE msm.entity_type = ? AND m.name = ?
-	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &reason, &score, &threshold, &candidateName, &searchQuery, &strategy, &errorText)
-	if err != nil {
-		t.Fatalf("get musician unmatched row: %v", err)
-	}
-	if status != musicSpotifyStatusUnmatched || !reason.Valid || reason.String != "score_below_threshold" {
-		t.Fatalf("musician status/reason = %s/%#v, want unmatched/score_below_threshold", status, reason)
-	}
-	if !score.Valid || score.Int64 != 52 || !threshold.Valid || threshold.Int64 != 78 {
-		t.Fatalf("musician score/threshold = %#v/%#v, want 52/78", score, threshold)
-	}
-	if !candidateName.Valid || candidateName.String != "Best Guess" {
-		t.Fatalf("candidate name = %#v, want Best Guess", candidateName)
-	}
-	if !searchQuery.Valid || searchQuery.String != "test artist" || !strategy.Valid || strategy.String != "normalized" {
-		t.Fatalf("search/strategy = %#v/%#v, want test artist/normalized", searchQuery, strategy)
-	}
-	if errorText.Valid {
-		t.Fatalf("error text = %#v, want null for unmatched row", errorText)
-	}
-
-	var albumReason sql.NullString
-	var candidateArtist sql.NullString
-	err = app.DB.QueryRow(`
-		SELECT msm.reason, msm.candidate_artist
-		FROM music_spotify_matches AS msm
-		INNER JOIN albums AS a ON a.id = msm.entity_id
-		WHERE msm.entity_type = ? AND a.title = ?
-	`, musicSpotifyEntityAlbum, "Test Album").Scan(&albumReason, &candidateArtist)
-	if err != nil {
-		t.Fatalf("get album unmatched row: %v", err)
-	}
-	if !albumReason.Valid || albumReason.String != "no_results" {
-		t.Fatalf("album reason = %#v, want no_results", albumReason)
-	}
-	if !candidateArtist.Valid || candidateArtist.String != "Wrong Artist" {
-		t.Fatalf("album candidate artist = %#v, want Wrong Artist", candidateArtist)
-	}
-}
-
-func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.Spotify = &musicScannerSpotifyStub{
-		artistErr: errors.New("artist temporary failure"),
-		albumErr:  errors.New("album temporary failure"),
-	}
-
-	file := helpers.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	var status string
-	var errorText sql.NullString
-	err := app.DB.QueryRow(`
-		SELECT msm.status, msm.error
-		FROM music_spotify_matches AS msm
-		INNER JOIN musicians AS m ON m.id = msm.entity_id
-		WHERE msm.entity_type = ? AND m.name = ?
-	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &errorText)
-	if err != nil {
-		t.Fatalf("get musician failed row: %v", err)
-	}
-	if status != musicSpotifyStatusFailed || !errorText.Valid || errorText.String != "artist temporary failure" {
-		t.Fatalf("musician failed row = %s/%#v, want failed/artist temporary failure", status, errorText)
-	}
-
-	err = app.DB.QueryRow(`
-		SELECT msm.status, msm.error
-		FROM music_spotify_matches AS msm
-		INNER JOIN albums AS a ON a.id = msm.entity_id
-		WHERE msm.entity_type = ? AND a.title = ?
-	`, musicSpotifyEntityAlbum, "Test Album").Scan(&status, &errorText)
-	if err != nil {
-		t.Fatalf("get album failed row: %v", err)
-	}
-	if status != musicSpotifyStatusFailed || !errorText.Valid || errorText.String != "album temporary failure" {
-		t.Fatalf("album failed row = %s/%#v, want failed/album temporary failure", status, errorText)
-	}
-}
-
 func TestProcessMusicBatchDoesNotMergeFailedPersistIntoScanContext(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -1984,7 +1078,7 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
 		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
 			Title:  "Compound Artists",
-			Artist: "Artist One & Artist Two, Artist One",
+			Artist: "Artist One feat. Artist Two; Artist One",
 			Album:  "Compound Album",
 			Genre:  "Indie",
 		}),
@@ -1997,6 +1091,9 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians"); got != 2 {
+		t.Fatalf("musician count = %d, want 2 deduplicated split credits", got)
+	}
 	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
 		t.Fatalf("split musician count = %d, want 2", got)
 	}
@@ -2036,121 +1133,81 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 	}
 }
 
-func TestSplitCompoundArtistCreditsPreservesSuffixes(t *testing.T) {
-	credits := parseCompoundArtistCredits("Anthony Ramos, Okieriete Onaodowan, Daveed Diggs, Lin-Manuel Miranda & Leslie Odom, Jr.")
-	want := []string{
-		"Anthony Ramos",
-		"Okieriete Onaodowan",
-		"Daveed Diggs",
-		"Lin-Manuel Miranda",
-		"Leslie Odom, Jr.",
-	}
-	if !slices.Equal(credits.parts, want) {
-		t.Fatalf("parts = %#v, want %#v", credits.parts, want)
-	}
-	if !shouldSplitCompoundArtistCreditsLocally(credits) {
-		t.Fatal("expected Hamilton-style credits to split locally")
-	}
-
-	credits = parseCompoundArtistCredits("Earth, Wind & Fire")
-	if shouldSplitCompoundArtistCreditsLocally(credits) {
-		t.Fatal("expected single-word comma/ampersand band name to stay combined locally")
-	}
-}
-
-func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	trackPath := filepath.Join(t.TempDir(), "Ampersand Artist.m4a")
-	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
-		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
-			Title:  "Ampersand Artist",
-			Artist: "Brooks & Dunn",
-		}),
-	})
-
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
-		{Path: trackPath, Ext: "m4a", Size: 5},
-	})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
-	}
-
-	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Brooks & Dunn"); got != 1 {
-		t.Fatalf("combined musician count = %d, want 1", got)
-	}
-	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Brooks", "Dunn"); got != 0 {
-		t.Fatalf("split musician count = %d, want 0", got)
-	}
-	if got := countMusicScannerRows(t, app.DB, `
-		SELECT COUNT(*)
-		FROM track_musicians AS tm
-		INNER JOIN tracks AS t ON t.id = tm.track_id
-		INNER JOIN musicians AS m ON m.id = tm.musician_id
-		WHERE t.file_path = ? AND m.name = ?
-	`, trackPath, "Brooks & Dunn"); got != 1 {
-		t.Fatalf("combined track_musicians count = %d, want 1", got)
-	}
-}
-
-func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	trackPath := filepath.Join(t.TempDir(), "Spotify Split Artist.m4a")
-	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
-		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
-			Title:  "Spotify Split Artist",
-			Artist: "Artist One & Artist Two",
-		}),
-	})
-	app.Spotify = &musicScannerSpotifyStub{
-		artistErr: &spotifyapi.MatchError{
-			Info: spotifyapi.MatchDebugInfo{
-				Lookup: "artist",
-				Input:  "Artist One & Artist Two",
-				Reason: "no_results",
-			},
+func TestSplitArtistCredits(t *testing.T) {
+	tests := []struct {
+		name      string
+		artistTag string
+		want      []string
+	}{
+		{"feat with dot", "Artist One feat. Artist Two", []string{"Artist One", "Artist Two"}},
+		{"feat case-insensitive", "Artist One FEAT. Artist Two", []string{"Artist One", "Artist Two"}},
+		{"ft without dot", "Artist One ft Artist Two", []string{"Artist One", "Artist Two"}},
+		{"featuring", "Jay-Z featuring Alicia Keys", []string{"Jay-Z", "Alicia Keys"}},
+		{"with", "Santana with Rob Thomas", []string{"Santana", "Rob Thomas"}},
+		{"vs with dot", "Daft Punk vs. Queen", []string{"Daft Punk", "Queen"}},
+		{"semicolon", "David Guetta; Sia", []string{"David Guetta", "Sia"}},
+		{"spaced slash", "Nujabes / Fat Jon", []string{"Nujabes", "Fat Jon"}},
+		{"parenthesized feat splits", "Beyoncé (feat. JAY-Z)", []string{"Beyoncé", "JAY-Z"}},
+		{"paren cut leftover is cleaned", "Beyoncé ( feat. JAY-Z)", []string{"Beyoncé", "JAY-Z"}},
+		{"duplicate credits deduplicate", "Drake feat. Drake", []string{"Drake"}},
+		{"unspaced slash stays combined", "AC/DC", []string{"AC/DC"}},
+		{"ampersand stays combined", "Tom Petty & The Heartbreakers", []string{"Tom Petty & The Heartbreakers"}},
+		{"comma and ampersand stay combined", "Earth, Wind & Fire", []string{"Earth, Wind & Fire"}},
+		{
+			"hamilton cast credit stays combined",
+			"Anthony Ramos, Okieriete Onaodowan, Daveed Diggs, Lin-Manuel Miranda & Leslie Odom, Jr.",
+			[]string{"Anthony Ramos, Okieriete Onaodowan, Daveed Diggs, Lin-Manuel Miranda & Leslie Odom, Jr."},
 		},
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
-		{Path: trackPath, Ext: "m4a", Size: 5},
-	})
-	if scanned != 1 || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitArtistCredits(tt.artistTag)
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("splitArtistCredits(%q) = %#v, want %#v", tt.artistTag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestProcessMusicBatchKeepsCommaAndAmpersandArtistsCombined(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	dir := t.TempDir()
+	combinedArtists := []string{
+		"Brooks & Dunn",
+		"Earth, Wind & Fire",
+		"Tom Petty & The Heartbreakers",
+	}
+	results := make(map[string]*ffprobe.FfprobeResult, len(combinedArtists))
+	files := make([]helpers.ScanFile, 0, len(combinedArtists))
+	for i, artist := range combinedArtists {
+		trackPath := filepath.Join(dir, fmt.Sprintf("Combined %d.m4a", i+1))
+		results[trackPath] = testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  fmt.Sprintf("Combined %d", i+1),
+			Artist: artist,
+		})
+		files = append(files, helpers.ScanFile{Path: trackPath, Ext: "m4a", Size: int64(5 + i)})
+	}
+	app.Ffprobe = newMusicScannerFfprobeByPath(results)
+
+	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), files)
+	if scanned != 3 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 3/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Artist One & Artist Two"); got != 0 {
-		t.Fatalf("combined musician count = %d, want 0", got)
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians"); got != 3 {
+		t.Fatalf("musician count = %d, want 3 combined acts", got)
 	}
-	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
-		t.Fatalf("split musician count = %d, want 2", got)
+	for _, artist := range combinedArtists {
+		if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", artist); got != 1 {
+			t.Fatalf("musician count for %q = %d, want 1 combined row", artist, got)
+		}
 	}
-
-	var primaryArtist string
-	err := app.DB.QueryRow(`
-		SELECT m.name
-		FROM tracks AS t
-		INNER JOIN musicians AS m ON m.id = t.musician_id
-		WHERE t.file_path = ?
-	`, trackPath).Scan(&primaryArtist)
-	if err != nil {
-		t.Fatalf("get primary artist: %v", err)
-	}
-	if primaryArtist != "Artist One" {
-		t.Fatalf("primary artist = %q, want Artist One", primaryArtist)
-	}
-
-	if got := countMusicScannerRows(t, app.DB, `
-		SELECT COUNT(*)
-		FROM track_musicians AS tm
-		INNER JOIN tracks AS t ON t.id = tm.track_id
-		INNER JOIN musicians AS m ON m.id = tm.musician_id
-		WHERE t.file_path = ? AND m.name IN (?, ?)
-	`, trackPath, "Artist One", "Artist Two"); got != 2 {
-		t.Fatalf("track_musicians split artist count = %d, want 2", got)
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?, ?, ?)",
+		"Brooks", "Dunn", "Tom Petty", "The Heartbreakers"); got != 0 {
+		t.Fatalf("split fragment musician count = %d, want 0", got)
 	}
 }
 
@@ -2162,7 +1219,7 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
 		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
 			Title:  "Changed Artist",
-			Artist: "Artist One & Artist Two, Artist One",
+			Artist: "Artist One feat. Artist Two",
 		}),
 	})
 	app.Ffprobe = ffprobeStub
@@ -2203,5 +1260,410 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 		WHERE t.file_path = ? AND m.name IN (?, ?)
 	`, trackPath, "Artist One", "Artist Two"); got != 0 {
 		t.Fatalf("stale split track_musicians count = %d, want 0", got)
+	}
+}
+
+func TestAlbumIdentityKey(t *testing.T) {
+	tests := []struct {
+		name          string
+		title         string
+		albumArtist   string
+		isCompilation bool
+		want          string
+	}{
+		{"plain title and artist", "Renaissance", "Beyoncé", false, "renaissance\x1fbeyonce"},
+		{"case and diacritic variant collapses", "RENAISSANCE", "Beyonce", false, "renaissance\x1fbeyonce"},
+		{"ampersand spelled as and", "Rock & Roll", "AC/DC", false, "rock and roll\x1fac dc"},
+		{"punctuation collapses", "Sgt. Pepper's!!", "The Beatles", false, "sgt pepper s\x1fthe beatles"},
+		{"punctuation variant collapses", "Sgt Pepper's", "The Beatles", false, "sgt pepper s\x1fthe beatles"},
+		{"compilation uses various artists sentinel", "Now 100", "ignored", true, "now 100\x1fvarious artists"},
+		{"lead credit only", "Hamilton", "Lin-Manuel Miranda", false, "hamilton\x1flin manuel miranda"},
+		{
+			"full cast credit cuts to lead credit",
+			"Hamilton",
+			"Lin-Manuel Miranda, Leslie Odom, Jr. & Christopher Jackson",
+			false,
+			"hamilton\x1flin manuel miranda",
+		},
+		{"punctuation-only names keep raw fallback", "!!!", "!!!", false, "!!!\x1f!!!"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := albumIdentityKey(tt.title, tt.albumArtist, tt.isCompilation)
+			if got != tt.want {
+				t.Fatalf("albumIdentityKey(%q, %q, %t) = %q, want %q", tt.title, tt.albumArtist, tt.isCompilation, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestProcessMusicBatchGroupsCompoundAlbumArtistSpellingsIntoOneAlbum(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "Alexander Hamilton.m4a")
+	secondPath := filepath.Join(dir, "Aaron Burr, Sir.m4a")
+	albumTitle := "Hamilton (Original Broadway Cast Recording)"
+	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		firstPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:       "Alexander Hamilton",
+			Artist:      "Lin-Manuel Miranda",
+			AlbumArtist: "Lin-Manuel Miranda",
+			Album:       albumTitle,
+			Track:       "1/46",
+		}),
+		secondPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:       "Aaron Burr, Sir",
+			Artist:      "Leslie Odom, Jr.",
+			AlbumArtist: "Lin-Manuel Miranda, Leslie Odom, Jr. & Christopher Jackson",
+			Album:       albumTitle,
+			Track:       "2/46",
+		}),
+	})
+
+	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
+		{Path: firstPath, Ext: "m4a", Size: 5},
+		{Path: secondPath, Ext: "m4a", Size: 6},
+	})
+	if scanned != 2 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM albums"); got != 1 {
+		t.Fatalf("album count = %d, want 1 shared cast recording", got)
+	}
+
+	var musician sql.NullString
+	var isCompilation bool
+	err := app.DB.QueryRow("SELECT musician, is_compilation FROM albums WHERE title = ?", albumTitle).Scan(&musician, &isCompilation)
+	if err != nil {
+		t.Fatalf("get shared album: %v", err)
+	}
+	if !musician.Valid || musician.String != "Lin-Manuel Miranda" {
+		t.Fatalf("album musician = %#v, want first-writer Lin-Manuel Miranda", musician)
+	}
+	if isCompilation {
+		t.Fatal("cast recording flagged as compilation, want regular album")
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM tracks WHERE album_id = (SELECT id FROM albums WHERE title = ?)", albumTitle); got != 2 {
+		t.Fatalf("tracks linked to shared album = %d, want 2", got)
+	}
+}
+
+func TestProcessMusicBatchGroupsVariousArtistsCompilationIntoOneAlbum(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	dir := t.TempDir()
+	albumTitle := "Now That's What I Call Music"
+	artists := []string{"Artist A", "Artist B", "Artist C"}
+	results := make(map[string]*ffprobe.FfprobeResult, len(artists))
+	files := make([]helpers.ScanFile, 0, len(artists))
+	for i, artist := range artists {
+		trackPath := filepath.Join(dir, fmt.Sprintf("Compilation %d.m4a", i+1))
+		results[trackPath] = testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:       fmt.Sprintf("Compilation Track %d", i+1),
+			Artist:      artist,
+			Album:       albumTitle,
+			Compilation: "1",
+			Track:       fmt.Sprintf("%d/3", i+1),
+		})
+		files = append(files, helpers.ScanFile{Path: trackPath, Ext: "m4a", Size: int64(5 + i)})
+	}
+	app.Ffprobe = newMusicScannerFfprobeByPath(results)
+
+	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), files)
+	if scanned != 3 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 3/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM albums"); got != 1 {
+		t.Fatalf("album count = %d, want 1 shared compilation", got)
+	}
+
+	var musician sql.NullString
+	var isCompilation bool
+	var albumArtistID sql.NullInt64
+	err := app.DB.QueryRow("SELECT musician, is_compilation, album_artist_id FROM albums WHERE title = ?", albumTitle).
+		Scan(&musician, &isCompilation, &albumArtistID)
+	if err != nil {
+		t.Fatalf("get compilation album: %v", err)
+	}
+	if !isCompilation {
+		t.Fatal("compilation flag not set on Various Artists album")
+	}
+	if !musician.Valid || musician.String != "Various Artists" {
+		t.Fatalf("album musician = %#v, want Various Artists", musician)
+	}
+	if albumArtistID.Valid {
+		t.Fatalf("album_artist_id = %#v, want null for Various Artists compilation", albumArtistID)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians"); got != 3 {
+		t.Fatalf("musician count = %d, want 3 individual artists", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM tracks WHERE album_id = (SELECT id FROM albums WHERE title = ?)", albumTitle); got != 3 {
+		t.Fatalf("tracks linked to compilation = %d, want 3", got)
+	}
+}
+
+func TestProcessMusicBatchKeepsSingleArtistCompilationUnderArtist(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Greatest Hits Track.m4a")
+	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:       "Every Light in the House",
+			Artist:      "Trace Adkins",
+			AlbumArtist: "Trace Adkins",
+			Album:       "Greatest Hits Collection",
+			Compilation: "1",
+		}),
+	})
+
+	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
+		{Path: trackPath, Ext: "m4a", Size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	var albumKey string
+	var musician sql.NullString
+	var isCompilation bool
+	var albumArtistID sql.NullInt64
+	err := app.DB.QueryRow("SELECT album_key, musician, is_compilation, album_artist_id FROM albums WHERE title = ?", "Greatest Hits Collection").
+		Scan(&albumKey, &musician, &isCompilation, &albumArtistID)
+	if err != nil {
+		t.Fatalf("get greatest hits album: %v", err)
+	}
+	if isCompilation {
+		t.Fatal("single-artist greatest hits flagged as Various Artists compilation")
+	}
+	if !musician.Valid || musician.String != "Trace Adkins" {
+		t.Fatalf("album musician = %#v, want Trace Adkins", musician)
+	}
+	wantKey := albumIdentityKey("Greatest Hits Collection", "Trace Adkins", false)
+	if albumKey != wantKey {
+		t.Fatalf("album key = %q, want artist-scoped %q", albumKey, wantKey)
+	}
+	if !albumArtistID.Valid {
+		t.Fatal("album_artist_id is null, want link to Trace Adkins")
+	}
+
+	var linkedArtist string
+	err = app.DB.QueryRow("SELECT name FROM musicians WHERE id = ?", albumArtistID.Int64).Scan(&linkedArtist)
+	if err != nil {
+		t.Fatalf("get linked album artist: %v", err)
+	}
+	if linkedArtist != "Trace Adkins" {
+		t.Fatalf("linked album artist = %q, want Trace Adkins", linkedArtist)
+	}
+}
+
+func TestProcessMusicBatchDedupesMusiciansByNameKey(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "Halo.m4a")
+	secondPath := filepath.Join(dir, "Formation.m4a")
+	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		firstPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Halo",
+			Artist: "Beyoncé",
+		}),
+		secondPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Formation",
+			Artist: "Beyonce",
+		}),
+	})
+
+	// Two separate batches, so the second spelling reaches the DB upsert instead
+	// of the per-scan cache: dedupe must hold at the name_key constraint itself.
+	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
+		{Path: firstPath, Ext: "m4a", Size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	scanned, skipped, errCount = app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
+		{Path: secondPath, Ext: "m4a", Size: 6},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians"); got != 1 {
+		t.Fatalf("musician count = %d, want 1 deduplicated row", got)
+	}
+
+	var name string
+	err := app.DB.QueryRow("SELECT name FROM musicians WHERE name_key = ?", "beyonce").Scan(&name)
+	if err != nil {
+		t.Fatalf("get deduplicated musician: %v", err)
+	}
+	if name != "Beyoncé" {
+		t.Fatalf("musician name = %q, want first scanned spelling Beyoncé", name)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN musicians AS m ON m.id = tm.musician_id
+		WHERE m.name_key = ?
+	`, "beyonce"); got != 2 {
+		t.Fatalf("tracks credited to deduplicated musician = %d, want 2", got)
+	}
+}
+
+func TestProcessMusicBatchRefreshesSortTagsOnRescan(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Refresh Track.m4a")
+	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:      "Refresh Track",
+			Artist:     "Refresh Artist",
+			SortArtist: "Artist, Refresh",
+			Album:      "Refresh Album",
+			SortAlbum:  "Refresh Album, The",
+		}),
+	})
+	app.Ffprobe = ffprobeStub
+
+	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
+		{Path: trackPath, Ext: "m4a", Size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	// Same identity keys, retagged sort names and a different artist spelling.
+	ffprobeStub.results[trackPath] = testMusicMetadataWithTags(ffprobe.FormatTags{
+		Title:      "Refresh Track",
+		Artist:     "REFRESH ARTIST",
+		SortArtist: "Artist, Refreshed",
+		Album:      "Refresh Album",
+		SortAlbum:  "Refresh Album, A",
+	})
+
+	scanned, skipped, errCount = app.processMusicBatchForTest(context.Background(), []helpers.ScanFile{
+		{Path: trackPath, Ext: "m4a", Size: 8},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians"); got != 1 {
+		t.Fatalf("musician count = %d, want 1", got)
+	}
+
+	var musicianName string
+	var sortName string
+	err := app.DB.QueryRow("SELECT name, sort_name FROM musicians WHERE name_key = ?", "refresh artist").Scan(&musicianName, &sortName)
+	if err != nil {
+		t.Fatalf("get rescanned musician: %v", err)
+	}
+	if sortName != "Artist, Refreshed" {
+		t.Fatalf("musician sort_name = %q, want refreshed Artist, Refreshed", sortName)
+	}
+	if musicianName != "Refresh Artist" {
+		t.Fatalf("musician name = %q, want unchanged first spelling Refresh Artist", musicianName)
+	}
+
+	var sortTitle string
+	err = app.DB.QueryRow("SELECT sort_title FROM albums WHERE title = ?", "Refresh Album").Scan(&sortTitle)
+	if err != nil {
+		t.Fatalf("get rescanned album: %v", err)
+	}
+	if sortTitle != "Refresh Album, A" {
+		t.Fatalf("album sort_title = %q, want refreshed Refresh Album, A", sortTitle)
+	}
+}
+
+func TestResolveTrackMusicians(t *testing.T) {
+	tests := []struct {
+		name       string
+		artistTag  string
+		sortArtist string
+		artistMBID string
+		want       []resolvedMusician
+	}{
+		{
+			name:       "single credit claims valid mbid",
+			artistTag:  "Beyoncé",
+			sortArtist: "Knowles, Beyoncé",
+			artistMBID: "859D0860-D480-4EFD-970C-C05D5F1882B9",
+			want: []resolvedMusician{
+				{name: "Beyoncé", sortName: "Knowles, Beyoncé", nameKey: "beyonce", mbArtistID: "859d0860-d480-4efd-970c-c05d5f1882b9"},
+			},
+		},
+		{
+			name:      "single credit without sort artist falls back to name",
+			artistTag: "Adele",
+			want: []resolvedMusician{
+				{name: "Adele", sortName: "Adele", nameKey: "adele"},
+			},
+		},
+		{
+			name:       "compound credit never claims the mbid",
+			artistTag:  "Artist One feat. Artist Two",
+			sortArtist: "One, Artist",
+			artistMBID: "859d0860-d480-4efd-970c-c05d5f1882b9",
+			want: []resolvedMusician{
+				{name: "Artist One", sortName: "Artist One", nameKey: "artist one"},
+				{name: "Artist Two", sortName: "Artist Two", nameKey: "artist two"},
+			},
+		},
+		{
+			name:       "invalid mbid is dropped",
+			artistTag:  "Adele",
+			artistMBID: "not-a-musicbrainz-id",
+			want: []resolvedMusician{
+				{name: "Adele", sortName: "Adele", nameKey: "adele"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveTrackMusicians(tt.artistTag, tt.sortArtist, tt.artistMBID)
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("resolveTrackMusicians(%q, %q, %q) = %#v, want %#v",
+					tt.artistTag, tt.sortArtist, tt.artistMBID, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseTrackTotal(t *testing.T) {
+	tests := []struct {
+		name     string
+		totalTag string
+		trackTag string
+		want     int64
+	}{
+		{"total tag wins", "10", "", 10},
+		{"total tag beats track fraction", "12", "3/10", 12},
+		{"track fraction fallback", "", "3/12", 12},
+		{"plain track number has no total", "", "5", 0},
+		{"garbage yields zero", "garbage", "junk", 0},
+		{"empty tags yield zero", "", "", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseTrackTotal(tt.totalTag, tt.trackTag)
+			if got != tt.want {
+				t.Fatalf("parseTrackTotal(%q, %q) = %d, want %d", tt.totalTag, tt.trackTag, got, tt.want)
+			}
+		})
 	}
 }

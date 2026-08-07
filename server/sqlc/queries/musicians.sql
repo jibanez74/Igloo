@@ -1,45 +1,29 @@
--- name: GetMusicianBySpotifyID :one
+-- name: GetMusicianByNameKey :one
 SELECT
   *
 FROM musicians
-WHERE spotify_id = ?
+WHERE name_key = ?
 LIMIT 1;
-
--- name: GetMusicianByName :one
-SELECT
-  *
-FROM musicians
-WHERE name = ?
-LIMIT 1;
-
--- name: UpdateMusicianSpotifyThumb :one
-UPDATE musicians
-SET
-  thumb = ?,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-RETURNING *;
 
 -- name: UpsertMusician :one
+-- Tag-owned fields only; enrichment columns (summary, thumb, audiodb id) are
+-- written by UpdateMusicianEnrichment. name is display-only and deliberately
+-- absent from the update list: the first scanned spelling wins so a later
+-- ASCII variant cannot degrade a name with diacritics. mb_artist_id is
+-- fill-only so an already-established identity is never rewritten by a track
+-- carrying a different tag.
 INSERT INTO musicians (
   name,
+  name_key,
   sort_name,
-  summary,
-  spotify_id,
-  spotify_popularity,
-  spotify_followers,
-  thumb
+  mb_artist_id
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (name) DO UPDATE
+  (?, ?, ?, ?)
+ON CONFLICT (name_key) DO UPDATE
 SET
   sort_name = excluded.sort_name,
-  summary = COALESCE(excluded.summary, musicians.summary),
-  spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
-  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
-  thumb = COALESCE(excluded.thumb, musicians.thumb),
+  mb_artist_id = COALESCE(musicians.mb_artist_id, excluded.mb_artist_id),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
