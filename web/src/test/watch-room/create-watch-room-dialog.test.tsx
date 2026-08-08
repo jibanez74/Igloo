@@ -119,6 +119,8 @@ function videoStream(overrides: Partial<VideoStreamType> = {}): VideoStreamType 
     color_space: { String: "", Valid: false },
     color_primaries: { String: "", Valid: false },
     color_transfer: { String: "", Valid: false },
+    field_order: { String: "", Valid: false },
+    rotation: { Int64: 0, Valid: false },
     language: { String: "", Valid: false },
     title: { String: "", Valid: false },
     ...overrides,

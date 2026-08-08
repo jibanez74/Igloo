@@ -109,6 +109,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 				"-c:a aac", "-ac 2", "-b:a 320k",
 				"-avoid_negative_ts make_zero", "-fflags +genpts",
 				"-hls_segment_type fmp4", "-hls_playlist_type event",
+				"-hls_flags independent_segments",
 			},
 			// No explicit thread cap: libx264 auto-detects its thread count and
 			// the concurrency limiter bounds total CPU pressure. A stray
@@ -131,7 +132,11 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			copyVideo:  true,
 			copyAudio:  true,
 			want:       []string{"-c:v copy", "-c:a copy"},
-			notWant:    []string{"libx264", "-hwaccel"},
+			// Copy output splits on whatever keyframes the source carries, and
+			// the remux validator only samples four fragments, so FFmpeg must
+			// not stamp the playlist as independently decodable throughout.
+			notWant:  []string{"libx264", "-hwaccel", "independent_segments"},
+			notFlags: []string{"-hls_flags"},
 		},
 		{
 			name:       "copies video and transcodes audio",
@@ -153,6 +158,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			notWant: []string{
 				"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv",
 				"-hwaccel", "scale=", "-sc_threshold", "-force_key_frames",
+				"independent_segments",
 			},
 		},
 		{
@@ -233,6 +239,23 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			requireArgSubstrings(t, args, tt.want, tt.notWant, tt.notFlags)
 		})
 	}
+}
+
+// Copy-video sessions cannot filter, so a deinterlace request must not leak a
+// -vf into the remux command; the gate keeps interlaced sources off remux in
+// the first place.
+func TestBuildHLSArgs_RemuxIgnoresDeinterlace(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_REMUX,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		Deinterlace:      true,
+	})
+
+	requireArgSubstrings(t, args, []string{"-c:v copy"}, []string{"yadif"}, []string{"-vf"})
 }
 
 func TestBuildHLSArgs_SeekOffset(t *testing.T) {
@@ -429,6 +452,7 @@ func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 	requireArgumentValue(t, args, "-f", "hls")
 	requireArgumentValue(t, args, "-hls_segment_type", "fmp4")
 	requireArgumentValue(t, args, "-hls_playlist_type", "event")
+	requireArgumentValue(t, args, "-hls_flags", "independent_segments")
 	requireArgumentValue(t, args, "-hls_list_size", "0")
 	requireArgumentValue(t, args, "-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC))
 	requireArgumentValue(t, args, "-hls_fmp4_init_filename", helpers.HLS_INIT_FILENAME)

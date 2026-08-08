@@ -23,18 +23,22 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 	nvidiaRuntimeProbeFailed.H264NVENCRuntimeUsable = false
 	nvidiaRuntimeProbeFailed.H264NVENCProbeError = "no capable devices"
 
+	nvidiaWithoutEncoderOptions := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	nvidiaWithoutEncoderOptions.EncoderOptions["h264_nvenc"] = map[string]bool{}
+
 	sdrScale := fmt.Sprintf("scale=-2:%d", helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS].Height)
 
 	tests := []struct {
-		name      string
-		device    string
-		profile   string
-		tonemap   bool
-		caps      Capabilities
-		want      []string
-		notWant   []string
-		notFlags  []string
-		wantOrder [][2]string
+		name        string
+		device      string
+		profile     string
+		tonemap     bool
+		deinterlace bool
+		caps        Capabilities
+		want        []string
+		notWant     []string
+		notFlags    []string
+		wantOrder   [][2]string
 	}{
 		// --- SDR, no probed hardware filter support ---
 		{
@@ -52,11 +56,27 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			wantOrder: [][2]string{{"-hwaccel", "-i"}},
 		},
 		{
-			name:    "nvidia decodes with cuda and encodes with NVENC",
-			device:  helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			caps:    hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
-			want:    []string{"-hwaccel cuda", "h264_nvenc", "-rc vbr", "-preset p4", sdrScale},
+			// -forced-idr is what turns NVENC's forced keyframes into IDR
+			// frames; without it they are plain intra frames that later frames
+			// may reference across, which breaks segment-level random access.
+			name:   "nvidia decodes with cuda and encodes with NVENC",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
+			want: []string{
+				"-hwaccel cuda", "h264_nvenc", "-rc vbr", "-preset p4",
+				"-forced-idr 1", "-hls_flags independent_segments", sdrScale,
+			},
 			notWant: []string{"-sc_threshold"},
+		},
+		{
+			// A build whose NVENC lacks the option cannot promise IDR frames,
+			// so the playlist must drop the independence claim with it.
+			name:     "nvidia omits forced-idr and the independence tag when unprobed",
+			device:   helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:     nvidiaWithoutEncoderOptions,
+			want:     []string{"h264_nvenc", "-rc vbr", "-preset p4"},
+			notWant:  []string{"-forced-idr", "independent_segments"},
+			notFlags: []string{"-hls_flags"},
 		},
 		{
 			name:   "intel encodes with QSV and software scale",
@@ -186,7 +206,69 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			device:   helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
 			caps:     intelQSVWithoutEncoderOptions,
 			want:     []string{"h264_qsv"},
-			notFlags: []string{"-preset", "-look_ahead", "-forced_idr"},
+			notWant:  []string{"independent_segments"},
+			notFlags: []string{"-preset", "-look_ahead", "-forced_idr", "-hls_flags"},
+		},
+
+		// --- deinterlacing: software yadif prepends at the chain head, where
+		// decoded frames are in system memory on every path (no chain sets
+		// -hwaccel_output_format; CUDA/QSV hwupload from system memory) ---
+		{
+			name:        "cpu deinterlaces before scaling",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			deinterlace: true,
+			want:        []string{"yadif," + sdrScale + ",format=yuv420p", "libx264"},
+		},
+		{
+			name:        "cpu deinterlaces before the software tone-map",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			profile:     helpers.HLS_PROFILE_1080P_8MBPS,
+			tonemap:     true,
+			deinterlace: true,
+			want:        []string{"yadif,zscale", "tonemap=tonemap=hable"},
+		},
+		{
+			name:        "apple SDR deinterlaces on the software chain",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			deinterlace: true,
+			caps:        hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE),
+			want:        []string{"yadif," + sdrScale, "h264_videotoolbox"},
+		},
+		{
+			// scale_vt consumes hardware frames, so interlaced HDR sources are
+			// routed to the software zscale chain instead.
+			name:        "apple HDR deinterlace falls back to the software tone-map",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			profile:     helpers.HLS_PROFILE_1080P_8MBPS,
+			tonemap:     true,
+			deinterlace: true,
+			want:        []string{"yadif,zscale", "tonemap=tonemap=hable", "h264_videotoolbox"},
+			notWant:     []string{"scale_vt"},
+		},
+		{
+			name:        "nvidia deinterlaces before hwupload",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			deinterlace: true,
+			caps:        hlsTestNvidiaCapabilities(false),
+			want:        []string{"yadif,format=nv12,hwupload,scale_cuda=w=-2:h=720:format=yuv420p"},
+		},
+		{
+			name:        "nvidia deinterlaces before the GPU tone-map",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			tonemap:     true,
+			deinterlace: true,
+			caps:        hlsTestNvidiaCapabilities(true),
+			want: []string{
+				"yadif,format=p010le,hwupload,scale_cuda=w=-2:h=720:format=p010",
+				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
+			},
+		},
+		{
+			name:        "intel deinterlaces before hwupload",
+			device:      helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			deinterlace: true,
+			caps:        hlsTestIntelQSVScaleCapabilities(),
+			want:        []string{"yadif,format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=720:format=nv12"},
 		},
 	}
 
@@ -204,6 +286,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 				AudioStreamIndex: 1,
 				HWDevice:         tt.device,
 				TonemapHDR:       tt.tonemap,
+				Deinterlace:      tt.deinterlace,
 				Capabilities:     tt.caps,
 			})
 
@@ -298,6 +381,105 @@ func TestBuildHLSArgs_KeyframeArgs(t *testing.T) {
 			})
 
 			requireArgSubstrings(t, args, tt.want, tt.notWant, nil)
+		})
+	}
+}
+
+// #EXT-X-INDEPENDENT-SEGMENTS asserts that a player may start decoding at any
+// segment. That only holds when -force_key_frames yields IDR frames, which
+// libx264 and VideoToolbox always do but NVENC and QSV only do with their
+// forced-IDR option. Copy-video is never independent: the remux validator
+// samples HLS_REMUX_PREVALIDATE_SEGMENTS fragments at the session's start
+// offset and cannot rule out a later GOP-structure change in the source.
+func TestHLSSegmentsAreIndependent(t *testing.T) {
+	nvidiaWithoutForcedIDR := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	nvidiaWithoutForcedIDR.EncoderOptions["h264_nvenc"] = map[string]bool{}
+
+	intelWithoutForcedIDR := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
+	intelWithoutForcedIDR.EncoderOptions["h264_qsv"] = map[string]bool{}
+
+	tests := []struct {
+		name      string
+		device    string
+		profile   string
+		copyVideo bool
+		caps      Capabilities
+		want      bool
+	}{
+		{name: "cpu transcode", device: helpers.HARDWARE_ACCELERATION_DEVICE_CPU, want: true},
+		{
+			name:   "apple transcode",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE),
+			want:   true,
+		},
+		{
+			name:   "nvidia transcode with forced-idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
+			want:   true,
+		},
+		{
+			name:   "nvidia transcode without forced-idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:   nvidiaWithoutForcedIDR,
+			want:   false,
+		},
+		{
+			name:   "intel transcode with forced_idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL),
+			want:   true,
+		},
+		{
+			name:   "intel transcode without forced_idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps:   intelWithoutForcedIDR,
+			want:   false,
+		},
+		{
+			// The device downgrades to libx264, which does force IDRs.
+			name:   "nvidia falls back to CPU when the runtime probe fails",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps: func() Capabilities {
+				caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+				caps.H264NVENCRuntimeUsable = false
+				return caps
+			}(),
+			want: true,
+		},
+		{
+			name:      "copy video",
+			device:    helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			copyVideo: true,
+			want:      false,
+		},
+		{
+			name:    "remux profile",
+			device:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			profile: helpers.HLS_PROFILE_REMUX,
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := tt.profile
+			if profile == "" {
+				profile = helpers.HLS_PROFILE_720P_3MBPS
+			}
+			got := HLSSegmentsAreIndependent(HLSParams{
+				SourcePath:       "/s",
+				Profile:          profile,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         tt.device,
+				CopyVideo:        tt.copyVideo,
+				Capabilities:     tt.caps,
+			})
+			if got != tt.want {
+				t.Fatalf("HLSSegmentsAreIndependent() = %t, want %t", got, tt.want)
+			}
 		})
 	}
 }

@@ -22,6 +22,7 @@ const nativeHlsSupport = vi.hoisted(() => ({ supported: false }));
 type FakeHlsInstance = {
   listeners: Map<string, FakeHlsListener[]>;
   trigger: (event: string, data: unknown) => void;
+  destroyed: boolean;
 };
 
 vi.mock("@/lib/playback", async (importOriginal) => {
@@ -51,6 +52,7 @@ vi.mock("hls.js/light", () => {
     };
 
     listeners = new Map<string, FakeHlsListener[]>();
+    destroyed = false;
 
     constructor() {
       fakeHlsInstances.push(this);
@@ -74,7 +76,9 @@ vi.mock("hls.js/light", () => {
     loadSource() {}
     attachMedia() {}
     recoverMediaError() {}
-    destroy() {}
+    destroy() {
+      this.destroyed = true;
+    }
   }
 
   return { default: FakeHls };
@@ -246,6 +250,73 @@ describe("VideoPlayer source lifecycle on start changes", () => {
     // Audit D11 guard: the subtitle track must stay enabled across the change.
     const track = video.querySelector<HTMLTrackElement>("track[data-subtitle]");
     expect(track?.track.mode).toBe("showing");
+  });
+
+  // H10: dispose must tear down exactly the instance it belongs to. The
+  // identity guard inside disposeHls (only null hlsRef when it still points
+  // at the disposed instance) is not separately observable here, but this
+  // pins the surrounding contract: a rebuild destroys the replaced instance,
+  // never the live one, and unmount destroys the survivor.
+  it("destroys only the replaced instance when the source changes", async () => {
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+    };
+    const { rerender, unmount } = render(
+      <VideoPlayer
+        {...baseProps}
+        src="/api/movies/1/hls/remux/playlist.m3u8?playback_session=a&start=0"
+      />,
+    );
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(1);
+
+    rerender(
+      <VideoPlayer
+        {...baseProps}
+        src="/api/movies/1/hls/remux/playlist.m3u8?playback_session=b&start=0"
+      />,
+    );
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(2);
+    expect(fakeHlsInstances[0].destroyed).toBe(true);
+    expect(fakeHlsInstances[1].destroyed).toBe(false);
+
+    unmount();
+    expect(fakeHlsInstances[1].destroyed).toBe(true);
+  });
+
+  // The fallback seek effect used to gate on hlsRef, which is assigned
+  // asynchronously and still null when the effect runs on a fresh hls.js
+  // mount — so its loadedmetadata listener competed with hls.js's own
+  // startPosition seek. The gate is by source type now.
+  it("does not compete with hls.js startPosition on a fresh mount", async () => {
+    const onStartApplied = vi.fn();
+    const videoRef = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        videoRef={videoRef}
+        src="/api/movies/1/hls/remux/playlist.m3u8?playback_session=a&start=30"
+        isHlsSource
+        title="Test Movie"
+        onError={vi.fn()}
+        startSec={30}
+        onStartApplied={onStartApplied}
+      />,
+    );
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(1);
+    const video = screen.getByLabelText(
+      "Video player for Test Movie",
+    ) as HTMLVideoElement;
+
+    fireEvent(video, new Event("loadedmetadata"));
+
+    expect(onStartApplied).not.toHaveBeenCalled();
+    expect(video.currentTime).toBe(0);
   });
 
   // Lock-in: for hls.js the URL can stay identical while startSec changes (a

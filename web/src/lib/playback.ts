@@ -86,8 +86,17 @@ function isContainerDirectPlayable(mimeType: string): boolean {
 /** Video fields the direct-play eligibility rules consult. */
 export type DirectPlayVideoInfo = Pick<
   VideoStreamType,
-  "codec" | "codec_profile" | "codec_level" | "height" | "bit_depth" | "pixel_format"
+  | "codec"
+  | "codec_profile"
+  | "codec_level"
+  | "height"
+  | "bit_depth"
+  | "pixel_format"
+  | "field_order"
 >;
+
+/** ffprobe field_order values that mark a stream interlaced. */
+const INTERLACED_FIELD_ORDERS = ["tt", "bb", "tb", "bt"];
 
 const NON_BROWSER_H264_PROFILE_MARKERS = ["10", "4:2:2", "422", "4:4:4", "444"];
 /**
@@ -129,6 +138,15 @@ function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
     profile &&
     NON_BROWSER_H264_PROFILE_MARKERS.some((m) => profile.includes(m))
   ) {
+    return false;
+  }
+
+  // Browsers do not deinterlace, so both direct play and remux would display
+  // combed frames; only the transcode path applies yadif.
+  const fieldOrder = unwrapStringOrUndefined(video.field_order)
+    ?.trim()
+    .toLowerCase();
+  if (fieldOrder && INTERLACED_FIELD_ORDERS.includes(fieldOrder)) {
     return false;
   }
 

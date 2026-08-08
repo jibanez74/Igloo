@@ -51,7 +51,6 @@ type Application struct {
 	// HLSMaxPersonalSessionsPerUser caps concurrent personal HLS sessions per
 	// user; zero falls back to hlsMaxPersonalSessionsPerUserDefault.
 	HLSMaxPersonalSessionsPerUser int
-	RemuxSafetyCache              *cache.Cache
 	SubtitleVTTCache              *cache.Cache
 	SubtitleExtractGroup          singleflight.Group
 	RoomHLSTombstone              *cache.Cache
@@ -211,10 +210,6 @@ func (app *Application) initRuntimeCaches() {
 		}
 	})
 	app.HLSSessionCache = hlsCache
-	app.RemuxSafetyCache = cache.New(
-		hlsRemuxSafetyCacheTTL,
-		hlsRemuxSafetyCacheSweep,
-	)
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)

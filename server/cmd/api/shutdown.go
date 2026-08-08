@@ -91,9 +91,6 @@ func (app *Application) cleanupHLSSessions() {
 }
 
 func (app *Application) flushRuntimeCaches() {
-	if app.RemuxSafetyCache != nil {
-		app.RemuxSafetyCache.Flush()
-	}
 	if app.SubtitleVTTCache != nil {
 		app.SubtitleVTTCache.Flush()
 	}

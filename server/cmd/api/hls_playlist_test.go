@@ -72,6 +72,7 @@ func TestRewritePlaylistURLs(t *testing.T) {
 	playlist := strings.Join([]string{
 		"#EXTM3U",
 		"#EXT-X-VERSION:7",
+		"#EXT-X-INDEPENDENT-SEGMENTS",
 		"#EXT-X-TARGETDURATION:8",
 		"#EXT-X-MEDIA-SEQUENCE:0",
 		"#EXT-X-PLAYLIST-TYPE:VOD",
@@ -92,6 +93,7 @@ func TestRewritePlaylistURLs(t *testing.T) {
 	want := strings.Join([]string{
 		"#EXTM3U",
 		"#EXT-X-VERSION:7",
+		"#EXT-X-INDEPENDENT-SEGMENTS",
 		"#EXT-X-TARGETDURATION:8",
 		"#EXT-X-MEDIA-SEQUENCE:0",
 		"#EXT-X-PLAYLIST-TYPE:VOD",
@@ -180,7 +182,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL := "/api/movies/1/hls/720p_3mbps/"
 			querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &tt.audioTrack})
-			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix)
+			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix, true)
 
 			if !strings.HasPrefix(got, "#EXTM3U\n") {
 				t.Error("playlist must start with #EXTM3U")
@@ -190,6 +192,14 @@ func TestGenerateVODPlaylist(t *testing.T) {
 			}
 			if !strings.Contains(got, "#EXT-X-ENDLIST") {
 				t.Error("VOD playlist must include #EXT-X-ENDLIST")
+			}
+			// Keyframes are forced onto every segment boundary, so the playlist
+			// must advertise independently decodable segments.
+			if strings.Count(got, "#EXT-X-INDEPENDENT-SEGMENTS\n") != 1 {
+				t.Errorf("expected exactly one #EXT-X-INDEPENDENT-SEGMENTS tag, got:\n%s", got)
+			}
+			if strings.Index(got, "#EXT-X-INDEPENDENT-SEGMENTS") > strings.Index(got, "#EXTINF:") {
+				t.Errorf("#EXT-X-INDEPENDENT-SEGMENTS must precede the first #EXTINF, got:\n%s", got)
 			}
 
 			// Transcode sessions force keyframes on segment boundaries, so the
@@ -230,5 +240,26 @@ func TestGenerateVODPlaylist(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// An encoder that cannot promise IDR frames on forced keyframes (NVENC or QSV
+// on a build without their forced-IDR option) must not have the playlist claim
+// independence on its behalf: a native HLS player would seek straight into a
+// segment that still references the previous GOP.
+func TestGenerateVODPlaylistOmitsIndependentSegmentsWhenNotGuaranteed(t *testing.T) {
+	baseURL := "/api/movies/1/hls/720p_3mbps/"
+	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)})
+
+	got := generateVODPlaylist(float64(helpers.HLS_SEGMENT_TIME_SEC)*2, baseURL, querySuffix, false)
+
+	if strings.Contains(got, "#EXT-X-INDEPENDENT-SEGMENTS") {
+		t.Errorf("playlist must omit #EXT-X-INDEPENDENT-SEGMENTS, got:\n%s", got)
+	}
+	if !strings.HasPrefix(got, "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:") {
+		t.Errorf("playlist header is malformed without the tag, got:\n%s", got)
+	}
+	if !strings.Contains(got, "#EXT-X-ENDLIST") {
+		t.Errorf("VOD playlist must still include #EXT-X-ENDLIST, got:\n%s", got)
 	}
 }

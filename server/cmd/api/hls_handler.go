@@ -262,7 +262,7 @@ func buildHLSPlaylistBody(
 		if finalPlaylist != "" {
 			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
 		}
-		return generateVODPlaylist(durationSec, baseURL, querySuffix), nil
+		return generateVODPlaylist(durationSec, baseURL, querySuffix, session.IndependentSegments), nil
 	}
 
 	ticker := time.NewTicker(hlsRemuxPreflightPoll)

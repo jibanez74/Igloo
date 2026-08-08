@@ -358,6 +358,12 @@ CREATE TABLE
     color_space TEXT,
     color_primaries TEXT,
     color_transfer TEXT,
+    -- ffprobe field_order (tt/bb/tb/bt = interlaced); NULL on rows scanned
+    -- before the column existed, which playback treats as progressive.
+    field_order TEXT,
+    -- Display-matrix rotation in degrees; NULL when the stream has no
+    -- display matrix (an explicit 0-degree matrix persists as 0).
+    rotation INTEGER,
     language TEXT,
     title TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -408,6 +414,42 @@ CREATE TABLE
   );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_subtitles_movie_stream ON subtitles (movie_id, stream_index);
+
+-- Persisted remux-safety verdicts, one per movie video stream. The fingerprint
+-- captures file identity (size, updated_at) plus the stream properties the
+-- safety gate reads; a mismatch on lookup means the file changed and the
+-- verdict is recomputed. Only definitive preflight validation results are
+-- stored, never transient preflight timeouts.
+CREATE TABLE
+  IF NOT EXISTS remux_safety_verdicts (
+    movie_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    fingerprint TEXT NOT NULL,
+    safe BOOLEAN NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (movie_id, stream_index),
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+-- Persisted keyframe indexes, one per movie video stream, extracted from the
+-- container's own seek tables (Matroska Cues, MP4 sample tables) on first
+-- copy-video playback. The fingerprint captures file identity; a mismatch on
+-- lookup means the file changed and the index is re-extracted. keyframes is a
+-- JSON array of ascending keyframe presentation times in seconds.
+CREATE TABLE
+  IF NOT EXISTS keyframe_indexes (
+    movie_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    fingerprint TEXT NOT NULL,
+    duration_sec REAL NOT NULL,
+    keyframes TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (movie_id, stream_index),
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
 
 -- Chapter markers and thumbnails for movie timelines.
 CREATE TABLE

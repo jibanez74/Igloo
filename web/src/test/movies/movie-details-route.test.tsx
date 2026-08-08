@@ -211,6 +211,8 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         color_space: nullableString("bt709"),
         color_primaries: nullableString("bt709"),
         color_transfer: nullableString("bt709"),
+        field_order: nullableString("progressive"),
+        rotation: nullableInt64(),
         language: nullableString("en"),
         title: nullableString("Main"),
       },

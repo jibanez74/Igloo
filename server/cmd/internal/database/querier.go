@@ -118,6 +118,9 @@ type Querier interface {
 	GetGenresByMovieID(ctx context.Context, movieID int64) ([]GetGenresByMovieIDRow, error)
 	// Returns all genres associated with a musician
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error)
+	// Persisted keyframe index for one video stream; the caller compares the
+	// stored fingerprint and treats a mismatch as a miss.
+	GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (KeyframeIndex, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
@@ -186,6 +189,9 @@ type Querier interface {
 	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
 	// stays random too.
 	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
+	// Persisted remux-safety verdict for one video stream; the caller compares
+	// the stored fingerprint and treats a mismatch as a miss.
+	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (RemuxSafetyVerdict, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
@@ -301,6 +307,7 @@ type Querier interface {
 	// Insert or update an extra video by external_id (e.g. TMDB video id). Use for trailers/special features.
 	// Call with a non-null external_id so conflicts are detected; then link via CreateMovieExtraVideo.
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (ExtraVideo, error)
+	UpsertKeyframeIndex(ctx context.Context, arg UpsertKeyframeIndexParams) error
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
@@ -308,6 +315,7 @@ type Querier interface {
 	// Creates a relationship between a musician and a genre (idempotent)
 	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (ProductionCompany, error)
+	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error

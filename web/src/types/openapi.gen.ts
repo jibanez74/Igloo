@@ -2418,6 +2418,8 @@ export interface components {
             color_space: components["schemas"]["SqlNullString"];
             color_primaries: components["schemas"]["SqlNullString"];
             color_transfer: components["schemas"]["SqlNullString"];
+            field_order: components["schemas"]["SqlNullString"];
+            rotation: components["schemas"]["SqlNullInt64"];
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
             created_at: string;
