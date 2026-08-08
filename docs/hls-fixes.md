@@ -1,6 +1,6 @@
 # HLS: Remaining Recommended Work
 
-This register carries forward the open items from the 2026-07-28 HLS playback audit (`docs/web-hls-playback-audit.md`, since removed) after the 2026-08-06 reliability pass, which closed H6 (remux-safety verdicts now persist in the `remux_safety_verdicts` table), H13 (`#EXT-X-INDEPENDENT-SEGMENTS` handling; `#EXT-X-START` deliberately dropped — see R2 below for the 2026-08-07 correction to which playlists carry the tag), and H20 (failed temp-dir removals are logged). Items keep their audit IDs. "Verified" means the gap was confirmed in code or measured; "hypothesis" means it is plausible but has not been reproduced.
+This register carries forward the open items from the 2026-07-28 HLS playback audit (removed once its findings were either fixed or recorded here; recoverable from git history) after the 2026-08-06 reliability pass, which closed H6 (remux-safety verdicts now persist in the `remux_safety_verdicts` table), H13 (`#EXT-X-INDEPENDENT-SEGMENTS` handling; `#EXT-X-START` deliberately dropped — see R2 below for the 2026-08-07 correction to which playlists carry the tag), and H20 (failed temp-dir removals are logged). Items keep their audit IDs. "Verified" means the gap was confirmed in code or measured; "hypothesis" means it is plausible but has not been reproduced.
 
 ## ~~R1 — NVENC never forced IDR frames~~ (CLOSED 2026-08-07)
 

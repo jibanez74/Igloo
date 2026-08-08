@@ -31,7 +31,8 @@ const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"]
  * in a <video> element — it stalls silently at 0ms with no MediaError — so do
  * NOT add video/x-matroska here. video/webm and video/ogg were dead entries:
  * WebM cannot carry H.264 (the only allowed video codec) and .ogv is not a
- * valid scanner extension. See docs/web-direct-playback-audit.md §3.2, §5.6.
+ * valid scanner extension. See "Direct Play Eligibility and Fallback" in
+ * docs/ffmpeg.md.
  */
 const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4"];
 
@@ -227,7 +228,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
       // The probe may only narrow eligibility, never widen it: the watch-room
       // server enforces the same direct ⊂ remux invariant from the static
       // rules alone and cannot ask a browser. Keep this an AND, never an OR.
-      // See docs/web-direct-playback-audit.md §3.4 (D3).
+      // See "Direct Play Eligibility and Fallback" in docs/ffmpeg.md.
       const canPlay = args.canPlay ?? defaultCanPlayProbe;
       const typeString = buildDirectPlayTypeString(video, audioStreams?.[0]);
       return canPlay(typeString) !== "";
