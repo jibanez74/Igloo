@@ -132,7 +132,11 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			copyVideo:  true,
 			copyAudio:  true,
 			want:       []string{"-c:v copy", "-c:a copy"},
-			notWant:    []string{"libx264", "-hwaccel"},
+			// Copy output splits on whatever keyframes the source carries, and
+			// the remux validator only samples four fragments, so FFmpeg must
+			// not stamp the playlist as independently decodable throughout.
+			notWant:  []string{"libx264", "-hwaccel", "independent_segments"},
+			notFlags: []string{"-hls_flags"},
 		},
 		{
 			name:       "copies video and transcodes audio",
@@ -154,6 +158,7 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			notWant: []string{
 				"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv",
 				"-hwaccel", "scale=", "-sc_threshold", "-force_key_frames",
+				"independent_segments",
 			},
 		},
 		{

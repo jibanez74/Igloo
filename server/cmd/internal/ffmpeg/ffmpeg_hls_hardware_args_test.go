@@ -23,6 +23,9 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 	nvidiaRuntimeProbeFailed.H264NVENCRuntimeUsable = false
 	nvidiaRuntimeProbeFailed.H264NVENCProbeError = "no capable devices"
 
+	nvidiaWithoutEncoderOptions := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	nvidiaWithoutEncoderOptions.EncoderOptions["h264_nvenc"] = map[string]bool{}
+
 	sdrScale := fmt.Sprintf("scale=-2:%d", helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS].Height)
 
 	tests := []struct {
@@ -53,11 +56,27 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			wantOrder: [][2]string{{"-hwaccel", "-i"}},
 		},
 		{
-			name:    "nvidia decodes with cuda and encodes with NVENC",
-			device:  helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			caps:    hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
-			want:    []string{"-hwaccel cuda", "h264_nvenc", "-rc vbr", "-preset p4", sdrScale},
+			// -forced-idr is what turns NVENC's forced keyframes into IDR
+			// frames; without it they are plain intra frames that later frames
+			// may reference across, which breaks segment-level random access.
+			name:   "nvidia decodes with cuda and encodes with NVENC",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
+			want: []string{
+				"-hwaccel cuda", "h264_nvenc", "-rc vbr", "-preset p4",
+				"-forced-idr 1", "-hls_flags independent_segments", sdrScale,
+			},
 			notWant: []string{"-sc_threshold"},
+		},
+		{
+			// A build whose NVENC lacks the option cannot promise IDR frames,
+			// so the playlist must drop the independence claim with it.
+			name:     "nvidia omits forced-idr and the independence tag when unprobed",
+			device:   helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:     nvidiaWithoutEncoderOptions,
+			want:     []string{"h264_nvenc", "-rc vbr", "-preset p4"},
+			notWant:  []string{"-forced-idr", "independent_segments"},
+			notFlags: []string{"-hls_flags"},
 		},
 		{
 			name:   "intel encodes with QSV and software scale",
@@ -187,7 +206,8 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			device:   helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
 			caps:     intelQSVWithoutEncoderOptions,
 			want:     []string{"h264_qsv"},
-			notFlags: []string{"-preset", "-look_ahead", "-forced_idr"},
+			notWant:  []string{"independent_segments"},
+			notFlags: []string{"-preset", "-look_ahead", "-forced_idr", "-hls_flags"},
 		},
 
 		// --- deinterlacing: software yadif prepends at the chain head, where
@@ -361,6 +381,105 @@ func TestBuildHLSArgs_KeyframeArgs(t *testing.T) {
 			})
 
 			requireArgSubstrings(t, args, tt.want, tt.notWant, nil)
+		})
+	}
+}
+
+// #EXT-X-INDEPENDENT-SEGMENTS asserts that a player may start decoding at any
+// segment. That only holds when -force_key_frames yields IDR frames, which
+// libx264 and VideoToolbox always do but NVENC and QSV only do with their
+// forced-IDR option. Copy-video is never independent: the remux validator
+// samples HLS_REMUX_PREVALIDATE_SEGMENTS fragments at the session's start
+// offset and cannot rule out a later GOP-structure change in the source.
+func TestHLSSegmentsAreIndependent(t *testing.T) {
+	nvidiaWithoutForcedIDR := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	nvidiaWithoutForcedIDR.EncoderOptions["h264_nvenc"] = map[string]bool{}
+
+	intelWithoutForcedIDR := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
+	intelWithoutForcedIDR.EncoderOptions["h264_qsv"] = map[string]bool{}
+
+	tests := []struct {
+		name      string
+		device    string
+		profile   string
+		copyVideo bool
+		caps      Capabilities
+		want      bool
+	}{
+		{name: "cpu transcode", device: helpers.HARDWARE_ACCELERATION_DEVICE_CPU, want: true},
+		{
+			name:   "apple transcode",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE),
+			want:   true,
+		},
+		{
+			name:   "nvidia transcode with forced-idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
+			want:   true,
+		},
+		{
+			name:   "nvidia transcode without forced-idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:   nvidiaWithoutForcedIDR,
+			want:   false,
+		},
+		{
+			name:   "intel transcode with forced_idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps:   hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL),
+			want:   true,
+		},
+		{
+			name:   "intel transcode without forced_idr",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps:   intelWithoutForcedIDR,
+			want:   false,
+		},
+		{
+			// The device downgrades to libx264, which does force IDRs.
+			name:   "nvidia falls back to CPU when the runtime probe fails",
+			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps: func() Capabilities {
+				caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+				caps.H264NVENCRuntimeUsable = false
+				return caps
+			}(),
+			want: true,
+		},
+		{
+			name:      "copy video",
+			device:    helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			copyVideo: true,
+			want:      false,
+		},
+		{
+			name:    "remux profile",
+			device:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			profile: helpers.HLS_PROFILE_REMUX,
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := tt.profile
+			if profile == "" {
+				profile = helpers.HLS_PROFILE_720P_3MBPS
+			}
+			got := HLSSegmentsAreIndependent(HLSParams{
+				SourcePath:       "/s",
+				Profile:          profile,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         tt.device,
+				CopyVideo:        tt.copyVideo,
+				Capabilities:     tt.caps,
+			})
+			if got != tt.want {
+				t.Fatalf("HLSSegmentsAreIndependent() = %t, want %t", got, tt.want)
+			}
 		})
 	}
 }

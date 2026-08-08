@@ -26,19 +26,36 @@ func movieStreamFingerprintBase(movie *database.Movie, streamIndex int64) string
 	return fmt.Sprintf("%d:%d:%d:%s", movie.ID, streamIndex, movie.Size, movie.UpdatedAt)
 }
 
+// remuxVerdictProducerRevision versions everything on our side of the verdict:
+// the remux FFmpeg arguments and ValidateRemuxSafety itself. Bump it whenever
+// either changes, so verdicts recorded against the old behavior are discarded.
+const remuxVerdictProducerRevision = 1
+
 // remuxSafetyFingerprint keys the persisted remux-safety verdict. Beyond file
 // identity it includes the stream properties the safety decision reads
 // (isBrowserSafeH264RemuxCandidate), so a rescan that changes stream rows
 // without touching the file invalidates the verdict.
-func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) string {
+//
+// A verdict validates FFmpeg-generated fMP4 output, not just the source, so the
+// producer is part of the key too: ffmpegVersion covers an upgraded embedded
+// payload or a swapped PATH binary, and remuxVerdictProducerRevision covers our
+// own argument and validator changes. A mismatch fails open into a fresh
+// preflight, which costs one re-validation per file.
+func remuxSafetyFingerprint(
+	movie *database.Movie,
+	video *database.VideoStream,
+	ffmpegVersion string,
+) string {
 	return fmt.Sprintf(
-		"%s:%s:%s:%d:%s:%s",
+		"%s:%s:%s:%d:%s:%s:p%d:%s",
 		movieStreamFingerprintBase(movie, video.StreamIndex),
 		video.Codec,
 		video.CodecProfile.String,
 		video.BitDepth.Int64,
 		video.PixelFormat.String,
 		video.FieldOrder.String,
+		remuxVerdictProducerRevision,
+		ffmpegVersion,
 	)
 }
 

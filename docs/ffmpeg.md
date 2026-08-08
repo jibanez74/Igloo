@@ -111,7 +111,9 @@ The generated files match the HTTP handlers:
 
 fMP4 HLS is used because modern browser players handle it well and it works naturally with copied H.264 video, transcoded H.264 video, and AAC audio. A short 4-second target segment gives acceptable startup and seek behavior while keeping the number of segment files manageable. FFmpeg also receives `movflags=+frag_discont` for fMP4 segment output so independent fragments tolerate discontinuities across rebased sessions and copy-video boundaries.
 
-Both playlist flavors carry `#EXT-X-INDEPENDENT-SEGMENTS`: the synthesized transcode playlist writes it directly (accurate because `-force_key_frames` pins an IDR to every segment boundary), and copy-video sessions get it from FFmpeg via `-hls_flags independent_segments` (accurate because the remux validator only admits copy output whose sync samples are IDR frames). hls.js ignores the tag in media playlists, so its practical beneficiary is native HLS playback (Safari) plus spec conformance. `#EXT-X-START` is deliberately not emitted: every session is rebased to zero and the web client passes an explicit `startPosition` to hls.js, which would override the tag anyway.
+`#EXT-X-INDEPENDENT-SEGMENTS` is emitted only where the guarantee is proven, which is transcode sessions whose encoder turns `-force_key_frames` into real IDR frames. `ffmpeg.HLSSegmentsAreIndependent` is the single predicate: it decides both whether FFmpeg receives `-hls_flags independent_segments` (which controls the tag in FFmpeg's own playlist, never segmentation) and whether the synthesized transcode playlist writes the tag, so a session's two playlist flavors always agree. libx264 and VideoToolbox always force IDRs; NVENC and QSV only do with `-forced-idr`/`-forced_idr`, so a build that does not expose the option loses the tag along with the guarantee.
+
+Copy-video sessions never carry the tag. Their segments split on whatever keyframes the source encode left behind, and the remux validator only inspects the first 4 fragments at the session's start offset — a source whose GOP structure changes later in the file is never ruled out, so claiming whole-playlist independence would let a native HLS player seek straight into a segment that still references the previous GOP. hls.js ignores the tag in media playlists either way, so the practical beneficiary is native HLS playback (Safari) plus spec conformance. `#EXT-X-START` is deliberately not emitted: every session is rebased to zero and the web client passes an explicit `startPosition` to hls.js, which would override the tag anyway.
 
 FFmpeg writes an event playlist while encoding. For transcode sessions, Igloo generates a complete VOD playlist from the known movie duration during encoding so hls.js sees a seekable on-demand asset instead of a live/event stream; generated playlists use a target duration of 8 seconds. Copy-video sessions are served FFmpeg's own playlist instead, as described below. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
 
@@ -151,9 +153,11 @@ Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples 
 - wait for the first 4 complete segments
 - inspect the generated fMP4 fragments
 - verify sync samples in the video track start with IDR frames
-- persist the safe or unsafe verdict in the database (`remux_safety_verdicts`), keyed by movie and stream with a fingerprint of the file (size, update timestamp) and the stream properties the safety gate reads
+- persist the safe or unsafe verdict in the database (`remux_safety_verdicts`), keyed by movie and stream with a fingerprint of the file (size, update timestamp), the stream properties the safety gate reads, and the producer that generated the validated output
 
-Persisted verdicts survive server restarts, so the preflight cost is paid once per file rather than once per process. A verdict is recomputed only when its fingerprint changes — the file was replaced or rescanned with a new size or timestamp, or its stream properties changed. If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without persisting an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo persists the unsafe verdict and falls back immediately for later sessions on the same fingerprint.
+This is a sample, not a proof: the 4 segments are the session's first 4, so a preflight run for a seek covers that offset rather than the head of the file, and a GOP structure that changes later is not ruled out. That is why copy-video playlists do not advertise `#EXT-X-INDEPENDENT-SEGMENTS`.
+
+Persisted verdicts survive server restarts, so the preflight cost is paid once per file rather than once per process. A verdict is recomputed only when its fingerprint changes — the file was replaced or rescanned with a new size or timestamp, its stream properties changed, or the producer changed. The producer terms matter because a verdict validates FFmpeg-generated fMP4 output, not just the source: the fingerprint carries the FFmpeg version parsed from the startup `-version` banner (so an upgraded embedded payload or a swapped `IGLOO_FFMPEG_PATH` binary invalidates it) plus `remuxVerdictProducerRevision`, a constant to bump whenever the remux arguments or `ValidateRemuxSafety` change. Either kind of change costs one re-preflight per file. If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without persisting an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo persists the unsafe verdict and falls back immediately for later sessions on the same fingerprint.
 
 The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the highest configured transcode profile whose target height fits within the source height. If the source is smaller than every configured profile, it falls back to `720p_3mbps` so playback still has a reliable transcode path.
 
@@ -284,6 +288,7 @@ NVIDIA adds:
 
 ```text
 -rc vbr -preset p4
+-forced-idr 1
 ```
 
 Intel adds:
@@ -294,7 +299,7 @@ Intel adds:
 -forced_idr 1
 ```
 
-Igloo only sends those Intel encoder options when the probed FFmpeg build lists them for `h264_qsv`.
+Igloo only sends these encoder options when the probed FFmpeg build lists them for the encoder in question. The forced-IDR options are load-bearing rather than cosmetic: both encoders default them to false, and with the default FFmpeg asks for a plain intra frame at each `-force_key_frames` boundary instead of an IDR, so later frames may still reference across the segment boundary. When the option is missing from the build, the session also drops `#EXT-X-INDEPENDENT-SEGMENTS` rather than claim a guarantee it cannot make. Note the spelling differs by encoder: `-forced-idr` for `h264_nvenc`, `-forced_idr` for `h264_qsv`.
 
 At startup, after the `-version` executability check, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, encoder options, and selected runtime filter chains. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, failed QSV runtime probes, and missing Apple VideoToolbox encoder support fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
 

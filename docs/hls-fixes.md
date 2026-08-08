@@ -1,6 +1,18 @@
 # HLS: Remaining Recommended Work
 
-This register carries forward the open items from the 2026-07-28 HLS playback audit (`docs/web-hls-playback-audit.md`, since removed) after the 2026-08-06 reliability pass, which closed H6 (remux-safety verdicts now persist in the `remux_safety_verdicts` table), H13 (`#EXT-X-INDEPENDENT-SEGMENTS` emitted in both playlist flavors; `#EXT-X-START` deliberately dropped), and H20 (failed temp-dir removals are logged). Items keep their audit IDs. "Verified" means the gap was confirmed in code or measured; "hypothesis" means it is plausible but has not been reproduced.
+This register carries forward the open items from the 2026-07-28 HLS playback audit (`docs/web-hls-playback-audit.md`, since removed) after the 2026-08-06 reliability pass, which closed H6 (remux-safety verdicts now persist in the `remux_safety_verdicts` table), H13 (`#EXT-X-INDEPENDENT-SEGMENTS` handling; `#EXT-X-START` deliberately dropped — see R2 below for the 2026-08-07 correction to which playlists carry the tag), and H20 (failed temp-dir removals are logged). Items keep their audit IDs. "Verified" means the gap was confirmed in code or measured; "hypothesis" means it is plausible but has not been reproduced.
+
+## ~~R1 — NVENC never forced IDR frames~~ (CLOSED 2026-08-07)
+
+`buildHLSArgs` applied `-force_key_frames:0 expr:...` to every encoder, but the NVIDIA branch was only `-rc vbr -preset p4`. `h264_nvenc` defaults `-forced-idr` to false, and with that default FFmpeg requests a plain intra frame at each forced boundary instead of an IDR, so later frames could still reference across it — breaking segment-level random access for every client, not just native HLS players. `appendHLSNvidiaEncoderArgs` now appends `-forced-idr 1`, capability-gated on a new `recordEncoderOptions(bin, "h264_nvenc", ...)` probe, mirroring what QSV already did. Pinned by argument-level tests only (no GPU on the dev machine — same caveat as H18).
+
+## ~~R2 — the independence tag was not gated on a proven guarantee~~ (CLOSED 2026-08-07)
+
+`-hls_flags independent_segments` was passed unconditionally and the synthesized transcode playlist wrote `#EXT-X-INDEPENDENT-SEGMENTS` unconditionally, so both flavors advertised whole-playlist independence regardless of whether it held. Two holes: NVENC/QSV builds without their forced-IDR option (see R1), and copy-video output, where the remux validator only samples 4 fragments at the session's start offset and cannot rule out a later GOP-structure change in the source. Both playlist flavors are now gated on one predicate, `ffmpeg.HLSSegmentsAreIndependent`, surfaced to the API layer as `HLSSession.IndependentSegments`; copy-video never carries the tag. The old code comment claiming the flag was "inert" for transcodes was also wrong — `buildHLSPlaylistBody` serves FFmpeg's own finalized playlist once a transcode session exits. Deliberately *not* done: proving source-wide independence by walking every source keyframe's NAL type, which would add thousands of bounded reads per file to buy back a tag hls.js ignores.
+
+## ~~R3 — persisted remux verdicts outlived their producer~~ (CLOSED 2026-08-07)
+
+`remuxSafetyFingerprint` keyed verdicts on source metadata alone, but a verdict validates FFmpeg-generated fMP4 output. An embedded-payload upgrade, a swapped `IGLOO_FFMPEG_PATH` binary, or a change to the remux arguments left stale `safe=true` rows that skipped preflight against different muxer behavior. The fingerprint now carries the FFmpeg version (parsed from the startup `-version` banner, which `initializeCandidate` already runs — reused rather than probed twice) and `remuxVerdictProducerRevision`, a constant to bump when the remux arguments or `ValidateRemuxSafety` change. Like the field-order term in H19, this invalidates every previously persisted verdict once (one re-preflight per file).
 
 ## ~~Keyframe index~~ (CLOSED 2026-08-07)
 

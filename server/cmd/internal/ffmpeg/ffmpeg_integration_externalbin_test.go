@@ -60,6 +60,10 @@ func TestExternalFFmpegCPUHLSRemuxAndSubtitles(t *testing.T) {
 		if len(segments) < 2 {
 			t.Fatalf("CPU transcode produced %d segments, want at least 2", len(segments))
 		}
+		// libx264 honors -force_key_frames as IDR, so the transcode may claim
+		// independence — and this proves -hls_flags actually reaches FFmpeg's
+		// playlist rather than just appearing in the argument list.
+		assertHLSPlaylistIndependence(t, outDir, true)
 	})
 
 	t.Run("H264 AAC remux", func(t *testing.T) {
@@ -88,6 +92,10 @@ func TestExternalFFmpegCPUHLSRemuxAndSubtitles(t *testing.T) {
 		if summary.CheckedSegments != len(segments) || summary.CheckedSyncSamples < len(segments) {
 			t.Fatalf("remux validation summary = %#v, segments=%d", summary, len(segments))
 		}
+		// Copy-video is served FFmpeg's own playlist verbatim, and validation
+		// only ever samples the leading fragments, so the playlist must not
+		// claim independence even when this fixture happens to validate clean.
+		assertHLSPlaylistIndependence(t, outDir, false)
 	})
 
 	t.Run("subtitle conversion", func(t *testing.T) {
@@ -356,6 +364,21 @@ func assertCompleteSequentialHLSOutput(t *testing.T, outDir string) []string {
 		assertNonemptyFile(t, filepath.Join(outDir, match[0]))
 	}
 	return segments
+}
+
+// assertHLSPlaylistIndependence checks FFmpeg's own playlist, which copy-video
+// sessions are served verbatim and transcode sessions are served once the
+// session exits.
+func assertHLSPlaylistIndependence(t *testing.T, outDir string, want bool) {
+	t.Helper()
+	playlistData, err := os.ReadFile(filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME))
+	if err != nil {
+		t.Fatalf("read HLS playlist: %v", err)
+	}
+	got := strings.Contains(string(playlistData), "#EXT-X-INDEPENDENT-SEGMENTS")
+	if got != want {
+		t.Fatalf("playlist contains #EXT-X-INDEPENDENT-SEGMENTS = %t, want %t:\n%s", got, want, playlistData)
+	}
 }
 
 func assertNonemptyFile(t *testing.T, path string) {

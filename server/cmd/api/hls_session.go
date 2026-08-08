@@ -74,6 +74,11 @@ type HLSSession struct {
 	ExitMu        sync.Mutex
 	IsRoom        bool
 	CopyVideo     bool // true when FFmpeg uses -c:v copy for the effective session profile
+	// IndependentSegments is true when every segment is guaranteed to start on
+	// an IDR frame, which is the only case where the playlist may carry
+	// #EXT-X-INDEPENDENT-SEGMENTS. FFmpeg's own playlist is gated on the same
+	// value inside buildHLSArgs, so both playlist flavors agree per session.
+	IndependentSegments bool
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
 	EffectiveProfile string
@@ -795,6 +800,24 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 
 	startSec := float64(params.StartSec)
 	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
+	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
+
+	hlsRunParams := ffmpeg.HLSParams{
+		SourcePath:       params.Movie.FilePath,
+		OutDir:           tempDir,
+		Profile:          params.EffectiveProfile,
+		VideoStreamIndex: videoStreamIndex,
+		AudioStreamIndex: audioStreamIndex,
+		HWDevice:         deviceDecision.Effective,
+		CopyVideo:        copyVideo,
+		CopyAudio:        copyAudio,
+		StartSec:         startSec,
+		TonemapHDR:       tonemapHDR,
+		Deinterlace:      deinterlace,
+		SourceFrameRate:  params.PrimaryVideo.FrameRate,
+		Capabilities:     ffmpegCaps,
+	}
+
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
 		MovieID:          params.Movie.ID,
@@ -805,14 +828,13 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		DurationSec:      params.DurationSec,
 		StartSec:         startSec,
 		IsRoom:           params.IsRoom,
-		CopyVideo:        copyVideo,
-		EffectiveProfile: params.EffectiveProfile,
+		CopyVideo:           copyVideo,
+		IndependentSegments: ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
+		EffectiveProfile:    params.EffectiveProfile,
 		// Re-encoding seeks accurately, so a transcode starts exactly where it
 		// was asked to. Copy-video cannot and is measured below.
 		ActualStartSec: startSec,
 	}
-
-	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
 
 	// Resolving the real start is advisory, so it is skipped rather than
 	// allowed to fail a session. A persisted keyframe index answers a seek
@@ -940,21 +962,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		)
 	}
 
-	cmd, err := app.FFmpeg.RunHLS(runCtx, ffmpeg.HLSParams{
-		SourcePath:       params.Movie.FilePath,
-		OutDir:           tempDir,
-		Profile:          params.EffectiveProfile,
-		VideoStreamIndex: videoStreamIndex,
-		AudioStreamIndex: audioStreamIndex,
-		HWDevice:         deviceDecision.Effective,
-		CopyVideo:        copyVideo,
-		CopyAudio:        copyAudio,
-		StartSec:         startSec,
-		TonemapHDR:       tonemapHDR,
-		Deinterlace:      deinterlace,
-		SourceFrameRate:  params.PrimaryVideo.FrameRate,
-		Capabilities:     ffmpegCaps,
-	}, onExit)
+	cmd, err := app.FFmpeg.RunHLS(runCtx, hlsRunParams, onExit)
 	if err != nil {
 		releaseTranscode()
 		cleanupHLSSession(session)
@@ -1298,7 +1306,7 @@ func (app *Application) createHLSSession(
 	requestedProfile := profile
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
-	fingerprint := remuxSafetyFingerprint(movie, primaryVideo)
+	fingerprint := remuxSafetyFingerprint(movie, primaryVideo, app.FFmpeg.Capabilities().Version)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {

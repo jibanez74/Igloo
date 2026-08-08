@@ -59,10 +59,27 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 		PixelFormat:  sql.NullString{String: "yuv420p", Valid: true},
 	}
 
-	baseKey := remuxSafetyFingerprint(&baseMovie, &baseVideo)
-	if got := remuxSafetyFingerprint(&baseMovie, &baseVideo); got != baseKey {
+	const baseVersion = "7.0.2-Jellyfin"
+
+	baseKey := remuxSafetyFingerprint(&baseMovie, &baseVideo, baseVersion)
+	if got := remuxSafetyFingerprint(&baseMovie, &baseVideo, baseVersion); got != baseKey {
 		t.Fatalf("fingerprint not stable: %q vs %q", got, baseKey)
 	}
+
+	// The verdict validates FFmpeg-generated fMP4 output, so a different muxer
+	// must not inherit it.
+	t.Run("ffmpeg version", func(t *testing.T) {
+		if got := remuxSafetyFingerprint(&baseMovie, &baseVideo, "7.1-Jellyfin"); got == baseKey {
+			t.Fatal("fingerprint unchanged after an ffmpeg version change")
+		}
+	})
+
+	t.Run("producer revision", func(t *testing.T) {
+		want := fmt.Sprintf(":p%d:%s", remuxVerdictProducerRevision, baseVersion)
+		if !strings.HasSuffix(baseKey, want) {
+			t.Fatalf("fingerprint %q does not end with the producer terms %q", baseKey, want)
+		}
+	})
 
 	tests := []struct {
 		name   string
@@ -92,7 +109,7 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 			movie := baseMovie
 			video := baseVideo
 			tt.mutate(&movie, &video)
-			if got := remuxSafetyFingerprint(&movie, &video); got == baseKey {
+			if got := remuxSafetyFingerprint(&movie, &video, baseVersion); got == baseKey {
 				t.Fatalf("fingerprint unchanged after %s change", tt.name)
 			}
 		})
