@@ -150,13 +150,17 @@ type hlsActualStartParams struct {
 // rather than before it so it adds no startup latency, and it is advisory: on
 // failure the start stays unknown and the session reports nothing, leaving
 // the client on its previous fallback.
+//
+// parentCtx is deliberately not the session's context — see the call site in
+// startHLSSession. The index outlives the session that extracted it, so the
+// two stages here are bounded by their own timeouts instead.
 func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsActualStartParams) {
 	defer app.Wait.Done()
 
-	ctx, cancel := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
-	defer cancel()
+	extractCtx, cancelExtract := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
+	defer cancelExtract()
 
-	idx, err := app.extractKeyframeIndexFromFile(ctx, p.FilePath, p.Container)
+	idx, err := app.extractKeyframeIndexFromFile(extractCtx, p.FilePath, p.Container)
 	if err == nil {
 		app.setKeyframeIndex(p.MovieID, p.StreamIndex, p.Fingerprint, idx)
 		if p.RequestedStartSec > 0 {
@@ -186,7 +190,14 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	if p.RequestedStartSec <= 0 || app.Ffprobe == nil {
 		return
 	}
-	actualStartSec, probeErr := app.Ffprobe.KeyframeAtOrBefore(ctx, p.FilePath, p.StreamIndex, p.RequestedStartSec)
+
+	// The probe gets its own budget rather than what the extraction left of
+	// the shared one. Sharing meant a slow moov read that burned most of the
+	// timeout handed the fallback a fraction of a second and it always failed.
+	probeCtx, cancelProbe := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
+	defer cancelProbe()
+
+	actualStartSec, probeErr := app.Ffprobe.KeyframeAtOrBefore(probeCtx, p.FilePath, p.StreamIndex, p.RequestedStartSec)
 	if probeErr != nil {
 		app.Logger.Warn("hls actual start probe failed",
 			"movie_id", p.MovieID,

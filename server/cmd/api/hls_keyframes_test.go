@@ -285,6 +285,43 @@ func TestStartHLSSession_KeyframeIndexMissExtractsFromContainer(t *testing.T) {
 	}
 }
 
+// The extracted index outlives the session that triggered it, so tearing that
+// session down must not cancel the extraction. Seeking again destroys the
+// previous session within milliseconds, which is exactly when a first-play
+// extraction is still running: parenting it on the session context meant the
+// index was rarely persisted and every play paid to extract it again.
+func TestStartHLSSession_PersistsKeyframeIndexAfterSessionTeardown(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
+	app.Wait = &sync.WaitGroup{}
+	app.Ffprobe = &stubKeyframeFfprobe{err: os.ErrInvalid}
+
+	movieID := writeTestMKVFixture(t, app, []float64{0, 42, 84, 126})
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 100, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+
+	// Stands in for the seek, stop, or navigation that immediately supersedes
+	// the session a first play just created.
+	cleanupHLSSession(session)
+
+	app.Wait.Wait()
+
+	row, err := app.Queries.GetKeyframeIndex(context.Background(), database.GetKeyframeIndexParams{
+		MovieID:     movieID,
+		StreamIndex: 0,
+	})
+	if err != nil {
+		t.Fatalf("GetKeyframeIndex after a torn-down session: %v", err)
+	}
+	if row.Keyframes != "[0,42,84,126]" {
+		t.Fatalf("persisted keyframes = %q, want the extracted cues", row.Keyframes)
+	}
+}
+
 // An avi source has no supported container index: the bounded probe answers
 // the seek and nothing is persisted.
 func TestStartHLSSession_AviFallsBackToProbeWithoutPersisting(t *testing.T) {
