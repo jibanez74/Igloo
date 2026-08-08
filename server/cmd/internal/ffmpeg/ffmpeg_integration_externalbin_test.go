@@ -282,8 +282,6 @@ func runExternalFFmpegCommand(t *testing.T, binary string, args ...string) {
 
 func generateTinyH264AACSource(t *testing.T, binary string, destination string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
-	defer cancel()
 	args := []string{
 		"-y", "-v", "error",
 		"-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=5.2",
@@ -293,11 +291,8 @@ func generateTinyH264AACSource(t *testing.T, binary string, destination string) 
 		"-c:a", "aac", "-shortest", "-movflags", "+faststart",
 		destination,
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generate H.264/AAC source: %v: %s", err, strings.TrimSpace(string(output)))
-	}
+	runExternalFFmpegCommand(t, binary, args...)
+
 	info, err := os.Stat(destination)
 	if err != nil {
 		t.Fatalf("stat generated source: %v", err)

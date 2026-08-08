@@ -414,7 +414,7 @@ func parseEBMLSeekEntry(data []byte) (uint32, uint64, error) {
 
 // readEBMLBoundedPayload validates the element at offset and reads its whole
 // payload in one sequential read.
-func readEBMLBoundedPayload(r io.ReaderAt, offset, segmentEnd int64, wantID uint32, cap int64) ([]byte, error) {
+func readEBMLBoundedPayload(r io.ReaderAt, offset, segmentEnd int64, wantID uint32, maxPayloadBytes int64) ([]byte, error) {
 	element, err := readEBMLElementHeader(r, offset, segmentEnd)
 	if err != nil {
 		return nil, fmt.Errorf("read element 0x%X header: %w", wantID, err)
@@ -425,7 +425,7 @@ func readEBMLBoundedPayload(r io.ReaderAt, offset, segmentEnd int64, wantID uint
 	if element.DataSize == ebmlUnknownSize {
 		return nil, ErrNoIndex
 	}
-	if element.DataSize > cap {
+	if element.DataSize > maxPayloadBytes {
 		return nil, ErrNoIndex
 	}
 

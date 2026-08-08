@@ -50,6 +50,9 @@
 # OS files
 .DS_Store
 
+# Editor backup copies
+*.save
+
 # Local assistant tooling
 .claude/
 .codex/

@@ -1235,13 +1235,20 @@ func setupTestApp(t *testing.T) *Application {
 
 // restartTestApp simulates a server restart: a fresh Application with fresh
 // in-memory caches over the same database, so only state persisted in the
-// database survives the boundary.
+// database survives the boundary. Statements are re-prepared exactly as
+// application.go does at boot, so a query left out of database.Prepare shows
+// up here rather than riding on the original app's prepared set.
 func restartTestApp(t *testing.T, app *Application) *Application {
 	t.Helper()
 
+	queries, err := database.Prepare(t.Context(), app.DB)
+	if err != nil {
+		t.Fatalf("prepare queries for restarted app: %v", err)
+	}
+
 	restarted := &Application{
 		DB:      app.DB,
-		Queries: app.Queries,
+		Queries: queries,
 		Config:  app.Config,
 	}
 	setupTestLogger(t, restarted)

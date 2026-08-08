@@ -49,14 +49,28 @@ func (app *Application) getKeyframeIndex(
 
 	var keyframes []float64
 	err = json.Unmarshal([]byte(row.Keyframes), &keyframes)
-	if err != nil || len(keyframes) == 0 {
+	if err != nil {
 		return keyframeindex.Index{}, false
 	}
 
-	return keyframeindex.Index{
+	// Seeks binary-search this slice, so a row that lost the extractor's
+	// invariants would answer with the wrong keyframe. Re-establish them here
+	// rather than trusting the row: ordering is repaired, values that cannot
+	// be a presentation time are rejected, and a rejection just re-extracts.
+	idx, err := keyframeindex.Finalize(keyframeindex.Index{
 		KeyframeSec: keyframes,
 		DurationSec: row.DurationSec,
-	}, true
+	})
+	if err != nil {
+		app.Logger.Warn("discarding invalid persisted keyframe index",
+			"movie_id", movieID,
+			"stream_index", streamIndex,
+			"error", err,
+		)
+		return keyframeindex.Index{}, false
+	}
+
+	return idx, true
 }
 
 // setKeyframeIndex persists an extracted index. It runs on

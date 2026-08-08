@@ -823,12 +823,19 @@ func TestIsVFRStream(t *testing.T) {
 
 func TestIsCopySafeAACStream(t *testing.T) {
 	tests := []struct {
-		name    string
-		codec   string
-		profile sql.NullString
-		want    bool
+		name     string
+		codec    string
+		profile  sql.NullString
+		channels int64
+		want     bool
 	}{
-		{name: "confirmed LC copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, want: true},
+		{name: "confirmed LC copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, channels: 2, want: true},
+		// Channel count is deliberately not part of the gate: every browser
+		// that decodes AAC-LC in fMP4 decodes it multichannel and downmixes at
+		// the output device, so surround survives instead of being re-encoded
+		// to stereo.
+		{name: "5.1 copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, channels: 6, want: true},
+		{name: "7.1 copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, channels: 8, want: true},
 		// ffprobe reports the profile verbatim; case and padding must not matter.
 		{name: "profile matched case-insensitively", codec: "aac", profile: sql.NullString{String: "lc", Valid: true}, want: true},
 		{name: "profile trimmed", codec: "aac", profile: sql.NullString{String: " LC ", Valid: true}, want: true},
@@ -842,9 +849,13 @@ func TestIsCopySafeAACStream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isCopySafeAACStream(&database.AudioStream{Codec: tt.codec, CodecProfile: tt.profile})
+			got := isCopySafeAACStream(&database.AudioStream{
+				Codec:        tt.codec,
+				CodecProfile: tt.profile,
+				Channels:     tt.channels,
+			})
 			if got != tt.want {
-				t.Fatalf("isCopySafeAACStream(%q, %q) = %v, want %v", tt.codec, tt.profile.String, got, tt.want)
+				t.Fatalf("isCopySafeAACStream(%q, %q, %dch) = %v, want %v", tt.codec, tt.profile.String, tt.channels, got, tt.want)
 			}
 		})
 	}

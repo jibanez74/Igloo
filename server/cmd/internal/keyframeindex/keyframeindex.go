@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 )
 
@@ -68,16 +69,31 @@ func Extract(ctx context.Context, r io.ReaderAt, size int64, container string) (
 		return Index{}, err
 	}
 
-	return finalizeIndex(idx)
+	return Finalize(idx)
 }
 
-// finalizeIndex enforces the shared invariants: sorted, deduplicated,
-// non-empty, capped, and a duration that covers the last keyframe.
-func finalizeIndex(idx Index) (Index, error) {
+// Finalize enforces the shared invariants: sorted, deduplicated, non-empty,
+// capped, finite, non-negative, and a duration that covers the last keyframe.
+// Extract runs every parsed index through it, and the persistence layer runs
+// every index read back out of the database through it, so a corrupt row is
+// rejected rather than silently mis-seeking a copy-video session.
+func Finalize(idx Index) (Index, error) {
 	if len(idx.KeyframeSec) == 0 {
 		return Index{}, ErrNoIndex
 	}
 	if len(idx.KeyframeSec) > maxKeyframeCount {
+		return Index{}, ErrNoIndex
+	}
+
+	// NaN would survive sorting as an unordered element and break the binary
+	// search every seek depends on; a negative timestamp is not a real
+	// presentation time.
+	for _, kf := range idx.KeyframeSec {
+		if math.IsNaN(kf) || math.IsInf(kf, 0) || kf < 0 {
+			return Index{}, ErrNoIndex
+		}
+	}
+	if math.IsNaN(idx.DurationSec) || math.IsInf(idx.DurationSec, 0) || idx.DurationSec < 0 {
 		return Index{}, ErrNoIndex
 	}
 

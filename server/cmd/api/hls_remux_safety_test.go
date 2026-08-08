@@ -158,6 +158,10 @@ func TestRemuxSafetyVerdictStore(t *testing.T) {
 	})
 
 	t.Run("upserts over the previous verdict", func(t *testing.T) {
+		// Written here rather than relied on from the first subtest: the row
+		// count below only proves an upsert when a row already existed, and
+		// this subtest must hold under -run on its own.
+		app.setRemuxSafetyVerdict(movieID, streamIndex, fingerprint, false, "10-bit H.264")
 		app.setRemuxSafetyVerdict(movieID, streamIndex, "fingerprint-b", true, "validated safe remux")
 
 		verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, "fingerprint-b")

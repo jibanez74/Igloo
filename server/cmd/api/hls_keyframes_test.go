@@ -66,16 +66,46 @@ func TestKeyframeIndexStore(t *testing.T) {
 	})
 
 	t.Run("treats a corrupt payload as a miss", func(t *testing.T) {
-		_, err := app.DB.Exec(`
-			UPDATE keyframe_indexes SET keyframes = 'not json' WHERE movie_id = ? AND stream_index = ?
-		`, movieID, streamIndex)
-		if err != nil {
-			t.Fatalf("corrupt payload: %v", err)
-		}
+		writeRawKeyframes(t, app, movieID, streamIndex, "not json")
 
 		_, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
 		if ok {
 			t.Fatal("a corrupt payload was reported as a hit")
+		}
+	})
+
+	// A row that violates the extractor's invariants must never reach
+	// keyframeAtOrBefore, whose binary search assumes them.
+	t.Run("repairs a row written out of order", func(t *testing.T) {
+		writeRawKeyframes(t, app, movieID, streamIndex, "[9.96, 0, 4.2]")
+
+		idx, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
+		if !ok {
+			t.Fatal("an unsorted payload was reported as a miss")
+		}
+		want := []float64{0, 4.2, 9.96}
+		for i := range want {
+			if idx.KeyframeSec[i] != want[i] {
+				t.Fatalf("KeyframeSec = %v, want %v", idx.KeyframeSec, want)
+			}
+		}
+	})
+
+	t.Run("treats out-of-range keyframes as a miss", func(t *testing.T) {
+		payloads := map[string]string{
+			"negative timestamp": "[-1, 4.2, 9.96]",
+			"empty list":         "[]",
+		}
+
+		for name, payload := range payloads {
+			t.Run(name, func(t *testing.T) {
+				writeRawKeyframes(t, app, movieID, streamIndex, payload)
+
+				_, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
+				if ok {
+					t.Fatalf("payload %s was reported as a hit", payload)
+				}
+			})
 		}
 	})
 
@@ -101,6 +131,20 @@ func TestKeyframeIndexStore(t *testing.T) {
 			t.Fatalf("index row count = %d, want the upsert to keep a single row", count)
 		}
 	})
+}
+
+// writeRawKeyframes overwrites a persisted index's payload with a literal the
+// normal write path would never produce, so the read path's validation can be
+// exercised.
+func writeRawKeyframes(t *testing.T, app *Application, movieID int64, streamIndex int64, payload string) {
+	t.Helper()
+
+	_, err := app.DB.Exec(`
+		UPDATE keyframe_indexes SET keyframes = ? WHERE movie_id = ? AND stream_index = ?
+	`, payload, movieID, streamIndex)
+	if err != nil {
+		t.Fatalf("write raw keyframes %q: %v", payload, err)
+	}
 }
 
 func TestKeyframeAtOrBefore(t *testing.T) {

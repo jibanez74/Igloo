@@ -184,6 +184,11 @@ func isVFRStream(stream *database.VideoStream) bool {
 // confirmed LC profile. HE-AAC and xHE-AAC (SBR/PS) support inside fMP4 HLS
 // is spotty across browsers, and an unknown profile cannot prove safety, so
 // anything but a confirmed "LC" falls back to the stereo AAC transcode.
+//
+// Channel count is deliberately not part of the gate. Every browser that
+// decodes AAC-LC in fMP4 decodes it multichannel and downmixes at the output
+// device, so copying a 5.1 or 7.1 track keeps surround for the listeners who
+// can use it instead of re-encoding everyone to stereo.
 func isCopySafeAACStream(stream *database.AudioStream) bool {
 	if !strings.EqualFold(strings.TrimSpace(stream.Codec), "aac") {
 		return false
