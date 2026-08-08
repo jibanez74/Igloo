@@ -14,21 +14,11 @@ Direct file streaming is separate from this flow. When the client can play a sou
 
 Release builds use embedded FFmpeg and ffprobe binaries. Platform-specific files under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` use `//go:embed` to include the binary payload at compile time. At startup, Igloo extracts each binary into an operating-system temp directory such as `igloo-ffmpeg-*` or `igloo-ffprobe-*`, marks it executable, and keeps a singleton wrapper pointing at the extracted path.
 
-Igloo uses Jellyfin FFmpeg builds for release payloads, not generic upstream FFmpeg builds. The Linux x64 payloads currently checked into this repository report `7.1.4-Jellyfin`. As of 2026-06-24, Jellyfin's current non-prerelease `jellyfin-ffmpeg` line is `7.1.4`, while its `8.1.1` line is a prerelease for the next major Jellyfin release. Upstream FFmpeg has newer stable branch releases, but embedded Igloo payloads should follow the stable Jellyfin FFmpeg line unless a change is intentionally testing a prerelease build.
+Igloo uses Jellyfin FFmpeg builds for release payloads, never generic upstream builds — the Linux x64 payloads in this repository report `7.1.4-Jellyfin`. Follow the current stable `jellyfin-ffmpeg` line; do not move to a prerelease line or an upstream build without a specific reason.
 
-When refreshing payloads, update both `ffmpeg_<platform>` and `ffprobe_<platform>` from the same Jellyfin FFmpeg release. Linux x64 builds use `ffmpeg_linux_amd64` and `ffprobe_linux_amd64`; macOS ARM64 builds expect matching `ffmpeg_darwin_arm64` and `ffprobe_darwin_arm64` payload files. `make build` checks that the payload files for the current native platform exist before compiling.
+When refreshing payloads, update both `ffmpeg_<platform>` and `ffprobe_<platform>` from the same Jellyfin release. Linux x64 uses `ffmpeg_linux_amd64` / `ffprobe_linux_amd64`; macOS ARM64 expects `ffmpeg_darwin_arm64` / `ffprobe_darwin_arm64`. `make build` checks that the current platform's payloads exist before compiling.
 
-Development and CI can use the `externalbin` build tag instead. With that tag, the wrappers do not extract embedded binaries. They resolve tools in this order:
-
-- `IGLOO_FFMPEG_PATH` or `IGLOO_FFPROBE_PATH`
-- `ffmpeg` or `ffprobe` on `PATH`
-
-The split exists for practical reasons:
-
-- Release packages are self-contained on supported platforms.
-- Development and tests do not require large ignored payload files.
-- Hardware acceleration still depends on the host runtime, drivers, and FFmpeg build support.
-- The wrappers give the application a stable internal interface even though the binary source differs by build mode.
+Development and CI use the `externalbin` build tag instead, which skips extraction and resolves `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` first, then `ffmpeg` / `ffprobe` on `PATH`. The split keeps release packages self-contained while keeping large payload files out of development checkouts; either way the wrappers present the same internal interface, and hardware acceleration always depends on the host runtime regardless of build mode.
 
 Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. Each wrapper verifies the resolved binary with `-version` before accepting it, so a corrupt, wrong-architecture, or non-executable binary fails during startup instead of during the first scan or transcode. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `externalbin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
 
@@ -36,32 +26,22 @@ Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same
 
 Movie and music scans treat ffprobe as required infrastructure.
 
-For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each movie file. The scanner uses ffprobe output for:
+For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each file and persists duration, container, chapters, and a row per video, audio, and subtitle stream — dimensions, codec names and profiles, bit depth, pixel format, frame rates, color metadata, language tags, channel layout, and dispositions. The database schema is the authoritative list; two details are not obvious from it:
 
-- duration and runtime
-- container and stream metadata
-- video, audio, and subtitle stream rows
-- chapter information
-- video dimensions, codec names, profiles, bit depth, pixel formats, frame rates, and color metadata
-- video field order (interlacing) and display-matrix rotation side data; an explicit 0-degree matrix persists as `0` while a stream without a matrix persists as `NULL`
-- audio codecs, language tags, channel layout, sample rate, bitrate, and the `default` disposition
-- subtitle codecs, language tags, stream indices, titles, and the `default`/`forced` dispositions
+- **Rotation** comes from display-matrix side data, and the absence of a matrix is distinct from a zero one: an explicit 0-degree matrix persists as `0`, a stream with no matrix as `NULL`.
+- **Stream tag keys** are normalized like format tags (lowercased, separators stripped, `lang` accepted as a `language` alias), so Matroska muxers writing `TITLE`/`LANGUAGE` still produce labelled, preference-matchable streams.
 
-Stream tag keys are normalized the same way format tags are (lowercased, separators stripped, `lang` accepted as a `language` alias), so Matroska muxers that write `TITLE`/`LANGUAGE` still produce labelled, preference-matchable streams.
-
-For music, Igloo uses ffprobe to populate track metadata such as title, sort title, artist, album, genre, track number, disc number, release date, duration, bitrate, composer, and copyright. The library scan supplies each source file's size from the filesystem.
+For music, `ffprobe.GetAudioMetadata` populates track metadata (title, artist, album, genre, track and disc numbers, release date, duration, bitrate, composer, copyright); the library scan supplies each file's size from the filesystem.
 
 The scanner stores stream data in SQLite so playback does not need to run ffprobe on every HLS request. That is intentional. HLS session creation reads movie, video stream, and audio stream rows from the database and starts FFmpeg from that stored metadata. This keeps playback startup predictable and avoids probing the same file repeatedly while users are trying to watch something.
 
-Movie scans use `ffprobe.GetMetadata`, which runs:
+Movie scans run:
 
 ```bash
 ffprobe -v quiet -print_format json -show_streams -show_format -show_chapters <file>
 ```
 
-Music scans use `ffprobe.GetAudioMetadata`, which limits `-show_entries` to the audio format, stream, and tag fields needed by the music scanner.
-
-The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams because a scanned media item without streams cannot be played or indexed reliably.
+Music scans limit `-show_entries` to the fields the music scanner needs. The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams, because a scanned item without streams cannot be played or indexed reliably.
 
 ## HLS Playback
 
@@ -115,16 +95,16 @@ fMP4 HLS is used because modern browser players handle it well and it works natu
 
 Copy-video sessions never carry the tag. Their segments split on whatever keyframes the source encode left behind, and the remux validator only inspects the first 4 fragments at the session's start offset — a source whose GOP structure changes later in the file is never ruled out, so claiming whole-playlist independence would let a native HLS player seek straight into a segment that still references the previous GOP. hls.js ignores the tag in media playlists either way, so the practical beneficiary is native HLS playback (Safari) plus spec conformance. `#EXT-X-START` is deliberately not emitted: every session is rebased to zero and the web client passes an explicit `startPosition` to hls.js, which would override the tag anyway.
 
-FFmpeg writes an event playlist while encoding. For transcode sessions, Igloo generates a complete VOD playlist from the known movie duration during encoding so hls.js sees a seekable on-demand asset instead of a live/event stream; generated playlists use a target duration of 8 seconds. Copy-video sessions are served FFmpeg's own playlist instead, as described below. When FFmpeg exits, Igloo finalizes whatever playlist it left behind by switching it to VOD and appending `#EXT-X-ENDLIST` when needed — on failed exits as well as clean ones, because the live playlist file outlives the process that was appending to it. Terminating it is what lets a client play up to the failure point and stop; leaving it unterminated left an EVENT playlist the client reloaded forever while playback sat stalled with no error reported.
+FFmpeg writes an event playlist while encoding. Which playlist a client receives depends on whether the session copies video, because only one of the two can be described arithmetically:
 
-Which playlist a client receives depends on whether the session copies video, because only one of the two can be described arithmetically:
+- **Transcode sessions** get a playlist synthesized from the known movie duration: `ceil(duration / 4)` entries each declared as 4 seconds, with a target duration of 8. This is exact, because `-force_key_frames` pins every boundary to a 4-second mark (measured drift over 300 s of output: 8 ms). The whole movie is listed from the first request, so the asset is seekable end to end immediately and hls.js sees an on-demand asset rather than a live stream.
+- **Copy-video (`remux`) sessions** are served FFmpeg's own playlist with only the asset URLs rewritten. Copied segments split only at source keyframes, so their durations are whatever the source encode dictates and vary widely both within and between files. Synthesizing one would advertise durations FFmpeg never produced and segments that never exist, and the surplus entries `404`ed once the session finished — breaking playback near the end of the film.
 
-- **Transcode sessions** get the synthesized playlist described above: `ceil(duration / 4)` entries each declared as 4 seconds. This is exact, because `-force_key_frames` pins every segment boundary to a 4-second mark (measured drift over 300 seconds of output: 8 ms). The whole movie is listed from the first request, so the asset is seekable end to end immediately.
-- **Copy-video (`remux`) sessions** are served FFmpeg's own playlist instead, with only the asset URLs rewritten. Copied segments can split only at source keyframes, so their durations are whatever the source encode dictates — 5.40 s mean (range 1.0–10.0) on one 1080p H.264 source, 9.24 s mean (range 1.2–12.4) on another. Synthesizing a playlist for these advertised durations FFmpeg never produced and segments that would never exist, and the surplus entries returned `404 segment does not exist` once the session finished, breaking playback near the end of the film (audit findings H1 and H2).
+While a copy-video session is still encoding, its playlist is `#EXT-X-PLAYLIST-TYPE:EVENT` with no `#EXT-X-ENDLIST`, so players reload it and pick up new segments as FFmpeg publishes them. A manifest request for one that has not published its first segment yet waits briefly and then returns `503` with a short `Retry-After` rather than falling back to a synthesized playlist.
 
-While a copy-video session is still encoding, its playlist is served as `#EXT-X-PLAYLIST-TYPE:EVENT` with no `#EXT-X-ENDLIST`, so players may reload it and pick up new segments as FFmpeg publishes them. Once FFmpeg exits the finalized VOD playlist is served as before. A manifest request for a copy-video session that has not published its first segment yet waits briefly and then returns `503` with a short `Retry-After` rather than falling back to a synthesized playlist.
+When FFmpeg exits, Igloo finalizes whatever playlist it left behind by switching it to VOD and appending `#EXT-X-ENDLIST` — on failed exits as well as clean ones, because the live playlist file outlives the process that was appending to it, and terminating it is what lets a client play up to the failure point and stop rather than reload an unterminated playlist forever.
 
-Both flavors check exit status before answering. For copy-video the check precedes the read of the live playlist file, since that file outlives its writer; for transcodes it precedes synthesizing, since a synthesized playlist describes output FFmpeg has not produced yet, which is only true while it is still running. A session that exited with an error reports a transcode failure, and one that exited having produced nothing playable reports an empty session — a dead transcode used to be handed back a complete `ENDLIST`-terminated playlist for the whole movie, so the client discovered the failure only by waiting out every segment request in turn.
+Both flavors check exit status before answering: for copy-video ahead of reading the live playlist file, since that file outlives its writer; for transcodes ahead of synthesizing, since a synthesized playlist describes output that only exists while FFmpeg is still running. A session that exited with an error reports a transcode failure, and one that produced nothing playable reports an empty session. Neither may be answered with a complete playlist — that hides the failure until the client has waited out every segment request in turn.
 
 The practical cost is that a copy-video session is seekable only across what FFmpeg has produced. During steady playback the encoder runs several times faster than realtime, and the web client rebases the session for any seek more than 120 seconds ahead, so this is narrower than it sounds.
 
@@ -136,9 +116,7 @@ HLS responses use `Cache-Control: no-store`. Transcode output is session-scoped,
 
 Igloo supports a special HLS profile named `remux`. Remux mode copies the video stream with `-c:v copy` and only transcodes audio when the selected audio codec is not already AAC.
 
-Remux exists because it preserves source video quality and avoids expensive video encoding when the source video is browser-compatible. It is much cheaper than transcoding and is the best path for compatible H.264 sources.
-
-Remux is also reached without the user selecting it. Because direct play cannot select an audio track, choosing any track other than the container's first one resolves the playback mode to `remux` (see Audio Handling). Users who pick a non-default soundtrack on an otherwise direct-playable file therefore land on remux rather than direct play.
+Remux exists because it preserves source video quality and avoids expensive video encoding when the source video is browser-compatible. It is much cheaper than transcoding and is the best path for compatible H.264 sources. It is also reached without the user selecting it: choosing any audio track other than the container's first resolves the mode to `remux` (see Audio Handling).
 
 Remux is only attempted for browser-compatible H.264 codec names:
 
@@ -147,7 +125,12 @@ Remux is only attempted for browser-compatible H.264 codec names:
 - `avc`
 - `avc1`
 
-If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. The pixel-format rule is an allowlist of the 8-bit 4:2:0 formats browsers decode (`yuv420p`, `yuvj420p`, `nv12`, `nv21`), so an unrecognised format falls back rather than being assumed safe. Interlaced sources (scanned `field_order` of `tt`/`bb`/`tb`/`bt`) also fall back: browsers do not deinterlace, so a copied interlaced stream displays combed, while the transcode path applies `yadif`. Rows scanned before `field_order` was persisted are `NULL` and are treated as progressive. This avoids serving copied video that browsers are unlikely to play through HLS.
+If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. It also falls back for H.264 that is not a safe browser remux target, decided by `isBrowserSafeH264RemuxCandidate` from the stored codec profile, bit depth, pixel format, and field order:
+
+- **Pixel format** is an allowlist of the 8-bit 4:2:0 formats browsers decode — `yuv420p`, `yuvj420p`, `nv12`, `nv21` — so 10-bit, 4:2:2, 4:4:4, and anything unrecognised falls back rather than being assumed safe.
+- **Interlaced** sources (`field_order` of `tt`/`bb`/`tb`/`bt`) fall back because browsers do not deinterlace, so a copied interlaced stream displays combed; the transcode path applies `yadif` instead. Rows scanned before `field_order` was persisted are `NULL` and treated as progressive.
+
+These two lists are the single definition of "browser-safe" for the whole system. The web client's direct-play gate applies the same rules against its own copy of both lists — **the copies must stay in sync**.
 
 Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples that are not independently decodable by browser players. To avoid that, Igloo preflights remux output before committing to it:
 
@@ -157,7 +140,7 @@ Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples 
 - verify sync samples in the video track start with IDR frames
 - persist the safe or unsafe verdict in the database (`remux_safety_verdicts`), keyed by movie and stream with a fingerprint of the file (size, update timestamp), the stream properties the safety gate reads, and the producer that generated the validated output
 
-This is a sample, not a proof: the 4 segments are the session's first 4, so a preflight run for a seek covers that offset rather than the head of the file, and a GOP structure that changes later is not ruled out. That is why copy-video playlists do not advertise `#EXT-X-INDEPENDENT-SEGMENTS`.
+This is a sample, not a proof: the 4 segments are the session's first 4, so a preflight run for a seek covers that offset rather than the head of the file, and a GOP structure that changes later is not ruled out — which is why copy-video playlists never advertise `#EXT-X-INDEPENDENT-SEGMENTS`.
 
 Persisted verdicts survive server restarts, so the preflight cost is paid once per file rather than once per process. A verdict is recomputed only when its fingerprint changes — the file was replaced or rescanned with a new size or timestamp, its stream properties changed, or the producer changed. The producer terms matter because a verdict validates FFmpeg-generated fMP4 output, not just the source: the fingerprint carries the FFmpeg version parsed from the startup `-version` banner (so an upgraded embedded payload or a swapped `IGLOO_FFMPEG_PATH` binary invalidates it) plus `remuxVerdictProducerRevision`, a constant to bump whenever the remux arguments or `ValidateRemuxSafety` change. Either kind of change costs one re-preflight per file. If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without persisting an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo persists the unsafe verdict and falls back immediately for later sessions on the same fingerprint.
 
@@ -168,7 +151,7 @@ The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the
 Direct play serves the original file over HTTP range requests with no FFmpeg process. Whether the web client offers it is decided from the scanned metadata plus one browser probe (`web/src/lib/playback.ts`, `getAvailableModes`):
 
 - **Container.** Only MP4 (`mp4`/`m4v`) is eligible. The container→MIME mapping is pinned in `helpers.VideoMimeTypes` — never derived from the host's MIME tables — and MKV must never be added: Chrome and Firefox fail Matroska in a `<video>` element silently at 0ms with no `MediaError`.
-- **Video.** H.264 codec names only, and the stream must be browser-safe: 10-bit, 4:2:2, 4:4:4, and interlaced sources are refused using the same profile / bit-depth / pixel-format / field-order rules as the server's remux gate (`isBrowserSafeH264RemuxCandidate`). Pixel formats are checked against an allowlist of the 8-bit 4:2:0 formats (`yuv420p`, `yuvj420p`, `nv12`, `nv21`) and interlacing against the `tt`/`bb`/`tb`/`bt` field orders — the two copies of both lists must stay in sync.
+- **Video.** H.264 codec names only, and the stream must pass the same browser-safety rules as the server's remux gate (see Remux, Transcode, and Fallback) — the client keeps its own copy of both lists.
 - **Audio.** The first audio stream's codec must be browser-playable, and the stream the browser will pick must be unambiguous: with two or more audio streams, a `default` disposition on a non-first stream or multiple `default` flags refuse direct play (no flags at all stays eligible — browsers follow container track order). Selecting any non-first track resolves the mode to `remux` (see Audio Handling).
 - **Browser probe.** After the static rules pass, the client asks `canPlayType` with an RFC 6381 string built from the stored codec profile and level. The probe can only narrow eligibility, never widen it: watch-room creation enforces the same rules server-side and cannot probe.
 
@@ -223,7 +206,7 @@ Transcodes also tag output color explicitly: the output gets `-color_primaries b
 
 ### Interlacing, Rotation, and VFR
 
-When the scanned `field_order` marks the source interlaced (`tt`/`bb`/`tb`/`bt` — see `isInterlacedStream`), transcode sessions prepend a software `yadif` (default `send_frame` mode, so the frame rate and the GOP math above are unchanged) at the head of the video filter chain. Deinterlacing must happen at native resolution before any scaling, and decoded frames are in system memory at the chain head on every path — no chain sets `-hwaccel_output_format`, and the CUDA/QSV chains `hwupload` from system memory — so the same prepend works for the CPU, NVIDIA, and Intel chains. The one exception is the Apple HDR `scale_vt` chain, which consumes hardware frames: interlaced HDR sources (vanishingly rare — interlacing is legacy broadcast SDR) are routed to the software zscale tone-map chain instead. Copy-video sessions never filter; the remux gate keeps interlaced sources off the copy paths entirely.
+Interlaced sources (`isInterlacedStream`) prepend a software `yadif` at the head of the transcode filter chain, in default `send_frame` mode so the frame rate and the GOP math above are unchanged. Deinterlacing must happen at native resolution before any scaling, and decoded frames are in system memory at the chain head on every path — no chain sets `-hwaccel_output_format`, and the CUDA/QSV chains `hwupload` from system memory — so one prepend covers the CPU, NVIDIA, and Intel chains. The exception is the Apple HDR `scale_vt` chain, which consumes hardware frames: interlaced HDR sources (vanishingly rare, since interlacing is legacy broadcast SDR) route to the software tone-map chain instead. Copy-video never filters; the remux gate keeps interlaced sources off the copy paths entirely.
 
 Rotation needs no filter work: FFmpeg's CLI applies display-matrix rotation automatically during transcode (verified against a real rotated source in `ffmpeg_integration_externalbin_test.go` — the output is rotated and the matrix consumed), and copy/direct paths pass the matrix through untouched, which browsers honor for MP4. Igloo persists the rotation only for visibility and logs it at session start.
 
@@ -303,7 +286,9 @@ Intel adds:
 
 Igloo only sends these encoder options when the probed FFmpeg build lists them for the encoder in question. The forced-IDR options are load-bearing rather than cosmetic: both encoders default them to false, and with the default FFmpeg asks for a plain intra frame at each `-force_key_frames` boundary instead of an IDR, so later frames may still reference across the segment boundary. When the option is missing from the build, the session also drops `#EXT-X-INDEPENDENT-SEGMENTS` rather than claim a guarantee it cannot make. Note the spelling differs by encoder: `-forced-idr` for `h264_nvenc`, `-forced_idr` for `h264_qsv`.
 
-At startup, after the `-version` executability check, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, encoder options, and selected runtime filter chains. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, failed QSV runtime probes, and missing Apple VideoToolbox encoder support fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
+At startup, after the `-version` executability check, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, encoder options, and selected runtime filter chains. Anything unproven falls back to `libx264` — CPU, unknown devices, missing hardware encoders, failed NVENC or QSV runtime probes, missing Apple VideoToolbox support. This is intentional: an invalid or unavailable hardware mode must not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder keeps its own CPU fallback regardless.
+
+Hardware acceleration always depends on host drivers, device access, and matching FFmpeg build support; Apple VideoToolbox additionally requires a macOS build.
 
 NVIDIA encode is checked with a short runtime encode probe, not just by looking for `h264_nvenc` in `ffmpeg -encoders`. When the probed build supports the `cuda` hwaccel, NVIDIA transcodes add `-hwaccel cuda` without `-hwaccel_output_format`: FFmpeg decodes on the GPU when the source codec is supported and transparently falls back to software decode otherwise, and decoded frames land in system memory either way, so the same filter chains work in both cases. For SDR transcodes, NVIDIA normally uses software scaling into `yuv420p` frames before `h264_nvenc` encode:
 
@@ -330,8 +315,6 @@ If QSV encode is usable and FFmpeg also exposes `qsv`, `scale_qsv`, the `scale_q
 -init_hw_device qsv=igloo_qsv -filter_hw_device igloo_qsv
 -vf format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=<height>:format=nv12
 ```
-
-NVIDIA and Intel hardware acceleration require host drivers, device access, and an FFmpeg build with the matching encoder support. Apple VideoToolbox is available only on macOS builds with a VideoToolbox-capable FFmpeg binary.
 
 ## HDR Tone Mapping
 
@@ -381,9 +364,9 @@ A file is treated as complete when:
 - the file FFmpeg writes after it exists, which means FFmpeg has moved on, or
 - FFmpeg has exited and the file itself exists, since nothing can be appended to a dead session's output.
 
-`init.mp4` follows the same rule with `segment_0.m4s` as its successor, so it is normally ready only after the first media segment exists — this avoids giving hls.js an init segment before any media is available. The exit half of the rule matters as much as the successor half: a session that died after writing `init.mp4` but before closing `segment_0` used to satisfy neither the readiness check nor the wait loop's escape hatch (which tests the *requested* file, and `init.mp4` existed), so the request polled out the full `hlsSegmentWait` and answered `503` for a file that was on disk and final.
+`init.mp4` follows the same rule with `segment_0.m4s` as its successor, so it is normally ready only once the first media segment exists — this avoids handing hls.js an init segment before any media is available. **Both halves of the rule are load-bearing.** Apply the successor half alone and a session that dies between writing `init.mp4` and closing `segment_0` waits out the full deadline for a file that is already on disk and final.
 
-This design prevents browsers from reading partially written `.m4s` files, which can cause decode errors, retry loops, or broken playback state. Segment requests wait up to `hlsSegmentWait` and poll every `hlsSegmentPoll`. If FFmpeg exits with an error before a requested segment exists, Igloo returns a transcode failure instead of hanging. A segment that is simply not encoded yet when the wait expires returns `503` with a `Retry-After`; the web client grants those a bounded number of fresh load attempts before reporting, and its fragment timeout is deliberately set above `hlsSegmentWait` so the server's answer always arrives first.
+This design prevents browsers from reading partially written `.m4s` files, which cause decode errors, retry loops, or broken playback state. Segment requests wait up to `hlsSegmentWait` and poll every `hlsSegmentPoll`. If FFmpeg exits with an error before a requested segment exists, Igloo returns a transcode failure instead of hanging. A segment that is merely not encoded yet when the wait expires returns `503` with a `Retry-After`; the web client grants those a bounded number of fresh load attempts before reporting. Its fragment timeout must stay above `hlsSegmentWait` — set equal, the two race and neither outcome is recoverable.
 
 The poll interval is deliberately short. A segment that lands just after a check waits a full interval before it is served, and that wait sits directly on the startup and post-seek path; the readiness check itself is one or two stats against page-cached directory entries, so polling tightly costs far less than the latency it removes. The wait also ends as soon as the request context is cancelled — a seek abandons the in-flight segment request, and without that the goroutine would keep polling for the full `hlsSegmentWait`, so scrubbing would accumulate them.
 
@@ -395,7 +378,7 @@ FFmpeg stderr is not streamed to clients. The HLS runner keeps the last 20 stder
 
 ## Seeking and Resume Behavior
 
-The HLS manifest accepts a `start` query parameter. When `start` is greater than zero, FFmpeg starts from that source offset with `-ss`, placed before `-i`. Input seeking lands on the source keyframe at or before the requested time. When re-encoding, FFmpeg then discards frames up to the requested offset, so a transcode starts exactly where it was asked to; stream copy cannot discard frames, so a copy-video session really begins at that earlier keyframe — measured at 8.83 s early for a request at 600 s on one source. The output is rebased to start at zero either way by `-avoid_negative_ts make_zero`.
+The HLS manifest accepts a `start` query parameter. When `start` is greater than zero, FFmpeg starts from that source offset with `-ss`, placed before `-i`. Input seeking lands on the source keyframe at or before the requested time. When re-encoding, FFmpeg then discards frames up to the requested offset, so a transcode starts exactly where it was asked to; stream copy cannot discard frames, so a copy-video session really begins at that earlier keyframe — by up to a full GOP. The output is rebased to start at zero either way by `-avoid_negative_ts make_zero`.
 
 For copy-video sessions Igloo resolves where the media actually begins and publishes it as the `X-Igloo-Actual-Start` response header on the manifest. The client maps session time back to absolute movie time from that value, so the displayed clock and saved watch progress follow the picture rather than the request.
 
@@ -411,9 +394,7 @@ When the web client knows the movie duration, it first clamps the requested abso
 
 Igloo exposes the rebased session as a VOD playlist. The files on disk start at `segment_0.m4s`, but the UI keeps absolute movie time. When a seek requires a different offset, the client asks for a manifest with a new `start` value and Igloo creates a new session.
 
-A rebased session's playlist covers only the remaining time from the start offset to the end of the movie. While FFmpeg is still encoding, Igloo generates the VOD playlist from that remaining duration; after FFmpeg exits successfully, the finalized FFmpeg playlist with accurate segment durations is served with only its asset URLs rewritten. The client is responsible for mapping session-local playback time back to absolute movie time in the UI.
-
-This is more complex than exposing FFmpeg's event playlist directly, but it gives browser players the behavior users expect from a movie: visible duration, seeking, resume, and a stable VOD presentation.
+A rebased session's playlist covers only the remaining time from the start offset to the end of the movie. While FFmpeg is still encoding, Igloo generates the VOD playlist from that remaining duration; once it exits, the finalized playlist with accurate segment durations is served with only its asset URLs rewritten. The client maps session-local playback time back to absolute movie time in the UI.
 
 ## Watch Rooms
 
@@ -467,14 +448,7 @@ For binary deployments:
 - `HLS_MAX_SESSIONS_PER_USER` is read at startup and limits cached plus in-flight personal HLS sessions per user; remux and transcode sessions are both counted. The default is 3. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 
-For local development:
-
-- `make dev` uses the `externalbin` build tag and requires `ffmpeg` and `ffprobe` on `PATH`.
-- Backend tests should be run with the `externalbin sqlite_fts5` build tags and require `ffmpeg` and `ffprobe` on `PATH`.
-- `make build` uses embedded release payloads for the current native platform.
-- `HARDWARE_ACCELERATION_DEVICE` can be set in `.env` for local testing.
-- Apple VideoToolbox only applies to macOS builds with the Apple-capable FFmpeg binary.
-- Linux hardware acceleration requires the host drivers, devices, and FFmpeg build support to be present.
+Build tags, `make` targets, and the environment variables above are documented in `CLAUDE.md`, `README.md`, and `.env.example`; the only FFmpeg-specific note is that every `externalbin` build — `make dev` and all backend tests — needs `ffmpeg` and `ffprobe` on `PATH`.
 
 For failures:
 
