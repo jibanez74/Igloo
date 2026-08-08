@@ -991,6 +991,48 @@ describe("VideoPlayer native HLS manifest preflight", () => {
     expect(video).not.toHaveAttribute("src");
   });
 
+  it("routes a manifest 404 to onSessionLost instead of the native player", async () => {
+    nativeHlsSupport.supported = true;
+    const { response, cancel } = nativeManifestResponse(404);
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+    const onSessionLost = vi.fn();
+
+    const { video } = renderPlayer({
+      src: firstSrc,
+      isHlsSource: true,
+      onSessionLost,
+    });
+
+    await waitFor(() => {
+      expect(onSessionLost).toHaveBeenCalledWith(0);
+    });
+    // onSessionLost alone must enable the preflight; without it Safari would
+    // hand the dead session's 404 to the native player as a generic error.
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(video).not.toHaveAttribute("src");
+  });
+
+  it("assigns a 404 source normally when no onSessionLost consumer exists", async () => {
+    nativeHlsSupport.supported = true;
+    const { response } = nativeManifestResponse(404);
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { video } = renderPlayer({
+      src: firstSrc,
+      isHlsSource: true,
+      onActualStart: vi.fn(),
+      requestedStartSec: 590,
+    });
+
+    await waitFor(() => {
+      expect(video).toHaveAttribute("src", firstSrc);
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("lets native HLS load normally after an unexpected preflight failure", async () => {
     nativeHlsSupport.supported = true;
     const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));

@@ -497,6 +497,20 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 			t.Fatalf("expected an empty session to be reported as producing nothing, got %v", err)
 		}
 	})
+
+	// The same past-the-end exit exists for transcodes: onExit publishes whatever
+	// FFmpeg wrote, so a finalized playlist can still describe nothing playable.
+	t.Run("transcode rejects a degenerate zero-duration final playlist", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 30, CopyVideo: false, TempDir: t.TempDir()}
+		session.FinalPlaylist = "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:0\n" +
+			"#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:0.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
+		session.Exited = true
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionEmpty) {
+			t.Fatalf("expected an unplayable final playlist to be reported as empty, got %v", err)
+		}
+	})
 }
 
 func TestServeReadyHLSSegment(t *testing.T) {

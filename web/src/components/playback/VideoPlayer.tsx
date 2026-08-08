@@ -258,7 +258,8 @@ export default function VideoPlayer({
     isHlsSource &&
     (onCapacityBusy !== undefined ||
       onEffectiveProfile !== undefined ||
-      onActualStart !== undefined);
+      onActualStart !== undefined ||
+      onSessionLost !== undefined);
 
   // Rate limiting and the max-attempt budget live in useHlsSessionRecovery
   // (the onSessionLost consumer); this component only reports the event.
@@ -493,6 +494,13 @@ export default function VideoPlayer({
           response.status === 503 &&
           handleCapacityBusy(response.headers);
         if (handledCapacityFailure) return;
+
+        // A 404 manifest is a dead session, the same signal the hls.js error
+        // handler routes to onSessionLost. Handing it to the native player
+        // instead would surface only a generic media error.
+        const handledLostSession =
+          response.status === 404 && reportSessionLost(video.currentTime);
+        if (handledLostSession) return;
 
         if (response.ok) {
           reportManifestMetadata(response.headers);

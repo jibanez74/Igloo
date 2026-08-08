@@ -260,6 +260,9 @@ func buildHLSPlaylistBody(
 	if !session.CopyVideo {
 		finalPlaylist := session.currentFinalPlaylist()
 		if finalPlaylist != "" {
+			if !hasPlayableSegment(finalPlaylist) {
+				return "", errHLSSessionEmpty
+			}
 			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
 		}
 
