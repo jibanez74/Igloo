@@ -10,6 +10,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import VideoPlayer from "@/components/playback/VideoPlayer";
 import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
+  HLS_JS_LOAD_TIMEOUT_MS,
+  HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
 
@@ -23,6 +25,8 @@ type FakeHlsInstance = {
   listeners: Map<string, FakeHlsListener[]>;
   trigger: (event: string, data: unknown) => void;
   destroyed: boolean;
+  startLoadCalls: number;
+  recoverMediaErrorCalls: number;
 };
 
 vi.mock("@/lib/playback", async (importOriginal) => {
@@ -44,6 +48,7 @@ vi.mock("hls.js/light", () => {
       ERROR: "hlsError",
       MANIFEST_PARSED: "hlsManifestParsed",
       MANIFEST_LOADED: "hlsManifestLoaded",
+      FRAG_BUFFERED: "hlsFragBuffered",
     };
     static ErrorDetails = {
       FRAG_LOAD_ERROR: "fragLoadError",
@@ -53,6 +58,8 @@ vi.mock("hls.js/light", () => {
 
     listeners = new Map<string, FakeHlsListener[]>();
     destroyed = false;
+    startLoadCalls = 0;
+    recoverMediaErrorCalls = 0;
 
     constructor() {
       fakeHlsInstances.push(this);
@@ -75,7 +82,12 @@ vi.mock("hls.js/light", () => {
 
     loadSource() {}
     attachMedia() {}
-    recoverMediaError() {}
+    recoverMediaError() {
+      this.recoverMediaErrorCalls += 1;
+    }
+    startLoad() {
+      this.startLoadCalls += 1;
+    }
     destroy() {
       this.destroyed = true;
     }
@@ -522,6 +534,119 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(onSessionLost).toHaveBeenCalledOnce();
     expect(onCapacityBusy).not.toHaveBeenCalled();
   });
+
+  // The server 404s the playlist handler as well as the segment handler when a
+  // session is gone, and hls.js reports those as manifest/level errors. Only
+  // matching the fragment detail sent them to the error screen with no attempt
+  // to recover the session.
+  it.each(["manifestLoadError", "levelLoadError"])(
+    "routes a %s 404 to onSessionLost",
+    async (details) => {
+      const onSessionLost = vi.fn();
+      const onError = vi.fn();
+      const hls = await renderHlsPlayer({ onSessionLost, onError });
+
+      act(() => {
+        hls.trigger("hlsError", {
+          type: "networkError",
+          details,
+          fatal: true,
+          response: { code: 404 },
+        });
+      });
+
+      expect(onSessionLost).toHaveBeenCalledOnce();
+      expect(onError).not.toHaveBeenCalled();
+    },
+  );
+
+  // A 503 on a fragment means the encoder has not reached that segment yet, not
+  // that the stream is broken. hls.js has spent its own retries by the time the
+  // error is fatal, so the player grants a bounded number of fresh attempts.
+  it("retries a not-yet-produced segment before reporting it", async () => {
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onError });
+
+    const notReady = {
+      type: "networkError",
+      details: "fragLoadError",
+      fatal: true,
+      response: { code: 503 },
+    };
+
+    for (let attempt = 0; attempt < HLS_SEGMENT_NOT_READY_MAX_RETRIES; attempt++) {
+      act(() => {
+        hls.trigger("hlsError", notReady);
+      });
+    }
+
+    expect(hls.startLoadCalls).toBe(HLS_SEGMENT_NOT_READY_MAX_RETRIES);
+    expect(onError).not.toHaveBeenCalled();
+
+    act(() => {
+      hls.trigger("hlsError", notReady);
+    });
+
+    expect(hls.startLoadCalls).toBe(HLS_SEGMENT_NOT_READY_MAX_RETRIES);
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0]).toMatch(/still preparing/i);
+  });
+
+  // A buffered fragment proves the stream recovered, so the one-shot budgets
+  // cover consecutive failures rather than the life of the instance.
+  it("restores the retry budget once a fragment buffers", async () => {
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onError });
+
+    const notReady = {
+      type: "networkError",
+      details: "fragLoadError",
+      fatal: true,
+      response: { code: 503 },
+    };
+
+    for (let attempt = 0; attempt < HLS_SEGMENT_NOT_READY_MAX_RETRIES; attempt++) {
+      act(() => {
+        hls.trigger("hlsError", notReady);
+      });
+    }
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+    });
+    act(() => {
+      hls.trigger("hlsError", notReady);
+    });
+
+    expect(hls.startLoadCalls).toBe(HLS_SEGMENT_NOT_READY_MAX_RETRIES + 1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  // hls.js's documented recovery for a fatal network error, which this handler
+  // previously never attempted — it went straight to the error screen.
+  it("restarts loading once on a fatal network error", async () => {
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onError });
+
+    const networkFailure = {
+      type: "networkError",
+      details: "fragLoadTimeOut",
+      fatal: true,
+    };
+
+    act(() => {
+      hls.trigger("hlsError", networkFailure);
+    });
+
+    expect(hls.startLoadCalls).toBe(1);
+    expect(onError).not.toHaveBeenCalled();
+
+    act(() => {
+      hls.trigger("hlsError", networkFailure);
+    });
+
+    expect(hls.startLoadCalls).toBe(1);
+    expect(onError).toHaveBeenCalledOnce();
+  });
 });
 
 describe("VideoPlayer HLS capability and effective profile", () => {
@@ -865,6 +990,80 @@ describe("VideoPlayer native HLS manifest preflight", () => {
     expect(cancel).toHaveBeenCalledOnce();
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(video).not.toHaveAttribute("src");
+  });
+
+  it("routes a manifest 404 to onSessionLost instead of the native player", async () => {
+    nativeHlsSupport.supported = true;
+    const { response, cancel } = nativeManifestResponse(404);
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+    const onSessionLost = vi.fn();
+
+    const { video } = renderPlayer({
+      src: firstSrc,
+      isHlsSource: true,
+      onSessionLost,
+    });
+
+    await waitFor(() => {
+      expect(onSessionLost).toHaveBeenCalledWith(0);
+    });
+    // onSessionLost alone must enable the preflight; without it Safari would
+    // hand the dead session's 404 to the native player as a generic error.
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(video).not.toHaveAttribute("src");
+  });
+
+  it("assigns a 404 source normally when no onSessionLost consumer exists", async () => {
+    nativeHlsSupport.supported = true;
+    const { response } = nativeManifestResponse(404);
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { video } = renderPlayer({
+      src: firstSrc,
+      isHlsSource: true,
+      onActualStart: vi.fn(),
+      requestedStartSec: 590,
+    });
+
+    await waitFor(() => {
+      expect(video).toHaveAttribute("src", firstSrc);
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to native loading when the preflight stalls past the timeout", async () => {
+    vi.useFakeTimers();
+    nativeHlsSupport.supported = true;
+    const fetchMock = vi.fn(
+      (_url: string, options: { signal: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          options.signal.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onSessionLost = vi.fn();
+
+    const { video } = renderPlayer({
+      src: firstSrc,
+      isHlsSource: true,
+      onSessionLost,
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_JS_LOAD_TIMEOUT_MS - 1);
+    });
+    expect(video).not.toHaveAttribute("src");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(video).toHaveAttribute("src", firstSrc);
+    expect(onSessionLost).not.toHaveBeenCalled();
   });
 
   it("lets native HLS load normally after an unexpected preflight failure", async () => {

@@ -37,7 +37,7 @@ var ValidVideoExtensions = map[string]bool{
 // with mime.TypeByExtension is host-dependent (/etc/mime.types overrides Go's
 // table and maps .webm to audio/webm; minimal images have no table at all),
 // which made playback eligibility and Content-Type vary by machine — see
-// docs/web-direct-playback-audit.md §3.2 (D1). Keys must match
+// "Direct Play Eligibility and Fallback" in docs/ffmpeg.md. Keys must match
 // ValidVideoExtensions exactly.
 var VideoMimeTypes = map[string]string{
 	"mp4":  "video/mp4",

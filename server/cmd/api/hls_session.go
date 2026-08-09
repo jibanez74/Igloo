@@ -316,11 +316,6 @@ func (app *Application) deleteHLSSession(key string) *HLSSession {
 	return session
 }
 
-func (app *Application) removeHLSSession(key string) {
-	session := app.deleteHLSSession(key)
-	cleanupHLSSession(session)
-}
-
 func (app *Application) removePersonalHLSSession(key string) {
 	app.PersonalHLSMu.Lock()
 	session := app.deleteHLSSession(key)
@@ -599,6 +594,12 @@ func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, se
 	app.RoomHLSMu.Lock()
 	deleted := app.isRoomHLSSessionDeleted(roomID)
 	if !deleted {
+		// Set does not fire OnEvicted — only Delete and DeleteExpired do — so
+		// overwriting a key whose entry expired before the janitor swept it
+		// would drop the old session without tearing it down, leaking its
+		// FFmpeg process and temp dir until the next boot sweep. Sweeping
+		// first is what reservePersonalHLSSession does for the same reason.
+		app.HLSSessionCache.DeleteExpired()
 		app.HLSSessionCache.Set(key, session, hlsRoomSessionTTL)
 	}
 	app.RoomHLSMu.Unlock()
@@ -825,14 +826,14 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
-		MovieID:          params.Movie.ID,
-		PlaybackSession:  params.PlaybackSession,
-		TempDir:          tempDir,
-		Cancel:           cancel,
-		Logger:           app.Logger,
-		DurationSec:      params.DurationSec,
-		StartSec:         startSec,
-		IsRoom:           params.IsRoom,
+		MovieID:             params.Movie.ID,
+		PlaybackSession:     params.PlaybackSession,
+		TempDir:             tempDir,
+		Cancel:              cancel,
+		Logger:              app.Logger,
+		DurationSec:         params.DurationSec,
+		StartSec:            startSec,
+		IsRoom:              params.IsRoom,
 		CopyVideo:           copyVideo,
 		IndependentSegments: ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
 		EffectiveProfile:    params.EffectiveProfile,
@@ -865,7 +866,13 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 				session.setActualStartSec(hlsUnknownActualStart)
 			}
 			app.Wait.Add(1)
-			go app.resolveHLSActualStart(runCtx, hlsActualStartParams{
+			// Not runCtx: the extracted index is persisted and reused by every
+			// later session, so it must not die with the session that happened
+			// to trigger it. Seeking again tears this session down within
+			// milliseconds, which is exactly when a first-play extraction is
+			// still running — on a network mount that meant the index was
+			// almost never written and every play re-extracted.
+			go app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
 				Session:           session,
 				FilePath:          params.Movie.FilePath,
 				Container:         params.Movie.Container,
@@ -918,13 +925,17 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 
 	startTime := time.Now()
 	onExit := func(exitErr error, stderrTail []string) {
-		if exitErr == nil {
-			raw, readErr := os.ReadFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME))
-			if readErr == nil {
-				session.ExitMu.Lock()
-				session.FinalPlaylist = finalizeEventPlaylist(string(raw))
-				session.ExitMu.Unlock()
-			}
+		// Published for failed exits too, not just clean ones. Whatever FFmpeg
+		// wrote before it died is what exists on disk, and terminating that
+		// with ENDLIST lets the client play up to the failure and stop. The
+		// alternative — leaving the un-terminated live file as the only answer
+		// — is an EVENT playlist the client reloads forever. A playlist with
+		// no playable segment still reports as empty downstream.
+		raw, readErr := os.ReadFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME))
+		if readErr == nil {
+			session.ExitMu.Lock()
+			session.FinalPlaylist = finalizeEventPlaylist(string(raw))
+			session.ExitMu.Unlock()
 		}
 
 		session.ExitMu.Lock()
@@ -1202,15 +1213,20 @@ func (app *Application) GetOrCreateRoomHLSSession(
 
 // CleanupRoomHLSSession stops and removes the HLS session for a watch room.
 // It is a no-op if no session exists for the room.
+//
+// Teardown runs after RoomHLSMu is released, for the reason
+// invalidateHLSSessionsForMovie documents: cleanupHLSSession waits seconds for
+// FFmpeg to exit, and holding the lock across it stalls every room manifest
+// and segment request behind a process that is already being killed.
 func (app *Application) CleanupRoomHLSSession(roomID int64) {
 	key := RoomHLSSessionKey(roomID)
+
 	app.RoomHLSMu.Lock()
 	app.markRoomHLSSessionDeleted(roomID)
-	_, ok := app.HLSSessionCache.Get(key)
-	if ok {
-		app.removeHLSSession(key)
-	}
+	session := app.deleteHLSSession(key)
 	app.RoomHLSMu.Unlock()
+
+	cleanupHLSSession(session)
 }
 
 // validateHLSMovieDuration is the duration check every HLS session creation

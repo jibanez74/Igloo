@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/helpers"
 )
@@ -82,6 +84,54 @@ func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
 	_, statErr := os.Stat(tempDir)
 	if !os.IsNotExist(statErr) {
 		t.Fatalf("expected temp dir cleanup, stat err = %v", statErr)
+	}
+}
+
+// go-cache fires OnEvicted from Delete and DeleteExpired but not from Set, so
+// overwriting a key whose entry expired before the janitor swept it dropped the
+// old session with no teardown: its FFmpeg process ran on to the end of the
+// movie and its temp dir survived until the next boot sweep.
+// Built on initRuntimeCaches rather than setupTestApp: the shared helper
+// installs a session cache with no eviction hook, and the eviction hook is
+// exactly what this test is about.
+func TestStoreRoomHLSSessionIfActive_TearsDownAnExpiredPredecessor(t *testing.T) {
+	app := &Application{Wait: &sync.WaitGroup{}}
+	app.initRuntimeCaches()
+
+	const roomID = int64(77)
+	key := RoomHLSSessionKey(roomID)
+
+	staleDir := t.TempDir()
+	stale := &HLSSession{TempDir: staleDir, IsRoom: true}
+	app.HLSSessionCache.Set(key, stale, time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
+
+	replacement := &HLSSession{TempDir: t.TempDir(), IsRoom: true}
+	err := app.storeRoomHLSSessionIfActive(roomID, key, replacement)
+	if err != nil {
+		t.Fatalf("unexpected error storing the replacement session: %v", err)
+	}
+
+	// Eviction hands teardown to a goroutine so the sweep never blocks on
+	// FFmpeg exiting, so the removal is observed rather than assumed.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, statErr := os.Stat(staleDir)
+		if os.IsNotExist(statErr) {
+			break
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("expected the superseded session's temp dir to be removed, stat err = %v", statErr)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok {
+		t.Fatal("expected the replacement session to be cached")
+	}
+	if raw != replacement {
+		t.Fatalf("cached session = %v, want the replacement", raw)
 	}
 }
 

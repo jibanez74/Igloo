@@ -32,7 +32,6 @@ import {
   stopMovieHlsPlaybackSession,
   deriveMoviePlaybackStatus,
   displayedMovieDuration,
-  nativeMoviePlaybackErrorMessage,
   shouldRebaseHlsMovieSession,
   toAbsoluteDuration,
   toAbsolutePlaybackTime,
@@ -518,10 +517,13 @@ function PlayMoviePage() {
     }));
   };
 
+  // durationRef is written where the duration is learned — onDurationChange
+  // below, and the HLS seed further down — not copied back out of state here.
+  // Round-tripping it meant every timeupdate restamped the ref with whatever
+  // `duration` held, which is 0 until the media reports one, wiping the seed.
   useEffect(() => {
     currentTimeRef.current = currentTime;
-    durationRef.current = duration;
-  }, [currentTime, duration]);
+  }, [currentTime]);
 
   const { handlePauseSave, handleEndedSave, flushProgress } =
     useMovieWatchProgressSaver({
@@ -599,12 +601,14 @@ function PlayMoviePage() {
       ? reportedProfile.profile
       : null;
 
+  // The player calls this before its own onError, which reports a message for
+  // every MediaError code. Writing one here too only produced a value that the
+  // next line of the same handler overwrote, so this decides one thing: whether
+  // the error was consumed by a direct-play fallback and must be swallowed.
   const handleNativePlaybackError = (code: number | null | undefined) => {
     if (handleDirectPlayFallbackError(code)) {
       fallbackConsumedErrorRef.current = true;
-      return;
     }
-    setPlaybackError(nativeMoviePlaybackErrorMessage(code));
   };
 
   const keyboardShortcutsEnabled =
