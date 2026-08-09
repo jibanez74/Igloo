@@ -10,6 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import VideoPlayer from "@/components/playback/VideoPlayer";
 import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
+  HLS_JS_LOAD_TIMEOUT_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
@@ -1031,6 +1032,38 @@ describe("VideoPlayer native HLS manifest preflight", () => {
       expect(video).toHaveAttribute("src", firstSrc);
     });
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to native loading when the preflight stalls past the timeout", async () => {
+    vi.useFakeTimers();
+    nativeHlsSupport.supported = true;
+    const fetchMock = vi.fn(
+      (_url: string, options: { signal: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          options.signal.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onSessionLost = vi.fn();
+
+    const { video } = renderPlayer({
+      src: firstSrc,
+      isHlsSource: true,
+      onSessionLost,
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_JS_LOAD_TIMEOUT_MS - 1);
+    });
+    expect(video).not.toHaveAttribute("src");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(video).toHaveAttribute("src", firstSrc);
+    expect(onSessionLost).not.toHaveBeenCalled();
   });
 
   it("lets native HLS load normally after an unexpected preflight failure", async () => {

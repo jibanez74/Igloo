@@ -104,7 +104,7 @@ While a copy-video session is still encoding, its playlist is `#EXT-X-PLAYLIST-T
 
 When FFmpeg exits, Igloo finalizes whatever playlist it left behind by switching it to VOD and appending `#EXT-X-ENDLIST` — on failed exits as well as clean ones, because the live playlist file outlives the process that was appending to it, and terminating it is what lets a client play up to the failure point and stop rather than reload an unterminated playlist forever.
 
-Both flavors check exit status before answering: for copy-video ahead of reading the live playlist file, since that file outlives its writer; for transcodes ahead of synthesizing, since a synthesized playlist describes output that only exists while FFmpeg is still running. A session that exited with an error reports a transcode failure, and one that produced nothing playable reports an empty session. Neither may be answered with a complete playlist — that hides the failure until the client has waited out every segment request in turn.
+Both flavors check exit status before answering: for copy-video ahead of reading the live playlist file, since that file outlives its writer; for transcodes ahead of synthesizing, since a synthesized playlist describes output that only exists while FFmpeg is still running. A finalized playlist with playable segments is served through the failure point. A finalized playlist without playable segments is an empty session; an exit error without a publishable playlist is an FFmpeg session failure. Neither may be answered with a complete playlist — that hides the failure until the client has waited out every segment request in turn.
 
 The practical cost is that a copy-video session is seekable only across what FFmpeg has produced. During steady playback the encoder runs several times faster than realtime, and the web client rebases the session for any seek more than 120 seconds ahead, so this is narrower than it sounds.
 
@@ -448,7 +448,7 @@ For binary deployments:
 - `HLS_MAX_SESSIONS_PER_USER` is read at startup and limits cached plus in-flight personal HLS sessions per user; remux and transcode sessions are both counted. The default is 3. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 
-Build tags, `make` targets, and the environment variables above are documented in `CLAUDE.md`, `README.md`, and `.env.example`; the only FFmpeg-specific note is that every `externalbin` build — `make dev` and all backend tests — needs `ffmpeg` and `ffprobe` on `PATH`.
+Build tags, `make` targets, and the environment variables above are documented in `CLAUDE.md`, `README.md`, and `.env.example`; the only FFmpeg-specific note is that every `externalbin` build — `make dev` and all backend tests — needs each binary on `PATH` or supplied through its `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` override.
 
 For failures:
 

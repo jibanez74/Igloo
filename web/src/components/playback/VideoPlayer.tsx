@@ -483,10 +483,21 @@ export default function VideoPlayer({
         await Promise.resolve();
         if (cancelled) return;
 
-        const response = await fetch(src, {
-          credentials: "include",
-          signal: controller.signal,
-        });
+        // A stalled manifest connection would otherwise leave native playback
+        // sourceless forever; aborting drops into the catch fallback below.
+        const timeoutId = window.setTimeout(
+          () => controller.abort(),
+          HLS_JS_LOAD_TIMEOUT_MS,
+        );
+        let response: Response;
+        try {
+          response = await fetch(src, {
+            credentials: "include",
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
         await releaseResponseBody(response);
         if (cancelled) return;
 
