@@ -43,6 +43,10 @@ function notificationTitleLabel(title: string): string {
   return NOTIFICATION_TITLE_LABELS[title] ?? "Notification";
 }
 
+const RELATIVE_TIME_FORMAT = new Intl.RelativeTimeFormat(undefined, {
+  numeric: "auto",
+});
+
 // SQLite timestamps come back as "YYYY-MM-DD HH:MM:SS" in UTC; normalize to an
 // ISO string before parsing so the relative time is computed correctly.
 function formatRelativeTime(timestamp: string): string {
@@ -51,7 +55,7 @@ function formatRelativeTime(timestamp: string): string {
 
   const diffSec = Math.round((parsed - Date.now()) / 1000);
   const abs = Math.abs(diffSec);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const rtf = RELATIVE_TIME_FORMAT;
 
   if (abs < 60) return rtf.format(diffSec, "second");
   if (abs < 3600) return rtf.format(Math.round(diffSec / 60), "minute");

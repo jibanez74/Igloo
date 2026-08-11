@@ -63,6 +63,21 @@ export const Route = createFileRoute("/_auth/trailer")({
   component: TrailerPage,
 });
 
+function focusMainAfterNavigation() {
+  window.setTimeout(() => {
+    document.getElementById("main")?.focus({ preventScroll: true });
+  }, 0);
+}
+
+function handleDialogEscapeKeyDown(event: KeyboardEvent) {
+  if (!getFullscreenElement()) {
+    return;
+  }
+
+  event.preventDefault();
+  void exitDocumentFullscreen();
+}
+
 function TrailerPage() {
   const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -71,7 +86,9 @@ function TrailerPage() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(
+    () => !!getFullscreenElement(),
+  );
 
   useEffect(() => {
     pause();
@@ -98,12 +115,6 @@ function TrailerPage() {
   const trailerKey = videoKey ?? trailerFromApi?.key ?? null;
 
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
-
-  const focusMainAfterNavigation = () => {
-    window.setTimeout(() => {
-      document.getElementById("main")?.focus({ preventScroll: true });
-    }, 0);
-  };
 
   const handleClose = () => {
     void router.navigate({ to: returnTo ?? "/" }).catch(() => {
@@ -142,7 +153,6 @@ function TrailerPage() {
     const onFullscreenChange = () => {
       setIsBrowserFullscreen(!!getFullscreenElement());
     };
-    onFullscreenChange();
     document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("webkitfullscreenchange", onFullscreenChange);
     return () => {
@@ -289,15 +299,6 @@ function TrailerPage() {
 
     const focusTarget = closeButtonRef.current ?? containerRef.current;
     focusTarget?.focus({ preventScroll: true });
-  };
-
-  const handleDialogEscapeKeyDown = (event: KeyboardEvent) => {
-    if (!getFullscreenElement()) {
-      return;
-    }
-
-    event.preventDefault();
-    void exitDocumentFullscreen();
   };
 
   if (error) {

@@ -10,16 +10,16 @@ import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import { MINI_PLAYER_CLEARANCE_PADDING_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+function handleSkipToContent() {
+  requestAnimationFrame(() => {
+    document.getElementById("main")?.focus();
+  });
+}
+
 export default function AppShell({ children }: PropsWithChildren) {
   // The minimized audio player is a fixed bottom bar; reserve space for it so
   // the last rows of any page stay reachable while music plays.
   const isMiniPlayerVisible = useIsMiniPlayerVisible();
-
-  const handleSkipToContent = () => {
-    requestAnimationFrame(() => {
-      document.getElementById("main")?.focus();
-    });
-  };
 
   return (
     <SidebarProvider>

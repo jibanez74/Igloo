@@ -78,22 +78,23 @@ function DialogContent({
   )
 }
 
-const DialogFullscreenContent = React.forwardRef<
-  React.ComponentRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal data-slot="dialog-portal">
-    <DialogPrimitive.Content
-      ref={ref}
-      data-slot="dialog-fullscreen-content"
-      className={cn("fixed inset-0 z-50 outline-hidden", className)}
-      {...props}
-    >
-      {children}
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
-DialogFullscreenContent.displayName = "DialogFullscreenContent";
+function DialogFullscreenContent({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  return (
+    <DialogPortal data-slot="dialog-portal">
+      <DialogPrimitive.Content
+        data-slot="dialog-fullscreen-content"
+        className={cn("fixed inset-0 z-50 outline-hidden", className)}
+        {...props}
+      >
+        {children}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  )
+}
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -118,18 +119,18 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-const DialogTitle = React.forwardRef<
-  React.ComponentRef<typeof DialogPrimitive.Title>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title
-    ref={ref}
-    data-slot="dialog-title"
-    className={cn("text-lg leading-none font-semibold", className)}
-    {...props}
-  />
-));
-DialogTitle.displayName = "DialogTitle";
+function DialogTitle({
+  className,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  return (
+    <DialogPrimitive.Title
+      data-slot="dialog-title"
+      className={cn("text-lg leading-none font-semibold", className)}
+      {...props}
+    />
+  )
+}
 
 function DialogDescription({
   className,
