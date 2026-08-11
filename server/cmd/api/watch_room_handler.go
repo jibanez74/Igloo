@@ -549,7 +549,6 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
 		app.Logger.Error("failed to commit watch room transaction", "error", err)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return

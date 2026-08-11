@@ -239,7 +239,6 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 
 	err = tx.Commit()
 	if err != nil {
-		_ = tx.Rollback()
 		app.Logger.Error("admin: failed to commit user update transaction", "error", err, "target_id", targetID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
@@ -320,7 +319,6 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	err = tx.Commit()
 	if err != nil {
-		_ = tx.Rollback()
 		app.Logger.Error("admin: failed to commit user deletion transaction", "error", err, "target_id", targetID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
