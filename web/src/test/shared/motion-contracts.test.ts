@@ -222,8 +222,14 @@ describe("motion contracts", () => {
     expect(MOTION_PLAYER_CHROME_BUTTON_CLASS).toBe(MOTION_MICRO_CONTROL_CLASS);
     expect(MOTION_PAGE_ENTER_CLASS).toContain("motion-reduce:animate-none");
     expect(MOTION_PAGE_ENTER_CLASS).toContain("motion-reduce:translate-y-0");
+    expect(MOTION_PAGE_ENTER_CLASS).toContain(
+      durationClass(MOTION_DURATION_PAGE_MS),
+    );
     expect(MOTION_SECTION_ENTER_CLASS).toContain(
       "motion-reduce:animate-none",
+    );
+    expect(MOTION_SECTION_ENTER_CLASS).toContain(
+      durationClass(MOTION_DURATION_STANDARD_MS),
     );
     expect(MOTION_SECTION_ENTER_DELAYED_CLASS).toContain("delay-75");
     expect(MOTION_SECTION_ENTER_DELAYED_CLASS).toContain(
