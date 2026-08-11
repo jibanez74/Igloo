@@ -47,7 +47,7 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
           {showThumb ? (
             <img
               src={thumbUrl}
-              alt={`Photo of ${name}`}
+              alt={name}
               width={256}
               height={256}
               loading="lazy"

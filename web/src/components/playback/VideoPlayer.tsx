@@ -474,6 +474,9 @@ export default function VideoPlayer({
 
     let cancelled = false;
     const controller = new AbortController();
+    // Cleared in both exits below; `finally` would bail React Compiler out of
+    // the whole component.
+    let timeoutId: number | undefined;
 
     void (async () => {
       try {
@@ -485,19 +488,15 @@ export default function VideoPlayer({
 
         // A stalled manifest connection would otherwise leave native playback
         // sourceless forever; aborting drops into the catch fallback below.
-        const timeoutId = window.setTimeout(
+        timeoutId = window.setTimeout(
           () => controller.abort(),
           HLS_JS_LOAD_TIMEOUT_MS,
         );
-        let response: Response;
-        try {
-          response = await fetch(src, {
-            credentials: "include",
-            signal: controller.signal,
-          });
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
+        const response = await fetch(src, {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
         await releaseResponseBody(response);
         if (cancelled) return;
 
@@ -520,6 +519,7 @@ export default function VideoPlayer({
           video.src = src;
         }
       } catch {
+        window.clearTimeout(timeoutId);
         if (!cancelled) {
           // Metadata is advisory. Let the native player use its existing
           // loading and error behavior when the preflight itself fails.

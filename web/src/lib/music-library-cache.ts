@@ -30,12 +30,6 @@ const MUSIC_LIBRARY_QUERY_KEYS = [
   PLAYLIST_TRACKS_KEY,
 ] as const;
 
-export function invalidateMusicLibraryQueries(queryClient: QueryClient) {
-  MUSIC_LIBRARY_QUERY_KEYS.forEach(key => {
-    void queryClient.invalidateQueries({ queryKey: [key] });
-  });
-}
-
 export async function refreshMusicLibraryCache(queryClient: QueryClient) {
   await Promise.all(
     MUSIC_LIBRARY_QUERY_KEYS.map(async key => {

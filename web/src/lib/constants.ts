@@ -132,7 +132,6 @@ export const YOUTUBE_THUMBNAIL_BASE = "/api/youtube/thumbnails";
 export const TMDB_BACKDROP_SIZE = "w1280";
 export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";
-export const TMDB_LOGO_SIZE = "w92";
 
 // Virtual-list measurements in pixels. These keep virtualized rows stable and
 // must match the rendered heights of TrackItem (p-3 row + two text lines) and
@@ -224,7 +223,6 @@ export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 /** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
 export const MOVIE_BUFFERING_SPINNER_DELAY_MS = 300;
-export const MEDIA_ERR_NETWORK = 2;
 export const MEDIA_ERR_DECODE = 3;
 export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 

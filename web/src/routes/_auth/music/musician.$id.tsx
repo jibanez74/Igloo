@@ -187,6 +187,19 @@ function MusicianDetailsSkeleton() {
   );
 }
 
+// Format follower count for display
+function formatFollowers(count: number) {
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1)}M`;
+  }
+
+  if (count >= 1_000) {
+    return `${Math.floor(count / 1_000)}K`;
+  }
+
+  return count.toString();
+}
+
 function MusicianDetailsContent({
   musician,
   albums,
@@ -210,19 +223,6 @@ function MusicianDetailsContent({
   // React 19 document metadata - dynamic based on musician
   const pageTitle = `${musician.name} - Igloo`;
   const pageDescription = `Listen to ${musician.name} - ${albums.length} albums, ${tracks.length} tracks in your Igloo music library.`;
-
-  // Format follower count for display
-  const formatFollowers = (count: number) => {
-    if (count >= 1_000_000) {
-      return `${(count / 1_000_000).toFixed(1)}M`;
-    }
-
-    if (count >= 1_000) {
-      return `${Math.floor(count / 1_000)}K`;
-    }
-
-    return count.toString();
-  };
 
   const convertTracksForPlayer = (musicianTracks: MusicianTrackType[]) => {
     return musicianTracks.map((track) =>

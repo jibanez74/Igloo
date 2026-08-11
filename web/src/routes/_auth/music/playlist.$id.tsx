@@ -256,9 +256,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     setShowDeleteDialog(true);
   };
 
-  // Page announcement for screen readers
-  const pageAnnouncement = `${playlist.name}. ${track_count} ${track_count === 1 ? "track" : "tracks"}. Total duration: ${formatDuration(duration)}.`;
-
   return (
     <article
       className={cn(
@@ -270,15 +267,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       {/* React 19 Document Metadata */}
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
-
-      {/* Screen reader announcement */}
-      <span
-        tabIndex={0}
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-muted focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden"
-        aria-label={pageAnnouncement}
-      >
-        {playlist.name} - {track_count} tracks
-      </span>
 
       {/* Header section */}
       <header className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">

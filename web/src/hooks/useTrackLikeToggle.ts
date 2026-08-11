@@ -30,7 +30,7 @@ function setTrackLiked(ids: number[], trackId: number, isLiked: boolean) {
  * source of liked state for track rows and the audio player. Mutations are
  * keyed per track so duplicate controls share their pending state.
  */
-export function useTrackLikeToggle(trackId: number) {
+function useTrackLikeToggle(trackId: number) {
   const queryClient = useQueryClient();
   const key = [LIKED_TRACK_IDS_KEY] as const;
   const mutationKey = [TRACK_LIKE_MUTATION_KEY, trackId] as const;
