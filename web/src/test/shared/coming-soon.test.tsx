@@ -27,6 +27,9 @@ describe("ComingSoon", () => {
     expect(
       screen.queryByText("Photos - Under Development"),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Photos - Under Development"),
+    ).not.toBeInTheDocument();
   });
 
   it("uses the shared entrance class without hidden initial state", () => {
