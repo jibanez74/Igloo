@@ -591,15 +591,13 @@ function SidebarMenuSkeleton({
 }) {
   // Use stable ID to derive a deterministic width between 50% to 90%
   const id = React.useId()
-  const width = React.useMemo(() => {
-    // Create a simple hash from the id to get a stable "random" value
-    let hash = 0
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) - hash) + id.charCodeAt(i)
-      hash = hash & hash // Convert to 32bit integer
-    }
-    return `${Math.abs(hash % 40) + 50}%`
-  }, [id])
+  // Create a simple hash from the id to get a stable "random" value
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash) + id.charCodeAt(i)
+    hash = hash & hash // Convert to 32bit integer
+  }
+  const width = `${Math.abs(hash % 40) + 50}%`
 
   return (
     <div
