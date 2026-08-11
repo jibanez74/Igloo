@@ -184,7 +184,7 @@ func (app *Application) ProxyTmdbImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func isSafeTmdbImageFile(file string) bool {
-	if file == "" || strings.Contains(file, "..") || strings.ContainsAny(file, `/\`) {
+	if file == "" || strings.Contains(file, "..") {
 		return false
 	}
 

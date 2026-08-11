@@ -403,7 +403,7 @@ func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID in
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodGet, path, nil)
-	for _, cookie := range searchAuthCookies(t, app, userID) {
+	for _, cookie := range authSessionCookies(t, app, userID) {
 		req.AddCookie(cookie)
 	}
 
@@ -418,7 +418,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	userID := createSearchUser(t, app)
 	app.InitSession()
 	app.InitRouter()
-	cookies := searchAuthCookies(t, app, userID)
+	cookies := authSessionCookies(t, app, userID)
 
 	tests := []struct {
 		operationID string
@@ -444,24 +444,6 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 			assertOpenAPIExchange(t, test.operationID, req, response)
 		})
 	}
-}
-
-func searchAuthCookies(t *testing.T, app *Application, userID int64) []*http.Cookie {
-	t.Helper()
-
-	handler := app.SessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/session", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	return resp.Cookies()
 }
 
 func TestNormalizeSearchPage(t *testing.T) {

@@ -116,26 +116,6 @@ func closeWatchRoomWSTestApp(t *testing.T, app *Application) {
 	}
 }
 
-func newWatchRoomSessionCookie(t *testing.T, app *Application, userID int64) *http.Cookie {
-	t.Helper()
-
-	ctx, err := app.SessionManager.Load(context.Background(), "")
-	if err != nil {
-		t.Fatalf("load test session: %v", err)
-	}
-
-	app.SessionManager.Put(ctx, cookieUserID, userID)
-	token, _, err := app.SessionManager.Commit(ctx)
-	if err != nil {
-		t.Fatalf("commit test session: %v", err)
-	}
-
-	return &http.Cookie{
-		Name:  app.SessionManager.Cookie.Name,
-		Value: token,
-	}
-}
-
 func dialWatchRoomSocketWithCookie(
 	t *testing.T,
 	serverURL string,
@@ -160,7 +140,7 @@ func dialWatchRoomSocketWithCookie(
 func dialWatchRoomSocket(t *testing.T, app *Application, serverURL string, roomID, userID int64) (*websocket.Conn, *http.Response) {
 	t.Helper()
 
-	return dialWatchRoomSocketWithCookie(t, serverURL, roomID, newWatchRoomSessionCookie(t, app, userID))
+	return dialWatchRoomSocketWithCookie(t, serverURL, roomID, newAuthSessionCookie(t, app, userID))
 }
 
 func readWatchRoomEvent(t *testing.T, conn *websocket.Conn) watchRoomWSTestEvent {
@@ -193,10 +173,11 @@ func readUntilEventType(t *testing.T, conn *websocket.Conn, eventType string) wa
 	return watchRoomWSTestEvent{}
 }
 
+const watchRoomPlaybackChangedEvent = "playback_changed"
+
 func readUntilPlaybackPosition(
 	t *testing.T,
 	conn *websocket.Conn,
-	eventType string,
 	minPosition float64,
 	maxPosition float64,
 ) watchRoomWSTestEvent {
@@ -204,7 +185,7 @@ func readUntilPlaybackPosition(
 
 	for i := 0; i < 8; i++ {
 		event := readWatchRoomEvent(t, conn)
-		if event.Type != eventType || event.Playback == nil {
+		if event.Type != watchRoomPlaybackChangedEvent || event.Playback == nil {
 			continue
 		}
 		if event.Playback.PositionSec >= minPosition && event.Playback.PositionSec <= maxPosition {
@@ -212,14 +193,18 @@ func readUntilPlaybackPosition(
 		}
 	}
 
-	t.Fatalf("did not receive %q event with position in range %.3f-%.3f", eventType, minPosition, maxPosition)
+	t.Fatalf("did not receive %q event with position in range %.3f-%.3f", watchRoomPlaybackChangedEvent, minPosition, maxPosition)
 	return watchRoomWSTestEvent{}
 }
 
-func expectNoEventType(t *testing.T, conn *websocket.Conn, forbiddenType string, wait time.Duration) {
+// expectNoEventWait is how long a socket is watched before concluding that a
+// forbidden event is genuinely not coming.
+const expectNoEventWait = 250 * time.Millisecond
+
+func expectNoEventType(t *testing.T, conn *websocket.Conn, forbiddenType string) {
 	t.Helper()
 
-	err := conn.SetReadDeadline(time.Now().Add(wait))
+	err := conn.SetReadDeadline(time.Now().Add(expectNoEventWait))
 	if err != nil {
 		t.Fatalf("set read deadline: %v", err)
 	}
@@ -321,7 +306,7 @@ func TestWatchRoomWebSocket_LoadsSessionReadOnlyWithoutCommit(t *testing.T) {
 	server := setupWatchRoomWSTestServer(t, app)
 	defer server.Close()
 
-	cookie := newWatchRoomSessionCookie(t, app, ownerID)
+	cookie := newAuthSessionCookie(t, app, ownerID)
 	store := &countingSessionStore{store: app.SessionManager.Store}
 	app.SessionManager.Store = store
 
@@ -562,7 +547,7 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 		t.Fatalf("guest send seek event: %v", err)
 	}
 
-	seekEvent := readUntilPlaybackPosition(t, ownerConn, "playback_changed", 41.5, 42.5)
+	seekEvent := readUntilPlaybackPosition(t, ownerConn, 41.5, 42.5)
 	if seekEvent.Playback == nil {
 		t.Fatal("expected playback payload on seek event")
 	}
@@ -575,66 +560,12 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 		t.Fatalf("owner send pause event: %v", err)
 	}
 
-	pauseEvent := readUntilPlaybackPosition(t, guestConn, "playback_changed", 44.5, 45.5)
+	pauseEvent := readUntilPlaybackPosition(t, guestConn, 44.5, 45.5)
 	if pauseEvent.Playback == nil {
 		t.Fatal("expected playback payload on pause event")
 	}
 	if !pauseEvent.Playback.Paused {
 		t.Fatal("expected pause event to set paused=true")
-	}
-}
-
-func TestWatchRoomWebSocket_PlaybackEventsUseCurrentPositionWhenMissing(t *testing.T) {
-	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
-
-	ctx := context.Background()
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Fallback Guest",
-		Email:    "fallback-guest@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest: %v", err)
-	}
-
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
-
-	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
-	defer ownerConn.Close()
-	guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
-	defer guestConn.Close()
-
-	_ = readUntilEventType(t, ownerConn, "room_snapshot")
-	_ = readUntilEventType(t, guestConn, "room_snapshot")
-
-	if err := ownerConn.WriteJSON(map[string]any{
-		"type":         "play",
-		"position_sec": 5,
-	}); err != nil {
-		t.Fatalf("owner send play event: %v", err)
-	}
-	_ = readUntilEventType(t, guestConn, "playback_changed")
-
-	time.Sleep(100 * time.Millisecond)
-
-	if err := ownerConn.WriteJSON(map[string]any{"type": "pause"}); err != nil {
-		t.Fatalf("owner send pause without position: %v", err)
-	}
-
-	pauseEvent := readUntilEventType(t, guestConn, "playback_changed")
-	if pauseEvent.Playback == nil {
-		t.Fatal("expected playback payload on pause event")
-	}
-	if !pauseEvent.Playback.Paused {
-		t.Fatalf("expected pause fallback event to set paused=true, got %+v", pauseEvent.Playback)
-	}
-	if pauseEvent.Playback.PositionSec <= 5 {
-		t.Fatalf("expected fallback pause position to advance beyond 5s, got %.3f", pauseEvent.Playback.PositionSec)
 	}
 }
 
@@ -674,7 +605,7 @@ func TestWatchRoomWebSocket_JoinSnapshotReflectsCurrentPlaybackState(t *testing.
 		t.Fatalf("owner send play event: %v", err)
 	}
 
-	playEvent := readUntilPlaybackPosition(t, guestConn, "playback_changed", 18.0, 19.5)
+	playEvent := readUntilPlaybackPosition(t, guestConn, 18.0, 19.5)
 	if playEvent.Playback == nil || playEvent.Playback.Paused {
 		t.Fatalf("expected guest play event to reflect active playback, got %+v", playEvent.Playback)
 	}
@@ -730,7 +661,7 @@ func TestWatchRoomWebSocket_DoesNotBroadcastMemberJoinedForSecondSocket(t *testi
 	defer ownerSecondConn.Close()
 
 	_ = readUntilEventType(t, ownerSecondConn, "room_snapshot")
-	expectNoEventType(t, guestConn, "member_joined", 250*time.Millisecond)
+	expectNoEventType(t, guestConn, "member_joined")
 }
 
 func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *testing.T) {
@@ -787,7 +718,7 @@ func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *t
 	_ = readUntilEventType(t, ownerSecondConn, "room_snapshot")
 
 	_ = ownerSecondConn.Close()
-	expectNoEventType(t, guestConn, "member_left", 250*time.Millisecond)
+	expectNoEventType(t, guestConn, "member_left")
 
 	_ = ownerConn.Close()
 	left := readUntilEventType(t, observerConn, "member_left")

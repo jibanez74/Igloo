@@ -17,21 +17,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func setupSettingsHTTPTestApp(t *testing.T) *Application {
-	t.Helper()
-
-	app := setupTestApp(t)
-	app.InitSession()
-	clearSettingsEnv(t)
-
-	err := app.InitSettings(context.Background())
-	if err != nil {
-		t.Fatalf("InitSettings failed: %v", err)
-	}
-
-	return app
-}
-
 func generalSettingsBody(staticDir string) string {
 	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
@@ -60,7 +45,7 @@ func performUpdateGeneralSettings(app *Application, body string) *httptest.Respo
 }
 
 func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
@@ -108,7 +93,7 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 }
 
 func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 	app.Wait = &sync.WaitGroup{}
 
@@ -174,7 +159,7 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupSettingsHTTPTestApp(t)
+			app := setupSettingsTestApp(t)
 			defer app.DB.Close()
 
 			staticDir := filepath.Join(t.TempDir(), "static")
@@ -189,7 +174,7 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 }
 
 func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
@@ -229,7 +214,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 }
 
 func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	w := performUpdateGeneralSettings(app, generalSettingsBody(""))
@@ -250,7 +235,7 @@ func performUpdateLibrarySettings(app *Application, body string) *httptest.Respo
 }
 
 func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	root := t.TempDir()
@@ -291,7 +276,7 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 }
 
 func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	w := performUpdateLibrarySettings(app, `{
@@ -315,7 +300,7 @@ func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
 }
 
 func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	body := fmt.Sprintf(`{
@@ -331,7 +316,7 @@ func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 }
 
 func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 	app.Settings.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
 
@@ -352,7 +337,7 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 }
 
 func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 	app.Settings.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
 
@@ -386,7 +371,7 @@ func mountGeneralSettingsRouter(app *Application, userID int64) http.Handler {
 }
 
 func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
-	app := setupSettingsHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{

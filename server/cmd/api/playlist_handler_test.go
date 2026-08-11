@@ -265,22 +265,6 @@ func playlistTestHandler(app *Application) http.Handler {
 	return app.SessionManager.LoadAndSave(router)
 }
 
-func playlistAuthCookies(t *testing.T, app *Application, userID int64) []*http.Cookie {
-	t.Helper()
-
-	handler := app.SessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	req := httptest.NewRequest(http.MethodGet, "/session", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-	return resp.Cookies()
-}
-
 func performPlaylistRequest(
 	t *testing.T,
 	app *Application,
@@ -297,7 +281,7 @@ func performPlaylistRequest(
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if userID != 0 {
-		for _, cookie := range playlistAuthCookies(t, app, userID) {
+		for _, cookie := range authSessionCookies(t, app, userID) {
 			req.AddCookie(cookie)
 		}
 	}
@@ -654,7 +638,7 @@ func TestPlaylistHandlers_ConformToOpenAPI(t *testing.T) {
 	outsider := createTestUser(t, app, "Contract Outsider", "contract-outsider@example.com", false)
 	app.InitSession()
 	app.InitRouter()
-	cookies := playlistAuthCookies(t, app, owner.ID)
+	cookies := authSessionCookies(t, app, owner.ID)
 
 	request := func(operationID, method, path, body string, wantStatus int) *httptest.ResponseRecorder {
 		t.Helper()

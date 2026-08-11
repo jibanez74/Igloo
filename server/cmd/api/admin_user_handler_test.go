@@ -8,36 +8,8 @@ import (
 	"strconv"
 	"testing"
 
-	"igloo/cmd/internal/database"
-
 	"github.com/go-chi/chi/v5"
 )
-
-func setupAdminUserHTTPTestApp(t *testing.T) *Application {
-	t.Helper()
-
-	app := setupTestApp(t)
-	app.InitSession()
-
-	return app
-}
-
-func createAdminUser(t *testing.T, app *Application, name, email string, isAdmin bool) database.User {
-	t.Helper()
-
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     name,
-		Email:    email,
-		Password: "hashed",
-		IsAdmin:  isAdmin,
-		Avatar:   sql.NullString{},
-	})
-	if err != nil {
-		t.Fatalf("create admin user %q: %v", email, err)
-	}
-
-	return user
-}
 
 func mountAdminUserRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
@@ -66,10 +38,10 @@ func mountAdminUserRouter(app *Application, userID int64) http.Handler {
 }
 
 func TestAdminUserListCreateAndPasswordReset_ConformToOpenAPI(t *testing.T) {
-	app := setupAdminUserHTTPTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
-	admin := createAdminUser(t, app, "Admin", "admin@example.com", true)
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	handler := mountAdminUserRouter(app, admin.ID)
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
@@ -107,10 +79,10 @@ func TestAdminUserListCreateAndPasswordReset_ConformToOpenAPI(t *testing.T) {
 }
 
 func TestAdminUpdateUser_RejectsDemotingLastAdmin(t *testing.T) {
-	app := setupAdminUserHTTPTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
-	target := createAdminUser(t, app, "Solo Admin", "solo-admin@example.com", true)
+	target := createTestUser(t, app, "Solo Admin", "solo-admin@example.com", true)
 	handler := mountAdminUserRouter(app, 999)
 
 	body := `{"name":"Solo Admin","email":"solo-admin@example.com","is_admin":false}`
@@ -134,11 +106,11 @@ func TestAdminUpdateUser_RejectsDemotingLastAdmin(t *testing.T) {
 }
 
 func TestAdminUpdateUser_DemotesAdminWhenAnotherAdminExists(t *testing.T) {
-	app := setupAdminUserHTTPTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
-	target := createAdminUser(t, app, "Admin One", "admin-one@example.com", true)
-	createAdminUser(t, app, "Admin Two", "admin-two@example.com", true)
+	target := createTestUser(t, app, "Admin One", "admin-one@example.com", true)
+	createTestUser(t, app, "Admin Two", "admin-two@example.com", true)
 	handler := mountAdminUserRouter(app, 999)
 
 	body := `{"name":"Admin One","email":"admin-one@example.com","is_admin":false}`
@@ -171,10 +143,10 @@ func TestAdminUpdateUser_DemotesAdminWhenAnotherAdminExists(t *testing.T) {
 }
 
 func TestAdminDeleteUser_RejectsDeletingLastAdmin(t *testing.T) {
-	app := setupAdminUserHTTPTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
-	target := createAdminUser(t, app, "Only Admin", "only-admin@example.com", true)
+	target := createTestUser(t, app, "Only Admin", "only-admin@example.com", true)
 	handler := mountAdminUserRouter(app, 999)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), nil)
@@ -193,11 +165,11 @@ func TestAdminDeleteUser_RejectsDeletingLastAdmin(t *testing.T) {
 }
 
 func TestAdminDeleteUser_DeletesAdminWhenAnotherAdminExists(t *testing.T) {
-	app := setupAdminUserHTTPTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
-	target := createAdminUser(t, app, "Delete Me", "delete-me@example.com", true)
-	createAdminUser(t, app, "Keep Me", "keep-me@example.com", true)
+	target := createTestUser(t, app, "Delete Me", "delete-me@example.com", true)
+	createTestUser(t, app, "Keep Me", "keep-me@example.com", true)
 	handler := mountAdminUserRouter(app, 999)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(target.ID, 10), nil)

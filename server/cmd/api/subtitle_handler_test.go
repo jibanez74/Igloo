@@ -13,30 +13,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func insertTestSubtitleFixture(t *testing.T, app *Application, movieID int64, streamIndex int64, codec string) {
+// The subtitle fixtures all live on stream 2, matching a typical container
+// where the subtitle track follows one video and one audio stream.
+const testSubtitleStreamIndex = 2
+
+func insertTestSubtitleFixture(t *testing.T, app *Application, movieID int64, codec string) {
 	t.Helper()
 
 	_, err := app.DB.Exec(`
 		INSERT INTO subtitles (movie_id, stream_index, codec, language)
 		VALUES (?, ?, ?, ?)
-	`, movieID, streamIndex, codec, "eng")
+	`, movieID, testSubtitleStreamIndex, codec, "eng")
 	if err != nil {
 		t.Fatalf("insert subtitle: %v", err)
 	}
-}
-
-func serveSubtitleWebVTT(app *Application, movieID int64, trackIndex string) *httptest.ResponseRecorder {
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
-
-	req := httptest.NewRequest(
-		http.MethodGet,
-		fmt.Sprintf("/api/movies/%d/subtitles/%s/web.vtt", movieID, trackIndex),
-		nil,
-	)
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, req)
-	return recorder
 }
 
 func serveSubtitleWebVTTWithQuery(
@@ -68,7 +58,7 @@ func TestSubtitleWebVTT_ShiftsCuesBySessionStart(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, 2, "subrip")
+	insertTestSubtitleFixture(t, app, movieID, "subrip")
 
 	absolute := "WEBVTT\n\n00:10:05.000 --> 00:10:07.000\nLine\n"
 	app.SubtitleVTTCache.Set(helpers.SubtitleCacheKey(movieID, 2), []byte(absolute), subtitleCacheTTL)
@@ -84,7 +74,7 @@ func TestSubtitleWebVTT_ShiftsCuesBySessionStart(t *testing.T) {
 
 	// The cache holds the absolute payload, so an unshifted request still gets
 	// absolute cues without a second extraction.
-	unshifted := serveSubtitleWebVTT(app, movieID, "0")
+	unshifted := serveSubtitleWebVTTWithQuery(app, movieID, "0", "")
 	if !strings.Contains(unshifted.Body.String(), "00:10:05.000 --> 00:10:07.000") {
 		t.Fatalf("cache must keep absolute cues: %s", unshifted.Body.String())
 	}
@@ -99,7 +89,7 @@ func TestSubtitleWebVTT_RejectsNegativeStart(t *testing.T) {
 	app.FFmpeg = &fakeFFmpeg{}
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, 2, "subrip")
+	insertTestSubtitleFixture(t, app, movieID, "subrip")
 
 	recorder := serveSubtitleWebVTTWithQuery(app, movieID, "0", "?start=-5")
 
@@ -115,9 +105,9 @@ func TestSubtitleWebVTT_ExtractsTextSubtitle(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, 2, "subrip")
+	insertTestSubtitleFixture(t, app, movieID, "subrip")
 
-	recorder := serveSubtitleWebVTT(app, movieID, "0")
+	recorder := serveSubtitleWebVTTWithQuery(app, movieID, "0", "")
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
@@ -143,14 +133,14 @@ func TestSubtitleWebVTT_SecondRequestServedFromCache(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, 2, "subrip")
+	insertTestSubtitleFixture(t, app, movieID, "subrip")
 
-	first := serveSubtitleWebVTT(app, movieID, "0")
+	first := serveSubtitleWebVTTWithQuery(app, movieID, "0", "")
 	if first.Code != http.StatusOK {
 		t.Fatalf("first request: expected 200, got %d", first.Code)
 	}
 
-	second := serveSubtitleWebVTT(app, movieID, "0")
+	second := serveSubtitleWebVTTWithQuery(app, movieID, "0", "")
 	if second.Code != http.StatusOK {
 		t.Fatalf("second request: expected 200, got %d", second.Code)
 	}
@@ -169,9 +159,9 @@ func TestSubtitleWebVTT_RejectsBitmapSubtitle(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, 2, "hdmv_pgs_subtitle")
+	insertTestSubtitleFixture(t, app, movieID, "hdmv_pgs_subtitle")
 
-	recorder := serveSubtitleWebVTT(app, movieID, "0")
+	recorder := serveSubtitleWebVTTWithQuery(app, movieID, "0", "")
 
 	if recorder.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("expected 415, got %d: %s", recorder.Code, recorder.Body.String())
@@ -198,9 +188,9 @@ func TestSubtitleWebVTT_TrackIndexOutOfRange(t *testing.T) {
 	app.FFmpeg = &fakeFFmpeg{}
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, 2, "subrip")
+	insertTestSubtitleFixture(t, app, movieID, "subrip")
 
-	recorder := serveSubtitleWebVTT(app, movieID, "5")
+	recorder := serveSubtitleWebVTTWithQuery(app, movieID, "5", "")
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", recorder.Code, recorder.Body.String())

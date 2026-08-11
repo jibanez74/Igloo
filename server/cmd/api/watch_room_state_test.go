@@ -204,7 +204,7 @@ func TestWatchRoomWebSocket_RoomsAreIsolated(t *testing.T) {
 		t.Fatalf("playback_changed room_id = %d, want %d", playEvent.RoomID, roomA.ID)
 	}
 
-	expectNoEventType(t, connB, "playback_changed", 250*time.Millisecond)
+	expectNoEventType(t, connB, "playback_changed")
 }
 
 func TestWatchRoomWebSocket_ConcurrentPlaybackEventsDoNotDeadlock(t *testing.T) {

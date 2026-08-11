@@ -65,13 +65,6 @@ func mountPinRouter(app *Application, userID int64) http.Handler {
 	return app.SessionManager.LoadAndSave(r)
 }
 
-func setupPinTestApp(t *testing.T) *Application {
-	t.Helper()
-	app := setupTestApp(t)
-	app.InitSession()
-	return app
-}
-
 func pinRequest(t *testing.T, handler http.Handler, method, target, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
@@ -111,7 +104,7 @@ func decodeHasPin(t *testing.T, body []byte) bool {
 }
 
 func TestUpdateUserPin_SetViaSession(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -137,7 +130,7 @@ func TestUpdateUserPin_SetViaSession(t *testing.T) {
 }
 
 func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Contract User", "contract@example.com", false)
@@ -172,7 +165,7 @@ func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 }
 
 func TestUpdateUserPin_SetViaDeviceToken(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 	app.InitRouter()
 
@@ -202,7 +195,7 @@ func TestUpdateUserPin_InvalidFormatRejected(t *testing.T) {
 		`{"pin":"12a4"}`,
 	}
 
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -222,7 +215,7 @@ func TestUpdateUserPin_InvalidFormatRejected(t *testing.T) {
 }
 
 func TestUpdateUserPin_ChangeRequiresCurrentPin(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -255,7 +248,7 @@ func TestUpdateUserPin_ChangeRequiresCurrentPin(t *testing.T) {
 }
 
 func TestUpdateUserPin_RemoveClearsPin(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -281,7 +274,7 @@ func TestUpdateUserPin_RemoveClearsPin(t *testing.T) {
 }
 
 func TestUpdateUserPin_RemoveWhenUnsetIsIdempotent(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -294,7 +287,7 @@ func TestUpdateUserPin_RemoveWhenUnsetIsIdempotent(t *testing.T) {
 }
 
 func TestGetUserPin_SessionOnly(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -327,7 +320,7 @@ func TestGetUserPin_SessionOnly(t *testing.T) {
 }
 
 func TestGetUserPin_RejectsDeviceToken(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 	app.InitRouter()
 
@@ -356,7 +349,7 @@ func TestGetUserPin_RejectsDeviceToken(t *testing.T) {
 }
 
 func TestVerifyUserPin(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -395,7 +388,7 @@ func TestVerifyUserPin(t *testing.T) {
 }
 
 func TestVerifyUserPin_ViaDeviceToken(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 	app.InitRouter()
 
@@ -425,7 +418,7 @@ func TestVerifyUserPin_ViaDeviceToken(t *testing.T) {
 }
 
 func TestPinAttempts_RateLimited(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -457,7 +450,7 @@ func TestPinAttempts_RateLimited(t *testing.T) {
 }
 
 func TestGetCurrentAuthUser_IncludesHasPin(t *testing.T) {
-	app := setupPinTestApp(t)
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 	app.InitRouter()
 

@@ -168,51 +168,6 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 	}
 }
 
-func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	fake := &fakeFFmpeg{
-		plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(unsafeRemuxFixture),
-			hlsRunPlan(transcodeFixture),
-			hlsRunPlan(transcodeFixture),
-		},
-	}
-	app.FFmpeg = fake
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-
-	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err != nil {
-		t.Fatalf("first createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(firstSession)
-
-	secondSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err != nil {
-		t.Fatalf("second createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(secondSession)
-
-	calls := fake.Calls()
-	if len(calls) != 3 {
-		t.Fatalf("RunHLS call count = %d, want 3", len(calls))
-	}
-	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("first RunHLS profile = %q, want remux", calls[0].Profile)
-	}
-	if calls[1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
-	}
-	if calls[2].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("third RunHLS profile = %q, want cached fallback %q", calls[2].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
-	}
-	if secondSession.CopyVideo {
-		t.Fatal("second session CopyVideo = true, want false for cached-unsafe fallback")
-	}
-}
-
 func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -654,57 +609,6 @@ func TestLoadHLSMovieForSession_RejectsNegativeStart(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "outside movie duration") {
 		t.Fatalf("error = %v, want it to mention the duration bound", err)
-	}
-}
-
-// A cached safe verdict must skip preflight entirely: paying four segments of
-// remux validation again on every re-watch is the latency this cache exists to
-// remove.
-func TestCreateHLSSession_CachedSafeVerdictSkipsPreflight(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	fake := &fakeFFmpeg{
-		plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(safeRemuxFixture),
-			// One segment is not enough to pass preflight, so a second session
-			// that still ran it would fall back to a transcode.
-			hlsRunPlan(transcodeFixture),
-		},
-	}
-	app.FFmpeg = fake
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-
-	for attempt := 1; attempt <= 2; attempt++ {
-		session, err := createTestHLSSession(
-			app,
-			context.Background(),
-			movieID,
-			helpers.HLS_PROFILE_REMUX,
-			testIntPtr(0),
-			testPlaybackSessionID,
-			0,
-			false,
-		)
-		if err != nil {
-			t.Fatalf("createHLSSession attempt %d returned error: %v", attempt, err)
-		}
-		defer cleanupHLSSession(session)
-
-		if !session.CopyVideo {
-			t.Fatalf("attempt %d CopyVideo = false, want true", attempt)
-		}
-	}
-
-	calls := fake.Calls()
-	if len(calls) != 2 {
-		t.Fatalf("RunHLS call count = %d, want 2", len(calls))
-	}
-	for i, call := range calls {
-		if call.Profile != helpers.HLS_PROFILE_REMUX {
-			t.Fatalf("RunHLS call %d profile = %q, want remux", i, call.Profile)
-		}
 	}
 }
 

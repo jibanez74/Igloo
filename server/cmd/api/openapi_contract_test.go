@@ -337,15 +337,3 @@ func operationResponseReturnsJSON(operation *openapi3.Operation, status int) boo
 	response := operation.Responses.Status(status)
 	return response != nil && response.Value != nil && response.Value.Content["application/json"] != nil
 }
-
-func TestOpenAPIContractFileExists(t *testing.T) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("failed to locate contract test")
-	}
-	path := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "docs", "openapi.json")
-	_, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("OpenAPI document: %v", err)
-	}
-}

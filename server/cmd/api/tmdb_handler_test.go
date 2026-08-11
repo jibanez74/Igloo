@@ -661,45 +661,6 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	}
 }
 
-func TestUpdateMovieMetadata_DoesNotRequireRemovedLockFields(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	ctx := context.Background()
-	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
-		Title:     "Original",
-		FilePath:  "/movies/original.mkv",
-		FileName:  "original.mkv",
-		Size:      1,
-		Container: "mkv",
-		MimeType:  "video/x-matroska",
-		Adult:     false,
-	})
-	if err != nil {
-		t.Fatalf("insert movie: %v", err)
-	}
-
-	router := chi.NewRouter()
-	router.Patch("/api/movies/{id}", app.UpdateMovieMetadata)
-
-	w := httptest.NewRecorder()
-	req := newOpenAPIJSONRequest(http.MethodPatch, "/api/movies/"+strconv.FormatInt(movie.ID, 10), `{"title":"Updated"}`)
-	addOpenAPITestCookie(req)
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
-	}
-	assertOpenAPIExchange(t, "updateMovieMetadata", req, w)
-
-	updated, err := app.Queries.GetMovieByID(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get updated movie: %v", err)
-	}
-	if updated.Title != "Updated" {
-		t.Fatalf("title = %q, want Updated", updated.Title)
-	}
-}
-
 func TestBuildUpdateParamsFromTmdbMapsNullableFields(t *testing.T) {
 	movie := tmdbMovieFromJSON(t, `{
 		"id": 603,
@@ -753,11 +714,13 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 	router.Patch("/api/movies/{id}", app.UpdateMovieMetadata)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPatch, "/api/movies/"+strconv.FormatInt(movie.ID, 10), strings.NewReader(`{"title":"Updated"}`))
+	req := newOpenAPIJSONRequest(http.MethodPatch, "/api/movies/"+strconv.FormatInt(movie.ID, 10), `{"title":"Updated"}`)
+	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
+	assertOpenAPIExchange(t, "updateMovieMetadata", req, w)
 
 	updated, err := app.Queries.GetMovieByID(ctx, movie.ID)
 	if err != nil {
