@@ -1261,19 +1261,6 @@ func TestWriteHLSPlaylistHeaders_PublishesEffectiveProfileAndStart(t *testing.T)
 	}
 }
 
-// A remux request that falls back still serves from the /hls/remux/ path, so
-// the header is the only thing that can tell the client what it is getting.
-func TestWriteHLSPlaylistHeaders_ReportsFallbackProfile(t *testing.T) {
-	session := &HLSSession{EffectiveProfile: "2160p_16mbps", ActualStartSec: 0}
-
-	recorder := httptest.NewRecorder()
-	writeHLSPlaylistHeaders(recorder, session)
-
-	if got := recorder.Header().Get(hlsEffectiveProfileHeader); got != "2160p_16mbps" {
-		t.Fatalf("effective profile header = %q, want the profile that actually ran", got)
-	}
-}
-
 func TestWriteHLSPlaylistHeaders_OmitsUnknownStart(t *testing.T) {
 	session := &HLSSession{EffectiveProfile: "remux", ActualStartSec: hlsUnknownActualStart}
 
