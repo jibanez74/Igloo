@@ -652,7 +652,7 @@ func TestUpdateMovieWatchProgress_HTTPCompletionThreshold(t *testing.T) {
 			var resp struct {
 				Error bool `json:"error"`
 				Data  struct {
-					Watched bool `json:"watched"`
+					Watched *bool `json:"watched"`
 				} `json:"data"`
 			}
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -662,8 +662,11 @@ func TestUpdateMovieWatchProgress_HTTPCompletionThreshold(t *testing.T) {
 			if resp.Error {
 				t.Fatalf("expected success response, got %s", w.Body.String())
 			}
-			if resp.Data.Watched != tt.wantWatched {
-				t.Errorf("response watched = %v, want %v", resp.Data.Watched, tt.wantWatched)
+			if resp.Data.Watched == nil {
+				t.Fatalf("response omitted data.watched, got %s", w.Body.String())
+			}
+			if *resp.Data.Watched != tt.wantWatched {
+				t.Errorf("response watched = %v, want %v", *resp.Data.Watched, tt.wantWatched)
 			}
 
 			row, err := app.Queries.GetMovieWatchProgress(context.Background(), database.GetMovieWatchProgressParams{
