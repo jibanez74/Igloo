@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import {
   createFileRoute,
   redirect,
@@ -209,10 +209,21 @@ function PlayMoviePage() {
     streamWindowKey: string;
     profile: string;
   } | null>(null);
-  const playbackSessionId = useMemo(
-    () => getOrCreateMovieHlsPlaybackSessionId(movieId),
-    [movieId],
-  );
+  // State rather than useMemo: the getter writes sessionStorage and mints a
+  // fresh random id when storage is unavailable, so a discarded memo cache
+  // could change the session id mid-playback. State guarantees identity;
+  // the render-phase reset re-seeds it when navigating to another movie.
+  const [playbackSession, setPlaybackSession] = useState(() => ({
+    movieId,
+    id: getOrCreateMovieHlsPlaybackSessionId(movieId),
+  }));
+  if (playbackSession.movieId !== movieId) {
+    setPlaybackSession({
+      movieId,
+      id: getOrCreateMovieHlsPlaybackSessionId(movieId),
+    });
+  }
+  const playbackSessionId = playbackSession.id;
   const [chapterAnnouncement, setChapterAnnouncement] =
     useState<ChapterAnnouncement>({
       key: 0,

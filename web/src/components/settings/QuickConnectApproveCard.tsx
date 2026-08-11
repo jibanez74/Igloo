@@ -83,9 +83,12 @@ export default function QuickConnectApproveCard() {
   const [error, setError] = useState<string | null>(null);
   const [pendingDevice, setPendingDevice] =
     useState<QuickConnectLookupType | null>(null);
-  const [knownDeviceIds, setKnownDeviceIds] = useState<number[] | null>(null);
-  const [waitDeadline, setWaitDeadline] = useState<number | null>(null);
   const [connectedName, setConnectedName] = useState<string | null>(null);
+
+  // Read only inside the devices query's refetchInterval callback, never
+  // rendered — refs keep them current without re-rendering the card.
+  const knownDeviceIdsRef = useRef<number[] | null>(null);
+  const waitDeadlineRef = useRef<number | null>(null);
 
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -156,8 +159,8 @@ export default function QuickConnectApproveCard() {
       }
 
       setError(null);
-      setKnownDeviceIds(baselineDeviceIds);
-      setWaitDeadline(Date.now() + WAIT_FOR_DEVICE_MS);
+      knownDeviceIdsRef.current = baselineDeviceIds;
+      waitDeadlineRef.current = Date.now() + WAIT_FOR_DEVICE_MS;
       setStep("waiting");
     },
     onError: () => {
@@ -187,9 +190,9 @@ export default function QuickConnectApproveCard() {
         return 2000;
       }
 
-      const currentKnownDeviceIds = knownDeviceIds;
+      const currentKnownDeviceIds = knownDeviceIdsRef.current;
       if (currentKnownDeviceIds === null) {
-        setKnownDeviceIds(devices.map(device => device.id));
+        knownDeviceIdsRef.current = devices.map(device => device.id);
         return 2000;
       }
 
@@ -205,6 +208,7 @@ export default function QuickConnectApproveCard() {
         return false;
       }
 
+      const waitDeadline = waitDeadlineRef.current;
       if (waitDeadline !== null && Date.now() > waitDeadline) {
         setConnectedName(null);
         setStep("done");
@@ -242,8 +246,8 @@ export default function QuickConnectApproveCard() {
   const handleReset = () => {
     setCode("");
     setPendingDevice(null);
-    setKnownDeviceIds([]);
-    setWaitDeadline(null);
+    knownDeviceIdsRef.current = [];
+    waitDeadlineRef.current = null;
     setConnectedName(null);
     setError(null);
     setStep("enter");
