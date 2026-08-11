@@ -24,12 +24,6 @@ export const THEME_COLORS: Record<Theme, string> = {
   light: tokenHex("light", "--background"),
 };
 
-// Body text on the canvas; mirrors the --foreground tokens and boot.css `color`.
-export const THEME_TEXT_COLORS: Record<Theme, string> = {
-  dark: tokenHex("dark", "--foreground"),
-  light: tokenHex("light", "--foreground"),
-};
-
 /** Reads the stored theme, defaulting to "dark" when absent or invalid. */
 export function getStoredTheme(): Theme {
   try {
