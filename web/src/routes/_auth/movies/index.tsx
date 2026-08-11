@@ -58,8 +58,8 @@ import {
 } from "@/lib/query-opts";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
+import { refreshLibraryWithToasts } from "@/lib/library-refresh";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
-import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
@@ -376,19 +376,9 @@ function MoreMenu({
     if (refreshingLibrary) return;
 
     setRefreshingLibrary(true);
-    try {
-      await refreshMovieLibraryCache(queryClient);
-      showSuccess("Library refreshed", "Movie library data is up to date.");
-    } catch (error) {
-      console.error("Failed to refresh movie library:", error);
-      showActionFailed(
-        "refresh library",
-        "Unable to refresh the movie library. Please try again.",
-      );
-    } finally {
-      setRefreshingLibrary(false);
-      setMenuOpen(false);
-    }
+    await refreshLibraryWithToasts(queryClient, refreshMovieLibraryCache, "Movie");
+    setRefreshingLibrary(false);
+    setMenuOpen(false);
   };
 
   return (
