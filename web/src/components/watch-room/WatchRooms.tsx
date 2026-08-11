@@ -36,7 +36,6 @@ export default function WatchRooms() {
 
   return (
     <section
-      role="region"
       aria-labelledby="watch-rooms-heading"
       aria-describedby={sectionDescribedBy}
       className={cn("mt-6 md:mt-8", MOTION_SECTION_ENTER_DELAYED_CLASS)}

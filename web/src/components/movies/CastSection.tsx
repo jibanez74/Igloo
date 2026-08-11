@@ -1,5 +1,6 @@
 import { User } from "lucide-react";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   TMDB_PROFILE_SIZE,
 } from "@/lib/constants";
@@ -33,35 +34,34 @@ export default function CastSection({
       </h2>
 
       <p className="sr-only">
-        Showing {displayedCast.length} of {cast.length} cast members. Use Tab to
-        move between cast cards, or scroll horizontally to see more.
+        Showing {displayedCast.length} of {cast.length} cast members. Scroll
+        horizontally to see more.
       </p>
 
+      {/* Focusable so keyboard users can scroll the horizontal strip; role
+          kept because Tailwind's list-none strips list semantics in Safari. */}
       <ul
-        className="-mx-4 flex scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
+        tabIndex={0}
+        className={cn(
+          "-mx-4 flex scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8",
+          FOCUS_VISIBLE_RING_CLASS,
+        )}
         role="list"
         aria-label={`Cast members, ${displayedCast.length} shown`}
       >
-        {displayedCast.map((actor, index) => (
+        {displayedCast.map(actor => (
           <li
             key={actor.id}
             className={cn(
               MOTION_MICRO_COLORS_CLASS,
-              "w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-primary/40",
+              "w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 hover:border-primary/40",
             )}
           >
-            <article
-              tabIndex={0}
-              role="article"
-              aria-label={`${actor.name} as ${actor.character}`}
-              aria-posinset={index + 1}
-              aria-setsize={displayedCast.length}
-              className="cursor-default outline-hidden"
-            >
+            <article aria-label={`${actor.name} as ${actor.character}`}>
               {actor.profile_path ? (
                 <img
                   src={buildTmdbImageUrl(actor.profile_path, TMDB_PROFILE_SIZE)}
-                  alt={`Photo of ${actor.name}`}
+                  alt={actor.name}
                   className="aspect-2/3 w-full object-cover"
                   loading="lazy"
                 />

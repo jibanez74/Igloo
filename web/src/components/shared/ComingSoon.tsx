@@ -24,26 +24,12 @@ export default function ComingSoon({
   description = "We're working hard to bring you this feature. Check back soon for updates!",
   icon: Icon = Snowflake,
 }: ComingSoonProps) {
-  // Accessible announcement for screen readers
-  const announcement = `${title}. Under Development. ${description}`;
-
   return (
     <section
       aria-labelledby="coming-soon-title"
       aria-describedby="coming-soon-desc"
       className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-16 text-center"
     >
-      {/* Screen reader announcement - focusable for Tab navigation */}
-      <span
-        tabIndex={0}
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50
-          focus:rounded-md focus:bg-muted focus:px-4 focus:py-2 focus:text-foreground focus:ring-2
-          focus:ring-ring focus:outline-none"
-        aria-label={announcement}
-      >
-        {title} - Under Development
-      </span>
-
       <div className={MOTION_PAGE_ENTER_CLASS}>
         {/* Animated icon container */}
         <div className="relative mx-auto mb-8" aria-hidden="true">

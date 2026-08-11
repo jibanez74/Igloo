@@ -22,12 +22,11 @@ describe("ComingSoon", () => {
       "Under Development",
     );
 
-    const announcement = screen.getByText("Photos - Under Development");
-    expect(announcement).toHaveAttribute("tabindex", "0");
-    expect(announcement).toHaveAttribute(
-      "aria-label",
-      `Photos. Under Development. ${description}`,
-    );
+    // The heading, status badge, and description carry the announcement; a
+    // separate focusable sr-only span would add a tab stop with no action.
+    expect(
+      screen.queryByText("Photos - Under Development"),
+    ).not.toBeInTheDocument();
   });
 
   it("uses the shared entrance class without hidden initial state", () => {
