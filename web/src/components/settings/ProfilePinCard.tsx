@@ -54,12 +54,12 @@ export default function ProfilePinCard() {
   const currentPinErrorId = `${currentPinId}-error`;
   const newPinErrorId = `${newPinId}-error`;
 
-  const pinQuery = useQuery({
+  const { data: pinData, isPending: pinPending } = useQuery({
     ...userPinQueryOpts(),
     enabled: hasPin && revealed,
   });
   const revealedPin =
-    pinQuery.data?.error === false ? pinQuery.data.data?.pin : null;
+    pinData?.error === false ? pinData.data?.pin : null;
 
   const showFieldError = (
     field: PinErrorField,
@@ -186,7 +186,7 @@ export default function ProfilePinCard() {
 
   let revealedPinDisplay = "••••";
   if (revealed) {
-    if (pinQuery.isPending) {
+    if (pinPending) {
       revealedPinDisplay = "…";
     } else if (revealedPin) {
       revealedPinDisplay = revealedPin;
@@ -224,9 +224,9 @@ export default function ProfilePinCard() {
             You have not set a profile PIN.
           </p>
         )}
-        {revealed && pinQuery.data?.error && (
+        {revealed && pinData?.error && (
           <p className="text-xs text-destructive" role="alert">
-            {pinQuery.data.message || "Failed to load your PIN."}
+            {pinData.message || "Failed to load your PIN."}
           </p>
         )}
 

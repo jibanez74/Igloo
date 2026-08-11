@@ -81,11 +81,15 @@ function TrailerPage() {
 
   const shouldFetchMovie =
     mediaType === "movie" && mediaId != null && mediaId > 0 && !videoKey;
-  const movieQuery = useQuery({
+  const {
+    data,
+    isPending: moviePending,
+    isError: movieIsError,
+    refetch: refetchMovie,
+  } = useQuery({
     ...movieDetailsQueryOpts(mediaId ?? 0),
     enabled: shouldFetchMovie,
   });
-  const data = movieQuery.data;
 
   const media = data?.data?.movie;
   const trailerFromApi = media?.videos?.results?.find(
@@ -349,7 +353,7 @@ function TrailerPage() {
     );
   }
 
-  if (!trailerKey && shouldFetchMovie && movieQuery.isPending) {
+  if (!trailerKey && shouldFetchMovie && moviePending) {
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -378,7 +382,7 @@ function TrailerPage() {
     );
   }
 
-  if (!trailerKey && (movieQuery.isError || data?.error)) {
+  if (!trailerKey && (movieIsError || data?.error)) {
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -404,7 +408,7 @@ function TrailerPage() {
               <button
                 type="button"
                 ref={closeButtonRef}
-                onClick={() => void movieQuery.refetch()}
+                onClick={() => void refetchMovie()}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",

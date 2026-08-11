@@ -68,17 +68,23 @@ export default function NotificationBell() {
   // on `error === false` before reading the success shape (like every other
   // query consumer). An error envelope surfaces as `showRefreshError`, not a
   // thrown query error.
-  const countQuery = useQuery(unreadNotificationCountQueryOpts());
+  const { data: countEnvelope, isError: countIsError } = useQuery(
+    unreadNotificationCountQueryOpts(),
+  );
   const freshCountData =
-    countQuery.data?.error === false ? countQuery.data.data : undefined;
+    countEnvelope?.error === false ? countEnvelope.data : undefined;
 
   // Only fetch the full list while the panel is open.
-  const listQuery = useQuery({
+  const {
+    data: listEnvelope,
+    isError: listIsError,
+    isLoading: listIsLoading,
+  } = useQuery({
     ...notificationsQueryOpts(),
     enabled: open,
   });
   const freshListData =
-    listQuery.data?.error === false ? listQuery.data.data : undefined;
+    listEnvelope?.error === false ? listEnvelope.data : undefined;
 
   // react-query stores an error envelope as (successful) data, dropping the last
   // good payload. Retain it so a failed refresh keeps showing the previous list
@@ -102,11 +108,11 @@ export default function NotificationBell() {
   const listUnreadCount = open ? listData?.unread_count : undefined;
   const unreadCount = listUnreadCount ?? countUnreadCount;
   const showRefreshError = Boolean(
-    countQuery.isError ||
-      countQuery.data?.error ||
-      (open && (listQuery.isError || listQuery.data?.error)),
+    countIsError ||
+      countEnvelope?.error ||
+      (open && (listIsError || listEnvelope?.error)),
   );
-  const showInitialLoading = listQuery.isLoading && !listQuery.data;
+  const showInitialLoading = listIsLoading && !listEnvelope;
   const showEmptyState = !!listData && notifications.length === 0;
 
   useEffect(() => {
