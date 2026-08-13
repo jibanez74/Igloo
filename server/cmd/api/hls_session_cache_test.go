@@ -520,7 +520,7 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	// A completed session sorts first but no longer owns a permit. A later idle,
 	// still-running session owns the only permit and must be the reclaim victim.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot()
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -576,10 +576,12 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	// Another device on the same account is actively playing (its TTL is fresh
-	// because segment fetches refresh it); a full pool must 503 the newcomer
-	// instead of killing the active stream.
+	// because segment fetches refresh it); a full pool must wait out its budget
+	// and then 503 the newcomer instead of killing the active stream.
+	withTestHLSTranscodeAcquireWait(t, 50*time.Millisecond)
+
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot()
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -604,6 +606,73 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	}
 	if _, ok := app.HLSSessionCache.Get(activeKey); !ok {
 		t.Fatal("expected the active device's session to remain cached")
+	}
+}
+
+// The starvation this replaces: with fast segment serving, running sessions
+// never go idle long enough for reclaim to free a permit, so an instant refusal
+// meant a queued stream never started at all. It must wait its turn instead.
+func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
+
+	withTestHLSTranscodeAcquireWait(t, 10*time.Second)
+
+	// The pool is full and nothing is reclaimable: the held permit belongs to a
+	// session that is genuinely playing, which is precisely the case reclaim
+	// cannot resolve.
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+	}
+
+	userID := int64(100)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	activeKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testOtherPlaybackSessionID, 0)
+	app.HLSSessionCache.Set(activeKey, &HLSSession{
+		MovieID:         movieID,
+		OwnerUserID:     userID,
+		PlaybackSession: testOtherPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		Exited:          true,
+	}, hlsPersonalSessionTTL)
+
+	type createResult struct {
+		session *HLSSession
+		err     error
+	}
+	resultCh := make(chan createResult, 1)
+	go func() {
+		session, _, createErr := app.GetOrCreateHLSSession(
+			context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS,
+			testIntPtr(0), testPlaybackSessionID, 0, userID,
+		)
+		resultCh <- createResult{session: session, err: createErr}
+	}()
+
+	// Nothing may be admitted while the permit is held.
+	select {
+	case created := <-resultCh:
+		t.Fatalf("session resolved before a permit freed: session=%v err=%v", created.session, created.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	release()
+
+	select {
+	case created := <-resultCh:
+		if created.err != nil {
+			t.Fatalf("GetOrCreateHLSSession after the permit freed: %v", created.err)
+		}
+		defer cleanupHLSSession(created.session)
+	case <-time.After(10 * time.Second):
+		t.Fatal("GetOrCreateHLSSession never resolved after a permit freed")
+	}
+
+	if _, ok := app.HLSSessionCache.Get(activeKey); !ok {
+		t.Fatal("the active device's session was reclaimed instead of waited out")
 	}
 }
 

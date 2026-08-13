@@ -483,7 +483,7 @@ func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
 
 	// Exhaust the only transcode slot; a copy-video (remux) session must not need it.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot()
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -508,7 +508,7 @@ func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
 	app.FFmpeg = &fakeFFmpeg{}
 
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot()
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
