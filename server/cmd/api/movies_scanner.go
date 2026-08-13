@@ -1026,6 +1026,13 @@ func insertVideoStream(ctx context.Context, qtx *database.Queries, movieID int64
 	if stream.CodedHeight > 0 {
 		codedHeight = sql.NullInt64{Int64: int64(stream.CodedHeight), Valid: true}
 	}
+	// An explicit 0-degree display matrix persists as 0 while absence persists
+	// as NULL, so helpers.NullInt64 (which maps 0 to NULL) does not fit here.
+	var rotation sql.NullInt64
+	rotationDeg, hasRotation := stream.Rotation()
+	if hasRotation {
+		rotation = sql.NullInt64{Int64: rotationDeg, Valid: true}
+	}
 
 	_, err := qtx.InsertVideoStream(ctx, database.InsertVideoStreamParams{
 		MovieID:        movieID,
@@ -1047,6 +1054,8 @@ func insertVideoStream(ctx context.Context, qtx *database.Queries, movieID int64
 		ColorSpace:     helpers.NullString(stream.ColorSpace),
 		ColorPrimaries: helpers.NullString(stream.ColorPrimaries),
 		ColorTransfer:  helpers.NullString(stream.ColorTransfer),
+		FieldOrder:     helpers.NullString(stream.FieldOrder),
+		Rotation:       rotation,
 		Language:       helpers.NullString(stream.Tags.Language),
 		Title:          helpers.NullString(stream.Tags.Title),
 	})

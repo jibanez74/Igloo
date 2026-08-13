@@ -11,7 +11,7 @@ export default function MoviesInTheaters() {
 
   let movies: TheaterMovieType[] = [];
   if (data && !data.error) {
-    movies = [...data.data.movies].sort((a, b) => {
+    movies = data.data.movies.toSorted((a, b) => {
       const dateA = new Date(a.release_date).getTime();
       const dateB = new Date(b.release_date).getTime();
 

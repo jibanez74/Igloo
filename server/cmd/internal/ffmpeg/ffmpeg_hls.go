@@ -49,6 +49,7 @@ type HLSParams struct {
 	CopyAudio        bool
 	StartSec         float64
 	TonemapHDR       bool // true when source is HDR and the profile requires SDR output
+	Deinterlace      bool // true when the scanned field_order marks the source interlaced
 	SourceFrameRate  float64
 	Capabilities     Capabilities
 }
@@ -65,6 +66,55 @@ var hlsHWTranscodeByDevice = map[string]struct {
 	helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:  {HWAccel: "qsv", Encoder: "h264_qsv"},
 }
 
+// hlsCopiesVideo reports whether a session hands FFmpeg -c:v copy. The remux
+// profile implies it regardless of what the caller asked for.
+func hlsCopiesVideo(p HLSParams) bool {
+	return p.CopyVideo || p.Profile == helpers.HLS_PROFILE_REMUX
+}
+
+// hlsVideoEncoder resolves the encoder a transcode uses for an already-resolved
+// hardware device. Unknown devices fall back to libx264, same as the CPU path.
+func hlsVideoEncoder(hwDevice string) string {
+	hw, ok := hlsHWTranscodeByDevice[hwDevice]
+	if !ok {
+		return "libx264"
+	}
+	return hw.Encoder
+}
+
+// hlsEncoderForcesIDR reports whether -force_key_frames yields IDR frames on
+// this encoder. libx264 and VideoToolbox always do. NVENC and QSV only do when
+// their forced-IDR option is set, which appendHLSNvidiaEncoderArgs and
+// appendHLSIntelEncoderArgs gate on the same capability — without it a forced
+// keyframe is a plain intra frame that later frames may reference across.
+func hlsEncoderForcesIDR(encoder string, caps Capabilities) bool {
+	switch strings.ToLower(encoder) {
+	case "libx264", "h264_videotoolbox":
+		return true
+	case "h264_nvenc":
+		return caps.SupportsEncoderOption("h264_nvenc", "forced-idr")
+	case "h264_qsv":
+		return caps.SupportsEncoderOption("h264_qsv", "forced_idr")
+	default:
+		return false
+	}
+}
+
+// HLSSegmentsAreIndependent reports whether every segment of a session built
+// from these params is guaranteed to start on an IDR frame, which is what
+// #EXT-X-INDEPENDENT-SEGMENTS asserts to a native HLS player.
+//
+// Copy-video is always false: the remux validator only inspects
+// HLS_REMUX_PREVALIDATE_SEGMENTS fragments at the session's start offset, so a
+// GOP structure that changes later in the source is never ruled out.
+func HLSSegmentsAreIndependent(p HLSParams) bool {
+	if hlsCopiesVideo(p) {
+		return false
+	}
+	deviceDecision := ResolveHLSDevice(p.HWDevice, p.Capabilities)
+	return hlsEncoderForcesIDR(hlsVideoEncoder(deviceDecision.Effective), p.Capabilities)
+}
+
 func buildHLSArgs(p HLSParams) ([]string, error) {
 	if !helpers.IsAllowedHLSProfile(p.Profile) {
 		return nil, fmt.Errorf("invalid HLS profile: %s", p.Profile)
@@ -78,10 +128,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		return nil, fmt.Errorf("video stream index must be non-negative")
 	}
 
-	copyVideo := p.CopyVideo
-	if p.Profile == helpers.HLS_PROFILE_REMUX {
-		copyVideo = true
-	}
+	copyVideo := hlsCopiesVideo(p)
 
 	var cfg helpers.HLSProfileConfig
 	if !copyVideo {
@@ -165,15 +212,12 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	if copyVideo {
 		args = append(args, "-c:v", "copy")
 	} else {
-		encoder := "libx264"
-		if hwKnown {
-			encoder = hw.Encoder
-		}
+		encoder := hlsVideoEncoder(hwLower)
 
 		args = append(args, "-c:v", encoder, "-profile:v", "high")
 		switch hwLower {
 		case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
-			args = append(args, "-rc", "vbr", "-preset", "p4")
+			args = appendHLSNvidiaEncoderArgs(args, p.Capabilities)
 		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
 			args = appendHLSIntelEncoderArgs(args, p.Capabilities)
 		case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
@@ -186,7 +230,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			"-bufsize", cfg.Bufsize,
 		)
 
-		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, useNvidiaCUDAFilters, useIntelQSVScale))
+		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, p.Deinterlace, useNvidiaCUDAFilters, useIntelQSVScale))
 		if shouldSetHLSPixelFormat(encoder, useNvidiaCUDAFilters) {
 			args = append(args, "-pix_fmt", "yuv420p")
 		}
@@ -215,6 +259,15 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-hls_segment_type", "fmp4",
 		"-hls_segment_options", "movflags=+frag_discont",
 		"-hls_playlist_type", "event",
+	)
+	// Only emits #EXT-X-INDEPENDENT-SEGMENTS in the playlist; segmentation is
+	// unaffected. The claim is only made where it is proven: transcodes pin an
+	// IDR to every segment boundary, while copy-video output is validated by
+	// sampling four fragments and so is never proven source-wide.
+	if HLSSegmentsAreIndependent(p) {
+		args = append(args, "-hls_flags", "independent_segments")
+	}
+	args = append(args,
 		"-hls_list_size", "0",
 		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
 		"-hls_segment_filename", segmentPattern,
@@ -223,6 +276,20 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	)
 
 	return args, nil
+}
+
+// appendHLSNvidiaEncoderArgs adds the NVENC encoder settings. -forced-idr is
+// what makes -force_key_frames produce IDR frames: with it at its default of
+// false, FFmpeg asks NVENC for a plain intra frame, and later frames may still
+// reference across it — which would break segment-level random access and make
+// #EXT-X-INDEPENDENT-SEGMENTS a lie. hlsEncoderForcesIDR reads the same
+// capability, so a build without the option loses the tag instead.
+func appendHLSNvidiaEncoderArgs(args []string, caps Capabilities) []string {
+	args = append(args, "-rc", "vbr", "-preset", "p4")
+	if caps.SupportsEncoderOption("h264_nvenc", "forced-idr") {
+		args = append(args, "-forced-idr", "1")
+	}
+	return args
 }
 
 func appendHLSIntelEncoderArgs(args []string, caps Capabilities) []string {
@@ -256,42 +323,62 @@ func hlsVideoFilter(
 	cfg helpers.HLSProfileConfig,
 	hwDevice string,
 	tonemapHDR bool,
+	deinterlace bool,
 	useNvidiaCUDAFilters bool,
 	useIntelQSVScale bool,
 ) string {
 	switch {
 	case tonemapHDR && useNvidiaCUDAFilters:
-		return fmt.Sprintf(
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"format=p010le,hwupload,scale_cuda=w=-2:h=%d:format=p010,"+
 				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 			cfg.Height,
-		)
+		))
 	case useNvidiaCUDAFilters:
-		return fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
+		return hlsMaybeDeinterlace(deinterlace,
+			fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height))
 	case useIntelQSVScale:
-		return fmt.Sprintf(
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",
 			cfg.Height,
-		)
-	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+		))
+	// scale_vt consumes hardware frames, so a software yadif cannot be
+	// prepended; interlaced HDR sources (vanishingly rare — interlacing is
+	// legacy broadcast SDR) fall through to the software tonemap chain.
+	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE && !deinterlace:
 		return fmt.Sprintf(
 			"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
 			cfg.Height,
 		)
 	case tonemapHDR:
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
-		return fmt.Sprintf(
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
 				"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
 				"zscale=t=bt709:m=bt709:r=tv,format=%s,%s",
 			cfg.Height,
 			outputFormat,
 			hlsSDRColorParams,
-		)
+		))
 	default:
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
-		return fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, hlsSDRColorParams)
+		return hlsMaybeDeinterlace(deinterlace,
+			fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, hlsSDRColorParams))
 	}
+}
+
+// hlsMaybeDeinterlace prepends a software yadif (send_frame, so the output
+// frame rate — and with it the GOP math in appendHLSKeyframeArgs — is
+// unchanged) ahead of the chain. Deinterlacing must happen at native
+// resolution before any scaling, and decoded frames are in system memory at
+// the head of every chain that reaches here: no path sets
+// -hwaccel_output_format, and the CUDA/QSV chains hwupload from system
+// memory.
+func hlsMaybeDeinterlace(deinterlace bool, chain string) string {
+	if deinterlace {
+		return "yadif," + chain
+	}
+	return chain
 }
 
 func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []string {

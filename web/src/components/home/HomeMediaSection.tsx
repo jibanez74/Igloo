@@ -60,7 +60,6 @@ export default function HomeMediaSection<T>({
 
   return (
     <section
-      role="region"
       aria-labelledby={headingId}
       aria-describedby={sectionSummaryId}
       className={cn("mt-6 md:mt-8", MOTION_SECTION_ENTER_DELAYED_CLASS)}

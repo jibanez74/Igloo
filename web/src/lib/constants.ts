@@ -132,7 +132,6 @@ export const YOUTUBE_THUMBNAIL_BASE = "/api/youtube/thumbnails";
 export const TMDB_BACKDROP_SIZE = "w1280";
 export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";
-export const TMDB_LOGO_SIZE = "w92";
 
 // Virtual-list measurements in pixels. These keep virtualized rows stable and
 // must match the rendered heights of TrackItem (p-3 row + two text lines) and
@@ -224,7 +223,6 @@ export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 /** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
 export const MOVIE_BUFFERING_SPINNER_DELAY_MS = 300;
-export const MEDIA_ERR_NETWORK = 2;
 export const MEDIA_ERR_DECODE = 3;
 export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 
@@ -257,8 +255,19 @@ export const HLS_ACTUAL_START_HEADER = "X-Igloo-Actual-Start";
 
 /** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
 export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;
-/** hls.js: manifest / level / fragment request timeout (ms). */
+/** hls.js: manifest / level request timeout (ms). */
 export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
+/**
+ * hls.js: fragment request timeout (ms). The server long-polls a segment
+ * request for up to 120s before answering 503, and it sends no bytes at all
+ * while it waits, so this budget covers time-to-first-byte as well. It must
+ * stay above the server's deadline: matching it turns every slow segment into
+ * a race between an unrecoverable client timeout and a 503 the client can act
+ * on. Keep in sync with hlsSegmentWait in server/cmd/api/hls_handler.go.
+ */
+export const HLS_JS_FRAG_LOAD_TIMEOUT_MS = 150_000;
+/** Retries of a segment the server reports as not yet produced (503). */
+export const HLS_SEGMENT_NOT_READY_MAX_RETRIES = 3;
 /** Resume HLS sessions this far before the target so short rewinds work without rebasing. */
 export const HLS_RESUME_REWIND_BUFFER_SEC = 10;
 /** hls.js: seconds of already-played buffer to keep behind the playhead. */

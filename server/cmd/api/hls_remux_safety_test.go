@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -58,10 +59,27 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 		PixelFormat:  sql.NullString{String: "yuv420p", Valid: true},
 	}
 
-	baseKey := remuxSafetyFingerprint(&baseMovie, &baseVideo)
-	if got := remuxSafetyFingerprint(&baseMovie, &baseVideo); got != baseKey {
+	const baseVersion = "7.0.2-Jellyfin"
+
+	baseKey := remuxSafetyFingerprint(&baseMovie, &baseVideo, baseVersion)
+	if got := remuxSafetyFingerprint(&baseMovie, &baseVideo, baseVersion); got != baseKey {
 		t.Fatalf("fingerprint not stable: %q vs %q", got, baseKey)
 	}
+
+	// The verdict validates FFmpeg-generated fMP4 output, so a different muxer
+	// must not inherit it.
+	t.Run("ffmpeg version", func(t *testing.T) {
+		if got := remuxSafetyFingerprint(&baseMovie, &baseVideo, "7.1-Jellyfin"); got == baseKey {
+			t.Fatal("fingerprint unchanged after an ffmpeg version change")
+		}
+	})
+
+	t.Run("producer revision", func(t *testing.T) {
+		want := fmt.Sprintf(":p%d:%s", remuxVerdictProducerRevision, baseVersion)
+		if !strings.HasSuffix(baseKey, want) {
+			t.Fatalf("fingerprint %q does not end with the producer terms %q", baseKey, want)
+		}
+	})
 
 	tests := []struct {
 		name   string
@@ -77,6 +95,11 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 		{"pixel format", func(_ *database.Movie, v *database.VideoStream) {
 			v.PixelFormat = sql.NullString{String: "yuv420p10le", Valid: true}
 		}},
+		// A rescan that newly discovers interlacing must kill a stale safe
+		// verdict, since the gate now rejects interlaced streams.
+		{"field order", func(_ *database.Movie, v *database.VideoStream) {
+			v.FieldOrder = sql.NullString{String: "tt", Valid: true}
+		}},
 		{"movie size", func(m *database.Movie, _ *database.VideoStream) { m.Size = 2_000_000 }},
 		{"updated at", func(m *database.Movie, _ *database.VideoStream) { m.UpdatedAt = "2026-07-02" }},
 	}
@@ -86,50 +109,78 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 			movie := baseMovie
 			video := baseVideo
 			tt.mutate(&movie, &video)
-			if got := remuxSafetyFingerprint(&movie, &video); got == baseKey {
+			if got := remuxSafetyFingerprint(&movie, &video, baseVersion); got == baseKey {
 				t.Fatalf("fingerprint unchanged after %s change", tt.name)
 			}
 		})
 	}
 }
 
-func TestRemuxSafetyVerdictCache(t *testing.T) {
+func TestRemuxSafetyVerdictStore(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	t.Run("returns a stored verdict", func(t *testing.T) {
-		app.setRemuxSafetyVerdict("stored", false, "10-bit H.264")
+	ctx := context.Background()
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	const streamIndex = int64(0)
+	const fingerprint = "fingerprint-a"
 
-		verdict, ok := app.getRemuxSafetyVerdict("stored")
+	t.Run("returns a persisted verdict", func(t *testing.T) {
+		app.setRemuxSafetyVerdict(movieID, streamIndex, fingerprint, false, "10-bit H.264")
+
+		verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, fingerprint)
 		if !ok {
-			t.Fatal("stored verdict was not returned")
+			t.Fatal("persisted verdict was not returned")
 		}
 		if verdict.Safe {
-			t.Fatal("Safe = true, want the stored unsafe verdict")
+			t.Fatal("Safe = true, want the persisted unsafe verdict")
 		}
 		if verdict.Reason != "10-bit H.264" {
-			t.Fatalf("Reason = %q, want the stored reason", verdict.Reason)
+			t.Fatalf("Reason = %q, want the persisted reason", verdict.Reason)
 		}
 	})
 
-	t.Run("reports an unknown key as a miss", func(t *testing.T) {
-		_, ok := app.getRemuxSafetyVerdict("never-stored")
+	// A stale fingerprint means the file or its stream rows changed since the
+	// verdict was computed; serving it could remux a stream that is no longer
+	// safe.
+	t.Run("treats a changed fingerprint as a miss", func(t *testing.T) {
+		_, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, "fingerprint-b")
 		if ok {
-			t.Fatal("an unknown key was reported as a hit")
+			t.Fatal("a stale fingerprint was reported as a hit")
 		}
 	})
 
-	// An entry of the wrong type can only come from a bug, but leaving it cached
-	// would pin the movie to a permanent miss for the whole 24h TTL.
-	t.Run("evicts an entry that is not a verdict", func(t *testing.T) {
-		app.RemuxSafetyCache.SetDefault("poisoned", "not a verdict")
-
-		_, ok := app.getRemuxSafetyVerdict("poisoned")
+	t.Run("reports an absent row as a miss", func(t *testing.T) {
+		_, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex+1, fingerprint)
 		if ok {
-			t.Fatal("a poisoned entry was reported as a hit")
+			t.Fatal("an absent verdict was reported as a hit")
 		}
-		if _, cached := app.RemuxSafetyCache.Get("poisoned"); cached {
-			t.Fatal("expected the poisoned entry to be evicted")
+	})
+
+	t.Run("upserts over the previous verdict", func(t *testing.T) {
+		// Written here rather than relied on from the first subtest: the row
+		// count below only proves an upsert when a row already existed, and
+		// this subtest must hold under -run on its own.
+		app.setRemuxSafetyVerdict(movieID, streamIndex, fingerprint, false, "10-bit H.264")
+		app.setRemuxSafetyVerdict(movieID, streamIndex, "fingerprint-b", true, "validated safe remux")
+
+		verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, "fingerprint-b")
+		if !ok {
+			t.Fatal("upserted verdict was not returned")
+		}
+		if !verdict.Safe {
+			t.Fatal("Safe = false, want the upserted safe verdict")
+		}
+
+		var count int
+		err := app.DB.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM remux_safety_verdicts WHERE movie_id = ? AND stream_index = ?
+		`, movieID, streamIndex).Scan(&count)
+		if err != nil {
+			t.Fatalf("count verdict rows: %v", err)
+		}
+		if count != 1 {
+			t.Fatalf("verdict row count = %d, want the upsert to keep a single row", count)
 		}
 	})
 }

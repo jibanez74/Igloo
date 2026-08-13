@@ -275,3 +275,49 @@ func TestStreamTagsUnmarshalNormalizesKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamRotationFromSideDataList(t *testing.T) {
+	cases := []struct {
+		name       string
+		payload    string
+		wantDeg    int64
+		wantMatrix bool
+	}{
+		{
+			// Captured verbatim from the bundled ffprobe 7.1.4-Jellyfin on an
+			// mp4 written with -display_rotation 90; the displaymatrix dump is
+			// deliberately unparsed noise.
+			name:       "display matrix rotation",
+			payload:    `{"field_order": "progressive", "side_data_list": [{"side_data_type": "Display Matrix", "displaymatrix": "\n00000000:            0      -65536           0\n", "rotation": 90}]}`,
+			wantDeg:    90,
+			wantMatrix: true,
+		},
+		{
+			name:       "explicit zero-degree matrix",
+			payload:    `{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 0}]}`,
+			wantMatrix: true,
+		},
+		{
+			name:    "no side data",
+			payload: `{"field_order": "tb"}`,
+		},
+		{
+			name:    "other side data types are not a matrix",
+			payload: `{"side_data_list": [{"side_data_type": "H.26[45] User Data Unregistered SEI message"}]}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stream Stream
+			err := json.Unmarshal([]byte(tc.payload), &stream)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			deg, hasMatrix := stream.Rotation()
+			if deg != tc.wantDeg || hasMatrix != tc.wantMatrix {
+				t.Errorf("Rotation() = (%d, %v), want (%d, %v)", deg, hasMatrix, tc.wantDeg, tc.wantMatrix)
+			}
+		})
+	}
+}

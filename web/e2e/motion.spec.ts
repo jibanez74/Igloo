@@ -94,48 +94,14 @@ async function expectDecorativeAnimationsStopped(page: Page) {
   ).toEqual([]);
 }
 
-async function expectAnnouncementReachable(page: Page, label: string) {
+// The visible heading, status badge, and description carry the page
+// announcement for screen readers; there is deliberately no focusable
+// sr-only span, since a non-interactive tab stop is keyboard noise.
+async function expectSkipLinkWorks(page: Page) {
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
-
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    await page.keyboard.press("Tab");
-
-    const activeLabel = await page.evaluate(() => {
-      const active = document.activeElement;
-      if (!(active instanceof HTMLElement)) {
-        return "";
-      }
-
-      return active.getAttribute("aria-label") ?? active.textContent?.trim() ?? "";
-    });
-
-    if (activeLabel === label) {
-      break;
-    }
-  }
-
-  const focusedAnnouncement = page.locator(`[aria-label="${label}"]`);
-  await expect(focusedAnnouncement).toBeFocused();
-
-  const bounds = await focusedAnnouncement.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    return {
-      bottom: rect.bottom,
-      left: rect.left,
-      right: rect.right,
-      top: rect.top,
-      viewportHeight: window.innerHeight,
-      viewportWidth: window.innerWidth,
-    };
-  });
-
-  expect(bounds.left).toBeGreaterThanOrEqual(0);
-  expect(bounds.top).toBeGreaterThanOrEqual(0);
-  expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
-  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight);
 }
 
 test.describe("Reduced motion", () => {
@@ -163,10 +129,7 @@ test.describe("Reduced motion", () => {
       );
       await expectPageHasNoHorizontalScroll(page);
       await expectDecorativeAnimationsStopped(page);
-      await expectAnnouncementReachable(
-        page,
-        `${comingSoonPage.title}. Under Development. ${comingSoonPage.description}`,
-      );
+      await expectSkipLinkWorks(page);
     }
 
     browserIssues.assertClean();

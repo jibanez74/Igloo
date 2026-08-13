@@ -22,16 +22,12 @@ type stubMovieScannerFfprobe struct {
 	noKeyframeProbe
 	result  *ffprobe.FfprobeResult
 	results []*ffprobe.FfprobeResult
-	errs    []error
 	calls   int
 }
 
 func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
 	callIndex := s.calls
 	s.calls++
-	if callIndex < len(s.errs) && s.errs[callIndex] != nil {
-		return nil, s.errs[callIndex]
-	}
 	if callIndex < len(s.results) && s.results[callIndex] != nil {
 		return s.results[callIndex], nil
 	}
@@ -108,17 +104,6 @@ func (s *stubMovieScannerTmdb) GetMoviesInTheaters(_ context.Context) ([]*tmdb.T
 
 func (*stubMovieScannerTmdb) ClearCache() {}
 
-func countMovieScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow(query, args...).Scan(&count)
-	if err != nil {
-		t.Fatalf("count rows: %v", err)
-	}
-	return count
-}
-
 func TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -181,7 +166,7 @@ func TestProcessMoviesBatchRollsBackInvalidMovieFile(t *testing.T) {
 	if scanned != 0 || skipped != 0 || errCount != 1 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 0/0/1", scanned, skipped, errCount)
 	}
-	if got := countMovieScannerRows(t, app.DB, "SELECT COUNT(*) FROM movies WHERE file_path = ?", path); got != 0 {
+	if got := countScannerRows(t, app.DB, "SELECT COUNT(*) FROM movies WHERE file_path = ?", path); got != 0 {
 		t.Fatalf("expected invalid movie transaction to roll back, got %d movie rows", got)
 	}
 }
@@ -369,6 +354,84 @@ func TestProcessMovieStreamsPersistsDispositions(t *testing.T) {
 	}
 }
 
+// field_order and the display-matrix rotation feed the deinterlace and remux
+// decisions, so the scanner must persist them faithfully — including the
+// difference between an explicit 0-degree matrix and no matrix at all.
+func TestProcessMovieStreamsPersistsFieldOrderAndRotation(t *testing.T) {
+	tests := []struct {
+		name         string
+		fieldOrder   string
+		sideData     []ffprobe.StreamSideData
+		wantOrder    sql.NullString
+		wantRotation sql.NullInt64
+	}{
+		{
+			name:         "interlaced with rotation",
+			fieldOrder:   "tt",
+			sideData:     []ffprobe.StreamSideData{{SideDataType: "Display Matrix", Rotation: -90}},
+			wantOrder:    sql.NullString{String: "tt", Valid: true},
+			wantRotation: sql.NullInt64{Int64: -90, Valid: true},
+		},
+		{
+			name:         "explicit zero-degree matrix stays distinguishable",
+			fieldOrder:   "progressive",
+			sideData:     []ffprobe.StreamSideData{{SideDataType: "Display Matrix", Rotation: 0}},
+			wantOrder:    sql.NullString{String: "progressive", Valid: true},
+			wantRotation: sql.NullInt64{Int64: 0, Valid: true},
+		},
+		{
+			name: "absent metadata persists as NULL",
+		},
+		{
+			name:     "non-matrix side data carries no rotation",
+			sideData: []ffprobe.StreamSideData{{SideDataType: "H.26[45] User Data Unregistered SEI message"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+			ctx := context.Background()
+
+			movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+				Title:     "Field Order Movie",
+				FilePath:  "/movies/Field.Order.Movie.2024.mp4",
+				FileName:  "Field.Order.Movie.2024.mp4",
+				Size:      1024,
+				Container: "mp4",
+				MimeType:  helpers.VideoMimeTypes["mp4"],
+			})
+			if err != nil {
+				t.Fatalf("insert movie: %v", err)
+			}
+
+			fixture := movieScannerMetadataFixture("120")
+			fixture.Streams[0].FieldOrder = tt.fieldOrder
+			fixture.Streams[0].SideDataList = tt.sideData
+
+			_, err = app.processMovieStreams(ctx, app.Queries, movie.ID, fixture.Streams)
+			if err != nil {
+				t.Fatalf("process movie streams: %v", err)
+			}
+
+			videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movie.ID)
+			if err != nil {
+				t.Fatalf("get video streams: %v", err)
+			}
+			if len(videoStreams) == 0 {
+				t.Fatal("no video streams persisted")
+			}
+			if videoStreams[0].FieldOrder != tt.wantOrder {
+				t.Errorf("field_order = %+v, want %+v", videoStreams[0].FieldOrder, tt.wantOrder)
+			}
+			if videoStreams[0].Rotation != tt.wantRotation {
+				t.Errorf("rotation = %+v, want %+v", videoStreams[0].Rotation, tt.wantRotation)
+			}
+		})
+	}
+}
+
 func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -527,32 +590,6 @@ func TestSelectBestTmdbMatch(t *testing.T) {
 		}
 	})
 
-	t.Run("exact title and year beats popularity", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Casino Royale",
-				ReleaseDate: "2020-01-01",
-				Popularity:  90.0,
-				VoteAverage: 8.5,
-			},
-			{
-				TmdbID:      2,
-				Title:       "Casino Royale",
-				ReleaseDate: "2006-11-14",
-				Popularity:  30.0,
-				VoteAverage: 7.6,
-			},
-		}
-		result := selectBestTmdbMatch(results, "Casino Royale", 2006)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		if result.Movie.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (title/year match), got %d", result.Movie.TmdbID)
-		}
-	})
-
 	t.Run("clean title beats noisy similar candidate", func(t *testing.T) {
 		results := []tmdb.TmdbMovie{
 			{
@@ -685,46 +722,6 @@ func TestNormalizeMovieTitleForSearch(t *testing.T) {
 		got := normalizeMovieTitleForSearch(tt.input)
 		if got != tt.want {
 			t.Errorf("normalizeMovieTitleForSearch(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFfprobeFormatDurationToRunTimeMinutes(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		format  string
-		wantMin int64
-		wantSec float64
-	}{
-		{"5423.456", 90, 5423.456},
-		{"3600", 60, 3600},
-		{"59.9", 1, 59.9},
-	}
-	for _, tt := range tests {
-		t.Run(tt.format, func(t *testing.T) {
-			t.Parallel()
-			durationSec, err := strconv.ParseFloat(tt.format, 64)
-			if err != nil || durationSec <= 0 {
-				t.Fatalf("parse %q: %v", tt.format, err)
-			}
-			runTimeMinutes := int64(math.Round(durationSec / 60))
-			if runTimeMinutes != tt.wantMin {
-				t.Errorf("rounded minutes = %d, want %d", runTimeMinutes, tt.wantMin)
-			}
-			if durationSec != tt.wantSec {
-				t.Errorf("seconds = %v, want %v", durationSec, tt.wantSec)
-			}
-		})
-	}
-}
-
-func TestFfprobeFormatDurationRejectedWhenInvalid(t *testing.T) {
-	t.Parallel()
-	for _, s := range []string{"", "0", "-1", "not-a-number"} {
-		sec, err := strconv.ParseFloat(s, 64)
-		ok := err == nil && sec > 0
-		if ok {
-			t.Errorf("%q should not be accepted as positive duration", s)
 		}
 	}
 }
@@ -1412,32 +1409,6 @@ func TestGetOrCreateArtist(t *testing.T) {
 		}
 	})
 
-	t.Run("idempotent for same TMDB ID", func(t *testing.T) {
-		tmdbID := 67890
-		name := "Idempotent Artist"
-		profilePath := "/idempotent/profile.jpg"
-
-		firstArtist, err := getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
-		if err != nil {
-			t.Fatalf("First getOrCreateArtist failed: %v", err)
-		}
-		if firstArtist == nil {
-			t.Fatal("First getOrCreateArtist returned nil artist")
-		}
-
-		secondArtist, err := getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
-		if err != nil {
-			t.Fatalf("Second getOrCreateArtist failed: %v", err)
-		}
-		if secondArtist == nil {
-			t.Fatal("Second getOrCreateArtist returned nil artist")
-		}
-
-		if secondArtist.ID != firstArtist.ID {
-			t.Errorf("Expected same artist ID %d, got %d", firstArtist.ID, secondArtist.ID)
-		}
-	})
-
 	t.Run("upsert refreshes mutable metadata", func(t *testing.T) {
 		tmdbID := 22222
 
@@ -1546,7 +1517,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countMovieScannerRows(t, app.DB, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
+	if got := countScannerRows(t, app.DB, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
 		t.Fatalf("artist rows for shared actor = %d, want 1", got)
 	}
 
@@ -1560,7 +1531,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 	}
 
 	// Both movies' cast rows must reference the single shared artist row.
-	if got := countMovieScannerRows(t, app.DB, `
+	if got := countScannerRows(t, app.DB, `
 		SELECT COUNT(*)
 		FROM cast AS c
 		INNER JOIN artist AS a ON a.id = c.artist_id

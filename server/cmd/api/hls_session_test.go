@@ -168,51 +168,6 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 	}
 }
 
-func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	fake := &fakeFFmpeg{
-		plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(unsafeRemuxFixture),
-			hlsRunPlan(transcodeFixture),
-			hlsRunPlan(transcodeFixture),
-		},
-	}
-	app.FFmpeg = fake
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-
-	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err != nil {
-		t.Fatalf("first createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(firstSession)
-
-	secondSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err != nil {
-		t.Fatalf("second createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(secondSession)
-
-	calls := fake.Calls()
-	if len(calls) != 3 {
-		t.Fatalf("RunHLS call count = %d, want 3", len(calls))
-	}
-	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
-		t.Fatalf("first RunHLS profile = %q, want remux", calls[0].Profile)
-	}
-	if calls[1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
-	}
-	if calls[2].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("third RunHLS profile = %q, want cached fallback %q", calls[2].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
-	}
-	if secondSession.CopyVideo {
-		t.Fatal("second session CopyVideo = true, want false for cached-unsafe fallback")
-	}
-}
-
 func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -240,6 +195,15 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 		t.Fatal("first session CopyVideo = true, want false after preflight fallback")
 	}
 
+	// The transient failure must leave no persisted verdict behind.
+	_, err = app.Queries.GetRemuxSafetyVerdict(context.Background(), database.GetRemuxSafetyVerdictParams{
+		MovieID:     movieID,
+		StreamIndex: 0,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetRemuxSafetyVerdict error = %v, want sql.ErrNoRows after a transient preflight failure", err)
+	}
+
 	secondSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
 	if err != nil {
 		t.Fatalf("second createHLSSession returned error: %v", err)
@@ -262,6 +226,101 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 	}
 	if calls[2].Profile != helpers.HLS_PROFILE_REMUX {
 		t.Fatalf("third RunHLS profile = %q, want remux retry", calls[2].Profile)
+	}
+}
+
+// A verdict must outlive the process: before persistence, every server restart
+// re-paid the multi-second remux preflight for every file (audit H6).
+func TestCreateHLSSession_UnsafeVerdictSurvivesRestart(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(firstSession)
+
+	restarted := restartTestApp(t, app)
+	restartedFake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	restarted.FFmpeg = restartedFake
+
+	session, err := createTestHLSSession(restarted, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession after restart returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want the persisted unsafe verdict to force a transcode")
+	}
+	calls := restartedFake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count after restart = %d, want 1 (no remux attempt)", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("RunHLS profile after restart = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+}
+
+func TestCreateHLSSession_SafeVerdictSurvivesRestart(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(safeRemuxFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	firstSession, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(firstSession)
+
+	restarted := restartTestApp(t, app)
+	restartedFake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			// One segment is not enough to pass preflight, so a restarted server
+			// that still ran it would fall back to a transcode.
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	restarted.FFmpeg = restartedFake
+
+	session, err := createTestHLSSession(restarted, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession after restart returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if !session.CopyVideo {
+		t.Fatal("CopyVideo = false, want the persisted safe verdict to skip the preflight")
+	}
+	calls := restartedFake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count after restart = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("RunHLS profile after restart = %q, want remux", calls[0].Profile)
 	}
 }
 
@@ -336,6 +395,47 @@ func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 	}
 	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS || calls[0].CopyVideo {
 		t.Fatalf("RunHLS call = profile %q copyVideo %v, want fallback transcode", calls[0].Profile, calls[0].CopyVideo)
+	}
+}
+
+// Browsers do not deinterlace, so an interlaced source must be rejected from
+// remux and the fallback transcode must carry the deinterlace flag.
+func TestCreateHLSSession_InterlacedFallsBackToTranscodeWithDeinterlace(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	_, err := app.DB.Exec(`UPDATE video_streams SET field_order = ? WHERE movie_id = ?`, "tt", movieID)
+	if err != nil {
+		t.Fatalf("update video stream: %v", err)
+	}
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want false for an interlaced source")
+	}
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS || calls[0].CopyVideo {
+		t.Fatalf("RunHLS call = profile %q copyVideo %v, want fallback transcode", calls[0].Profile, calls[0].CopyVideo)
+	}
+	if !calls[0].Deinterlace {
+		t.Fatal("Deinterlace = false, want true for an interlaced source transcode")
 	}
 }
 
@@ -512,57 +612,6 @@ func TestLoadHLSMovieForSession_RejectsNegativeStart(t *testing.T) {
 	}
 }
 
-// A cached safe verdict must skip preflight entirely: paying four segments of
-// remux validation again on every re-watch is the latency this cache exists to
-// remove.
-func TestCreateHLSSession_CachedSafeVerdictSkipsPreflight(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	fake := &fakeFFmpeg{
-		plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(safeRemuxFixture),
-			// One segment is not enough to pass preflight, so a second session
-			// that still ran it would fall back to a transcode.
-			hlsRunPlan(transcodeFixture),
-		},
-	}
-	app.FFmpeg = fake
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-
-	for attempt := 1; attempt <= 2; attempt++ {
-		session, err := createTestHLSSession(
-			app,
-			context.Background(),
-			movieID,
-			helpers.HLS_PROFILE_REMUX,
-			testIntPtr(0),
-			testPlaybackSessionID,
-			0,
-			false,
-		)
-		if err != nil {
-			t.Fatalf("createHLSSession attempt %d returned error: %v", attempt, err)
-		}
-		defer cleanupHLSSession(session)
-
-		if !session.CopyVideo {
-			t.Fatalf("attempt %d CopyVideo = false, want true", attempt)
-		}
-	}
-
-	calls := fake.Calls()
-	if len(calls) != 2 {
-		t.Fatalf("RunHLS call count = %d, want 2", len(calls))
-	}
-	for i, call := range calls {
-		if call.Profile != helpers.HLS_PROFILE_REMUX {
-			t.Fatalf("RunHLS call %d profile = %q, want remux", i, call.Profile)
-		}
-	}
-}
-
 // The copy-video start probe is wired up inside startHLSSession. Without it the
 // client maps session time to movie time using the requested offset, so the
 // clock and every watch-progress write run ahead of the picture.
@@ -616,6 +665,147 @@ func TestIsHDRStream(t *testing.T) {
 			got := isHDRStream(&database.VideoStream{ColorTransfer: tt.colorTransfer})
 			if got != tt.want {
 				t.Fatalf("isHDRStream(%q) = %v, want %v", tt.colorTransfer.String, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsInterlacedStream(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldOrder sql.NullString
+		want       bool
+	}{
+		// NULL rows predate the field_order column and must stay eligible for
+		// everything progressive content is.
+		{name: "unset field order is progressive", fieldOrder: sql.NullString{}},
+		{name: "progressive", fieldOrder: sql.NullString{String: "progressive", Valid: true}},
+		{name: "empty string is progressive", fieldOrder: sql.NullString{String: "", Valid: true}},
+		{name: "unrecognized value is progressive", fieldOrder: sql.NullString{String: "unknown", Valid: true}},
+		{name: "top field first", fieldOrder: sql.NullString{String: "tt", Valid: true}, want: true},
+		{name: "bottom field first", fieldOrder: sql.NullString{String: "bb", Valid: true}, want: true},
+		{name: "top coded first displayed first", fieldOrder: sql.NullString{String: "tb", Valid: true}, want: true},
+		{name: "bottom coded first displayed first", fieldOrder: sql.NullString{String: "bt", Valid: true}, want: true},
+		{name: "matched case-insensitively", fieldOrder: sql.NullString{String: " TT ", Valid: true}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isInterlacedStream(&database.VideoStream{FieldOrder: tt.fieldOrder})
+			if got != tt.want {
+				t.Fatalf("isInterlacedStream(%q) = %v, want %v", tt.fieldOrder.String, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsVFRStream(t *testing.T) {
+	tests := []struct {
+		name         string
+		frameRate    float64
+		avgFrameRate sql.NullString
+		want         bool
+	}{
+		{name: "matching rates are constant", frameRate: 23.976, avgFrameRate: sql.NullString{String: "24000/1001", Valid: true}},
+		{name: "rounding noise is constant", frameRate: 23.976, avgFrameRate: sql.NullString{String: "23976/1000", Valid: true}},
+		{name: "diverging average is VFR", frameRate: 30, avgFrameRate: sql.NullString{String: "18574/1000", Valid: true}, want: true},
+		{name: "unset average cannot prove VFR", frameRate: 23.976, avgFrameRate: sql.NullString{}},
+		{name: "zero average cannot prove VFR", frameRate: 23.976, avgFrameRate: sql.NullString{String: "0/0", Valid: true}},
+		{name: "unparseable average cannot prove VFR", frameRate: 23.976, avgFrameRate: sql.NullString{String: "garbage", Valid: true}},
+		{name: "zero nominal rate cannot prove VFR", frameRate: 0, avgFrameRate: sql.NullString{String: "24/1", Valid: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isVFRStream(&database.VideoStream{FrameRate: tt.frameRate, AvgFrameRate: tt.avgFrameRate})
+			if got != tt.want {
+				t.Fatalf("isVFRStream(rate=%v, avg=%q) = %v, want %v", tt.frameRate, tt.avgFrameRate.String, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsCopySafeAACStream(t *testing.T) {
+	tests := []struct {
+		name     string
+		codec    string
+		profile  sql.NullString
+		channels int64
+		want     bool
+	}{
+		{name: "confirmed LC copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, channels: 2, want: true},
+		// Channel count is deliberately not part of the gate: every browser
+		// that decodes AAC-LC in fMP4 decodes it multichannel and downmixes at
+		// the output device, so surround survives instead of being re-encoded
+		// to stereo.
+		{name: "5.1 copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, channels: 6, want: true},
+		{name: "7.1 copies", codec: "aac", profile: sql.NullString{String: "LC", Valid: true}, channels: 8, want: true},
+		// ffprobe reports the profile verbatim; case and padding must not matter.
+		{name: "profile matched case-insensitively", codec: "aac", profile: sql.NullString{String: "lc", Valid: true}, want: true},
+		{name: "profile trimmed", codec: "aac", profile: sql.NullString{String: " LC ", Valid: true}, want: true},
+		{name: "codec matched case-insensitively", codec: "AAC", profile: sql.NullString{String: "LC", Valid: true}, want: true},
+		{name: "HE-AAC transcodes", codec: "aac", profile: sql.NullString{String: "HE-AAC", Valid: true}},
+		{name: "HE-AACv2 transcodes", codec: "aac", profile: sql.NullString{String: "HE-AACv2", Valid: true}},
+		{name: "unknown profile cannot prove safety", codec: "aac", profile: sql.NullString{}},
+		{name: "empty profile cannot prove safety", codec: "aac", profile: sql.NullString{String: "", Valid: true}},
+		{name: "non-AAC never copies", codec: "ac3", profile: sql.NullString{String: "LC", Valid: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isCopySafeAACStream(&database.AudioStream{
+				Codec:        tt.codec,
+				CodecProfile: tt.profile,
+				Channels:     tt.channels,
+			})
+			if got != tt.want {
+				t.Fatalf("isCopySafeAACStream(%q, %q, %dch) = %v, want %v", tt.codec, tt.profile.String, tt.channels, got, tt.want)
+			}
+		})
+	}
+}
+
+// The copy gate must read the scanned profile end to end: the fixture's AAC-LC
+// track copies, and the same track with its profile wiped (a row scanned
+// before profiles were persisted) transcodes.
+func TestCreateHLSSession_AACProfileGatesAudioCopy(t *testing.T) {
+	tests := []struct {
+		name          string
+		clearProfile  bool
+		wantCopyAudio bool
+	}{
+		{name: "confirmed LC copies", wantCopyAudio: true},
+		{name: "unknown profile transcodes", clearProfile: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+			app.FFmpeg = fake
+
+			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			if tt.clearProfile {
+				_, err := app.DB.Exec(`UPDATE audio_streams SET codec_profile = NULL WHERE movie_id = ?`, movieID)
+				if err != nil {
+					t.Fatalf("clear codec_profile: %v", err)
+				}
+			}
+
+			session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+
+			calls := fake.Calls()
+			if len(calls) != 1 {
+				t.Fatalf("expected 1 RunHLS call, got %d", len(calls))
+			}
+			if calls[0].CopyAudio != tt.wantCopyAudio {
+				t.Fatalf("CopyAudio = %v, want %v", calls[0].CopyAudio, tt.wantCopyAudio)
 			}
 		})
 	}
@@ -779,7 +969,9 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 	}
 }
 
-func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T) {
+// A file the extractor cannot open (nonexistent path) must fall back to the
+// bounded ffprobe probe exactly as before the keyframe index existed.
+func TestResolveHLSActualStart_FallsBackToProbeWithoutContainerIndex(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -791,7 +983,14 @@ func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
-	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
+	app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
+		Session:           session,
+		FilePath:          "/movies/example.mp4",
+		Container:         "mp4",
+		MovieID:           1,
+		StreamIndex:       0,
+		RequestedStartSec: 600,
+	})
 	app.Wait.Wait()
 
 	if prober.calls != 1 {
@@ -805,9 +1004,10 @@ func TestMeasureHLSSessionStart_RecordsKeyframeBeforeRequestedStart(t *testing.T
 	}
 }
 
-// The probe is advisory: a failure must leave the start unknown rather than
-// publish a wrong one, so the client keeps its existing fallback.
-func TestMeasureHLSSessionStart_LeavesStartUnknownOnFailure(t *testing.T) {
+// The resolver is advisory: a failure must leave the start unknown rather
+// than publish a wrong one, so the client keeps its existing fallback. A
+// failed extraction must also persist nothing.
+func TestResolveHLSActualStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -818,10 +1018,25 @@ func TestMeasureHLSSessionStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
-	app.measureHLSSessionStart(context.Background(), session, "/movies/example.mp4", 0, 600)
+	app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
+		Session:           session,
+		FilePath:          "/movies/example.mp4",
+		Container:         "mp4",
+		MovieID:           1,
+		StreamIndex:       0,
+		RequestedStartSec: 600,
+	})
 	app.Wait.Wait()
 
 	if got := session.actualStartSec(); got >= 0 {
 		t.Fatalf("actual start = %v, want it to stay unknown", got)
+	}
+
+	_, err := app.Queries.GetKeyframeIndex(context.Background(), database.GetKeyframeIndexParams{
+		MovieID:     1,
+		StreamIndex: 0,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetKeyframeIndex error = %v, want sql.ErrNoRows after a failed extraction", err)
 	}
 }

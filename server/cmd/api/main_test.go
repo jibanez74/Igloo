@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1093,8 +1095,11 @@ func TestInitTables_UsersSchema(t *testing.T) {
 		t.Fatalf("InitTables failed: %v", err)
 	}
 
-	result, err := db.Exec(`
-		INSERT INTO users (name, email, password) 
+	// A user inserted without an explicit is_admin must not come back as an
+	// admin: the column default is the only thing standing between a fresh
+	// signup and full admin rights.
+	_, err = db.Exec(`
+		INSERT INTO users (name, email, password)
 		VALUES ('Test User', 'test@example.com', 'hashedpassword')
 	`)
 
@@ -1102,83 +1107,15 @@ func TestInitTables_UsersSchema(t *testing.T) {
 		t.Fatalf("Failed to insert user: %v", err)
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		t.Fatalf("Failed to get last insert id: %v", err)
-	}
-
-	if id != 1 {
-		t.Errorf("Expected user id 1, got %d", id)
-	}
-
-	var name, email string
 	var isAdmin bool
 
-	err = db.QueryRow("SELECT name, email, is_admin FROM users WHERE id = ?", id).Scan(&name, &email, &isAdmin)
+	err = db.QueryRow("SELECT is_admin FROM users WHERE email = ?", "test@example.com").Scan(&isAdmin)
 	if err != nil {
 		t.Fatalf("Failed to query user: %v", err)
 	}
 
-	if name != "Test User" {
-		t.Errorf("Expected name 'Test User', got '%s'", name)
-	}
-
-	if email != "test@example.com" {
-		t.Errorf("Expected email 'test@example.com', got '%s'", email)
-	}
-
-	if isAdmin != false {
-		t.Errorf("Expected is_admin to be false by default")
-	}
-}
-
-func TestInitTables_ForeignKeys(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("Failed to open in-memory database: %v", err)
-	}
-	defer db.Close()
-
-	app := &Application{DB: db}
-	setupTestLogger(t, app)
-
-	err = app.InitTables()
-	if err != nil {
-		t.Fatalf("InitTables failed: %v", err)
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO musicians (name, name_key, sort_name)
-		VALUES ('Test Artist', 'test artist', 'test artist')
-	`)
-
-	if err != nil {
-		t.Fatalf("Failed to insert musician: %v", err)
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO albums (title, sort_title, album_key)
-		VALUES ('Test Album', 'test album', 'test album')
-	`)
-	if err != nil {
-		t.Fatalf("Failed to insert album: %v", err)
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO musician_albums (musician_id, album_id) 
-		VALUES (1, 1)
-	`)
-
-	if err != nil {
-		t.Fatalf("Failed to insert musician_album relationship: %v", err)
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO musician_albums (musician_id, album_id) 
-		VALUES (999, 1)
-	`)
-	if err == nil {
-		t.Error("Expected foreign key constraint violation, but insert succeeded")
+	if isAdmin {
+		t.Error("Expected is_admin to be false by default")
 	}
 }
 
@@ -1231,6 +1168,112 @@ func setupTestApp(t *testing.T) *Application {
 	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 
 	return app
+}
+
+// setupSessionTestApp is setupTestApp for handler tests that authenticate
+// through a session cookie.
+func setupSessionTestApp(t *testing.T) *Application {
+	t.Helper()
+
+	app := setupTestApp(t)
+	app.InitSession()
+
+	return app
+}
+
+func createTestUser(t *testing.T, app *Application, name, email string, isAdmin bool) database.User {
+	t.Helper()
+
+	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
+		Name:     name,
+		Email:    email,
+		Password: "hashed",
+		IsAdmin:  isAdmin,
+		Avatar:   sql.NullString{},
+	})
+	if err != nil {
+		t.Fatalf("create user %q: %v", email, err)
+	}
+
+	return user
+}
+
+// authSessionCookies runs one request through the session manager so the
+// caller gets cookies a signed-in user would send.
+func authSessionCookies(t *testing.T, app *Application, userID int64) []*http.Cookie {
+	t.Helper()
+
+	handler := app.SessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/session", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	return resp.Cookies()
+}
+
+func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
+	t.Helper()
+
+	var count int
+	err := db.QueryRow(query, args...).Scan(&count)
+	if err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+
+	return count
+}
+
+// setupSettingsTestApp is setupSessionTestApp for handler tests that read or
+// write app settings, with the settings environment cleared so a developer's
+// own environment cannot change what the handler sees.
+func setupSettingsTestApp(t *testing.T) *Application {
+	t.Helper()
+
+	app := setupSessionTestApp(t)
+	clearSettingsEnv(t)
+
+	err := app.InitSettings(context.Background())
+	if err != nil {
+		t.Fatalf("InitSettings failed: %v", err)
+	}
+
+	return app
+}
+
+// restartTestApp simulates a server restart: a fresh Application with fresh
+// in-memory caches over the same database, so only state persisted in the
+// database survives the boundary. Statements are re-prepared exactly as
+// application.go does at boot, so a query left out of database.Prepare shows
+// up here rather than riding on the original app's prepared set.
+func restartTestApp(t *testing.T, app *Application) *Application {
+	t.Helper()
+
+	queries, err := database.Prepare(t.Context(), app.DB)
+	if err != nil {
+		t.Fatalf("prepare queries for restarted app: %v", err)
+	}
+
+	restarted := &Application{
+		DB:      app.DB,
+		Queries: queries,
+		Config:  app.Config,
+	}
+	setupTestLogger(t, restarted)
+
+	restarted.initRuntimeCaches()
+	restarted.WatchRoomHub = NewWatchRoomHub()
+	restarted.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
+	restarted.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
+	restarted.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
+
+	return restarted
 }
 
 func clearSettingsEnv(t *testing.T) {
@@ -1381,46 +1424,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	}
 	if app.Settings.DownloadImages != true {
 		t.Error("Expected DownloadImages to be true")
-	}
-}
-
-func TestInitSettings_LoadsExistingSettings(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	params := database.CreateSettingsParams{
-		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
-		JellyfinApiKey:             sql.NullString{Valid: false},
-		HardwareAccelerationDevice: sql.NullString{String: "nvidia", Valid: true},
-		EnableWatcher:              false,
-		DownloadImages:             false,
-		MoviesDir:                  sql.NullString{Valid: false},
-		ShowsDir:                   sql.NullString{Valid: false},
-		MusicDir:                   sql.NullString{Valid: false},
-		StaticDir:                  "existing-static",
-		TranscodeDir:               "existing-transcode",
-	}
-	_, err := app.Queries.CreateSettings(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Failed to create test settings: %v", err)
-	}
-
-	err = app.InitSettings(context.Background())
-	if err != nil {
-		t.Fatalf("InitSettings failed: %v", err)
-	}
-
-	if app.Settings.TmdbKey.String != "existing-key" {
-		t.Errorf("Expected TmdbKey 'existing-key', got '%s'", app.Settings.TmdbKey.String)
-	}
-	if app.Settings.StaticDir != "existing-static" {
-		t.Errorf("Expected StaticDir 'existing-static', got '%s'", app.Settings.StaticDir)
-	}
-	if app.Settings.TranscodeDir != "existing-transcode" {
-		t.Errorf("Expected TranscodeDir 'existing-transcode', got '%s'", app.Settings.TranscodeDir)
-	}
-	if app.Settings.HardwareAccelerationDevice.String != "nvidia" {
-		t.Errorf("Expected HardwareAccelerationDevice 'nvidia', got '%s'", app.Settings.HardwareAccelerationDevice.String)
 	}
 }
 

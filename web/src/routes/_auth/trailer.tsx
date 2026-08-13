@@ -63,6 +63,21 @@ export const Route = createFileRoute("/_auth/trailer")({
   component: TrailerPage,
 });
 
+function focusMainAfterNavigation() {
+  window.setTimeout(() => {
+    document.getElementById("main")?.focus({ preventScroll: true });
+  }, 0);
+}
+
+function handleDialogEscapeKeyDown(event: KeyboardEvent) {
+  if (!getFullscreenElement()) {
+    return;
+  }
+
+  event.preventDefault();
+  void exitDocumentFullscreen();
+}
+
 function TrailerPage() {
   const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -71,7 +86,9 @@ function TrailerPage() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(
+    () => !!getFullscreenElement(),
+  );
 
   useEffect(() => {
     pause();
@@ -81,11 +98,15 @@ function TrailerPage() {
 
   const shouldFetchMovie =
     mediaType === "movie" && mediaId != null && mediaId > 0 && !videoKey;
-  const movieQuery = useQuery({
+  const {
+    data,
+    isPending: moviePending,
+    isError: movieIsError,
+    refetch: refetchMovie,
+  } = useQuery({
     ...movieDetailsQueryOpts(mediaId ?? 0),
     enabled: shouldFetchMovie,
   });
-  const data = movieQuery.data;
 
   const media = data?.data?.movie;
   const trailerFromApi = media?.videos?.results?.find(
@@ -94,12 +115,6 @@ function TrailerPage() {
   const trailerKey = videoKey ?? trailerFromApi?.key ?? null;
 
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
-
-  const focusMainAfterNavigation = () => {
-    window.setTimeout(() => {
-      document.getElementById("main")?.focus({ preventScroll: true });
-    }, 0);
-  };
 
   const handleClose = () => {
     void router.navigate({ to: returnTo ?? "/" }).catch(() => {
@@ -138,7 +153,6 @@ function TrailerPage() {
     const onFullscreenChange = () => {
       setIsBrowserFullscreen(!!getFullscreenElement());
     };
-    onFullscreenChange();
     document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("webkitfullscreenchange", onFullscreenChange);
     return () => {
@@ -287,15 +301,6 @@ function TrailerPage() {
     focusTarget?.focus({ preventScroll: true });
   };
 
-  const handleDialogEscapeKeyDown = (event: KeyboardEvent) => {
-    if (!getFullscreenElement()) {
-      return;
-    }
-
-    event.preventDefault();
-    void exitDocumentFullscreen();
-  };
-
   if (error) {
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
@@ -349,7 +354,7 @@ function TrailerPage() {
     );
   }
 
-  if (!trailerKey && shouldFetchMovie && movieQuery.isPending) {
+  if (!trailerKey && shouldFetchMovie && moviePending) {
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -378,7 +383,7 @@ function TrailerPage() {
     );
   }
 
-  if (!trailerKey && (movieQuery.isError || data?.error)) {
+  if (!trailerKey && (movieIsError || data?.error)) {
     return (
       <Dialog open onOpenChange={handleDialogOpenChange}>
         <DialogFullscreenContent
@@ -404,7 +409,7 @@ function TrailerPage() {
               <button
                 type="button"
                 ref={closeButtonRef}
-                onClick={() => void movieQuery.refetch()}
+                onClick={() => void refetchMovie()}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",

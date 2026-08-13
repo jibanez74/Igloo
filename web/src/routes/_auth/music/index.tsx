@@ -32,7 +32,8 @@ import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
-import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
+import { showActionFailed } from "@/lib/toast-helpers";
+import { refreshLibraryWithToasts } from "@/lib/library-refresh";
 import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
@@ -291,19 +292,9 @@ function MoreMenu() {
     if (refreshingLibrary) return;
 
     setRefreshingLibrary(true);
-    try {
-      await refreshMusicLibraryCache(queryClient);
-      showSuccess("Library refreshed", "Music library data is up to date.");
-    } catch (error) {
-      console.error("Failed to refresh music library:", error);
-      showActionFailed(
-        "refresh library",
-        "Unable to refresh the music library. Please try again.",
-      );
-    } finally {
-      setRefreshingLibrary(false);
-      setMenuOpen(false);
-    }
+    await refreshLibraryWithToasts(queryClient, refreshMusicLibraryCache, "Music");
+    setRefreshingLibrary(false);
+    setMenuOpen(false);
   };
   const spotifyAvailable =
     spotifyStatusData?.error === false

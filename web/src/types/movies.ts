@@ -234,6 +234,10 @@ export type VideoStreamType = {
   color_space: NullableString;
   color_primaries: NullableString;
   color_transfer: NullableString;
+  /** ffprobe field_order; tt/bb/tb/bt mark interlaced content. */
+  field_order: NullableString;
+  /** Display-matrix rotation in degrees; null when the stream has none. */
+  rotation: NullableInt64;
   language: NullableString;
   title: NullableString;
 };

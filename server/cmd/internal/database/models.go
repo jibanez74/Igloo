@@ -113,6 +113,16 @@ type Genre struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type KeyframeIndex struct {
+	MovieID     int64   `json:"movie_id"`
+	StreamIndex int64   `json:"stream_index"`
+	Fingerprint string  `json:"fingerprint"`
+	DurationSec float64 `json:"duration_sec"`
+	Keyframes   string  `json:"keyframes"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
 type Movie struct {
 	ID             int64           `json:"id"`
 	Title          string          `json:"title"`
@@ -229,6 +239,16 @@ type ProductionCompany struct {
 	UpdatedAt string         `json:"updated_at"`
 }
 
+type RemuxSafetyVerdict struct {
+	MovieID     int64  `json:"movie_id"`
+	StreamIndex int64  `json:"stream_index"`
+	Fingerprint string `json:"fingerprint"`
+	Safe        bool   `json:"safe"`
+	Reason      string `json:"reason"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
 type Setting struct {
 	ID                         int64           `json:"id"`
 	TmdbKey                    sql.NullString  `json:"tmdb_key"`
@@ -333,6 +353,8 @@ type VideoStream struct {
 	ColorSpace     sql.NullString `json:"color_space"`
 	ColorPrimaries sql.NullString `json:"color_primaries"`
 	ColorTransfer  sql.NullString `json:"color_transfer"`
+	FieldOrder     sql.NullString `json:"field_order"`
+	Rotation       sql.NullInt64  `json:"rotation"`
 	Language       sql.NullString `json:"language"`
 	Title          sql.NullString `json:"title"`
 	CreatedAt      string         `json:"created_at"`

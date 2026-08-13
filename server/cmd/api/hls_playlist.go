@@ -77,9 +77,13 @@ func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {
 // Only transcode sessions use it: their -force_key_frames boundaries make the
 // arithmetic exact, while copy-video sessions serve FFmpeg's own playlist.
 //
+// independentSegments comes from ffmpeg.HLSSegmentsAreIndependent, the same
+// predicate that decides whether FFmpeg writes the tag into its own playlist,
+// so a session's two playlist flavors never disagree.
+//
 // FFmpeg produces the actual segment files in the background; the segment
 // handler waits for each file to appear on disk before serving.
-func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string) string {
+func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, independentSegments bool) string {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	segCount := int(math.Ceil(totalDurationSec / segDur))
 	if segCount < 1 {
@@ -89,6 +93,13 @@ func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string) 
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
 	b.WriteString("#EXT-X-VERSION:7\n")
+	// Accurate when -force_key_frames pins an IDR to every segment boundary,
+	// which needs the encoder to honor forced keyframes as IDRs. hls.js ignores
+	// the tag in media playlists; native HLS players (Safari) use it to start
+	// decoding from any segment.
+	if independentSegments {
+		b.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
+	}
 	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", helpers.HLS_SEGMENT_TIME_SEC*2))
 	b.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")

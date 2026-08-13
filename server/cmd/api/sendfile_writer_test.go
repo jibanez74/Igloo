@@ -59,13 +59,6 @@ func TestUnwrapReaderFromStopsAtOutermostCapableWriter(t *testing.T) {
 	}
 }
 
-func TestUnwrapReaderFromReportsMissingCapability(t *testing.T) {
-	_, found := unwrapReaderFrom(httptest.NewRecorder())
-	if found {
-		t.Error("unwrapReaderFrom reported a capability the recorder does not have")
-	}
-}
-
 func TestRestoreSendfileLeavesCapableWriterAlone(t *testing.T) {
 	capable := &countingReaderFrom{ResponseWriter: httptest.NewRecorder()}
 

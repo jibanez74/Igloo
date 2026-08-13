@@ -654,6 +654,8 @@ function movieTechnicalDetails(id: number) {
         color_space: nullableString("bt709"),
         color_primaries: nullableString("bt709"),
         color_transfer: nullableString("bt709"),
+        field_order: nullableString("progressive"),
+        rotation: nullableInt(null),
         language: nullableString("eng"),
         title: nullableString("Main"),
       },

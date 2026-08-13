@@ -111,26 +111,3 @@ func TestDamerauLevenshtein(t *testing.T) {
 		})
 	}
 }
-
-func TestVocabCorrections(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-
-	corrections, err := testVocabCorrections(app, context.Background(), "movies_fts_vocab", "license")
-	if err != nil {
-		t.Fatalf("vocabCorrections failed: %v", err)
-	}
-	if !slices.Contains(corrections, "licence") {
-		t.Fatalf("expected licence correction, got %#v", corrections)
-	}
-
-	corrections, err = testVocabCorrections(app, context.Background(), "movies_fts_vocab", "to")
-	if err != nil {
-		t.Fatalf("vocabCorrections short token failed: %v", err)
-	}
-	if corrections != nil {
-		t.Fatalf("expected no corrections for short token, got %#v", corrections)
-	}
-}

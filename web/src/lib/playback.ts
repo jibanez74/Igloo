@@ -31,7 +31,8 @@ const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"]
  * in a <video> element — it stalls silently at 0ms with no MediaError — so do
  * NOT add video/x-matroska here. video/webm and video/ogg were dead entries:
  * WebM cannot carry H.264 (the only allowed video codec) and .ogv is not a
- * valid scanner extension. See docs/web-direct-playback-audit.md §3.2, §5.6.
+ * valid scanner extension. See "Direct Play Eligibility and Fallback" in
+ * docs/ffmpeg.md.
  */
 const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4"];
 
@@ -86,8 +87,17 @@ function isContainerDirectPlayable(mimeType: string): boolean {
 /** Video fields the direct-play eligibility rules consult. */
 export type DirectPlayVideoInfo = Pick<
   VideoStreamType,
-  "codec" | "codec_profile" | "codec_level" | "height" | "bit_depth" | "pixel_format"
+  | "codec"
+  | "codec_profile"
+  | "codec_level"
+  | "height"
+  | "bit_depth"
+  | "pixel_format"
+  | "field_order"
 >;
+
+/** ffprobe field_order values that mark a stream interlaced. */
+const INTERLACED_FIELD_ORDERS = ["tt", "bb", "tb", "bt"];
 
 const NON_BROWSER_H264_PROFILE_MARKERS = ["10", "4:2:2", "422", "4:4:4", "444"];
 /**
@@ -129,6 +139,15 @@ function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
     profile &&
     NON_BROWSER_H264_PROFILE_MARKERS.some((m) => profile.includes(m))
   ) {
+    return false;
+  }
+
+  // Browsers do not deinterlace, so both direct play and remux would display
+  // combed frames; only the transcode path applies yadif.
+  const fieldOrder = unwrapStringOrUndefined(video.field_order)
+    ?.trim()
+    .toLowerCase();
+  if (fieldOrder && INTERLACED_FIELD_ORDERS.includes(fieldOrder)) {
     return false;
   }
 
@@ -209,7 +228,7 @@ export function getAvailableModes(args: AvailableModesArgs) {
       // The probe may only narrow eligibility, never widen it: the watch-room
       // server enforces the same direct ⊂ remux invariant from the static
       // rules alone and cannot ask a browser. Keep this an AND, never an OR.
-      // See docs/web-direct-playback-audit.md §3.4 (D3).
+      // See "Direct Play Eligibility and Fallback" in docs/ffmpeg.md.
       const canPlay = args.canPlay ?? defaultCanPlayProbe;
       const typeString = buildDirectPlayTypeString(video, audioStreams?.[0]);
       return canPlay(typeString) !== "";

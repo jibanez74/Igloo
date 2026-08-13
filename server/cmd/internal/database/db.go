@@ -225,6 +225,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getGenresByMusicianIDStmt, err = db.PrepareContext(ctx, getGenresByMusicianID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByMusicianID: %w", err)
 	}
+	if q.getKeyframeIndexStmt, err = db.PrepareContext(ctx, getKeyframeIndex); err != nil {
+		return nil, fmt.Errorf("error preparing query GetKeyframeIndex: %w", err)
+	}
 	if q.getLatestAlbumsStmt, err = db.PrepareContext(ctx, getLatestAlbums); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLatestAlbums: %w", err)
 	}
@@ -335,6 +338,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getRandomTracksStmt, err = db.PrepareContext(ctx, getRandomTracks); err != nil {
 		return nil, fmt.Errorf("error preparing query GetRandomTracks: %w", err)
+	}
+	if q.getRemuxSafetyVerdictStmt, err = db.PrepareContext(ctx, getRemuxSafetyVerdict); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRemuxSafetyVerdict: %w", err)
 	}
 	if q.getSettingsStmt, err = db.PrepareContext(ctx, getSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSettings: %w", err)
@@ -549,6 +555,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.upsertExtraVideoStmt, err = db.PrepareContext(ctx, upsertExtraVideo); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertExtraVideo: %w", err)
 	}
+	if q.upsertKeyframeIndexStmt, err = db.PrepareContext(ctx, upsertKeyframeIndex); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertKeyframeIndex: %w", err)
+	}
 	if q.upsertMovieStmt, err = db.PrepareContext(ctx, upsertMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMovie: %w", err)
 	}
@@ -566,6 +575,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertProductionCompanyStmt, err = db.PrepareContext(ctx, upsertProductionCompany); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertProductionCompany: %w", err)
+	}
+	if q.upsertRemuxSafetyVerdictStmt, err = db.PrepareContext(ctx, upsertRemuxSafetyVerdict); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertRemuxSafetyVerdict: %w", err)
 	}
 	if q.upsertTrackStmt, err = db.PrepareContext(ctx, upsertTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertTrack: %w", err)
@@ -916,6 +928,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getGenresByMusicianIDStmt: %w", cerr)
 		}
 	}
+	if q.getKeyframeIndexStmt != nil {
+		if cerr := q.getKeyframeIndexStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getKeyframeIndexStmt: %w", cerr)
+		}
+	}
 	if q.getLatestAlbumsStmt != nil {
 		if cerr := q.getLatestAlbumsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLatestAlbumsStmt: %w", cerr)
@@ -1099,6 +1116,11 @@ func (q *Queries) Close() error {
 	if q.getRandomTracksStmt != nil {
 		if cerr := q.getRandomTracksStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getRandomTracksStmt: %w", cerr)
+		}
+	}
+	if q.getRemuxSafetyVerdictStmt != nil {
+		if cerr := q.getRemuxSafetyVerdictStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRemuxSafetyVerdictStmt: %w", cerr)
 		}
 	}
 	if q.getSettingsStmt != nil {
@@ -1456,6 +1478,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertExtraVideoStmt: %w", cerr)
 		}
 	}
+	if q.upsertKeyframeIndexStmt != nil {
+		if cerr := q.upsertKeyframeIndexStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertKeyframeIndexStmt: %w", cerr)
+		}
+	}
 	if q.upsertMovieStmt != nil {
 		if cerr := q.upsertMovieStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertMovieStmt: %w", cerr)
@@ -1484,6 +1511,11 @@ func (q *Queries) Close() error {
 	if q.upsertProductionCompanyStmt != nil {
 		if cerr := q.upsertProductionCompanyStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertProductionCompanyStmt: %w", cerr)
+		}
+	}
+	if q.upsertRemuxSafetyVerdictStmt != nil {
+		if cerr := q.upsertRemuxSafetyVerdictStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertRemuxSafetyVerdictStmt: %w", cerr)
 		}
 	}
 	if q.upsertTrackStmt != nil {
@@ -1607,6 +1639,7 @@ type Queries struct {
 	getGenresByAlbumIDStmt                      *sql.Stmt
 	getGenresByMovieIDStmt                      *sql.Stmt
 	getGenresByMusicianIDStmt                   *sql.Stmt
+	getKeyframeIndexStmt                        *sql.Stmt
 	getLatestAlbumsStmt                         *sql.Stmt
 	getLatestMoviesStmt                         *sql.Stmt
 	getLikedMoviesForUserAscStmt                *sql.Stmt
@@ -1644,6 +1677,7 @@ type Queries struct {
 	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
 	getProductionCompaniesByMovieIDStmt         *sql.Stmt
 	getRandomTracksStmt                         *sql.Stmt
+	getRemuxSafetyVerdictStmt                   *sql.Stmt
 	getSettingsStmt                             *sql.Stmt
 	getSubtitlesByMovieIDStmt                   *sql.Stmt
 	getTrackStmt                                *sql.Stmt
@@ -1715,12 +1749,14 @@ type Queries struct {
 	upsertCastStmt                              *sql.Stmt
 	upsertCrewStmt                              *sql.Stmt
 	upsertExtraVideoStmt                        *sql.Stmt
+	upsertKeyframeIndexStmt                     *sql.Stmt
 	upsertMovieStmt                             *sql.Stmt
 	upsertMovieWatchProgressStmt                *sql.Stmt
 	upsertMusicMetadataMatchStmt                *sql.Stmt
 	upsertMusicianStmt                          *sql.Stmt
 	upsertMusicianGenreStmt                     *sql.Stmt
 	upsertProductionCompanyStmt                 *sql.Stmt
+	upsertRemuxSafetyVerdictStmt                *sql.Stmt
 	upsertTrackStmt                             *sql.Stmt
 	upsertUserTrackStatsStmt                    *sql.Stmt
 	userExistsStmt                              *sql.Stmt
@@ -1797,6 +1833,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getGenresByAlbumIDStmt:                      q.getGenresByAlbumIDStmt,
 		getGenresByMovieIDStmt:                      q.getGenresByMovieIDStmt,
 		getGenresByMusicianIDStmt:                   q.getGenresByMusicianIDStmt,
+		getKeyframeIndexStmt:                        q.getKeyframeIndexStmt,
 		getLatestAlbumsStmt:                         q.getLatestAlbumsStmt,
 		getLatestMoviesStmt:                         q.getLatestMoviesStmt,
 		getLikedMoviesForUserAscStmt:                q.getLikedMoviesForUserAscStmt,
@@ -1834,6 +1871,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
 		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,
 		getRandomTracksStmt:                         q.getRandomTracksStmt,
+		getRemuxSafetyVerdictStmt:                   q.getRemuxSafetyVerdictStmt,
 		getSettingsStmt:                             q.getSettingsStmt,
 		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                                q.getTrackStmt,
@@ -1905,12 +1943,14 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertCastStmt:                              q.upsertCastStmt,
 		upsertCrewStmt:                              q.upsertCrewStmt,
 		upsertExtraVideoStmt:                        q.upsertExtraVideoStmt,
+		upsertKeyframeIndexStmt:                     q.upsertKeyframeIndexStmt,
 		upsertMovieStmt:                             q.upsertMovieStmt,
 		upsertMovieWatchProgressStmt:                q.upsertMovieWatchProgressStmt,
 		upsertMusicMetadataMatchStmt:                q.upsertMusicMetadataMatchStmt,
 		upsertMusicianStmt:                          q.upsertMusicianStmt,
 		upsertMusicianGenreStmt:                     q.upsertMusicianGenreStmt,
 		upsertProductionCompanyStmt:                 q.upsertProductionCompanyStmt,
+		upsertRemuxSafetyVerdictStmt:                q.upsertRemuxSafetyVerdictStmt,
 		upsertTrackStmt:                             q.upsertTrackStmt,
 		upsertUserTrackStatsStmt:                    q.upsertUserTrackStatsStmt,
 		userExistsStmt:                              q.userExistsStmt,

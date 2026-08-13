@@ -16,21 +16,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func setupPlaybackHTTPTestApp(t *testing.T) *Application {
-	t.Helper()
-
-	app := setupTestApp(t)
-	app.InitSession()
-	clearSettingsEnv(t)
-
-	err := app.InitSettings(context.Background())
-	if err != nil {
-		t.Fatalf("InitSettings failed: %v", err)
-	}
-
-	return app
-}
-
 func mountPlaybackRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
@@ -50,21 +35,6 @@ func mountPlaybackRouter(app *Application, userID int64) http.Handler {
 	return app.SessionManager.LoadAndSave(r)
 }
 
-func createTestUser(t *testing.T, app *Application, name, email string, isAdmin bool) database.User {
-	t.Helper()
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     name,
-		Email:    email,
-		Password: "hashed",
-		IsAdmin:  isAdmin,
-		Avatar:   sql.NullString{},
-	})
-	if err != nil {
-		t.Fatalf("create user %q: %v", email, err)
-	}
-	return user
-}
-
 type playbackSettingsEnvelope struct {
 	Data struct {
 		Settings playbackSettingsResponse `json:"settings"`
@@ -82,7 +52,7 @@ func decodePlaybackResponse(t *testing.T, body []byte) playbackSettingsResponse 
 }
 
 func TestGetPlaybackSettings_ReturnsDefaultsForNewUser(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -125,7 +95,7 @@ func TestGetPlaybackSettings_ReturnsDefaultsForNewUser(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RoundTrips(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -160,7 +130,7 @@ func TestUpdatePlaybackSettings_RoundTrips(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RejectsUnknownProfile(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -178,31 +148,13 @@ func TestUpdatePlaybackSettings_RejectsUnknownProfile(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RejectsRemuxProfile(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
 	body := `{"preferred_profile": "remux", "download_mbps": 50}`
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestUpdatePlaybackSettings_RejectsInvalidDownloadMbps(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
-	defer app.DB.Close()
-
-	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPlaybackRouter(app, user.ID)
-
-	body := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": -5}`, helpers.HLS_PROFILE_1080P_6MBPS)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -228,7 +180,7 @@ func TestUpdatePlaybackSettings_DownloadMbpsBoundaries(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupPlaybackHTTPTestApp(t)
+			app := setupSettingsTestApp(t)
 			defer app.DB.Close()
 
 			user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -258,7 +210,7 @@ func TestUpdatePlaybackSettings_DownloadMbpsBoundaries(t *testing.T) {
 }
 
 func TestPlaybackSettings_RequiresAuth(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	handler := mountPlaybackRouter(app, 0)
@@ -283,7 +235,7 @@ func TestPlaybackSettings_RequiresAuth(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_PutResponseShape(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -335,7 +287,7 @@ func TestUpdatePlaybackSettings_PutResponseShape(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_EmptyStringPreferredProfileClearsColumn(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -369,7 +321,7 @@ func TestUpdatePlaybackSettings_EmptyStringPreferredProfileClearsColumn(t *testi
 }
 
 func TestUpdatePlaybackSettings_PartialUpdatePreservesOmittedField(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -407,7 +359,7 @@ func TestUpdatePlaybackSettings_PartialUpdatePreservesOmittedField(t *testing.T)
 }
 
 func TestUpdatePlaybackSettings_NullClearsBothColumns(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -444,7 +396,7 @@ func TestUpdatePlaybackSettings_NullClearsBothColumns(t *testing.T) {
 }
 
 func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
@@ -491,7 +443,7 @@ func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 }
 
 func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	app.Settings.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
@@ -514,7 +466,7 @@ func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
@@ -566,7 +518,7 @@ func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RegularUserCannotUpdateServerUploadCap(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	settings, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
@@ -628,7 +580,7 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupPlaybackHTTPTestApp(t)
+			app := setupSettingsTestApp(t)
 			defer app.DB.Close()
 
 			settings, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
@@ -668,7 +620,7 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
@@ -697,7 +649,7 @@ func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RegularUserCannotUpdateHardwareDevice(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -723,7 +675,7 @@ func TestUpdatePlaybackSettings_RegularUserCannotUpdateHardwareDevice(t *testing
 }
 
 func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
@@ -745,7 +697,7 @@ func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_LanguagePrefsRoundTrip(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -774,7 +726,7 @@ func TestUpdatePlaybackSettings_LanguagePrefsRoundTrip(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_SubtitleOffAccepted(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -800,7 +752,7 @@ func TestUpdatePlaybackSettings_SubtitleOffAccepted(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_AudioOffRejected(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -832,7 +784,7 @@ func TestUpdatePlaybackSettings_RejectsMalformedLanguageCodes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupPlaybackHTTPTestApp(t)
+			app := setupSettingsTestApp(t)
 			defer app.DB.Close()
 
 			user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -851,7 +803,7 @@ func TestUpdatePlaybackSettings_RejectsMalformedLanguageCodes(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_LanguageEmptyStringClears(t *testing.T) {
-	app := setupPlaybackHTTPTestApp(t)
+	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)

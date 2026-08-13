@@ -3,7 +3,6 @@ import {
   HLS_PLAYBACK_SESSION_QUERY_PARAM,
   HLS_RESUME_REWIND_BUFFER_SEC,
   MEDIA_ERR_DECODE,
-  MEDIA_ERR_NETWORK,
   MEDIA_ERR_SRC_NOT_SUPPORTED,
   MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC,
   MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
@@ -352,21 +351,6 @@ export function shouldDirectPlayFallback(args: DirectPlayFallbackArgs): boolean 
     args.trigger === MEDIA_ERR_DECODE ||
     args.trigger === MEDIA_ERR_SRC_NOT_SUPPORTED
   );
-}
-
-export function nativeMoviePlaybackErrorMessage(
-  code: number | null | undefined,
-) {
-  if (code === MEDIA_ERR_SRC_NOT_SUPPORTED) {
-    return "This media format is not supported by the browser.";
-  }
-  if (code === MEDIA_ERR_DECODE) {
-    return "The stream could not be decoded.";
-  }
-  if (code === MEDIA_ERR_NETWORK) {
-    return "A network error interrupted playback.";
-  }
-  return "Playback failed.";
 }
 
 // shouldPersistMovieWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= MOVIE_WATCH_PROGRESS_MIN_SECONDS; hasEligibleMovieResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.

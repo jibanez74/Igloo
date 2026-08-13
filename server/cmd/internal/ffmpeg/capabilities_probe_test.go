@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+// fakeFFmpegVersionBanner stands in for the `-version` output that
+// initializeCandidate captures before handing it to probeCapabilities.
+const fakeFFmpegVersionBanner = "ffmpeg version 7.0.2-Jellyfin Copyright (c) 2000-2024 the FFmpeg developers\n"
+
 func fullCapabilityProbeFake(t *testing.T, runtimeExit int, logPath string) string {
 	t.Helper()
 	runtimeResult := "exit 0"
@@ -50,6 +54,10 @@ if [ "$1" = "-h" ] && [ "$2" = "encoder=h264_qsv" ]; then
   printf '%s\n' '-preset value' '-look_ahead value' '-forced_idr value'
   exit 0
 fi
+if [ "$1" = "-h" ] && [ "$2" = "encoder=h264_nvenc" ]; then
+  printf '%s\n' '-rc value' '-preset value' '-forced-idr value'
+  exit 0
+fi
 ` + runtimeResult + "\n"
 	return writeFakeFFmpeg(t, "probe ffmpeg", body)
 }
@@ -58,7 +66,7 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "probes.log")
 	script := fullCapabilityProbeFake(t, 0, logPath)
 
-	caps := probeCapabilities(script)
+	caps := probeCapabilities(script, fakeFFmpegVersionBanner)
 	if !caps.Probed || !caps.SupportsEncoder("h264_nvenc") || !caps.SupportsEncoder("h264_qsv") {
 		t.Fatalf("encoder capabilities were not orchestrated: %#v", caps)
 	}
@@ -71,8 +79,14 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	if !caps.SupportsFilterOption("tonemap_cuda", "desat") {
 		t.Fatalf("filter options were not orchestrated: %#v", caps.FilterOptions)
 	}
-	if !caps.SupportsEncoderOption("h264_qsv", "forced_idr") {
+	// NVENC spells the option with a hyphen, QSV with an underscore; both must
+	// be recorded or the transcode silently loses its IDR guarantee.
+	if !caps.SupportsEncoderOption("h264_qsv", "forced_idr") ||
+		!caps.SupportsEncoderOption("h264_nvenc", "forced-idr") {
 		t.Fatalf("encoder options were not orchestrated: %#v", caps.EncoderOptions)
+	}
+	if caps.Version != "7.0.2-Jellyfin" {
+		t.Fatalf("Version = %q, want the token from the -version banner", caps.Version)
 	}
 	if !caps.H264NVENCRuntimeUsable || !caps.NvidiaCUDAScaleRuntimeUsable {
 		t.Fatalf("NVENC/CUDA runtime probes did not succeed: %#v", caps)
@@ -92,7 +106,7 @@ exit 0
 `
 	script := writeFakeFFmpeg(t, "probe ffmpeg", body)
 
-	caps := probeCapabilities(script)
+	caps := probeCapabilities(script, fakeFFmpegVersionBanner)
 	if !caps.H264NVENCRuntimeUsable || !caps.H264QSVRuntimeUsable {
 		t.Fatalf("encoder runtime probes should succeed in the fake: %#v", caps)
 	}
@@ -113,7 +127,7 @@ func TestProbeCapabilitiesRecordsBoundedEncoderDiagnostics(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "probes.log")
 	script := fullCapabilityProbeFake(t, 7, logPath)
 
-	caps := probeCapabilities(script)
+	caps := probeCapabilities(script, fakeFFmpegVersionBanner)
 	if caps.H264NVENCRuntimeUsable || caps.H264QSVRuntimeUsable {
 		t.Fatalf("failing encoder runtime probes reported usable: %#v", caps)
 	}

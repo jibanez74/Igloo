@@ -260,9 +260,25 @@ func buildHLSPlaylistBody(
 	if !session.CopyVideo {
 		finalPlaylist := session.currentFinalPlaylist()
 		if finalPlaylist != "" {
+			if !hasPlayableSegment(finalPlaylist) {
+				return "", errHLSSessionEmpty
+			}
 			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
 		}
-		return generateVODPlaylist(durationSec, baseURL, querySuffix), nil
+
+		// A synthesized playlist describes output FFmpeg has not produced yet,
+		// which is correct while it is still running and a lie once it is not:
+		// without this the client is handed a complete playlist for a dead
+		// session and only discovers the failure by waiting out every segment.
+		exited, exitErr := session.exitStatus()
+		if exited {
+			if exitErr != nil {
+				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
+			}
+			return "", errHLSSessionEmpty
+		}
+
+		return generateVODPlaylist(durationSec, baseURL, querySuffix, session.IndependentSegments), nil
 	}
 
 	ticker := time.NewTicker(hlsRemuxPreflightPoll)
@@ -280,17 +296,23 @@ func buildHLSPlaylistBody(
 			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
 		}
 
-		livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
-		if readErr == nil {
-			return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
-		}
-
+		// Exit status is checked before the live file because the live file
+		// outlives the process that was appending to it. onExit publishes
+		// FinalPlaylist for every exit it can read one from, so reaching here
+		// with Exited set means there is nothing publishable — serving the live
+		// file instead would hand the client an EVENT playlist with no
+		// ENDLIST, which it reloads forever while playback sits stalled.
 		exited, exitErr := session.exitStatus()
 		if exited {
 			if exitErr != nil {
 				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
 			}
 			return "", errHLSSessionEmpty
+		}
+
+		livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
+		if readErr == nil {
+			return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
 		}
 
 		if !time.Now().Before(deadline) {
@@ -340,6 +362,9 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 		}
 	}
 
+	// The session is healthy, the encoder just has not reached this segment,
+	// so the client is told to come back rather than left to guess.
+	w.Header().Set("Retry-After", strconv.Itoa(hlsPlaylistRetryAfterSec))
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
 }
 
@@ -482,30 +507,35 @@ func fileReady(path string) bool {
 	return info.Size() > 0
 }
 
-// segmentComplete returns true when FFmpeg has finished writing the segment.
+// segmentComplete returns true when FFmpeg has finished writing the file.
 //
-// A segment is complete when the next segment file exists (meaning FFmpeg
-// has moved on) or when FFmpeg has exited (all remaining files are final).
-// This prevents serving partially-written files that would cause hls.js
-// decode errors and infinite retries.
+// A file is complete when the file FFmpeg writes after it exists (meaning
+// FFmpeg has moved on) or when FFmpeg has exited, since nothing can be
+// appended to a dead session's output. This prevents serving partially-written
+// files that would cause hls.js decode errors and infinite retries.
+//
+// Both branches need the exit tail. Without it on init.mp4, a session that
+// dies after writing the init segment but before closing segment_0 leaves the
+// request polling until the segment deadline and answering 503, even though
+// init.mp4 is on disk and final.
 func segmentComplete(session *HLSSession, filename string) bool {
 	dir := session.TempDir
 	prefix := helpers.HLS_SEGMENT_FILENAME_PREFIX
 	suffix := helpers.HLS_SEGMENT_FILENAME_SUFFIX
 
+	successor := ""
 	if filename == helpers.HLS_INIT_FILENAME {
-		firstSeg := fmt.Sprintf("%s%d%s", prefix, 0, suffix)
-		return fileReady(filepath.Join(dir, firstSeg))
+		successor = fmt.Sprintf("%s%d%s", prefix, 0, suffix)
+	} else {
+		rest := strings.TrimSuffix(strings.TrimPrefix(filename, prefix), suffix)
+		n, err := strconv.ParseInt(rest, 10, 64)
+		if err != nil || n < 0 {
+			return false
+		}
+		successor = fmt.Sprintf("%s%d%s", prefix, n+1, suffix)
 	}
 
-	rest := strings.TrimSuffix(strings.TrimPrefix(filename, prefix), suffix)
-	n, err := strconv.ParseInt(rest, 10, 64)
-	if err != nil || n < 0 {
-		return false
-	}
-
-	nextSeg := fmt.Sprintf("%s%d%s", prefix, n+1, suffix)
-	if fileReady(filepath.Join(dir, nextSeg)) {
+	if fileReady(filepath.Join(dir, successor)) {
 		return true
 	}
 

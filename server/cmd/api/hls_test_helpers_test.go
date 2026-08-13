@@ -266,11 +266,25 @@ func waitForHLSSessionCleanupResult[T any](t *testing.T, result <-chan T) T {
 }
 
 // insertTestHLSMovieFixture seeds a 7200s H.264 movie with one AAC audio track
-// at absolute stream index 1.
+// at absolute stream index 1. The file path is synthetic and does not exist.
 func insertTestHLSMovieFixture(t *testing.T, app *Application, videoCodec string, height int64) int64 {
 	t.Helper()
 
 	path := fmt.Sprintf("/tmp/%s-%s.mkv", sanitizeTestPathComponent(t.Name()), sanitizeTestPathComponent(videoCodec))
+	return insertTestHLSMovieFixtureAt(t, app, videoCodec, height, path, "mkv")
+}
+
+// insertTestHLSMovieFixtureAt is insertTestHLSMovieFixture with an explicit
+// file path and container, for tests that put a real media file on disk.
+func insertTestHLSMovieFixtureAt(
+	t *testing.T,
+	app *Application,
+	videoCodec string,
+	height int64,
+	path string,
+	container string,
+) int64 {
+	t.Helper()
 
 	result, err := app.DB.Exec(`
 		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult, duration)
@@ -280,8 +294,8 @@ func insertTestHLSMovieFixture(t *testing.T, app *Application, videoCodec string
 		path,
 		filepath.Base(path),
 		1_000_000,
-		"mkv",
-		"video/x-matroska",
+		container,
+		helpers.VideoMimeTypes[container],
 		0,
 		7200.0,
 	)
@@ -310,13 +324,16 @@ func insertTestHLSMovieFixture(t *testing.T, app *Application, videoCodec string
 		t.Fatalf("insert video stream: %v", err)
 	}
 
+	// codec_profile LC keeps the fixture on the audio-copy path: the copy gate
+	// requires a confirmed AAC-LC profile.
 	_, err = app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO audio_streams (movie_id, stream_index, codec, codec_profile, bit_rate, channels)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`,
 		movieID,
 		1,
 		"aac",
+		"LC",
 		192000,
 		2,
 	)

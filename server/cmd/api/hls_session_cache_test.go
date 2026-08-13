@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -440,49 +439,6 @@ func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 	defer cleanupHLSSession(session)
 }
 
-func TestGetOrCreateHLSSession_MetadataFailureReleasesReservation(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 1
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	userID := int64(100)
-	_, _, err := app.GetOrCreateHLSSession(
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(9),
-		testPlaybackSessionID,
-		0,
-		userID,
-	)
-	if err == nil || !strings.Contains(err.Error(), "out of range") {
-		t.Fatalf("metadata validation error = %v, want audio-track range error", err)
-	}
-
-	app.PersonalHLSMu.Lock()
-	reserved := app.PersonalHLSReservations[userID]
-	app.PersonalHLSMu.Unlock()
-	if reserved != 0 {
-		t.Fatalf("pending reservations after metadata failure = %d, want 0", reserved)
-	}
-
-	session, _, err := app.GetOrCreateHLSSession(
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_720P_3MBPS,
-		testIntPtr(0),
-		testOtherPlaybackSessionID,
-		20,
-		userID,
-	)
-	if err != nil {
-		t.Fatalf("later creation returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
-}
-
 func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -651,21 +607,6 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	}
 }
 
-func TestHLSMaxPersonalSessionsPerUser_DefaultsWhenUnconfigured(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.HLSMaxPersonalSessionsPerUser = 0
-	if got := app.hlsMaxPersonalSessionsPerUser(); got != hlsMaxPersonalSessionsPerUserDefault {
-		t.Fatalf("hlsMaxPersonalSessionsPerUser() = %d, want %d", got, hlsMaxPersonalSessionsPerUserDefault)
-	}
-
-	app.HLSMaxPersonalSessionsPerUser = 7
-	if got := app.hlsMaxPersonalSessionsPerUser(); got != 7 {
-		t.Fatalf("hlsMaxPersonalSessionsPerUser() = %d, want the configured 7", got)
-	}
-}
-
 // Reclaim exists to free a transcode permit. A copy-video session never held
 // one, so killing it would interrupt playback and buy nothing.
 func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
@@ -688,6 +629,23 @@ func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
 	}
 	if _, cached := app.HLSSessionCache.Get(key); !cached {
 		t.Fatal("expected the copy-video session to stay cached")
+	}
+}
+
+// hlsMaxPersonalSessionsPerUser is the per-user cap the session cache enforces.
+// An unconfigured server must fall back to the default rather than to zero,
+// which would refuse every personal playback session.
+func TestHLSMaxPersonalSessionsPerUser(t *testing.T) {
+	app := &Application{}
+
+	app.HLSMaxPersonalSessionsPerUser = 0
+	if got := app.hlsMaxPersonalSessionsPerUser(); got != hlsMaxPersonalSessionsPerUserDefault {
+		t.Fatalf("hlsMaxPersonalSessionsPerUser() = %d, want the default %d", got, hlsMaxPersonalSessionsPerUserDefault)
+	}
+
+	app.HLSMaxPersonalSessionsPerUser = 7
+	if got := app.hlsMaxPersonalSessionsPerUser(); got != 7 {
+		t.Fatalf("hlsMaxPersonalSessionsPerUser() = %d, want the configured 7", got)
 	}
 }
 

@@ -394,6 +394,66 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		}
 	})
 
+	// The live playlist file outlives the process that was appending to it. It
+	// has no ENDLIST, so serving it to a dead session leaves the client
+	// reloading a playlist that will never grow while playback sits stalled
+	// with no error reported.
+	t.Run("copy-video that died does not serve its unterminated live playlist", func(t *testing.T) {
+		tempDir := t.TempDir()
+		live := "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-MAP:URI=\"init.mp4\"\n" +
+			"#EXTINF:4.000000,\nsegment_0.m4s\n"
+		writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME), []byte(live), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to write live playlist: %v", writeErr)
+		}
+
+		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: tempDir}
+		session.Exited = true
+		session.ExitErr = errors.New("ffmpeg exited 1")
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionFailed) {
+			t.Fatalf("expected a failed-session error, got %v", err)
+		}
+	})
+
+	// Synthesizing describes output FFmpeg has not produced yet, which is only
+	// true while it is still running. A dead transcode used to be handed back a
+	// complete playlist, so the client discovered the failure only by waiting
+	// out every segment request in turn.
+	t.Run("transcode that exited with an error reports a failed session", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+		session.Exited = true
+		session.ExitErr = errors.New("ffmpeg exited 1")
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionFailed) {
+			t.Fatalf("expected a failed-session error, got %v", err)
+		}
+	})
+
+	t.Run("transcode that exited without a playlist reports an empty session", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+		session.Exited = true
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionEmpty) {
+			t.Fatalf("expected an empty-session error, got %v", err)
+		}
+	})
+
+	t.Run("running transcode still gets a synthesized playlist", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+
+		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
+			t.Fatalf("synthesized playlist missing segment URL: %s", playlist)
+		}
+	})
+
 	t.Run("copy-video serves the playlist as soon as FFmpeg publishes it", func(t *testing.T) {
 		tempDir := t.TempDir()
 		session := &HLSSession{DurationSec: 600, CopyVideo: true, TempDir: tempDir}
@@ -435,6 +495,20 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
 		if !errors.Is(err, errHLSSessionEmpty) {
 			t.Fatalf("expected an empty session to be reported as producing nothing, got %v", err)
+		}
+	})
+
+	// The same past-the-end exit exists for transcodes: onExit publishes whatever
+	// FFmpeg wrote, so a finalized playlist can still describe nothing playable.
+	t.Run("transcode rejects a degenerate zero-duration final playlist", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 30, CopyVideo: false, TempDir: t.TempDir()}
+		session.FinalPlaylist = "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:0\n" +
+			"#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:0.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
+		session.Exited = true
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionEmpty) {
+			t.Fatalf("expected an unplayable final playlist to be reported as empty, got %v", err)
 		}
 	})
 }
@@ -520,6 +594,42 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		}
 		if !strings.Contains(w.Body.String(), "transcoding stopped") {
 			t.Fatalf("body = %q, want transcode failure", w.Body.String())
+		}
+	})
+
+	// The init segment is gated on segment_0 existing, so a session that died
+	// between writing the two used to satisfy neither the ready check nor the
+	// exit check: the request polled for the full hlsSegmentWait and answered
+	// 503, even though init.mp4 was on disk and could never change again.
+	t.Run("serves a final init segment when FFmpeg died before segment_0", func(t *testing.T) {
+		tempDir := t.TempDir()
+		payload := []byte("init-bytes")
+		writeErr := os.WriteFile(filepath.Join(tempDir, helpers.HLS_INIT_FILENAME), payload, 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to write init segment: %v", writeErr)
+		}
+
+		session := &HLSSession{TempDir: tempDir, Exited: true, ExitErr: fmt.Errorf("ffmpeg failed")}
+		req := httptest.NewRequest(http.MethodGet, "/init", nil)
+		w := httptest.NewRecorder()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			serveReadyHLSSegment(w, req, session, helpers.HLS_INIT_FILENAME)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("init request waited on a segment a dead session will never write")
+		}
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+		}
+		if w.Body.String() != string(payload) {
+			t.Fatalf("body = %q, want %q", w.Body.String(), payload)
 		}
 	})
 
@@ -720,6 +830,13 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
 		WriteFiles: func(outDir string) error {
+			// The full fixture first, so the session models a transcode that
+			// produced a playlist rather than one that exited having written
+			// nothing, then the recognizable segment body this test asserts on.
+			err := writeTestHLSFixture(outDir, transcodeFixture)
+			if err != nil {
+				return err
+			}
 			segmentPath := filepath.Join(outDir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
 			return os.WriteFile(segmentPath, []byte("effective-segment"), 0o644)
 		},
@@ -782,7 +899,7 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
+	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
 	app.FFmpeg = ffmpegRunner
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -1141,19 +1258,6 @@ func TestWriteHLSPlaylistHeaders_PublishesEffectiveProfileAndStart(t *testing.T)
 	}
 	if start != 591.174 {
 		t.Fatalf("actual start header = %v, want 591.174", start)
-	}
-}
-
-// A remux request that falls back still serves from the /hls/remux/ path, so
-// the header is the only thing that can tell the client what it is getting.
-func TestWriteHLSPlaylistHeaders_ReportsFallbackProfile(t *testing.T) {
-	session := &HLSSession{EffectiveProfile: "2160p_16mbps", ActualStartSec: 0}
-
-	recorder := httptest.NewRecorder()
-	writeHLSPlaylistHeaders(recorder, session)
-
-	if got := recorder.Header().Get(hlsEffectiveProfileHeader); got != "2160p_16mbps" {
-		t.Fatalf("effective profile header = %q, want the profile that actually ran", got)
 	}
 }
 

@@ -82,7 +82,8 @@ func isValidPlaybackMode(mode string) bool {
 // directPlayAudioSelectionUnambiguous reports whether direct play can
 // guarantee which audio stream a browser decodes: refuse on ambiguity, not on
 // absence. Mirrors directPlayAudioSelectionEligible in web/src/lib/playback.ts
-// — keep the two in sync (docs/web-direct-playback-audit.md §6.2, D8).
+// — keep the two in sync. Background: "Direct Play Eligibility and Fallback"
+// in docs/ffmpeg.md.
 func directPlayAudioSelectionUnambiguous(audioStreams []database.AudioStream) bool {
 	if len(audioStreams) <= 1 {
 		return true
@@ -548,7 +549,6 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err = tx.Commit(); err != nil {
-		_ = tx.Rollback()
 		app.Logger.Error("failed to commit watch room transaction", "error", err)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return

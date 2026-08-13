@@ -70,7 +70,7 @@ func initializeCandidate(candidate binaryCandidate) (*ffmpeg, error) {
 	// wrong-arch, or non-executable ffmpeg would boot with empty capabilities and
 	// only fail at the first transcode. The server must not boot without a working
 	// ffmpeg.
-	_, err := runFFmpegProbe(candidate.path, "-version")
+	versionOutput, err := runFFmpegProbe(candidate.path, "-version")
 	if err != nil {
 		cleanupErr := mediabin.CleanupExtracted("ffmpeg", candidate.extractedDir)
 		if cleanupErr != nil {
@@ -86,7 +86,7 @@ func initializeCandidate(candidate binaryCandidate) (*ffmpeg, error) {
 
 	return &ffmpeg{
 		bin:          candidate.path,
-		capabilities: probeCapabilities(candidate.path),
+		capabilities: probeCapabilities(candidate.path, versionOutput),
 	}, nil
 }
 

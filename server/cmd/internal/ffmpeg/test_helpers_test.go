@@ -217,6 +217,7 @@ func hlsTestCapabilitiesForDevice(device string) Capabilities {
 		caps.Filters["hwupload"] = true
 		caps.Filters["scale_cuda"] = true
 		caps.FilterOptions["scale_cuda"] = map[string]bool{"format": true}
+		caps.EncoderOptions["h264_nvenc"] = map[string]bool{"forced-idr": true}
 	}
 
 	return caps

@@ -12,8 +12,18 @@ import (
 
 const ffmpegProbeTimeout = 5 * time.Second
 
+// ffmpegUnknownVersion stands in when the `-version` banner is missing or
+// unparseable. It is a stable value on purpose: an unreadable banner must not
+// churn the remux-safety fingerprints that embed it.
+const ffmpegUnknownVersion = "unknown"
+
 type Capabilities struct {
-	Probed                         bool
+	Probed bool
+	// Version is the token FFmpeg prints in its `-version` banner (for example
+	// "7.0.2-Jellyfin"), or "unknown" when the banner could not be read. It
+	// identifies the muxer that produced a remux-safety verdict, so a binary
+	// swap or upgrade invalidates verdicts it did not produce.
+	Version                        string
 	Encoders                       map[string]bool
 	Filters                        map[string]bool
 	HWAccels                       map[string]bool
@@ -190,9 +200,13 @@ func ResolveHLSDevice(configured string, caps Capabilities) HLSDeviceDecision {
 	return decision
 }
 
-func probeCapabilities(bin string) Capabilities {
+// probeCapabilities inspects one FFmpeg binary. versionOutput is the `-version`
+// banner the caller already ran to prove the binary executes, reused here so
+// startup does not invoke it twice.
+func probeCapabilities(bin string, versionOutput string) Capabilities {
 	caps := Capabilities{
 		Probed:         true,
+		Version:        parseFFmpegVersion(versionOutput),
 		Encoders:       map[string]bool{},
 		Filters:        map[string]bool{},
 		HWAccels:       map[string]bool{},
@@ -222,6 +236,9 @@ func probeCapabilities(bin string) Capabilities {
 	caps.recordFilterOptions(bin, "tonemap_cuda", []string{"format", "p", "t", "m", "tonemap", "desat"})
 	caps.recordFilterOptions(bin, "scale_qsv", []string{"format"})
 	caps.recordEncoderOptions(bin, "h264_qsv", []string{"look_ahead", "forced_idr", "preset"})
+	// NVENC spells the option with a hyphen while QSV uses an underscore. Both
+	// default to false, which turns a forced keyframe into a non-IDR I-frame.
+	caps.recordEncoderOptions(bin, "h264_nvenc", []string{"forced-idr"})
 
 	if caps.SupportsEncoder("h264_nvenc") {
 		caps.H264NVENCRuntimeUsable, caps.H264NVENCProbeError = probeH264NVENC(bin)
@@ -446,6 +463,24 @@ func runFFmpegProbeContext(ctx context.Context, bin string, args ...string) (str
 		return string(output), fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return string(output), nil
+}
+
+// parseFFmpegVersion pulls the version token out of the `-version` banner,
+// whose first line reads "ffmpeg version <token> Copyright ...". Anything that
+// does not match that shape yields ffmpegUnknownVersion rather than a partial
+// string, so the value stays stable across probes of the same binary.
+func parseFFmpegVersion(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if !strings.EqualFold(fields[0], "ffmpeg") || !strings.EqualFold(fields[1], "version") {
+			continue
+		}
+		return fields[2]
+	}
+	return ffmpegUnknownVersion
 }
 
 func parseFFmpegNamedRows(output string) map[string]bool {

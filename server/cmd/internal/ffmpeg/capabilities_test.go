@@ -48,6 +48,45 @@ func TestFFmpegHelpHasOption(t *testing.T) {
 	}
 }
 
+// The parsed version keys persisted remux-safety verdicts, so an unreadable
+// banner has to collapse to one stable value rather than a partial string that
+// would churn fingerprints and re-run preflight on every play.
+func TestParseFFmpegVersion(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{
+			name:   "jellyfin build",
+			output: "ffmpeg version 7.0.2-Jellyfin Copyright (c) 2000-2024 the FFmpeg developers\nbuilt with gcc 13\n",
+			want:   "7.0.2-Jellyfin",
+		},
+		{
+			name:   "distribution build",
+			output: "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers\n",
+			want:   "6.1.1-3ubuntu5",
+		},
+		{
+			name:   "banner after a leading notice",
+			output: "some wrapper notice\nffmpeg version n7.1 Copyright (c) 2000-2024\n",
+			want:   "n7.1",
+		},
+		{name: "empty output", output: "", want: ffmpegUnknownVersion},
+		{name: "unexpected shape", output: "ffmpeg 7.0.2\n", want: ffmpegUnknownVersion},
+		{name: "truncated banner", output: "ffmpeg version\n", want: ffmpegUnknownVersion},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseFFmpegVersion(tt.output)
+			if got != tt.want {
+				t.Fatalf("parseFFmpegVersion() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSupportsNvidiaCUDAFilters(t *testing.T) {
 	base := func() Capabilities {
 		return Capabilities{
