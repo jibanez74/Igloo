@@ -9,7 +9,7 @@ import (
 // including the rotation cost once the line cap is reached.
 func BenchmarkRotatingWriterWrite(b *testing.B) {
 	path := filepath.Join(b.TempDir(), "bench.log")
-	w, err := newRotatingWriter(path, loggerMaxLines)
+	w, err := newRotatingWriter(path, loggerMaxBytes)
 	if err != nil {
 		b.Fatal(err)
 	}
