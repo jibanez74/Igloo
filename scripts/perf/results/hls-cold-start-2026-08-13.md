@@ -8,12 +8,18 @@ milliseconds.
 
 ## What changed
 
-`fix/hls-cold-start`: `-hls_flags temp_file` on every session plus the
-`segmentReady` predicate (a segment is complete when its final name exists;
-init.mp4 once segment_0's temp or final name appears), replacing the
-successor-file heuristic that gated startup on ~two encoded segments. Also
-first-segment instrumentation (`ttfs_ms`, `spawn_ms`, limiter rejection
-logging). See docs/ffmpeg.md "Segment Serving and Readiness".
+`fix/hls-cold-start`: `-hls_flags temp_file` plus the `segmentReady` predicate
+(a segment is complete when its final name exists; init.mp4 once segment_0's
+temp or final name appears), replacing the successor-file heuristic that gated
+startup on ~two encoded segments. Also first-segment instrumentation
+(`ttfs_ms`, `spawn_ms`, limiter rejection logging). See docs/ffmpeg.md
+"Segment Serving and Readiness".
+
+`temp_file` is capability-probed (`ffmpeg -h muxer=hls`), so these numbers are
+the capable-binary path: this run used the embedded Jellyfin FFmpeg build,
+which supports the flag. A swapped `IGLOO_FFMPEG_PATH` binary without it keeps
+the legacy `segmentComplete` successor heuristic and would not show these
+gains.
 
 ## Single stream (720p_3mbps transcode of the HEVC source, 5 min)
 
