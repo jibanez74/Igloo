@@ -47,7 +47,7 @@ dev-profile: check-dev-tools generate prepare-webdist-placeholder
 build: check-build-tools check-media-payloads generate prepare-web
 	@echo "Building $(BINARY_NAME) for $(PLATFORM)..."
 	@mkdir -p $(DIST_DIR)
-	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(GO_TAGS)" -ldflags="$(LDFLAGS)" -o $(SERVER_BINARY) ./cmd/api
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -trimpath -tags "$(GO_TAGS)" -ldflags="$(LDFLAGS)" -o $(SERVER_BINARY) ./cmd/api
 	@echo "Built $(BINARY_PATH)."
 
 start:
