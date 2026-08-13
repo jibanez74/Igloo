@@ -61,7 +61,9 @@ func ExtractEmbeddedZstd(binaryName string, compressed []byte) (string, string, 
 // compressed payload's hash. A sidecar .sha256 marker records the hash of
 // the decompressed binary; reuse requires the on-disk file to match it, so a
 // corrupted or tampered cache entry is silently rewritten rather than
-// executed. Write-to-temp-then-rename keeps the final paths atomic.
+// executed. A truncated marker or an unreadable binary is likewise a miss —
+// neither may satisfy the digest check by comparing empty strings.
+// Write-to-temp-then-rename keeps the final paths atomic.
 //
 // A missing user cache directory is an error, never a fall back to
 // os.TempDir(): the cache holds executables at a path derived only from the
@@ -80,8 +82,17 @@ func extractToCache(binaryName string, compressed []byte) (string, error) {
 	markerPath := binPath + ".sha256"
 
 	marker, err := os.ReadFile(markerPath)
-	if err == nil && fileSHA256(binPath) == strings.TrimSpace(string(marker)) {
-		return binPath, nil
+	if err == nil {
+		want := strings.TrimSpace(string(marker))
+
+		// A truncated marker holds no digest to check the binary against, so
+		// treat it as a miss instead of comparing two empty strings.
+		if want != "" {
+			got, err := fileSHA256(binPath)
+			if err == nil && got == want {
+				return binPath, nil
+			}
+		}
 	}
 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -168,20 +179,22 @@ func writeFileAtomic(path string, content []byte) error {
 	return nil
 }
 
-// fileSHA256 returns the hex sha256 of the file, or "" when unreadable.
-func fileSHA256(path string) string {
+// fileSHA256 hashes the file at path. It reports the read error rather than an
+// empty digest: an empty string would compare equal to an empty .sha256 marker
+// and validate a binary that could not be read at all.
+func fileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	defer f.Close()
 
 	h := sha256.New()
 	_, err = io.Copy(h, f)
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // pruneStaleCacheEntries removes cached extractions of older releases of the

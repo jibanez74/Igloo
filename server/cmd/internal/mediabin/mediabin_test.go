@@ -109,6 +109,43 @@ func TestExtractEmbeddedZstdRewritesCorruptedCacheEntry(t *testing.T) {
 	}
 }
 
+// An empty marker holds no digest, and hashing a missing binary used to yield
+// an empty string too — so the cache check compared "" to "" and handed back a
+// path with no binary at it.
+func TestExtractEmbeddedZstdRewritesEntryWithEmptyMarker(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	payload := []byte("fake-binary-payload")
+	compressed := zstdCompress(t, payload)
+
+	binPath, _, err := ExtractEmbeddedZstd("fakebin", compressed)
+	if err != nil {
+		t.Fatalf("extract failed: %v", err)
+	}
+
+	err = os.WriteFile(binPath+".sha256", []byte("  \n"), 0o644)
+	if err != nil {
+		t.Fatalf("failed to truncate cache marker: %v", err)
+	}
+	err = os.Remove(binPath)
+	if err != nil {
+		t.Fatalf("failed to remove cached binary: %v", err)
+	}
+
+	binPath, _, err = ExtractEmbeddedZstd("fakebin", compressed)
+	if err != nil {
+		t.Fatalf("re-extract failed: %v", err)
+	}
+
+	restored, err := os.ReadFile(binPath)
+	if err != nil {
+		t.Fatalf("failed to read restored binary: %v", err)
+	}
+	if string(restored) != string(payload) {
+		t.Fatal("empty marker was accepted as a cache hit instead of re-extracting")
+	}
+}
+
 func TestExtractEmbeddedZstdPrunesOldVersions(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 

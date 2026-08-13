@@ -16,7 +16,10 @@ const (
 func benchVocabTerms(n int) []searchVocabTerm {
 	rng := rand.New(rand.NewSource(42))
 	terms := make([]searchVocabTerm, 0, n)
-	for i := 0; i < n; i++ {
+
+	// One slot is reserved for the planted hit appended below, so the caller
+	// gets exactly n terms.
+	for i := 0; i < n-1; i++ {
 		runes := make([]rune, 4+rng.Intn(9))
 		for j := range runes {
 			runes[j] = rune('a' + rng.Intn(26))
@@ -46,7 +49,7 @@ func benchVocabTerms(n int) []searchVocabTerm {
 }
 
 // Benchmarks the synchronous BK-tree rebuild that currently runs inside a
-// search request whenever a library write bumps the vocab generation.
+// search request whenever a searchable-field write bumps the vocab generation.
 func BenchmarkSearchVocabBuild(b *testing.B) {
 	terms := benchVocabTerms(10_000)
 	b.ResetTimer()
