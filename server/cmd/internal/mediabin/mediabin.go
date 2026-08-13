@@ -62,10 +62,16 @@ func ExtractEmbeddedZstd(binaryName string, compressed []byte) (string, string, 
 // the decompressed binary; reuse requires the on-disk file to match it, so a
 // corrupted or tampered cache entry is silently rewritten rather than
 // executed. Write-to-temp-then-rename keeps the final paths atomic.
+//
+// A missing user cache directory is an error, never a fall back to
+// os.TempDir(): the cache holds executables at a path derived only from the
+// payload hash, so on a shared temp dir a local attacker could pre-create the
+// binary and a matching marker and have it pass the digest check and run. The
+// caller falls back to a randomized temp dir instead.
 func extractToCache(binaryName string, compressed []byte) (string, error) {
 	cacheRoot, err := os.UserCacheDir()
 	if err != nil {
-		cacheRoot = os.TempDir()
+		return "", fmt.Errorf("no user cache directory available: %w", err)
 	}
 
 	key := sha256.Sum256(compressed)

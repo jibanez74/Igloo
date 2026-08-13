@@ -13,7 +13,6 @@ func BenchmarkRotatingWriterWrite(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer w.Close()
 
 	line := []byte(`{"time":"2026-08-12T00:00:00Z","level":"INFO","msg":"request completed","method":"GET","path":"/api/movies/latest","status":200,"duration_ms":12}` + "\n")
 
@@ -24,5 +23,13 @@ func BenchmarkRotatingWriterWrite(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+	// Close flushes the buffer and closes the file, so keep it out of the
+	// per-line measurement.
+	b.StopTimer()
+
+	err = w.Close()
+	if err != nil {
+		b.Fatal(err)
 	}
 }

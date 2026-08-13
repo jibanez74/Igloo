@@ -416,7 +416,12 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		addedCount++
 	}
 
-	_ = qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	if timestampErr != nil {
+		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to add tracks"))
+		return
+	}
 
 	err = tx.Commit()
 	if err != nil {
@@ -489,7 +494,12 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	timestampErr := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	if timestampErr != nil {
+		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"))
+		return
+	}
 
 	app.Logger.Info("track removed from playlist", "playlist_id", playlistId, "track_id", trackId)
 
@@ -569,7 +579,12 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	_ = qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	if timestampErr != nil {
+		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to reorder tracks"))
+		return
+	}
 
 	err = tx.Commit()
 	if err != nil {

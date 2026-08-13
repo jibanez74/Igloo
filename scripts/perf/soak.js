@@ -38,6 +38,12 @@ const execByScenario = {
 export const options = {
   // Keep session cookies across iterations; each VU logs in once.
   noCookiesReset: true,
+  // check() failures otherwise only move the checks metric, so a run full of
+  // failed requests still exits 0 and produces a clean-looking summary that
+  // baseline.sh happily records. Fail the run instead.
+  thresholds: {
+    checks: ["rate==1"],
+  },
   scenarios: {
     [SCENARIO]: {
       executor: "constant-vus",
@@ -114,14 +120,28 @@ function uuidv4() {
   });
 }
 
-const playbackSession = uuidv4();
+// Module init runs once per VU, so a module-scope UUID would give every VU a
+// different session that teardown() could not name. setup() mints one session
+// per VU instead and hands the list to both the VUs and teardown.
+export function setup() {
+  const sessions = [];
+  for (let i = 0; i < VUS; i++) {
+    sessions.push(uuidv4());
+  }
+  return { sessions };
+}
 
-export function streamHLS() {
+function sessionForVU(data) {
+  return data.sessions[(__VU - 1) % data.sessions.length];
+}
+
+export function streamHLS(data) {
   ensureLogin();
   if (!MOVIE_ID) {
     fail("MOVIE_ID is required for the stream-hls scenario");
   }
 
+  const playbackSession = sessionForVU(data);
   const started = Date.now();
   const manifest = get(
     `/api/movies/${MOVIE_ID}/hls/${PROFILE}/playlist.m3u8?playback_session=${playbackSession}&start=0&audio_track=0`,
@@ -167,17 +187,23 @@ export function streamDirect() {
   }
 }
 
-export function teardown() {
-  // Best effort: stop any personal HLS session this run started. teardown()
-  // runs in a fresh VU, so it needs its own login.
-  if (SCENARIO === "stream-hls" && MOVIE_ID) {
+export function teardown(data) {
+  // Stop every session the run started. An abandoned session holds a transcode
+  // slot until it self-evicts (~5 min), which would skew whatever is measured
+  // next. teardown() runs in a fresh VU, so it needs its own login.
+  if (SCENARIO !== "stream-hls" || !MOVIE_ID) {
+    return;
+  }
+
+  http.post(
+    `${BASE}/api/auth/login`,
+    JSON.stringify({ email: EMAIL, password: PASSWORD }),
+    { headers: { "Content-Type": "application/json" } },
+  );
+
+  for (const session of data.sessions) {
     http.post(
-      `${BASE}/api/auth/login`,
-      JSON.stringify({ email: EMAIL, password: PASSWORD }),
-      { headers: { "Content-Type": "application/json" } },
-    );
-    http.post(
-      `${BASE}/api/movies/${MOVIE_ID}/hls/session/stop?playback_session=${playbackSession}`,
+      `${BASE}/api/movies/${MOVIE_ID}/hls/session/stop?playback_session=${session}`,
     );
   }
 }

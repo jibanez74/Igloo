@@ -7,8 +7,9 @@ import (
 	"testing"
 )
 
-// Benchmarks the SPA hot path, which currently re-reads the embedded asset on
-// every request. Skips when webdist holds only the test placeholder.
+// Benchmarks the SPA hot path: an asset-map lookup plus http.ServeContent from
+// the pre-read, pre-fingerprinted bytes. Skips when webdist holds only the test
+// placeholder.
 func BenchmarkServeFrontend(b *testing.B) {
 	_, err := FrontendFS.Open("webdist/index.html")
 	if err != nil {

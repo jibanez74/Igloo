@@ -132,6 +132,54 @@ func TestExtractEmbeddedZstdPrunesOldVersions(t *testing.T) {
 	}
 }
 
+// Without a user cache directory the extraction must land in a randomized
+// temp dir, never in a predictable path under the shared os.TempDir(): the
+// cache path is derived only from the payload hash, so a shared-temp cache
+// could be pre-seeded by a local attacker with a matching .sha256 marker and
+// would then pass the digest check and be executed.
+func TestExtractEmbeddedZstdFallsBackToTempDirWithoutCacheDir(t *testing.T) {
+	tempRoot := t.TempDir()
+	t.Setenv("TMPDIR", tempRoot)
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("HOME", "")
+
+	_, err := os.UserCacheDir()
+	if err == nil {
+		t.Skip("this platform still resolves a user cache directory without HOME")
+	}
+
+	payload := []byte("fake-binary-payload")
+
+	binPath, cleanupDir, err := ExtractEmbeddedZstd("fakebin", zstdCompress(t, payload))
+	if err != nil {
+		t.Fatalf("extract failed: %v", err)
+	}
+	if cleanupDir == "" {
+		t.Fatal("temp-dir extraction must return a cleanup dir")
+	}
+	if filepath.Dir(binPath) != cleanupDir {
+		t.Fatalf("expected %q inside the cleanup dir %q", binPath, cleanupDir)
+	}
+
+	content, err := os.ReadFile(binPath)
+	if err != nil {
+		t.Fatalf("extracted binary missing: %v", err)
+	}
+	if string(content) != string(payload) {
+		t.Fatal("extracted binary does not match the decompressed payload")
+	}
+
+	_, err = os.Stat(filepath.Join(tempRoot, "igloo", "bin"))
+	if !os.IsNotExist(err) {
+		t.Fatalf("expected no shared-temp cache directory, stat err: %v", err)
+	}
+
+	err = CleanupExtracted("fakebin", cleanupDir)
+	if err != nil {
+		t.Fatalf("cleanup failed: %v", err)
+	}
+}
+
 func TestExtractEmbeddedZstdRejectsEmptyPayload(t *testing.T) {
 	_, _, err := ExtractEmbeddedZstd("fakebin", nil)
 	if err == nil {
