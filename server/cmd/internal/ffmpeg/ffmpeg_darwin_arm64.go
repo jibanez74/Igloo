@@ -4,5 +4,5 @@ package ffmpeg
 
 import _ "embed"
 
-//go:embed ffmpeg_darwin_arm64
-var embeddedBinary []byte
+//go:embed ffmpeg_darwin_arm64.zst
+var embeddedCompressed []byte

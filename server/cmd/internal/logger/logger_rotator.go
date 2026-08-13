@@ -3,192 +3,175 @@ package logger
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 	"sync"
+	"time"
 )
 
-// rotatingWriter keeps recent slog JSON entries in a bounded file.
+const loggerFlushInterval = time.Second
+
+// rotatingWriter keeps recent slog JSON entries in a bounded pair of files:
+// the live log plus one rotated predecessor (path + ".1").
+//
+// Writes are buffered and flushed by a background ticker, on severe records
+// (see flushOnSevereHandler), and on Close — not per line. Request logging
+// sits on the HTTP hot path, and a write syscall per log line dominated the
+// server's idle disk writes. The trade-off is that a hard crash can lose up
+// to a second of buffered INFO lines.
 type rotatingWriter struct {
+	mu       sync.Mutex
+	path     string
 	file     *os.File
 	buf      *bufio.Writer
-	mu       sync.Mutex
-	lines    int
-	maxLines int
+	size     int64
+	maxBytes int64
+	closed   bool
+	stop     chan struct{}
+	done     chan struct{}
 }
 
-func newRotatingWriter(path string, maxLines int) (*rotatingWriter, error) {
-	if maxLines <= 0 {
-		return nil, fmt.Errorf("max lines must be positive")
+func newRotatingWriter(path string, maxBytes int64) (*rotatingWriter, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("max bytes must be positive")
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, err
 	}
 
-	lines, err := countLines(f)
+	info, err := f.Stat()
 	if err != nil {
 		f.Close()
 		return nil, err
 	}
 
-	return &rotatingWriter{
+	w := &rotatingWriter{
+		path:     path,
 		file:     f,
 		buf:      bufio.NewWriter(f),
-		lines:    lines,
-		maxLines: maxLines,
-	}, nil
+		size:     info.Size(),
+		maxBytes: maxBytes,
+		stop:     make(chan struct{}),
+		done:     make(chan struct{}),
+	}
+
+	go w.flushLoop()
+
+	return w, nil
 }
 
-func countLines(f *os.File) (int, error) {
-	_, err := f.Seek(0, 0)
-	if err != nil {
-		return 0, err
-	}
+func (w *rotatingWriter) flushLoop() {
+	defer close(w.done)
 
-	count := 0
-	reader := bufio.NewReader(f)
+	ticker := time.NewTicker(loggerFlushInterval)
+	defer ticker.Stop()
 
 	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			count++
+		select {
+		case <-w.stop:
+			return
+		case <-ticker.C:
+			w.mu.Lock()
+			if !w.closed {
+				// A flush failure here has nowhere to be reported; the next
+				// Write surfaces the buffered writer's sticky error instead.
+				_ = w.buf.Flush()
+			}
+			w.mu.Unlock()
 		}
-
-		if err == nil {
-			continue
-		}
-
-		if err == io.EOF {
-			break
-		}
-
-		return 0, err
 	}
-
-	return count, nil
 }
 
 // Write implements io.Writer. Each slog entry is one JSON line.
-func (w *rotatingWriter) Write(p []byte) (n int, err error) {
+func (w *rotatingWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.lines >= w.maxLines {
+	if w.closed {
+		return 0, fmt.Errorf("log writer is closed")
+	}
+
+	// A single entry larger than the cap is still written whole; the next
+	// entry rotates it away.
+	if w.size > 0 && w.size+int64(len(p)) > w.maxBytes {
 		if err := w.rotate(); err != nil {
 			return 0, fmt.Errorf("failed to rotate log file: %w", err)
 		}
 	}
 
-	n, err = w.buf.Write(p)
+	n, err := w.buf.Write(p)
 	if err != nil {
 		return n, err
 	}
 
-	// Flush immediately to ensure logs survive crashes.
-	// Trade-off: slightly slower writes for guaranteed persistence.
-	err = w.buf.Flush()
-	if err != nil {
-		return n, err
-	}
-
-	w.lines++
+	w.size += int64(n)
 
 	return n, nil
 }
 
-// rotate discards the oldest half of the log file and keeps the newest half.
-// Keeping half avoids rotating on every write once the limit is reached.
+// rotate renames the live file to its ".1" sibling (replacing any previous
+// one) and starts a fresh live file, so rotation cost is O(1) instead of
+// rewriting retained lines.
 func (w *rotatingWriter) rotate() error {
 	err := w.buf.Flush()
 	if err != nil {
 		return err
 	}
 
-	_, err = w.file.Seek(0, 0)
+	err = w.file.Close()
 	if err != nil {
 		return err
 	}
 
-	lines, err := readLines(w.file, w.lines)
+	err = os.Rename(w.path, w.path+".1")
 	if err != nil {
 		return err
 	}
 
-	keepFrom := len(lines) / 2
-	lines = lines[keepFrom:]
-
-	err = w.file.Truncate(0)
+	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
 
-	_, err = w.file.Seek(0, 0)
-	if err != nil {
-		return err
-	}
-
-	for _, line := range lines {
-		_, err = w.buf.WriteString(line)
-		if err != nil {
-			return err
-		}
-
-		err = w.buf.WriteByte('\n')
-		if err != nil {
-			return err
-		}
-	}
-
-	err = w.buf.Flush()
-	if err != nil {
-		return err
-	}
-
-	w.lines = len(lines)
+	w.file = f
+	w.buf = bufio.NewWriter(f)
+	w.size = 0
 
 	return nil
 }
 
-func readLines(f *os.File, capacity int) ([]string, error) {
-	lines := make([]string, 0, capacity)
-	reader := bufio.NewReader(f)
+// Flush forces buffered entries to disk; severe records use it so warnings
+// and errors never sit in the buffer.
+func (w *rotatingWriter) Flush() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			line = strings.TrimSuffix(line, "\n")
-			line = strings.TrimSuffix(line, "\r")
-			lines = append(lines, line)
-		}
-
-		if err == nil {
-			continue
-		}
-
-		if err == io.EOF {
-			break
-		}
-
-		return nil, err
+	if w.closed {
+		return fmt.Errorf("log writer is closed")
 	}
 
-	return lines, nil
+	return w.buf.Flush()
 }
 
 func (w *rotatingWriter) Close() error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 
-	err := w.buf.Flush()
-	if err != nil {
-		// Still close the file even if flush fails
-		w.file.Close()
-
-		return err
+	if w.closed {
+		w.mu.Unlock()
+		return fmt.Errorf("log writer is already closed")
 	}
+	w.closed = true
 
-	return w.file.Close()
+	flushErr := w.buf.Flush()
+	closeErr := w.file.Close()
+	w.mu.Unlock()
+
+	close(w.stop)
+	<-w.done
+
+	if flushErr != nil {
+		return flushErr
+	}
+	return closeErr
 }

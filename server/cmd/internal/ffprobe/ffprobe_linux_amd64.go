@@ -4,5 +4,5 @@ package ffprobe
 
 import _ "embed"
 
-//go:embed ffprobe_linux_amd64
-var embeddedBinary []byte
+//go:embed ffprobe_linux_amd64.zst
+var embeddedCompressed []byte

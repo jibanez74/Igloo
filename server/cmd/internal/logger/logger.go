@@ -1,13 +1,14 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 )
 
-const loggerMaxLines = 500
+const loggerMaxBytes = 1 << 20
 
 type LoggerInterface interface {
 	Debug(msg string, args ...any)
@@ -74,7 +75,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 
 	path := filepath.Join(cfg.LogDir, logFile)
 
-	rw, err := newRotatingWriter(path, loggerMaxLines)
+	rw, err := newRotatingWriter(path, loggerMaxBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -85,5 +86,32 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 		Level: slog.LevelInfo,
 	})
 
-	return slog.New(handler), closer, nil
+	return slog.New(flushOnSevereHandler{Handler: handler, flush: rw.Flush}), closer, nil
+}
+
+// flushOnSevereHandler flushes the rotating writer after WARN and ERROR
+// records, so severe entries reach disk immediately while routine request
+// logging stays buffered.
+type flushOnSevereHandler struct {
+	slog.Handler
+	flush func() error
+}
+
+func (h flushOnSevereHandler) Handle(ctx context.Context, record slog.Record) error {
+	err := h.Handler.Handle(ctx, record)
+	if record.Level >= slog.LevelWarn {
+		flushErr := h.flush()
+		if err == nil {
+			err = flushErr
+		}
+	}
+	return err
+}
+
+func (h flushOnSevereHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return flushOnSevereHandler{Handler: h.Handler.WithAttrs(attrs), flush: h.flush}
+}
+
+func (h flushOnSevereHandler) WithGroup(name string) slog.Handler {
+	return flushOnSevereHandler{Handler: h.Handler.WithGroup(name), flush: h.flush}
 }

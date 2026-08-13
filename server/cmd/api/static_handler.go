@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -83,6 +88,84 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
+// frontendAsset is one embedded SPA file, read and fingerprinted once so the
+// request path serves from memory with ETag revalidation instead of
+// re-reading the embedded filesystem on every hit.
+type frontendAsset struct {
+	content     []byte
+	contentType string
+	etag        string
+}
+
+var (
+	frontendAssetsOnce sync.Once
+	frontendAssets     map[string]*frontendAsset
+)
+
+// loadFrontendAssets walks the embedded webdist once. webdist is ~3 MB, so
+// holding the decoded copies in memory is cheap next to re-reading and
+// re-allocating them per request.
+func loadFrontendAssets() map[string]*frontendAsset {
+	assets := make(map[string]*frontendAsset)
+
+	walkErr := fs.WalkDir(FrontendFS, "webdist", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+
+		content, err := fs.ReadFile(FrontendFS, path)
+		if err != nil {
+			return err
+		}
+
+		contentType := mime.TypeByExtension(filepath.Ext(path))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		sum := sha256.Sum256(content)
+		assets[path] = &frontendAsset{
+			content:     content,
+			contentType: contentType,
+			etag:        `"` + hex.EncodeToString(sum[:16]) + `"`,
+		}
+		return nil
+	})
+	if walkErr != nil {
+		// A missing or unreadable webdist degrades to the same "frontend not
+		// found" responses the per-request reads produced.
+		return assets
+	}
+
+	return assets
+}
+
+func frontendAssetFor(fsPath string) (*frontendAsset, bool) {
+	frontendAssetsOnce.Do(func() {
+		frontendAssets = loadFrontendAssets()
+	})
+
+	asset, ok := frontendAssets[fsPath]
+	return asset, ok
+}
+
+func serveFrontendAsset(w http.ResponseWriter, r *http.Request, asset *frontendAsset, isHTML bool) {
+	// Hashed assets are immutable; HTML must revalidate so deploys are
+	// picked up. Both get an ETag so revalidation can answer 304.
+	if isHTML {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=31536000")
+	}
+
+	w.Header().Set("Content-Type", asset.contentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("ETag", asset.etag)
+
+	// Embedded files carry no modtime; the ETag drives conditional requests.
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(asset.content))
+}
+
 // ServeFrontend serves the React SPA from embedded files, or redirects to the Vite dev
 // server when VITE_DEV_SERVER is set (e.g. VITE_DEV_SERVER=http://localhost:3000 for make dev).
 func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
@@ -115,102 +198,37 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	fsPath := filepath.Join("webdist", requestedPath)
 	fsPath = filepath.ToSlash(fsPath)
 
-	file, err := FrontendFS.Open(fsPath)
-	if err != nil {
-		if embeddedPathLooksLikeStaticAsset(requestedPath) {
-			app.Logger.Warn(
-				"embedded frontend asset missing; rebuild web, copy to cmd/api/webdist, then rebuild the binary",
-				"path", fsPath,
-			)
-			http.Error(
-				w,
-				"Not Found: embedded static asset missing. From the repo: run make build from server/ to embed the web app.",
-				http.StatusNotFound,
-			)
-			return
-		}
-
-		indexPath := "webdist/index.html"
-		content, err := fs.ReadFile(FrontendFS, indexPath)
-		if err != nil {
-			app.Logger.Error("failed to find index.html in embedded filesystem", "error", err)
-			http.Error(w, "Frontend not found. Please build the web application and rebuild the binary.", http.StatusNotFound)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.WriteHeader(http.StatusOK)
-		w.Write(content)
-		return
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		app.Logger.Error("failed to stat embedded file", "error", err, "path", fsPath)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if asset, ok := frontendAssetFor(fsPath); ok {
+		serveFrontendAsset(w, r, asset, strings.HasSuffix(fsPath, ".html"))
 		return
 	}
 
-	var content []byte
-	var fileInfo fs.FileInfo
-
-	if info.IsDir() {
-		indexPath := filepath.Join(fsPath, "index.html")
-		indexPath = filepath.ToSlash(indexPath)
-		indexContent, err := fs.ReadFile(FrontendFS, indexPath)
-		if err != nil {
-			rootIndexPath := "webdist/index.html"
-			indexContent, err = fs.ReadFile(FrontendFS, rootIndexPath)
-			if err != nil {
-				http.Error(w, "Not Found", http.StatusNotFound)
-				return
-			}
-			indexFile, _ := FrontendFS.Open(rootIndexPath)
-			if statInfo, err := indexFile.Stat(); err == nil {
-				fileInfo = statInfo
-			} else {
-				fileInfo = info
-			}
-			indexFile.Close()
-			content = indexContent
-		} else {
-			indexFile, _ := FrontendFS.Open(indexPath)
-			if statInfo, err := indexFile.Stat(); err == nil {
-				fileInfo = statInfo
-			} else {
-				fileInfo = info
-			}
-			indexFile.Close()
-			content = indexContent
-		}
-	} else {
-		content, err = fs.ReadFile(FrontendFS, fsPath)
-		if err != nil {
-			app.Logger.Error("failed to read embedded file", "error", err, "path", fsPath)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		fileInfo = info
+	// A directory request serves its own index.html when one exists.
+	if asset, ok := frontendAssetFor(fsPath + "/index.html"); ok {
+		serveFrontendAsset(w, r, asset, true)
+		return
 	}
 
-	ext := filepath.Ext(fileInfo.Name())
-	contentType := mime.TypeByExtension(ext)
-	if contentType == "" {
-		contentType = "application/octet-stream"
+	if embeddedPathLooksLikeStaticAsset(requestedPath) {
+		app.Logger.Warn(
+			"embedded frontend asset missing; rebuild web, copy to cmd/api/webdist, then rebuild the binary",
+			"path", fsPath,
+		)
+		http.Error(
+			w,
+			"Not Found: embedded static asset missing. From the repo: run make build from server/ to embed the web app.",
+			http.StatusNotFound,
+		)
+		return
 	}
 
-	// Static assets should be cached; HTML should not.
-	if ext == ".html" {
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	} else {
-		w.Header().Set("Cache-Control", "public, max-age=31536000")
+	// SPA fallback: any other path serves the root index.html.
+	asset, ok := frontendAssetFor("webdist/index.html")
+	if !ok {
+		app.Logger.Error("failed to find index.html in embedded filesystem")
+		http.Error(w, "Frontend not found. Please build the web application and rebuild the binary.", http.StatusNotFound)
+		return
 	}
 
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(content)
+	serveFrontendAsset(w, r, asset, true)
 }

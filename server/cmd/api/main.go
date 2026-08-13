@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -29,6 +30,14 @@ func main() {
 	app.Server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.Config.Port),
 		Handler: app.Router,
+		// No WriteTimeout: it would cut off long-running direct-play and HLS
+		// responses. No ReadTimeout either: it applies to the watch-room
+		// WebSocket, whose read deadline survives the hijack, so it would kill
+		// idle rooms. Request bodies are bounded per request instead, by
+		// helpers.ReadJSON. ReadHeaderTimeout bounds header parsing so idle or
+		// malicious connections cannot hold a goroutine open indefinitely.
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	deviceExpiryCtx, cancelDeviceExpiry := context.WithCancel(context.Background())
