@@ -25,7 +25,9 @@ mkdir -p "$OUT_DIR"
 stamp="$(date +%Y%m%d-%H%M%S)"
 
 sample() { # pid out.csv — starts sampler in background, echoes sampler pid
-  "$here/sample-rss.sh" "$1" "$2" 2 &
+  # The redirect matters: without it the backgrounded sampler holds the
+  # command-substitution pipe open and $(sample ...) blocks until it exits.
+  "$here/sample-rss.sh" "$1" "$2" 2 >/dev/null 2>&1 &
   echo $!
 }
 

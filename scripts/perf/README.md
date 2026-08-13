@@ -34,6 +34,10 @@ Notes:
 - CPU% from the CSV: `100 * Δcpu_ticks / (100 * Δepoch_s)` (CLK_TCK is 100).
 - `write_bytes` comes from `/proc/<pid>/io` and is cumulative; growth while
   idle is almost entirely log churn.
+- **Caveat:** `/proc/<pid>/io` includes reaped children. When the server
+  reaps a killed ffmpeg at HLS teardown, ffmpeg's lifetime IO lands in the
+  server's counters as one instantaneous jump — do not read teardown-moment
+  bursts as server writes.
 - Streaming scenarios need a `MOVIE_ID` that exists in the library; pick one
   from `/api/movies/library`. The HLS scenario starts a real transcode —
   expect CPU load, and give the session ~5 min to self-evict afterwards (the
