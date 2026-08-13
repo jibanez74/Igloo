@@ -15,6 +15,7 @@ LOG_FILE := $(DIST_DIR)/$(BINARY_NAME).log
 
 GO_TAGS := sqlite_fts5
 DEV_TAGS := externalbin sqlite_fts5
+PROFILE_TAGS := externalbin sqlite_fts5 pprofdebug
 TEST_TAGS := externalbin sqlite_fts5
 LDFLAGS := -s -w
 
@@ -27,7 +28,7 @@ FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev build start stop clean help check test test-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
+.PHONY: dev dev-profile build start stop clean help check test test-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder
@@ -35,6 +36,12 @@ dev: check-dev-tools generate prepare-webdist-placeholder
 	@echo "Start the web client separately with: cd $(WEB_DIR) && bun run dev"
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(DEV_TAGS)" -o $(DEV_BINARY) ./cmd/api
+	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
+
+dev-profile: check-dev-tools generate prepare-webdist-placeholder
+	@echo "Starting development server with pprof at /api/debug/pprof (admin only)..."
+	@mkdir -p $(DIST_DIR)
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(PROFILE_TAGS)" -o $(DEV_BINARY) ./cmd/api
 	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
 
 build: check-build-tools check-media-payloads generate prepare-web
@@ -105,6 +112,7 @@ clean: stop
 help:
 	@echo "Igloo Make targets:"
 	@echo "  make dev           Generate sqlc code and run the API for local development"
+	@echo "  make dev-profile   Run the dev API with pprof endpoints at /api/debug/pprof"
 	@echo "  make build         Build the native binary with embedded web assets and media tools"
 	@echo "  make start         Build and run the full application in the background"
 	@echo "  make stop          Stop the background application"

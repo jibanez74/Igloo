@@ -71,6 +71,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 		app.registerWatchRoomRoutes(r)
 		app.registerSettingsRoutes(r)
 		app.registerMusicRoutes(r)
+		app.registerPprof(r)
 	})
 }
 
