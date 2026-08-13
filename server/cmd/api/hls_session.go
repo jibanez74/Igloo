@@ -82,6 +82,11 @@ type HLSSession struct {
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
 	EffectiveProfile string
+	// TempFileSegments is true when FFmpeg runs with -hls_flags temp_file, so
+	// a segment's final name existing on disk means it is complete. False
+	// only for a swapped binary whose hls muxer lacks the flag; readiness
+	// then falls back to the successor-file heuristic.
+	TempFileSegments bool
 	// ActualStartSec is where the session's media really begins. Input seeking
 	// is frame-accurate when re-encoding but can only land on a source keyframe
 	// when copying video, so a copy-video session can start before StartSec.
@@ -845,6 +850,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		CopyVideo:           copyVideo,
 		IndependentSegments: ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
 		EffectiveProfile:    params.EffectiveProfile,
+		TempFileSegments:    ffmpeg.HLSUsesTempFile(hlsRunParams),
 		// Re-encoding seeks accurately, so a transcode starts exactly where it
 		// was asked to. Copy-video cannot and is measured below.
 		ActualStartSec: startSec,

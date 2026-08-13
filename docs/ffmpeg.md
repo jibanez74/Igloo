@@ -357,14 +357,13 @@ The Hable tone curve is a practical default that gives reasonable SDR output for
 
 ## Segment Serving and Readiness
 
-FFmpeg writes segments sequentially while the browser is already requesting them. Igloo deliberately does not serve a segment as soon as the file appears.
+FFmpeg writes segments sequentially while the browser is already requesting them. Igloo deliberately does not serve a segment before it is complete.
 
-A file is treated as complete when:
+Every session runs with `-hls_flags temp_file` (merged into the same single `-hls_flags` value as the conditional `independent_segments` — FFmpeg reads only one occurrence): the muxer writes each segment to `segment_N.m4s.tmp` and renames it on close, so a segment whose **final name** exists non-empty is complete (`segmentReady`, `server/cmd/api/hls_handler.go`). `.tmp` names are rejected by the segment-filename validator, so a partially-written file is unreachable.
 
-- the file FFmpeg writes after it exists, which means FFmpeg has moved on, or
-- FFmpeg has exited and the file itself exists, since nothing can be appended to a dead session's output.
+`init.mp4` is the exception: the hls muxer opens it under its final name directly, with no rename (verified by strace against the embedded build), so existence does not prove it was closed. It is ready once it is non-empty **and** FFmpeg has moved past it — evidenced by `segment_0.m4s` under either its temp or final name, which the muxer only opens after closing the init file — or once FFmpeg has exited, since nothing can be appended to a dead session's output. **The exit half is load-bearing**: without it a session that dies between writing `init.mp4` and opening `segment_0` waits out the full deadline for a file that is already on disk and final.
 
-`init.mp4` follows the same rule with `segment_0.m4s` as its successor, so it is normally ready only once the first media segment exists — this avoids handing hls.js an init segment before any media is available. **Both halves of the rule are load-bearing.** Apply the successor half alone and a session that dies between writing `init.mp4` and closing `segment_0` waits out the full deadline for a file that is already on disk and final.
+The `temp_file` behavior is capability-probed at startup (`ffmpeg -h muxer=hls`). A swapped `IGLOO_FFMPEG_PATH` binary whose hls muxer lacks the flag falls back to the legacy successor-file heuristic (`segmentComplete`): a file is complete when the file FFmpeg writes after it exists, or FFmpeg has exited and the file itself exists — at the cost of one extra encoded segment of startup latency.
 
 This design prevents browsers from reading partially written `.m4s` files, which cause decode errors, retry loops, or broken playback state. Segment requests wait up to `hlsSegmentWait` and poll every `hlsSegmentPoll`. If FFmpeg exits with an error before a requested segment exists, Igloo returns a transcode failure instead of hanging. A segment that is merely not encoded yet when the wait expires returns `503` with a `Retry-After`; the web client grants those a bounded number of fresh load attempts before reporting. Its fragment timeout must stay above `hlsSegmentWait` — set equal, the two race and neither outcome is recoverable.
 

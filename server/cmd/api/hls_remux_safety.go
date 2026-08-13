@@ -135,7 +135,7 @@ func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.D
 					i,
 					helpers.HLS_SEGMENT_FILENAME_SUFFIX,
 				)
-				if !segmentComplete(session, name) {
+				if !segmentReady(session, name) {
 					allReady = false
 					break
 				}
@@ -165,7 +165,7 @@ func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.D
 					i,
 					helpers.HLS_SEGMENT_FILENAME_SUFFIX,
 				)
-				if !segmentComplete(session, name) {
+				if !segmentReady(session, name) {
 					if exitErr != nil {
 						return fmt.Errorf("segment %q was not completed before ffmpeg exit: %w", name, exitErr)
 					}
