@@ -546,8 +546,20 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// One transaction for the whole reorder: previously each position update
+	// committed (and synced) individually, so a long playlist cost one fsync
+	// per track. Individual misses are still tolerated, as before.
+	tx, err := app.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		app.Logger.Error("failed to begin reorder transaction", "error", err, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to reorder tracks"))
+		return
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
 	for i, trackId := range req.TrackIds {
-		err := app.Queries.UpdateTrackPosition(r.Context(), database.UpdateTrackPositionParams{
+		err := qtx.UpdateTrackPosition(r.Context(), database.UpdateTrackPositionParams{
 			Position:   int64(i),
 			PlaylistID: playlistId,
 			TrackID:    trackId,
@@ -557,7 +569,14 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
+	_ = qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+
+	err = tx.Commit()
+	if err != nil {
+		app.Logger.Error("failed to commit reorder transaction", "error", err, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New("failed to reorder tracks"))
+		return
+	}
 
 	app.Logger.Info("playlist tracks reordered", "playlist_id", playlistId)
 
