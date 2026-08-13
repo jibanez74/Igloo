@@ -1,17 +1,39 @@
 package mediabin
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
-func TestExtractEmbeddedUsesCacheAcrossCalls(t *testing.T) {
+func zstdCompress(t *testing.T, payload []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w, err := zstd.NewWriter(&buf)
+	if err != nil {
+		t.Fatalf("failed to create zstd writer: %v", err)
+	}
+	_, err = w.Write(payload)
+	if err != nil {
+		t.Fatalf("failed to compress payload: %v", err)
+	}
+	err = w.Close()
+	if err != nil {
+		t.Fatalf("failed to close zstd writer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestExtractEmbeddedZstdUsesCacheAcrossCalls(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	payload := []byte("fake-binary-payload")
+	compressed := zstdCompress(t, payload)
 
-	firstPath, firstDir, err := ExtractEmbedded("fakebin", payload)
+	firstPath, firstDir, err := ExtractEmbeddedZstd("fakebin", compressed)
 	if err != nil {
 		t.Fatalf("first extract failed: %v", err)
 	}
@@ -19,9 +41,17 @@ func TestExtractEmbeddedUsesCacheAcrossCalls(t *testing.T) {
 		t.Fatalf("cached extraction should return an empty cleanup dir, got %q", firstDir)
 	}
 
-	info, err := os.Stat(firstPath)
+	content, err := os.ReadFile(firstPath)
 	if err != nil {
 		t.Fatalf("extracted binary missing: %v", err)
+	}
+	if string(content) != string(payload) {
+		t.Fatal("extracted binary does not match the decompressed payload")
+	}
+
+	info, err := os.Stat(firstPath)
+	if err != nil {
+		t.Fatalf("failed to stat extracted binary: %v", err)
 	}
 	if info.Mode().Perm() != 0o755 {
 		t.Fatalf("expected mode 0755, got %v", info.Mode().Perm())
@@ -29,7 +59,7 @@ func TestExtractEmbeddedUsesCacheAcrossCalls(t *testing.T) {
 
 	firstModTime := info.ModTime()
 
-	secondPath, secondDir, err := ExtractEmbedded("fakebin", payload)
+	secondPath, secondDir, err := ExtractEmbeddedZstd("fakebin", compressed)
 	if err != nil {
 		t.Fatalf("second extract failed: %v", err)
 	}
@@ -49,12 +79,13 @@ func TestExtractEmbeddedUsesCacheAcrossCalls(t *testing.T) {
 	}
 }
 
-func TestExtractEmbeddedRewritesCorruptedCacheEntry(t *testing.T) {
+func TestExtractEmbeddedZstdRewritesCorruptedCacheEntry(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	payload := []byte("fake-binary-payload")
+	compressed := zstdCompress(t, payload)
 
-	binPath, _, err := ExtractEmbedded("fakebin", payload)
+	binPath, _, err := ExtractEmbeddedZstd("fakebin", compressed)
 	if err != nil {
 		t.Fatalf("extract failed: %v", err)
 	}
@@ -64,7 +95,7 @@ func TestExtractEmbeddedRewritesCorruptedCacheEntry(t *testing.T) {
 		t.Fatalf("failed to corrupt cache entry: %v", err)
 	}
 
-	binPath, _, err = ExtractEmbedded("fakebin", payload)
+	binPath, _, err = ExtractEmbeddedZstd("fakebin", compressed)
 	if err != nil {
 		t.Fatalf("re-extract failed: %v", err)
 	}
@@ -78,15 +109,15 @@ func TestExtractEmbeddedRewritesCorruptedCacheEntry(t *testing.T) {
 	}
 }
 
-func TestExtractEmbeddedPrunesOldVersions(t *testing.T) {
+func TestExtractEmbeddedZstdPrunesOldVersions(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
-	oldPath, _, err := ExtractEmbedded("fakebin", []byte("version-one"))
+	oldPath, _, err := ExtractEmbeddedZstd("fakebin", zstdCompress(t, []byte("version-one")))
 	if err != nil {
 		t.Fatalf("extract of old version failed: %v", err)
 	}
 
-	newPath, _, err := ExtractEmbedded("fakebin", []byte("version-two"))
+	newPath, _, err := ExtractEmbeddedZstd("fakebin", zstdCompress(t, []byte("version-two")))
 	if err != nil {
 		t.Fatalf("extract of new version failed: %v", err)
 	}
@@ -101,9 +132,18 @@ func TestExtractEmbeddedPrunesOldVersions(t *testing.T) {
 	}
 }
 
-func TestExtractEmbeddedRejectsEmptyPayload(t *testing.T) {
-	_, _, err := ExtractEmbedded("fakebin", nil)
+func TestExtractEmbeddedZstdRejectsEmptyPayload(t *testing.T) {
+	_, _, err := ExtractEmbeddedZstd("fakebin", nil)
 	if err == nil {
 		t.Fatal("expected error for empty payload")
+	}
+}
+
+func TestExtractEmbeddedZstdRejectsGarbagePayload(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	_, _, err := ExtractEmbeddedZstd("fakebin", []byte("not-zstd-data"))
+	if err == nil {
+		t.Fatal("expected error for non-zstd payload")
 	}
 }

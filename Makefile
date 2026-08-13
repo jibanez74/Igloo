@@ -25,11 +25,13 @@ PLATFORM := $(GOOS_CURRENT)-$(GOARCH_CURRENT)
 PAYLOAD_SUFFIX := $(GOOS_CURRENT)_$(GOARCH_CURRENT)
 FFMPEG_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffmpeg/ffmpeg_$(PAYLOAD_SUFFIX)
 FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
+FFMPEG_PAYLOAD_ZST := $(FFMPEG_PAYLOAD).zst
+FFPROBE_PAYLOAD_ZST := $(FFPROBE_PAYLOAD).zst
 
 .DEFAULT_GOAL := dev
 
 .PHONY: dev dev-profile build start stop clean help check test test-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
-.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
+.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder
 	@echo "Starting development server..."
@@ -44,7 +46,7 @@ dev-profile: check-dev-tools generate prepare-webdist-placeholder
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(PROFILE_TAGS)" -o $(DEV_BINARY) ./cmd/api
 	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
 
-build: check-build-tools check-media-payloads generate prepare-web
+build: check-build-tools check-media-payloads compress-media-payloads generate prepare-web
 	@echo "Building $(BINARY_NAME) for $(PLATFORM)..."
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -trimpath -tags "$(GO_TAGS)" -ldflags="$(LDFLAGS)" -o $(SERVER_BINARY) ./cmd/api
@@ -193,6 +195,19 @@ check-platform:
 check-media-payloads: check-platform
 	@test -f "$(FFMPEG_PAYLOAD)" || (echo "Missing embedded ffmpeg payload: $(FFMPEG_PAYLOAD)"; exit 1)
 	@test -f "$(FFPROBE_PAYLOAD)" || (echo "Missing embedded ffprobe payload: $(FFPROBE_PAYLOAD)"; exit 1)
+	@command -v zstd >/dev/null || (echo "zstd is required to compress media payloads"; exit 1)
+
+# The release binary embeds the .zst payloads; regenerate them whenever the
+# raw payloads change.
+compress-media-payloads: $(FFMPEG_PAYLOAD_ZST) $(FFPROBE_PAYLOAD_ZST)
+
+$(FFMPEG_PAYLOAD_ZST): $(FFMPEG_PAYLOAD)
+	@echo "Compressing ffmpeg payload..."
+	@zstd -19 -T0 -f -q -o $@ $<
+
+$(FFPROBE_PAYLOAD_ZST): $(FFPROBE_PAYLOAD)
+	@echo "Compressing ffprobe payload..."
+	@zstd -19 -T0 -f -q -o $@ $<
 
 generate:
 	@cd $(SERVER_DIR)/sqlc && sqlc generate

@@ -12,6 +12,8 @@
 /server/cmd/internal/ffprobe/ffprobe_linux_amd64
 /server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64
 /server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
+/server/cmd/internal/ffprobe/*.zst
+/server/cmd/internal/ffmpeg/*.zst
 
 # Embedded frontend assets generated during build
 /server/cmd/api/webdist/

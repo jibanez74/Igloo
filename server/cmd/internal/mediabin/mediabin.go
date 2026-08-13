@@ -1,6 +1,7 @@
 package mediabin
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func ResolveExternal(binaryName, envVar string) (string, error) {
@@ -23,18 +26,18 @@ func ResolveExternal(binaryName, envVar string) (string, error) {
 	return path, nil
 }
 
-// ExtractEmbedded materializes an embedded binary on disk and returns its
-// path plus a cleanup directory for CleanupExtracted. It reuses a per-version
-// cache so the payload is written once per release instead of on every boot;
-// cached binaries return an empty cleanup directory so shutdown leaves them
-// in place. Falls back to a fresh temp-dir extraction when no cache
-// directory is available.
-func ExtractEmbedded(binaryName string, payload []byte) (string, string, error) {
-	if len(payload) == 0 {
+// ExtractEmbeddedZstd materializes a zstd-compressed embedded binary on disk
+// and returns its path plus a cleanup directory for CleanupExtracted. It
+// reuses a per-version cache so the payload is decompressed once per release
+// instead of on every boot; cached binaries return an empty cleanup directory
+// so shutdown leaves them in place. Falls back to a fresh temp-dir extraction
+// when no cache directory is available.
+func ExtractEmbeddedZstd(binaryName string, compressed []byte) (string, string, error) {
+	if len(compressed) == 0 {
 		return "", "", fmt.Errorf("%s binary is missing: embedded payload is empty (binary was not included at compile time)", binaryName)
 	}
 
-	binPath, err := extractToCache(binaryName, payload)
+	binPath, err := extractToCache(binaryName, compressed)
 	if err == nil {
 		return binPath, "", nil
 	}
@@ -45,7 +48,8 @@ func ExtractEmbedded(binaryName string, payload []byte) (string, string, error) 
 	}
 
 	binPath = filepath.Join(tempDir, binaryName)
-	if err := os.WriteFile(binPath, payload, 0755); err != nil {
+	err = decompressToFile(binPath, compressed, io.Discard)
+	if err != nil {
 		os.RemoveAll(tempDir)
 		return "", "", fmt.Errorf("failed to write %s binary: %w", binaryName, err)
 	}
@@ -53,22 +57,24 @@ func ExtractEmbedded(binaryName string, payload []byte) (string, string, error) 
 	return binPath, tempDir, nil
 }
 
-// extractToCache writes the payload to a hash-keyed cache path, reusing an
-// existing file when its content hash matches. The hash check means a
+// extractToCache decompresses the payload to a cache path keyed by the
+// compressed payload's hash. A sidecar .sha256 marker records the hash of
+// the decompressed binary; reuse requires the on-disk file to match it, so a
 // corrupted or tampered cache entry is silently rewritten rather than
-// executed, and the write-to-temp-then-rename keeps the final path atomic.
-func extractToCache(binaryName string, payload []byte) (string, error) {
+// executed. Write-to-temp-then-rename keeps the final paths atomic.
+func extractToCache(binaryName string, compressed []byte) (string, error) {
 	cacheRoot, err := os.UserCacheDir()
 	if err != nil {
 		cacheRoot = os.TempDir()
 	}
 
-	sum := sha256.Sum256(payload)
-	digest := hex.EncodeToString(sum[:])
-	dir := filepath.Join(cacheRoot, "igloo", "bin", binaryName+"-"+digest[:16])
+	key := sha256.Sum256(compressed)
+	dir := filepath.Join(cacheRoot, "igloo", "bin", binaryName+"-"+hex.EncodeToString(key[:])[:16])
 	binPath := filepath.Join(dir, binaryName)
+	markerPath := binPath + ".sha256"
 
-	if cachedFileMatches(binPath, sum) {
+	marker, err := os.ReadFile(markerPath)
+	if err == nil && fileSHA256(binPath) == strings.TrimSpace(string(marker)) {
 		return binPath, nil
 	}
 
@@ -81,15 +87,13 @@ func extractToCache(binaryName string, payload []byte) (string, error) {
 		return "", fmt.Errorf("failed to create cache temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
+	tmp.Close()
 
-	_, writeErr := tmp.Write(payload)
-	chmodErr := tmp.Chmod(0o755)
-	closeErr := tmp.Close()
-	for _, err := range []error{writeErr, chmodErr, closeErr} {
-		if err != nil {
-			os.Remove(tmpPath)
-			return "", fmt.Errorf("failed to write cached %s binary: %w", binaryName, err)
-		}
+	digest := sha256.New()
+	err = decompressToFile(tmpPath, compressed, digest)
+	if err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("failed to write cached %s binary: %w", binaryName, err)
 	}
 
 	if err := os.Rename(tmpPath, binPath); err != nil {
@@ -97,26 +101,81 @@ func extractToCache(binaryName string, payload []byte) (string, error) {
 		return "", fmt.Errorf("failed to move cached %s binary in place: %w", binaryName, err)
 	}
 
+	err = writeFileAtomic(markerPath, []byte(hex.EncodeToString(digest.Sum(nil))))
+	if err != nil {
+		return "", fmt.Errorf("failed to write cache marker for %s: %w", binaryName, err)
+	}
+
 	pruneStaleCacheEntries(filepath.Dir(dir), binaryName, filepath.Base(dir))
 
 	return binPath, nil
 }
 
-// cachedFileMatches streams the cached file through sha256 and compares it
-// to the embedded payload's hash.
-func cachedFileMatches(binPath string, sum [sha256.Size]byte) bool {
-	f, err := os.Open(binPath)
+// decompressToFile streams the zstd payload into path (mode 0755), teeing
+// the decompressed bytes into digest.
+func decompressToFile(path string, compressed []byte, digest io.Writer) error {
+	reader, err := zstd.NewReader(bytes.NewReader(compressed))
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to open zstd payload: %w", err)
+	}
+	defer reader.Close()
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+
+	_, copyErr := reader.WriteTo(io.MultiWriter(f, digest))
+	// O_CREATE's mode is ignored when the file pre-exists (the cache path
+	// hands us an os.CreateTemp file), so set it explicitly.
+	chmodErr := f.Chmod(0o755)
+	closeErr := f.Close()
+	for _, err := range []error{copyErr, chmodErr, closeErr} {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeFileAtomic(path string, content []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+
+	_, writeErr := tmp.Write(content)
+	closeErr := tmp.Close()
+	for _, err := range []error{writeErr, closeErr} {
+		if err != nil {
+			os.Remove(tmpPath)
+			return err
+		}
+	}
+
+	err = os.Rename(tmpPath, path)
+	if err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
+}
+
+// fileSHA256 returns the hex sha256 of the file, or "" when unreadable.
+func fileSHA256(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
 	}
 	defer f.Close()
 
 	h := sha256.New()
 	_, err = io.Copy(h, f)
 	if err != nil {
-		return false
+		return ""
 	}
-	return [sha256.Size]byte(h.Sum(nil)) == sum
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // pruneStaleCacheEntries removes cached extractions of older releases of the
