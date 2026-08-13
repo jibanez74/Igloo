@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1269,5 +1271,33 @@ func TestWriteHLSPlaylistHeaders_OmitsUnknownStart(t *testing.T) {
 
 	if got := recorder.Header().Get(hlsActualStartHeader); got != "" {
 		t.Fatalf("unknown start must not be published, got %q", got)
+	}
+}
+
+func TestLogFirstHLSSegmentServed(t *testing.T) {
+	var buf bytes.Buffer
+	session := &HLSSession{
+		TempDir:          "/transcode/igloo-hls-abc",
+		MovieID:          7,
+		Logger:           slog.New(slog.NewTextHandler(&buf, nil)),
+		StartedAt:        time.Now(),
+		EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS,
+	}
+
+	logFirstHLSSegmentServed(session, "init.mp4", time.Now())
+	logFirstHLSSegmentServed(session, "segment_0.m4s", time.Now())
+
+	if got := strings.Count(buf.String(), "hls first segment served"); got != 1 {
+		t.Fatalf("first-serve log emitted %d times, want exactly once:\n%s", got, buf.String())
+	}
+	if !strings.Contains(buf.String(), "filename=init.mp4") {
+		t.Fatalf("log should name the first served file:\n%s", buf.String())
+	}
+
+	// Bare sessions, as tests build them, must neither log nor panic.
+	logFirstHLSSegmentServed(&HLSSession{TempDir: "x"}, "init.mp4", time.Now())
+	logFirstHLSSegmentServed(&HLSSession{TempDir: "x", Logger: session.Logger}, "init.mp4", time.Now())
+	if strings.Count(buf.String(), "hls first segment served") != 1 {
+		t.Fatalf("bare sessions must not log:\n%s", buf.String())
 	}
 }

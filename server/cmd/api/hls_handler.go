@@ -329,6 +329,7 @@ func buildHLSPlaylistBody(
 
 func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSession, filename string) {
 	filePath := filepath.Join(session.TempDir, filename)
+	requestStart := time.Now()
 
 	ticker := time.NewTicker(hlsSegmentPoll)
 	defer ticker.Stop()
@@ -336,6 +337,7 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 	deadline := time.Now().Add(hlsSegmentWait)
 	for time.Now().Before(deadline) {
 		if segmentComplete(session, filename) {
+			logFirstHLSSegmentServed(session, filename, requestStart)
 			w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
 			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
@@ -366,6 +368,29 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 	// so the client is told to come back rather than left to guess.
 	w.Header().Set("Retry-After", strconv.Itoa(hlsPlaylistRetryAfterSec))
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
+}
+
+// logFirstHLSSegmentServed emits the session's one-time cold-start metric the
+// moment its first file goes out. ttfs_ms measures from session start,
+// request_wait_ms only this request's readiness poll, so a slow encoder and a
+// late-arriving client are distinguishable. Bare test sessions (nil logger or
+// zero StartedAt) are skipped.
+func logFirstHLSSegmentServed(session *HLSSession, filename string, requestStart time.Time) {
+	if session.Logger == nil || session.StartedAt.IsZero() {
+		return
+	}
+
+	session.FirstServeOnce.Do(func() {
+		session.Logger.Info("hls first segment served",
+			"session_dir", filepath.Base(session.TempDir),
+			"movie_id", session.MovieID,
+			"filename", filename,
+			"ttfs_ms", time.Since(session.StartedAt).Milliseconds(),
+			"request_wait_ms", time.Since(requestStart).Milliseconds(),
+			"copy_video", session.CopyVideo,
+			"effective_profile", session.EffectiveProfile,
+		)
+	})
 }
 
 func sessionPlaylistDurationSec(session *HLSSession) float64 {
