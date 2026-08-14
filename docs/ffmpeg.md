@@ -218,6 +218,8 @@ Admission when permits are exhausted runs in three steps. First, personal playba
 
 The wait is what guarantees progress. Reclaim only covers the abandoned-client case; when every permit belongs to a stream that is genuinely playing, nothing goes idle and an instant refusal starves the queued stream forever. Parking is a send on the permit channel rather than a poll, so the runtime hands a freed slot straight to the longest-waiting request with no idle-slot gap. A background room warm-up passes a zero budget and never parks.
 
+The client contract: the park is invisible on the wire — a queued manifest request simply takes longer to answer — so the player cannot distinguish it from a slow cold start on its own. `useHlsCapacityRetry` therefore keeps its "Waiting for server capacity…" notice up from the first capacity `503` until a manifest actually arrives (`onManifestLoaded`), rather than clearing it when it fires each retry. Anything that lengthens `hlsTranscodeAcquireWait` lengthens that silent stretch, and the client's total patience is `HLS_CAPACITY_RETRY_MAX_ATTEMPTS` × (wait + `Retry-After`) — currently 6 × ~20 s ≈ 2 minutes before the stream is reported dead.
+
 ## Audio Handling
 
 HLS sessions always map one video stream and map one audio stream when the movie has audio:
