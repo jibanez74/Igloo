@@ -11,6 +11,12 @@ type HlsCapacityRetryOptions = {
  * capacity), honoring the server's Retry-After delay. Attempts are budgeted
  * per stream window so a persistently saturated server surfaces a playback
  * error instead of retrying forever.
+ *
+ * `waitingForCapacity` stays true across the retry request, not just during
+ * the Retry-After delay: the server parks a queued manifest request for up to
+ * 15s before answering, and clearing the flag when the retry fires would hide
+ * the explanation behind a bare spinner for most of the wait. It is the
+ * consumer's job to call `notifyManifestLoaded` once a manifest arrives.
  */
 export function useHlsCapacityRetry({
   streamWindowKey,
@@ -56,10 +62,16 @@ export function useHlsCapacityRetry({
     setWaitingForCapacity(true);
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
-      setWaitingForCapacity(false);
       onRetry();
     }, retryAfterSec * 1000);
   };
 
-  return { waitingForCapacity, handleCapacityBusy };
+  // A manifest arrived, so the stream is no longer queued behind capacity.
+  // The attempt budget deliberately survives: it is scoped to the stream
+  // window, and a session that got in can still be refused on a later reload.
+  const notifyManifestLoaded = () => {
+    setWaitingForCapacity(false);
+  };
+
+  return { waitingForCapacity, handleCapacityBusy, notifyManifestLoaded };
 }
