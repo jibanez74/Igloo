@@ -17,7 +17,7 @@ Most of this register is now closed; the strikethrough headings below are kept a
 
 Only two of these can be picked up as-is: the keyframe-index pass (pure code, just deliberately deferred) and the capacity-wait tuning below (a judgement call). The rest are gated on something this machine does not have — a product decision, a discrete GPU, listening tests on real AC-3, or a browser pass on real media.
 
-**Capacity-wait tuning.** `hlsTranscodeAcquireWait` (15 s) and `HLS_CAPACITY_RETRY_MAX_ATTEMPTS` (6) multiply into ~2 minutes of client patience before a saturated server reports the stream dead, up from ~30 s before the limiter fix. That time is now spent genuinely queued behind an honest notice rather than idle, which is why it was left as is, but the pair has never been tuned against a real saturated server with real users. Neither number has a measurement behind it — only the reasoning in `scripts/perf/results/hls-limiter-wait-2026-08-13.md`.
+**Capacity-wait tuning.** `hlsTranscodeAcquireWait` (15 s) and `HLS_CAPACITY_RETRY_MAX_ATTEMPTS` (6) give approximately 7 × wait + 6 × `Retry-After` of client patience — currently 7 × 15 s + 6 × 5 s = 135 s — before a saturated server reports the stream dead, up from ~30 s before the limiter fix. That time is now spent genuinely queued behind an honest notice rather than idle, which is why it was left as is, but the pair has never been tuned against a real saturated server with real users. Neither number has a measurement behind it — only the reasoning in `scripts/perf/results/hls-limiter-wait-2026-08-13.md`.
 
 ## ~~R1 — NVENC never forced IDR frames~~ (CLOSED 2026-08-07)
 
