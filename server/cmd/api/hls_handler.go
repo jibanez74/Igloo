@@ -38,6 +38,9 @@ const (
 	hlsLivePlaylistWait       = 30 * time.Second
 	hlsPlaylistContentType    = "application/vnd.apple.mpegurl"
 	hlsSegmentHTTPContentType = "video/mp4"
+	// The extension FFmpeg's hls muxer appends while writing a file under
+	// -hls_flags temp_file, before the rename to the final name.
+	hlsTempFileSuffix         = ".tmp"
 	hlsEffectiveProfileHeader = "X-Igloo-Effective-Profile"
 	hlsActualStartHeader      = "X-Igloo-Actual-Start"
 )
@@ -92,6 +95,11 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
+		// Session creation can park waiting for a transcode permit, so a client
+		// that navigates away lands here. That is not a server failure.
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		app.Logger.Error("hls session failed", "error", err, "movie_id", params.MovieID)
 		writeHLSSessionError(w, err)
 		return
@@ -329,13 +337,15 @@ func buildHLSPlaylistBody(
 
 func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSession, filename string) {
 	filePath := filepath.Join(session.TempDir, filename)
+	requestStart := time.Now()
 
 	ticker := time.NewTicker(hlsSegmentPoll)
 	defer ticker.Stop()
 
 	deadline := time.Now().Add(hlsSegmentWait)
 	for time.Now().Before(deadline) {
-		if segmentComplete(session, filename) {
+		if segmentReady(session, filename) {
+			logFirstHLSSegmentServed(session, filename, requestStart)
 			w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
 			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
@@ -366,6 +376,29 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 	// so the client is told to come back rather than left to guess.
 	w.Header().Set("Retry-After", strconv.Itoa(hlsPlaylistRetryAfterSec))
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
+}
+
+// logFirstHLSSegmentServed emits the session's one-time cold-start metric the
+// moment its first file goes out. ttfs_ms measures from session start,
+// request_wait_ms only this request's readiness poll, so a slow encoder and a
+// late-arriving client are distinguishable. Bare test sessions (nil logger or
+// zero StartedAt) are skipped.
+func logFirstHLSSegmentServed(session *HLSSession, filename string, requestStart time.Time) {
+	if session.Logger == nil || session.StartedAt.IsZero() {
+		return
+	}
+
+	session.FirstServeOnce.Do(func() {
+		session.Logger.Info("hls first segment served",
+			"session_dir", filepath.Base(session.TempDir),
+			"movie_id", session.MovieID,
+			"filename", filename,
+			"ttfs_ms", time.Since(session.StartedAt).Milliseconds(),
+			"request_wait_ms", time.Since(requestStart).Milliseconds(),
+			"copy_video", session.CopyVideo,
+			"effective_profile", session.EffectiveProfile,
+		)
+	})
 }
 
 func sessionPlaylistDurationSec(session *HLSSession) float64 {
@@ -507,7 +540,61 @@ func fileReady(path string) bool {
 	return info.Size() > 0
 }
 
-// segmentComplete returns true when FFmpeg has finished writing the file.
+// segmentReady returns true when FFmpeg has finished writing the file, which
+// is what prevents serving partially-written files that would cause hls.js
+// decode errors and infinite retries.
+//
+// With -hls_flags temp_file (every session on the embedded FFmpeg), segments
+// are written to a .tmp name and renamed on close, so a segment's final name
+// existing non-empty means it is complete. init.mp4 is the one file the hls
+// muxer opens under its final name directly (verified by strace against the
+// embedded build), so it stays gated on evidence FFmpeg moved past it: the
+// muxer opens segment_0's .tmp only after closing the init file, making
+// either segment_0 name — temp or final — proof that init.mp4 is final.
+//
+// Sessions whose muxer lacks temp_file fall back to segmentComplete's
+// successor-file heuristic, which costs one extra encoded segment of latency.
+func segmentReady(session *HLSSession, filename string) bool {
+	if !session.TempFileSegments {
+		return segmentComplete(session, filename)
+	}
+
+	dir := session.TempDir
+
+	if filename == helpers.HLS_INIT_FILENAME {
+		if !fileReady(filepath.Join(dir, filename)) {
+			return false
+		}
+		segmentZero := filepath.Join(
+			dir,
+			helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+		)
+		if fileExists(segmentZero) || fileExists(segmentZero+hlsTempFileSuffix) {
+			return true
+		}
+		// A session that died right after writing init.mp4 never opens
+		// segment_0; its init file is final because nothing can be appended
+		// to a dead session's output.
+		session.ExitMu.Lock()
+		exited := session.Exited
+		session.ExitMu.Unlock()
+		return exited
+	}
+
+	return fileReady(filepath.Join(dir, filename))
+}
+
+// fileExists reports mere presence, any size: the segment_0 evidence in
+// segmentReady must count a .tmp file the muxer has opened but not yet
+// written to, which fileReady's size check would miss.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// segmentComplete returns true when FFmpeg has finished writing the file. It
+// is the readiness fallback for muxers without temp_file; segmentReady is
+// the production path.
 //
 // A file is complete when the file FFmpeg writes after it exists (meaning
 // FFmpeg has moved on) or when FFmpeg has exited, since nothing can be

@@ -80,9 +80,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     : "";
   // Reload changes only the source URL. Keeping it out of this key prevents a
   // player rebuild from replenishing either recovery budget.
-  const streamWindowKey = room
-    ? `${room.id}:${room.playback_mode}`
-    : "";
+  const streamWindowKey = room ? `${room.id}:${room.playback_mode}` : "";
   const posterUrl =
     room?.movie_poster != null
       ? buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE)
@@ -131,20 +129,23 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   // went straight to a dead "Stream error" (audit H9). Recovery rebuilds the
   // player; the WebSocket sync then pulls the playhead back to the host's
   // position, so participants are not thrown back to the start.
-  const { waitingForCapacity, handleCapacityBusy } = useHlsCapacityRetry({
-    streamWindowKey,
-    onRetry: () => setStreamReloadKey(prev => prev + 1),
-    onMaxAttempts: () =>
-      setPlaybackError(
-        "The server is running at its transcoding limit. Try again shortly.",
-      ),
-  });
+  const { waitingForCapacity, handleCapacityBusy, notifyManifestLoaded } =
+    useHlsCapacityRetry({
+      streamWindowKey,
+      onRetry: () => setStreamReloadKey((prev) => prev + 1),
+      onMaxAttempts: () =>
+        setPlaybackError(
+          "The server is running at its transcoding limit. Try again shortly.",
+        ),
+    });
 
   const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
     streamWindowKey,
-    onRecover: () => setStreamReloadKey(prev => prev + 1),
+    onRecover: () => setStreamReloadKey((prev) => prev + 1),
     onMaxAttempts: () =>
-      setPlaybackError("The playback session expired. Reload to keep watching."),
+      setPlaybackError(
+        "The playback session expired. Reload to keep watching.",
+      ),
   });
 
   // Rooms keep a long TTL but nothing refreshes it while every participant is
@@ -258,7 +259,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     );
   }
 
-  const connectedMembers = room.members.filter(member =>
+  const connectedMembers = room.members.filter((member) =>
     connectedUserIds.includes(member.id),
   );
 
@@ -280,7 +281,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       <LiveAnnouncer message={syncAnnouncement} />
       <LiveAnnouncer
         message={
-          recoveryAttempt > 0 ? "Playback interrupted, reloading the stream…" : ""
+          recoveryAttempt > 0
+            ? "Playback interrupted, reloading the stream…"
+            : ""
         }
         announcementKey={recoveryAttempt}
         politeness="assertive"
@@ -298,14 +301,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
           playerFullscreenMode && "max-w-none",
         )}
       >
-          <WatchRoomHeader
-            room={room}
-            connectedCount={connectedMembers.length}
-            connectionReady={connectionReady}
-            deleteButtonRef={deleteButtonRef}
-            onDelete={() => setDeleteDialogOpen(true)}
-            onLeave={() => navigate({ to: "/" })}
-          />
+        <WatchRoomHeader
+          room={room}
+          connectedCount={connectedMembers.length}
+          connectionReady={connectionReady}
+          deleteButtonRef={deleteButtonRef}
+          onDelete={() => setDeleteDialogOpen(true)}
+          onLeave={() => navigate({ to: "/" })}
+        />
 
         <div
           className={cn(
@@ -320,6 +323,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             waitingForCapacity={waitingForCapacity}
             onSessionLost={handleSessionLost}
             onCapacityBusy={handleCapacityBusy}
+            onManifestLoaded={notifyManifestLoaded}
             videoRef={videoRef}
             playing={playing}
             currentTime={currentTime}
@@ -383,7 +387,9 @@ function WatchRoomLoading() {
     <div className="flex min-h-screen items-center justify-center bg-card px-4">
       <div className="text-center">
         <Spinner className="mx-auto mb-4 size-10 text-primary" />
-        <p className="text-lg font-medium text-foreground">Loading watch room...</p>
+        <p className="text-lg font-medium text-foreground">
+          Loading watch room...
+        </p>
       </div>
     </div>
   );
@@ -402,7 +408,10 @@ export function WatchRoomUnavailable({
     <div className="flex min-h-screen items-center justify-center bg-card px-4">
       <div className="max-w-md text-center">
         <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
-          <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
+          <AlertCircle
+            className="size-10 text-destructive"
+            aria-hidden="true"
+          />
         </div>
         <h1 className="mb-2 text-xl font-semibold text-foreground">
           Watch room unavailable
@@ -520,6 +529,7 @@ type WatchRoomPlayerPanelProps = {
   waitingForCapacity: boolean;
   onSessionLost: (currentTime: number) => void;
   onCapacityBusy: (retryAfterSec: number) => void;
+  onManifestLoaded: () => void;
   onError: (error: string | null) => void;
   onPlayingChange: (playing: boolean) => void;
   onTimeUpdate: (time: number) => void;
@@ -547,6 +557,7 @@ function WatchRoomPlayerPanel({
   waitingForCapacity,
   onSessionLost,
   onCapacityBusy,
+  onManifestLoaded,
   onError,
   onPlayingChange,
   onTimeUpdate,
@@ -581,6 +592,7 @@ function WatchRoomPlayerPanel({
           subtitleTrack={subtitleTrack}
           onSessionLost={onSessionLost}
           onCapacityBusy={onCapacityBusy}
+          onManifestLoaded={onManifestLoaded}
         />
 
         {waitingForCapacity && (
@@ -719,7 +731,7 @@ function WatchRoomMembersPanel({
       )}
 
       <ul className="mt-4 space-y-3">
-        {members.map(member => {
+        {members.map((member) => {
           const isConnected = connectedUserIds.includes(member.id);
           return (
             <li

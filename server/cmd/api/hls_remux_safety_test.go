@@ -222,6 +222,21 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 		}
 	})
 
+	// The legacy heuristic needs the successor file (or an exit) to prove the
+	// last preflight segment complete; temp_file renames on close, so a still-
+	// running session clears preflight one segment sooner.
+	t.Run("a temp_file session needs no successor segment", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		writeSegments(t, dir, segmentCount-1)
+		session := &HLSSession{TempDir: dir, TempFileSegments: true}
+
+		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		if err != nil {
+			t.Fatalf("waitForRemuxPreflight returned error: %v", err)
+		}
+	})
+
 	t.Run("reports a missing init segment", func(t *testing.T) {
 		session := &HLSSession{TempDir: t.TempDir(), Exited: true}
 

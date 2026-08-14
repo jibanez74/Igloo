@@ -82,12 +82,24 @@ type HLSSession struct {
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
 	EffectiveProfile string
+	// TempFileSegments is true when FFmpeg runs with -hls_flags temp_file, so
+	// a segment's final name existing on disk means it is complete. False
+	// only for a swapped binary whose hls muxer lacks the flag; readiness
+	// then falls back to the successor-file heuristic.
+	TempFileSegments bool
 	// ActualStartSec is where the session's media really begins. Input seeking
 	// is frame-accurate when re-encoding but can only land on a source keyframe
 	// when copying video, so a copy-video session can start before StartSec.
 	// Negative means unknown; callers then fall back to StartSec. Guarded by
 	// ExitMu along with the exit fields above.
 	ActualStartSec float64
+	// StartedAt anchors the cold time-to-first-segment measurement at the top
+	// of startHLSSession, before any directory, limiter, or FFmpeg work. Set
+	// once at construction and read-only afterwards; zero in bare test
+	// sessions, which suppresses the first-serve metric.
+	StartedAt time.Time
+	// FirstServeOnce guards the one-time "hls first segment served" log.
+	FirstServeOnce sync.Once
 }
 
 // setActualStartSec records where the session's media really begins.
@@ -135,6 +147,13 @@ type hlsSessionStartParams struct {
 	StartSec         int
 	DurationSec      float64
 	IsRoom           bool
+
+	// AcquireWait is how long the start may park for a CPU transcode permit
+	// before giving up with a capacity error; zero means do not park. It rides
+	// on the params rather than the signature so the remux-safety fallback
+	// restarts, which copy this struct and switch to a transcoding profile,
+	// inherit the same budget.
+	AcquireWait time.Duration
 }
 
 // isHDRStream returns true when the stream's color_transfer indicates HDR content
@@ -742,7 +761,8 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 	}
 }
 
-func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
+func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionStartParams) (*HLSSession, error) {
+	startedAt := time.Now()
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
 	audioCodecProfile := ""
@@ -790,7 +810,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	// CPU transcode limiter instead of blocking real transcodes.
 	releaseTranscode := func() {}
 	if !copyVideo {
-		releaseTranscode, err = app.acquireHLSTranscodeSlot()
+		releaseTranscode, err = app.acquireHLSTranscodeSlot(ctx, params.AcquireWait)
 		if err != nil {
 			removeErr := os.RemoveAll(tempDir)
 			if removeErr != nil {
@@ -837,9 +857,11 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		CopyVideo:           copyVideo,
 		IndependentSegments: ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
 		EffectiveProfile:    params.EffectiveProfile,
+		TempFileSegments:    ffmpeg.HLSUsesTempFile(hlsRunParams),
 		// Re-encoding seeks accurately, so a transcode starts exactly where it
 		// was asked to. Copy-video cannot and is measured below.
 		ActualStartSec: startSec,
+		StartedAt:      startedAt,
 	}
 
 	// Resolving the real start is advisory, so it is skipped rather than
@@ -899,6 +921,8 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	}
 
 	app.Logger.Info("hls session starting",
+		"session_dir", filepath.Base(tempDir),
+		"playback_session", params.PlaybackSession,
 		"movie_id", params.Movie.ID,
 		"requested_profile", params.RequestedProfile,
 		"effective_profile", params.EffectiveProfile,
@@ -923,7 +947,6 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		"hw_fallback_reason", deviceDecision.Reason,
 	)
 
-	startTime := time.Now()
 	onExit := func(exitErr error, stderrTail []string) {
 		// Published for failed exits too, not just clean ones. Whatever FFmpeg
 		// wrote before it died is what exists on disk, and terminating that
@@ -944,13 +967,16 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		session.ExitErr = exitErr
 		session.ExitMu.Unlock()
 
-		elapsed := time.Since(startTime).Round(time.Second)
+		// Millisecond precision: whole seconds hide everything at the
+		// cold-start scale this log is used to measure.
+		elapsed := time.Since(startedAt).Round(time.Millisecond)
 
 		releaseTranscode()
 
 		if exitErr != nil {
 			if expectedStop {
 				app.Logger.Info("hls session stopped",
+					"session_dir", filepath.Base(tempDir),
 					"movie_id", params.Movie.ID,
 					"requested_profile", params.RequestedProfile,
 					"effective_profile", params.EffectiveProfile,
@@ -960,6 +986,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 			}
 
 			app.Logger.Error("hls session failed",
+				"session_dir", filepath.Base(tempDir),
 				"movie_id", params.Movie.ID,
 				"requested_profile", params.RequestedProfile,
 				"effective_profile", params.EffectiveProfile,
@@ -971,6 +998,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		}
 
 		app.Logger.Info("hls session finished",
+			"session_dir", filepath.Base(tempDir),
 			"movie_id", params.Movie.ID,
 			"requested_profile", params.RequestedProfile,
 			"effective_profile", params.EffectiveProfile,
@@ -984,6 +1012,16 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		cleanupHLSSession(session)
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
+
+	// spawn_ms isolates the server's own pre-encode overhead (directories,
+	// limiter, keyframe lookup, process launch) from encode time, so a slow
+	// ttfs_ms can be attributed to the right side.
+	app.Logger.Info("hls ffmpeg spawned",
+		"session_dir", filepath.Base(tempDir),
+		"movie_id", params.Movie.ID,
+		"copy_video", copyVideo,
+		"spawn_ms", time.Since(startedAt).Milliseconds(),
+	)
 
 	session.Cmd = cmd
 	return session, nil
@@ -1077,14 +1115,24 @@ func (app *Application) GetOrCreateHLSSession(
 			playbackSession,
 			effectiveStartSec,
 			false,
+			0,
 		)
 		if createErr != nil {
 			// On a full transcode pool, an abandoned client (closed browser that
 			// never sent a stop) may be holding a permit. Reclaim the owner's
-			// least-recently-used idle transcode session and retry once; if none
-			// qualifies, the 503 + Retry-After path stands.
+			// least-recently-used idle transcode session, then retry with a wait
+			// budget: reclaim covers the abandoned case instantly, and parking
+			// covers the case where every permit belongs to a stream that is
+			// genuinely playing, which reclaim can never resolve. Only a request
+			// that outlasts the budget falls through to 503 + Retry-After.
 			var capErr *hlsTranscodeCapacityError
-			if errors.As(createErr, &capErr) && app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
+			if errors.As(createErr, &capErr) {
+				if !app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
+					app.Logger.Info("hls limiter reclaim found no idle session",
+						"movie_id", movieID,
+						"owner_user_id", ownerUserID,
+					)
+				}
 				session, createErr = app.createHLSSession(
 					ctx,
 					&movie,
@@ -1094,6 +1142,7 @@ func (app *Application) GetOrCreateHLSSession(
 					playbackSession,
 					effectiveStartSec,
 					false,
+					hlsTranscodeAcquireWait,
 				)
 			}
 		}
@@ -1189,7 +1238,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		}
 
 		audioTrackCopy := audioTrack
-		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, preloadedAudio, "", 0, true)
+		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, preloadedAudio, "", 0, true, 0)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -1285,6 +1334,7 @@ func (app *Application) createHLSSession(
 	playbackSession string,
 	startSec int,
 	isRoom bool,
+	acquireWait time.Duration,
 ) (*HLSSession, error) {
 	movieID := movie.ID
 	durationSec := movie.Duration.Float64
@@ -1384,9 +1434,10 @@ func (app *Application) createHLSSession(
 		StartSec:         startSec,
 		DurationSec:      durationSec,
 		IsRoom:           isRoom,
+		AcquireWait:      acquireWait,
 	}
 
-	session, err := app.startHLSSession(&hlsParams)
+	session, err := app.startHLSSession(ctx, &hlsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1414,7 +1465,7 @@ func (app *Application) createHLSSession(
 		cleanupHLSSession(session)
 		fp := hlsParams
 		fp.EffectiveProfile = fallbackProfile
-		return app.startHLSSession(&fp)
+		return app.startHLSSession(ctx, &fp)
 	}
 
 	validationSummary, err := ffmpeg.ValidateRemuxSafety(
@@ -1436,7 +1487,7 @@ func (app *Application) createHLSSession(
 		cleanupHLSSession(session)
 		fp := hlsParams
 		fp.EffectiveProfile = fallbackProfile
-		return app.startHLSSession(&fp)
+		return app.startHLSSession(ctx, &fp)
 	}
 
 	app.setRemuxSafetyVerdict(movieID, primaryVideo.StreamIndex, fingerprint, true, "validated safe remux")

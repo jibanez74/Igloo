@@ -115,6 +115,18 @@ func HLSSegmentsAreIndependent(p HLSParams) bool {
 	return hlsEncoderForcesIDR(hlsVideoEncoder(deviceDecision.Effective), p.Capabilities)
 }
 
+// HLSUsesTempFile reports whether the hls muxer writes each segment to a
+// .tmp name and renames it on close (-hls_flags temp_file), which is what
+// lets the api package judge a segment complete by its final name's
+// existence alone. Exported for the same reason as HLSSegmentsAreIndependent:
+// the args builder and the serving side must agree from one predicate.
+// The embedded FFmpeg supports the flag; the capability gate only protects a
+// swapped IGLOO_FFMPEG_PATH binary, which falls back to the successor-file
+// readiness heuristic.
+func HLSUsesTempFile(p HLSParams) bool {
+	return p.Capabilities.SupportsMuxerFlag("hls", "temp_file")
+}
+
 func buildHLSArgs(p HLSParams) ([]string, error) {
 	if !helpers.IsAllowedHLSProfile(p.Profile) {
 		return nil, fmt.Errorf("invalid HLS profile: %s", p.Profile)
@@ -260,12 +272,26 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-hls_segment_options", "movflags=+frag_discont",
 		"-hls_playlist_type", "event",
 	)
-	// Only emits #EXT-X-INDEPENDENT-SEGMENTS in the playlist; segmentation is
-	// unaffected. The claim is only made where it is proven: transcodes pin an
-	// IDR to every segment boundary, while copy-video output is validated by
-	// sampling four fragments and so is never proven source-wide.
+	// FFmpeg reads a single -hls_flags value, so every flag must merge into
+	// one plus-joined occurrence — a second -hls_flags would silently replace
+	// the first.
+	hlsFlags := make([]string, 0, 2)
+	// independent_segments only emits #EXT-X-INDEPENDENT-SEGMENTS in the
+	// playlist; segmentation is unaffected. The claim is only made where it is
+	// proven: transcodes pin an IDR to every segment boundary, while
+	// copy-video output is validated by sampling four fragments and so is
+	// never proven source-wide.
 	if HLSSegmentsAreIndependent(p) {
-		args = append(args, "-hls_flags", "independent_segments")
+		hlsFlags = append(hlsFlags, "independent_segments")
+	}
+	// temp_file writes each segment to a .tmp name and renames it on close,
+	// so a segment's final name existing means it is complete — the serving
+	// side (segmentReady) relies on exactly that contract.
+	if HLSUsesTempFile(p) {
+		hlsFlags = append(hlsFlags, "temp_file")
+	}
+	if len(hlsFlags) > 0 {
+		args = append(args, "-hls_flags", strings.Join(hlsFlags, "+"))
 	}
 	args = append(args,
 		"-hls_list_size", "0",

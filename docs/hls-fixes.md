@@ -2,6 +2,23 @@
 
 This register carries forward the open items from the 2026-07-28 HLS playback audit (removed once its findings were either fixed or recorded here; recoverable from git history) after the 2026-08-06 reliability pass, which closed H6 (remux-safety verdicts now persist in the `remux_safety_verdicts` table), H13 (`#EXT-X-INDEPENDENT-SEGMENTS` handling; `#EXT-X-START` deliberately dropped — see R2 below for the 2026-08-07 correction to which playlists carry the tag), and H20 (failed temp-dir removals are logged). Items keep their audit IDs. "Verified" means the gap was confirmed in code or measured; "hypothesis" means it is plausible but has not been reproduced.
 
+## What is still open (as of 2026-08-13)
+
+Most of this register is now closed; the strikethrough headings below are kept as the record of why each thing is the way it is. Still outstanding:
+
+| Item | Kind | Blocked on |
+|---|---|---|
+| [H12](#h12--in-player-trackquality-switching-product-feature) — in-player track/quality switching | Product feature (largest) | A product decision; spans server, player, and watch-room pinning |
+| [Keyframe-index parser correctness](#keyframe-index-parser-correctness-verified-gaps-deferred-as-one-pass) | 3 verified correctness gaps | Nothing — needs a pass that adds a producer-revision term to the fingerprint first |
+| [H18](#h18--no-runtime-hardware-fallback-verified-gap-needs-a-gpu-host) — no runtime hardware fallback | Verified gap | Hardware; cannot be developed or tested without a discrete GPU |
+| [H16](#h16--dialnorm-ignored-on-downmix-hypothesis) — dialnorm on downmix | Hypothesis | Listening tests against real AC-3 material |
+| [H4](#client-side-stragglers) — subtitle rebase in a browser | Unverified fix | A manual pass on a rebased session with sidecar subtitles |
+| [Capacity-wait tuning](#transcode-limiter-starves-a-queued-stream-closed-2026-08-13) | Open question | Judgement, not code — see below |
+
+Only two of these can be picked up as-is: the keyframe-index pass (pure code, just deliberately deferred) and the capacity-wait tuning below (a judgement call). The rest are gated on something this machine does not have — a product decision, a discrete GPU, listening tests on real AC-3, or a browser pass on real media.
+
+**Capacity-wait tuning.** `hlsTranscodeAcquireWait` (15 s) and `HLS_CAPACITY_RETRY_MAX_ATTEMPTS` (6) give approximately 7 × wait + 6 × `Retry-After` of client patience — currently 7 × 15 s + 6 × 5 s = 135 s — before a saturated server reports the stream dead, up from ~30 s before the limiter fix. That time is now spent genuinely queued behind an honest notice rather than idle, which is why it was left as is, but the pair has never been tuned against a real saturated server with real users. Neither number has a measurement behind it — only the reasoning in `scripts/perf/results/hls-limiter-wait-2026-08-13.md`.
+
 ## ~~R1 — NVENC never forced IDR frames~~ (CLOSED 2026-08-07)
 
 `buildHLSArgs` applied `-force_key_frames:0 expr:...` to every encoder, but the NVIDIA branch was only `-rc vbr -preset p4`. `h264_nvenc` defaults `-forced-idr` to false, and with that default FFmpeg requests a plain intra frame at each forced boundary instead of an IDR, so later frames could still reference across it — breaking segment-level random access for every client, not just native HLS players. `appendHLSNvidiaEncoderArgs` now appends `-forced-idr 1`, capability-gated on a new `recordEncoderOptions(bin, "h264_nvenc", ...)` probe, mirroring what QSV already did. Pinned by argument-level tests only (no GPU on the dev machine — same caveat as H18).
@@ -58,6 +75,7 @@ Changing audio track, subtitles, or quality mid-playback tears down the player a
 
 - ~~**H10:**~~ (CLOSED 2026-08-07) `disposeHls` now nulls `hlsRef.current` only when it still points at the instance being disposed (`web/src/components/playback/VideoPlayer.tsx` — the register's `components/movies` path was stale). The race was defensive rather than reproducible with the current single call site, but the guard makes the invariant local. The same fix was applied to the reachable variant in `useYouTubePlayer.ts`, whose cleanup nulled `playerRef` unconditionally across `reloadKey` rebuilds.
 - **H4 browser confirmation:** the subtitle rebase fix (`helpers.ShiftWebVTT` serving cues shifted by `?start=`) has passing unit tests but has never been verified against a real browser on a rebased (resume/seek) session with sidecar subtitles.
+- **Capacity-notice browser confirmation:** the 2026-08-13 limiter change made `useHlsCapacityRetry` hold "Waiting for server capacity…" across the retry request. That is covered by unit tests only. Seeing it requires a genuinely saturated server (`HLS_MAX_CPU_TRANSCODES=1` plus two streams), and the watch-room variant of the notice lives behind the Playwright suites that need `E2E_BASE_URL` against a real instance — those skipped on the run that shipped it.
 
 ## Keyframe-index parser correctness (verified gaps, deferred as one pass)
 
@@ -69,8 +87,16 @@ Three ways to persist a *silently wrong* index that `Finalize` cannot detect, al
 
 They are one pass because fixing any of them requires first adding a producer-revision term to `keyframeIndexFingerprint` — which `remuxSafetyFingerprint` deliberately carries and this one deliberately does not (its comment states "file identity alone invalidates it"). Without that, every wrong row already written stays authoritative until the file itself changes.
 
-## First-frame latency measurement (instrumentation)
+## ~~First-frame latency measurement + temp_file~~ (CLOSED 2026-08-13)
 
-Transcode startup is gated on roughly two encoded segments (~8 s of media): `init.mp4` is served once `segment_0` exists and `segment_0` once `segment_1` exists (`segmentComplete`, `server/cmd/api/hls_handler.go`). Fine on hardware encoders; on CPU-only 4K HDR tone-mapping this is the slowest path in the system and has never been measured. Log time-from-session-start-to-first-served-segment before optimizing anything.
+Shipped on `fix/hls-cold-start` in the order this entry demanded: instrumentation first ("hls first segment served" logs `ttfs_ms`/`request_wait_ms` once per session, "hls ffmpeg spawned" logs `spawn_ms`, limiter rejections log occupancy, sessions carry `session_dir`), then `-hls_flags temp_file` — on capability-supporting builds, which the embedded FFmpeg is — with the `segmentReady` predicate replacing the successor-file gating. Measured: single-stream cold TTFS **5.9 s → 1.36 s** (−77%); three concurrent streams at 5 slots **6.9/28.6/50.6 s → 1.8/6.3/6.5 s**. Full record with the manual playback matrix in `scripts/perf/results/hls-cold-start-2026-08-13.md`.
 
-The obvious lever, deferred with this item rather than taken blind: `buildHLSArgs` does not pass `-hls_flags temp_file`. With it, FFmpeg writes `segment_N.m4s.tmp` and renames on close, so mere existence would mean "complete" — deleting the `segmentComplete` heuristic entirely (F1 above becomes impossible by construction) and removing one full segment of startup latency. It changes the on-disk contract for every session, so it wants the measurement above first and live verification after.
+Two deviations from this entry's sketch. The heuristic was not deleted: strace against the embedded build showed the fmp4 **init file is opened under its final name with no rename**, so init.mp4 stays gated on segment_0's temp-or-final name appearing (the muxer opens it only after closing init) with the F1 exit escape intact — F1-by-construction holds for segments, not init. And `temp_file` is capability-probed (`ffmpeg -h muxer=hls`, mirroring R1's forced-idr probe); a swapped `IGLOO_FFMPEG_PATH` binary without it falls back to the legacy `segmentComplete` successor heuristic.
+
+**Follow-up shipped separately — see the limiter starvation entry below.**
+
+## ~~Transcode limiter starves a queued stream~~ (CLOSED 2026-08-13)
+
+Surfaced by the `temp_file` work above: with the default 2-slot limiter, the third concurrent stream was 503-rejected indefinitely (60 rejections over 5 min, never started). At baseline, saturation made segment serving slow enough (p95 8–14.6 s) that sessions went >30 s idle and same-owner LRU reclaim admitted the queued stream; fast segment serving keeps sessions hot, so the instant-503 `tryAcquire` never freed up. Reclaim can only resolve the abandoned-client case, never the case where every permit belongs to a stream that is genuinely playing.
+
+Shipped on `fix/hls-limiter-blocking-acquire`: `hlsTranscodeLimiter.acquire(ctx, wait)` parks on the permit channel — fast-path `tryAcquire`, then same-owner idle reclaim at the `GetOrCreateHLSSession` level, then a retry that waits up to `hlsTranscodeAcquireWait` (15 s) with a `ctx.Done()` arm. The retry is now unconditional; previously it ran only when reclaim found a victim, which was the starvation path itself. Timeout keeps the existing 503 + `Retry-After` wire behavior, well inside hls.js's 120 s manifest budget, so the protocol is unchanged. One client change was needed: `useHlsCapacityRetry` cleared `waitingForCapacity` the moment it fired a retry, which was fine when the 503 came back instantly but hides the "Waiting for server capacity…" notice behind a bare spinner for the 15 s the retry now parks. The flag stays set across the retry and clears on `onManifestLoaded`, a new `VideoPlayer` callback fired from the same manifest-success path that already reports the effective profile. A cancelled request returns `context.Canceled` and the manifest handler drops it without logging a server failure. Also fixed the unsynchronized lazy install of `app.HLSTranscodeLimiter`, a data race between two concurrent session starts. Measured: a parked request is seated in the same millisecond the permit frees (`scripts/perf/results/hls-limiter-wait-2026-08-13.md`).

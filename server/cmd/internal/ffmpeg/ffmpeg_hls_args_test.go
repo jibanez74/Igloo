@@ -440,6 +440,11 @@ func TestBuildHLSArgs_UnknownAndBlankHardwareUseCPU(t *testing.T) {
 
 func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 	outDir := t.TempDir()
+	tempFileCaps := Capabilities{
+		Probed:     true,
+		MuxerFlags: map[string]map[string]bool{"hls": {"temp_file": true}},
+	}
+
 	args := hlsArgs(t, HLSParams{
 		SourcePath:       "/s",
 		OutDir:           outDir,
@@ -447,12 +452,19 @@ func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 		VideoStreamIndex: 0,
 		AudioStreamIndex: 1,
 		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		Capabilities:     tempFileCaps,
 	})
 
 	requireArgumentValue(t, args, "-f", "hls")
 	requireArgumentValue(t, args, "-hls_segment_type", "fmp4")
 	requireArgumentValue(t, args, "-hls_playlist_type", "event")
-	requireArgumentValue(t, args, "-hls_flags", "independent_segments")
+	// One merged -hls_flags occurrence: FFmpeg reads a single value, so a
+	// second flag appended as its own -hls_flags would silently replace the
+	// first.
+	requireArgumentValue(t, args, "-hls_flags", "independent_segments+temp_file")
+	if n := countArgument(args, "-hls_flags"); n != 1 {
+		t.Errorf("-hls_flags appears %d times, want exactly 1: %v", n, args)
+	}
 	requireArgumentValue(t, args, "-hls_list_size", "0")
 	requireArgumentValue(t, args, "-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC))
 	requireArgumentValue(t, args, "-hls_fmp4_init_filename", helpers.HLS_INIT_FILENAME)
@@ -462,6 +474,42 @@ func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 	if args[len(args)-1] != wantPlaylist {
 		t.Errorf("last arg = %q, want playlist path %q", args[len(args)-1], wantPlaylist)
 	}
+
+	t.Run("copy-video carries temp_file without the independence tag", func(t *testing.T) {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           outDir,
+			Profile:          helpers.HLS_PROFILE_REMUX,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: -1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			Capabilities:     tempFileCaps,
+		})
+		requireArgumentValue(t, args, "-hls_flags", "temp_file")
+	})
+
+	t.Run("a muxer without temp_file keeps the legacy flags", func(t *testing.T) {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           outDir,
+			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		})
+		requireArgumentValue(t, args, "-hls_flags", "independent_segments")
+	})
+}
+
+// countArgument counts how many times an option name appears in args.
+func countArgument(args []string, name string) int {
+	count := 0
+	for _, arg := range args {
+		if arg == name {
+			count++
+		}
+	}
+	return count
 }
 
 func TestBuildHLSArgs_PreservesPathsContainingSpaces(t *testing.T) {

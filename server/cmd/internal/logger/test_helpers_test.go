@@ -10,7 +10,7 @@ import (
 
 // newTestWriter creates a rotatingWriter over a temp file, seeding the file
 // first when seed is not empty.
-func newTestWriter(t *testing.T, maxLines int, seed string) (*rotatingWriter, string) {
+func newTestWriter(t *testing.T, maxBytes int64, seed string) (*rotatingWriter, string) {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "test.log")
@@ -22,7 +22,7 @@ func newTestWriter(t *testing.T, maxLines int, seed string) (*rotatingWriter, st
 		}
 	}
 
-	rw, err := newRotatingWriter(path, maxLines)
+	rw, err := newRotatingWriter(path, maxBytes)
 	if err != nil {
 		t.Fatalf("create rotating writer: %v", err)
 	}
@@ -32,29 +32,6 @@ func newTestWriter(t *testing.T, maxLines int, seed string) (*rotatingWriter, st
 	})
 
 	return rw, path
-}
-
-// openSeededFile writes content to a temp file and returns it open for reading.
-func openSeededFile(t *testing.T, content string) *os.File {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), "seeded.log")
-
-	err := os.WriteFile(path, []byte(content), 0o644)
-	if err != nil {
-		t.Fatalf("write seeded file: %v", err)
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("open seeded file: %v", err)
-	}
-
-	t.Cleanup(func() {
-		f.Close()
-	})
-
-	return f
 }
 
 // writeRegularFile creates a regular file and returns its path, for the cases

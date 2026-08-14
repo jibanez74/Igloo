@@ -44,6 +44,7 @@ type Application struct {
 	SearchVocab             searchVocabCache
 	HLSSessionCache         *cache.Cache
 	HLSSessionGroup         singleflight.Group
+	HLSTranscodeLimiterMu   sync.Mutex
 	HLSTranscodeLimiter     *hlsTranscodeLimiter
 	PersonalHLSMu           sync.Mutex
 	PersonalHLSReservations map[int64]int

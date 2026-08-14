@@ -36,7 +36,11 @@ func (app *Application) registerSessionRoutes(r chi.Router) {
 	app.registerAPIRoutes(r)
 
 	// Register SPA fallback after /api routes so API paths cannot be captured.
+	// HEAD needs its own registration: chi resolves methods separately, so a
+	// GET-only route answers HEAD with 405. ServeFrontend serves HEAD correctly
+	// through http.ServeContent.
 	r.Get("/*", app.ServeFrontend)
+	r.Head("/*", app.ServeFrontend)
 }
 
 func (app *Application) registerAPIRoutes(r chi.Router) {
@@ -71,6 +75,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 		app.registerWatchRoomRoutes(r)
 		app.registerSettingsRoutes(r)
 		app.registerMusicRoutes(r)
+		app.registerPprof(r)
 	})
 }
 
