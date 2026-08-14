@@ -2,6 +2,23 @@
 
 This register carries forward the open items from the 2026-07-28 HLS playback audit (removed once its findings were either fixed or recorded here; recoverable from git history) after the 2026-08-06 reliability pass, which closed H6 (remux-safety verdicts now persist in the `remux_safety_verdicts` table), H13 (`#EXT-X-INDEPENDENT-SEGMENTS` handling; `#EXT-X-START` deliberately dropped — see R2 below for the 2026-08-07 correction to which playlists carry the tag), and H20 (failed temp-dir removals are logged). Items keep their audit IDs. "Verified" means the gap was confirmed in code or measured; "hypothesis" means it is plausible but has not been reproduced.
 
+## What is still open (as of 2026-08-13)
+
+Most of this register is now closed; the strikethrough headings below are kept as the record of why each thing is the way it is. Still outstanding:
+
+| Item | Kind | Blocked on |
+|---|---|---|
+| [H12](#h12--in-player-trackquality-switching-product-feature) — in-player track/quality switching | Product feature (largest) | A product decision; spans server, player, and watch-room pinning |
+| [Keyframe-index parser correctness](#keyframe-index-parser-correctness-verified-gaps-deferred-as-one-pass) | 3 verified correctness gaps | Nothing — needs a pass that adds a producer-revision term to the fingerprint first |
+| [H18](#h18--no-runtime-hardware-fallback-verified-gap-needs-a-gpu-host) — no runtime hardware fallback | Verified gap | Hardware; cannot be developed or tested without a discrete GPU |
+| [H16](#h16--dialnorm-ignored-on-downmix-hypothesis) — dialnorm on downmix | Hypothesis | Listening tests against real AC-3 material |
+| [H4](#client-side-stragglers) — subtitle rebase in a browser | Unverified fix | A manual pass on a rebased session with sidecar subtitles |
+| [Capacity-wait tuning](#transcode-limiter-starves-a-queued-stream-closed-2026-08-13) | Open question | Judgement, not code — see below |
+
+Only two of these can be picked up as-is: the keyframe-index pass (pure code, just deliberately deferred) and the capacity-wait tuning below (a judgement call). The rest are gated on something this machine does not have — a product decision, a discrete GPU, listening tests on real AC-3, or a browser pass on real media.
+
+**Capacity-wait tuning.** `hlsTranscodeAcquireWait` (15 s) and `HLS_CAPACITY_RETRY_MAX_ATTEMPTS` (6) give approximately 7 × wait + 6 × `Retry-After` of client patience — currently 7 × 15 s + 6 × 5 s = 135 s — before a saturated server reports the stream dead, up from ~30 s before the limiter fix. That time is now spent genuinely queued behind an honest notice rather than idle, which is why it was left as is, but the pair has never been tuned against a real saturated server with real users. Neither number has a measurement behind it — only the reasoning in `scripts/perf/results/hls-limiter-wait-2026-08-13.md`.
+
 ## ~~R1 — NVENC never forced IDR frames~~ (CLOSED 2026-08-07)
 
 `buildHLSArgs` applied `-force_key_frames:0 expr:...` to every encoder, but the NVIDIA branch was only `-rc vbr -preset p4`. `h264_nvenc` defaults `-forced-idr` to false, and with that default FFmpeg requests a plain intra frame at each forced boundary instead of an IDR, so later frames could still reference across it — breaking segment-level random access for every client, not just native HLS players. `appendHLSNvidiaEncoderArgs` now appends `-forced-idr 1`, capability-gated on a new `recordEncoderOptions(bin, "h264_nvenc", ...)` probe, mirroring what QSV already did. Pinned by argument-level tests only (no GPU on the dev machine — same caveat as H18).
@@ -58,6 +75,7 @@ Changing audio track, subtitles, or quality mid-playback tears down the player a
 
 - ~~**H10:**~~ (CLOSED 2026-08-07) `disposeHls` now nulls `hlsRef.current` only when it still points at the instance being disposed (`web/src/components/playback/VideoPlayer.tsx` — the register's `components/movies` path was stale). The race was defensive rather than reproducible with the current single call site, but the guard makes the invariant local. The same fix was applied to the reachable variant in `useYouTubePlayer.ts`, whose cleanup nulled `playerRef` unconditionally across `reloadKey` rebuilds.
 - **H4 browser confirmation:** the subtitle rebase fix (`helpers.ShiftWebVTT` serving cues shifted by `?start=`) has passing unit tests but has never been verified against a real browser on a rebased (resume/seek) session with sidecar subtitles.
+- **Capacity-notice browser confirmation:** the 2026-08-13 limiter change made `useHlsCapacityRetry` hold "Waiting for server capacity…" across the retry request. That is covered by unit tests only. Seeing it requires a genuinely saturated server (`HLS_MAX_CPU_TRANSCODES=1` plus two streams), and the watch-room variant of the notice lives behind the Playwright suites that need `E2E_BASE_URL` against a real instance — those skipped on the run that shipped it.
 
 ## Keyframe-index parser correctness (verified gaps, deferred as one pass)
 
