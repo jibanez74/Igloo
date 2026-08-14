@@ -92,9 +92,8 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
       // render until every query resolves. The component's own queries join
       // these in-flight fetches; errors surface through them.
       void (async () => {
-        const authRes = await context.queryClient.ensureQueryData(
-          authUserQueryOpts(),
-        );
+        const authRes =
+          await context.queryClient.ensureQueryData(authUserQueryOpts());
         if (authRes.error) return;
         await Promise.all([
           context.queryClient.ensureQueryData(
@@ -111,13 +110,14 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
       return;
     }
 
-    const authRes = await context.queryClient.ensureQueryData(
-      authUserQueryOpts(),
-    );
+    const authRes =
+      await context.queryClient.ensureQueryData(authUserQueryOpts());
     if (authRes.error) return;
 
     const [, techRes, playbackRes] = await Promise.all([
-      context.queryClient.ensureQueryData(libraryMovieDetailsQueryOpts(movieId)),
+      context.queryClient.ensureQueryData(
+        libraryMovieDetailsQueryOpts(movieId),
+      ),
       context.queryClient.ensureQueryData(
         movieTechnicalDetailsQueryOpts(movieId),
       ),
@@ -142,7 +142,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     if (availableModes.length === 0) return;
 
     const userPrefs =
-      playbackRes.error === false ? playbackRes.data?.settings ?? null : null;
+      playbackRes.error === false ? (playbackRes.data?.settings ?? null) : null;
     const resolved = getDefaultPlaybackSettings(
       availableModes,
       userPrefs,
@@ -283,7 +283,7 @@ function PlayMoviePage() {
     search,
     streamReloadKey,
     playbackSessionId,
-    onSyncSearch: settings => {
+    onSyncSearch: (settings) => {
       navigate({
         search: (prev: PlaySearchParams) => ({
           ...prev,
@@ -407,11 +407,12 @@ function PlayMoviePage() {
     onMaxAttempts: setPlaybackError,
   });
 
-  const { waitingForCapacity, handleCapacityBusy } = useHlsCapacityRetry({
-    streamWindowKey: sessionWindowKey,
-    onRetry: () => setStreamReloadKey((prev) => prev + 1),
-    onMaxAttempts: setPlaybackError,
-  });
+  const { waitingForCapacity, handleCapacityBusy, notifyManifestLoaded } =
+    useHlsCapacityRetry({
+      streamWindowKey: sessionWindowKey,
+      onRetry: () => setStreamReloadKey((prev) => prev + 1),
+      onMaxAttempts: setPlaybackError,
+    });
 
   const { handleNativeError: handleDirectPlayFallbackError } =
     useDirectPlayFallback({
@@ -426,7 +427,10 @@ function PlayMoviePage() {
         const remuxLabel =
           STREAM_MODES.find((m) => m.id === "remux")?.label ?? "remux";
         const notice = `This file can't be played directly by your browser. Switched to ${remuxLabel}.`;
-        setFallbackAnnouncement((prev) => ({ key: prev.key + 1, text: notice }));
+        setFallbackAnnouncement((prev) => ({
+          key: prev.key + 1,
+          text: notice,
+        }));
         showInfo("Switched playback mode", notice);
         // Resume playing once the remux stream is ready; the auto-resume
         // effect is keyed on the stream window and re-fires after this
@@ -622,8 +626,7 @@ function PlayMoviePage() {
     }
   };
 
-  const keyboardShortcutsEnabled =
-    status.kind === "ready" && !resumeDialogOpen;
+  const keyboardShortcutsEnabled = status.kind === "ready" && !resumeDialogOpen;
 
   useVideoPlaybackKeyboard({
     containerRef,
@@ -660,7 +663,9 @@ function PlayMoviePage() {
     }
 
     queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
-    queryClient.removeQueries({ queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId] });
+    queryClient.removeQueries({
+      queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId],
+    });
     dismissResumeDecision();
   };
 
@@ -727,7 +732,8 @@ function PlayMoviePage() {
         handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
       onCapacityBusy={handleCapacityBusy}
-      onEffectiveProfile={profile =>
+      onManifestLoaded={notifyManifestLoaded}
+      onEffectiveProfile={(profile) =>
         setReportedProfile({ streamWindowKey: sessionWindowKey, profile })
       }
       onActualStart={handleActualHlsStart}
@@ -770,12 +776,8 @@ function PlayMoviePage() {
   return (
     <div
       ref={containerRef}
-      onMouseMove={
-        chromeFullscreenMode ? showControlsAndResetIdle : undefined
-      }
-      onTouchStart={
-        chromeFullscreenMode ? showControlsAndResetIdle : undefined
-      }
+      onMouseMove={chromeFullscreenMode ? showControlsAndResetIdle : undefined}
+      onTouchStart={chromeFullscreenMode ? showControlsAndResetIdle : undefined}
       className={cn(
         "flex min-h-0 flex-1 flex-col bg-background [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
         isImmersiveViewport &&
@@ -802,7 +804,9 @@ function PlayMoviePage() {
       />
       <LiveAnnouncer
         message={
-          recoveryAttempt > 0 ? "Playback interrupted, reloading the stream…" : ""
+          recoveryAttempt > 0
+            ? "Playback interrupted, reloading the stream…"
+            : ""
         }
         announcementKey={recoveryAttempt}
         politeness="assertive"
@@ -897,6 +901,6 @@ function PlayMoviePage() {
         onToggleFullscreen={() => void toggleFullscreen()}
         onSelectChapter={handleChapterSelect}
       />
-      </div>
+    </div>
   );
 }

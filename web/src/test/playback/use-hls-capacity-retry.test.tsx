@@ -48,6 +48,31 @@ describe("useHlsCapacityRetry", () => {
       await vi.advanceTimersByTimeAsync(1);
     });
     expect(onRetry).toHaveBeenCalledOnce();
+    // The retry request itself can park server-side for up to 15s waiting for
+    // a transcode permit, so the explanation must stay up across it.
+    expect(result.current.waitingForCapacity).toBe(true);
+  });
+
+  it("keeps the capacity notice up until a manifest arrives", async () => {
+    const { result } = renderRetry();
+
+    act(() => {
+      result.current.handleCapacityBusy(5);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(result.current.waitingForCapacity).toBe(true);
+
+    // A queued request parked for the server's full budget before being seated.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(result.current.waitingForCapacity).toBe(true);
+
+    act(() => {
+      result.current.notifyManifestLoaded();
+    });
     expect(result.current.waitingForCapacity).toBe(false);
   });
 

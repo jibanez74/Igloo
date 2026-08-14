@@ -46,6 +46,11 @@ type VideoPlayerProps = {
   onSessionLost?: (currentTime: number) => void;
   onCapacityBusy?: (retryAfterSec: number) => void;
   /**
+   * Reports that a manifest loaded, which is what tells a capacity-busy
+   * consumer its stream is no longer queued behind the transcode limiter.
+   */
+  onManifestLoaded?: () => void;
+  /**
    * Reports the profile the server actually ran, which differs from the
    * requested one whenever the remux safety gate forced a transcode.
    */
@@ -182,6 +187,7 @@ export default function VideoPlayer({
   onStartApplied,
   onSessionLost,
   onCapacityBusy,
+  onManifestLoaded,
   onEffectiveProfile,
   onActualStart,
 }: VideoPlayerProps) {
@@ -246,6 +252,9 @@ export default function VideoPlayer({
     (headers: ManifestHeaders | null) => {
       const metadata = parseManifestMetadata(headers, requestedStartSec);
 
+      if (onManifestLoaded) {
+        onManifestLoaded();
+      }
       if (metadata.effectiveProfile && onEffectiveProfile) {
         onEffectiveProfile(metadata.effectiveProfile);
       }
@@ -257,6 +266,7 @@ export default function VideoPlayer({
   const needsNativeManifestPreflight =
     isHlsSource &&
     (onCapacityBusy !== undefined ||
+      onManifestLoaded !== undefined ||
       onEffectiveProfile !== undefined ||
       onActualStart !== undefined ||
       onSessionLost !== undefined);
@@ -501,8 +511,7 @@ export default function VideoPlayer({
         if (cancelled) return;
 
         const handledCapacityFailure =
-          response.status === 503 &&
-          handleCapacityBusy(response.headers);
+          response.status === 503 && handleCapacityBusy(response.headers);
         if (handledCapacityFailure) return;
 
         // A 404 manifest is a dead session, the same signal the hls.js error
@@ -554,7 +563,9 @@ export default function VideoPlayer({
       applyStartTime(video);
     };
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata, { once: true });
+    video.addEventListener("loadedmetadata", handleLoadedMetadata, {
+      once: true,
+    });
     return () => {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };

@@ -147,6 +147,13 @@ type hlsSessionStartParams struct {
 	StartSec         int
 	DurationSec      float64
 	IsRoom           bool
+
+	// AcquireWait is how long the start may park for a CPU transcode permit
+	// before giving up with a capacity error; zero means do not park. It rides
+	// on the params rather than the signature so the remux-safety fallback
+	// restarts, which copy this struct and switch to a transcoding profile,
+	// inherit the same budget.
+	AcquireWait time.Duration
 }
 
 // isHDRStream returns true when the stream's color_transfer indicates HDR content
@@ -754,7 +761,7 @@ func (app *Application) checkHLSTranscodeSpace(transcodeRoot string) error {
 	}
 }
 
-func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
+func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionStartParams) (*HLSSession, error) {
 	startedAt := time.Now()
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := ""
@@ -803,7 +810,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	// CPU transcode limiter instead of blocking real transcodes.
 	releaseTranscode := func() {}
 	if !copyVideo {
-		releaseTranscode, err = app.acquireHLSTranscodeSlot()
+		releaseTranscode, err = app.acquireHLSTranscodeSlot(ctx, params.AcquireWait)
 		if err != nil {
 			removeErr := os.RemoveAll(tempDir)
 			if removeErr != nil {
@@ -1108,31 +1115,35 @@ func (app *Application) GetOrCreateHLSSession(
 			playbackSession,
 			effectiveStartSec,
 			false,
+			0,
 		)
 		if createErr != nil {
 			// On a full transcode pool, an abandoned client (closed browser that
 			// never sent a stop) may be holding a permit. Reclaim the owner's
-			// least-recently-used idle transcode session and retry once; if none
-			// qualifies, the 503 + Retry-After path stands.
+			// least-recently-used idle transcode session, then retry with a wait
+			// budget: reclaim covers the abandoned case instantly, and parking
+			// covers the case where every permit belongs to a stream that is
+			// genuinely playing, which reclaim can never resolve. Only a request
+			// that outlasts the budget falls through to 503 + Retry-After.
 			var capErr *hlsTranscodeCapacityError
 			if errors.As(createErr, &capErr) {
-				if app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
-					session, createErr = app.createHLSSession(
-						ctx,
-						&movie,
-						profile,
-						audioTrack,
-						nil,
-						playbackSession,
-						effectiveStartSec,
-						false,
-					)
-				} else {
+				if !app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
 					app.Logger.Info("hls limiter reclaim found no idle session",
 						"movie_id", movieID,
 						"owner_user_id", ownerUserID,
 					)
 				}
+				session, createErr = app.createHLSSession(
+					ctx,
+					&movie,
+					profile,
+					audioTrack,
+					nil,
+					playbackSession,
+					effectiveStartSec,
+					false,
+					hlsTranscodeAcquireWait,
+				)
 			}
 		}
 		if createErr != nil {
@@ -1227,7 +1238,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		}
 
 		audioTrackCopy := audioTrack
-		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, preloadedAudio, "", 0, true)
+		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, preloadedAudio, "", 0, true, 0)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -1323,6 +1334,7 @@ func (app *Application) createHLSSession(
 	playbackSession string,
 	startSec int,
 	isRoom bool,
+	acquireWait time.Duration,
 ) (*HLSSession, error) {
 	movieID := movie.ID
 	durationSec := movie.Duration.Float64
@@ -1422,9 +1434,10 @@ func (app *Application) createHLSSession(
 		StartSec:         startSec,
 		DurationSec:      durationSec,
 		IsRoom:           isRoom,
+		AcquireWait:      acquireWait,
 	}
 
-	session, err := app.startHLSSession(&hlsParams)
+	session, err := app.startHLSSession(ctx, &hlsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1452,7 +1465,7 @@ func (app *Application) createHLSSession(
 		cleanupHLSSession(session)
 		fp := hlsParams
 		fp.EffectiveProfile = fallbackProfile
-		return app.startHLSSession(&fp)
+		return app.startHLSSession(ctx, &fp)
 	}
 
 	validationSummary, err := ffmpeg.ValidateRemuxSafety(
@@ -1474,7 +1487,7 @@ func (app *Application) createHLSSession(
 		cleanupHLSSession(session)
 		fp := hlsParams
 		fp.EffectiveProfile = fallbackProfile
-		return app.startHLSSession(&fp)
+		return app.startHLSSession(ctx, &fp)
 	}
 
 	app.setRemuxSafetyVerdict(movieID, primaryVideo.StreamIndex, fingerprint, true, "validated safe remux")

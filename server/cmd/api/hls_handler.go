@@ -95,6 +95,11 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
+		// Session creation can park waiting for a transcode permit, so a client
+		// that navigates away lands here. That is not a server failure.
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		app.Logger.Error("hls session failed", "error", err, "movie_id", params.MovieID)
 		writeHLSSessionError(w, err)
 		return
