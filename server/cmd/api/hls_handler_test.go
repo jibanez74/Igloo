@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -32,6 +34,10 @@ func TestIsAllowedHLSFilename(t *testing.T) {
 		{"other.mp4", false},
 		{"../escape.m4s", false},
 		{"bad_name.m4s", false},
+		// temp_file writes segments under .tmp names before the rename; a
+		// request must never be able to read one mid-write.
+		{"segment_0.m4s.tmp", false},
+		{"init.mp4.tmp", false},
 		// Larger than int64 max: index must stay representable as int64.
 		{"segment_18446744073709551615.m4s", false},
 	}
@@ -516,17 +522,14 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 func TestServeReadyHLSSegment(t *testing.T) {
 	tempDir := t.TempDir()
 	filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
-	nextFilename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "1" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
 	payload := []byte("segment payload")
 	err := os.WriteFile(filepath.Join(tempDir, filename), payload, 0o600)
 	if err != nil {
 		t.Fatalf("write segment: %v", err)
 	}
-	err = os.WriteFile(filepath.Join(tempDir, nextFilename), []byte("next segment"), 0o600)
-	if err != nil {
-		t.Fatalf("write next segment: %v", err)
-	}
-	session := &HLSSession{TempDir: tempDir}
+	// A temp_file session judges a segment by its own final name, so no
+	// successor file is needed for it to serve.
+	session := &HLSSession{TempDir: tempDir, TempFileSegments: true}
 
 	t.Run("serves completed segment with shared headers", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
@@ -689,6 +692,156 @@ func TestFileReady(t *testing.T) {
 		}
 		if !fileReady(path) {
 			t.Error("expected true for file with content")
+		}
+	})
+}
+
+func TestSegmentReadyTempFile(t *testing.T) {
+	prefix := helpers.HLS_SEGMENT_FILENAME_PREFIX
+	suffix := helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	segName := func(n int) string {
+		return fmt.Sprintf("%s%d%s", prefix, n, suffix)
+	}
+	newSession := func(dir string) *HLSSession {
+		return &HLSSession{TempDir: dir, TempFileSegments: true}
+	}
+
+	t.Run("a segment is ready by its own final name", func(t *testing.T) {
+		dir := t.TempDir()
+		session := newSession(dir)
+
+		if segmentReady(session, segName(0)) {
+			t.Error("missing segment must not be ready")
+		}
+
+		err := os.WriteFile(filepath.Join(dir, segName(0)), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !segmentReady(session, segName(0)) {
+			t.Error("a renamed segment is complete and must be ready without a successor")
+		}
+	})
+
+	t.Run("an empty segment file is not ready", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, segName(0)), nil, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if segmentReady(newSession(dir), segName(0)) {
+			t.Error("zero-byte segment must not be ready")
+		}
+	})
+
+	t.Run("init is not ready on existence alone", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// The hls muxer opens init.mp4 under its final name directly, so
+		// existence does not prove it was closed.
+		if segmentReady(newSession(dir), helpers.HLS_INIT_FILENAME) {
+			t.Error("init must not be ready without evidence FFmpeg moved past it")
+		}
+	})
+
+	t.Run("init is ready once segment_0's temp file appears", func(t *testing.T) {
+		dir := t.TempDir()
+		session := newSession(dir)
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// The muxer opens segment_0's .tmp only after closing init.mp4, so
+		// even an empty .tmp is proof init is final.
+		err = os.WriteFile(filepath.Join(dir, segName(0)+hlsTempFileSuffix), nil, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !segmentReady(session, helpers.HLS_INIT_FILENAME) {
+			t.Error("init must be ready once segment_0.m4s.tmp exists")
+		}
+	})
+
+	t.Run("init is ready once segment_0's final name appears", func(t *testing.T) {
+		dir := t.TempDir()
+		session := newSession(dir)
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(filepath.Join(dir, segName(0)), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !segmentReady(session, helpers.HLS_INIT_FILENAME) {
+			t.Error("init must be ready once segment_0.m4s exists")
+		}
+	})
+
+	t.Run("an empty init file is never ready", func(t *testing.T) {
+		dir := t.TempDir()
+		session := newSession(dir)
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), nil, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(filepath.Join(dir, segName(0)), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if segmentReady(session, helpers.HLS_INIT_FILENAME) {
+			t.Error("zero-byte init must not be ready even with segment_0 present")
+		}
+	})
+
+	t.Run("a dead session's init is final", func(t *testing.T) {
+		dir := t.TempDir()
+		session := newSession(dir)
+		session.Exited = true
+
+		if segmentReady(session, helpers.HLS_INIT_FILENAME) {
+			t.Error("a missing init must not be ready even after exit")
+		}
+
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !segmentReady(session, helpers.HLS_INIT_FILENAME) {
+			t.Error("a dead session that wrote init but never opened segment_0 leaves init final")
+		}
+	})
+
+	t.Run("a fallback session delegates to the successor heuristic", func(t *testing.T) {
+		dir := t.TempDir()
+		legacy := &HLSSession{TempDir: dir}
+		err := os.WriteFile(filepath.Join(dir, segName(0)), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if segmentReady(legacy, segName(0)) {
+			t.Error("without temp_file a segment must wait for its successor")
+		}
+
+		err = os.WriteFile(filepath.Join(dir, segName(1)), []byte{0x01}, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !segmentReady(legacy, segName(0)) {
+			t.Error("legacy readiness must clear once the successor exists")
 		}
 	})
 }
@@ -1269,5 +1422,33 @@ func TestWriteHLSPlaylistHeaders_OmitsUnknownStart(t *testing.T) {
 
 	if got := recorder.Header().Get(hlsActualStartHeader); got != "" {
 		t.Fatalf("unknown start must not be published, got %q", got)
+	}
+}
+
+func TestLogFirstHLSSegmentServed(t *testing.T) {
+	var buf bytes.Buffer
+	session := &HLSSession{
+		TempDir:          "/transcode/igloo-hls-abc",
+		MovieID:          7,
+		Logger:           slog.New(slog.NewTextHandler(&buf, nil)),
+		StartedAt:        time.Now(),
+		EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS,
+	}
+
+	logFirstHLSSegmentServed(session, "init.mp4", time.Now())
+	logFirstHLSSegmentServed(session, "segment_0.m4s", time.Now())
+
+	if got := strings.Count(buf.String(), "hls first segment served"); got != 1 {
+		t.Fatalf("first-serve log emitted %d times, want exactly once:\n%s", got, buf.String())
+	}
+	if !strings.Contains(buf.String(), "filename=init.mp4") {
+		t.Fatalf("log should name the first served file:\n%s", buf.String())
+	}
+
+	// Bare sessions, as tests build them, must neither log nor panic.
+	logFirstHLSSegmentServed(&HLSSession{TempDir: "x"}, "init.mp4", time.Now())
+	logFirstHLSSegmentServed(&HLSSession{TempDir: "x", Logger: session.Logger}, "init.mp4", time.Now())
+	if strings.Count(buf.String(), "hls first segment served") != 1 {
+		t.Fatalf("bare sessions must not log:\n%s", buf.String())
 	}
 }

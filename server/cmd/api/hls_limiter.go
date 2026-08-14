@@ -98,9 +98,22 @@ func (l *hlsTranscodeLimiter) tryAcquire() (func(), error) {
 	}
 }
 
+// occupancy reports the held permits and the pool size, for logging.
+func (l *hlsTranscodeLimiter) occupancy() (active, capacity int) {
+	return len(l.permits), cap(l.permits)
+}
+
 func (app *Application) acquireHLSTranscodeSlot() (func(), error) {
 	if app.HLSTranscodeLimiter == nil {
 		app.HLSTranscodeLimiter = newHLSTranscodeLimiter(defaultHLSMaxCPUTranscodes())
 	}
-	return app.HLSTranscodeLimiter.tryAcquire()
+	release, err := app.HLSTranscodeLimiter.tryAcquire()
+	if err != nil {
+		active, capacity := app.HLSTranscodeLimiter.occupancy()
+		app.Logger.Warn("hls transcode limiter rejected",
+			"active", active,
+			"max", capacity,
+		)
+	}
+	return release, err
 }

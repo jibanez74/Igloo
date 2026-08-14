@@ -34,6 +34,10 @@ if [ "$1" = "-hwaccels" ]; then
   printf '%s\n' 'Hardware acceleration methods:' 'cuda' 'qsv'
   exit 0
 fi
+if [ "$1" = "-hide_banner" ] && [ "$3" = "muxer=hls" ]; then
+  printf '%s\n' '  -hls_flags <flags> E... set flags' '     temp_file  E... write segment and playlist to temporary file and rename when complete'
+  exit 0
+fi
 if [ "$1" = "-hide_banner" ]; then
   printf '%s\n' '-readrate value' '-readrate_initial_burst value'
   exit 0
@@ -84,6 +88,9 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	if !caps.SupportsEncoderOption("h264_qsv", "forced_idr") ||
 		!caps.SupportsEncoderOption("h264_nvenc", "forced-idr") {
 		t.Fatalf("encoder options were not orchestrated: %#v", caps.EncoderOptions)
+	}
+	if !caps.SupportsMuxerFlag("hls", "temp_file") {
+		t.Fatalf("muxer flags were not orchestrated: %#v", caps.MuxerFlags)
 	}
 	if caps.Version != "7.0.2-Jellyfin" {
 		t.Fatalf("Version = %q, want the token from the -version banner", caps.Version)

@@ -29,6 +29,7 @@ type Capabilities struct {
 	HWAccels                       map[string]bool
 	FilterOptions                  map[string]map[string]bool
 	EncoderOptions                 map[string]map[string]bool
+	MuxerFlags                     map[string]map[string]bool
 	CLIOptions                     map[string]bool
 	H264NVENCRuntimeUsable         bool
 	H264NVENCProbeError            string
@@ -57,6 +58,7 @@ func cloneCapabilities(source Capabilities) Capabilities {
 	cloned.CLIOptions = cloneBoolMap(source.CLIOptions)
 	cloned.FilterOptions = cloneNestedBoolMap(source.FilterOptions)
 	cloned.EncoderOptions = cloneNestedBoolMap(source.EncoderOptions)
+	cloned.MuxerFlags = cloneNestedBoolMap(source.MuxerFlags)
 	return cloned
 }
 
@@ -108,6 +110,14 @@ func (c Capabilities) SupportsEncoderOption(encoder, option string) bool {
 		return false
 	}
 	return options[strings.ToLower(strings.TrimSpace(option))]
+}
+
+func (c Capabilities) SupportsMuxerFlag(muxer, flag string) bool {
+	flags := c.MuxerFlags[strings.ToLower(strings.TrimSpace(muxer))]
+	if flags == nil {
+		return false
+	}
+	return flags[strings.ToLower(strings.TrimSpace(flag))]
 }
 
 func (c Capabilities) SupportsNvidiaCUDAFilters(tonemap bool) bool {
@@ -239,6 +249,10 @@ func probeCapabilities(bin string, versionOutput string) Capabilities {
 	// NVENC spells the option with a hyphen while QSV uses an underscore. Both
 	// default to false, which turns a forced keyframe into a non-IDR I-frame.
 	caps.recordEncoderOptions(bin, "h264_nvenc", []string{"forced-idr"})
+	// temp_file makes the hls muxer write each segment to a .tmp name and
+	// rename it on close, which is what lets segment readiness be judged by
+	// the final name's existence alone.
+	caps.recordMuxerFlags(bin, "hls", []string{"temp_file"})
 
 	if caps.SupportsEncoder("h264_nvenc") {
 		caps.H264NVENCRuntimeUsable, caps.H264NVENCProbeError = probeH264NVENC(bin)
@@ -330,6 +344,24 @@ func (c *Capabilities) recordEncoderOptions(bin string, encoder string, options 
 	for _, option := range options {
 		option = strings.ToLower(strings.TrimSpace(option))
 		c.EncoderOptions[key][option] = ffmpegHelpHasOption(output, option)
+	}
+}
+
+func (c *Capabilities) recordMuxerFlags(bin string, muxer string, flags []string) {
+	output, err := runFFmpegProbe(bin, "-hide_banner", "-h", "muxer="+muxer)
+	if err != nil {
+		return
+	}
+	if c.MuxerFlags == nil {
+		c.MuxerFlags = map[string]map[string]bool{}
+	}
+	key := strings.ToLower(muxer)
+	if c.MuxerFlags[key] == nil {
+		c.MuxerFlags[key] = map[string]bool{}
+	}
+	for _, flag := range flags {
+		flag = strings.ToLower(strings.TrimSpace(flag))
+		c.MuxerFlags[key][flag] = ffmpegHelpHasOption(output, flag)
 	}
 }
 
