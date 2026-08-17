@@ -64,12 +64,12 @@ export default function MovieDetailsMetadataChips({
         </li>
       )}
       {certificationLabel && (
-        <li>
+        <li aria-label={`Rated ${certificationLabel}`}>
           <Badge
             variant="outline"
             className={`${OVER_MEDIA_BADGE_CLASS} font-semibold`}
           >
-            {certificationLabel}
+            <span aria-hidden="true">{certificationLabel}</span>
           </Badge>
         </li>
       )}

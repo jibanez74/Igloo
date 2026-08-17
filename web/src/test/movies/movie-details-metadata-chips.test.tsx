@@ -37,6 +37,20 @@ describe("MovieDetailsMetadataChips", () => {
     ).toBeInTheDocument();
   });
 
+  it("gives the certification chip a spoken accessible name", () => {
+    render(
+      <MovieDetailsMetadataChips
+        {...baseProps}
+        certificationLabel="PG-13"
+        runtime={null}
+        runTimeMins={null}
+      />,
+    );
+
+    expect(screen.getByLabelText("Rated PG-13")).toBeInTheDocument();
+    expect(screen.getByText("PG-13")).toBeInTheDocument();
+  });
+
   it("renders capability badges with accessible descriptions", () => {
     render(
       <MovieDetailsMetadataChips
