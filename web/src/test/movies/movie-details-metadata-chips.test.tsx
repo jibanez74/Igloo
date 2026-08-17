@@ -20,7 +20,7 @@ describe("MovieDetailsMetadataChips", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Runtime: 1 hr 56 min")).toBeInTheDocument();
+    expect(screen.getByText("Runtime: 1 hr 56 min")).toBeInTheDocument();
   });
 
   it("uses spoken runtime in the accessible label when minutes are available", () => {
@@ -32,12 +32,10 @@ describe("MovieDetailsMetadataChips", () => {
       />,
     );
 
-    expect(
-      screen.getByLabelText("Runtime: 1 hour 56 minutes"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Runtime: 1 hour 56 minutes")).toBeInTheDocument();
   });
 
-  it("gives the certification chip a spoken accessible name", () => {
+  it("exposes the certification to assistive tech as list item content", () => {
     render(
       <MovieDetailsMetadataChips
         {...baseProps}
@@ -47,7 +45,7 @@ describe("MovieDetailsMetadataChips", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Rated PG-13")).toBeInTheDocument();
+    expect(screen.getByText("Rated PG-13")).toBeInTheDocument();
     expect(screen.getByText("PG-13")).toBeInTheDocument();
   });
 
@@ -72,7 +70,7 @@ describe("MovieDetailsMetadataChips", () => {
       "7.1 surround sound audio",
       "Subtitles available",
     ]) {
-      expect(screen.getByLabelText(description)).toBeInTheDocument();
+      expect(screen.getByText(description)).toBeInTheDocument();
     }
     expect(screen.getByText("4K")).toBeInTheDocument();
     expect(screen.getByText("CC")).toBeInTheDocument();

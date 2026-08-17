@@ -264,6 +264,24 @@ stamps `data-variant`/`data-size`.
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses
   `aria-current`; sections use `role="region" aria-labelledby`.
+- **`aria-label` only where the role supports it**: `aria-label` names elements
+  whose role accepts a name from the author — buttons, links, inputs, `role="list"`,
+  regions, dialogs. It does **not** reliably name `<li>` (`role="listitem"`),
+  `<time>`, or plain `<span>`/`<div>`; browsers and screen readers inconsistently
+  ignore it there. For those, put the spoken text *in the content* as an `sr-only`
+  span and mark the visually-formatted value `aria-hidden="true"`
+  (`MovieDetailsMetadataChips` pattern):
+
+  ```tsx
+  <li>
+    <Star aria-hidden="true" />
+    <span className="sr-only">Critic rating: 8.5 out of 10</span>
+    <span aria-hidden="true">8.5</span>
+  </li>
+  ```
+
+  Never leave a non-interactive element whose only content is `aria-hidden` —
+  assistive tech lands on an empty node.
 
 ---
 

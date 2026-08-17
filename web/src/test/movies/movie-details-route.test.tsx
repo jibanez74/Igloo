@@ -447,7 +447,9 @@ describe("movie details route motion", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("1 hr 56 min")).toBeInTheDocument();
 
-    const runtime = screen.getByLabelText("Runtime: 1 hour 56 minutes");
+    const runtime = screen
+      .getByText("Runtime: 1 hour 56 minutes")
+      .closest("time");
     expect(runtime).toHaveAttribute("datetime", "PT116M");
 
     const wrappers = getDetailMotionWrappers(container);
