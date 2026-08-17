@@ -8,6 +8,7 @@ import {
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+import { pickTmdbCertification } from "@/lib/tmdb-certification";
 import {
   formatRuntimeMinutes,
   prepareYouTubeExtrasForDisplay,
@@ -156,6 +157,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
     : `Watch ${movie.title} in your Igloo media library.`;
 
   const runtime = formatRuntimeMinutes(movie.runtime);
+  const certificationLabel = pickTmdbCertification(movie.release_dates);
 
   const trailer = movie.videos?.results?.find(
     v => v.type === "Trailer" && v.site === "YouTube",
@@ -206,7 +208,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           <MovieDetailsMetadataChips
             criticRating={null}
             audienceRating={null}
-            certificationLabel={null}
+            certificationLabel={certificationLabel}
             runtime={runtime}
             runTimeMins={movie.runtime ?? null}
             releaseDateStr={releaseDateStr}
