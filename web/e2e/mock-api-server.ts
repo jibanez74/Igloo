@@ -53,13 +53,6 @@ type ServerPlaybackSettings = {
   hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
 };
 
-type PlaybackPreferences = {
-  preferred_profile: string | null;
-  download_mbps: number | null;
-  preferred_audio_language: string | null;
-  preferred_subtitle_language: string | null;
-};
-
 type MovieWatchProgress = {
   progress_sec: number | null;
   duration_sec: number | null;
@@ -105,7 +98,6 @@ const sessions = new Map<string, number>();
 // by the Go integration tests and the live-gated quick-connect.spec.ts.
 const devices: MockDevice[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
-const playbackPreferences = new Map<number, PlaybackPreferences>();
 const likedMovieIds = new Set<number>();
 const likedTrackIds = new Set<number>();
 const watchProgress = new Map<number, MovieWatchProgress>();
@@ -804,58 +796,13 @@ function musicianDetails(id: number) {
   };
 }
 
-function playbackSettingsFor(user: User) {
-  const prefs = playbackPreferences.get(user.id) ?? {
-    preferred_profile: null,
-    download_mbps: null,
-    preferred_audio_language: null,
-    preferred_subtitle_language: null,
-  };
-
+function playbackSettingsResponse() {
   return {
     profiles: playbackProfiles,
-    preferred_profile: prefs.preferred_profile,
-    download_mbps: prefs.download_mbps,
     server_upload_mbps: serverPlaybackSettings.server_upload_mbps,
     hardware_acceleration_device:
       serverPlaybackSettings.hardware_acceleration_device,
-    is_admin: user.is_admin,
-    preferred_audio_language: prefs.preferred_audio_language,
-    preferred_subtitle_language: prefs.preferred_subtitle_language,
   };
-}
-
-function updatePlaybackPreferences(
-  user: User,
-  body: Record<string, unknown>,
-) {
-  const current = playbackPreferences.get(user.id) ?? {
-    preferred_profile: null,
-    download_mbps: null,
-    preferred_audio_language: null,
-    preferred_subtitle_language: null,
-  };
-
-  const next: PlaybackPreferences = {
-    preferred_profile: valueOrCurrent(
-      nullableStringField(body, "preferred_profile"),
-      current.preferred_profile,
-    ),
-    download_mbps: valueOrCurrent(
-      nullableNumberField(body, "download_mbps"),
-      current.download_mbps,
-    ),
-    preferred_audio_language: valueOrCurrent(
-      nullableStringField(body, "preferred_audio_language"),
-      current.preferred_audio_language,
-    ),
-    preferred_subtitle_language: valueOrCurrent(
-      nullableStringField(body, "preferred_subtitle_language"),
-      current.preferred_subtitle_language,
-    ),
-  };
-
-  playbackPreferences.set(user.id, next);
 }
 
 function canHandleWithoutAuth(pathname: string) {
@@ -1126,7 +1073,6 @@ async function handleUserRoutes(
     const index = users.findIndex(item => item.id === user.id);
     if (index >= 0) {
       users.splice(index, 1);
-      playbackPreferences.delete(user.id);
       removeSessionsForUser(user.id);
     }
     sendSuccess(response, {}, 200, "Account deleted", {
@@ -1218,7 +1164,6 @@ async function handleAdminRoutes(
     const index = users.findIndex(item => item.id === userId);
     if (index >= 0) {
       users.splice(index, 1);
-      playbackPreferences.delete(userId);
       removeSessionsForUser(userId);
     }
     sendSuccess(response, {});
@@ -1327,54 +1272,41 @@ async function handleSettingsRoutes(
   }
 
   if (url.pathname === "/api/settings/playback" && method === "GET") {
-    sendSuccess(response, { settings: playbackSettingsFor(user) });
+    sendSuccess(response, { settings: playbackSettingsResponse() });
     return true;
   }
 
   if (url.pathname === "/api/settings/playback" && method === "PUT") {
-    const body = await readJSONBody(request);
-    const hasServerUpload = Object.prototype.hasOwnProperty.call(
-      body,
-      "server_upload_mbps",
-    );
-    const hasHardwareDevice = Object.prototype.hasOwnProperty.call(
-      body,
-      "hardware_acceleration_device",
-    );
-
-    if (!user.is_admin && (hasServerUpload || hasHardwareDevice)) {
+    // Mirrors the RequireAdmin middleware on the real route.
+    if (!user.is_admin) {
       sendFailure(response, 403, "Server playback settings are admin-only.");
       return true;
     }
 
-    updatePlaybackPreferences(user, body);
-    if (user.is_admin && (hasServerUpload || hasHardwareDevice)) {
-      serverPlaybackSettings = {
-        server_upload_mbps: hasServerUpload
-          ? valueOrCurrent(
-              nullableNumberField(body, "server_upload_mbps"),
-              serverPlaybackSettings.server_upload_mbps,
-            )
-          : serverPlaybackSettings.server_upload_mbps,
-        hardware_acceleration_device: hasHardwareDevice
-          ? (stringField(
-              body,
-              "hardware_acceleration_device",
-              serverPlaybackSettings.hardware_acceleration_device,
-            ) as ServerPlaybackSettings["hardware_acceleration_device"])
-          : serverPlaybackSettings.hardware_acceleration_device,
-      };
-    }
+    const body = await readJSONBody(request);
+    serverPlaybackSettings = {
+      server_upload_mbps: Object.prototype.hasOwnProperty.call(
+        body,
+        "server_upload_mbps",
+      )
+        ? valueOrCurrent(
+            nullableNumberField(body, "server_upload_mbps"),
+            serverPlaybackSettings.server_upload_mbps,
+          )
+        : serverPlaybackSettings.server_upload_mbps,
+      hardware_acceleration_device: Object.prototype.hasOwnProperty.call(
+        body,
+        "hardware_acceleration_device",
+      )
+        ? (stringField(
+            body,
+            "hardware_acceleration_device",
+            serverPlaybackSettings.hardware_acceleration_device,
+          ) as ServerPlaybackSettings["hardware_acceleration_device"])
+        : serverPlaybackSettings.hardware_acceleration_device,
+    };
 
-    const settings = playbackSettingsFor(user);
-    sendSuccess(response, {
-      settings: {
-        preferred_profile: settings.preferred_profile,
-        download_mbps: settings.download_mbps,
-        preferred_audio_language: settings.preferred_audio_language,
-        preferred_subtitle_language: settings.preferred_subtitle_language,
-      },
-    });
+    sendSuccess(response, { settings: playbackSettingsResponse() });
     return true;
   }
 

@@ -1456,11 +1456,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get playback preferences and available profiles */
+        /** Get transcode profiles and server playback settings */
         get: operations["getPlaybackSettings"];
         /**
-         * Update playback preferences and admin server settings
-         * @description Per-user playback preferences. The server_upload_mbps and hardware_acceleration_device fields are global settings and admin-only; requests from non-admins that include them return 403.
+         * Update server playback settings
+         * @description Admin-only. Replaces the server-wide upload bandwidth cap and hardware acceleration device. Per-device playback preferences are not stored on the server; they live in the client's local storage.
          */
         put: operations["updatePlaybackSettings"];
         post?: never;
@@ -2231,43 +2231,21 @@ export interface components {
         };
         PlaybackSettings: {
             profiles: components["schemas"]["PlaybackProfile"][];
-            preferred_profile: string | null;
-            download_mbps: number | null;
             server_upload_mbps: number | null;
             hardware_acceleration_device: components["schemas"]["HardwareAccelerationDevice"];
-            is_admin: boolean;
-            preferred_audio_language: string | null;
-            preferred_subtitle_language: string | null;
         };
+        /** @description Fields absent from the body keep their current value. */
         UpdatePlaybackSettingsRequest: {
-            /** @description Allowed transcode profile except remux. */
-            preferred_profile?: string | null;
-            download_mbps?: number | null;
-            preferred_audio_language?: string | null;
-            /** @description Two- or three-letter language code, or off. */
-            preferred_subtitle_language?: string | null;
-            /** @description Admin-only server upload bandwidth cap in Mbps. */
+            /** @description Server upload bandwidth cap in Mbps. Null means uncapped. */
             server_upload_mbps?: number | null;
-            /** @description Admin-only hardware acceleration device used for new transcodes. */
+            /** @description Hardware acceleration device used for new transcodes. */
             hardware_acceleration_device?: components["schemas"]["HardwareAccelerationDevice"];
-        };
-        UpdatePlaybackSettings: {
-            preferred_profile: string | null;
-            download_mbps: number | null;
-            preferred_audio_language: string | null;
-            preferred_subtitle_language: string | null;
         };
         PlaybackSettingsData: {
             settings: components["schemas"]["PlaybackSettings"];
         };
         PlaybackSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["PlaybackSettingsData"];
-        };
-        UpdatePlaybackSettingsData: {
-            settings: components["schemas"]["UpdatePlaybackSettings"];
-        };
-        UpdatePlaybackSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["UpdatePlaybackSettingsData"];
         };
         LatestMovie: {
             /** Format: int64 */
@@ -3560,15 +3538,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["PlaybackSettingsEnvelope"];
-            };
-        };
-        /** @description Updated playback settings response. */
-        UpdatePlaybackSettingsResponse: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["UpdatePlaybackSettingsEnvelope"];
             };
         };
         /** @description Latest movies response. */
@@ -6397,7 +6366,7 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["UpdatePlaybackSettingsRequest"];
         responses: {
-            200: components["responses"]["UpdatePlaybackSettingsResponse"];
+            200: components["responses"]["PlaybackSettingsResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

@@ -8,6 +8,7 @@ import {
   Cpu,
   Gauge,
   MonitorCog,
+  Server,
   Sliders,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,11 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
+  DOWNLOAD_SPEED_MAX_MBPS,
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
@@ -36,6 +39,8 @@ import {
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
+import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
+import { setDevicePlaybackPreferences } from "@/lib/playback-preferences";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import { authUserQueryOpts, playbackSettingsQueryOpts } from "@/lib/query-opts";
 import {
@@ -45,7 +50,7 @@ import {
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
-  ApiResponseType,
+  DevicePlaybackPreferences,
   HardwareAccelerationDevice,
   PlaybackSettingsResponseType,
   PlaybackSettingsType,
@@ -57,13 +62,15 @@ export const Route = createFileRoute("/_auth/settings/playback")({
 });
 
 const NO_SELECTION_VALUE = "__none__";
-const DOWNLOAD_SPEED_MAX_MBPS = 10_000;
 const SERVER_UPLOAD_MAX_MBPS = 100_000;
-const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}$/;
 const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
   `Download speed must be between 0 and ${DOWNLOAD_SPEED_MAX_MBPS} Mbps.`;
 const SERVER_UPLOAD_VALIDATION_MESSAGE =
   `Server upload bandwidth must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps.`;
+/** Explains that the device card writes to this browser rather than the account. */
+const DEVICE_SCOPE_DESCRIPTION =
+  "Saved in this browser only. Your other devices keep their own settings.";
+const DEVICE_SAVED_SUFFIX = "Saved on this device.";
 
 const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
   ([, a], [, b]) => a.localeCompare(b),
@@ -109,46 +116,15 @@ function isHardwareAccelerationDevice(
   return HARDWARE_OPTIONS.some(option => option.value === value);
 }
 
-function formFromSettings(
-  settings: PlaybackSettingsType,
-): UpdatePlaybackSettingsRequest {
-  const form: UpdatePlaybackSettingsRequest = {
-    preferred_profile: settings.preferred_profile,
-    download_mbps: settings.download_mbps,
-    preferred_audio_language: settings.preferred_audio_language,
-    preferred_subtitle_language: settings.preferred_subtitle_language,
-  };
-
-  if (settings.is_admin) {
-    form.server_upload_mbps = settings.server_upload_mbps;
-    form.hardware_acceleration_device = settings.hardware_acceleration_device;
-  }
-
-  return form;
+function parseMbpsInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formsMatchSettings(
-  form: UpdatePlaybackSettingsRequest,
-  settings: PlaybackSettingsType,
-) {
-  const settingsForm = formFromSettings(settings);
-  return (
-    form.preferred_profile === settingsForm.preferred_profile &&
-    form.download_mbps === settingsForm.download_mbps &&
-    form.preferred_audio_language === settingsForm.preferred_audio_language &&
-    form.preferred_subtitle_language ===
-      settingsForm.preferred_subtitle_language &&
-    form.server_upload_mbps === settingsForm.server_upload_mbps &&
-    form.hardware_acceleration_device ===
-      settingsForm.hardware_acceleration_device
-  );
-}
-
-function isDownloadSpeedOutOfRange(form: UpdatePlaybackSettingsRequest) {
-  return (
-    form.download_mbps != null &&
-    (form.download_mbps <= 0 || form.download_mbps >= DOWNLOAD_SPEED_MAX_MBPS)
-  );
+function isDownloadSpeedOutOfRange(value: number | null) {
+  return value != null && (value <= 0 || value >= DOWNLOAD_SPEED_MAX_MBPS);
 }
 
 function isServerUploadOutOfRange(form: UpdatePlaybackSettingsRequest) {
@@ -159,50 +135,19 @@ function isServerUploadOutOfRange(form: UpdatePlaybackSettingsRequest) {
   );
 }
 
-function validatePlaybackSettingsForm(
-  form: UpdatePlaybackSettingsRequest,
-  settings: PlaybackSettingsType,
-) {
-  if (isDownloadSpeedOutOfRange(form)) {
-    return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
-  }
-  if (
-    form.preferred_profile != null &&
-    !settings.profiles.some(p => p.id === form.preferred_profile)
-  ) {
-    return "Selected profile is not available.";
-  }
-  if (
-    form.preferred_audio_language != null &&
-    !LANGUAGE_CODE_PATTERN.test(form.preferred_audio_language)
-  ) {
-    return "Audio language must be a 2- or 3-letter lowercase code.";
-  }
-  if (
-    form.preferred_subtitle_language != null &&
-    form.preferred_subtitle_language !== SUBTITLE_OFF_VALUE &&
-    !LANGUAGE_CODE_PATTERN.test(form.preferred_subtitle_language)
-  ) {
-    return "Subtitle language must be a 2- or 3-letter lowercase code.";
-  }
-  if (settings.is_admin && isServerUploadOutOfRange(form)) {
-    return SERVER_UPLOAD_VALIDATION_MESSAGE;
-  }
-  return "";
+function languageLabel(code: string | null) {
+  if (code === null) return "No preference";
+  if (code === SUBTITLE_OFF_VALUE) return "Always off";
+  return LANGUAGE_NAMES[code] ?? code;
 }
 
 function PlaybackSettings() {
   const { data: authData, isLoading: authLoading } = useQuery(
     authUserQueryOpts(),
   );
-  const userId =
-    authData?.error === false && authData.data?.user
-      ? authData.data.user.id
-      : null;
-  const { data, isLoading } = useQuery({
-    ...playbackSettingsQueryOpts(userId ?? 0),
-    enabled: userId !== null,
-  });
+  const user =
+    authData?.error === false && authData.data?.user ? authData.data.user : null;
+  const { data, isLoading } = useQuery(playbackSettingsQueryOpts());
 
   const settings =
     data?.error === false && data.data?.settings ? data.data.settings : null;
@@ -211,7 +156,7 @@ function PlaybackSettings() {
     return <SettingsLoadingCard label="Loading playback settings..." />;
   }
 
-  if (authData?.error || userId === null) {
+  if (authData?.error || user === null) {
     return (
       <SettingsErrorCard
         title="Settings unavailable"
@@ -237,222 +182,135 @@ function PlaybackSettings() {
     return null;
   }
 
-  return <PlaybackSettingsForm settings={settings} userId={userId} />;
+  return (
+    <div className="max-w-5xl space-y-6">
+      <DevicePlaybackCards
+        settings={settings}
+        userId={user.id}
+        isAdmin={user.is_admin}
+      />
+      {user.is_admin && <ServerPlaybackForm settings={settings} />}
+    </div>
+  );
 }
 
-type PlaybackSettingsFormProps = {
+type DevicePlaybackCardsProps = {
   settings: PlaybackSettingsType;
   userId: number;
+  isAdmin: boolean;
 };
 
-type PlaybackSettingsQueryData = ApiResponseType<PlaybackSettingsResponseType>;
-
-function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
-  const queryClient = useQueryClient();
+/**
+ * The per-device half of the page. These preferences live in localStorage and
+ * apply the moment they change, so there is no save bar -- the confirmation is
+ * the live announcement instead.
+ */
+function DevicePlaybackCards({
+  settings,
+  userId,
+  isAdmin,
+}: DevicePlaybackCardsProps) {
   const downloadMbpsId = useId();
   const preferredProfileId = useId();
   const recommendationId = useId();
   const recommendationTitleId = useId();
-  const serverUploadMbpsId = useId();
-  const hardwareDeviceId = useId();
-  const statusId = useId();
+  const deviceStatusId = useId();
   const preferredAudioLanguageId = useId();
   const preferredSubtitleLanguageId = useId();
 
-  const [form, setForm] = useState<UpdatePlaybackSettingsRequest>(() =>
-    formFromSettings(settings),
-  );
-  const [syncedSettings, setSyncedSettings] = useState(settings);
-  const [validationMessage, setValidationMessage] = useState("");
-  const [, startTransition] = useTransition();
+  const prefs = useDevicePlaybackPreferences(userId);
+  // The input keeps its own text so a half-typed "0." neither reaches storage
+  // nor snaps back under the user; committed values flow from `prefs`.
+  const [downloadText, setDownloadText] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [announcementKey, setAnnouncementKey] = useState(0);
 
-  if (settings !== syncedSettings) {
-    const formIsClean = formsMatchSettings(form, syncedSettings);
-    setSyncedSettings(settings);
-    if (formIsClean) {
-      setForm(formFromSettings(settings));
-      setValidationMessage("");
-    }
-  }
-
-  const updateMutation = useMutation({
-    mutationFn: updatePlaybackSettings,
-    onSuccess: (res, nextSettings) => {
-      if (res.error) {
-        showActionFailed("save playback settings", res.message);
-        return;
-      }
-      queryClient.setQueryData<PlaybackSettingsQueryData>(
-        [PLAYBACK_SETTINGS_KEY, userId],
-        current => {
-          const currentSettings =
-            current?.error === false && current.data?.settings
-              ? current.data.settings
-              : syncedSettings;
-          const serverUpload =
-            nextSettings.server_upload_mbps !== undefined
-              ? nextSettings.server_upload_mbps
-              : currentSettings.server_upload_mbps;
-          const hardwareDevice =
-            nextSettings.hardware_acceleration_device !== undefined
-              ? nextSettings.hardware_acceleration_device
-              : currentSettings.hardware_acceleration_device;
-
-          return {
-            error: false,
-            message: res.message,
-            data: {
-              settings: {
-                ...currentSettings,
-                ...res.data.settings,
-                server_upload_mbps: serverUpload,
-                hardware_acceleration_device: hardwareDevice,
-              },
-            },
-          };
-        },
-      );
-      queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
-      showSuccess("Playback settings saved");
-    },
-    onError: () => {
-      showActionFailed(
-        "save playback settings",
-        "An unexpected error occurred",
-      );
-    },
-  });
-
-  const handleDownloadMbpsChange = (value: string) => {
-    const trimmed = value.trim();
-    let downloadMbps: number | null = null;
-    if (trimmed === "") {
-      downloadMbps = null;
-    } else {
-      const parsed = Number.parseFloat(trimmed);
-      downloadMbps = Number.isFinite(parsed) ? parsed : null;
-    }
-
-    const nextForm = { ...form, download_mbps: downloadMbps };
-    setForm(nextForm);
-    if (validationMessage) {
-      setValidationMessage(validatePlaybackSettingsForm(nextForm, settings));
-    }
+  const announce = (message: string) => {
+    setAnnouncement(`${message} ${DEVICE_SAVED_SUFFIX}`);
+    setAnnouncementKey(current => current + 1);
   };
 
-  const handleServerUploadMbpsChange = (value: string) => {
-    const trimmed = value.trim();
-    let serverUploadMbps: number | null = null;
-    if (trimmed === "") {
-      serverUploadMbps = null;
-    } else {
-      const parsed = Number.parseFloat(trimmed);
-      serverUploadMbps = Number.isFinite(parsed) ? parsed : null;
-    }
+  const persist = (
+    patch: Partial<DevicePlaybackPreferences>,
+    message: string,
+  ) => {
+    setDevicePlaybackPreferences(userId, patch);
+    announce(message);
+  };
 
-    const nextForm = { ...form, server_upload_mbps: serverUploadMbps };
-    setForm(nextForm);
-    if (validationMessage) {
-      setValidationMessage(validatePlaybackSettingsForm(nextForm, settings));
-    }
+  const pendingDownload =
+    downloadText === null ? prefs.downloadMbps : parseMbpsInput(downloadText);
+  const downloadInvalid = isDownloadSpeedOutOfRange(pendingDownload);
+
+  const handleDownloadMbpsChange = (value: string) => {
+    setDownloadText(value);
+    const parsed = parseMbpsInput(value);
+    if (isDownloadSpeedOutOfRange(parsed)) return;
+    if (parsed === prefs.downloadMbps) return;
+
+    setDevicePlaybackPreferences(userId, { downloadMbps: parsed });
+  };
+
+  const handleDownloadMbpsCommit = () => {
+    if (downloadInvalid) return;
+    announce(
+      pendingDownload === null
+        ? "Download speed cleared."
+        : `Download speed set to ${pendingDownload} Mbps.`,
+    );
   };
 
   const handleProfileChange = (value: string) => {
-    startTransition(() => {
-      setForm(current => ({
-        ...current,
-        preferred_profile: value === NO_SELECTION_VALUE ? null : value,
-      }));
-    });
+    const preferredProfile = value === NO_SELECTION_VALUE ? null : value;
+    const label = preferredProfile
+      ? (settings.profiles.find(p => p.id === preferredProfile)?.label ??
+        preferredProfile)
+      : "Use recommended";
+    persist({ preferredProfile }, `Preferred profile set to ${label}.`);
   };
 
   const handleAudioLanguageChange = (value: string) => {
-    startTransition(() => {
-      setForm(current => ({
-        ...current,
-        preferred_audio_language:
-          value === NO_SELECTION_VALUE ? null : value,
-      }));
-    });
+    const preferredAudioLanguage =
+      value === NO_SELECTION_VALUE ? null : value;
+    persist(
+      { preferredAudioLanguage },
+      `Preferred audio language set to ${languageLabel(preferredAudioLanguage)}.`,
+    );
   };
 
   const handleSubtitleLanguageChange = (value: string) => {
-    startTransition(() => {
-      setForm(current => ({
-        ...current,
-        preferred_subtitle_language:
-          value === NO_SELECTION_VALUE ? null : value,
-      }));
-    });
-  };
-
-  const handleHardwareChange = (value: string) => {
-    if (!isHardwareAccelerationDevice(value)) return;
-    startTransition(() => {
-      setForm(current => ({
-        ...current,
-        hardware_acceleration_device: value,
-      }));
-    });
-  };
-
-  const resetForm = () => {
-    setForm(formFromSettings(syncedSettings));
-    setValidationMessage("");
-  };
-
-  const validateForm = () => {
-    return validatePlaybackSettingsForm(form, settings);
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const message = validateForm();
-    if (message) {
-      setValidationMessage(message);
-      showValidationError(message);
-      return;
-    }
-    setValidationMessage("");
-    updateMutation.mutate(form);
+    const preferredSubtitleLanguage =
+      value === NO_SELECTION_VALUE ? null : value;
+    persist(
+      { preferredSubtitleLanguage },
+      `Preferred subtitles set to ${languageLabel(preferredSubtitleLanguage)}.`,
+    );
   };
 
   const recommendedId = recommendedProfileId(
     settings.profiles,
-    form.download_mbps ?? null,
-    settings.is_admin
-      ? (form.server_upload_mbps ?? null)
-      : settings.server_upload_mbps,
+    downloadInvalid ? prefs.downloadMbps : pendingDownload,
+    settings.server_upload_mbps,
   );
   const recommendedProfile = recommendedId
     ? settings.profiles.find(p => p.id === recommendedId)
     : null;
-  const downloadMbpsInvalid =
-    validationMessage === DOWNLOAD_SPEED_VALIDATION_MESSAGE &&
-    isDownloadSpeedOutOfRange(form);
-  const serverUploadMbpsInvalid =
-    validationMessage === SERVER_UPLOAD_VALIDATION_MESSAGE &&
-    settings.is_admin &&
-    isServerUploadOutOfRange(form);
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      noValidate
-      className="max-w-5xl space-y-6"
-    >
+    <>
+      <LiveAnnouncer message={announcement} announcementKey={announcementKey} />
       <Card
         className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
         <SettingsCardHeader
           icon={Gauge}
           title="Streaming & bandwidth"
-          description="Tell Igloo about your connection so it can pick the right stream quality for you."
+          description={`Tell Igloo about this connection so it can pick the right stream quality. ${DEVICE_SCOPE_DESCRIPTION}`}
         />
         <CardContent className="divide-y divide-border/50">
           <PlaybackSection
             title="Your network speed"
-            description="Used to recommend a stream profile for your viewing."
+            description="Used to recommend a stream profile for this device."
           >
             <div className="grid max-w-md gap-2">
               <Label htmlFor={downloadMbpsId}>Download speed (Mbps)</Label>
@@ -463,13 +321,13 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                 inputMode="decimal"
                 min={0.1}
                 step={0.1}
-                value={form.download_mbps ?? ""}
+                value={downloadText ?? prefs.downloadMbps ?? ""}
                 onChange={event => handleDownloadMbpsChange(event.target.value)}
-                disabled={updateMutation.isPending}
-                aria-invalid={downloadMbpsInvalid ? "true" : undefined}
+                onBlur={handleDownloadMbpsCommit}
+                aria-invalid={downloadInvalid ? "true" : undefined}
                 aria-describedby={
-                  downloadMbpsInvalid
-                    ? `${downloadMbpsId}-description ${statusId}`
+                  downloadInvalid
+                    ? `${downloadMbpsId}-description ${deviceStatusId}`
                     : `${downloadMbpsId}-description`
                 }
                 className={SETTINGS_INPUT_CLASS}
@@ -480,57 +338,29 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               >
                 Leave blank if unsure.
               </p>
+              <p
+                id={deviceStatusId}
+                aria-live="polite"
+                className="text-sm text-destructive empty:hidden"
+              >
+                {downloadInvalid ? DOWNLOAD_SPEED_VALIDATION_MESSAGE : ""}
+              </p>
             </div>
           </PlaybackSection>
           <PlaybackSection
             title="Server upload cap"
             description="The home server's outbound bandwidth limit, applied when you stream from outside the home network."
           >
-            {settings.is_admin ? (
-              <div className="grid max-w-md gap-2">
-                <Label htmlFor={serverUploadMbpsId}>
-                  Server upload bandwidth (Mbps)
-                </Label>
-                <Input
-                  id={serverUploadMbpsId}
-                  name="server_upload_mbps"
-                  type="number"
-                  inputMode="decimal"
-                  min={0.1}
-                  step={0.1}
-                  value={form.server_upload_mbps ?? ""}
-                  onChange={event =>
-                    handleServerUploadMbpsChange(event.target.value)
-                  }
-                  disabled={updateMutation.isPending}
-                  aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
-                  aria-describedby={
-                    serverUploadMbpsInvalid
-                      ? `${serverUploadMbpsId}-description ${statusId}`
-                      : `${serverUploadMbpsId}-description`
-                  }
-                  className={SETTINGS_INPUT_CLASS}
-                />
-                <p
-                  id={`${serverUploadMbpsId}-description`}
-                  className="text-sm text-muted-foreground"
-                >
-                  Leave blank if the server should be uncapped.
-                </p>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-foreground">
-                  {settings.server_upload_mbps != null
-                    ? `${settings.server_upload_mbps} Mbps`
-                    : "Not set (uncapped)"}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Set by the server administrator. Affects your recommendation
-                  when streaming from outside the home network.
-                </p>
-              </>
-            )}
+            <p className="text-sm text-foreground">
+              {settings.server_upload_mbps != null
+                ? `${settings.server_upload_mbps} Mbps`
+                : "Not set (uncapped)"}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {isAdmin
+                ? "Set for the whole server below. Affects your recommendation when streaming from outside the home network."
+                : "Set by the server administrator. Affects your recommendation when streaming from outside the home network."}
+            </p>
           </PlaybackSection>
           <PlaybackSection
             title="Recommended profile"
@@ -558,7 +388,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         <SettingsCardHeader
           icon={Sliders}
           title="Stream defaults"
-          description="Defaults applied when you start a stream. You can still change each per video."
+          description={`Defaults applied when you start a stream; you can still change each per video. ${DEVICE_SCOPE_DESCRIPTION}`}
         />
         <CardContent className="divide-y divide-border/50">
           <PlaybackSection
@@ -576,9 +406,8 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               */}
               <Select
                 name="preferred_profile"
-                value={form.preferred_profile ?? NO_SELECTION_VALUE}
+                value={prefs.preferredProfile ?? NO_SELECTION_VALUE}
                 onValueChange={handleProfileChange}
-                disabled={updateMutation.isPending}
               >
                 <SelectTrigger
                   id={preferredProfileId}
@@ -614,9 +443,8 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               <Label htmlFor={preferredAudioLanguageId}>Audio language</Label>
               <Select
                 name="preferred_audio_language"
-                value={form.preferred_audio_language ?? NO_SELECTION_VALUE}
+                value={prefs.preferredAudioLanguage ?? NO_SELECTION_VALUE}
                 onValueChange={handleAudioLanguageChange}
-                disabled={updateMutation.isPending}
               >
                 <SelectTrigger
                   id={preferredAudioLanguageId}
@@ -654,9 +482,8 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               </Label>
               <Select
                 name="preferred_subtitle_language"
-                value={form.preferred_subtitle_language ?? NO_SELECTION_VALUE}
+                value={prefs.preferredSubtitleLanguage ?? NO_SELECTION_VALUE}
                 onValueChange={handleSubtitleLanguageChange}
-                disabled={updateMutation.isPending}
               >
                 <SelectTrigger
                   id={preferredSubtitleLanguageId}
@@ -692,20 +519,167 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
           </PlaybackSection>
         </CardContent>
       </Card>
+    </>
+  );
+}
 
-      {settings.is_admin && (
-        <Card
-          className={cn(
-            SETTINGS_CARD_SURFACE_CLASS,
-            MOTION_SETTINGS_SURFACE_CLASS,
-          )}
-        >
-          <SettingsCardHeader
-            icon={MonitorCog}
+type ServerPlaybackFormProps = {
+  settings: PlaybackSettingsType;
+};
+
+type PlaybackSettingsQueryData = {
+  error: false;
+  message?: string;
+  data?: PlaybackSettingsResponseType;
+};
+
+/** The server-wide half of the page: admin-only, and the only part that saves. */
+function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
+  const queryClient = useQueryClient();
+  const serverUploadMbpsId = useId();
+  const hardwareDeviceId = useId();
+  const statusId = useId();
+
+  const [form, setForm] = useState<UpdatePlaybackSettingsRequest>(() => ({
+    server_upload_mbps: settings.server_upload_mbps,
+    hardware_acceleration_device: settings.hardware_acceleration_device,
+  }));
+  const [syncedSettings, setSyncedSettings] = useState(settings);
+  const [validationMessage, setValidationMessage] = useState("");
+  const [, startTransition] = useTransition();
+
+  if (settings !== syncedSettings) {
+    const formIsClean =
+      form.server_upload_mbps === syncedSettings.server_upload_mbps &&
+      form.hardware_acceleration_device ===
+        syncedSettings.hardware_acceleration_device;
+    setSyncedSettings(settings);
+    if (formIsClean) {
+      setForm({
+        server_upload_mbps: settings.server_upload_mbps,
+        hardware_acceleration_device: settings.hardware_acceleration_device,
+      });
+      setValidationMessage("");
+    }
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: updatePlaybackSettings,
+    onSuccess: res => {
+      if (res.error) {
+        showActionFailed("save playback settings", res.message);
+        return;
+      }
+      // The PUT echoes the same envelope the GET returns, so the response is
+      // the authoritative catalog -- no merge, no refetch.
+      queryClient.setQueryData<PlaybackSettingsQueryData>(
+        [PLAYBACK_SETTINGS_KEY],
+        res,
+      );
+      showSuccess("Playback settings saved");
+    },
+    onError: () => {
+      showActionFailed(
+        "save playback settings",
+        "An unexpected error occurred",
+      );
+    },
+  });
+
+  const handleServerUploadMbpsChange = (value: string) => {
+    const nextForm = { ...form, server_upload_mbps: parseMbpsInput(value) };
+    setForm(nextForm);
+    if (validationMessage) {
+      setValidationMessage(
+        isServerUploadOutOfRange(nextForm) ? SERVER_UPLOAD_VALIDATION_MESSAGE : "",
+      );
+    }
+  };
+
+  const handleHardwareChange = (value: string) => {
+    if (!isHardwareAccelerationDevice(value)) return;
+    startTransition(() => {
+      setForm(current => ({
+        ...current,
+        hardware_acceleration_device: value,
+      }));
+    });
+  };
+
+  const resetForm = () => {
+    setForm({
+      server_upload_mbps: syncedSettings.server_upload_mbps,
+      hardware_acceleration_device: syncedSettings.hardware_acceleration_device,
+    });
+    setValidationMessage("");
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isServerUploadOutOfRange(form)) {
+      setValidationMessage(SERVER_UPLOAD_VALIDATION_MESSAGE);
+      showValidationError(SERVER_UPLOAD_VALIDATION_MESSAGE);
+      return;
+    }
+    setValidationMessage("");
+    updateMutation.mutate(form);
+  };
+
+  const serverUploadMbpsInvalid =
+    validationMessage === SERVER_UPLOAD_VALIDATION_MESSAGE &&
+    isServerUploadOutOfRange(form);
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      <Card
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
+      >
+        <SettingsCardHeader
+          icon={Server}
+          title="Server"
+          description="Applies to the whole server and every person using it."
+        />
+        <CardContent className="divide-y divide-border/50">
+          <PlaybackSection
+            title="Server upload bandwidth"
+            description="The home server's outbound limit, used to cap stream quality recommendations."
+          >
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={serverUploadMbpsId}>
+                Server upload bandwidth (Mbps)
+              </Label>
+              <Input
+                id={serverUploadMbpsId}
+                name="server_upload_mbps"
+                type="number"
+                inputMode="decimal"
+                min={0.1}
+                step={0.1}
+                value={form.server_upload_mbps ?? ""}
+                onChange={event =>
+                  handleServerUploadMbpsChange(event.target.value)
+                }
+                disabled={updateMutation.isPending}
+                aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
+                aria-describedby={
+                  serverUploadMbpsInvalid
+                    ? `${serverUploadMbpsId}-description ${statusId}`
+                    : `${serverUploadMbpsId}-description`
+                }
+                className={SETTINGS_INPUT_CLASS}
+              />
+              <p
+                id={`${serverUploadMbpsId}-description`}
+                className="text-sm text-muted-foreground"
+              >
+                Leave blank if the server should be uncapped.
+              </p>
+            </div>
+          </PlaybackSection>
+          <PlaybackSection
             title="Transcoding"
             description="Choose the hardware acceleration mode used for new transcodes."
-          />
-          <CardContent>
+          >
             <div className="grid max-w-md gap-2">
               <Label htmlFor={hardwareDeviceId}>Hardware acceleration</Label>
               <Select
@@ -744,15 +718,15 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                 }
               </p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </PlaybackSection>
+        </CardContent>
+      </Card>
 
       <SettingsSaveBar
-        title="Playback settings"
+        title="Server playback settings"
         statusId={statusId}
         statusMessage={
-          validationMessage || "Saved preferences apply to your future streams."
+          validationMessage || "Applies to every device streaming from this server."
         }
         statusTone={validationMessage ? "error" : "neutral"}
         onReset={resetForm}

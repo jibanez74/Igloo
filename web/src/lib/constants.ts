@@ -277,6 +277,10 @@ export const HLS_JS_BACK_BUFFER_LENGTH_SEC = 120;
 export const PLAYBACK_SETTINGS_SUMMARY_LOADING = "Loading playback options…";
 /** Subtitle preference and track-select value when subtitles are off. */
 export const SUBTITLE_OFF_VALUE = "off";
+/** Upper bound (exclusive) for a device's reported download speed, in Mbps. */
+export const DOWNLOAD_SPEED_MAX_MBPS = 10_000;
+/** ISO 639-1/639-2 language code accepted for audio and subtitle preferences. */
+export const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}$/;
 /** Single audio stream placeholder option value/index. */
 export const AUDIO_TRACK_SELECT_DEFAULT_VALUE = "0";
 export const AUDIO_TRACK_DEFAULT_LABEL = "Default";

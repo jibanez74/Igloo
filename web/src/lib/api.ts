@@ -52,7 +52,6 @@ import type {
   UpdateLibrarySettingsRequest,
   UpdateLibrarySettingsResponseType,
   UpdatePlaybackSettingsRequest,
-  UpdatePlaybackSettingsResponseType,
   UpdatePlaylistRequest,
   WatchRoomInviteUsersResponseType,
   WatchRoomResponseType,
@@ -652,7 +651,7 @@ export const getPlaybackSettings = () =>
   apiRequest<PlaybackSettingsResponseType>("/api/settings/playback");
 
 export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
-  apiRequest<UpdatePlaybackSettingsResponseType>("/api/settings/playback", {
+  apiRequest<PlaybackSettingsResponseType>("/api/settings/playback", {
     method: "PUT",
     body: data,
   });

@@ -568,6 +568,16 @@ require the full playback test pass.
   dialogs rely on the `data-slot` contract (§1.6).
 - Form-level failures toast; field-level validation renders inline with
   `aria-invalid` (styled by the Button/Input base classes).
+- **Device-scoped settings apply instantly and carry no Save bar.** Settings
+  that belong to the browser rather than the account (theme; the playback
+  preferences in `lib/playback-preferences.ts`) persist to localStorage on
+  change. Because the Save bar that used to confirm the write is gone, such a
+  card must: state its scope in the `SettingsCardHeader` description ("Saved
+  in this browser only…"), and confirm each change through `LiveAnnouncer`
+  so the write is not silent for screen-reader users. Do not mix the two
+  models inside one card — split by ownership, as Settings → Playback does
+  (two "this device" cards, one admin-only "Server" card with the only Save
+  bar).
 
 ---
 

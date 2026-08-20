@@ -303,19 +303,15 @@ type Track struct {
 }
 
 type User struct {
-	ID                        int64           `json:"id"`
-	Name                      string          `json:"name"`
-	Email                     string          `json:"email"`
-	Password                  string          `json:"password"`
-	IsAdmin                   bool            `json:"is_admin"`
-	Avatar                    sql.NullString  `json:"avatar"`
-	PreferredHlsProfile       sql.NullString  `json:"preferred_hls_profile"`
-	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
-	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
-	PreferredSubtitleLanguage sql.NullString  `json:"preferred_subtitle_language"`
-	Pin                       sql.NullString  `json:"pin"`
-	CreatedAt                 string          `json:"created_at"`
-	UpdatedAt                 string          `json:"updated_at"`
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	Password  string         `json:"password"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
 }
 
 type VideoStream struct {

@@ -3,7 +3,7 @@ import type { PlaybackProfileType } from "@/types";
 const HEADROOM_FACTOR = 0.8;
 
 export function recommendedProfileId(
-  profiles: PlaybackProfileType[],
+  profiles: readonly PlaybackProfileType[],
   downloadMbps: number | null,
   serverUploadMbps: number | null,
 ): string | null {

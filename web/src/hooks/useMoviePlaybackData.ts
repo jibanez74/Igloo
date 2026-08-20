@@ -5,6 +5,7 @@ import {
   directPlayModeLabel,
   getAvailableModes,
   getPrimaryVideoStream,
+  playbackDefaultsInput,
   resolveModeForAudioTrack,
   resolvePlaybackSettings,
 } from "@/lib/playback";
@@ -22,6 +23,7 @@ import {
   movieWatchProgressQueryOpts,
   playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
+import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
 import {
@@ -79,16 +81,24 @@ export function useMoviePlaybackData({
   const {
     data: playbackSettingsData,
     isPending: playbackSettingsPending,
-  } = useQuery({
-    ...playbackSettingsQueryOpts(user?.id ?? 0),
-    enabled: user !== null,
-  });
-  const userPlaybackPrefs =
+  } = useQuery(playbackSettingsQueryOpts());
+  const serverPlaybackSettings =
     playbackSettingsData?.error === false && playbackSettingsData.data?.settings
       ? playbackSettingsData.data.settings
       : null;
+  const devicePrefs = useDevicePlaybackPreferences(user?.id ?? 0);
+  const userPlaybackPrefs = playbackDefaultsInput(
+    devicePrefs,
+    serverPlaybackSettings,
+  );
+  // Device preferences are synchronous, so the only thing still worth waiting
+  // for is the server catalog -- and getDefaultPlaybackSettings consults it on
+  // exactly one path: no preferred profile, but a download speed to size one
+  // against. Everything else (audio/subtitle language) resolves immediately.
+  const needsServerCatalog =
+    devicePrefs.preferredProfile === null && devicePrefs.downloadMbps !== null;
   const playbackPreferencesReady =
-    !authUserPending && (user === null || !playbackSettingsPending);
+    !authUserPending && (!needsServerCatalog || !playbackSettingsPending);
 
   const techLoaded = !techPending && techData?.data != null;
   const videoStreams = techData?.data?.video_streams ?? [];

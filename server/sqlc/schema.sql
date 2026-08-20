@@ -1,6 +1,7 @@
 -- Core users, settings, and authentication
 
--- Local user accounts and per-user playback preferences.
+-- Local user accounts. Playback preferences are device-specific and live in
+-- the browser's localStorage, not here.
 CREATE TABLE
   IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -9,10 +10,6 @@ CREATE TABLE
     password TEXT NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     avatar TEXT,
-    preferred_hls_profile TEXT,
-    download_mbps REAL,
-    preferred_audio_language TEXT,
-    preferred_subtitle_language TEXT,
     pin TEXT CHECK (pin GLOB '[0-9][0-9][0-9][0-9]'),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

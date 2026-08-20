@@ -83,13 +83,8 @@ function playbackSettings() {
         video_mbps: 8,
       },
     ],
-    preferred_profile: null,
-    download_mbps: null,
     server_upload_mbps: 20,
     hardware_acceleration_device: "cpu",
-    is_admin: true,
-    preferred_audio_language: null,
-    preferred_subtitle_language: null,
   };
 }
 
@@ -425,25 +420,23 @@ describe("settings form query updates", () => {
   it("updates a clean playback settings form when query data changes", async () => {
     const { queryClient } = await renderSettingsRoute("/settings/playback");
 
-    expect(await screen.findByLabelText("Download speed (Mbps)")).toHaveValue(
-      null,
-    );
+    expect(
+      await screen.findByLabelText("Server upload bandwidth (Mbps)"),
+    ).toHaveValue(20);
 
     await act(async () => {
-      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY, 1], {
+      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY], {
         error: false,
         data: {
-          settings: {
-            ...playbackSettings(),
-            download_mbps: 22.5,
-            server_upload_mbps: 25,
-          },
+          settings: { ...playbackSettings(), server_upload_mbps: 25 },
         },
       });
     });
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(22.5);
+      expect(
+        screen.getByLabelText("Server upload bandwidth (Mbps)"),
+      ).toHaveValue(25);
     });
   });
 
@@ -451,27 +444,29 @@ describe("settings form query updates", () => {
     const user = userEvent.setup();
     const { queryClient } = await renderSettingsRoute("/settings/playback");
 
-    const downloadSpeed = await screen.findByLabelText("Download speed (Mbps)");
-    await user.clear(downloadSpeed);
-    await user.type(downloadSpeed, "12.5");
+    const serverUpload = await screen.findByLabelText(
+      "Server upload bandwidth (Mbps)",
+    );
+    await user.clear(serverUpload);
+    await user.type(serverUpload, "12.5");
 
     await act(async () => {
-      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY, 1], {
+      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY], {
         error: false,
         data: {
-          settings: {
-            ...playbackSettings(),
-            download_mbps: 22.5,
-            server_upload_mbps: 25,
-          },
+          settings: { ...playbackSettings(), server_upload_mbps: 25 },
         },
       });
     });
 
-    expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(12.5);
+    expect(
+      screen.getByLabelText("Server upload bandwidth (Mbps)"),
+    ).toHaveValue(12.5);
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
 
-    expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(22.5);
+    expect(
+      screen.getByLabelText("Server upload bandwidth (Mbps)"),
+    ).toHaveValue(25);
   });
 });

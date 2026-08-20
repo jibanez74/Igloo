@@ -19,7 +19,16 @@ import type {
   MovieTechnicalDetailsResponse,
   PlaybackSettingsType,
 } from "@/types";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  resetDevicePlaybackPreferencesCache,
+  setDevicePlaybackPreferences,
+} from "@/lib/playback-preferences";
+
+beforeEach(() => {
+  localStorage.clear();
+  resetDevicePlaybackPreferencesCache();
+});
 
 // The playback settings dialog renders native selects on coarse pointers,
 // which jsdom can drive with fireEvent.change (Radix selects need real
@@ -91,13 +100,8 @@ function authUser(): AuthUser {
 function playbackSettings(): PlaybackSettingsType {
   return {
     profiles: [],
-    preferred_profile: null,
-    download_mbps: null,
     server_upload_mbps: null,
     hardware_acceleration_device: "cpu",
-    is_admin: false,
-    preferred_audio_language: null,
-    preferred_subtitle_language: null,
   };
 }
 
@@ -527,14 +531,10 @@ describe("movie details route playback settings sync", () => {
     const queryClient = createMovieDetailsQueryClient();
     queryClient.setQueryData([AUTH_USER_KEY], success({ user: authUser() }));
     queryClient.setQueryData(
-      [PLAYBACK_SETTINGS_KEY, 1],
-      success({
-        settings: {
-          ...playbackSettings(),
-          preferred_profile: "1080p_8mbps",
-        },
-      }),
+      [PLAYBACK_SETTINGS_KEY],
+      success({ settings: playbackSettings() }),
     );
+    setDevicePlaybackPreferences(1, { preferredProfile: "1080p_8mbps" });
 
     await renderMovieDetailsRouteWithQueryClient("/movies/57/", queryClient);
 
@@ -544,8 +544,8 @@ describe("movie details route playback settings sync", () => {
     expect(getPlayLinkMode()).toBe("1080p_8mbps");
   });
 
-  it("updates the play link when playback settings query data changes", async () => {
-    const { queryClient } = await renderMovieDetailsRoute("/movies/57/");
+  it("updates the play link when the device preference changes", async () => {
+    await renderMovieDetailsRoute("/movies/57/");
 
     expect(
       await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
@@ -553,15 +553,7 @@ describe("movie details route playback settings sync", () => {
     expect(getPlayLinkMode()).toBe("remux");
 
     await act(async () => {
-      queryClient.setQueryData(
-        [PLAYBACK_SETTINGS_KEY, 1],
-        success({
-          settings: {
-            ...playbackSettings(),
-            preferred_profile: "1080p_8mbps",
-          },
-        }),
-      );
+      setDevicePlaybackPreferences(1, { preferredProfile: "1080p_8mbps" });
     });
 
     await waitFor(() => {
@@ -569,10 +561,10 @@ describe("movie details route playback settings sync", () => {
     });
   });
 
-  it("keeps the user's saved dialog selection when playback settings data changes", async () => {
+  it("keeps the user's saved dialog selection when the device preference changes", async () => {
     prefersCoarse.value = true;
     try {
-      const { queryClient } = await renderMovieDetailsRoute("/movies/57/");
+      await renderMovieDetailsRoute("/movies/57/");
 
       expect(
         await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
@@ -594,15 +586,7 @@ describe("movie details route playback settings sync", () => {
       });
 
       await act(async () => {
-        queryClient.setQueryData(
-          [PLAYBACK_SETTINGS_KEY, 1],
-          success({
-            settings: {
-              ...playbackSettings(),
-              preferred_profile: "1080p_8mbps",
-            },
-          }),
-        );
+        setDevicePlaybackPreferences(1, { preferredProfile: "1080p_8mbps" });
       });
 
       expect(getPlayLinkMode()).toBe("720p_3mbps");

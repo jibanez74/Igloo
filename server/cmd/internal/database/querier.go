@@ -210,7 +210,6 @@ type Querier interface {
 	// Returns overall listening statistics for a user
 	GetUserListeningStats(ctx context.Context, userID int64) (GetUserListeningStatsRow, error)
 	GetUserPin(ctx context.Context, id int64) (sql.NullString, error)
-	GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
 	// Returns the user's most listened albums
@@ -295,7 +294,6 @@ type Querier interface {
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error)
-	UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error)
 	// Matches idx_albums_title_musician, which treats a missing musician as '' so an
 	// untagged album cannot be inserted twice.
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
