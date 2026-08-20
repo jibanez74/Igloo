@@ -892,7 +892,7 @@ func TestGetWatchRoom_HTTP_DetailIncludesPlaybackAndNullableFields(t *testing.T)
 func TestCreateWatchRoom_HTTP_HLSWarmUpStoresRoomSession(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
+	app.settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
 			{
@@ -943,7 +943,7 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpStoresRoomSession(t *testing.T) {
 func TestCreateWatchRoom_HTTP_HLSWarmUpFailureRollsBackRoom(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
+	app.settings = &database.Setting{}
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	handler := mountWatchRoomRouter(t, app, ownerID)
@@ -1540,7 +1540,7 @@ func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
 func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
+	app.settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
 			{
@@ -1798,7 +1798,7 @@ func TestVerifyWatchRoomStreamPins(t *testing.T) {
 func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
+	app.settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
 			{

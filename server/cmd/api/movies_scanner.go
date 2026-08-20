@@ -24,7 +24,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func (app *Application) ScanMoviesLibrary() {
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
+	settings := app.CurrentSettings()
+	if !settings.MoviesDir.Valid || settings.MoviesDir.String == "" {
 		app.Logger.Info("skipping movie library scan: movies directory is not configured")
 		return
 	}
@@ -46,12 +47,13 @@ func (app *Application) runMovieScan() {
 	}
 	defer movieScanGuard.Finish()
 
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
+	settings := app.CurrentSettings()
+	if !settings.MoviesDir.Valid || settings.MoviesDir.String == "" {
 		app.Logger.Info("skipping movie library scan: movies directory is not configured")
 		return
 	}
 
-	app.Logger.Info(fmt.Sprintf("scanning movies directory: %s", app.Settings.MoviesDir.String))
+	app.Logger.Info(fmt.Sprintf("scanning movies directory: %s", settings.MoviesDir.String))
 
 	ctx := app.scanContext()
 	errorCount := 0
@@ -81,7 +83,7 @@ func (app *Application) runMovieScan() {
 
 	err = helpers.WalkMediaLibraryContext(
 		ctx,
-		app.Settings.MoviesDir.String,
+		settings.MoviesDir.String,
 		helpers.ValidVideoExtensions,
 		func(err error) {
 			app.Logger.Error(err.Error())

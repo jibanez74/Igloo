@@ -22,9 +22,21 @@ import (
 )
 
 type Application struct {
-	DB                      *sql.DB
-	Queries                 *database.Queries
-	Settings                *database.Setting
+	DB      *sql.DB
+	Queries *database.Queries
+
+	// settings is the in-memory copy of the single settings row, read by
+	// request handlers, scanners and HLS sessions concurrently and replaced by
+	// the admin settings writers. Never touch it directly outside startup:
+	// go through CurrentSettings/SetSettings, or withSettingsWrite for a
+	// read-modify-write.
+	//
+	// InitSettings runs in NewApplication before anything serves and fails the
+	// boot if it cannot load or create the row, so this is never nil once the
+	// application exists. Readers dereference it without a nil check.
+	settingsMu sync.RWMutex
+	settings   *database.Setting
+
 	Config                  RuntimeConfig
 	Logger                  applogger.LoggerInterface
 	LoggerCloser            func() error
@@ -129,7 +141,8 @@ func InitApp() (initializedApp *Application, err error) {
 
 	// Remove any leftover HLS temp directories from a previous run that did not
 	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
-	cleanupStaleHLSTempDirs(app.Logger, app.Settings.TranscodeDir)
+	settings := app.CurrentSettings()
+	cleanupStaleHLSTempDirs(app.Logger, settings.TranscodeDir)
 
 	err = app.InitDefaultUser(ctx)
 	if err != nil {
@@ -150,8 +163,8 @@ func InitApp() (initializedApp *Application, err error) {
 	}
 	app.FFmpeg = ffmpegApp
 
-	if app.Settings.TmdbKey.Valid {
-		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
+	if settings.TmdbKey.Valid {
+		tmdb, err := tmdb.New(settings.TmdbKey.String)
 		if err != nil {
 			app.Logger.Warn("failed to initialize tmdb client", "error", err)
 		} else {
@@ -160,12 +173,12 @@ func InitApp() (initializedApp *Application, err error) {
 		}
 	}
 
-	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
-		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
+	if settings.SpotifyClientID.Valid && settings.SpotifyClientID.String != "" &&
+		settings.SpotifyClientSecret.Valid && settings.SpotifyClientSecret.String != "" {
 		spotifyClient, err := spotify.New(
 			ctx,
-			app.Settings.SpotifyClientID.String,
-			app.Settings.SpotifyClientSecret.String,
+			settings.SpotifyClientID.String,
+			settings.SpotifyClientSecret.String,
 		)
 
 		if err != nil {

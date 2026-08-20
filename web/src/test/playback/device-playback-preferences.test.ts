@@ -181,16 +181,145 @@ describe("device playback preferences", () => {
     });
   });
 
-  it("still applies the value for this session when storage throws", () => {
-    const setItem = vi
-      .spyOn(Storage.prototype, "setItem")
-      .mockImplementation(() => {
-        throw new Error("quota exceeded");
+  describe("reports whether the write persisted", () => {
+    it("returns true when localStorage accepts the write", () => {
+      expect(setDevicePlaybackPreferences(USER, { downloadMbps: 15 })).toBe(
+        true,
+      );
+    });
+
+    it("returns false but still applies the value when storage throws", () => {
+      const setItem = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(() => {
+          throw new Error("quota exceeded");
+        });
+
+      expect(setDevicePlaybackPreferences(USER, { downloadMbps: 15 })).toBe(
+        false,
+      );
+      expect(getDevicePlaybackPreferences(USER).downloadMbps).toBe(15);
+
+      setItem.mockRestore();
+    });
+
+    // Nothing reached storage, so a later patch has to merge against the
+    // session snapshot -- re-reading storage would drop the earlier value.
+    it("keeps session-only values when a later patch is applied", () => {
+      const setItem = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(() => {
+          throw new Error("quota exceeded");
+        });
+
+      setDevicePlaybackPreferences(USER, { downloadMbps: 15 });
+      setDevicePlaybackPreferences(USER, { preferredAudioLanguage: "eng" });
+      expect(getDevicePlaybackPreferences(USER)).toMatchObject({
+        downloadMbps: 15,
+        preferredAudioLanguage: "eng",
       });
 
-    setDevicePlaybackPreferences(USER, { downloadMbps: 15 });
-    expect(getDevicePlaybackPreferences(USER).downloadMbps).toBe(15);
+      setItem.mockRestore();
+    });
+  });
 
-    setItem.mockRestore();
+  // A second tab writes to the same key. Without this the module would merge
+  // patches against a stale snapshot and write the other tab's field away.
+  describe("synchronizes across tabs", () => {
+    function otherTabWrites(
+      userId: number,
+      value: Partial<Record<string, unknown>>,
+    ) {
+      const key = storageKeyForUser(userId);
+      const newValue = JSON.stringify(value);
+      localStorage.setItem(key, newValue);
+      window.dispatchEvent(new StorageEvent("storage", { key, newValue }));
+    }
+
+    it("picks up another tab's write and notifies subscribers", () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeDevicePlaybackPreferences(listener);
+
+      otherTabWrites(USER, { preferredAudioLanguage: "fra" });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(getDevicePlaybackPreferences(USER).preferredAudioLanguage).toBe(
+        "fra",
+      );
+
+      unsubscribe();
+    });
+
+    it("preserves the other tab's field when merging a later patch", () => {
+      const unsubscribe = subscribeDevicePlaybackPreferences(() => {});
+      // This tab reads first, so it holds a snapshot with no profile.
+      expect(getDevicePlaybackPreferences(USER).preferredProfile).toBeNull();
+
+      otherTabWrites(USER, { preferredProfile: "1080p_8mbps" });
+      setDevicePlaybackPreferences(USER, { preferredAudioLanguage: "eng" });
+
+      expect(getDevicePlaybackPreferences(USER)).toMatchObject({
+        preferredProfile: "1080p_8mbps",
+        preferredAudioLanguage: "eng",
+      });
+
+      unsubscribe();
+    });
+
+    it("merges against storage even before the event is delivered", () => {
+      const unsubscribe = subscribeDevicePlaybackPreferences(() => {});
+      expect(getDevicePlaybackPreferences(USER).preferredProfile).toBeNull();
+
+      // No StorageEvent: the browser delivers it asynchronously, so the write
+      // path cannot rely on having seen it.
+      localStorage.setItem(
+        storageKeyForUser(USER),
+        JSON.stringify({ preferredProfile: "1080p_8mbps" }),
+      );
+      setDevicePlaybackPreferences(USER, { preferredAudioLanguage: "eng" });
+
+      expect(getDevicePlaybackPreferences(USER)).toMatchObject({
+        preferredProfile: "1080p_8mbps",
+        preferredAudioLanguage: "eng",
+      });
+
+      unsubscribe();
+    });
+
+    it("drops every snapshot when another tab clears storage", () => {
+      const unsubscribe = subscribeDevicePlaybackPreferences(() => {});
+      setDevicePlaybackPreferences(USER, { preferredAudioLanguage: "eng" });
+
+      localStorage.clear();
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+
+      expect(getDevicePlaybackPreferences(USER)).toEqual(
+        DEFAULT_DEVICE_PLAYBACK_PREFERENCES,
+      );
+
+      unsubscribe();
+    });
+
+    it("ignores writes to unrelated keys", () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeDevicePlaybackPreferences(listener);
+
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "igloo-theme", newValue: "light" }),
+      );
+
+      expect(listener).not.toHaveBeenCalled();
+
+      unsubscribe();
+    });
+
+    it("stops listening once the last subscriber unsubscribes", () => {
+      const listener = vi.fn();
+      subscribeDevicePlaybackPreferences(listener)();
+
+      otherTabWrites(USER, { preferredAudioLanguage: "fra" });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 });

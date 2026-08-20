@@ -477,6 +477,65 @@ test.describe("Playback settings", () => {
     tracker.assertClean();
   });
 
+  // Regression for the cross-tab clobbering in docs/ls-review.md: each tab
+  // caches its own snapshot, so a merge against a stale one used to write the
+  // other tab's field away.
+  test("keeps preferences set in another tab", async ({ page, context }) => {
+    const env = readE2EEnv();
+    const tracker = trackBrowserIssues(page);
+
+    await login(page, env);
+
+    const second = await context.newPage();
+    const secondTracker = trackBrowserIssues(second);
+
+    try {
+      await page.goto(apiURL(env, "/settings/playback"), {
+        waitUntil: "networkidle",
+      });
+      await clearDevicePreferences(page);
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(
+        page.getByRole("heading", { name: "Streaming & bandwidth" }),
+      ).toBeVisible();
+
+      await second.goto(apiURL(env, "/settings/playback"), {
+        waitUntil: "networkidle",
+      });
+      await expect(
+        second.getByRole("heading", { name: "Stream defaults" }),
+      ).toBeVisible();
+
+      // Tab one sets the audio language.
+      await page.getByRole("combobox", { name: "Audio language" }).click();
+      await page.getByRole("option", { name: "English", exact: true }).click();
+      await expect
+        .poll(async () => (await readDevicePreferences(page))?.preferredAudioLanguage)
+        .toBe("en");
+
+      // Tab two, holding a snapshot from before that write, sets a different field.
+      await second.getByRole("spinbutton", { name: "Download speed (Mbps)" }).fill("30");
+      await expect
+        .poll(async () => (await readDevicePreferences(second))?.downloadMbps)
+        .toBe(30);
+
+      // Both survive, and tab two shows the language tab one chose.
+      const stored = await readDevicePreferences(second);
+      expect(stored?.preferredAudioLanguage).toBe("en");
+      expect(stored?.downloadMbps).toBe(30);
+      await expect(
+        second.getByRole("combobox", { name: "Audio language" }),
+      ).toHaveText("English");
+
+      await clearDevicePreferences(page);
+    } finally {
+      secondTracker.assertClean();
+      await second.close();
+    }
+
+    tracker.assertClean();
+  });
+
   test("gives regular users device-only settings with no save bar", async ({
     page,
   }) => {

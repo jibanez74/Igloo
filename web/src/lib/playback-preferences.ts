@@ -115,6 +115,11 @@ function read(userId: number): DevicePlaybackPreferences {
 const snapshots = new Map<number, DevicePlaybackPreferences>();
 const listeners = new Set<() => void>();
 
+// Users whose last write never reached localStorage (private mode, quota).
+// Their current values exist only in `snapshots`, so a later patch must merge
+// against the snapshot rather than re-reading storage that never took them.
+const unpersisted = new Set<number>();
+
 /** Returns this user's stored preferences on this device, sanitized. */
 export function getDevicePlaybackPreferences(
   userId: number,
@@ -133,36 +138,102 @@ function notify(): void {
   }
 }
 
-/** Merges a patch into this user's preferences and persists them. */
-export function setDevicePlaybackPreferences(
-  userId: number,
-  patch: Partial<DevicePlaybackPreferences>,
-): void {
-  const next = sanitize({ ...getDevicePlaybackPreferences(userId), ...patch });
-  snapshots.set(userId, next);
+function userIdFromStorageKey(key: string): number | null {
+  if (!key.startsWith(PLAYBACK_PREFERENCES_STORAGE_PREFIX)) return null;
 
-  const storage = browserLocalStorage();
-  try {
-    storage?.setItem(storageKeyForUser(userId), JSON.stringify(next));
-  } catch {
-    // Ignore storage failures (private mode, quota); the value still applies
-    // for this session, matching the theme module's behaviour.
+  const suffix = key.slice(PLAYBACK_PREFERENCES_STORAGE_PREFIX.length);
+  if (!/^\d+$/.test(suffix)) return null;
+
+  return Number(suffix);
+}
+
+// Another tab wrote to localStorage. Drop the affected snapshot rather than
+// adopting event.newValue, so the next read re-parses and re-sanitizes through
+// read() and there is only ever one parse path.
+function handleStorageEvent(event: StorageEvent): void {
+  // A null key means the other tab called localStorage.clear().
+  if (event.key === null) {
+    snapshots.clear();
+    unpersisted.clear();
+    notify();
+    return;
   }
 
+  const userId = userIdFromStorageKey(event.key);
+  if (userId === null) return;
+
+  snapshots.delete(userId);
+  unpersisted.delete(userId);
   notify();
 }
 
-/** Subscribes to preference changes; returns an unsubscribe function. */
+/**
+ * Merges a patch into this user's preferences and persists them.
+ *
+ * Returns whether the write reached localStorage. A false result still applies
+ * the value for this session, but the caller must not confirm it as a durable
+ * save -- see docs/design-system.md §3.7.
+ */
+export function setDevicePlaybackPreferences(
+  userId: number,
+  patch: Partial<DevicePlaybackPreferences>,
+): boolean {
+  // Merge against storage, not the cached snapshot: another tab may have
+  // written since this tab last read, and its `storage` event is delivered
+  // asynchronously. Merging stale would write the whole object back and
+  // silently clear the field the other tab changed.
+  const base = unpersisted.has(userId)
+    ? getDevicePlaybackPreferences(userId)
+    : read(userId);
+  const next = sanitize({ ...base, ...patch });
+  snapshots.set(userId, next);
+
+  let persisted = false;
+  const storage = browserLocalStorage();
+  if (storage) {
+    try {
+      storage.setItem(storageKeyForUser(userId), JSON.stringify(next));
+      persisted = true;
+    } catch {
+      // Private mode or quota. The value still applies for this session; the
+      // caller reports the session-only save.
+    }
+  }
+
+  if (persisted) {
+    unpersisted.delete(userId);
+  } else {
+    unpersisted.add(userId);
+  }
+
+  notify();
+  return persisted;
+}
+
+/**
+ * Subscribes to preference changes; returns an unsubscribe function.
+ *
+ * The `storage` listener is attached with the first subscriber and dropped with
+ * the last, so tabs stay in sync only while something is rendering.
+ */
 export function subscribeDevicePlaybackPreferences(
   listener: () => void,
 ): () => void {
+  if (listeners.size === 0 && typeof window !== "undefined") {
+    window.addEventListener("storage", handleStorageEvent);
+  }
+
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
+    if (listeners.size === 0 && typeof window !== "undefined") {
+      window.removeEventListener("storage", handleStorageEvent);
+    }
   };
 }
 
 /** Drops cached snapshots so the next read re-parses storage. Test-only. */
 export function resetDevicePlaybackPreferencesCache(): void {
   snapshots.clear();
+  unpersisted.clear();
 }

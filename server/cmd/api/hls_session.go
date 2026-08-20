@@ -696,8 +696,9 @@ func cleanupHLSSession(session *HLSSession) {
 }
 
 func (app *Application) hlsTranscodeRoot() string {
-	if app.Settings != nil && strings.TrimSpace(app.Settings.TranscodeDir) != "" {
-		return app.Settings.TranscodeDir
+	settings := app.CurrentSettings()
+	if strings.TrimSpace(settings.TranscodeDir) != "" {
+		return settings.TranscodeDir
 	}
 	return app.Config.effectiveTranscodeDir()
 }
@@ -782,7 +783,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
 	vfrDetected := isVFRStream(params.PrimaryVideo)
 
-	hwDevice := hardwareAccelerationDeviceOrDefault(app.Settings)
+	hwDevice := hardwareAccelerationDeviceOrDefault(*app.CurrentSettings())
 	ffmpegCaps := app.FFmpeg.Capabilities()
 	deviceDecision := ffmpeg.ResolveHLSDevice(hwDevice, ffmpegCaps)
 

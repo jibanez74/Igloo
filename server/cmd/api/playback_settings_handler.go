@@ -29,9 +29,8 @@ type playbackSettingsResponse struct {
 	HardwareAccelerationDevice string                    `json:"hardware_acceleration_device"`
 }
 
-func hardwareAccelerationDeviceOrDefault(settings *database.Setting) string {
-	if settings != nil &&
-		settings.HardwareAccelerationDevice.Valid &&
+func hardwareAccelerationDeviceOrDefault(settings database.Setting) string {
+	if settings.HardwareAccelerationDevice.Valid &&
 		settings.HardwareAccelerationDevice.String != "" {
 		return settings.HardwareAccelerationDevice.String
 	}
@@ -100,15 +99,10 @@ func formatProfileLabel(height, videoMbps int) string {
 	return strconv.Itoa(height) + "p · " + strconv.Itoa(videoMbps) + " Mbps"
 }
 
-func mapPlaybackSettingsResponse(settings *database.Setting) playbackSettingsResponse {
-	var serverUpload *float64
-	if settings != nil {
-		serverUpload = helpers.Float64PtrFromNull(settings.ServerUploadMbps)
-	}
-
+func mapPlaybackSettingsResponse(settings database.Setting) playbackSettingsResponse {
 	return playbackSettingsResponse{
 		Profiles:                   playbackProfileCatalog(),
-		ServerUploadMbps:           serverUpload,
+		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
 		HardwareAccelerationDevice: hardwareAccelerationDeviceOrDefault(settings),
 	}
 }
@@ -117,7 +111,7 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"settings": mapPlaybackSettingsResponse(app.Settings),
+			"settings": mapPlaybackSettingsResponse(*app.CurrentSettings()),
 		},
 	})
 }
@@ -134,14 +128,10 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	current, err := app.currentSettings(r)
-	if err != nil {
-		app.Logger.Error("failed to load settings for playback update", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
-		return
-	}
-
-	serverUpload := current.ServerUploadMbps
+	// The body is validated before the lock is taken; only the fields that were
+	// actually sent are decoded here, and the rest are filled in from the row
+	// read under the lock below.
+	var serverUpload *sql.NullFloat64
 	if raw, ok := rawFields["server_upload_mbps"]; ok {
 		var val *float64
 		err := json.Unmarshal(raw, &val)
@@ -150,17 +140,18 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		serverUpload = sql.NullFloat64{}
+		parsed := sql.NullFloat64{}
 		if val != nil {
 			if *val <= 0 || *val >= 100000 {
 				helpers.ErrorJSON(w, errors.New("server upload speed must be greater than 0 and less than 100000 Mbps"), http.StatusBadRequest)
 				return
 			}
-			serverUpload = helpers.NullFloat64FromPtr(val)
+			parsed = helpers.NullFloat64FromPtr(val)
 		}
+		serverUpload = &parsed
 	}
 
-	hardwareDevice := hardwareAccelerationDeviceOrDefault(&current)
+	var hardwareDevice *string
 	if raw, ok := rawFields["hardware_acceleration_device"]; ok {
 		var val string
 		err := json.Unmarshal(raw, &val)
@@ -174,12 +165,25 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 			helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
 			return
 		}
-		hardwareDevice = val
+		hardwareDevice = &val
 	}
 
-	updated, err := app.Queries.UpdatePlaybackServerSettings(r.Context(), database.UpdatePlaybackServerSettingsParams{
-		ServerUploadMbps:           serverUpload,
-		HardwareAccelerationDevice: helpers.NullString(hardwareDevice),
+	// The query writes both columns, so the omitted one has to be carried over
+	// from the current row. Doing that under the write lock is what keeps two
+	// concurrent partial updates from each restoring the other's stale value.
+	updated, err := app.withSettingsWrite(r.Context(), func(current database.Setting) (database.Setting, error) {
+		params := database.UpdatePlaybackServerSettingsParams{
+			ServerUploadMbps:           current.ServerUploadMbps,
+			HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDeviceOrDefault(current)),
+		}
+		if serverUpload != nil {
+			params.ServerUploadMbps = *serverUpload
+		}
+		if hardwareDevice != nil {
+			params.HardwareAccelerationDevice = helpers.NullString(*hardwareDevice)
+		}
+
+		return app.Queries.UpdatePlaybackServerSettings(r.Context(), params)
 	})
 	if err != nil {
 		app.Logger.Error("failed to update playback server settings", "error", err)
@@ -187,13 +191,11 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	app.Settings = &updated
-
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error:   false,
 		Message: "Playback settings updated",
 		Data: map[string]any{
-			"settings": mapPlaybackSettingsResponse(&updated),
+			"settings": mapPlaybackSettingsResponse(updated),
 		},
 	})
 }

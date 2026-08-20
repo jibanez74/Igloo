@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -61,7 +62,7 @@ func seedServerPlaybackSettings(t *testing.T, app *Application, uploadMbps float
 	if err != nil {
 		t.Fatalf("seed server settings: %v", err)
 	}
-	app.Settings = &settings
+	app.settings = &settings
 }
 
 func putPlayback(t *testing.T, handler http.Handler, body string) *httptest.ResponseRecorder {
@@ -258,7 +259,7 @@ func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
-	app.Settings.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
+	app.settings.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
@@ -296,8 +297,8 @@ func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
 	if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != 12.5 {
 		t.Fatalf("expected server_upload_mbps 12.5, got valid=%v %v", settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
 	}
-	if app.Settings == nil || !app.Settings.ServerUploadMbps.Valid || app.Settings.ServerUploadMbps.Float64 != 12.5 {
-		t.Fatalf("expected app.Settings server_upload_mbps 12.5, got %+v", app.Settings)
+	if !app.settings.ServerUploadMbps.Valid || app.settings.ServerUploadMbps.Float64 != 12.5 {
+		t.Fatalf("expected app.settings server_upload_mbps 12.5, got %+v", app.settings)
 	}
 }
 
@@ -395,8 +396,8 @@ func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
 	if !settings.HardwareAccelerationDevice.Valid || settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
 		t.Fatalf("expected stored hardware device apple, got valid=%v %q", settings.HardwareAccelerationDevice.Valid, settings.HardwareAccelerationDevice.String)
 	}
-	if app.Settings == nil || app.Settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
-		t.Fatalf("expected app.Settings hardware device apple, got %+v", app.Settings)
+	if app.settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
+		t.Fatalf("expected app.settings hardware device apple, got %+v", app.settings)
 	}
 }
 
@@ -415,5 +416,57 @@ func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("body=%s expected 400, got %d: %s", body, w.Code, w.Body.String())
 		}
+	}
+}
+
+// Two admins each send a partial PUT for a different field. The query writes
+// both columns, so without serializing the read-modify-write one request would
+// restore the other's column to the value it read before either wrote.
+func TestUpdatePlaybackSettings_ConcurrentPartialUpdatesBothLand(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	defer app.DB.Close()
+
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	handler := mountPlaybackRouter(app, admin.ID)
+	seedServerPlaybackSettings(t, app, 25)
+
+	bodies := []string{
+		`{"server_upload_mbps": 42.5}`,
+		`{"hardware_acceleration_device": "nvidia"}`,
+	}
+
+	var wg sync.WaitGroup
+	codes := make([]int, len(bodies))
+	start := make(chan struct{})
+	for i, body := range bodies {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			codes[i] = w.Code
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	for i, code := range codes {
+		if code != http.StatusOK {
+			t.Fatalf("request %d expected 200, got %d", i, code)
+		}
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != 42.5 {
+		t.Errorf("expected server upload 42.5 to survive, got valid=%v %v", settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
+	}
+	if settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
+		t.Errorf("expected hardware device nvidia to survive, got %q", settings.HardwareAccelerationDevice.String)
 	}
 }

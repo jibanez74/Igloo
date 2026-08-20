@@ -574,10 +574,15 @@ require the full playback test pass.
   change. Because the Save bar that used to confirm the write is gone, such a
   card must: state its scope in the `SettingsCardHeader` description ("Saved
   in this browser only…"), and confirm each change through `LiveAnnouncer`
-  so the write is not silent for screen-reader users. Do not mix the two
-  models inside one card — split by ownership, as Settings → Playback does
-  (two "this device" cards, one admin-only "Server" card with the only Save
-  bar).
+  so the write is not silent for screen-reader users. The confirmation must
+  reflect what actually happened — localStorage can refuse the write (private
+  browsing, quota), so the writer returns whether it persisted and the card
+  says "applied for this session only" instead of claiming a save. Because the
+  announcement is one-shot while the refusal is a standing browser condition,
+  such a card also renders a visible `text-destructive` notice for as long as
+  it lasts. Do not mix the two models inside one card — split by ownership,
+  as Settings → Playback does (two "this device" cards, one admin-only
+  "Server" card with the only Save bar).
 
 ---
 

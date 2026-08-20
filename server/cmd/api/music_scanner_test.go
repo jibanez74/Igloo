@@ -930,7 +930,7 @@ func TestRunMusicScanDoesNotClearSpotifyRuntimeCache(t *testing.T) {
 	spotifyStub := &musicScannerSpotifyStub{}
 	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
 	app.Spotify = spotifyStub
-	app.Settings = &database.Setting{
+	app.settings = &database.Setting{
 		MusicDir: sql.NullString{String: musicDir, Valid: true},
 	}
 
@@ -982,7 +982,7 @@ func TestRunMusicScanWalksAudioFilesAndSkipsUnchangedFiles(t *testing.T) {
 		}),
 	})
 	app.Ffprobe = ffprobeStub
-	app.Settings = &database.Setting{
+	app.settings = &database.Setting{
 		MusicDir: sql.NullString{String: musicDir, Valid: true},
 	}
 

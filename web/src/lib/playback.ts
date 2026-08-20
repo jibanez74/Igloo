@@ -23,6 +23,17 @@ import type {
   PlaybackSettingsType,
 } from "@/types/settings";
 
+/**
+ * Parses a bandwidth field's text into Mbps. Blank means "no value"; anything
+ * unparseable is treated the same way, so a half-typed number never commits.
+ */
+export function parseMbpsInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 type PlaybackModeOption = {
   id: StreamModeId;
 };

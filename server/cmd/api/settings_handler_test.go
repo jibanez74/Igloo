@@ -84,11 +84,11 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if settings.TranscodeDir != filepath.Join(filepath.Dir(staticDir), "transcode") {
 		t.Fatalf("expected transcode dir to be saved, got %q", settings.TranscodeDir)
 	}
-	if app.Settings == nil || app.Settings.StaticDir != staticDir {
-		t.Fatal("expected app.Settings to reflect the saved general settings")
+	if app.settings.StaticDir != staticDir {
+		t.Fatal("expected app.settings to reflect the saved general settings")
 	}
-	if app.Settings.ImmichApiKey.String != "immich-api-key" || !app.Settings.ImmichApiKey.Valid {
-		t.Fatalf("expected app.Settings Immich API key to be saved, got %q valid=%v", app.Settings.ImmichApiKey.String, app.Settings.ImmichApiKey.Valid)
+	if app.settings.ImmichApiKey.String != "immich-api-key" || !app.settings.ImmichApiKey.Valid {
+		t.Fatalf("expected app.settings Immich API key to be saved, got %q valid=%v", app.settings.ImmichApiKey.String, app.settings.ImmichApiKey.Valid)
 	}
 }
 
@@ -318,7 +318,7 @@ func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
-	app.Settings.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
+	app.settings.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
 
 	musicScanGuard.Finish()
 	if !musicScanGuard.TryBegin() {
@@ -339,7 +339,7 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
-	app.Settings.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
+	app.settings.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
 
 	movieScanGuard.Finish()
 	if !movieScanGuard.TryBegin() {

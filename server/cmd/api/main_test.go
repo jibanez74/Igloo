@@ -1137,7 +1137,10 @@ func setupTestApp(t *testing.T) *Application {
 	app := &Application{
 		DB: db,
 		Config: RuntimeConfig{
-			StaticDir:                  defaultStaticDir,
+			// Both are absolute: InitSettings persists them, and handlers that
+			// write beneath StaticDir would otherwise create ./static in the
+			// package directory.
+			StaticDir:                  filepath.Join(dataDir, "static"),
 			TranscodeDir:               filepath.Join(dataDir, "transcode"),
 			Port:                       defaultAppPort,
 			DefaultAdminName:           defaultAdminName,
@@ -1155,6 +1158,14 @@ func setupTestApp(t *testing.T) *Application {
 	app.Queries, err = database.Prepare(context.Background(), db)
 	if err != nil {
 		t.Fatalf("Failed to prepare queries: %v", err)
+	}
+
+	// Production boots through InitSettings before anything serves, so app
+	// settings are never nil. Tests share that invariant rather than exercising
+	// a state the running server cannot reach.
+	err = app.InitSettings(context.Background())
+	if err != nil {
+		t.Fatalf("InitSettings failed: %v", err)
 	}
 
 	// Share the production wiring so a cache added there is never missing here.
@@ -1267,6 +1278,14 @@ func restartTestApp(t *testing.T, app *Application) *Application {
 	}
 	setupTestLogger(t, restarted)
 
+	// A real restart loads the persisted settings row, exactly as
+	// NewApplication does; without it the restarted app would carry a nil
+	// settings cache that production never has.
+	err = restarted.InitSettings(t.Context())
+	if err != nil {
+		t.Fatalf("InitSettings for restarted app: %v", err)
+	}
+
 	restarted.initRuntimeCaches()
 	restarted.WatchRoomHub = NewWatchRoomHub()
 	restarted.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
@@ -1274,6 +1293,19 @@ func restartTestApp(t *testing.T, app *Application) *Application {
 	restarted.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 
 	return restarted
+}
+
+// clearSettingsRow empties the settings table so InitSettings takes its
+// create-defaults path. setupTestApp already booted settings the way production
+// does, so a test that exercises the create path has to undo that first --
+// without ever nil-ing the cache, which the running server never does.
+func clearSettingsRow(t *testing.T, app *Application) {
+	t.Helper()
+
+	_, err := app.DB.Exec("DELETE FROM settings")
+	if err != nil {
+		t.Fatalf("clear settings row: %v", err)
+	}
 }
 
 func clearSettingsEnv(t *testing.T) {
@@ -1301,6 +1333,7 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	clearSettingsRow(t, app)
 	clearSettingsEnv(t)
 	config, err := NewRuntimeConfig()
 	if err != nil {
@@ -1314,45 +1347,45 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
 
-	if app.Settings == nil {
+	if app.settings == nil {
 		t.Fatal("Settings should not be nil after InitSettings")
 	}
 
-	if app.Settings.StaticDir != defaultStaticDir {
-		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.Settings.StaticDir)
+	if app.settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.settings.StaticDir)
 	}
-	if app.Settings.TranscodeDir != defaultTranscodeDir {
-		t.Errorf("Expected TranscodeDir %q, got %q", defaultTranscodeDir, app.Settings.TranscodeDir)
+	if app.settings.TranscodeDir != defaultTranscodeDir {
+		t.Errorf("Expected TranscodeDir %q, got %q", defaultTranscodeDir, app.settings.TranscodeDir)
 	}
 
-	if app.Settings.HardwareAccelerationDevice.String != "cpu" {
-		t.Errorf("Expected HardwareAccelerationDevice 'cpu', got '%s'", app.Settings.HardwareAccelerationDevice.String)
+	if app.settings.HardwareAccelerationDevice.String != "cpu" {
+		t.Errorf("Expected HardwareAccelerationDevice 'cpu', got '%s'", app.settings.HardwareAccelerationDevice.String)
 	}
-	if !app.Settings.HardwareAccelerationDevice.Valid {
+	if !app.settings.HardwareAccelerationDevice.Valid {
 		t.Error("Expected HardwareAccelerationDevice to be valid")
 	}
 
-	if app.Settings.EnableWatcher != false {
+	if app.settings.EnableWatcher != false {
 		t.Error("Expected EnableWatcher to be false by default")
 	}
-	if app.Settings.DownloadImages != false {
+	if app.settings.DownloadImages != false {
 		t.Error("Expected DownloadImages to be false by default")
 	}
 
-	if app.Settings.TmdbKey.Valid {
+	if app.settings.TmdbKey.Valid {
 		t.Error("Expected TmdbKey to be invalid when not set")
 	}
-	if app.Settings.JellyfinApiKey.Valid {
+	if app.settings.JellyfinApiKey.Valid {
 		t.Error("Expected JellyfinApiKey to be invalid when not set")
 	}
-	if app.Settings.MoviesDir.Valid {
-		t.Errorf("Expected MoviesDir to be disabled by default, got %q", app.Settings.MoviesDir.String)
+	if app.settings.MoviesDir.Valid {
+		t.Errorf("Expected MoviesDir to be disabled by default, got %q", app.settings.MoviesDir.String)
 	}
-	if app.Settings.ShowsDir.Valid {
-		t.Errorf("Expected ShowsDir to be disabled by default, got %q", app.Settings.ShowsDir.String)
+	if app.settings.ShowsDir.Valid {
+		t.Errorf("Expected ShowsDir to be disabled by default, got %q", app.settings.ShowsDir.String)
 	}
-	if app.Settings.MusicDir.Valid {
-		t.Errorf("Expected MusicDir to be disabled by default, got %q", app.Settings.MusicDir.String)
+	if app.settings.MusicDir.Valid {
+		t.Errorf("Expected MusicDir to be disabled by default, got %q", app.settings.MusicDir.String)
 	}
 
 	var settingsCount int
@@ -1369,6 +1402,7 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	clearSettingsRow(t, app)
 	clearSettingsEnv(t)
 
 	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
@@ -1393,36 +1427,36 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
 
-	if app.Settings.TmdbKey.String != "test-tmdb-key" || !app.Settings.TmdbKey.Valid {
-		t.Errorf("Expected TmdbKey 'test-tmdb-key' (valid), got '%s' (valid=%v)", app.Settings.TmdbKey.String, app.Settings.TmdbKey.Valid)
+	if app.settings.TmdbKey.String != "test-tmdb-key" || !app.settings.TmdbKey.Valid {
+		t.Errorf("Expected TmdbKey 'test-tmdb-key' (valid), got '%s' (valid=%v)", app.settings.TmdbKey.String, app.settings.TmdbKey.Valid)
 	}
-	if app.Settings.JellyfinApiKey.String != "test-jellyfin-api-key" || !app.Settings.JellyfinApiKey.Valid {
-		t.Errorf("Expected JellyfinApiKey 'test-jellyfin-api-key' (valid), got '%s' (valid=%v)", app.Settings.JellyfinApiKey.String, app.Settings.JellyfinApiKey.Valid)
+	if app.settings.JellyfinApiKey.String != "test-jellyfin-api-key" || !app.settings.JellyfinApiKey.Valid {
+		t.Errorf("Expected JellyfinApiKey 'test-jellyfin-api-key' (valid), got '%s' (valid=%v)", app.settings.JellyfinApiKey.String, app.settings.JellyfinApiKey.Valid)
 	}
-	if app.Settings.HardwareAccelerationDevice.String != "nvidia" || !app.Settings.HardwareAccelerationDevice.Valid {
-		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.Settings.HardwareAccelerationDevice.String, app.Settings.HardwareAccelerationDevice.Valid)
+	if app.settings.HardwareAccelerationDevice.String != "nvidia" || !app.settings.HardwareAccelerationDevice.Valid {
+		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.settings.HardwareAccelerationDevice.String, app.settings.HardwareAccelerationDevice.Valid)
 	}
-	if app.Settings.MoviesDir.String != "/host/movies" || !app.Settings.MoviesDir.Valid {
-		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", "/host/movies", app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if app.settings.MoviesDir.String != "/host/movies" || !app.settings.MoviesDir.Valid {
+		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", "/host/movies", app.settings.MoviesDir.String, app.settings.MoviesDir.Valid)
 	}
-	if app.Settings.ShowsDir.String != "/host/shows" || !app.Settings.ShowsDir.Valid {
-		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", "/host/shows", app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
+	if app.settings.ShowsDir.String != "/host/shows" || !app.settings.ShowsDir.Valid {
+		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", "/host/shows", app.settings.ShowsDir.String, app.settings.ShowsDir.Valid)
 	}
-	if app.Settings.MusicDir.String != "/host/music" || !app.Settings.MusicDir.Valid {
-		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", "/host/music", app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
-	}
-
-	if app.Settings.StaticDir != "/host/static" {
-		t.Errorf("Expected StaticDir %q, got %q", "/host/static", app.Settings.StaticDir)
-	}
-	if app.Settings.TranscodeDir != "/host/transcode" {
-		t.Errorf("Expected TranscodeDir %q, got %q", "/host/transcode", app.Settings.TranscodeDir)
+	if app.settings.MusicDir.String != "/host/music" || !app.settings.MusicDir.Valid {
+		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", "/host/music", app.settings.MusicDir.String, app.settings.MusicDir.Valid)
 	}
 
-	if app.Settings.EnableWatcher != true {
+	if app.settings.StaticDir != "/host/static" {
+		t.Errorf("Expected StaticDir %q, got %q", "/host/static", app.settings.StaticDir)
+	}
+	if app.settings.TranscodeDir != "/host/transcode" {
+		t.Errorf("Expected TranscodeDir %q, got %q", "/host/transcode", app.settings.TranscodeDir)
+	}
+
+	if app.settings.EnableWatcher != true {
 		t.Error("Expected EnableWatcher to be true")
 	}
-	if app.Settings.DownloadImages != true {
+	if app.settings.DownloadImages != true {
 		t.Error("Expected DownloadImages to be true")
 	}
 }
@@ -1430,6 +1464,8 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
+
+	clearSettingsRow(t, app)
 
 	const (
 		existingMoviesDir = "/media/movies"
@@ -1475,50 +1511,50 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
 
-	if app.Settings.TmdbKey.String != "existing-key" {
-		t.Errorf("Expected existing tmdb key, got %q", app.Settings.TmdbKey.String)
+	if app.settings.TmdbKey.String != "existing-key" {
+		t.Errorf("Expected existing tmdb key, got %q", app.settings.TmdbKey.String)
 	}
-	if app.Settings.JellyfinApiKey.String != "existing-jellyfin" {
-		t.Errorf("Expected existing jellyfin api key, got %q", app.Settings.JellyfinApiKey.String)
+	if app.settings.JellyfinApiKey.String != "existing-jellyfin" {
+		t.Errorf("Expected existing jellyfin api key, got %q", app.settings.JellyfinApiKey.String)
 	}
-	if app.Settings.SpotifyClientID.String != "existing-spotify-id" {
-		t.Errorf("Expected existing spotify client id, got %q", app.Settings.SpotifyClientID.String)
+	if app.settings.SpotifyClientID.String != "existing-spotify-id" {
+		t.Errorf("Expected existing spotify client id, got %q", app.settings.SpotifyClientID.String)
 	}
-	if app.Settings.SpotifyClientSecret.String != "existing-spotify-secret" {
-		t.Errorf("Expected existing spotify client secret, got %q", app.Settings.SpotifyClientSecret.String)
+	if app.settings.SpotifyClientSecret.String != "existing-spotify-secret" {
+		t.Errorf("Expected existing spotify client secret, got %q", app.settings.SpotifyClientSecret.String)
 	}
-	if app.Settings.HardwareAccelerationDevice.String != "cpu" {
-		t.Errorf("Expected existing hardware mode, got %q", app.Settings.HardwareAccelerationDevice.String)
+	if app.settings.HardwareAccelerationDevice.String != "cpu" {
+		t.Errorf("Expected existing hardware mode, got %q", app.settings.HardwareAccelerationDevice.String)
 	}
-	if app.Settings.EnableWatcher {
+	if app.settings.EnableWatcher {
 		t.Error("Expected existing EnableWatcher to remain false")
 	}
-	if app.Settings.DownloadImages {
+	if app.settings.DownloadImages {
 		t.Error("Expected existing DownloadImages to remain false")
 	}
-	if app.Settings.MoviesDir.String != existingMoviesDir {
-		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", existingMoviesDir, app.Settings.MoviesDir.String)
+	if app.settings.MoviesDir.String != existingMoviesDir {
+		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", existingMoviesDir, app.settings.MoviesDir.String)
 	}
-	if !app.Settings.MoviesDir.Valid {
+	if !app.settings.MoviesDir.Valid {
 		t.Error("Expected MoviesDir.Valid to remain true")
 	}
-	if app.Settings.ShowsDir.String != existingShowsDir {
-		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", existingShowsDir, app.Settings.ShowsDir.String)
+	if app.settings.ShowsDir.String != existingShowsDir {
+		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", existingShowsDir, app.settings.ShowsDir.String)
 	}
-	if !app.Settings.ShowsDir.Valid {
+	if !app.settings.ShowsDir.Valid {
 		t.Error("Expected ShowsDir.Valid to remain true")
 	}
-	if app.Settings.MusicDir.String != existingMusicDir {
-		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", existingMusicDir, app.Settings.MusicDir.String)
+	if app.settings.MusicDir.String != existingMusicDir {
+		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", existingMusicDir, app.settings.MusicDir.String)
 	}
-	if !app.Settings.MusicDir.Valid {
+	if !app.settings.MusicDir.Valid {
 		t.Error("Expected MusicDir.Valid to remain true")
 	}
-	if app.Settings.StaticDir != defaultStaticDir {
-		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", defaultStaticDir, app.Settings.StaticDir)
+	if app.settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", defaultStaticDir, app.settings.StaticDir)
 	}
-	if app.Settings.TranscodeDir != defaultTranscodeDir {
-		t.Errorf("Expected TranscodeDir to remain fixed at %q, got %q", defaultTranscodeDir, app.Settings.TranscodeDir)
+	if app.settings.TranscodeDir != defaultTranscodeDir {
+		t.Errorf("Expected TranscodeDir to remain fixed at %q, got %q", defaultTranscodeDir, app.settings.TranscodeDir)
 	}
 }
 
@@ -1533,15 +1569,15 @@ func TestInitSettings_Idempotent(t *testing.T) {
 		t.Fatalf("First InitSettings call failed: %v", err)
 	}
 
-	firstSettingsID := app.Settings.ID
+	firstSettingsID := app.settings.ID
 
 	err = app.InitSettings(ctx)
 	if err != nil {
 		t.Fatalf("Second InitSettings call failed: %v", err)
 	}
 
-	if app.Settings.ID != firstSettingsID {
-		t.Errorf("Expected same settings ID %d, got %d", firstSettingsID, app.Settings.ID)
+	if app.settings.ID != firstSettingsID {
+		t.Errorf("Expected same settings ID %d, got %d", firstSettingsID, app.settings.ID)
 	}
 
 	var settingsCount int
@@ -1628,7 +1664,7 @@ func TestInitDirs(t *testing.T) {
 		t.Fatalf("failed to create music file: %v", err)
 	}
 
-	app.Settings = &database.Setting{
+	app.settings = &database.Setting{
 		StaticDir:    filepath.Join(tmpDir, "static"),
 		TranscodeDir: filepath.Join(tmpDir, "transcode"),
 		MoviesDir: sql.NullString{
@@ -1651,10 +1687,10 @@ func TestInitDirs(t *testing.T) {
 	}
 
 	for _, dir := range []string{
-		app.Settings.StaticDir,
-		app.Settings.TranscodeDir,
-		filepath.Join(app.Settings.StaticDir, "albums"),
-		filepath.Join(app.Settings.StaticDir, "musicians"),
+		app.settings.StaticDir,
+		app.settings.TranscodeDir,
+		filepath.Join(app.settings.StaticDir, "albums"),
+		filepath.Join(app.settings.StaticDir, "musicians"),
 	} {
 		info, err := os.Stat(dir)
 		if err != nil {
@@ -1666,14 +1702,14 @@ func TestInitDirs(t *testing.T) {
 		}
 	}
 
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String != moviesDir {
-		t.Errorf("expected existing movies directory to remain configured, got %q (valid=%v)", app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if !app.settings.MoviesDir.Valid || app.settings.MoviesDir.String != moviesDir {
+		t.Errorf("expected existing movies directory to remain configured, got %q (valid=%v)", app.settings.MoviesDir.String, app.settings.MoviesDir.Valid)
 	}
-	if app.Settings.ShowsDir.Valid {
-		t.Errorf("expected missing shows directory to be disabled, got %q", app.Settings.ShowsDir.String)
+	if app.settings.ShowsDir.Valid {
+		t.Errorf("expected missing shows directory to be disabled, got %q", app.settings.ShowsDir.String)
 	}
-	if app.Settings.MusicDir.Valid {
-		t.Errorf("expected non-directory music path to be disabled, got %q", app.Settings.MusicDir.String)
+	if app.settings.MusicDir.Valid {
+		t.Errorf("expected non-directory music path to be disabled, got %q", app.settings.MusicDir.String)
 	}
 	if _, err := os.Stat(missingShowsDir); !os.IsNotExist(err) {
 		t.Errorf("expected missing shows directory not to be created, stat err=%v", err)

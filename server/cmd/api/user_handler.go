@@ -356,7 +356,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		app.deleteAvatarFile(currentUser.Avatar.String)
 	}
 
-	avatarsDir := filepath.Join(app.Settings.StaticDir, "avatars")
+	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
 	if err := os.MkdirAll(avatarsDir, 0755); err != nil {
 		app.Logger.Error("failed to create avatars directory", "error", err)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
@@ -417,7 +417,7 @@ func isUploadedAvatar(avatarURL string) bool {
 
 func (app *Application) deleteAvatarFile(avatarURL string) {
 	relativePath := strings.TrimPrefix(avatarURL, "/api/static/")
-	fullPath := filepath.Join(app.Settings.StaticDir, relativePath)
+	fullPath := filepath.Join(app.CurrentSettings().StaticDir, relativePath)
 
 	if err := os.Remove(fullPath); err != nil {
 		if !os.IsNotExist(err) {

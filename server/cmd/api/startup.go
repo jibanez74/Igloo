@@ -163,7 +163,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	settings, err := app.Queries.GetSettings(ctx)
 	if err == nil {
 		app.Logger.Info("loaded existing settings from database")
-		app.Settings = &settings
+		app.SetSettings(&settings)
 		return nil
 	}
 
@@ -195,33 +195,35 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	app.Logger.Info("default settings created successfully")
 
-	app.Settings = &settings
+	app.SetSettings(&settings)
 
 	return nil
 }
 
 func (app *Application) InitDirs() error {
-	created, err := helpers.GetOrCreateDir(app.Settings.StaticDir)
+	settings := app.CurrentSettings()
+
+	created, err := helpers.GetOrCreateDir(settings.StaticDir)
 	if err != nil {
 		return fmt.Errorf("failed to initialize static directory: %w", err)
 	}
 
 	if created {
-		app.Logger.Info("created static directory", "path", app.Settings.StaticDir)
+		app.Logger.Info("created static directory", "path", settings.StaticDir)
 	}
 
 	// Scanner-downloaded artwork is stored beneath static/.
-	_, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "albums"))
+	_, err = helpers.GetOrCreateDir(filepath.Join(settings.StaticDir, "albums"))
 	if err != nil {
 		return fmt.Errorf("failed to initialize static/albums: %w", err)
 	}
 
-	_, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "musicians"))
+	_, err = helpers.GetOrCreateDir(filepath.Join(settings.StaticDir, "musicians"))
 	if err != nil {
 		return fmt.Errorf("failed to initialize static/musicians: %w", err)
 	}
 
-	transcodeDir := app.Settings.TranscodeDir
+	transcodeDir := settings.TranscodeDir
 	if transcodeDir != "" {
 		created, err = helpers.GetOrCreateDir(transcodeDir)
 		if err != nil {
@@ -233,9 +235,9 @@ func (app *Application) InitDirs() error {
 		}
 	}
 
-	app.validateMediaDir("movies", &app.Settings.MoviesDir)
-	app.validateMediaDir("shows", &app.Settings.ShowsDir)
-	app.validateMediaDir("music", &app.Settings.MusicDir)
+	app.validateMediaDir("movies", &settings.MoviesDir)
+	app.validateMediaDir("shows", &settings.ShowsDir)
+	app.validateMediaDir("music", &settings.MusicDir)
 
 	app.Logger.Info("directories initialized successfully")
 

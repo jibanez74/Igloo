@@ -2,15 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
-import {
-  Apple,
-  CircuitBoard,
-  Cpu,
-  Gauge,
-  MonitorCog,
-  Server,
-  Sliders,
-} from "lucide-react";
+import { Apple, CircuitBoard, Cpu, MonitorCog, Server } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,14 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import DevicePlaybackCards from "@/components/settings/DevicePlaybackCards";
+import PlaybackSection from "@/components/settings/PlaybackSection";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
-  DOWNLOAD_SPEED_MAX_MBPS,
-  LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
@@ -36,12 +27,9 @@ import {
   SETTINGS_SELECT_CONTENT_CLASS,
   SETTINGS_SELECT_ITEM_CLASS,
   SETTINGS_SELECT_TRIGGER_CLASS,
-  SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
-import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
-import { setDevicePlaybackPreferences } from "@/lib/playback-preferences";
-import { recommendedProfileId } from "@/lib/playback-recommendation";
+import { parseMbpsInput } from "@/lib/playback";
 import { authUserQueryOpts, playbackSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
@@ -50,7 +38,6 @@ import {
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
-  DevicePlaybackPreferences,
   HardwareAccelerationDevice,
   PlaybackSettingsResponseType,
   PlaybackSettingsType,
@@ -61,20 +48,9 @@ export const Route = createFileRoute("/_auth/settings/playback")({
   component: PlaybackSettings,
 });
 
-const NO_SELECTION_VALUE = "__none__";
 const SERVER_UPLOAD_MAX_MBPS = 100_000;
-const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
-  `Download speed must be between 0 and ${DOWNLOAD_SPEED_MAX_MBPS} Mbps.`;
 const SERVER_UPLOAD_VALIDATION_MESSAGE =
   `Server upload bandwidth must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps.`;
-/** Explains that the device card writes to this browser rather than the account. */
-const DEVICE_SCOPE_DESCRIPTION =
-  "Saved in this browser only. Your other devices keep their own settings.";
-const DEVICE_SAVED_SUFFIX = "Saved on this device.";
-
-const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
-  ([, a], [, b]) => a.localeCompare(b),
-);
 
 type HardwareOption = {
   value: HardwareAccelerationDevice;
@@ -116,29 +92,12 @@ function isHardwareAccelerationDevice(
   return HARDWARE_OPTIONS.some(option => option.value === value);
 }
 
-function parseMbpsInput(value: string): number | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  const parsed = Number.parseFloat(trimmed);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isDownloadSpeedOutOfRange(value: number | null) {
-  return value != null && (value <= 0 || value >= DOWNLOAD_SPEED_MAX_MBPS);
-}
-
 function isServerUploadOutOfRange(form: UpdatePlaybackSettingsRequest) {
   return (
     form.server_upload_mbps != null &&
     (form.server_upload_mbps <= 0 ||
       form.server_upload_mbps >= SERVER_UPLOAD_MAX_MBPS)
   );
-}
-
-function languageLabel(code: string | null) {
-  if (code === null) return "No preference";
-  if (code === SUBTITLE_OFF_VALUE) return "Always off";
-  return LANGUAGE_NAMES[code] ?? code;
 }
 
 function PlaybackSettings() {
@@ -191,335 +150,6 @@ function PlaybackSettings() {
       />
       {user.is_admin && <ServerPlaybackForm settings={settings} />}
     </div>
-  );
-}
-
-type DevicePlaybackCardsProps = {
-  settings: PlaybackSettingsType;
-  userId: number;
-  isAdmin: boolean;
-};
-
-/**
- * The per-device half of the page. These preferences live in localStorage and
- * apply the moment they change, so there is no save bar -- the confirmation is
- * the live announcement instead.
- */
-function DevicePlaybackCards({
-  settings,
-  userId,
-  isAdmin,
-}: DevicePlaybackCardsProps) {
-  const downloadMbpsId = useId();
-  const preferredProfileId = useId();
-  const recommendationId = useId();
-  const recommendationTitleId = useId();
-  const deviceStatusId = useId();
-  const preferredAudioLanguageId = useId();
-  const preferredSubtitleLanguageId = useId();
-
-  const prefs = useDevicePlaybackPreferences(userId);
-  // The input keeps its own text so a half-typed "0." neither reaches storage
-  // nor snaps back under the user; committed values flow from `prefs`.
-  const [downloadText, setDownloadText] = useState<string | null>(null);
-  const [announcement, setAnnouncement] = useState("");
-  const [announcementKey, setAnnouncementKey] = useState(0);
-
-  const announce = (message: string) => {
-    setAnnouncement(`${message} ${DEVICE_SAVED_SUFFIX}`);
-    setAnnouncementKey(current => current + 1);
-  };
-
-  const persist = (
-    patch: Partial<DevicePlaybackPreferences>,
-    message: string,
-  ) => {
-    setDevicePlaybackPreferences(userId, patch);
-    announce(message);
-  };
-
-  const pendingDownload =
-    downloadText === null ? prefs.downloadMbps : parseMbpsInput(downloadText);
-  const downloadInvalid = isDownloadSpeedOutOfRange(pendingDownload);
-
-  const handleDownloadMbpsChange = (value: string) => {
-    setDownloadText(value);
-    const parsed = parseMbpsInput(value);
-    if (isDownloadSpeedOutOfRange(parsed)) return;
-    if (parsed === prefs.downloadMbps) return;
-
-    setDevicePlaybackPreferences(userId, { downloadMbps: parsed });
-  };
-
-  const handleDownloadMbpsCommit = () => {
-    if (downloadInvalid) return;
-    announce(
-      pendingDownload === null
-        ? "Download speed cleared."
-        : `Download speed set to ${pendingDownload} Mbps.`,
-    );
-  };
-
-  const handleProfileChange = (value: string) => {
-    const preferredProfile = value === NO_SELECTION_VALUE ? null : value;
-    const label = preferredProfile
-      ? (settings.profiles.find(p => p.id === preferredProfile)?.label ??
-        preferredProfile)
-      : "Use recommended";
-    persist({ preferredProfile }, `Preferred profile set to ${label}.`);
-  };
-
-  const handleAudioLanguageChange = (value: string) => {
-    const preferredAudioLanguage =
-      value === NO_SELECTION_VALUE ? null : value;
-    persist(
-      { preferredAudioLanguage },
-      `Preferred audio language set to ${languageLabel(preferredAudioLanguage)}.`,
-    );
-  };
-
-  const handleSubtitleLanguageChange = (value: string) => {
-    const preferredSubtitleLanguage =
-      value === NO_SELECTION_VALUE ? null : value;
-    persist(
-      { preferredSubtitleLanguage },
-      `Preferred subtitles set to ${languageLabel(preferredSubtitleLanguage)}.`,
-    );
-  };
-
-  const recommendedId = recommendedProfileId(
-    settings.profiles,
-    downloadInvalid ? prefs.downloadMbps : pendingDownload,
-    settings.server_upload_mbps,
-  );
-  const recommendedProfile = recommendedId
-    ? settings.profiles.find(p => p.id === recommendedId)
-    : null;
-
-  return (
-    <>
-      <LiveAnnouncer message={announcement} announcementKey={announcementKey} />
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Gauge}
-          title="Streaming & bandwidth"
-          description={`Tell Igloo about this connection so it can pick the right stream quality. ${DEVICE_SCOPE_DESCRIPTION}`}
-        />
-        <CardContent className="divide-y divide-border/50">
-          <PlaybackSection
-            title="Your network speed"
-            description="Used to recommend a stream profile for this device."
-          >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={downloadMbpsId}>Download speed (Mbps)</Label>
-              <Input
-                id={downloadMbpsId}
-                name="download_mbps"
-                type="number"
-                inputMode="decimal"
-                min={0.1}
-                step={0.1}
-                value={downloadText ?? prefs.downloadMbps ?? ""}
-                onChange={event => handleDownloadMbpsChange(event.target.value)}
-                onBlur={handleDownloadMbpsCommit}
-                aria-invalid={downloadInvalid ? "true" : undefined}
-                aria-describedby={
-                  downloadInvalid
-                    ? `${downloadMbpsId}-description ${deviceStatusId}`
-                    : `${downloadMbpsId}-description`
-                }
-                className={SETTINGS_INPUT_CLASS}
-              />
-              <p
-                id={`${downloadMbpsId}-description`}
-                className="text-sm text-muted-foreground"
-              >
-                Leave blank if unsure.
-              </p>
-              <p
-                id={deviceStatusId}
-                aria-live="polite"
-                className="text-sm text-destructive empty:hidden"
-              >
-                {downloadInvalid ? DOWNLOAD_SPEED_VALIDATION_MESSAGE : ""}
-              </p>
-            </div>
-          </PlaybackSection>
-          <PlaybackSection
-            title="Server upload cap"
-            description="The home server's outbound bandwidth limit, applied when you stream from outside the home network."
-          >
-            <p className="text-sm text-foreground">
-              {settings.server_upload_mbps != null
-                ? `${settings.server_upload_mbps} Mbps`
-                : "Not set (uncapped)"}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {isAdmin
-                ? "Set for the whole server below. Affects your recommendation when streaming from outside the home network."
-                : "Set by the server administrator. Affects your recommendation when streaming from outside the home network."}
-            </p>
-          </PlaybackSection>
-          <PlaybackSection
-            title="Recommended profile"
-            titleId={recommendationTitleId}
-            description="Calculated from your download speed and the server upload cap, with 20% headroom for audio and overhead."
-          >
-            <p
-              id={recommendationId}
-              role="region"
-              aria-labelledby={recommendationTitleId}
-              aria-live="polite"
-              className="text-sm text-foreground"
-            >
-              {recommendedProfile
-                ? `Recommended: ${recommendedProfile.label}`
-                : "Enter your download speed to see a recommendation."}
-            </p>
-          </PlaybackSection>
-        </CardContent>
-      </Card>
-
-      <Card
-        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
-      >
-        <SettingsCardHeader
-          icon={Sliders}
-          title="Stream defaults"
-          description={`Defaults applied when you start a stream; you can still change each per video. ${DEVICE_SCOPE_DESCRIPTION}`}
-        />
-        <CardContent className="divide-y divide-border/50">
-          <PlaybackSection
-            title="Preferred profile"
-            description="The default profile when you start a stream."
-          >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={preferredProfileId}>Profile</Label>
-              {/*
-                Radix renders a visually-hidden aria-hidden <select name> for each
-                of these for native form integration; they're never submitted (this
-                form is JS-controlled). Chrome's Issues panel flags them "no label" —
-                a false-positive on aria-hidden fields, not fixable without ejecting
-                Radix. Keep the names so the fields stay identified.
-              */}
-              <Select
-                name="preferred_profile"
-                value={prefs.preferredProfile ?? NO_SELECTION_VALUE}
-                onValueChange={handleProfileChange}
-              >
-                <SelectTrigger
-                  id={preferredProfileId}
-                  className={SETTINGS_SELECT_TRIGGER_CLASS}
-                >
-                  <SelectValue placeholder="Use recommended" />
-                </SelectTrigger>
-                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                  <SelectItem
-                    value={NO_SELECTION_VALUE}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    Use recommended
-                  </SelectItem>
-                  {settings.profiles.map(profile => (
-                    <SelectItem
-                      key={profile.id}
-                      value={profile.id}
-                      className={SETTINGS_SELECT_ITEM_CLASS}
-                    >
-                      {profile.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </PlaybackSection>
-          <PlaybackSection
-            title="Preferred audio language"
-            description="Igloo will pick the matching audio track when a movie has one."
-          >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={preferredAudioLanguageId}>Audio language</Label>
-              <Select
-                name="preferred_audio_language"
-                value={prefs.preferredAudioLanguage ?? NO_SELECTION_VALUE}
-                onValueChange={handleAudioLanguageChange}
-              >
-                <SelectTrigger
-                  id={preferredAudioLanguageId}
-                  className={SETTINGS_SELECT_TRIGGER_CLASS}
-                >
-                  <SelectValue placeholder="No preference" />
-                </SelectTrigger>
-                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                  <SelectItem
-                    value={NO_SELECTION_VALUE}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    No preference
-                  </SelectItem>
-                  {SORTED_LANGUAGE_ENTRIES.map(([code, name]) => (
-                    <SelectItem
-                      key={code}
-                      value={code}
-                      className={SETTINGS_SELECT_ITEM_CLASS}
-                    >
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </PlaybackSection>
-          <PlaybackSection
-            title="Preferred subtitles"
-            description="Pick a default subtitle language, or always start with subtitles off."
-          >
-            <div className="grid max-w-md gap-2">
-              <Label htmlFor={preferredSubtitleLanguageId}>
-                Subtitle language
-              </Label>
-              <Select
-                name="preferred_subtitle_language"
-                value={prefs.preferredSubtitleLanguage ?? NO_SELECTION_VALUE}
-                onValueChange={handleSubtitleLanguageChange}
-              >
-                <SelectTrigger
-                  id={preferredSubtitleLanguageId}
-                  className={SETTINGS_SELECT_TRIGGER_CLASS}
-                >
-                  <SelectValue placeholder="No preference" />
-                </SelectTrigger>
-                <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
-                  <SelectItem
-                    value={NO_SELECTION_VALUE}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    No preference
-                  </SelectItem>
-                  <SelectItem
-                    value={SUBTITLE_OFF_VALUE}
-                    className={SETTINGS_SELECT_ITEM_CLASS}
-                  >
-                    Always off
-                  </SelectItem>
-                  {SORTED_LANGUAGE_ENTRIES.map(([code, name]) => (
-                    <SelectItem
-                      key={code}
-                      value={code}
-                      className={SETTINGS_SELECT_ITEM_CLASS}
-                    >
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </PlaybackSection>
-        </CardContent>
-      </Card>
-    </>
   );
 }
 
@@ -735,29 +365,5 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
         className={cn("bg-card/70", MOTION_SETTINGS_SURFACE_CLASS)}
       />
     </form>
-  );
-}
-
-type PlaybackSectionProps = {
-  title: string;
-  titleId?: string;
-  description: string;
-  children: ReactNode;
-};
-
-function PlaybackSection({
-  title,
-  titleId,
-  description,
-  children,
-}: PlaybackSectionProps) {
-  return (
-    <section className="py-5 first:pt-0 last:pb-0">
-      <h3 id={titleId} className="text-sm font-semibold text-foreground">
-        {title}
-      </h3>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      <div className="mt-3">{children}</div>
-    </section>
   );
 }
