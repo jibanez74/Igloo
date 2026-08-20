@@ -1012,6 +1012,72 @@ describe("useMoviePlaybackData", () => {
     );
   });
 
+  // The other side of the same coin: a stored profile only settles the mode
+  // when this file can actually serve it. When it cannot, resolution falls
+  // through to the download-speed branch, which needs the catalog -- so
+  // readiness has to wait rather than start a stream the settings response
+  // would immediately restart.
+  it("waits for the catalog when the stored profile is unavailable for the file", async () => {
+    const movieId = 13;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedAuthenticatedUser(queryClient);
+    // 4K is a storable profile, but this 1080p source never offers it.
+    seedDevicePreferences({
+      preferredProfile: "2160p_16mbps",
+      downloadMbps: 4,
+    });
+
+    const playbackSettingsRequest = createDeferredResponse();
+    const fetchMock = vi.fn(() => playbackSettingsRequest.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const onSyncSearch = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMoviePlaybackData({
+          movieId,
+          search: {
+            mode: "2160p_16mbps",
+            audio_track: 99,
+            subtitle_track: 99,
+            start: 0,
+          },
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch,
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(result.current.playbackPreferencesReady).toBe(false);
+    expect(onSyncSearch).not.toHaveBeenCalled();
+
+    playbackSettingsRequest.resolve(
+      jsonResponse({
+        error: false,
+        data: { settings: playbackSettings() },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playbackPreferencesReady).toBe(true);
+      expect(result.current.resolvedMode).toBe("720p_3mbps");
+    });
+    // Exactly one rewrite: the catalog was in hand before the first one.
+    expect(onSyncSearch).toHaveBeenCalledTimes(1);
+    expect(onSyncSearch).toHaveBeenCalledWith({
+      mode: "720p_3mbps",
+      audioTrack: 0,
+      subtitleTrack: null,
+    });
+  });
+
   it("normalizes through existing defaults after playback settings fail", async () => {
     const movieId = 11;
     const queryClient = new QueryClient({

@@ -91,15 +91,6 @@ export function useMoviePlaybackData({
     devicePrefs,
     serverPlaybackSettings,
   );
-  // Device preferences are synchronous, so the only thing still worth waiting
-  // for is the server catalog -- and getDefaultPlaybackSettings consults it on
-  // exactly one path: no preferred profile, but a download speed to size one
-  // against. Everything else (audio/subtitle language) resolves immediately.
-  const needsServerCatalog =
-    devicePrefs.preferredProfile === null && devicePrefs.downloadMbps !== null;
-  const playbackPreferencesReady =
-    !authUserPending && (!needsServerCatalog || !playbackSettingsPending);
-
   const techLoaded = !techPending && techData?.data != null;
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
@@ -116,6 +107,20 @@ export function useMoviePlaybackData({
         mimeType: techData.data.movie?.mime_type,
       })
     : null;
+  // Device preferences are synchronous, so the only thing still worth waiting
+  // for is the server catalog -- and getDefaultPlaybackSettings consults it on
+  // exactly one path: the mode is not settled by a stored profile, but there is
+  // a download speed to size one against. A stored profile this file cannot
+  // serve falls through to that same path, so it leaves the mode unsettled too.
+  // Everything else (audio/subtitle language) resolves immediately.
+  const storedProfileApplies =
+    devicePrefs.preferredProfile !== null &&
+    (availableModes?.some((m) => m.id === devicePrefs.preferredProfile) ??
+      false);
+  const needsServerCatalog =
+    !storedProfileApplies && devicePrefs.downloadMbps !== null;
+  const playbackPreferencesReady =
+    !authUserPending && (!needsServerCatalog || !playbackSettingsPending);
   const resolvedPlaybackSettings =
     availableModes !== null
       ? resolvePlaybackSettings(

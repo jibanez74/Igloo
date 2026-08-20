@@ -321,5 +321,49 @@ describe("device playback preferences", () => {
 
       expect(listener).not.toHaveBeenCalled();
     });
+
+    // With no listener attached nothing invalidates the cache, so a snapshot
+    // held from before can only be stale -- and non-subscribing readers such as
+    // the movie play loader would serve it.
+    it("re-parses storage for a read after the last subscriber leaves", () => {
+      const unsubscribe = subscribeDevicePlaybackPreferences(() => {});
+      expect(getDevicePlaybackPreferences(USER).preferredAudioLanguage).toBe(
+        null,
+      );
+      unsubscribe();
+
+      // No StorageEvent: with the listener gone, nothing would deliver it.
+      localStorage.setItem(
+        storageKeyForUser(USER),
+        JSON.stringify({ preferredAudioLanguage: "fra" }),
+      );
+
+      expect(getDevicePlaybackPreferences(USER).preferredAudioLanguage).toBe(
+        "fra",
+      );
+    });
+
+    // The exception: a value that never reached storage lives only in the
+    // snapshot, so re-reading would return what storage never took.
+    it("keeps a session-only value across the last unsubscribe", () => {
+      const setItem = vi
+        .spyOn(Storage.prototype, "setItem")
+        .mockImplementation(() => {
+          throw new Error("quota exceeded");
+        });
+
+      const unsubscribe = subscribeDevicePlaybackPreferences(() => {});
+      setDevicePlaybackPreferences(USER, { downloadMbps: 15 });
+      unsubscribe();
+
+      expect(getDevicePlaybackPreferences(USER).downloadMbps).toBe(15);
+      setDevicePlaybackPreferences(USER, { preferredAudioLanguage: "eng" });
+      expect(getDevicePlaybackPreferences(USER)).toMatchObject({
+        downloadMbps: 15,
+        preferredAudioLanguage: "eng",
+      });
+
+      setItem.mockRestore();
+    });
   });
 });

@@ -318,7 +318,9 @@ func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
-	app.settings.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
+	current := *app.CurrentSettings()
+	current.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
+	app.SetSettings(&current)
 
 	musicScanGuard.Finish()
 	if !musicScanGuard.TryBegin() {
@@ -339,7 +341,9 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
-	app.settings.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
+	current := *app.CurrentSettings()
+	current.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
+	app.SetSettings(&current)
 
 	movieScanGuard.Finish()
 	if !movieScanGuard.TryBegin() {

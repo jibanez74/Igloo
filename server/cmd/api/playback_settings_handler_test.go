@@ -62,7 +62,7 @@ func seedServerPlaybackSettings(t *testing.T, app *Application, uploadMbps float
 	if err != nil {
 		t.Fatalf("seed server settings: %v", err)
 	}
-	app.settings = &settings
+	app.SetSettings(&settings)
 }
 
 func putPlayback(t *testing.T, handler http.Handler, body string) *httptest.ResponseRecorder {
@@ -259,7 +259,9 @@ func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 
-	app.settings.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
+	current := *app.CurrentSettings()
+	current.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
+	app.SetSettings(&current)
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
@@ -328,8 +330,12 @@ func TestUpdatePlaybackSettings_RegularUserForbidden(t *testing.T) {
 	if !gotSettings.ServerUploadMbps.Valid || gotSettings.ServerUploadMbps.Float64 != 22 {
 		t.Fatalf("expected server_upload_mbps unchanged at 22, got valid=%v %v", gotSettings.ServerUploadMbps.Valid, gotSettings.ServerUploadMbps.Float64)
 	}
-	if gotSettings.HardwareAccelerationDevice.String == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
-		t.Fatal("expected hardware device unchanged for regular user")
+	if !gotSettings.HardwareAccelerationDevice.Valid ||
+		gotSettings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
+		t.Fatalf("expected hardware device unchanged at %s, got valid=%v %q",
+			helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			gotSettings.HardwareAccelerationDevice.Valid,
+			gotSettings.HardwareAccelerationDevice.String)
 	}
 }
 

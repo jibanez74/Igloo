@@ -53,6 +53,26 @@ type ServerPlaybackSettings = {
   hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
 };
 
+// Both mirror UpdatePlaybackSettings in the Go server: a mock that accepts what
+// the real handler answers with 400 lets a spec pass against a contract that
+// does not exist.
+const SERVER_UPLOAD_MAX_MBPS = 100_000;
+const HARDWARE_ACCELERATION_DEVICES = [
+  "cpu",
+  "apple",
+  "nvidia",
+  "intel",
+] as const;
+
+function isHardwareAccelerationDevice(
+  value: unknown,
+): value is ServerPlaybackSettings["hardware_acceleration_device"] {
+  return (
+    typeof value === "string" &&
+    (HARDWARE_ACCELERATION_DEVICES as readonly string[]).includes(value)
+  );
+}
+
 type MovieWatchProgress = {
   progress_sec: number | null;
   duration_sec: number | null;
@@ -1284,26 +1304,43 @@ async function handleSettingsRoutes(
     }
 
     const body = await readJSONBody(request);
+
+    // Absent fields keep their current value; the ones that were sent are
+    // validated exactly as the Go handler validates them.
+    let serverUploadMbps = serverPlaybackSettings.server_upload_mbps;
+    if (Object.prototype.hasOwnProperty.call(body, "server_upload_mbps")) {
+      const sent = nullableNumberField(body, "server_upload_mbps");
+      if (
+        typeof sent === "number" &&
+        (sent <= 0 || sent >= SERVER_UPLOAD_MAX_MBPS)
+      ) {
+        sendFailure(
+          response,
+          400,
+          `server upload speed must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps`,
+        );
+        return true;
+      }
+      serverUploadMbps = valueOrCurrent(sent, serverUploadMbps);
+    }
+
+    let hardwareDevice = serverPlaybackSettings.hardware_acceleration_device;
+    if (
+      Object.prototype.hasOwnProperty.call(body, "hardware_acceleration_device")
+    ) {
+      const sent = body.hardware_acceleration_device;
+      // Rejects null and any unknown string, so the union type is enforced by a
+      // check rather than by a cast that assumes it.
+      if (!isHardwareAccelerationDevice(sent)) {
+        sendFailure(response, 400, "invalid hardware acceleration device");
+        return true;
+      }
+      hardwareDevice = sent;
+    }
+
     serverPlaybackSettings = {
-      server_upload_mbps: Object.prototype.hasOwnProperty.call(
-        body,
-        "server_upload_mbps",
-      )
-        ? valueOrCurrent(
-            nullableNumberField(body, "server_upload_mbps"),
-            serverPlaybackSettings.server_upload_mbps,
-          )
-        : serverPlaybackSettings.server_upload_mbps,
-      hardware_acceleration_device: Object.prototype.hasOwnProperty.call(
-        body,
-        "hardware_acceleration_device",
-      )
-        ? (stringField(
-            body,
-            "hardware_acceleration_device",
-            serverPlaybackSettings.hardware_acceleration_device,
-          ) as ServerPlaybackSettings["hardware_acceleration_device"])
-        : serverPlaybackSettings.hardware_acceleration_device,
+      server_upload_mbps: serverUploadMbps,
+      hardware_acceleration_device: hardwareDevice,
     };
 
     sendSuccess(response, { settings: playbackSettingsResponse() });

@@ -205,12 +205,19 @@ export default function DevicePlaybackCards({
   // from the standing flag rather than a fresh return value.
   const handleDownloadMbpsCommit = () => {
     if (downloadInvalid) return;
+    // A blur with nothing typed is not a save: `downloadText` stays null until
+    // the user edits, so announcing here would confirm a write that never ran.
+    if (downloadText === null) return;
+
     announce(
       pendingDownload === null
         ? "Download speed cleared."
         : `Download speed set to ${pendingDownload} Mbps.`,
       !persistenceFailed,
     );
+    // Hand the field back to `prefs` so it shows the committed number rather
+    // than the raw text ("0025"), and follows a write from another tab.
+    setDownloadText(null);
   };
 
   const handleProfileChange = (preferredProfile: string | null) => {

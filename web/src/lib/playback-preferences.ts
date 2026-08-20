@@ -214,7 +214,9 @@ export function setDevicePlaybackPreferences(
  * Subscribes to preference changes; returns an unsubscribe function.
  *
  * The `storage` listener is attached with the first subscriber and dropped with
- * the last, so tabs stay in sync only while something is rendering.
+ * the last, so tabs stay in sync only while something is rendering. Dropping it
+ * also drops the cached snapshots, because nothing would invalidate them until
+ * the next subscriber arrives.
  */
 export function subscribeDevicePlaybackPreferences(
   listener: () => void,
@@ -228,6 +230,16 @@ export function subscribeDevicePlaybackPreferences(
     listeners.delete(listener);
     if (listeners.size === 0 && typeof window !== "undefined") {
       window.removeEventListener("storage", handleStorageEvent);
+      // A cached snapshot can now only go stale -- another tab's write is no
+      // longer observed -- and non-subscribing readers such as the movie play
+      // loader would serve it. Drop them so the next read re-parses. Users
+      // whose last write never reached storage are kept: re-reading would
+      // return values that storage never took.
+      for (const cachedUserId of snapshots.keys()) {
+        if (!unpersisted.has(cachedUserId)) {
+          snapshots.delete(cachedUserId);
+        }
+      }
     }
   };
 }

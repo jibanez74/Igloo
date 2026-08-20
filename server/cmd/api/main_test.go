@@ -1664,7 +1664,7 @@ func TestInitDirs(t *testing.T) {
 		t.Fatalf("failed to create music file: %v", err)
 	}
 
-	app.settings = &database.Setting{
+	app.SetSettings(&database.Setting{
 		StaticDir:    filepath.Join(tmpDir, "static"),
 		TranscodeDir: filepath.Join(tmpDir, "transcode"),
 		MoviesDir: sql.NullString{
@@ -1679,7 +1679,7 @@ func TestInitDirs(t *testing.T) {
 			String: musicFile,
 			Valid:  true,
 		},
-	}
+	})
 
 	err := app.InitDirs()
 	if err != nil {

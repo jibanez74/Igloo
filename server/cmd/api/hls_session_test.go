@@ -816,7 +816,7 @@ func TestHLSTranscodeRoot(t *testing.T) {
 	defer app.DB.Close()
 
 	t.Run("a configured transcode dir wins", func(t *testing.T) {
-		app.settings = &database.Setting{TranscodeDir: "/mnt/fast/transcode"}
+		app.SetSettings(&database.Setting{TranscodeDir: "/mnt/fast/transcode"})
 		if got := app.hlsTranscodeRoot(); got != "/mnt/fast/transcode" {
 			t.Fatalf("hlsTranscodeRoot() = %q, want the settings override", got)
 		}
@@ -825,7 +825,7 @@ func TestHLSTranscodeRoot(t *testing.T) {
 	// Settings are never nil (see Application.settings), so a blank column is
 	// the only way the runtime config is used.
 	t.Run("a blank transcode dir falls back to the runtime config", func(t *testing.T) {
-		app.settings = &database.Setting{TranscodeDir: "   "}
+		app.SetSettings(&database.Setting{TranscodeDir: "   "})
 		if got := app.hlsTranscodeRoot(); got != app.Config.effectiveTranscodeDir() {
 			t.Fatalf("hlsTranscodeRoot() = %q, want %q", got, app.Config.effectiveTranscodeDir())
 		}

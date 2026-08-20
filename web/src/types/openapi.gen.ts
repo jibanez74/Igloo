@@ -1460,7 +1460,7 @@ export interface paths {
         get: operations["getPlaybackSettings"];
         /**
          * Update server playback settings
-         * @description Admin-only. Replaces the server-wide upload bandwidth cap and hardware acceleration device. Per-device playback preferences are not stored on the server; they live in the client's local storage.
+         * @description Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage.
          */
         put: operations["updatePlaybackSettings"];
         post?: never;
