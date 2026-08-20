@@ -13,12 +13,54 @@ import {
 import { unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
-import type { PlaybackSettings, StreamModeId } from "@/types/playback";
-import type { PlaybackSettingsType } from "@/types/settings";
+import type {
+  DevicePlaybackPreferences,
+  PlaybackSettings,
+  StreamModeId,
+} from "@/types/playback";
+import type {
+  PlaybackProfileType,
+  PlaybackSettingsType,
+} from "@/types/settings";
+
+/**
+ * Parses a bandwidth field's text into Mbps. Blank means "no value"; anything
+ * unparseable is treated the same way, so a half-typed number never commits.
+ */
+export function parseMbpsInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 type PlaybackModeOption = {
   id: StreamModeId;
 };
+
+/**
+ * What the default-resolution logic needs: this device's stored preferences
+ * plus the server-owned catalog it is measured against. They arrive from
+ * different places (localStorage and the API) but answer one question, so they
+ * travel together -- passing the device half alone would silently disable the
+ * download-speed recommendation.
+ */
+export type PlaybackDefaultsInput = DevicePlaybackPreferences & {
+  profiles: readonly PlaybackProfileType[];
+  serverUploadMbps: number | null;
+};
+
+/** Combines this device's preferences with the server's playback settings. */
+export function playbackDefaultsInput(
+  device: DevicePlaybackPreferences,
+  server: PlaybackSettingsType | null | undefined,
+): PlaybackDefaultsInput {
+  return {
+    ...device,
+    profiles: server?.profiles ?? [],
+    serverUploadMbps: server?.server_upload_mbps ?? null,
+  };
+}
 
 type PlaybackSettingsInput = Omit<PlaybackSettings, "subtitleTrack"> & {
   subtitleTrack?: number | null;
@@ -289,7 +331,7 @@ export function normalizeLang(raw: string | undefined): string | undefined {
 
 export function getDefaultPlaybackSettings(
   availableModes: readonly PlaybackModeOption[],
-  userPrefs?: PlaybackSettingsType | null,
+  userPrefs?: PlaybackDefaultsInput | null,
   audioStreams?: AudioStreamType[],
   subtitleStreams?: SubtitleType[],
 ): PlaybackSettings {
@@ -302,15 +344,15 @@ export function getDefaultPlaybackSettings(
   let mode: StreamModeId = fallbackMode;
   if (userPrefs) {
     if (
-      userPrefs.preferred_profile &&
-      isInAvailableModes(userPrefs.preferred_profile)
+      userPrefs.preferredProfile &&
+      isInAvailableModes(userPrefs.preferredProfile)
     ) {
-      mode = userPrefs.preferred_profile as StreamModeId;
-    } else if (userPrefs.download_mbps != null) {
+      mode = userPrefs.preferredProfile as StreamModeId;
+    } else if (userPrefs.downloadMbps != null) {
       const recommended = recommendedProfileId(
         userPrefs.profiles,
-        userPrefs.download_mbps,
-        userPrefs.server_upload_mbps,
+        userPrefs.downloadMbps,
+        userPrefs.serverUploadMbps,
       );
       if (recommended && isInAvailableModes(recommended)) {
         mode = recommended as StreamModeId;
@@ -320,7 +362,7 @@ export function getDefaultPlaybackSettings(
 
   let audioTrack = 0;
   const preferredAudio = normalizeLang(
-    userPrefs?.preferred_audio_language ?? undefined,
+    userPrefs?.preferredAudioLanguage ?? undefined,
   );
   if (preferredAudio && audioStreams && audioStreams.length > 0) {
     const matchIndex = audioStreams.findIndex(
@@ -331,7 +373,7 @@ export function getDefaultPlaybackSettings(
   }
 
   let subtitleTrack: number | null = null;
-  const preferredSubtitle = userPrefs?.preferred_subtitle_language ?? null;
+  const preferredSubtitle = userPrefs?.preferredSubtitleLanguage ?? null;
   if (preferredSubtitle && preferredSubtitle !== SUBTITLE_OFF_VALUE) {
     const normalized = normalizeLang(preferredSubtitle);
     if (normalized && subtitleStreams && subtitleStreams.length > 0) {
@@ -356,7 +398,7 @@ export function resolvePlaybackSettings(
   availableModes: readonly PlaybackModeOption[],
   audioStreams: AudioStreamType[] | undefined,
   subtitleStreams: SubtitleType[] | undefined,
-  userPrefs?: PlaybackSettingsType | null,
+  userPrefs?: PlaybackDefaultsInput | null,
 ): PlaybackSettings {
   const defaults = getDefaultPlaybackSettings(
     availableModes,

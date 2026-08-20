@@ -5,17 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
-
-const subtitleLanguageOff = "off"
-
-var languageCodePattern = regexp.MustCompile(`^[a-z]{2,3}$`)
 
 type playbackProfileResponse struct {
 	ID        string `json:"id"`
@@ -24,28 +19,18 @@ type playbackProfileResponse struct {
 	VideoMbps int    `json:"video_mbps"`
 }
 
+// Server-owned playback data. Per-device preferences (preferred profile,
+// download speed, preferred audio/subtitle language) live in the browser's
+// localStorage, because one account streams from devices with different
+// screens, decoders and network links.
 type playbackSettingsResponse struct {
 	Profiles                   []playbackProfileResponse `json:"profiles"`
-	PreferredProfile           *string                   `json:"preferred_profile"`
-	DownloadMbps               *float64                  `json:"download_mbps"`
 	ServerUploadMbps           *float64                  `json:"server_upload_mbps"`
 	HardwareAccelerationDevice string                    `json:"hardware_acceleration_device"`
-	IsAdmin                    bool                      `json:"is_admin"`
-	PreferredAudioLanguage     *string                   `json:"preferred_audio_language"`
-	PreferredSubtitleLanguage  *string                   `json:"preferred_subtitle_language"`
 }
 
-// PUT returns only user-editable playback preferences; the client refetches the full catalog.
-type updatePlaybackSettingsResponse struct {
-	PreferredProfile          *string  `json:"preferred_profile"`
-	DownloadMbps              *float64 `json:"download_mbps"`
-	PreferredAudioLanguage    *string  `json:"preferred_audio_language"`
-	PreferredSubtitleLanguage *string  `json:"preferred_subtitle_language"`
-}
-
-func hardwareAccelerationDeviceOrDefault(settings *database.Setting) string {
-	if settings != nil &&
-		settings.HardwareAccelerationDevice.Valid &&
+func hardwareAccelerationDeviceOrDefault(settings database.Setting) string {
+	if settings.HardwareAccelerationDevice.Valid &&
 		settings.HardwareAccelerationDevice.String != "" {
 		return settings.HardwareAccelerationDevice.String
 	}
@@ -114,53 +99,28 @@ func formatProfileLabel(height, videoMbps int) string {
 	return strconv.Itoa(height) + "p · " + strconv.Itoa(videoMbps) + " Mbps"
 }
 
-func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
-
-	prefs, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-			return
-		}
-		app.Logger.Error("failed to load playback preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	var serverUpload *float64
-	if app.Settings != nil {
-		serverUpload = helpers.Float64PtrFromNull(app.Settings.ServerUploadMbps)
-	}
-
-	res := playbackSettingsResponse{
+func mapPlaybackSettingsResponse(settings database.Setting) playbackSettingsResponse {
+	return playbackSettingsResponse{
 		Profiles:                   playbackProfileCatalog(),
-		PreferredProfile:           helpers.StringPtrFromNull(prefs.PreferredHlsProfile),
-		DownloadMbps:               helpers.Float64PtrFromNull(prefs.DownloadMbps),
-		ServerUploadMbps:           serverUpload,
-		HardwareAccelerationDevice: hardwareAccelerationDeviceOrDefault(app.Settings),
-		IsAdmin:                    prefs.IsAdmin,
-		PreferredAudioLanguage:     helpers.StringPtrFromNull(prefs.PreferredAudioLanguage),
-		PreferredSubtitleLanguage:  helpers.StringPtrFromNull(prefs.PreferredSubtitleLanguage),
+		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
+		HardwareAccelerationDevice: hardwareAccelerationDeviceOrDefault(settings),
 	}
+}
 
+func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"settings": res,
+			"settings": mapPlaybackSettingsResponse(*app.CurrentSettings()),
 		},
 	})
 }
 
+// UpdatePlaybackSettings writes the server-wide playback settings. The route is
+// admin-gated by RequireAdmin. Per-device preferences are not stored here --
+// they live in the client's local storage. Fields absent from the body keep
+// their current value, so a client may send just the one it changed.
 func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return
-	}
-
 	var rawFields map[string]json.RawMessage
 	err := helpers.ReadJSON(w, r, &rawFields, 0)
 	if err != nil {
@@ -168,226 +128,74 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	current, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
-	if err != nil {
-		app.Logger.Error("failed to load playback preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	if !current.IsAdmin {
-		for _, adminField := range []string{"server_upload_mbps", "hardware_acceleration_device"} {
-			if _, ok := rawFields[adminField]; ok {
-				helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusForbidden)
-				return
-			}
-		}
-	}
-
-	preferred := current.PreferredHlsProfile
-	if raw, ok := rawFields["preferred_profile"]; ok {
-		var val *string
-		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-			return
-		}
-		preferred = sql.NullString{}
-		if val != nil {
-			trimmed := strings.TrimSpace(*val)
-			if trimmed != "" {
-				if !helpers.IsAllowedHLSProfile(trimmed) || trimmed == helpers.HLS_PROFILE_REMUX {
-					helpers.ErrorJSON(w, errors.New("invalid playback profile"), http.StatusBadRequest)
-					return
-				}
-				preferred = helpers.NullString(trimmed)
-			}
-		}
-	}
-
-	download := current.DownloadMbps
-	if raw, ok := rawFields["download_mbps"]; ok {
-		var val *float64
-		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-			return
-		}
-		download = sql.NullFloat64{}
-		if val != nil {
-			if *val <= 0 || *val >= 10000 {
-				helpers.ErrorJSON(w, errors.New("download speed must be greater than 0 and less than 10000 Mbps"), http.StatusBadRequest)
-				return
-			}
-			download = helpers.NullFloat64FromPtr(val)
-		}
-	}
-
-	audioLang := current.PreferredAudioLanguage
-	if raw, ok := rawFields["preferred_audio_language"]; ok {
-		var val *string
-		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-			return
-		}
-		audioLang = sql.NullString{}
-		if val != nil {
-			trimmed := strings.TrimSpace(*val)
-			if trimmed != "" {
-				if trimmed == subtitleLanguageOff || !languageCodePattern.MatchString(trimmed) {
-					helpers.ErrorJSON(w, errors.New("invalid audio language code"), http.StatusBadRequest)
-					return
-				}
-				audioLang = helpers.NullString(trimmed)
-			}
-		}
-	}
-
-	subtitleLang := current.PreferredSubtitleLanguage
-	if raw, ok := rawFields["preferred_subtitle_language"]; ok {
-		var val *string
-		if err := json.Unmarshal(raw, &val); err != nil {
-			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
-			return
-		}
-		subtitleLang = sql.NullString{}
-		if val != nil {
-			trimmed := strings.TrimSpace(*val)
-			if trimmed != "" {
-				if trimmed != subtitleLanguageOff && !languageCodePattern.MatchString(trimmed) {
-					helpers.ErrorJSON(w, errors.New("invalid subtitle language code"), http.StatusBadRequest)
-					return
-				}
-				subtitleLang = helpers.NullString(trimmed)
-			}
-		}
-	}
-
-	var serverUpload sql.NullFloat64
-	serverUploadProvided := false
+	// The body is validated before the lock is taken; only the fields that were
+	// actually sent are decoded here, and the rest are filled in from the row
+	// read under the lock below.
+	var serverUpload *sql.NullFloat64
 	if raw, ok := rawFields["server_upload_mbps"]; ok {
-		serverUploadProvided = true
-
 		var val *float64
-		if err := json.Unmarshal(raw, &val); err != nil {
+		err := json.Unmarshal(raw, &val)
+		if err != nil {
 			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
+
+		parsed := sql.NullFloat64{}
 		if val != nil {
 			if *val <= 0 || *val >= 100000 {
 				helpers.ErrorJSON(w, errors.New("server upload speed must be greater than 0 and less than 100000 Mbps"), http.StatusBadRequest)
 				return
 			}
-			serverUpload = helpers.NullFloat64FromPtr(val)
+			parsed = helpers.NullFloat64FromPtr(val)
 		}
+		serverUpload = &parsed
 	}
 
-	hardwareDevice := ""
-	hardwareProvided := false
+	var hardwareDevice *string
 	if raw, ok := rawFields["hardware_acceleration_device"]; ok {
-		hardwareProvided = true
-
 		var val string
-		if err := json.Unmarshal(raw, &val); err != nil {
+		err := json.Unmarshal(raw, &val)
+		if err != nil {
 			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 			return
 		}
+
 		val = strings.TrimSpace(val)
 		if !validateHardwareAccelerationDevice(val) {
 			helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
 			return
 		}
-		hardwareDevice = val
+		hardwareDevice = &val
 	}
 
-	updateParams := database.UpdateUserPlaybackPreferencesParams{
-		PreferredHlsProfile:       preferred,
-		DownloadMbps:              download,
-		PreferredAudioLanguage:    audioLang,
-		PreferredSubtitleLanguage: subtitleLang,
-		ID:                        userID,
-	}
-
-	var updated database.UpdateUserPlaybackPreferencesRow
-	var updateErr error
-	if serverUploadProvided || hardwareProvided {
-		tx, txErr := app.DB.BeginTx(r.Context(), nil)
-		if txErr != nil {
-			app.Logger.Error("failed to begin playback settings transaction", "error", txErr, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
-			return
+	// The query writes both columns, so the omitted one has to be carried over
+	// from the current row. Doing that under the write lock is what keeps two
+	// concurrent partial updates from each restoring the other's stale value.
+	updated, err := app.withSettingsWrite(r.Context(), func(current database.Setting) (database.Setting, error) {
+		params := database.UpdatePlaybackServerSettingsParams{
+			ServerUploadMbps:           current.ServerUploadMbps,
+			HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDeviceOrDefault(current)),
+		}
+		if serverUpload != nil {
+			params.ServerUploadMbps = *serverUpload
+		}
+		if hardwareDevice != nil {
+			params.HardwareAccelerationDevice = helpers.NullString(*hardwareDevice)
 		}
 
-		qtx := app.Queries.WithTx(tx)
-		updated, txErr = qtx.UpdateUserPlaybackPreferences(r.Context(), updateParams)
-		if txErr != nil {
-			rollbackErr := tx.Rollback()
-			if rollbackErr != nil {
-				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
-			}
-			app.Logger.Error("failed to update playback preferences", "error", txErr, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
-			return
-		}
-
-		currentSettings, txErr := qtx.GetSettings(r.Context())
-		if txErr != nil {
-			rollbackErr := tx.Rollback()
-			if rollbackErr != nil {
-				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
-			}
-			app.Logger.Error("failed to load settings for playback update", "error", txErr, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
-			return
-		}
-		if !serverUploadProvided {
-			serverUpload = currentSettings.ServerUploadMbps
-		}
-		if !hardwareProvided {
-			hardwareDevice = hardwareAccelerationDeviceOrDefault(&currentSettings)
-		}
-
-		updatedSettings, txErr := qtx.UpdatePlaybackServerSettings(r.Context(), database.UpdatePlaybackServerSettingsParams{
-			ServerUploadMbps:           serverUpload,
-			HardwareAccelerationDevice: helpers.NullString(hardwareDevice),
-		})
-		if txErr != nil {
-			rollbackErr := tx.Rollback()
-			if rollbackErr != nil {
-				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
-			}
-			app.Logger.Error("failed to update playback server settings", "error", txErr, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
-			return
-		}
-
-		txErr = tx.Commit()
-		if txErr != nil {
-			app.Logger.Error("failed to commit playback settings transaction", "error", txErr, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
-			return
-		}
-
-		app.Settings = &updatedSettings
-	} else {
-		updated, updateErr = app.Queries.UpdateUserPlaybackPreferences(r.Context(), updateParams)
-	}
-	if updateErr != nil {
-		app.Logger.Error("failed to update playback preferences", "error", updateErr, "user_id", userID)
+		return app.Queries.UpdatePlaybackServerSettings(r.Context(), params)
+	})
+	if err != nil {
+		app.Logger.Error("failed to update playback server settings", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
 		return
-	}
-
-	res := updatePlaybackSettingsResponse{
-		PreferredProfile:          helpers.StringPtrFromNull(updated.PreferredHlsProfile),
-		DownloadMbps:              helpers.Float64PtrFromNull(updated.DownloadMbps),
-		PreferredAudioLanguage:    helpers.StringPtrFromNull(updated.PreferredAudioLanguage),
-		PreferredSubtitleLanguage: helpers.StringPtrFromNull(updated.PreferredSubtitleLanguage),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error:   false,
 		Message: "Playback settings updated",
 		Data: map[string]any{
-			"settings": res,
+			"settings": mapPlaybackSettingsResponse(updated),
 		},
 	})
 }

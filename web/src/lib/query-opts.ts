@@ -561,12 +561,14 @@ export function generalSettingsQueryOpts() {
   });
 }
 
-export function playbackSettingsQueryOpts(userId: number) {
+// Server-owned playback data (transcode catalog + admin settings). Per-device
+// preferences are not fetched -- see src/lib/playback-preferences.ts.
+export function playbackSettingsQueryOpts() {
   return queryOptions({
-    queryKey: [PLAYBACK_SETTINGS_KEY, userId],
+    queryKey: [PLAYBACK_SETTINGS_KEY],
     queryFn: getPlaybackSettings,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
   });
 }
 

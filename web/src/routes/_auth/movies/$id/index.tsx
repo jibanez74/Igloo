@@ -36,8 +36,10 @@ import MovieChaptersSection from "@/components/movies/MovieChaptersSection";
 import {
   getAvailableModes,
   getPrimaryVideoStream,
+  playbackDefaultsInput,
   resolvePlaybackSettings
 } from "@/lib/playback";
+import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
 import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
@@ -146,15 +148,17 @@ function LibraryMovieDetailsContent({
     userData?.error === false && userData.data?.user
       ? (userData.data.user)
       : null;
-  const { data: playbackSettingsData } = useQuery({
-    ...playbackSettingsQueryOpts(user?.id ?? 0),
-    enabled: user !== null,
-  });
-  const userPlaybackPrefs =
+  const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
+  const serverPlaybackSettings =
     playbackSettingsData?.error === false &&
     playbackSettingsData.data?.settings
       ? playbackSettingsData.data.settings
       : null;
+  const devicePrefs = useDevicePlaybackPreferences(user?.id ?? 0);
+  const userPlaybackPrefs = playbackDefaultsInput(
+    devicePrefs,
+    serverPlaybackSettings,
+  );
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
   const chapters = techData?.data?.chapters ?? [];

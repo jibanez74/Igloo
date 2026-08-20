@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"igloo/cmd/internal/database"
@@ -94,23 +95,53 @@ func isOptionalHTTPBaseURL(value string) bool {
 	return parsed.Host != ""
 }
 
-// currentSettings returns the in-memory settings copy that every write path
-// refreshes -- the same source GetPlaybackSettings reads -- falling back to the
-// database only if it has somehow not been initialized.
-func (app *Application) currentSettings(r *http.Request) (database.Setting, error) {
-	if app.Settings != nil {
-		return *app.Settings, nil
-	}
-	return app.Queries.GetSettings(r.Context())
+// CurrentSettings returns the in-memory settings copy that every write path
+// refreshes. The returned pointer is only ever replaced, never mutated in
+// place, so callers may read it without holding the lock -- but they must take
+// it from here rather than from the field, or the read races the replacement.
+func (app *Application) CurrentSettings() *database.Setting {
+	app.settingsMu.RLock()
+	defer app.settingsMu.RUnlock()
+
+	return app.settings
 }
 
-func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
-	settings, err := app.currentSettings(r)
+// SetSettings replaces the in-memory settings copy.
+func (app *Application) SetSettings(settings *database.Setting) {
+	app.settingsMu.Lock()
+	defer app.settingsMu.Unlock()
+
+	app.settings = settings
+}
+
+// withSettingsWrite runs a read-modify-write against the settings row while
+// holding the write lock, so two concurrent admin updates cannot both read the
+// same row and then each write back the other's omitted fields. fn receives the
+// current row and returns the updated one; the cache is refreshed on success.
+//
+// Anything that touches the filesystem or the network must be validated before
+// calling this -- the lock is held for the whole callback.
+func (app *Application) withSettingsWrite(
+	ctx context.Context,
+	fn func(current database.Setting) (database.Setting, error),
+) (database.Setting, error) {
+	app.settingsMu.Lock()
+	defer app.settingsMu.Unlock()
+
+	// Reads the field directly: the write lock is already held, and RLock on a
+	// sync.RWMutex is not reentrant.
+	updated, err := fn(*app.settings)
 	if err != nil {
-		app.Logger.Error("failed to get settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch settings"))
-		return
+		return database.Setting{}, err
 	}
+
+	app.settings = &updated
+
+	return updated, nil
+}
+
+func (app *Application) GetSettings(w http.ResponseWriter, _ *http.Request) {
+	settings := *app.CurrentSettings()
 
 	res := helpers.JSONResponse{
 		Error: false,
@@ -120,13 +151,8 @@ func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func (app *Application) GetGeneralSettings(w http.ResponseWriter, r *http.Request) {
-	settings, err := app.currentSettings(r)
-	if err != nil {
-		app.Logger.Error("failed to get general settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch settings"))
-		return
-	}
+func (app *Application) GetGeneralSettings(w http.ResponseWriter, _ *http.Request) {
+	settings := *app.CurrentSettings()
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
@@ -202,28 +228,36 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	currentSettings := app.Settings
-	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
-		TmdbKey:             helpers.NullString(req.TmdbKey),
-		ImmichBaseUrl:       helpers.NullString(req.ImmichBaseURL),
-		ImmichApiKey:        helpers.NullString(req.ImmichApiKey),
-		JellyfinBaseUrl:     helpers.NullString(req.JellyfinBaseURL),
-		JellyfinApiKey:      helpers.NullString(req.JellyfinApiKey),
-		SpotifyClientID:     helpers.NullString(req.SpotifyClientID),
-		SpotifyClientSecret: helpers.NullString(req.SpotifyClientSecret),
-		EnableWatcher:       req.EnableWatcher,
-		DownloadImages:      req.DownloadImages,
-		StaticDir:           req.StaticDir,
-		TranscodeDir:        req.TranscodeDir,
+	// The directory validation above touches the filesystem, so it stays
+	// outside the lock; only the read-compare-write runs under it.
+	var restartRequired bool
+	updatedSettings, err := app.withSettingsWrite(r.Context(), func(current database.Setting) (database.Setting, error) {
+		updated, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
+			TmdbKey:             helpers.NullString(req.TmdbKey),
+			ImmichBaseUrl:       helpers.NullString(req.ImmichBaseURL),
+			ImmichApiKey:        helpers.NullString(req.ImmichApiKey),
+			JellyfinBaseUrl:     helpers.NullString(req.JellyfinBaseURL),
+			JellyfinApiKey:      helpers.NullString(req.JellyfinApiKey),
+			SpotifyClientID:     helpers.NullString(req.SpotifyClientID),
+			SpotifyClientSecret: helpers.NullString(req.SpotifyClientSecret),
+			EnableWatcher:       req.EnableWatcher,
+			DownloadImages:      req.DownloadImages,
+			StaticDir:           req.StaticDir,
+			TranscodeDir:        req.TranscodeDir,
+		})
+		if err != nil {
+			return database.Setting{}, err
+		}
+
+		restartRequired = generalSettingsRestartRequired(&current, updated)
+
+		return updated, nil
 	})
 	if err != nil {
 		app.Logger.Error("failed to update general settings", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to update settings"))
 		return
 	}
-
-	app.Settings = &updatedSettings
-	restartRequired := generalSettingsRestartRequired(currentSettings, updatedSettings)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error:   false,
@@ -280,18 +314,20 @@ func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	updatedSettings, err := app.Queries.UpdateLibrarySettings(r.Context(), database.UpdateLibrarySettingsParams{
-		MoviesDir: moviesDir,
-		ShowsDir:  showsDir,
-		MusicDir:  musicDir,
+	// The directory validation above touches the filesystem, so it stays
+	// outside the lock; only the write and the cache refresh run under it.
+	updatedSettings, err := app.withSettingsWrite(r.Context(), func(database.Setting) (database.Setting, error) {
+		return app.Queries.UpdateLibrarySettings(r.Context(), database.UpdateLibrarySettingsParams{
+			MoviesDir: moviesDir,
+			ShowsDir:  showsDir,
+			MusicDir:  musicDir,
+		})
 	})
 	if err != nil {
 		app.Logger.Error("failed to update library settings", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to update library settings"))
 		return
 	}
-
-	app.Settings = &updatedSettings
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error:   false,
@@ -324,7 +360,8 @@ func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
 }
 
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
-	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
+	settings := app.CurrentSettings()
+	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
 		helpers.ErrorJSON(w, errors.New("music directory is not configured"))
 		return
 	}
@@ -339,7 +376,7 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 	}
 	go app.runMusicScan()
 
-	app.Logger.Info("music library scan triggered via API", "path", app.Settings.MusicDir.String)
+	app.Logger.Info("music library scan triggered via API", "path", settings.MusicDir.String)
 
 	res := helpers.JSONResponse{
 		Error:   false,
@@ -350,7 +387,8 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
+	settings := app.CurrentSettings()
+	if !settings.MoviesDir.Valid || settings.MoviesDir.String == "" {
 		helpers.ErrorJSON(w, errors.New("movies directory is not configured"))
 		return
 	}
@@ -365,7 +403,7 @@ func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request)
 	}
 	go app.runMovieScan()
 
-	app.Logger.Info("movie library scan triggered via API", "path", app.Settings.MoviesDir.String)
+	app.Logger.Info("movie library scan triggered via API", "path", settings.MoviesDir.String)
 
 	res := helpers.JSONResponse{
 		Error:   false,

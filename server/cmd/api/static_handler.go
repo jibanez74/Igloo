@@ -42,10 +42,11 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fullPath := filepath.Join(app.Settings.StaticDir, requestedPath)
+	staticDir := app.CurrentSettings().StaticDir
+	fullPath := filepath.Join(staticDir, requestedPath)
 	fullPath = filepath.Clean(fullPath)
 
-	if !strings.HasPrefix(fullPath, filepath.Clean(app.Settings.StaticDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(staticDir)) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

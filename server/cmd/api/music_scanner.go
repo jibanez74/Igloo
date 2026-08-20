@@ -22,7 +22,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func (app *Application) ScanMusicLibrary() {
-	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
+	settings := app.CurrentSettings()
+	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
 		app.Logger.Info("skipping music library scan: music directory is not configured")
 		return
 	}
@@ -44,12 +45,13 @@ func (app *Application) runMusicScan() {
 	}
 	defer musicScanGuard.Finish()
 
-	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
+	settings := app.CurrentSettings()
+	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
 		app.Logger.Info("skipping music library scan: music directory is not configured")
 		return
 	}
 
-	app.Logger.Info(fmt.Sprintf("scanning music directory: %s", app.Settings.MusicDir.String))
+	app.Logger.Info(fmt.Sprintf("scanning music directory: %s", settings.MusicDir.String))
 
 	ctx := app.scanContext()
 	errorCount := 0
@@ -77,7 +79,7 @@ func (app *Application) runMusicScan() {
 
 	err = helpers.WalkMediaLibraryContext(
 		ctx,
-		app.Settings.MusicDir.String,
+		settings.MusicDir.String,
 		helpers.ValidAudioExtensions,
 		func(err error) {
 			app.Logger.Error(err.Error())

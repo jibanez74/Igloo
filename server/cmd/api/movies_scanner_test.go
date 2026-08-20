@@ -191,7 +191,7 @@ func TestRunMovieScanPreservesMissingMovieRows(t *testing.T) {
 		t.Fatalf("insert missing movie: %v", err)
 	}
 
-	app.Settings = &database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}}
+	app.SetSettings(&database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}})
 	app.runMovieScan()
 
 	_, err = app.Queries.GetMovieByID(ctx, movie.ID)
@@ -222,7 +222,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 
 	ffprobeStub := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 	app.Ffprobe = ffprobeStub
-	app.Settings = &database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}}
+	app.SetSettings(&database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}})
 
 	app.runMovieScan()
 
@@ -1286,7 +1286,7 @@ func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
 	app.Logger = logger
 	ffprobeStub := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 	app.Ffprobe = ffprobeStub
-	app.Settings = &database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}}
+	app.SetSettings(&database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}})
 
 	app.runMovieScan()
 

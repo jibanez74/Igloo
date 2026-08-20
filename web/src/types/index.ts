@@ -133,11 +133,11 @@ export type {
   UpdateLibrarySettingsRequest,
   UpdateLibrarySettingsResponseType,
   UpdatePlaybackSettingsRequest,
-  UpdatePlaybackSettingsResponseType,
 } from "./settings";
 
 // Playback types
 export type {
+  DevicePlaybackPreferences,
   MoviePlaybackStatus,
   PlaybackSettings,
   StreamModeId,

@@ -299,12 +299,8 @@ async function mockMovieDetailsApi(page: Page) {
       await fulfillJSON(route, apiResponse({
         settings: {
           profiles: [],
-          preferred_profile: null,
-          download_mbps: null,
           server_upload_mbps: null,
-          is_admin: false,
-          preferred_audio_language: null,
-          preferred_subtitle_language: null,
+          hardware_acceleration_device: "cpu",
         },
       }));
       return;

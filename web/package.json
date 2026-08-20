@@ -21,6 +21,7 @@
     "test:e2e:account-settings": "playwright test e2e/account-settings.spec.ts",
     "test:e2e:device-lifecycle": "playwright test e2e/device-lifecycle.spec.ts",
     "test:e2e:general-settings": "playwright test e2e/general-settings.spec.ts",
+    "test:e2e:playback-settings": "playwright test e2e/playback-settings.spec.ts",
     "test:e2e:libraries-settings": "playwright test e2e/libraries-settings.spec.ts",
     "test:e2e:user-settings": "playwright test e2e/user-settings.spec.ts",
     "test:e2e:movies": "playwright test e2e/movies.spec.ts",

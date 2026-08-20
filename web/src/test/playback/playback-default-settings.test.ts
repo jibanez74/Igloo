@@ -6,8 +6,8 @@ import {
   resolveModeForAudioTrack,
   resolvePlaybackSettings,
 } from "@/lib/playback";
+import type { PlaybackDefaultsInput } from "@/lib/playback";
 import type { StreamModeId } from "@/types/playback";
-import type { PlaybackSettingsType } from "@/types/settings";
 import type { AudioStreamType, SubtitleType } from "@/types/movies";
 
 const audioStream = (
@@ -72,16 +72,14 @@ const PROFILES = [
 ];
 
 const makePrefs = (
-  overrides: Partial<PlaybackSettingsType> = {},
-): PlaybackSettingsType => ({
+  overrides: Partial<PlaybackDefaultsInput> = {},
+): PlaybackDefaultsInput => ({
   profiles: PROFILES,
-  preferred_profile: null,
-  download_mbps: null,
-  server_upload_mbps: null,
-  hardware_acceleration_device: "cpu",
-  is_admin: false,
-  preferred_audio_language: null,
-  preferred_subtitle_language: null,
+  serverUploadMbps: null,
+  preferredProfile: null,
+  downloadMbps: null,
+  preferredAudioLanguage: null,
+  preferredSubtitleLanguage: null,
   ...overrides,
 });
 
@@ -90,37 +88,37 @@ describe("getDefaultPlaybackSettings", () => {
     expect(getDefaultPlaybackSettings(ALL_MODES).mode).toBe("direct");
   });
 
-  it("uses preferred_profile when it is in availableModes", () => {
-    const prefs = makePrefs({ preferred_profile: "1080p_8mbps" });
+  it("uses preferredProfile when it is in availableModes", () => {
+    const prefs = makePrefs({ preferredProfile: "1080p_8mbps" });
     expect(getDefaultPlaybackSettings(ALL_MODES, prefs).mode).toBe(
       "1080p_8mbps",
     );
   });
 
-  it("ignores preferred_profile when it is not in availableModes", () => {
-    const prefs = makePrefs({ preferred_profile: "2160p_16mbps" });
+  it("ignores preferredProfile when it is not in availableModes", () => {
+    const prefs = makePrefs({ preferredProfile: "2160p_16mbps" });
     expect(getDefaultPlaybackSettings(SUB_HD_MODES, prefs).mode).toBe("remux");
   });
 
-  it("falls back when preferred_profile and download recommendation are unavailable", () => {
+  it("falls back when preferredProfile and download recommendation are unavailable", () => {
     const prefs = makePrefs({
-      preferred_profile: "2160p_16mbps",
-      download_mbps: 100,
+      preferredProfile: "2160p_16mbps",
+      downloadMbps: 100,
     });
     expect(getDefaultPlaybackSettings(SUB_HD_MODES, prefs).mode).toBe("remux");
   });
 
-  it("uses download_mbps recommendation when no preferred_profile is set", () => {
-    const prefs = makePrefs({ download_mbps: 5 });
+  it("uses the downloadMbps recommendation when no preferredProfile is set", () => {
+    const prefs = makePrefs({ downloadMbps: 5 });
     expect(getDefaultPlaybackSettings(ALL_MODES, prefs).mode).toBe(
       "1080p_4mbps",
     );
   });
 
-  it("clamps recommendation by server_upload_mbps", () => {
+  it("clamps recommendation by serverUploadMbps", () => {
     const prefs = makePrefs({
-      download_mbps: 100,
-      server_upload_mbps: 5,
+      downloadMbps: 100,
+      serverUploadMbps: 5,
     });
     expect(getDefaultPlaybackSettings(ALL_MODES, prefs).mode).toBe(
       "1080p_4mbps",
@@ -128,14 +126,14 @@ describe("getDefaultPlaybackSettings", () => {
   });
 
   it("falls back to availableModes[0] when recommendation is not in availableModes", () => {
-    const prefs = makePrefs({ download_mbps: 100 });
+    const prefs = makePrefs({ downloadMbps: 100 });
     expect(getDefaultPlaybackSettings(SUB_HD_MODES, prefs).mode).toBe("remux");
   });
 
-  it("prefers preferred_profile over the download_mbps recommendation", () => {
+  it("prefers preferredProfile over the downloadMbps recommendation", () => {
     const prefs = makePrefs({
-      preferred_profile: "720p_3mbps",
-      download_mbps: 100,
+      preferredProfile: "720p_3mbps",
+      downloadMbps: 100,
     });
     expect(getDefaultPlaybackSettings(ALL_MODES, prefs).mode).toBe(
       "720p_3mbps",
@@ -152,8 +150,8 @@ describe("getDefaultPlaybackSettings", () => {
     expect(result.subtitleTrack).toBeNull();
   });
 
-  it("picks the audio track matching preferred_audio_language", () => {
-    const prefs = makePrefs({ preferred_audio_language: "en" });
+  it("picks the audio track matching preferredAudioLanguage", () => {
+    const prefs = makePrefs({ preferredAudioLanguage: "en" });
     const audio = [
       audioStream(0, "spa"),
       audioStream(1, "eng"),
@@ -163,15 +161,15 @@ describe("getDefaultPlaybackSettings", () => {
     expect(result.audioTrack).toBe(1);
   });
 
-  it("falls back to audioTrack 0 when preferred_audio_language has no match", () => {
-    const prefs = makePrefs({ preferred_audio_language: "de" });
+  it("falls back to audioTrack 0 when preferredAudioLanguage has no match", () => {
+    const prefs = makePrefs({ preferredAudioLanguage: "de" });
     const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, audio);
     expect(result.audioTrack).toBe(0);
   });
 
-  it("returns subtitleTrack null when preferred_subtitle_language is 'off'", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "off" });
+  it("returns subtitleTrack null when preferredSubtitleLanguage is 'off'", () => {
+    const prefs = makePrefs({ preferredSubtitleLanguage: "off" });
     const subs = [subtitleStream(0, "eng"), subtitleStream(1, "spa")];
     const result = getDefaultPlaybackSettings(
       ALL_MODES,
@@ -182,8 +180,8 @@ describe("getDefaultPlaybackSettings", () => {
     expect(result.subtitleTrack).toBeNull();
   });
 
-  it("picks the subtitle track matching preferred_subtitle_language", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+  it("picks the subtitle track matching preferredSubtitleLanguage", () => {
+    const prefs = makePrefs({ preferredSubtitleLanguage: "es" });
     const subs = [
       subtitleStream(0, "eng"),
       subtitleStream(1, "spa"),
@@ -198,8 +196,8 @@ describe("getDefaultPlaybackSettings", () => {
     expect(result.subtitleTrack).toBe(1);
   });
 
-  it("falls back to subtitleTrack null when preferred_subtitle_language has no match", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "de" });
+  it("falls back to subtitleTrack null when preferredSubtitleLanguage has no match", () => {
+    const prefs = makePrefs({ preferredSubtitleLanguage: "de" });
     const subs = [subtitleStream(0, "eng"), subtitleStream(1, "spa")];
     const result = getDefaultPlaybackSettings(
       ALL_MODES,
@@ -210,27 +208,27 @@ describe("getDefaultPlaybackSettings", () => {
     expect(result.subtitleTrack).toBeNull();
   });
 
-  it("returns audioTrack 0 when preferred_audio_language is set but audioStreams is empty", () => {
-    const prefs = makePrefs({ preferred_audio_language: "en" });
+  it("returns audioTrack 0 when preferredAudioLanguage is set but audioStreams is empty", () => {
+    const prefs = makePrefs({ preferredAudioLanguage: "en" });
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, []);
     expect(result.audioTrack).toBe(0);
   });
 
-  it("returns subtitleTrack null when preferred_subtitle_language is set but subtitleStreams is empty", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+  it("returns subtitleTrack null when preferredSubtitleLanguage is set but subtitleStreams is empty", () => {
+    const prefs = makePrefs({ preferredSubtitleLanguage: "es" });
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, undefined, []);
     expect(result.subtitleTrack).toBeNull();
   });
 
   it("does not match an unmapped 3-letter stream code against a 2-letter user pref", () => {
-    const prefs = makePrefs({ preferred_audio_language: "fi" });
+    const prefs = makePrefs({ preferredAudioLanguage: "fi" });
     const audio = [audioStream(0, "eng"), audioStream(1, "fil")];
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, audio);
     expect(result.audioTrack).toBe(0);
   });
 
   it("never auto-selects a bitmap subtitle for the preferred language", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "en" });
+    const prefs = makePrefs({ preferredSubtitleLanguage: "en" });
     const subtitles = [
       { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
       subtitleStream(1, "eng"),
@@ -242,7 +240,7 @@ describe("getDefaultPlaybackSettings", () => {
 
 describe("resolvePlaybackSettings", () => {
   it("falls back to the user's preferred profile when the mode is invalid", () => {
-    const prefs = makePrefs({ preferred_profile: "1080p_8mbps" });
+    const prefs = makePrefs({ preferredProfile: "1080p_8mbps" });
     const result = resolvePlaybackSettings(
       { mode: "direct", audioTrack: 0, subtitleTrack: null },
       SUB_HD_MODES.concat([{ id: "1080p_8mbps" }]),
@@ -254,7 +252,7 @@ describe("resolvePlaybackSettings", () => {
   });
 
   it("falls back to the preferred audio language when the track is out of range", () => {
-    const prefs = makePrefs({ preferred_audio_language: "es" });
+    const prefs = makePrefs({ preferredAudioLanguage: "es" });
     const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
     const result = resolvePlaybackSettings(
       { mode: "direct", audioTrack: 9, subtitleTrack: null },
@@ -269,8 +267,8 @@ describe("resolvePlaybackSettings", () => {
 
   it("keeps a valid explicit selection over user preferences", () => {
     const prefs = makePrefs({
-      preferred_profile: "720p_3mbps",
-      preferred_audio_language: "es",
+      preferredProfile: "720p_3mbps",
+      preferredAudioLanguage: "es",
     });
     const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
     const result = resolvePlaybackSettings(
@@ -284,7 +282,7 @@ describe("resolvePlaybackSettings", () => {
   });
 
   it("keeps an explicit subtitle-off selection over user preferences", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+    const prefs = makePrefs({ preferredSubtitleLanguage: "es" });
     const subtitles = [
       subtitleStream(0, "eng"),
       subtitleStream(1, "spa"),
@@ -303,7 +301,7 @@ describe("resolvePlaybackSettings", () => {
     ["an omitted selection", undefined],
     ["an out-of-range selection", 99],
   ])("uses the preferred text subtitle for %s", (_label, subtitleTrack) => {
-    const prefs = makePrefs({ preferred_subtitle_language: "es" });
+    const prefs = makePrefs({ preferredSubtitleLanguage: "es" });
     const subtitles = [
       subtitleStream(0, "eng"),
       subtitleStream(1, "spa"),
@@ -333,7 +331,7 @@ describe("resolvePlaybackSettings", () => {
   });
 
   it("falls back from a bitmap selection to the preferred text subtitle", () => {
-    const prefs = makePrefs({ preferred_subtitle_language: "en" });
+    const prefs = makePrefs({ preferredSubtitleLanguage: "en" });
     const subtitles = [
       { ...subtitleStream(0, "eng"), codec: "hdmv_pgs_subtitle" },
       subtitleStream(1, "eng"),
@@ -396,7 +394,7 @@ describe("resolvePlaybackSettings", () => {
   });
 
   it("upgrades a preferred-language default away from direct play", () => {
-    const prefs = makePrefs({ preferred_audio_language: "es" });
+    const prefs = makePrefs({ preferredAudioLanguage: "es" });
     const audio = [audioStream(0, "eng"), audioStream(1, "spa")];
     const result = getDefaultPlaybackSettings(ALL_MODES, prefs, audio, []);
     expect(result.mode).toBe("remux");

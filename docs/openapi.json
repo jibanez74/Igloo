@@ -3148,7 +3148,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Get playback preferences and available profiles",
+        "summary": "Get transcode profiles and server playback settings",
         "operationId": "getPlaybackSettings",
         "responses": {
           "200": {
@@ -3166,15 +3166,15 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Update playback preferences and admin server settings",
-        "description": "Per-user playback preferences. The server_upload_mbps and hardware_acceleration_device fields are global settings and admin-only; requests from non-admins that include them return 403.",
+        "summary": "Update server playback settings",
+        "description": "Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage.",
         "operationId": "updatePlaybackSettings",
         "requestBody": {
           "$ref": "#/components/requestBodies/UpdatePlaybackSettingsRequest"
         },
         "responses": {
           "200": {
-            "$ref": "#/components/responses/UpdatePlaybackSettingsResponse"
+            "$ref": "#/components/responses/PlaybackSettingsResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -5153,16 +5153,6 @@
           }
         }
       },
-      "UpdatePlaybackSettingsResponse": {
-        "description": "Updated playback settings response.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/UpdatePlaybackSettingsEnvelope"
-            }
-          }
-        }
-      },
       "LatestMoviesResponse": {
         "description": "Latest movies response.",
         "content": {
@@ -6995,13 +6985,8 @@
         "type": "object",
         "required": [
           "profiles",
-          "preferred_profile",
-          "download_mbps",
           "server_upload_mbps",
-          "hardware_acceleration_device",
-          "is_admin",
-          "preferred_audio_language",
-          "preferred_subtitle_language"
+          "hardware_acceleration_device"
         ],
         "properties": {
           "profiles": {
@@ -7009,18 +6994,6 @@
             "items": {
               "$ref": "#/components/schemas/PlaybackProfile"
             }
-          },
-          "preferred_profile": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "download_mbps": {
-            "type": [
-              "number",
-              "null"
-            ]
           },
           "server_upload_mbps": {
             "type": [
@@ -7030,105 +7003,26 @@
           },
           "hardware_acceleration_device": {
             "$ref": "#/components/schemas/HardwareAccelerationDevice"
-          },
-          "is_admin": {
-            "type": "boolean"
-          },
-          "preferred_audio_language": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "preferred_subtitle_language": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         },
         "additionalProperties": false
       },
       "UpdatePlaybackSettingsRequest": {
         "type": "object",
+        "description": "Fields absent from the body keep their current value.",
         "properties": {
-          "preferred_profile": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Allowed transcode profile except remux."
-          },
-          "download_mbps": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "exclusiveMinimum": 0,
-            "exclusiveMaximum": 10000
-          },
-          "preferred_audio_language": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[a-z]{2,3}$"
-          },
-          "preferred_subtitle_language": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Two- or three-letter language code, or off."
-          },
           "server_upload_mbps": {
             "type": [
               "number",
               "null"
             ],
-            "description": "Admin-only server upload bandwidth cap in Mbps.",
+            "description": "Server upload bandwidth cap in Mbps. Null means uncapped.",
             "exclusiveMinimum": 0,
             "exclusiveMaximum": 100000
           },
           "hardware_acceleration_device": {
             "$ref": "#/components/schemas/HardwareAccelerationDevice",
-            "description": "Admin-only hardware acceleration device used for new transcodes."
-          }
-        },
-        "additionalProperties": false
-      },
-      "UpdatePlaybackSettings": {
-        "type": "object",
-        "required": [
-          "preferred_profile",
-          "download_mbps",
-          "preferred_audio_language",
-          "preferred_subtitle_language"
-        ],
-        "properties": {
-          "preferred_profile": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "download_mbps": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "preferred_audio_language": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "preferred_subtitle_language": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "description": "Hardware acceleration device used for new transcodes."
           }
         },
         "additionalProperties": false
@@ -7158,36 +7052,6 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/PlaybackSettingsData"
-              }
-            }
-          }
-        ]
-      },
-      "UpdatePlaybackSettingsData": {
-        "type": "object",
-        "required": [
-          "settings"
-        ],
-        "properties": {
-          "settings": {
-            "$ref": "#/components/schemas/UpdatePlaybackSettings"
-          }
-        },
-        "additionalProperties": false
-      },
-      "UpdatePlaybackSettingsEnvelope": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/JsonSuccess"
-          },
-          {
-            "type": "object",
-            "required": [
-              "data"
-            ],
-            "properties": {
-              "data": {
-                "$ref": "#/components/schemas/UpdatePlaybackSettingsData"
               }
             }
           }

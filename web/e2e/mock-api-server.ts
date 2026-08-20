@@ -53,12 +53,25 @@ type ServerPlaybackSettings = {
   hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
 };
 
-type PlaybackPreferences = {
-  preferred_profile: string | null;
-  download_mbps: number | null;
-  preferred_audio_language: string | null;
-  preferred_subtitle_language: string | null;
-};
+// Both mirror UpdatePlaybackSettings in the Go server: a mock that accepts what
+// the real handler answers with 400 lets a spec pass against a contract that
+// does not exist.
+const SERVER_UPLOAD_MAX_MBPS = 100_000;
+const HARDWARE_ACCELERATION_DEVICES = [
+  "cpu",
+  "apple",
+  "nvidia",
+  "intel",
+] as const;
+
+function isHardwareAccelerationDevice(
+  value: unknown,
+): value is ServerPlaybackSettings["hardware_acceleration_device"] {
+  return (
+    typeof value === "string" &&
+    (HARDWARE_ACCELERATION_DEVICES as readonly string[]).includes(value)
+  );
+}
 
 type MovieWatchProgress = {
   progress_sec: number | null;
@@ -105,7 +118,6 @@ const sessions = new Map<string, number>();
 // by the Go integration tests and the live-gated quick-connect.spec.ts.
 const devices: MockDevice[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
-const playbackPreferences = new Map<number, PlaybackPreferences>();
 const likedMovieIds = new Set<number>();
 const likedTrackIds = new Set<number>();
 const watchProgress = new Map<number, MovieWatchProgress>();
@@ -804,58 +816,13 @@ function musicianDetails(id: number) {
   };
 }
 
-function playbackSettingsFor(user: User) {
-  const prefs = playbackPreferences.get(user.id) ?? {
-    preferred_profile: null,
-    download_mbps: null,
-    preferred_audio_language: null,
-    preferred_subtitle_language: null,
-  };
-
+function playbackSettingsResponse() {
   return {
     profiles: playbackProfiles,
-    preferred_profile: prefs.preferred_profile,
-    download_mbps: prefs.download_mbps,
     server_upload_mbps: serverPlaybackSettings.server_upload_mbps,
     hardware_acceleration_device:
       serverPlaybackSettings.hardware_acceleration_device,
-    is_admin: user.is_admin,
-    preferred_audio_language: prefs.preferred_audio_language,
-    preferred_subtitle_language: prefs.preferred_subtitle_language,
   };
-}
-
-function updatePlaybackPreferences(
-  user: User,
-  body: Record<string, unknown>,
-) {
-  const current = playbackPreferences.get(user.id) ?? {
-    preferred_profile: null,
-    download_mbps: null,
-    preferred_audio_language: null,
-    preferred_subtitle_language: null,
-  };
-
-  const next: PlaybackPreferences = {
-    preferred_profile: valueOrCurrent(
-      nullableStringField(body, "preferred_profile"),
-      current.preferred_profile,
-    ),
-    download_mbps: valueOrCurrent(
-      nullableNumberField(body, "download_mbps"),
-      current.download_mbps,
-    ),
-    preferred_audio_language: valueOrCurrent(
-      nullableStringField(body, "preferred_audio_language"),
-      current.preferred_audio_language,
-    ),
-    preferred_subtitle_language: valueOrCurrent(
-      nullableStringField(body, "preferred_subtitle_language"),
-      current.preferred_subtitle_language,
-    ),
-  };
-
-  playbackPreferences.set(user.id, next);
 }
 
 function canHandleWithoutAuth(pathname: string) {
@@ -1126,7 +1093,6 @@ async function handleUserRoutes(
     const index = users.findIndex(item => item.id === user.id);
     if (index >= 0) {
       users.splice(index, 1);
-      playbackPreferences.delete(user.id);
       removeSessionsForUser(user.id);
     }
     sendSuccess(response, {}, 200, "Account deleted", {
@@ -1218,7 +1184,6 @@ async function handleAdminRoutes(
     const index = users.findIndex(item => item.id === userId);
     if (index >= 0) {
       users.splice(index, 1);
-      playbackPreferences.delete(userId);
       removeSessionsForUser(userId);
     }
     sendSuccess(response, {});
@@ -1327,54 +1292,58 @@ async function handleSettingsRoutes(
   }
 
   if (url.pathname === "/api/settings/playback" && method === "GET") {
-    sendSuccess(response, { settings: playbackSettingsFor(user) });
+    sendSuccess(response, { settings: playbackSettingsResponse() });
     return true;
   }
 
   if (url.pathname === "/api/settings/playback" && method === "PUT") {
-    const body = await readJSONBody(request);
-    const hasServerUpload = Object.prototype.hasOwnProperty.call(
-      body,
-      "server_upload_mbps",
-    );
-    const hasHardwareDevice = Object.prototype.hasOwnProperty.call(
-      body,
-      "hardware_acceleration_device",
-    );
-
-    if (!user.is_admin && (hasServerUpload || hasHardwareDevice)) {
+    // Mirrors the RequireAdmin middleware on the real route.
+    if (!user.is_admin) {
       sendFailure(response, 403, "Server playback settings are admin-only.");
       return true;
     }
 
-    updatePlaybackPreferences(user, body);
-    if (user.is_admin && (hasServerUpload || hasHardwareDevice)) {
-      serverPlaybackSettings = {
-        server_upload_mbps: hasServerUpload
-          ? valueOrCurrent(
-              nullableNumberField(body, "server_upload_mbps"),
-              serverPlaybackSettings.server_upload_mbps,
-            )
-          : serverPlaybackSettings.server_upload_mbps,
-        hardware_acceleration_device: hasHardwareDevice
-          ? (stringField(
-              body,
-              "hardware_acceleration_device",
-              serverPlaybackSettings.hardware_acceleration_device,
-            ) as ServerPlaybackSettings["hardware_acceleration_device"])
-          : serverPlaybackSettings.hardware_acceleration_device,
-      };
+    const body = await readJSONBody(request);
+
+    // Absent fields keep their current value; the ones that were sent are
+    // validated exactly as the Go handler validates them.
+    let serverUploadMbps = serverPlaybackSettings.server_upload_mbps;
+    if (Object.prototype.hasOwnProperty.call(body, "server_upload_mbps")) {
+      const sent = nullableNumberField(body, "server_upload_mbps");
+      if (
+        typeof sent === "number" &&
+        (sent <= 0 || sent >= SERVER_UPLOAD_MAX_MBPS)
+      ) {
+        sendFailure(
+          response,
+          400,
+          `server upload speed must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps`,
+        );
+        return true;
+      }
+      serverUploadMbps = valueOrCurrent(sent, serverUploadMbps);
     }
 
-    const settings = playbackSettingsFor(user);
-    sendSuccess(response, {
-      settings: {
-        preferred_profile: settings.preferred_profile,
-        download_mbps: settings.download_mbps,
-        preferred_audio_language: settings.preferred_audio_language,
-        preferred_subtitle_language: settings.preferred_subtitle_language,
-      },
-    });
+    let hardwareDevice = serverPlaybackSettings.hardware_acceleration_device;
+    if (
+      Object.prototype.hasOwnProperty.call(body, "hardware_acceleration_device")
+    ) {
+      const sent = body.hardware_acceleration_device;
+      // Rejects null and any unknown string, so the union type is enforced by a
+      // check rather than by a cast that assumes it.
+      if (!isHardwareAccelerationDevice(sent)) {
+        sendFailure(response, 400, "invalid hardware acceleration device");
+        return true;
+      }
+      hardwareDevice = sent;
+    }
+
+    serverPlaybackSettings = {
+      server_upload_mbps: serverUploadMbps,
+      hardware_acceleration_device: hardwareDevice,
+    };
+
+    sendSuccess(response, { settings: playbackSettingsResponse() });
     return true;
   }
 

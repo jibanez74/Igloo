@@ -24,7 +24,9 @@ import {
   getAvailableModes,
   getDefaultPlaybackSettings,
   getPrimaryVideoStream,
+  playbackDefaultsInput,
 } from "@/lib/playback";
+import { getDevicePlaybackPreferences } from "@/lib/playback-preferences";
 import { deleteMovieWatchProgress } from "@/lib/api";
 import {
   clampMoviePlaybackTime,
@@ -102,9 +104,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
           context.queryClient.ensureQueryData(
             movieTechnicalDetailsQueryOpts(movieId),
           ),
-          context.queryClient.ensureQueryData(
-            playbackSettingsQueryOpts(authRes.data.user.id),
-          ),
+          context.queryClient.ensureQueryData(playbackSettingsQueryOpts()),
         ]);
       })().catch(() => {});
       return;
@@ -121,9 +121,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
       context.queryClient.ensureQueryData(
         movieTechnicalDetailsQueryOpts(movieId),
       ),
-      context.queryClient.ensureQueryData(
-        playbackSettingsQueryOpts(authRes.data.user.id),
-      ),
+      context.queryClient.ensureQueryData(playbackSettingsQueryOpts()),
     ]);
 
     const techData = techRes.error === false ? techRes.data : null;
@@ -141,11 +139,14 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     });
     if (availableModes.length === 0) return;
 
-    const userPrefs =
+    const serverSettings =
       playbackRes.error === false ? (playbackRes.data?.settings ?? null) : null;
     const resolved = getDefaultPlaybackSettings(
       availableModes,
-      userPrefs,
+      playbackDefaultsInput(
+        getDevicePlaybackPreferences(authRes.data.user.id),
+        serverSettings,
+      ),
       audioStreams,
       subtitleStreams,
     );
