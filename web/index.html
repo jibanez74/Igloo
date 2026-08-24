@@ -1,17 +1,42 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-app-ready="false">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Igloo</title>
+  <title data-igloo-bootstrap-title>Igloo</title>
   <meta name="description"
+    data-igloo-bootstrap-description
     content="Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library." />
-  <meta name="theme-color" content="#0f172a" />
+  <!-- BEGIN GENERATED: theme boot — edit src/lib/theme-tokens.ts and run `bun run generate:theme` -->
+  <meta name="theme-color" content="#0A1322" />
+  <!-- Anti-flash: apply the stored theme before any CSS paints. Defaults
+       to dark, including on storage errors. -->
+  <script>
+    (function () {
+      try {
+        var light = localStorage.getItem("igloo-theme") === "light";
+        document.documentElement.classList.toggle("dark", !light);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", light ? "#F2F7FC" : "#0A1322");
+      } catch (e) {
+        document.documentElement.classList.add("dark");
+      }
+    })();
+  </script>
+  <!-- END GENERATED: theme boot -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/src/assets/boot.css" />
 </head>
 
-<body
-  class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
+<body>
+  <div id="initial-splash" role="status" aria-live="polite" aria-atomic="true">
+    <div class="initial-splash__content">
+      <p class="initial-splash__title">Igloo</p>
+      <p class="initial-splash__message">Starting Igloo...</p>
+    </div>
+  </div>
   <div id="app"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

@@ -1,181 +1,298 @@
 package ffprobe
 
 import (
+	"encoding/json"
 	"path/filepath"
-	"runtime"
+	"strings"
 	"testing"
 )
 
-// getTestMediaPath returns the absolute path to a test media file.
-func getTestMediaPath(filename string) string {
-	_, currentFile, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..", "..")
+func TestRunMetadataRejectsEmptyPath(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
 
-	return filepath.Join(projectRoot, "media", filename)
+	_, err := probe.GetMetadata("")
+	if err == nil || !strings.Contains(err.Error(), "file path is required") {
+		t.Fatalf("GetMetadata(\"\") error = %v, want missing file path error", err)
+	}
+
+	_, err = probe.GetAudioMetadata("   ")
+	if err == nil || !strings.Contains(err.Error(), "file path is required") {
+		t.Fatalf("GetAudioMetadata(blank) error = %v, want missing file path error", err)
+	}
 }
 
-func TestGetMetadata_AudioFile(t *testing.T) {
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
+func TestRunMetadataValidJSON(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: `{"streams":[{"index":1,"codec_name":"aac","codec_type":"audio","sample_rate":"44100"}],"format":{"duration":"12.34","tags":{"title":"Song Title"}},"chapters":[]}`,
+	})}
 
-	trackPath := getTestMediaPath("track.m4a")
-
-	result, err := probe.GetMetadata(trackPath)
+	result, err := probe.GetMetadata("/tmp/song.mp3")
 	if err != nil {
 		t.Fatalf("GetMetadata failed: %v", err)
 	}
 
-	if result == nil {
-		t.Fatal("Expected non-nil result")
+	if len(result.Streams) != 1 {
+		t.Fatalf("len(Streams) = %d, want 1", len(result.Streams))
 	}
-
-	// Verify we got at least one stream
-	if len(result.Streams) == 0 {
-		t.Error("Expected at least one stream")
+	if result.Streams[0].CodecName != "aac" {
+		t.Fatalf("CodecName = %q, want %q", result.Streams[0].CodecName, "aac")
 	}
-
-	// Verify format info is populated
-	if result.Format.Filename == "" {
-		t.Error("Expected Format.Filename to be set")
+	if result.Streams[0].CodecType != "audio" {
+		t.Fatalf("CodecType = %q, want %q", result.Streams[0].CodecType, "audio")
 	}
-
-	if result.Format.Duration == "" {
-		t.Error("Expected Format.Duration to be set")
-	}
-
-	if result.Format.FormatName == "" {
-		t.Error("Expected Format.FormatName to be set")
+	if result.Format.Tags.Title != "Song Title" {
+		t.Fatalf("Format.Tags.Title = %q, want %q", result.Format.Tags.Title, "Song Title")
 	}
 }
 
-func TestGetMetadata_AudioStream(t *testing.T) {
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
+func TestRunMetadataInvalidJSONIncludesFilePath(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: `{invalid json`,
+	})}
 
-	trackPath := getTestMediaPath("track.m4a")
-
-	result, err := probe.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("GetMetadata failed: %v", err)
-	}
-
-	var audioStream *Stream
-
-	// Find the audio stream
-	for i := range result.Streams {
-		if result.Streams[i].CodecType == "audio" {
-			audioStream = &result.Streams[i]
-			break
-		}
-	}
-
-	if audioStream == nil {
-		t.Fatal("Expected to find an audio stream")
-	}
-
-	if audioStream.CodecName == "" {
-		t.Error("Expected audio stream to have CodecName")
-	}
-
-	// an audio track must have at least one channel
-	if audioStream.Channels == 0 {
-		t.Error("Expected audio stream to have Channels > 0")
-	}
-}
-
-func TestGetMetadata_NonExistentFile(t *testing.T) {
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	_, err = probe.GetMetadata("/nonexistent/path/file.mp3")
+	_, err := probe.GetMetadata("/tmp/bad.mp3")
 	if err == nil {
-		t.Error("Expected error for non-existent file")
+		t.Fatal("Expected parse error")
+	}
+
+	errText := err.Error()
+	if !strings.Contains(errText, "failed to parse ffprobe output for /tmp/bad.mp3") {
+		t.Fatalf("error = %q, want parse error with file path", errText)
 	}
 }
 
-func TestGetMetadata_EmptyPath(t *testing.T) {
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
+func TestRunMetadataNonzeroExitSurfacesTrimmedStderr(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stderr:   "  fake stderr  ",
+		exitCode: 2,
+	})}
 
-	_, err = probe.GetMetadata("")
+	_, err := probe.GetMetadata("/tmp/fail.mp3")
 	if err == nil {
-		t.Error("Expected error for empty file path")
+		t.Fatal("Expected ffprobe failure")
+	}
+
+	errText := err.Error()
+	if !strings.Contains(errText, "ffprobe failed for /tmp/fail.mp3") {
+		t.Fatalf("error = %q, want ffprobe failure with file path", errText)
+	}
+	if !strings.Contains(errText, "fake stderr") {
+		t.Fatalf("error = %q, want stderr", errText)
+	}
+	if strings.Contains(errText, "  fake stderr  ") {
+		t.Fatalf("error = %q, want trimmed stderr", errText)
 	}
 }
 
-func TestGetMetadata_FormatTags(t *testing.T) {
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
+func TestRunMetadataNonzeroExitWithoutStderr(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		exitCode: 2,
+	})}
 
-	trackPath := getTestMediaPath("track.m4a")
-
-	result, err := probe.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("GetMetadata failed: %v", err)
+	_, err := probe.GetMetadata("/tmp/fail.mp3")
+	if err == nil {
+		t.Fatal("Expected ffprobe failure")
 	}
 
-	// Log the tags we found (some may be empty depending on the file)
-	t.Logf("Title: %s", result.Format.Tags.Title)
-	t.Logf("Artist: %s", result.Format.Tags.Artist)
-	t.Logf("Album: %s", result.Format.Tags.Album)
-	t.Logf("Genre: %s", result.Format.Tags.Genre)
-	t.Logf("Track: %s", result.Format.Tags.Track)
-	t.Logf("Date: %s", result.Format.Tags.Date)
-
-	// Verify that at least some metadata structure is present
-	// (actual values depend on the test file's embedded metadata)
-	if result.Format.Tags == (FormatTags{}) {
-		t.Log("Warning: No format tags found in file - this may be expected if file has no metadata")
+	errText := err.Error()
+	if !strings.Contains(errText, "ffprobe failed for /tmp/fail.mp3") {
+		t.Fatalf("error = %q, want ffprobe failure with file path", errText)
+	}
+	if !strings.Contains(errText, "exit status 2") {
+		t.Fatalf("error = %q, want the exit status", errText)
 	}
 }
 
-func TestGetMetadata_MultipleCallsUseSameInstance(t *testing.T) {
-	probe1, err := New()
+func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout: `{"streams":[],"format":{},"chapters":[]}`,
+	})}
+
+	_, err := probe.GetMetadata("/tmp/empty.mp3")
+	if err == nil {
+		t.Fatal("Expected empty streams error")
+	}
+
+	if !strings.Contains(err.Error(), "no streams found in /tmp/empty.mp3") {
+		t.Fatalf("error = %q, want no streams error with file path", err.Error())
+	}
+}
+
+func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
+	argsLog := filepath.Join(t.TempDir(), "args.log")
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stdout:  `{"streams":[{"codec_name":"aac","codec_type":"audio","channels":2}],"format":{"duration":"12.34","bit_rate":"256000","tags":{"title":"Song Title"}}}`,
+		argsLog: argsLog,
+	})}
+
+	_, err := probe.GetAudioMetadata("/tmp/song.mp3")
 	if err != nil {
-		t.Fatalf("Failed to create first ffprobe instance: %v", err)
+		t.Fatalf("GetAudioMetadata failed: %v", err)
 	}
 
-	probe2, err := New()
+	args := readArgumentLog(t, argsLog)
+	requireArgumentValue(t, args, "-print_format", "json")
+	requireArgumentValue(t, args, "-show_entries",
+		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language")
+	if args[len(args)-1] != "/tmp/song.mp3" {
+		t.Fatalf("last argument = %q, want the probed file path", args[len(args)-1])
+	}
+}
+
+func TestFormatTagsUnmarshalAliases(t *testing.T) {
+	var tags FormatTags
+	err := json.Unmarshal([]byte(`{
+		"title": "Song Title",
+		"albumartist": "Album Artist",
+		"tracknumber": "2/10",
+		"discnumber": "1/2",
+		"titlesort": "Song Title Sort",
+		"albumsort": "Album Sort",
+		"artistsort": "Artist Sort"
+	}`), &tags)
 	if err != nil {
-		t.Fatalf("Failed to create second ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	// Both should be the same singleton instance
-	if probe1 != probe2 {
-		t.Error("Expected New() to return the same singleton instance")
+		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	trackPath := getTestMediaPath("track.m4a")
+	if tags.Title != "Song Title" {
+		t.Fatalf("Title = %q, want %q", tags.Title, "Song Title")
+	}
+	if tags.AlbumArtist != "Album Artist" {
+		t.Fatalf("AlbumArtist = %q, want %q", tags.AlbumArtist, "Album Artist")
+	}
+	if tags.Track != "2/10" {
+		t.Fatalf("Track = %q, want %q", tags.Track, "2/10")
+	}
+	if tags.Disc != "1/2" {
+		t.Fatalf("Disc = %q, want %q", tags.Disc, "1/2")
+	}
+	if tags.SortName != "Song Title Sort" {
+		t.Fatalf("SortName = %q, want %q", tags.SortName, "Song Title Sort")
+	}
+	if tags.SortAlbum != "Album Sort" {
+		t.Fatalf("SortAlbum = %q, want %q", tags.SortAlbum, "Album Sort")
+	}
+	if tags.SortArtist != "Artist Sort" {
+		t.Fatalf("SortArtist = %q, want %q", tags.SortArtist, "Artist Sort")
+	}
+}
 
-	// Both instances should work
-	result1, err := probe1.GetMetadata(trackPath)
+func TestFormatTagsAliasPrecedence(t *testing.T) {
+	var tags FormatTags
+	err := json.Unmarshal([]byte(`{
+		"track": "3",
+		"tracknumber": "9",
+		"disc": "1",
+		"discnumber": "5",
+		"date": "2001",
+		"year": "1999",
+		"sortname": "Canonical Sort",
+		"titlesort": "Alias Sort"
+	}`), &tags)
 	if err != nil {
-		t.Fatalf("First GetMetadata call failed: %v", err)
+		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	result2, err := probe2.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("Second GetMetadata call failed: %v", err)
+	if tags.Track != "3" {
+		t.Fatalf("Track = %q, want canonical %q over alias", tags.Track, "3")
+	}
+	if tags.Disc != "1" {
+		t.Fatalf("Disc = %q, want canonical %q over alias", tags.Disc, "1")
+	}
+	if tags.Date != "2001" {
+		t.Fatalf("Date = %q, want canonical %q over alias", tags.Date, "2001")
+	}
+	if tags.SortName != "Canonical Sort" {
+		t.Fatalf("SortName = %q, want canonical %q over alias", tags.SortName, "Canonical Sort")
+	}
+}
+
+func TestStreamTagsUnmarshalNormalizesKeys(t *testing.T) {
+	cases := []struct {
+		name         string
+		payload      string
+		wantTitle    string
+		wantLanguage string
+	}{
+		{
+			name:         "uppercase matroska keys",
+			payload:      `{"TITLE": "Director Commentary", "LANGUAGE": "eng"}`,
+			wantTitle:    "Director Commentary",
+			wantLanguage: "eng",
+		},
+		{
+			name:         "lang alias and padded values",
+			payload:      `{"lang": "  fra  ", "title": "  Main  "}`,
+			wantTitle:    "Main",
+			wantLanguage: "fra",
+		},
+		{
+			name:         "empty values ignored",
+			payload:      `{"title": "", "language": ""}`,
+			wantTitle:    "",
+			wantLanguage: "",
+		},
 	}
 
-	// Results should be equivalent
-	if result1.Format.Duration != result2.Format.Duration {
-		t.Error("Expected same duration from both calls")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var tags StreamTags
+			err := json.Unmarshal([]byte(tc.payload), &tags)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			if tags.Title != tc.wantTitle {
+				t.Errorf("Title = %q, want %q", tags.Title, tc.wantTitle)
+			}
+			if tags.Language != tc.wantLanguage {
+				t.Errorf("Language = %q, want %q", tags.Language, tc.wantLanguage)
+			}
+		})
+	}
+}
+
+func TestStreamRotationFromSideDataList(t *testing.T) {
+	cases := []struct {
+		name       string
+		payload    string
+		wantDeg    int64
+		wantMatrix bool
+	}{
+		{
+			// Captured verbatim from the bundled ffprobe 7.1.4-Jellyfin on an
+			// mp4 written with -display_rotation 90; the displaymatrix dump is
+			// deliberately unparsed noise.
+			name:       "display matrix rotation",
+			payload:    `{"field_order": "progressive", "side_data_list": [{"side_data_type": "Display Matrix", "displaymatrix": "\n00000000:            0      -65536           0\n", "rotation": 90}]}`,
+			wantDeg:    90,
+			wantMatrix: true,
+		},
+		{
+			name:       "explicit zero-degree matrix",
+			payload:    `{"side_data_list": [{"side_data_type": "Display Matrix", "rotation": 0}]}`,
+			wantMatrix: true,
+		},
+		{
+			name:    "no side data",
+			payload: `{"field_order": "tb"}`,
+		},
+		{
+			name:    "other side data types are not a matrix",
+			payload: `{"side_data_list": [{"side_data_type": "H.26[45] User Data Unregistered SEI message"}]}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stream Stream
+			err := json.Unmarshal([]byte(tc.payload), &stream)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			deg, hasMatrix := stream.Rotation()
+			if deg != tc.wantDeg || hasMatrix != tc.wantMatrix {
+				t.Errorf("Rotation() = (%d, %v), want (%d, %v)", deg, hasMatrix, tc.wantDeg, tc.wantMatrix)
+			}
+		})
 	}
 }

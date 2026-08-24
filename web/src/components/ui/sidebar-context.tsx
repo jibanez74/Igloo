@@ -1,5 +1,4 @@
 import * as React from "react"
-
 export type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
@@ -14,7 +13,7 @@ export const SidebarContext =
   React.createContext<SidebarContextProps | null>(null)
 
 export function useSidebar() {
-  const context = React.useContext(SidebarContext)
+  const context = React.use(SidebarContext)
   if (!context) {
     throw new Error("useSidebar must be used within a SidebarProvider.")
   }

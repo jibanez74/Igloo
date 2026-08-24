@@ -1,67 +1,512 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"mime"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
 
-// GetLatestMovies returns the 12 most recently added movies from the database.
-// Response includes id, title, poster (full URL when available), and year.
+const (
+	moviesLibraryDefaultPerPage = 24
+	moviesLibraryMaxPerPage     = 48
+)
+
+// moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
+type moviesLibraryData struct {
+	Movies     []database.GetMoviesLibraryAscRow `json:"movies"`
+	Total      int64                             `json:"total"`
+	Page       int64                             `json:"page"`
+	PerPage    int64                             `json:"per_page"`
+	TotalPages int64                             `json:"total_pages"`
+	Sort       string                            `json:"sort"`
+}
+
+// moviesStatsData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/stats.
+type moviesStatsData struct {
+	TotalMovies int64 `json:"total_movies"`
+}
+
+func libraryRowsFromDesc(rows []database.GetMoviesLibraryDescRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func libraryRowsFromLikedAsc(rows []database.GetLikedMoviesForUserAscRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func libraryRowsFromLikedDesc(rows []database.GetLikedMoviesForUserDescRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func (app *Application) logNormalizedChapterStartTimes(
+	movie database.Movie,
+	original []database.Chapter,
+	normalized []database.Chapter,
+) {
+	if app.Logger == nil {
+		return
+	}
+
+	count := len(original)
+	if len(normalized) < count {
+		count = len(normalized)
+	}
+
+	for i := 0; i < count; i++ {
+		if original[i].StartTime == normalized[i].StartTime {
+			continue
+		}
+
+		app.Logger.Debug(
+			"normalized chapter start time",
+			"movie_id", movie.ID,
+			"movie_title", movie.Title,
+			"chapter_id", normalized[i].ID,
+			"chapter_index", i,
+			"original_start_time", original[i].StartTime,
+			"normalized_start_time", normalized[i].StartTime,
+		)
+	}
+}
+
+func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
+	page = 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		parsed, err := strconv.ParseInt(p, 10, 64)
+		if err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	perPage = int64(moviesLibraryDefaultPerPage)
+	if pp := r.URL.Query().Get("per_page"); pp != "" {
+		parsed, err := strconv.ParseInt(pp, 10, 64)
+		if err == nil && parsed > 0 {
+			perPage = parsed
+		}
+	}
+	if perPage > moviesLibraryMaxPerPage {
+		perPage = moviesLibraryMaxPerPage
+	}
+
+	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
+	if sort != "desc" {
+		sort = "asc"
+	}
+	return page, perPage, sort
+}
+
+func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request) {
+	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+
+	offset := (page - 1) * perPage
+	ctx := r.Context()
+
+	total, err := app.Queries.GetMoviesCount(ctx)
+	if err != nil {
+		app.Logger.Error("failed to get movies count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch movies count"))
+		return
+	}
+
+	pag := database.GetMoviesLibraryAscParams{Limit: perPage, Offset: offset}
+
+	var movies []database.GetMoviesLibraryAscRow
+	if sortParam == "desc" {
+		descRows, err := app.Queries.GetMoviesLibraryDesc(ctx, database.GetMoviesLibraryDescParams{
+			Limit:  pag.Limit,
+			Offset: pag.Offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get movies library", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			return
+		}
+		movies = libraryRowsFromDesc(descRows)
+	} else {
+		movies, err = app.Queries.GetMoviesLibraryAsc(ctx, pag)
+		if err != nil {
+			app.Logger.Error("failed to get movies library", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			return
+		}
+	}
+
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: moviesLibraryData{
+			Movies:     movies,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages,
+			Sort:       sortParam,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func libraryRowsFromGenreAsc(rows []database.GetMoviesByGenreAscRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func libraryRowsFromGenreDesc(rows []database.GetMoviesByGenreDescRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Request) {
+	rows, err := app.Queries.GetMovieGenresWithCounts(r.Context())
+	if err != nil {
+		app.Logger.Error("failed to get movie genres with counts", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch genres"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"genres": rows,
+		},
+	}
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {
+	genreIDStr := chi.URLParam(r, "genreId")
+	genreID, err := strconv.ParseInt(genreIDStr, 10, 64)
+	if err != nil || genreID <= 0 {
+		helpers.ErrorJSON(w, errors.New("invalid genre id"), http.StatusBadRequest)
+		return
+	}
+
+	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	offset := (page - 1) * perPage
+	ctx := r.Context()
+
+	total, err := app.Queries.CountMoviesForGenre(ctx, genreID)
+	if err != nil {
+		app.Logger.Error("failed to count movies for genre", "error", err, "genre_id", genreID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch movies count for genre"))
+		return
+	}
+
+	paramsAsc := database.GetMoviesByGenreAscParams{GenreID: genreID, Limit: perPage, Offset: offset}
+
+	var movies []database.GetMoviesLibraryAscRow
+	if sortParam == "desc" {
+		descRows, err := app.Queries.GetMoviesByGenreDesc(ctx, database.GetMoviesByGenreDescParams{
+			GenreID: paramsAsc.GenreID,
+			Limit:   paramsAsc.Limit,
+			Offset:  paramsAsc.Offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			return
+		}
+		movies = libraryRowsFromGenreDesc(descRows)
+	} else {
+		ascRows, err := app.Queries.GetMoviesByGenreAsc(ctx, paramsAsc)
+		if err != nil {
+			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			return
+		}
+		movies = libraryRowsFromGenreAsc(ascRows)
+	}
+
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: moviesLibraryData{
+			Movies:     movies,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages,
+			Sort:       sortParam,
+		},
+	}
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
+		return
+	}
+
+	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	offset := (page - 1) * perPage
+	ctx := r.Context()
+
+	total, err := app.Queries.CountUserLikedMovies(ctx, userID)
+	if err != nil {
+		app.Logger.Error("failed to count liked movies", "error", err, "userID", userID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch liked movies count"))
+		return
+	}
+
+	paramsAsc := database.GetLikedMoviesForUserAscParams{UserID: userID, Limit: perPage, Offset: offset}
+
+	var movies []database.GetMoviesLibraryAscRow
+	if sortParam == "desc" {
+		descRows, err := app.Queries.GetLikedMoviesForUserDesc(ctx, database.GetLikedMoviesForUserDescParams{
+			UserID: paramsAsc.UserID,
+			Limit:  paramsAsc.Limit,
+			Offset: paramsAsc.Offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get liked movies", "error", err, "userID", userID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch liked movies"))
+			return
+		}
+		movies = libraryRowsFromLikedDesc(descRows)
+	} else {
+		ascRows, err := app.Queries.GetLikedMoviesForUserAsc(ctx, paramsAsc)
+		if err != nil {
+			app.Logger.Error("failed to get liked movies", "error", err, "userID", userID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch liked movies"))
+			return
+		}
+		movies = libraryRowsFromLikedAsc(ascRows)
+	}
+
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: moviesLibraryData{
+			Movies:     movies,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages,
+			Sort:       sortParam,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Request) {
+	userID := app.userIDFromRequest(r)
+	idParam := chi.URLParam(r, "id")
+	movieID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil || movieID <= 0 {
+		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		return
+	}
+
+	if userID == 0 {
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+			Error: false,
+			Data: map[string]any{
+				"is_liked": false,
+			},
+		})
+		return
+	}
+
+	isLiked, err := app.Queries.IsMovieLiked(r.Context(), database.IsMovieLikedParams{
+		UserID:  userID,
+		MovieID: movieID,
+	})
+	if err != nil {
+		app.Logger.Error("failed to check movie like status", "error", err, "movie_id", movieID)
+		helpers.ErrorJSON(w, errors.New("failed to check like status"))
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"is_liked": isLiked,
+		},
+	})
+}
+
+// toggleMovieLike flips like state in a single DB transaction without IsMovieLiked (avoids read-then-write races).
+// It DELETEs the row; if a row was removed, the new state is unliked; otherwise it INSERTs (LikeMovie is
+// idempotent via ON CONFLICT DO NOTHING).
+func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int64) (isLiked bool, err error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+
+	removed, err := qtx.UnlikeMovie(ctx, database.UnlikeMovieParams{UserID: userID, MovieID: movieID})
+	if err != nil {
+		return false, err
+	}
+	if removed > 0 {
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	if err := qtx.LikeMovie(ctx, database.LikeMovieParams{UserID: userID, MovieID: movieID}); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	movieID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	movieOK, err := app.Queries.MovieExists(ctx, movieID)
+	if err != nil {
+		app.Logger.Error("failed to get movie for like toggle", "error", err, "id", movieID)
+		helpers.ErrorJSON(w, errors.New("failed to verify movie exists"))
+		return
+	}
+	if !movieOK {
+		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+		return
+	}
+
+	isLiked, err := app.toggleMovieLike(ctx, userID, movieID)
+	if err != nil {
+		app.Logger.Error("failed to toggle movie like", "error", err, "movieID", movieID, "userID", userID)
+		helpers.ErrorJSON(w, errors.New("failed to update like"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"movie_id": movieID,
+			"is_liked": isLiked,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
+	total, err := app.Queries.GetMoviesCount(r.Context())
+	if err != nil {
+		app.Logger.Error("failed to get movies count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch movies stats"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: moviesStatsData{
+			TotalMovies: total,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
 func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
-	rows, err := app.Queries.GetLatestMovies(r.Context())
+	movies, err := app.Queries.GetLatestMovies(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to get latest movies", "error", err)
 		helpers.ErrorJSON(w, err)
 		return
 	}
 
-	movies := make([]map[string]any, 0, len(rows))
-	for _, row := range rows {
-		var poster any
-		if row.PosterPath.Valid && row.PosterPath.String != "" {
-			poster = helpers.TmdbImageURL(row.PosterPath.String, helpers.TMDB_POSTER_SIZE)
-		} else {
-			poster = nil
-		}
-
-		var year any
-		if row.Year.Valid {
-			year = row.Year.Int64
-		} else {
-			year = nil
-		}
-
-		movies = append(movies, map[string]any{
-			"id":     row.ID,
-			"title":  row.Title,
-			"poster": poster,
-			"year":   year,
-		})
-	}
-
-	// Ensure we return [] not null when empty
-	if movies == nil {
-		movies = []map[string]any{}
-	}
-
 	res := helpers.JSONResponse{
 		Error: false,
 		Data:  map[string]any{"movies": movies},
 	}
+
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMovieDetails returns a movie with all related data (cast, crew, genres, production companies, extra videos).
-// Uses a read-only transaction so all data is from a single consistent snapshot.
+// Read-only transaction keeps related movie data in one snapshot.
 func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -88,6 +533,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
 			return
 		}
+
 		app.Logger.Error("failed to get movie", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
 		return
@@ -128,190 +574,112 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Build movie response with poster as full URL
-	movieData := movieDetailsMovieToMap(movie)
-
-	// Build cast with artist_profile as full URL
-	castData := make([]map[string]any, 0, len(cast))
-	for _, c := range cast {
-		profile := any(nil)
-		if c.ArtistProfile.Valid && c.ArtistProfile.String != "" {
-			profile = helpers.TmdbImageURL(c.ArtistProfile.String, helpers.TMDB_PROFILE_SIZE)
-		}
-		castData = append(castData, map[string]any{
-			"id":             c.ID,
-			"movie_id":       c.MovieID,
-			"artist_id":      c.ArtistID,
-			"character":      c.Character,
-			"cast_order":     c.CastOrder,
-			"artist_name":    c.ArtistName,
-			"artist_profile": profile,
-		})
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"movie":                movie,
+			"cast":                 cast,
+			"crew":                 crew,
+			"genres":               genres,
+			"production_companies": productionCompanies,
+			"extra_videos":         extraVideos,
+		},
 	}
 
-	// Build crew with artist_profile as full URL
-	crewData := make([]map[string]any, 0, len(crew))
-	for _, c := range crew {
-		profile := any(nil)
-		if c.ArtistProfile.Valid && c.ArtistProfile.String != "" {
-			profile = helpers.TmdbImageURL(c.ArtistProfile.String, helpers.TMDB_PROFILE_SIZE)
-		}
-		crewData = append(crewData, map[string]any{
-			"id":             c.ID,
-			"movie_id":       c.MovieID,
-			"artist_id":      c.ArtistID,
-			"job":            c.Job,
-			"department":     c.Department,
-			"artist_name":    c.ArtistName,
-			"artist_profile": profile,
-		})
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		return
 	}
 
-	// Build genres (id, tag)
-	genresData := make([]map[string]any, 0, len(genres))
-	for _, g := range genres {
-		genresData = append(genresData, map[string]any{"id": g.ID, "tag": g.Tag})
+	ctx := r.Context()
+
+	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		app.Logger.Error("failed to begin transaction", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		return
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
+
+	movie, err := qtx.GetMovieByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get movie", "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		return
 	}
 
-	// Build production companies with logo as full URL
-	companiesData := make([]map[string]any, 0, len(productionCompanies))
-	for _, pc := range productionCompanies {
-		logo := any(nil)
-		if pc.Logo.Valid && pc.Logo.String != "" {
-			logo = helpers.TmdbImageURL(pc.Logo.String, helpers.TMDB_LOGO_SIZE)
-		}
-		country := any(nil)
-		if pc.Country.Valid && pc.Country.String != "" {
-			country = pc.Country.String
-		}
-		companiesData = append(companiesData, map[string]any{
-			"id":      pc.ID,
-			"name":    pc.Name,
-			"tmdb_id": pc.TmdbID,
-			"logo":    logo,
-			"country": country,
-		})
+	videoStreams, err := qtx.GetVideoStreamsByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get video streams", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch video streams"))
+		return
 	}
 
-	// Build extra videos (trailers, featurettes) for playback
-	extraVideosData := make([]map[string]any, 0, len(extraVideos))
-	for _, v := range extraVideos {
-		externalID := any(nil)
-		if v.ExternalID.Valid {
-			externalID = v.ExternalID.String
-		}
-		extraVideosData = append(extraVideosData, map[string]any{
-			"id":          v.ID,
-			"title":       v.Title,
-			"external_id": externalID,
-			"key":         v.Key,
-			"type":        v.Type,
-			"site":        v.Site,
-			"official":    v.Official,
-		})
+	audioStreams, err := qtx.GetAudioStreamsByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get audio streams", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch audio streams"))
+		return
 	}
+
+	subtitles, err := qtx.GetSubtitlesByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get subtitles", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
+		return
+	}
+
+	chapters, err := qtx.GetChaptersByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))
+		return
+	}
+
+	durationSec := 0.0
+	if movie.Duration.Valid {
+		durationSec = movie.Duration.Float64
+	}
+	normalizedChapters := normalizeChaptersStartTimes(chapters, durationSec)
+	app.logNormalizedChapterStartTimes(movie, chapters, normalizedChapters)
+	chapters = normalizedChapters
 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"movie":                movieData,
-			"cast":                 castData,
-			"crew":                 crewData,
-			"genres":               genresData,
-			"production_companies": companiesData,
-			"extra_videos":         extraVideosData,
+			"movie": map[string]any{
+				"file_name": movie.FileName,
+				"file_path": movie.FilePath,
+				"size":      movie.Size,
+				"container": movie.Container,
+				// The value the client's direct-play container gate reads, so
+				// it must be the one the watch-room handler validates against.
+				"mime_type": movieContentType(movie.Container, movie.MimeType),
+				"run_time":  movie.RunTime,
+				"duration":  movie.Duration,
+			},
+			"video_streams": videoStreams,
+			"audio_streams": audioStreams,
+			"subtitles":     subtitles,
+			"chapters":      chapters,
 		},
 	}
+
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// movieDetailsMovieToMap converts a Movie row to a response map with poster as full URL and snake_case keys.
-func movieDetailsMovieToMap(m database.Movie) map[string]any {
-	poster := any(nil)
-	if m.PosterPath.Valid && m.PosterPath.String != "" {
-		poster = helpers.TmdbImageURL(m.PosterPath.String, helpers.TMDB_POSTER_SIZE)
-	}
-	year := any(nil)
-	if m.Year.Valid {
-		year = m.Year.Int64
-	}
-	releaseDate := any(nil)
-	if m.ReleaseDate.Valid {
-		releaseDate = m.ReleaseDate.String
-	}
-	overview := any(nil)
-	if m.Overview.Valid {
-		overview = m.Overview.String
-	}
-	tagLine := any(nil)
-	if m.TagLine.Valid {
-		tagLine = m.TagLine.String
-	}
-	certification := any(nil)
-	if m.Certification.Valid {
-		certification = m.Certification.String
-	}
-	criticRating := any(nil)
-	if m.CriticRating.Valid {
-		criticRating = m.CriticRating.Float64
-	}
-	audienceRating := any(nil)
-	if m.AudienceRating.Valid {
-		audienceRating = m.AudienceRating.Float64
-	}
-	revenue := any(nil)
-	if m.Revenue.Valid {
-		revenue = m.Revenue.Float64
-	}
-	budget := any(nil)
-	if m.Budget.Valid {
-		budget = m.Budget.Float64
-	}
-	runTime := any(nil)
-	if m.RunTime.Valid {
-		runTime = m.RunTime.Int64
-	}
-	tmdbID := any(nil)
-	if m.TmdbID.Valid {
-		tmdbID = m.TmdbID.Int64
-	}
-	imdbID := any(nil)
-	if m.ImdbID.Valid {
-		imdbID = m.ImdbID.String
-	}
-	language := any(nil)
-	if m.Language.Valid {
-		language = m.Language.String
-	}
-
-	return map[string]any{
-		"id":              m.ID,
-		"title":           m.Title,
-		"file_path":       m.FilePath,
-		"file_name":       m.FileName,
-		"size":            m.Size,
-		"container":       m.Container,
-		"adult":           m.Adult,
-		"tmdb_id":         tmdbID,
-		"imdb_id":         imdbID,
-		"poster":          poster,
-		"language":        language,
-		"year":            year,
-		"release_date":    releaseDate,
-		"overview":        overview,
-		"tag_line":        tagLine,
-		"certification":   certification,
-		"critic_rating":   criticRating,
-		"audience_rating": audienceRating,
-		"revenue":         revenue,
-		"budget":          budget,
-		"run_time":        runTime,
-		"created_at":      m.CreatedAt,
-		"updated_at":      m.UpdatedAt,
-	}
-}
-
-// StreamMovie streams the movie file for playback (direct stream, no transcoding).
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -320,7 +688,7 @@ func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	movie, err := app.Queries.GetMovieByID(r.Context(), id)
+	movie, err := app.movieStreamFile(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
@@ -332,36 +700,8 @@ func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(movie.FilePath)
+	err = serveMediaFile(w, r, movie.Path, movie.Name, movie.ContentType)
 	if err != nil {
-		if os.IsNotExist(err) {
-			app.Logger.Error("movie file not found on disk", "path", movie.FilePath, "id", id)
-			helpers.ErrorJSON(w, errors.New("movie file not found"), http.StatusNotFound)
-			return
-		}
-
-		app.Logger.Error("failed to open movie file", "error", err, "path", movie.FilePath)
-		helpers.ErrorJSON(w, errors.New("failed to open movie file"))
-		return
+		app.Logger.Error("failed to stream movie file", "error", err, "path", movie.Path, "id", id)
 	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		app.Logger.Error("failed to stat movie file", "error", err, "path", movie.FilePath)
-		helpers.ErrorJSON(w, errors.New("failed to read movie file"))
-		return
-	}
-
-	contentType := movie.MimeType
-	if contentType == "" {
-		ext := filepath.Ext(movie.FileName)
-		contentType = mime.TypeByExtension(ext)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-	}
-	w.Header().Set("Content-Type", contentType)
-
-	http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)
 }

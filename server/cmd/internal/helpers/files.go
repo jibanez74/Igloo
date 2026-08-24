@@ -18,7 +18,6 @@ var ValidAudioExtensions = map[string]bool{
 	"m4a":  true,
 }
 
-// AudioMimeTypes maps audio file extensions to their MIME types.
 var AudioMimeTypes = map[string]string{
 	"mp3":  "audio/mpeg",
 	"flac": "audio/flac",
@@ -26,40 +25,64 @@ var AudioMimeTypes = map[string]string{
 }
 
 var ValidVideoExtensions = map[string]bool{
-	"mp4": true,
-	"avi": true,
-	"mkv": true,
-	"mov": true,
-	"m4v": true,
+	"mp4":  true,
+	"avi":  true,
+	"mkv":  true,
+	"mov":  true,
+	"m4v":  true,
+	"webm": true,
 }
 
-// knownNonYearTokens are common dot-separated suffixes that are not a release year.
-var knownNonYearTokens = map[string]bool{
+// VideoMimeTypes pins the container→MIME mapping for movie files. Deriving it
+// with mime.TypeByExtension is host-dependent (/etc/mime.types overrides Go's
+// table and maps .webm to audio/webm; minimal images have no table at all),
+// which made playback eligibility and Content-Type vary by machine — see
+// "Direct Play Eligibility and Fallback" in docs/ffmpeg.md. Keys must match
+// ValidVideoExtensions exactly.
+var VideoMimeTypes = map[string]string{
+	"mp4":  "video/mp4",
+	"m4v":  "video/mp4",
+	"mkv":  "video/x-matroska",
+	"webm": "video/webm",
+	"avi":  "video/x-msvideo",
+	"mov":  "video/quicktime",
+}
+
+var movieReleaseNoiseTokens = map[string]bool{
 	"1080p": true, "720p": true, "480p": true, "2160p": true, "4k": true,
-	"bluray": true, "webrip": true, "web-dl": true, "webdl": true,
-	"h264": true, "h265": true, "x264": true, "x265": true, "hevc": true,
-	"aac": true, "ac3": true, "dts": true, "mkv": true, "mp4": true,
-	"remux": true, "repack": true, "proper": true, "extended": true,
+	"bluray": true, "brrip": true, "webrip": true, "web": true, "web-dl": true, "webdl": true,
+	"dvdrip": true, "hdrip": true, "remux": true, "repack": true, "proper": true, "remastered": true,
+	"extended": true,
+	"h264":     true, "h265": true, "x264": true, "x265": true, "hevc": true, "av1": true,
+	"10bit": true, "8bit": true, "hdr": true, "sdr": true,
+	"aac": true, "aac5": true, "aac51": true, "ddp": true, "ac3": true, "dts": true,
+	"dtshd": true, "atmos": true, "truehd": true,
+	"mkv": true, "mp4": true,
+	"yts": true, "ytsmx": true, "mx": true,
 }
 
 func isReasonableYear(n int) bool {
 	return n >= 1900 && n <= 2100
 }
 
-// GetTitleAndYearFromFileName parses a movie filename into title and year.
-// Supports: "Title.Word.2020.mkv", "Title.Name.2020.1080p.mkv", "Title (2020).mkv",
-// "Title Name 2020.mkv", and similar. Returns year 0 when no year can be parsed.
+// IsMovieReleaseNoiseToken reports whether token is a movie release or codec marker
+// that should not be treated as part of a movie title.
+func IsMovieReleaseNoiseToken(token string) bool {
+	return movieReleaseNoiseTokens[strings.ToLower(strings.TrimSpace(token))]
+}
+
 func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 	baseName := filepath.Base(fileName)
 	ext := filepath.Ext(baseName)
 	s := strings.TrimSuffix(baseName, ext)
 	s = strings.TrimSpace(s)
+
 	if s == "" {
 		return nil, fmt.Errorf("empty filename: %s", fileName)
 	}
 
-	// Pattern 1: "Something (2020)" or "Something (2020) Extra"
-	if open := strings.LastIndex(s, "("); open >= 0 {
+	open := strings.LastIndex(s, "(")
+	if open >= 0 {
 		if close := strings.Index(s[open:], ")"); close >= 0 {
 			close += open
 			yearStr := strings.TrimSpace(s[open+1 : close])
@@ -75,11 +98,10 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 		}
 	}
 
-	// Pattern 2: dot-separated — find rightmost segment that is a 4-digit year (skip 1080p, etc.)
 	parts := strings.Split(s, ".")
 	for i := len(parts) - 1; i >= 0; i-- {
 		tok := strings.TrimSpace(parts[i])
-		if knownNonYearTokens[strings.ToLower(tok)] {
+		if IsMovieReleaseNoiseToken(tok) {
 			continue
 		}
 		if len(tok) != 4 {
@@ -96,7 +118,6 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 		}
 	}
 
-	// Pattern 3: space-separated — last token is 4-digit year
 	words := strings.Fields(s)
 	if len(words) >= 2 {
 		last := words[len(words)-1]
@@ -110,7 +131,6 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 		}
 	}
 
-	// Fallback: entire name as title, no year
 	title := strings.ReplaceAll(s, ".", " ")
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -126,5 +146,5 @@ func GetFileExtension(path string) string {
 		return ""
 	}
 
-	return ext[1:]
+	return strings.ToLower(ext[1:])
 }

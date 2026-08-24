@@ -1,95 +1,382 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"errors"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
-	"sync"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
-var (
-	// scanMutex prevents multiple simultaneous music scans
-	scanMutex  sync.Mutex
-	isScanning bool
+type generalSettingsResponse struct {
+	TmdbKey             *string `json:"tmdb_key"`
+	ImmichBaseURL       *string `json:"immich_base_url"`
+	ImmichApiKey        *string `json:"immich_api_key"`
+	JellyfinBaseURL     *string `json:"jellyfin_base_url"`
+	JellyfinApiKey      *string `json:"jellyfin_api_key"`
+	SpotifyClientID     *string `json:"spotify_client_id"`
+	SpotifyClientSecret *string `json:"spotify_client_secret"`
+	EnableWatcher       bool    `json:"enable_watcher"`
+	DownloadImages      bool    `json:"download_images"`
+	StaticDir           string  `json:"static_dir"`
+	TranscodeDir        string  `json:"transcode_dir"`
+	RestartRequired     bool    `json:"restart_required,omitempty"`
+}
 
-	// movieScanMutex prevents multiple simultaneous movie scans
-	movieScanMutex  sync.Mutex
-	isMovieScanning bool
-)
+type updateGeneralSettingsRequest struct {
+	TmdbKey             string `json:"tmdb_key"`
+	ImmichBaseURL       string `json:"immich_base_url"`
+	ImmichApiKey        string `json:"immich_api_key"`
+	JellyfinBaseURL     string `json:"jellyfin_base_url"`
+	JellyfinApiKey      string `json:"jellyfin_api_key"`
+	SpotifyClientID     string `json:"spotify_client_id"`
+	SpotifyClientSecret string `json:"spotify_client_secret"`
+	EnableWatcher       bool   `json:"enable_watcher"`
+	DownloadImages      bool   `json:"download_images"`
+	StaticDir           string `json:"static_dir"`
+	TranscodeDir        string `json:"transcode_dir"`
+}
 
-// GetSettings returns the application settings including library paths
-func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+type librarySettingsResponse struct {
+	MoviesDir *string `json:"movies_dir"`
+	ShowsDir  *string `json:"shows_dir"`
+	MusicDir  *string `json:"music_dir"`
+}
 
-	settings, err := app.Queries.GetSettings(ctx)
+type updateLibrarySettingsRequest struct {
+	MoviesDir *string `json:"movies_dir"`
+	ShowsDir  *string `json:"shows_dir"`
+	MusicDir  *string `json:"music_dir"`
+}
+
+func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool) generalSettingsResponse {
+	return generalSettingsResponse{
+		TmdbKey:             helpers.StringPtrFromNull(settings.TmdbKey),
+		ImmichBaseURL:       helpers.StringPtrFromNull(settings.ImmichBaseUrl),
+		ImmichApiKey:        helpers.StringPtrFromNull(settings.ImmichApiKey),
+		JellyfinBaseURL:     helpers.StringPtrFromNull(settings.JellyfinBaseUrl),
+		JellyfinApiKey:      helpers.StringPtrFromNull(settings.JellyfinApiKey),
+		SpotifyClientID:     helpers.StringPtrFromNull(settings.SpotifyClientID),
+		SpotifyClientSecret: helpers.StringPtrFromNull(settings.SpotifyClientSecret),
+		EnableWatcher:       settings.EnableWatcher,
+		DownloadImages:      settings.DownloadImages,
+		StaticDir:           settings.StaticDir,
+		TranscodeDir:        settings.TranscodeDir,
+		RestartRequired:     restartRequired,
+	}
+}
+
+func mapLibrarySettingsResponse(settings database.Setting) librarySettingsResponse {
+	return librarySettingsResponse{
+		MoviesDir: helpers.StringPtrFromNull(settings.MoviesDir),
+		ShowsDir:  helpers.StringPtrFromNull(settings.ShowsDir),
+		MusicDir:  helpers.StringPtrFromNull(settings.MusicDir),
+	}
+}
+
+func isOptionalHTTPBaseURL(value string) bool {
+	if value == "" {
+		return true
+	}
+
+	parsed, err := url.Parse(value)
 	if err != nil {
-		app.Logger.Error("failed to get settings", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch settings"))
-		return
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
 	}
 
-	// Build response with library paths
-	// Only include paths that are configured (Valid = true)
-	responseData := map[string]any{
-		"music_dir":  nil,
-		"movies_dir": nil,
-		"shows_dir":  nil,
+	return parsed.Host != ""
+}
+
+// CurrentSettings returns the in-memory settings copy that every write path
+// refreshes. The returned pointer is only ever replaced, never mutated in
+// place, so callers may read it without holding the lock -- but they must take
+// it from here rather than from the field, or the read races the replacement.
+func (app *Application) CurrentSettings() *database.Setting {
+	app.settingsMu.RLock()
+	defer app.settingsMu.RUnlock()
+
+	return app.settings
+}
+
+// SetSettings replaces the in-memory settings copy.
+func (app *Application) SetSettings(settings *database.Setting) {
+	app.settingsMu.Lock()
+	defer app.settingsMu.Unlock()
+
+	app.settings = settings
+}
+
+// withSettingsWrite runs a read-modify-write against the settings row while
+// holding the write lock, so two concurrent admin updates cannot both read the
+// same row and then each write back the other's omitted fields. fn receives the
+// current row and returns the updated one; the cache is refreshed on success.
+//
+// Anything that touches the filesystem or the network must be validated before
+// calling this -- the lock is held for the whole callback.
+func (app *Application) withSettingsWrite(
+	ctx context.Context,
+	fn func(current database.Setting) (database.Setting, error),
+) (database.Setting, error) {
+	app.settingsMu.Lock()
+	defer app.settingsMu.Unlock()
+
+	// Reads the field directly: the write lock is already held, and RLock on a
+	// sync.RWMutex is not reentrant.
+	updated, err := fn(*app.settings)
+	if err != nil {
+		return database.Setting{}, err
 	}
 
-	if settings.MusicDir.Valid {
-		responseData["music_dir"] = settings.MusicDir.String
-	}
+	app.settings = &updated
 
-	if settings.MoviesDir.Valid {
-		responseData["movies_dir"] = settings.MoviesDir.String
-	}
+	return updated, nil
+}
 
-	if settings.ShowsDir.Valid {
-		responseData["shows_dir"] = settings.ShowsDir.String
-	}
+func (app *Application) GetSettings(w http.ResponseWriter, _ *http.Request) {
+	settings := *app.CurrentSettings()
 
 	res := helpers.JSONResponse{
 		Error: false,
-		Data:  responseData,
+		Data:  mapLibrarySettingsResponse(settings),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// TriggerMusicScan triggers a new music library scan
-// The scan runs asynchronously in a goroutine and returns immediately
-func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
-	scanMutex.Lock()
-	if isScanning {
-		scanMutex.Unlock()
-		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"))
+func (app *Application) GetGeneralSettings(w http.ResponseWriter, _ *http.Request) {
+	settings := *app.CurrentSettings()
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"settings": mapGeneralSettingsResponse(settings, false),
+		},
+	})
+}
+
+func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Request) {
+	var req updateGeneralSettingsRequest
+	err := helpers.ReadJSON(w, r, &req, 0)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
-	isScanning = true
-	scanMutex.Unlock()
+	req.TmdbKey = strings.TrimSpace(req.TmdbKey)
+	req.ImmichBaseURL = strings.TrimSpace(req.ImmichBaseURL)
+	req.ImmichApiKey = strings.TrimSpace(req.ImmichApiKey)
+	req.JellyfinBaseURL = strings.TrimSpace(req.JellyfinBaseURL)
+	req.JellyfinApiKey = strings.TrimSpace(req.JellyfinApiKey)
+	req.SpotifyClientID = strings.TrimSpace(req.SpotifyClientID)
+	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
+	req.StaticDir = strings.TrimSpace(req.StaticDir)
+	req.TranscodeDir = strings.TrimSpace(req.TranscodeDir)
 
-	// Check if music directory is configured
-	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
-		scanMutex.Lock()
-		isScanning = false
-		scanMutex.Unlock()
+	if !isOptionalHTTPBaseURL(req.JellyfinBaseURL) {
+		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
+		return
+	}
+
+	if !isOptionalHTTPBaseURL(req.ImmichBaseURL) {
+		helpers.ErrorJSON(w, errors.New("immich base URL must be a valid http or https URL"), http.StatusBadRequest)
+		return
+	}
+
+	if req.StaticDir == "" {
+		helpers.ErrorJSON(w, errors.New("static directory is required"), http.StatusBadRequest)
+		return
+	}
+
+	if req.TranscodeDir == "" {
+		helpers.ErrorJSON(w, errors.New("transcode directory is required"), http.StatusBadRequest)
+		return
+	}
+
+	_, err = helpers.GetOrCreateDir(req.StaticDir)
+	if err != nil {
+		app.Logger.Error("failed to validate static directory", "error", err, "path", req.StaticDir)
+		helpers.ErrorJSON(w, errors.New("static directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	_, err = helpers.GetOrCreateDir(filepath.Join(req.StaticDir, "albums"))
+	if err != nil {
+		app.Logger.Error("failed to validate static albums directory", "error", err, "path", req.StaticDir)
+		helpers.ErrorJSON(w, errors.New("static directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	_, err = helpers.GetOrCreateDir(filepath.Join(req.StaticDir, "musicians"))
+	if err != nil {
+		app.Logger.Error("failed to validate static musicians directory", "error", err, "path", req.StaticDir)
+		helpers.ErrorJSON(w, errors.New("static directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	_, err = helpers.GetOrCreateDir(req.TranscodeDir)
+	if err != nil {
+		app.Logger.Error("failed to validate transcode directory", "error", err, "path", req.TranscodeDir)
+		helpers.ErrorJSON(w, errors.New("transcode directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	// The directory validation above touches the filesystem, so it stays
+	// outside the lock; only the read-compare-write runs under it.
+	var restartRequired bool
+	updatedSettings, err := app.withSettingsWrite(r.Context(), func(current database.Setting) (database.Setting, error) {
+		updated, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
+			TmdbKey:             helpers.NullString(req.TmdbKey),
+			ImmichBaseUrl:       helpers.NullString(req.ImmichBaseURL),
+			ImmichApiKey:        helpers.NullString(req.ImmichApiKey),
+			JellyfinBaseUrl:     helpers.NullString(req.JellyfinBaseURL),
+			JellyfinApiKey:      helpers.NullString(req.JellyfinApiKey),
+			SpotifyClientID:     helpers.NullString(req.SpotifyClientID),
+			SpotifyClientSecret: helpers.NullString(req.SpotifyClientSecret),
+			EnableWatcher:       req.EnableWatcher,
+			DownloadImages:      req.DownloadImages,
+			StaticDir:           req.StaticDir,
+			TranscodeDir:        req.TranscodeDir,
+		})
+		if err != nil {
+			return database.Setting{}, err
+		}
+
+		restartRequired = generalSettingsRestartRequired(&current, updated)
+
+		return updated, nil
+	})
+	if err != nil {
+		app.Logger.Error("failed to update general settings", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update settings"))
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error:   false,
+		Message: "Settings updated",
+		Data: map[string]any{
+			"settings":         mapGeneralSettingsResponse(updatedSettings, restartRequired),
+			"restart_required": restartRequired,
+		},
+	})
+}
+
+func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
+	if previous == nil {
+		return false
+	}
+
+	return previous.StaticDir != next.StaticDir ||
+		previous.TranscodeDir != next.TranscodeDir ||
+		previous.TmdbKey != next.TmdbKey ||
+		previous.ImmichBaseUrl != next.ImmichBaseUrl ||
+		previous.ImmichApiKey != next.ImmichApiKey ||
+		previous.JellyfinBaseUrl != next.JellyfinBaseUrl ||
+		previous.JellyfinApiKey != next.JellyfinApiKey ||
+		previous.SpotifyClientID != next.SpotifyClientID ||
+		previous.SpotifyClientSecret != next.SpotifyClientSecret
+}
+
+func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Request) {
+	var req updateLibrarySettingsRequest
+	err := helpers.ReadJSON(w, r, &req, 0)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
+		return
+	}
+
+	moviesDir, err := validatedOptionalMediaDir(req.MoviesDir)
+	if err != nil {
+		app.Logger.Error("failed to validate movies directory", "error", err)
+		helpers.ErrorJSON(w, errors.New("movies directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	showsDir, err := validatedOptionalMediaDir(req.ShowsDir)
+	if err != nil {
+		app.Logger.Error("failed to validate shows directory", "error", err)
+		helpers.ErrorJSON(w, errors.New("shows directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	musicDir, err := validatedOptionalMediaDir(req.MusicDir)
+	if err != nil {
+		app.Logger.Error("failed to validate music directory", "error", err)
+		helpers.ErrorJSON(w, errors.New("music directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	// The directory validation above touches the filesystem, so it stays
+	// outside the lock; only the write and the cache refresh run under it.
+	updatedSettings, err := app.withSettingsWrite(r.Context(), func(database.Setting) (database.Setting, error) {
+		return app.Queries.UpdateLibrarySettings(r.Context(), database.UpdateLibrarySettingsParams{
+			MoviesDir: moviesDir,
+			ShowsDir:  showsDir,
+			MusicDir:  musicDir,
+		})
+	})
+	if err != nil {
+		app.Logger.Error("failed to update library settings", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update library settings"))
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error:   false,
+		Message: "Library settings updated",
+		Data: map[string]any{
+			"settings": mapLibrarySettingsResponse(updatedSettings),
+		},
+	})
+}
+
+func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
+	if value == nil {
+		return sql.NullString{}, nil
+	}
+
+	dir := strings.TrimSpace(*value)
+	if dir == "" {
+		return sql.NullString{}, nil
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return sql.NullString{}, err
+	}
+	if !info.IsDir() {
+		return sql.NullString{}, errors.New("path is not a directory")
+	}
+
+	return helpers.NullString(dir), nil
+}
+
+func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
+	settings := app.CurrentSettings()
+	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
 		helpers.ErrorJSON(w, errors.New("music directory is not configured"))
 		return
 	}
 
-	// Start scan in background goroutine
-	go func() {
-		defer func() {
-			scanMutex.Lock()
-			isScanning = false
-			scanMutex.Unlock()
-		}()
+	if !musicScanGuard.TryBegin() {
+		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"), http.StatusConflict)
+		return
+	}
 
-		app.ScanMusicLibrary()
-	}()
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+	go app.runMusicScan()
 
-	app.Logger.Info("music library scan triggered via API", "path", app.Settings.MusicDir.String)
+	app.Logger.Info("music library scan triggered via API", "path", settings.MusicDir.String)
 
 	res := helpers.JSONResponse{
 		Error:   false,
@@ -99,40 +386,24 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// TriggerMovieScan triggers a new movie library scan
-// The scan runs asynchronously in a goroutine and returns immediately
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
-	movieScanMutex.Lock()
-	if isMovieScanning {
-		movieScanMutex.Unlock()
-		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"))
-		return
-	}
-
-	isMovieScanning = true
-	movieScanMutex.Unlock()
-
-	// Check if movies directory is configured
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
-		movieScanMutex.Lock()
-		isMovieScanning = false
-		movieScanMutex.Unlock()
+	settings := app.CurrentSettings()
+	if !settings.MoviesDir.Valid || settings.MoviesDir.String == "" {
 		helpers.ErrorJSON(w, errors.New("movies directory is not configured"))
 		return
 	}
 
-	// Start scan in background goroutine
-	go func() {
-		defer func() {
-			movieScanMutex.Lock()
-			isMovieScanning = false
-			movieScanMutex.Unlock()
-		}()
+	if !movieScanGuard.TryBegin() {
+		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"), http.StatusConflict)
+		return
+	}
 
-		app.ScanMoviesLibrary()
-	}()
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+	go app.runMovieScan()
 
-	app.Logger.Info("movie library scan triggered via API", "path", app.Settings.MoviesDir.String)
+	app.Logger.Info("movie library scan triggered via API", "path", settings.MoviesDir.String)
 
 	res := helpers.JSONResponse{
 		Error:   false,

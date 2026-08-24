@@ -1,0 +1,18 @@
+{
+  "ignore": {
+    "files": [
+      "e2e/**",
+      "src/test/**",
+      "**/*.test.*",
+      "**/*.spec.*",
+      "playwright.config.*",
+      "dist/**",
+      "test-results/**",
+      "playwright-report/**",
+      "blob-report/**",
+      "coverage/**",
+      ".tanstack/**",
+      "src/routeTree.gen.ts"
+    ]
+  }
+}

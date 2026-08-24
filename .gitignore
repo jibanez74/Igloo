@@ -1,48 +1,67 @@
-# Binaries
+# Local environment
+.env*
+!.env.example
+
+# Server build output
 /server/igloo-server
 /server/api
+/server/dist/
 
-# ffprobe and ffmpeg binaries (large files, distribute separately)
+# Embedded ffprobe and ffmpeg payloads (large local binaries)
 /server/cmd/internal/ffprobe/ffprobe_darwin_arm64
 /server/cmd/internal/ffprobe/ffprobe_linux_amd64
-/server/cmd/internal/ffmpeg/ffmpeg_mac_arm
+/server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64
 /server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
+/server/cmd/internal/ffprobe/*.zst
+/server/cmd/internal/ffmpeg/*.zst
 
-# IDE and editor
-.idea/
-.vscode/
+# Embedded frontend assets generated during build
+/server/cmd/api/webdist/
 
-
-# Environment files
-.env
-.env.local
-
-# Database files
+# Runtime data created by local app runs
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
+/db/
+/logs/
+/static/
+/server/static/
+/media/
+/transcode/
 
-# Directories created by the server at startup
-/server/logs/*
-/server/static/*
+# Frontend dependencies, generated files, and reports
+/web/node_modules/
+/web/dist/
+/web/.tanstack/
+/web/test-results/
+/scripts/perf/results/*.csv
+/scripts/perf/results/*.json
+/scripts/perf/results/*.txt
+/web/playwright-report/
+/web/blob-report/
+/web/coverage/
+/web/*.tsbuildinfo
 
-# Embedded frontend assets (generated during build)
-# These are copied from web/dist by the root Makefile
-# A placeholder index.html exists for backend-only builds
-/server/cmd/api/web/dist/*.html
-/server/cmd/api/web/dist/assets/
-/server/cmd/api/web/dist/vite.svg
+# Local Playwright/debug screenshots
+/movies-*.png
+/settings-*.png
 
-# Symlink/copy of web/dist for embedding into Go binary
-/server/cmd/api/webdist
-
-# Frontend (web)
-/web/node_modules/*
-/web/dist
+# IDE and editor
+.idea/
+.vscode/
+.cursor/
 
 # OS files
 .DS_Store
 
-# Testing media files directory
-/media/*
+# Editor backup copies
+*.save
+
+# Local assistant tooling
+.claude/
+.codex/
+.playwright-mcp/
+AGENTS.md
+CLAUDE.md
+web/.openapi-docs/

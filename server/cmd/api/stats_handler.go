@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -10,25 +9,22 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-// RecordPlayEventRequest represents the request body for recording a play event.
 type RecordPlayEventRequest struct {
 	TrackID        int64 `json:"track_id"`
 	DurationPlayed int64 `json:"duration_played"`
 	Completed      bool  `json:"completed"`
 }
 
-// RecordPlayEvent records when a user plays a track.
-// Called by the frontend after playback threshold is met (30s or 80% completion).
+// The frontend records a play after its playback threshold is met.
 func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
 	var req RecordPlayEventRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -39,19 +35,17 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	// Verify track exists
-	_, err := app.Queries.GetTrack(ctx, req.TrackID)
+	trackOK, err := app.Queries.TrackExists(ctx, req.TrackID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
-			return
-		}
 		app.Logger.Error("failed to get track for play event", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to record play event"))
 		return
 	}
+	if !trackOK {
+		helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+		return
+	}
 
-	// Record the play event
 	err = app.Queries.RecordPlayEvent(ctx, database.RecordPlayEventParams{
 		UserID:         userID,
 		TrackID:        req.TrackID,
@@ -64,7 +58,6 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Update aggregated stats
 	err = app.Queries.UpsertUserTrackStats(ctx, database.UpsertUserTrackStatsParams{
 		UserID:          userID,
 		TrackID:         req.TrackID,
@@ -72,7 +65,6 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		app.Logger.Error("failed to update track stats", "error", err)
-		// Don't fail the request, the play was still recorded
 	}
 
 	res := helpers.JSONResponse{
@@ -82,18 +74,13 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetUserListeningStats returns overall listening statistics for the authenticated user.
 func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
-	stats, err := app.Queries.GetUserListeningStats(r.Context(), database.GetUserListeningStatsParams{
-		UserID:   userID,
-		UserID_2: userID,
-	})
+	stats, err := app.Queries.GetUserListeningStats(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to get listening stats", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch listening stats"))
@@ -112,11 +99,9 @@ func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetUserTopTracks returns the user's most played tracks.
 func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -144,11 +129,9 @@ func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetUserTopMusicians returns the user's most listened musicians.
 func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -176,11 +159,9 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetUserTopGenres returns the user's most listened genres.
 func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -214,11 +195,9 @@ func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetUserTopAlbums returns the user's most listened albums.
 func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -246,11 +225,9 @@ func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetUserRecentlyPlayed returns recently played tracks for the user.
 func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -278,7 +255,6 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// parseStatsPaginationParams extracts limit and offset from query parameters.
 func parseStatsPaginationParams(r *http.Request, defaultLimit, maxLimit int64) (int64, int64) {
 	limit := defaultLimit
 	if l := r.URL.Query().Get("limit"); l != "" {

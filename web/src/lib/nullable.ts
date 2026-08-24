@@ -1,78 +1,81 @@
 /**
- * Helper functions for unwrapping nullable types from the Go backend.
- *
- * The backend uses Go's sql.NullString, sql.NullInt64, sql.NullFloat64 types
- * which serialize to { Valid: boolean, String/Int64/Float64: value }.
- * These helpers provide a cleaner API for accessing the values.
+ * Nullable helpers: unwrap backend nullable types (Valid + value) into plain values.
+ * Works with nullable database wrapper types from the Go backend.
+ * — same shape from the backend. Also accepts already-plain values for API responses that send strings/numbers.
  */
 
-import type { NullableString, NullableInt64, NullableFloat64 } from "@/types";
+/** Shape of nullable string from backend. */
+type NullableStringLike = { Valid: boolean; String: string };
+
+/** Shape of nullable int from backend. */
+type NullableInt64Like = { Valid: boolean; Int64: number };
+
+/** Shape of nullable float from backend (NullableFloat64, etc.) */
+type NullableFloat64Like = { Valid: boolean; Float64: number };
 
 /**
- * Unwraps a NullableString, returning the string value or null if not valid.
+ * Returns a string or null. Accepts nullable object (Valid + String) or plain string.
+ * Use for poster_path, backdrop_path, and any DB/API string that may be nullable.
  *
  * @example
- * const coverUrl = unwrapString(album.cover);
- * // Instead of: album.cover.Valid ? album.cover.String : null
+ * import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+ * const url = buildTmdbImageUrl(unwrapString(movie.poster_path), TMDB_POSTER_SIZE);
  */
 export function unwrapString(
-  nullable: NullableString | null | undefined
+  value: NullableStringLike | string | null | undefined,
 ): string | null {
-  return nullable?.Valid ? nullable.String : null;
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  return value.Valid ? value.String : null;
 }
 
 /**
- * Unwraps a NullableString, returning the string value or undefined if not valid.
+ * Same as unwrapString but returns undefined when not valid.
  * Useful for optional props that expect string | undefined.
- *
- * @example
- * <Component title={unwrapStringOrUndefined(item.title)} />
  */
 export function unwrapStringOrUndefined(
-  nullable: NullableString | null | undefined
+  value: NullableStringLike | string | null | undefined,
 ): string | undefined {
-  return nullable?.Valid ? nullable.String : undefined;
+  if (value == null) return undefined;
+  if (typeof value === "string") return value;
+  return value.Valid ? value.String : undefined;
 }
 
 /**
- * Unwraps a NullableInt64, returning the number value or null if not valid.
+ * Returns a number or null. Accepts nullable object (Valid + Int64) or plain number.
  *
  * @example
- * const albumId = unwrapInt(track.album_id);
- * // Instead of: track.album_id.Valid ? Number(track.album_id.Int64) : null
+ * const year = unwrapInt(movie.year);
  */
 export function unwrapInt(
-  nullable: NullableInt64 | null | undefined
+  value: NullableInt64Like | number | null | undefined,
 ): number | null {
-  return nullable?.Valid ? nullable.Int64 : null;
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  return value.Valid ? value.Int64 : null;
 }
 
 /**
- * Unwraps a NullableInt64, returning the number value or undefined if not valid.
- */
-export function unwrapIntOrUndefined(
-  nullable: NullableInt64 | null | undefined
-): number | undefined {
-  return nullable?.Valid ? nullable.Int64 : undefined;
-}
-
-/**
- * Unwraps a NullableFloat64, returning the number value or null if not valid.
+ * Returns a number or null. Accepts nullable object (Valid + Float64) or plain number.
  *
  * @example
  * const popularity = unwrapFloat(album.spotify_popularity);
  */
 export function unwrapFloat(
-  nullable: NullableFloat64 | null | undefined
+  value: NullableFloat64Like | number | null | undefined,
 ): number | null {
-  return nullable?.Valid ? nullable.Float64 : null;
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  return value.Valid ? value.Float64 : null;
 }
 
 /**
- * Unwraps a NullableFloat64, returning the number value or undefined if not valid.
+ * Same as unwrapFloat but returns undefined when not valid.
  */
 export function unwrapFloatOrUndefined(
-  nullable: NullableFloat64 | null | undefined
+  value: NullableFloat64Like | number | null | undefined,
 ): number | undefined {
-  return nullable?.Valid ? nullable.Float64 : undefined;
+  if (value == null) return undefined;
+  if (typeof value === "number") return value;
+  return value.Valid ? value.Float64 : undefined;
 }

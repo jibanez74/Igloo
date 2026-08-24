@@ -1,55 +1,112 @@
-import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
-import { Settings, User, Sliders, Library, Play } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useLocation,
+} from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  CONTENT_FADE_ENTER_CLASS,
+  CONTENT_FADE_EXIT_CLASS,
+  CONTENT_FADE_TRANSITION_MS,
+  LIBRARY_TAB_TRIGGER_CLASS,
+  LIBRARY_TABS_LIST_CLASS,
+} from "@/lib/constants";
+import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
+import { authUserQueryOpts } from "@/lib/query-opts";
+import { computeSettingsLayoutState } from "@/lib/settings-layout";
+import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_auth/settings")({
-  component: SettingsLayout,
-});
-
-// Tab configuration - DRY principle
 const SETTINGS_TABS = [
   { id: "general", label: "General", icon: Sliders, path: "/settings" },
   { id: "account", label: "Account", icon: User, path: "/settings/account" },
-  { id: "libraries", label: "Libraries", icon: Library, path: "/settings/libraries" },
+  {
+    id: "libraries",
+    label: "Libraries",
+    icon: Library,
+    path: "/settings/libraries",
+  },
   { id: "playback", label: "Playback", icon: Play, path: "/settings/playback" },
+  { id: "users", label: "Users", icon: Users, path: "/settings/users" },
 ] as const;
 
-type TabId = (typeof SETTINGS_TABS)[number]["id"];
+export const Route = createFileRoute("/_auth/settings")({
+  beforeLoad: async ({ context, location }) => {
+    const authData = await context.queryClient.fetchQuery(
+      authUserQueryOpts(),
+    );
+    if (authData.error) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.href },
+      });
+    }
+
+    const { redirectTo } = computeSettingsLayoutState({
+      isAdmin: authData.data.user.is_admin,
+      pathname: location.pathname,
+      tabs: SETTINGS_TABS,
+    });
+    if (redirectTo) {
+      throw redirect({ to: redirectTo, replace: true });
+    }
+  },
+  component: SettingsLayout,
+});
 
 function SettingsLayout() {
   const navigate = Route.useNavigate();
   const location = useLocation();
+  const { data: authData } = useSuspenseQuery(authUserQueryOpts());
+  const isAdmin = authData.data?.user.is_admin ?? false;
+  const {
+    isExiting,
+    runTransition,
+    usesContentAnimation,
+  } = useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
-  // Determine current tab from pathname
-  // /settings -> "general" (index route)
-  // /settings/account -> "account"
-  // /settings/libraries -> "libraries"
-  // /settings/playback -> "playback"
-  const getCurrentTab = (): TabId => {
-    const pathParts = location.pathname.split("/").filter(Boolean);
-    
-    // If pathname is exactly "/settings", it's the index route (general)
-    if (pathParts.length === 1 && pathParts[0] === "settings") {
-      return "general";
-    }
-    
-    // Otherwise, get the tab name from the second path segment
-    const tabId = pathParts[1] as TabId | undefined;
-    return tabId && SETTINGS_TABS.some(tab => tab.id === tabId) ? tabId : "general";
-  };
+  const { visibleTabs, currentTab } = computeSettingsLayoutState({
+    isAdmin,
+    pathname: location.pathname,
+    tabs: SETTINGS_TABS,
+  });
 
-  const currentTab = getCurrentTab();
-
-  // Handle tab change - navigate to the appropriate route
   const handleTabChange = (newTab: string) => {
-    const tab = SETTINGS_TABS.find(t => t.id === newTab);
-    if (tab) {
-      navigate({
-        to: tab.path,
-        replace: true,
-      });
+    const tab = visibleTabs.find(t => t.id === newTab);
+    if (!tab || tab.id === currentTab) {
+      return;
     }
+
+    runTransition({
+      shouldAnimate: true,
+      onTransition: () =>
+        navigate({
+          to: tab.path,
+          replace: true,
+        }),
+    });
   };
+
+  const isCompactLayout = visibleTabs.length <= 2;
+  const tabsListClassName = isCompactLayout
+    ? cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2")
+    : cn(
+        LIBRARY_TABS_LIST_CLASS,
+        "grid-cols-2 @lg:grid-cols-3 @2xl:grid-cols-5",
+      );
+  const tabsTriggerClassName = isCompactLayout
+    ? LIBRARY_TAB_TRIGGER_CLASS
+    : cn(
+        LIBRARY_TAB_TRIGGER_CLASS,
+        "last:col-span-2 @2xl:last:col-span-1",
+      );
 
   return (
     <>
@@ -60,40 +117,50 @@ function SettingsLayout() {
         content="Configure your Igloo media center settings and preferences."
       />
 
-      <div className="animate-in duration-300 fade-in">
+      <div className="@container min-w-0">
         {/* Page header */}
-        <header className="mb-8">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-            <Settings className="size-6 text-amber-400" aria-hidden="true" />
+        <header className="mb-6 sm:mb-7">
+          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+            <Settings className="size-6 text-primary" aria-hidden="true" />
             <span>Settings</span>
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base">
-            Manage your account settings and preferences
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
+            Manage application settings, your account, and users
           </p>
         </header>
 
         {/* Tabs */}
         <Tabs value={currentTab} onValueChange={handleTabChange}>
-          <TabsList className="h-auto border border-slate-700/50 bg-slate-800/50 p-1">
-            {SETTINGS_TABS.map((tab) => {
+          <TabsList className={tabsListClassName}>
+            {visibleTabs.map(tab => {
               const Icon = tab.icon;
               return (
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+                  className={tabsTriggerClassName}
                 >
-                  <Icon className="mr-2 size-4" aria-hidden="true" />
+                  <Icon
+                    className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+                    aria-hidden="true"
+                  />
                   {tab.label}
                 </TabsTrigger>
               );
             })}
           </TabsList>
 
-          {/* Child route content */}
-          <div className="mt-6">
-            <Outlet />
-          </div>
+          <TabsContent value={currentTab} className="mt-6">
+            <div
+              key={location.pathname}
+              className={cn(
+                usesContentAnimation &&
+                  (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
+              )}
+            >
+              <Outlet />
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
     </>

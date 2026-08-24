@@ -5,7 +5,16 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 )
+
+// setReadDeadline bounds (deadline) or clears (zero deadline) the time allowed
+// to read the rest of the request. Responses that do not support deadlines —
+// httptest.ResponseRecorder in the handler tests — are left alone; nothing else
+// is worth failing a request over, since the deadline is only a guard rail.
+func setReadDeadline(w http.ResponseWriter, deadline time.Time) {
+	_ = http.NewResponseController(w).SetReadDeadline(deadline)
+}
 
 type JSONResponse struct {
 	Error   bool   `json:"error"`
@@ -36,13 +45,15 @@ func WriteJSON(w http.ResponseWriter, status int, data any, headers ...http.Head
 }
 
 // ReadJSON decodes JSON from the request body into data.
-// It enforces a maximum body size and rejects unknown fields.
+// It enforces a maximum body size, a read deadline, and rejects unknown fields.
 func ReadJSON(w http.ResponseWriter, r *http.Request, data any, maxBytes int64) error {
 	if maxBytes == 0 {
 		maxBytes = 1024 * 1024 // 1 MB default
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	defer setReadDeadline(w, time.Time{})
+	setReadDeadline(w, time.Now().Add(READ_JSON_TIMEOUT))
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

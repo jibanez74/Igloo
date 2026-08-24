@@ -1,16 +1,4 @@
-// User types for authentication and account management
+import type { components } from "./openapi.gen";
 
-export type AuthUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  avatar: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-// API response type for auth user endpoint
-export type AuthUserResponseType = {
-  user: AuthUser;
-};
+export type AuthUser = components["schemas"]["AuthUser"];
+export type AdminUserType = components["schemas"]["AdminUser"];

@@ -1,19 +1,26 @@
-import type { NullableInt64, NullableString } from "@/types";
+import type { PlayableTrackData } from "@/types";
 
-// Minimal track data needed for audio playback
-// This is the common shape that different track types can be converted from
-export type PlayableTrackData = {
-  id: number;
-  title: string;
-  file_path: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: NullableInt64;
-  musician_id?: NullableInt64;
-  album_cover?: NullableString;
-  musician_name?: NullableString;
-};
+// Start playback, swallowing the rejection browsers throw when autoplay is
+// blocked — the UI simply stays paused in that case.
+export async function playMediaElement(media: HTMLMediaElement | null) {
+  if (!media) return;
+
+  try {
+    await media.play();
+  } catch {
+    // Autoplay can still be blocked by the browser in some cases.
+  }
+}
+
+export function toggleMediaPlayback(media: HTMLMediaElement | null) {
+  if (!media) return;
+
+  if (media.paused) {
+    void playMediaElement(media);
+  } else {
+    media.pause();
+  }
+}
 
 // Convert minimal track data to a full TrackType for the audio player
 // Fills in default values for fields not needed for playback
@@ -41,20 +48,46 @@ export function convertToAudioTrack(track: PlayableTrackData) {
     copyright: { String: "", Valid: false },
     language: { String: "", Valid: false },
     album_id: track.album_id,
-    musician_id: track.musician_id ?? { Int64: 0, Valid: false },
+    musician_id: track.musician_id,
     created_at: "",
     updated_at: "",
   };
 }
 
-// Extract cover and musician info from playable track data
+// Extract cover, musician, and album title info from playable track data
 export function extractTrackMetadata(track: PlayableTrackData): {
   cover: string | null;
   musician: string | null;
+  albumTitle: string;
 } {
   return {
-    cover: track.album_cover?.Valid ? track.album_cover.String : null,
-    musician: track.musician_name?.Valid ? track.musician_name.String : null,
+    cover: track.album_cover.Valid ? track.album_cover.String : null,
+    musician: track.musician_name.Valid ? track.musician_name.String : null,
+    albumTitle: track.album_title?.Valid ? track.album_title.String : "",
+  };
+}
+
+// Bound an endless queue's history: keep at most keepBehind tracks before the
+// current one and report what was dropped so callers can prune per-track
+// metadata. Returns the input array untouched when nothing needs trimming.
+export function trimQueueHistory<T extends { id: number }>(
+  tracks: T[],
+  currentTrackId: number | null,
+  keepBehind: number,
+): { tracks: T[]; dropped: T[] } {
+  const currentIndex =
+    currentTrackId === null
+      ? -1
+      : tracks.findIndex(track => track.id === currentTrackId);
+  const dropCount = currentIndex - keepBehind;
+
+  if (dropCount <= 0) {
+    return { tracks, dropped: [] };
+  }
+
+  return {
+    tracks: tracks.slice(dropCount),
+    dropped: tracks.slice(0, dropCount),
   };
 }
 

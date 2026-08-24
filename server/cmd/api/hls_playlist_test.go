@@ -2,278 +2,264 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"testing"
 
 	"igloo/cmd/internal/helpers"
 )
 
-// ---- finalizeEventPlaylist ----
+func TestBuildHLSAssetQuerySuffix(t *testing.T) {
+	got := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
+		AudioTrack:      testIntPtr(2),
+		StartSec:        testIntPtr(120),
+		PlaybackSession: "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
+		Reload:          "7",
+	})
+
+	if got != "?audio_track=2&playback_session=4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4&reload=7&start=120" {
+		t.Fatalf("buildHLSAssetQuerySuffix() = %q", got)
+	}
+}
 
 func TestFinalizeEventPlaylist(t *testing.T) {
-	t.Run("replaces EVENT with VOD playlist type", func(t *testing.T) {
-		input := "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n"
-		result := finalizeEventPlaylist(input)
-		if strings.Contains(result, "#EXT-X-PLAYLIST-TYPE:EVENT") {
-			t.Error("Result still contains EVENT playlist type")
-		}
-		if !strings.Contains(result, "#EXT-X-PLAYLIST-TYPE:VOD") {
-			t.Error("Result does not contain VOD playlist type")
-		}
-	})
+	tests := []struct {
+		name             string
+		input            string
+		wantVOD          bool
+		wantEndlistCount int
+	}{
+		{
+			name:             "converts EVENT to VOD and appends ENDLIST",
+			input:            "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n",
+			wantVOD:          true,
+			wantEndlistCount: 1,
+		},
+		{
+			name:             "does not duplicate an existing ENDLIST",
+			input:            "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n#EXT-X-ENDLIST\n",
+			wantVOD:          true,
+			wantEndlistCount: 1,
+		},
+		{
+			// No EVENT tag means the playlist is already on-demand: it must be
+			// left alone apart from the ENDLIST terminator.
+			name:             "no EVENT tag leaves the playlist type untouched",
+			input:            "#EXTM3U\n#EXTINF:4.0,\nsegment_0.m4s\n",
+			wantVOD:          false,
+			wantEndlistCount: 1,
+		},
+	}
 
-	t.Run("appends ENDLIST when missing", func(t *testing.T) {
-		input := "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n"
-		result := finalizeEventPlaylist(input)
-		if !strings.Contains(result, "#EXT-X-ENDLIST") {
-			t.Error("Result does not contain #EXT-X-ENDLIST")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := finalizeEventPlaylist(tt.input)
 
-	t.Run("does not duplicate ENDLIST when already present", func(t *testing.T) {
-		input := "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
-		result := finalizeEventPlaylist(input)
-		count := strings.Count(result, "#EXT-X-ENDLIST")
-		if count != 1 {
-			t.Errorf("Expected exactly 1 #EXT-X-ENDLIST, got %d", count)
-		}
-	})
-
-	t.Run("preserves other playlist content", func(t *testing.T) {
-		input := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n"
-		result := finalizeEventPlaylist(input)
-		for _, tag := range []string{"#EXTM3U", "#EXT-X-VERSION:7", "segment_0.m4s"} {
-			if !strings.Contains(result, tag) {
-				t.Errorf("Result is missing expected content %q", tag)
+			if strings.Contains(got, "#EXT-X-PLAYLIST-TYPE:EVENT") {
+				t.Errorf("EVENT type survived finalization:\n%s", got)
 			}
-		}
-	})
-
-	t.Run("handles already-finalized VOD playlist without duplicating ENDLIST", func(t *testing.T) {
-		input := "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:4.0,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
-		result := finalizeEventPlaylist(input)
-		if !strings.Contains(result, "#EXT-X-PLAYLIST-TYPE:VOD") {
-			t.Error("Result lost VOD type when input had no EVENT type")
-		}
-		if strings.Count(result, "#EXT-X-ENDLIST") != 1 {
-			t.Error("Expected exactly 1 ENDLIST in already-finalized playlist")
-		}
-	})
-
-	t.Run("only first EVENT occurrence is replaced", func(t *testing.T) {
-		// strings.Replace with n=1 only replaces the first occurrence
-		input := "#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-PLAYLIST-TYPE:EVENT\n"
-		result := finalizeEventPlaylist(input)
-		// Only first replaced
-		vodCount := strings.Count(result, "#EXT-X-PLAYLIST-TYPE:VOD")
-		eventCount := strings.Count(result, "#EXT-X-PLAYLIST-TYPE:EVENT")
-		if vodCount != 1 {
-			t.Errorf("Expected 1 VOD tag, got %d", vodCount)
-		}
-		if eventCount != 1 {
-			t.Errorf("Expected 1 remaining EVENT tag, got %d", eventCount)
-		}
-	})
-
-	t.Run("empty input gets ENDLIST appended", func(t *testing.T) {
-		result := finalizeEventPlaylist("")
-		if !strings.Contains(result, "#EXT-X-ENDLIST") {
-			t.Error("Expected #EXT-X-ENDLIST to be appended to empty input")
-		}
-	})
+			hasVOD := strings.Contains(got, "#EXT-X-PLAYLIST-TYPE:VOD")
+			if hasVOD != tt.wantVOD {
+				t.Errorf("contains VOD type = %v, want %v:\n%s", hasVOD, tt.wantVOD, got)
+			}
+			if count := strings.Count(got, "#EXT-X-ENDLIST"); count != tt.wantEndlistCount {
+				t.Errorf("#EXT-X-ENDLIST count = %d, want %d", count, tt.wantEndlistCount)
+			}
+		})
+	}
 }
-
-// ---- rewritePlaylistURLs ----
 
 func TestRewritePlaylistURLs(t *testing.T) {
-	t.Run("prepends baseURL to segment filenames", func(t *testing.T) {
-		playlist := "#EXTM3U\n#EXTINF:4.0,\nsegment_0.m4s\n#EXTINF:4.0,\nsegment_1.m4s\n#EXT-X-ENDLIST\n"
-		baseURL := "/api/movies/1/hls/1080p_4mbps/"
-		result := rewritePlaylistURLs(playlist, baseURL, 0)
-		if !strings.Contains(result, baseURL+"segment_0.m4s?audio_track=0") {
-			t.Errorf("Expected segment_0.m4s to be rewritten, got:\n%s", result)
-		}
-		if !strings.Contains(result, baseURL+"segment_1.m4s?audio_track=0") {
-			t.Errorf("Expected segment_1.m4s to be rewritten, got:\n%s", result)
-		}
-	})
+	playlist := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-VERSION:7",
+		"#EXT-X-INDEPENDENT-SEGMENTS",
+		"#EXT-X-TARGETDURATION:8",
+		"#EXT-X-MEDIA-SEQUENCE:0",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		fmt.Sprintf(`#EXT-X-MAP:URI="%s"`, helpers.HLS_INIT_FILENAME),
+		"#EXTINF:4.000000,",
+		"segment_0.m4s",
+		"#EXTINF:4.000000,",
+		"segment_1.m4s",
+		"#EXT-X-ENDLIST",
+		"",
+	}, "\n")
 
-	t.Run("rewrites EXT-X-MAP URI for init file", func(t *testing.T) {
-		playlist := fmt.Sprintf("#EXTM3U\n#EXT-X-MAP:URI=\"%s\"\n#EXTINF:4.0,\nsegment_0.m4s\n",
-			helpers.HLS_INIT_FILENAME)
-		baseURL := "/api/movies/5/hls/remux/"
-		audioTrack := 2
-		result := rewritePlaylistURLs(playlist, baseURL, audioTrack)
-		expected := fmt.Sprintf(`URI="%s%s?audio_track=%d"`, baseURL, helpers.HLS_INIT_FILENAME, audioTrack)
-		if !strings.Contains(result, expected) {
-			t.Errorf("Expected EXT-X-MAP URI %q, got:\n%s", expected, result)
-		}
-	})
+	baseURL := "/api/movies/7/hls/1080p_8mbps/"
+	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(2)})
 
-	t.Run("appends correct audio_track query param", func(t *testing.T) {
-		playlist := "#EXTM3U\n#EXTINF:4.0,\nsegment_0.m4s\n"
-		result := rewritePlaylistURLs(playlist, "/base/", 3)
-		if !strings.Contains(result, "?audio_track=3") {
-			t.Errorf("Expected audio_track=3, got:\n%s", result)
-		}
-	})
+	got := rewritePlaylistURLs(playlist, baseURL, querySuffix)
 
-	t.Run("comment lines and HLS tags are passed through unchanged", func(t *testing.T) {
-		playlist := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:8\n#EXTINF:4.0,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
-		result := rewritePlaylistURLs(playlist, "/base/", 0)
-		for _, tag := range []string{"#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-ENDLIST"} {
-			if !strings.Contains(result, tag) {
-				t.Errorf("Tag %q was dropped from result", tag)
-			}
-		}
-	})
+	want := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-VERSION:7",
+		"#EXT-X-INDEPENDENT-SEGMENTS",
+		"#EXT-X-TARGETDURATION:8",
+		"#EXT-X-MEDIA-SEQUENCE:0",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		`#EXT-X-MAP:URI="/api/movies/7/hls/1080p_8mbps/init.mp4?audio_track=2"`,
+		"#EXTINF:4.000000,",
+		"/api/movies/7/hls/1080p_8mbps/segment_0.m4s?audio_track=2",
+		"#EXTINF:4.000000,",
+		"/api/movies/7/hls/1080p_8mbps/segment_1.m4s?audio_track=2",
+		"#EXT-X-ENDLIST",
+		"",
+		"",
+	}, "\n")
 
-	t.Run("audioTrack=0 produces ?audio_track=0 suffix", func(t *testing.T) {
-		playlist := "#EXTINF:4.0,\nsegment_0.m4s\n"
-		result := rewritePlaylistURLs(playlist, "/b/", 0)
-		if !strings.Contains(result, "?audio_track=0") {
-			t.Errorf("Expected audio_track=0, got: %s", result)
-		}
-	})
-
-	t.Run("segment lines are not treated as comment lines", func(t *testing.T) {
-		playlist := "#EXTINF:4.0,\nsegment_0.m4s\n"
-		result := rewritePlaylistURLs(playlist, "/x/", 1)
-		// segment_0.m4s should be prefixed, not left bare
-		if strings.Contains(result, "\nsegment_0.m4s") {
-			t.Errorf("Segment line was not rewritten: %s", result)
-		}
-		if !strings.Contains(result, "/x/segment_0.m4s?audio_track=1") {
-			t.Errorf("Expected rewritten segment URL, got: %s", result)
-		}
-	})
-
-	t.Run("empty playlist returns empty-ish string", func(t *testing.T) {
-		result := rewritePlaylistURLs("", "/base/", 0)
-		// Should not panic; result is a single newline from the split+write loop
-		_ = result
-	})
+	if got != want {
+		t.Fatalf("rewritePlaylistURLs() =\n%s\nwant\n%s", got, want)
+	}
 }
 
-// ---- generateVODPlaylist ----
-
 func TestGenerateVODPlaylist(t *testing.T) {
-	t.Run("contains required M3U8 headers", func(t *testing.T) {
-		result := generateVODPlaylist(120.0, "/base/", 0)
-		for _, required := range []string{
-			"#EXTM3U",
-			"#EXT-X-VERSION:7",
-			"#EXT-X-TARGETDURATION:",
-			"#EXT-X-MEDIA-SEQUENCE:0",
-			"#EXT-X-PLAYLIST-TYPE:VOD",
-			"#EXT-X-ENDLIST",
-		} {
-			if !strings.Contains(result, required) {
-				t.Errorf("Missing required tag %q", required)
+	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
+
+	tests := []struct {
+		name        string
+		durationSec float64
+		audioTrack  int
+		wantSegs    int
+		// wantLastEXTINF pins the trailing segment's advertised duration: a
+		// partial tail must be reported at its real length, never a full
+		// segment, or the player seeks past the end of the media.
+		wantLastEXTINF string
+	}{
+		{
+			name:           "short movie fits in one partial segment",
+			durationSec:    3.0,
+			audioTrack:     0,
+			wantSegs:       1,
+			wantLastEXTINF: "#EXTINF:3.000000,",
+		},
+		{
+			name:           "duration on the segment boundary",
+			durationSec:    segDur,
+			audioTrack:     0,
+			wantSegs:       1,
+			wantLastEXTINF: "#EXTINF:4.000000,",
+		},
+		{
+			name:           "two full segments",
+			durationSec:    segDur * 2,
+			audioTrack:     0,
+			wantSegs:       2,
+			wantLastEXTINF: "#EXTINF:4.000000,",
+		},
+		{
+			name:           "partial last segment",
+			durationSec:    segDur*2 + 1,
+			audioTrack:     0,
+			wantSegs:       3,
+			wantLastEXTINF: "#EXTINF:1.000000,",
+		},
+		{
+			name:           "fractional partial last segment",
+			durationSec:    segDur + 1.5,
+			audioTrack:     0,
+			wantSegs:       2,
+			wantLastEXTINF: "#EXTINF:1.500000,",
+		},
+		{
+			// A zero-duration movie must still yield a playable manifest rather
+			// than an empty one the player rejects outright.
+			name:           "zero duration still yields one segment",
+			durationSec:    0,
+			audioTrack:     0,
+			wantSegs:       1,
+			wantLastEXTINF: "#EXTINF:0.001000,",
+		},
+		{
+			name:           "alternate audio track in URLs",
+			durationSec:    segDur,
+			audioTrack:     3,
+			wantSegs:       1,
+			wantLastEXTINF: "#EXTINF:4.000000,",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseURL := "/api/movies/1/hls/720p_3mbps/"
+			querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &tt.audioTrack})
+			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix, true)
+
+			if !strings.HasPrefix(got, "#EXTM3U\n") {
+				t.Error("playlist must start with #EXTM3U")
 			}
-		}
-	})
+			if !strings.Contains(got, "#EXT-X-PLAYLIST-TYPE:VOD") {
+				t.Error("playlist must declare VOD type")
+			}
+			if !strings.Contains(got, "#EXT-X-ENDLIST") {
+				t.Error("VOD playlist must include #EXT-X-ENDLIST")
+			}
+			// Keyframes are forced onto every segment boundary, so the playlist
+			// must advertise independently decodable segments.
+			if strings.Count(got, "#EXT-X-INDEPENDENT-SEGMENTS\n") != 1 {
+				t.Errorf("expected exactly one #EXT-X-INDEPENDENT-SEGMENTS tag, got:\n%s", got)
+			}
+			if strings.Index(got, "#EXT-X-INDEPENDENT-SEGMENTS") > strings.Index(got, "#EXTINF:") {
+				t.Errorf("#EXT-X-INDEPENDENT-SEGMENTS must precede the first #EXTINF, got:\n%s", got)
+			}
 
-	t.Run("contains EXT-X-MAP for init file with correct base URL", func(t *testing.T) {
-		baseURL := "/api/movies/1/hls/1080p_8mbps/"
-		result := generateVODPlaylist(60.0, baseURL, 0)
-		expected := fmt.Sprintf(`#EXT-X-MAP:URI="%s%s?audio_track=0"`, baseURL, helpers.HLS_INIT_FILENAME)
-		if !strings.Contains(result, expected) {
-			t.Errorf("Expected EXT-X-MAP line %q not found in:\n%s", expected, result)
-		}
-	})
+			// Transcode sessions force keyframes on segment boundaries, so the
+			// target duration is twice the nominal segment time.
+			wantTarget := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC*2)
+			if !strings.Contains(got, wantTarget) {
+				t.Errorf("expected target duration %q, got:\n%s", wantTarget, got)
+			}
 
-	t.Run("correct segment count for exact multiple of segment duration", func(t *testing.T) {
-		segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
-		totalDur := segDur * 10
-		result := generateVODPlaylist(totalDur, "/b/", 0)
-		segCount := strings.Count(result, helpers.HLS_SEGMENT_FILENAME_PREFIX)
-		// EXT-X-MAP also contains the baseURL but not the segment prefix; count segment_ occurrences
-		if segCount != 10 {
-			t.Errorf("Expected 10 segments for %v sec duration, got %d", totalDur, segCount)
-		}
-	})
+			initURI := fmt.Sprintf(`URI="%s%s%s"`, baseURL, helpers.HLS_INIT_FILENAME, querySuffix)
+			if !strings.Contains(got, initURI) {
+				t.Errorf("expected init map URI %q", initURI)
+			}
 
-	t.Run("correct segment count when duration is not exact multiple", func(t *testing.T) {
-		segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
-		totalDur := segDur*7 + 1.5 // 7 full + 1 partial = 8 segments
-		expected := int(math.Ceil(totalDur / segDur))
-		result := generateVODPlaylist(totalDur, "/b/", 0)
-		segCount := strings.Count(result, helpers.HLS_SEGMENT_FILENAME_PREFIX)
-		if segCount != expected {
-			t.Errorf("Expected %d segments, got %d", expected, segCount)
-		}
-	})
-
-	t.Run("segments are named with correct prefix and suffix", func(t *testing.T) {
-		result := generateVODPlaylist(float64(helpers.HLS_SEGMENT_TIME_SEC), "/b/", 0)
-		if !strings.Contains(result, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX) {
-			t.Error("segment_0.m4s not found in playlist")
-		}
-	})
-
-	t.Run("last segment duration is clipped to remaining time", func(t *testing.T) {
-		segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
-		remainder := 1.5
-		totalDur := segDur*3 + remainder
-		result := generateVODPlaylist(totalDur, "/b/", 0)
-		expected := fmt.Sprintf("#EXTINF:%.6f,", remainder)
-		if !strings.Contains(result, expected) {
-			t.Errorf("Expected last segment duration %s, not found in:\n%s", expected, result)
-		}
-	})
-
-	t.Run("single segment for very short duration", func(t *testing.T) {
-		result := generateVODPlaylist(0.001, "/b/", 0)
-		segCount := strings.Count(result, helpers.HLS_SEGMENT_FILENAME_PREFIX)
-		if segCount < 1 {
-			t.Error("Expected at least 1 segment for tiny duration")
-		}
-	})
-
-	t.Run("audio track query param added to all segment and init URIs", func(t *testing.T) {
-		result := generateVODPlaylist(float64(helpers.HLS_SEGMENT_TIME_SEC)*2, "/b/", 2)
-		for _, line := range strings.Split(result, "\n") {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "/b/"+helpers.HLS_SEGMENT_FILENAME_PREFIX) {
-				if !strings.Contains(trimmed, "audio_track=2") {
-					t.Errorf("Expected audio_track=2 in segment line: %q", trimmed)
+			var extinf []string
+			for _, line := range strings.Split(got, "\n") {
+				if strings.HasPrefix(line, "#EXTINF:") {
+					extinf = append(extinf, line)
 				}
 			}
-			if strings.HasPrefix(trimmed, "#EXT-X-MAP:") && strings.Contains(trimmed, helpers.HLS_INIT_FILENAME) {
-				if !strings.Contains(trimmed, "audio_track=2") {
-					t.Errorf("Expected audio_track=2 in EXT-X-MAP line: %q", trimmed)
+			if len(extinf) != tt.wantSegs {
+				t.Fatalf("segment count = %d, want %d:\n%s", len(extinf), tt.wantSegs, got)
+			}
+			if last := extinf[len(extinf)-1]; last != tt.wantLastEXTINF {
+				t.Errorf("last segment = %q, want %q", last, tt.wantLastEXTINF)
+			}
+
+			for i := 0; i < tt.wantSegs; i++ {
+				segLine := fmt.Sprintf("%s%s%d%s%s",
+					baseURL,
+					helpers.HLS_SEGMENT_FILENAME_PREFIX,
+					i,
+					helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+					querySuffix,
+				)
+				if !strings.Contains(got, segLine) {
+					t.Errorf("expected segment line %q in playlist", segLine)
 				}
 			}
-		}
-	})
+		})
+	}
+}
 
-	t.Run("target duration is double the segment time", func(t *testing.T) {
-		result := generateVODPlaylist(60.0, "/b/", 0)
-		expectedTarget := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC*2)
-		if !strings.Contains(result, expectedTarget) {
-			t.Errorf("Expected TARGETDURATION=%d, not found in:\n%s", helpers.HLS_SEGMENT_TIME_SEC*2, result)
-		}
-	})
+// An encoder that cannot promise IDR frames on forced keyframes (NVENC or QSV
+// on a build without their forced-IDR option) must not have the playlist claim
+// independence on its behalf: a native HLS player would seek straight into a
+// segment that still references the previous GOP.
+func TestGenerateVODPlaylistOmitsIndependentSegmentsWhenNotGuaranteed(t *testing.T) {
+	baseURL := "/api/movies/1/hls/720p_3mbps/"
+	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)})
 
-	t.Run("zero duration produces at least one segment", func(t *testing.T) {
-		result := generateVODPlaylist(0.0, "/b/", 0)
-		segCount := strings.Count(result, helpers.HLS_SEGMENT_FILENAME_PREFIX)
-		if segCount < 1 {
-			t.Error("Expected at least 1 segment for zero duration input")
-		}
-	})
+	got := generateVODPlaylist(float64(helpers.HLS_SEGMENT_TIME_SEC)*2, baseURL, querySuffix, false)
 
-	t.Run("playlist ends with ENDLIST tag", func(t *testing.T) {
-		result := generateVODPlaylist(30.0, "/b/", 0)
-		trimmed := strings.TrimRight(result, "\n")
-		if !strings.HasSuffix(trimmed, "#EXT-X-ENDLIST") {
-			offset := len(trimmed) - 40
-			if offset < 0 {
-				offset = 0
-			}
-			t.Errorf("Expected playlist to end with #EXT-X-ENDLIST, got:\n...%s", trimmed[offset:])
-		}
-	})
+	if strings.Contains(got, "#EXT-X-INDEPENDENT-SEGMENTS") {
+		t.Errorf("playlist must omit #EXT-X-INDEPENDENT-SEGMENTS, got:\n%s", got)
+	}
+	if !strings.HasPrefix(got, "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:") {
+		t.Errorf("playlist header is malformed without the tag, got:\n%s", got)
+	}
+	if !strings.Contains(got, "#EXT-X-ENDLIST") {
+		t.Errorf("VOD playlist must still include #EXT-X-ENDLIST, got:\n%s", got)
+	}
 }

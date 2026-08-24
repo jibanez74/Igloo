@@ -1,41 +1,59 @@
 package logger
 
 import (
+	"context"
 	"fmt"
-	"igloo/cmd/internal/helpers"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 )
 
+const loggerMaxBytes = 1 << 20
+
+type LoggerInterface interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
+var _ LoggerInterface = (*slog.Logger)(nil)
+
 type LoggerConfig struct {
 	Debug   bool
+	Stdout  bool
 	LogDir  string
 	LogFile string
 }
 
-// New creates a new slog.Logger based on the provided configuration.
-// In debug mode (Debug=true), logs are written to stdout with text format at debug level.
-// In production mode (Debug=false), logs are written to a file with JSON format at info level.
-// The log file is automatically rotated to never exceed maxLines.
-// Returns the logger, a cleanup function to close the log file, and any error.
-// The log directory must exist - this function will not create it.
-func New(cfg *LoggerConfig) (*slog.Logger, func() error, error) {
-	var w io.Writer
-	var closer func() error = func() error { return nil }
+// New creates a configured logger and cleanup function.
+// Production file logging requires an existing LogDir.
+func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("logger config is required")
+	}
+
+	closer := func() error { return nil }
 
 	if cfg.Debug {
-		w = os.Stdout
-		handler := slog.NewTextHandler(w, &slog.HandlerOptions{
+		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		})
 
 		return slog.New(handler), closer, nil
 	}
 
-	if cfg.LogFile == "" {
-		cfg.LogFile = "app.log"
+	if cfg.Stdout {
+		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		})
+
+		return slog.New(handler), closer, nil
+	}
+
+	logFile := cfg.LogFile
+	if logFile == "" {
+		logFile = "app.log"
 	}
 
 	if cfg.LogDir == "" {
@@ -55,19 +73,45 @@ func New(cfg *LoggerConfig) (*slog.Logger, func() error, error) {
 		return nil, nil, fmt.Errorf("log path is not a directory: %s", cfg.LogDir)
 	}
 
-	path := filepath.Join(cfg.LogDir, cfg.LogFile)
+	path := filepath.Join(cfg.LogDir, logFile)
 
-	rw, err := newRotatingWriter(path, helpers.LOGGER_MAX_LINES)
+	rw, err := newRotatingWriter(path, loggerMaxBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	w = rw
 	closer = rw.Close
 
-	handler := slog.NewJSONHandler(w, &slog.HandlerOptions{
+	handler := slog.NewJSONHandler(rw, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
 
-	return slog.New(handler), closer, nil
+	return slog.New(flushOnSevereHandler{Handler: handler, flush: rw.Flush}), closer, nil
+}
+
+// flushOnSevereHandler flushes the rotating writer after WARN and ERROR
+// records, so severe entries reach disk immediately while routine request
+// logging stays buffered.
+type flushOnSevereHandler struct {
+	slog.Handler
+	flush func() error
+}
+
+func (h flushOnSevereHandler) Handle(ctx context.Context, record slog.Record) error {
+	err := h.Handler.Handle(ctx, record)
+	if record.Level >= slog.LevelWarn {
+		flushErr := h.flush()
+		if err == nil {
+			err = flushErr
+		}
+	}
+	return err
+}
+
+func (h flushOnSevereHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return flushOnSevereHandler{Handler: h.Handler.WithAttrs(attrs), flush: h.flush}
+}
+
+func (h flushOnSevereHandler) WithGroup(name string) slog.Handler {
+	return flushOnSevereHandler{Handler: h.Handler.WithGroup(name), flush: h.flush}
 }

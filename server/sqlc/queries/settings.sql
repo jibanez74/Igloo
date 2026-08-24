@@ -1,27 +1,77 @@
 -- name: GetSettings :one
 SELECT
   *
-FROM
-  settings
-LIMIT
-  1;
+FROM settings
+ORDER BY id
+LIMIT 1;
 
 -- name: CreateSettings :one
-INSERT INTO
-  settings (
-    tmdb_key,
-    jellyfin_token,
-    spotify_client_id,
-    spotify_client_secret,
-    hardware_acceleration_device,
-    enable_logger,
-    enable_watcher,
-    download_images,
-    movies_dir,
-    shows_dir,
-    music_dir,
-    static_dir,
-    logs_dir
-  )
+INSERT INTO settings (
+  tmdb_key,
+  jellyfin_api_key,
+  spotify_client_id,
+  spotify_client_secret,
+  hardware_acceleration_device,
+  enable_watcher,
+  download_images,
+  movies_dir,
+  shows_dir,
+  music_dir,
+  static_dir,
+  transcode_dir
+)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: UpdateGeneralSettings :one
+UPDATE settings
+SET
+  tmdb_key = ?,
+  immich_base_url = ?,
+  immich_api_key = ?,
+  jellyfin_base_url = ?,
+  jellyfin_api_key = ?,
+  spotify_client_id = ?,
+  spotify_client_secret = ?,
+  enable_watcher = ?,
+  download_images = ?,
+  static_dir = ?,
+  transcode_dir = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING *;
+
+-- name: UpdateLibrarySettings :one
+UPDATE settings
+SET
+  movies_dir = ?,
+  shows_dir = ?,
+  music_dir = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING *;
+
+-- name: UpdatePlaybackServerSettings :one
+UPDATE settings
+SET
+  server_upload_mbps = ?,
+  hardware_acceleration_device = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING *;

@@ -4,205 +4,174 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
+	"time"
 )
 
-// rotatingWriter is an io.Writer implementation that wraps a file and ensures
-// it never exceeds a maximum number of lines. When the limit is reached,
-// it discards the oldest half of the log entries and keeps the newest half.
-// This prevents unbounded log file growth while preserving recent history.
-// The writer is thread-safe and uses buffered I/O for efficient writes.
-// Each log entry from slog is one line (JSON format), so line count equals entry count.
+const loggerFlushInterval = time.Second
+
+// rotatingWriter keeps recent slog JSON entries in a bounded pair of files:
+// the live log plus one rotated predecessor (path + ".1").
+//
+// Writes are buffered and flushed by a background ticker, on severe records
+// (see flushOnSevereHandler), and on Close — not per line. Request logging
+// sits on the HTTP hot path, and a write syscall per log line dominated the
+// server's idle disk writes. The trade-off is that a hard crash can lose up
+// to a second of buffered INFO lines.
 type rotatingWriter struct {
-	path     string        // Full path to the log file
-	file     *os.File      // Open file handle for read/write operations
-	buf      *bufio.Writer // Buffered writer for efficient disk writes
-	mu       sync.Mutex    // Protects all fields for concurrent access
-	lines    int           // Current number of lines in the file
-	maxLines int           // Maximum allowed lines before rotation
+	mu       sync.Mutex
+	path     string
+	file     *os.File
+	buf      *bufio.Writer
+	size     int64
+	maxBytes int64
+	closed   bool
+	stop     chan struct{}
+	done     chan struct{}
 }
 
-// newRotatingWriter creates a new rotating writer for the given file path.
-// It opens (or creates) the log file and counts existing lines to initialize
-// the line counter. The maxLines parameter sets when rotation will occur.
-// Returns an error if the file cannot be opened or read.
-func newRotatingWriter(path string, maxLines int) (*rotatingWriter, error) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o644)
+func newRotatingWriter(path string, maxBytes int64) (*rotatingWriter, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("max bytes must be positive")
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, err
 	}
 
-	// Count existing lines so we know when to rotate
-	lines, err := countLines(f)
+	info, err := f.Stat()
 	if err != nil {
 		f.Close()
 		return nil, err
 	}
 
-	return &rotatingWriter{
+	w := &rotatingWriter{
 		path:     path,
 		file:     f,
 		buf:      bufio.NewWriter(f),
-		lines:    lines,
-		maxLines: maxLines,
-	}, nil
-}
-
-// countLines reads the file from the beginning and counts the number of lines.
-// This is called once at startup to initialize the line counter.
-func countLines(f *os.File) (int, error) {
-	// Seek to the beginning of the file
-	_, err := f.Seek(0, 0)
-	if err != nil {
-		return 0, err
+		size:     info.Size(),
+		maxBytes: maxBytes,
+		stop:     make(chan struct{}),
+		done:     make(chan struct{}),
 	}
 
-	count := 0
-	scanner := bufio.NewScanner(f)
+	go w.flushLoop()
 
-	// Count each line in the file
-	for scanner.Scan() {
-		count++
-	}
-
-	return count, scanner.Err()
+	return w, nil
 }
 
-// Write implements io.Writer. It writes data to the log file with rotation support.
-// If the line limit is reached, rotation occurs before writing the new entry.
-// Thread-safe: multiple goroutines can safely call Write concurrently.
-// Each Write call is assumed to be one complete log line (slog writes one JSON line per log).
-func (w *rotatingWriter) Write(p []byte) (n int, err error) {
+func (w *rotatingWriter) flushLoop() {
+	defer close(w.done)
+
+	ticker := time.NewTicker(loggerFlushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-w.stop:
+			return
+		case <-ticker.C:
+			w.mu.Lock()
+			if !w.closed {
+				// A flush failure here has nowhere to be reported; the next
+				// Write surfaces the buffered writer's sticky error instead.
+				_ = w.buf.Flush()
+			}
+			w.mu.Unlock()
+		}
+	}
+}
+
+// Write implements io.Writer. Each slog entry is one JSON line.
+func (w *rotatingWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Check if we need to rotate before writing
-	if w.lines >= w.maxLines {
+	if w.closed {
+		return 0, fmt.Errorf("log writer is closed")
+	}
+
+	// A single entry larger than the cap is still written whole; the next
+	// entry rotates it away.
+	if w.size > 0 && w.size+int64(len(p)) > w.maxBytes {
 		if err := w.rotate(); err != nil {
 			return 0, fmt.Errorf("failed to rotate log file: %w", err)
 		}
 	}
 
-	// Write to the buffer (fast, in-memory operation)
-	n, err = w.buf.Write(p)
+	n, err := w.buf.Write(p)
 	if err != nil {
 		return n, err
 	}
 
-	// Flush immediately to ensure logs survive crashes.
-	// Trade-off: slightly slower writes for guaranteed persistence.
-	err = w.buf.Flush()
-	if err != nil {
-		return n, err
-	}
-
-	w.lines++
+	w.size += int64(n)
 
 	return n, nil
 }
 
-// rotate discards the oldest half of the log file and keeps the newest half.
-// This strategy:
-//   - Keeps enough history to be useful for debugging
-//   - Avoids rotating on every single write after hitting the limit
-//   - Provides O(n) rotation but only runs every ~250 writes (for 500 line limit)
-//
-// Process:
-//  1. Flush any buffered writes
-//  2. Read all lines from the file
-//  3. Keep only the newest 50% of lines
-//  4. Truncate and rewrite the file with kept lines
+// rotate renames the live file to its ".1" sibling (replacing any previous
+// one) and starts a fresh live file, so rotation cost is O(1) instead of
+// rewriting retained lines.
 func (w *rotatingWriter) rotate() error {
-	// Ensure any pending writes are flushed before we read the file
 	err := w.buf.Flush()
 	if err != nil {
 		return err
 	}
 
-	// Seek to beginning to read all lines
-	_, err = w.file.Seek(0, 0)
+	err = w.file.Close()
 	if err != nil {
 		return err
 	}
 
-	// Pre-allocate slice with known capacity to avoid reallocations during scan
-	lines := make([]string, 0, w.lines)
-	scanner := bufio.NewScanner(w.file)
-
-	// Read all existing lines into memory
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	err = scanner.Err()
+	err = os.Rename(w.path, w.path+".1")
 	if err != nil {
 		return err
 	}
 
-	// Keep only the newest half of lines.
-	// Example: 500 lines -> keep lines 250-499 (newest 250 entries)
-	keepFrom := len(lines) / 2
-	lines = lines[keepFrom:]
-
-	// Truncate the file to zero length
-	err = w.file.Truncate(0)
+	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
 
-	// Seek back to beginning for writing
-	_, err = w.file.Seek(0, 0)
-	if err != nil {
-		return err
-	}
-
-	// Reset the buffer to point to the file's new position (start)
-	w.buf.Reset(w.file)
-
-	// Build all retained lines into a single string for efficient writing.
-	// Using strings.Builder avoids repeated allocations from string concatenation.
-	// Pre-grow to estimated size (~100 bytes per JSON log line) to minimize reallocations.
-	var builder strings.Builder
-	builder.Grow(len(lines) * 100)
-
-	for _, line := range lines {
-		builder.WriteString(line)
-		builder.WriteByte('\n')
-	}
-
-	// Write all lines in a single operation (efficient: one syscall after buffer fills)
-	_, err = w.buf.WriteString(builder.String())
-	if err != nil {
-		return err
-	}
-
-	// Flush to ensure all data is persisted to disk
-	err = w.buf.Flush()
-	if err != nil {
-		return err
-	}
-
-	// Update line count to reflect the new state
-	w.lines = len(lines)
+	w.file = f
+	w.buf = bufio.NewWriter(f)
+	w.size = 0
 
 	return nil
 }
 
-// Close flushes any buffered data and closes the underlying file.
-// Should be called during application shutdown to ensure no logs are lost.
-func (w *rotatingWriter) Close() error {
+// Flush forces buffered entries to disk; severe records use it so warnings
+// and errors never sit in the buffer.
+func (w *rotatingWriter) Flush() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Flush any remaining buffered data
-	err := w.buf.Flush()
-	if err != nil {
-		// Still close the file even if flush fails
-		w.file.Close()
-
-		return err
+	if w.closed {
+		return fmt.Errorf("log writer is closed")
 	}
 
-	return w.file.Close()
+	return w.buf.Flush()
+}
+
+func (w *rotatingWriter) Close() error {
+	w.mu.Lock()
+
+	if w.closed {
+		w.mu.Unlock()
+		return fmt.Errorf("log writer is already closed")
+	}
+	w.closed = true
+
+	flushErr := w.buf.Flush()
+	closeErr := w.file.Close()
+	w.mu.Unlock()
+
+	close(w.stop)
+	<-w.done
+
+	if flushErr != nil {
+		return flushErr
+	}
+	return closeErr
 }

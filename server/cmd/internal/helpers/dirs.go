@@ -5,9 +5,7 @@ import (
 	"os"
 )
 
-// GetOrCreateDir checks if a directory exists and is readable, creating it if necessary.
-// Returns true if the directory was created, false if it already existed.
-// Returns an error if the path exists but is not a directory, or if permissions prevent access.
+// GetOrCreateDir ensures path is a readable directory and reports whether it was created.
 func GetOrCreateDir(path string) (bool, error) {
 	if path == "" {
 		return false, fmt.Errorf("path cannot be empty")

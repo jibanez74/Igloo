@@ -1,422 +1,325 @@
 package logger
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
 func TestNewRotatingWriter(t *testing.T) {
-	t.Run("creates new file if it does not exist", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("creates a new file", func(t *testing.T) {
+		rw, path := newTestWriter(t, 1024, "")
 
-		rw, err := newRotatingWriter(path, 100)
+		if rw.size != 0 {
+			t.Errorf("size = %d, want 0", rw.size)
+		}
+
+		if rw.maxBytes != 1024 {
+			t.Errorf("maxBytes = %d, want 1024", rw.maxBytes)
+		}
+
+		_, err := os.Stat(path)
 		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		defer rw.Close()
-
-		if rw.lines != 0 {
-			t.Errorf("expected 0 lines, got %d", rw.lines)
-		}
-
-		if rw.maxLines != 100 {
-			t.Errorf("expected maxLines 100, got %d", rw.maxLines)
-		}
-
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			t.Error("expected file to be created")
+			t.Fatalf("expected the log file to be created: %v", err)
 		}
 	})
 
-	t.Run("counts existing lines in file", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("seeds the size from an existing file", func(t *testing.T) {
+		seed := "line1\nline2\n"
+		rw, _ := newTestWriter(t, 1024, seed)
 
-		// Create file with 5 lines
-		content := "line1\nline2\nline3\nline4\nline5\n"
-		err := os.WriteFile(path, []byte(content), 0o644)
-		if err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
-
-		rw, err := newRotatingWriter(path, 100)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		defer rw.Close()
-
-		if rw.lines != 5 {
-			t.Errorf("expected 5 lines, got %d", rw.lines)
+		if rw.size != int64(len(seed)) {
+			t.Errorf("size = %d, want %d", rw.size, len(seed))
 		}
 	})
 
-	t.Run("returns error for invalid path", func(t *testing.T) {
-		// Try to create in a non-existent directory
-		path := "/nonexistent/directory/test.log"
-
-		_, err := newRotatingWriter(path, 100)
+	t.Run("rejects a non positive byte cap", func(t *testing.T) {
+		_, err := newRotatingWriter(filepath.Join(t.TempDir(), "test.log"), 0)
 		if err == nil {
-			t.Error("expected error for invalid path")
+			t.Fatal("expected an error")
+		}
+
+		if !strings.Contains(err.Error(), "max bytes must be positive") {
+			t.Errorf("error = %v, want a max bytes error", err)
+		}
+	})
+
+	t.Run("rejects an unopenable path", func(t *testing.T) {
+		_, err := newRotatingWriter(filepath.Join(t.TempDir(), "missing", "test.log"), 1024)
+		if err == nil {
+			t.Fatal("expected an error")
 		}
 	})
 }
 
 func TestRotatingWriter_Write(t *testing.T) {
-	t.Run("writes single line", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("reports the written byte count", func(t *testing.T) {
+		rw, _ := newTestWriter(t, 1024, "")
 
-		rw, err := newRotatingWriter(path, 100)
+		entry := []byte("test log line\n")
+
+		n, err := rw.Write(entry)
 		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-		defer rw.Close()
-
-		n, err := rw.Write([]byte("test log line\n"))
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("write: %v", err)
 		}
 
-		if n != 14 {
-			t.Errorf("expected 14 bytes written, got %d", n)
+		if n != len(entry) {
+			t.Errorf("n = %d, want %d", n, len(entry))
 		}
 
-		if rw.lines != 1 {
-			t.Errorf("expected 1 line, got %d", rw.lines)
+		if rw.size != int64(len(entry)) {
+			t.Errorf("size = %d, want %d", rw.size, len(entry))
 		}
 	})
 
-	t.Run("writes multiple lines", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("entries reach the file after a flush", func(t *testing.T) {
+		rw, path := newTestWriter(t, 1024, "")
 
-		rw, err := newRotatingWriter(path, 100)
+		_, err := rw.Write([]byte("buffered line\n"))
 		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-		defer rw.Close()
-
-		for i := 0; i < 10; i++ {
-			_, err := rw.Write([]byte("log line\n"))
-			if err != nil {
-				t.Fatalf("write %d failed: %v", i, err)
-			}
+			t.Fatalf("write: %v", err)
 		}
 
-		if rw.lines != 10 {
-			t.Errorf("expected 10 lines, got %d", rw.lines)
+		err = rw.Flush()
+		if err != nil {
+			t.Fatalf("flush: %v", err)
+		}
+
+		lines := readLogLines(t, path)
+		if len(lines) != 1 || lines[0] != "buffered line" {
+			t.Errorf("lines = %q, want [buffered line]", lines)
 		}
 	})
 
-	t.Run("persists data to disk", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("entries reach the file on close", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.log")
 
-		rw, err := newRotatingWriter(path, 100)
+		rw, err := newRotatingWriter(path, 1024)
 		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
+			t.Fatalf("create rotating writer: %v", err)
 		}
 
-		_, err = rw.Write([]byte("persisted line\n"))
+		_, err = rw.Write([]byte("closed line\n"))
 		if err != nil {
-			t.Fatalf("write failed: %v", err)
+			t.Fatalf("write: %v", err)
 		}
 
-		rw.Close()
-
-		content, err := os.ReadFile(path)
+		err = rw.Close()
 		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
+			t.Fatalf("close: %v", err)
 		}
 
-		if string(content) != "persisted line\n" {
-			t.Errorf("expected 'persisted line\\n', got %q", string(content))
+		lines := readLogLines(t, path)
+		if len(lines) != 1 || lines[0] != "closed line" {
+			t.Errorf("lines = %q, want [closed line]", lines)
 		}
 	})
 }
 
 func TestRotatingWriter_Rotate(t *testing.T) {
-	t.Run("rotates when max lines reached", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("rotates once the byte cap would be exceeded", func(t *testing.T) {
+		entry := []byte("0123456789\n")
+		rw, path := newTestWriter(t, int64(3*len(entry)), "")
 
-		maxLines := 10
-		rw, err := newRotatingWriter(path, maxLines)
-		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-		defer rw.Close()
-
-		// Write exactly maxLines
-		for i := 0; i < maxLines; i++ {
-			_, err := rw.Write([]byte("line\n"))
+		for i := 0; i < 3; i++ {
+			_, err := rw.Write(entry)
 			if err != nil {
-				t.Fatalf("write %d failed: %v", i, err)
+				t.Fatalf("write %d: %v", i, err)
 			}
 		}
 
-		// At this point we have 10 lines, next write should trigger rotation
-		if rw.lines != maxLines {
-			t.Errorf("expected %d lines before rotation trigger, got %d", maxLines, rw.lines)
-		}
-
-		// Write one more to trigger rotation
-		_, err = rw.Write([]byte("trigger rotation\n"))
+		_, err := rw.Write([]byte("trigger\n"))
 		if err != nil {
-			t.Fatalf("rotation write failed: %v", err)
+			t.Fatalf("rotation write: %v", err)
 		}
 
-		// After rotation: kept 5 lines (half of 10) + 1 new = 6
-		expectedLines := (maxLines / 2) + 1
-		if rw.lines != expectedLines {
-			t.Errorf("expected %d lines after rotation, got %d", expectedLines, rw.lines)
+		err = rw.Flush()
+		if err != nil {
+			t.Fatalf("flush: %v", err)
+		}
+
+		lines := readLogLines(t, path)
+		if len(lines) != 1 || lines[0] != "trigger" {
+			t.Errorf("live file = %q, want only the post-rotation entry", lines)
+		}
+
+		rotated := readLogLines(t, path+".1")
+		if len(rotated) != 3 {
+			t.Errorf("rotated file holds %d lines, want the 3 pre-rotation entries", len(rotated))
 		}
 	})
 
-	t.Run("keeps newest lines after rotation", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("keeps at most two generations", func(t *testing.T) {
+		entry := []byte("aaaaaaaaa\n")
+		rw, path := newTestWriter(t, int64(2*len(entry)), "")
 
-		maxLines := 6
-		rw, err := newRotatingWriter(path, maxLines)
-		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-
-		// Write lines with identifiable content
-		for i := 1; i <= maxLines; i++ {
-			line := strings.Repeat("x", i) + "\n" // "x", "xx", "xxx", etc.
-			_, err := rw.Write([]byte(line))
+		for i := 1; i <= 9; i++ {
+			_, err := rw.Write([]byte(fmt.Sprintf("line%04d0\n", i)))
 			if err != nil {
-				t.Fatalf("write %d failed: %v", i, err)
+				t.Fatalf("write %d: %v", i, err)
 			}
 		}
 
-		// Trigger rotation with a final line
-		_, err = rw.Write([]byte("final\n"))
+		err := rw.Flush()
 		if err != nil {
-			t.Fatalf("final write failed: %v", err)
+			t.Fatalf("flush: %v", err)
 		}
 
-		rw.Close()
+		live := readLogLines(t, path)
+		rotated := readLogLines(t, path+".1")
 
-		// Read and verify content
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
+		if len(live)+len(rotated) != 3 {
+			t.Errorf("retained %d lines across generations, want 3", len(live)+len(rotated))
 		}
 
-		lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
-
-		// Should have kept the newest half (3 lines: "xxxx", "xxxxx", "xxxxxx") + "final"
-		if len(lines) != 4 {
-			t.Errorf("expected 4 lines after rotation, got %d: %v", len(lines), lines)
+		all := append(rotated, live...)
+		want := []string{"line00070", "line00080", "line00090"}
+		if strings.Join(all, "|") != strings.Join(want, "|") {
+			t.Errorf("retained = %q, want the newest entries %q", all, want)
 		}
 
-		// First kept line should be "xxxx" (the 4th original line)
-		if lines[0] != "xxxx" {
-			t.Errorf("expected first line to be 'xxxx', got %q", lines[0])
-		}
-
-		// Last line should be "final"
-		if lines[len(lines)-1] != "final" {
-			t.Errorf("expected last line to be 'final', got %q", lines[len(lines)-1])
+		_, err = os.Stat(path + ".2")
+		if !os.IsNotExist(err) {
+			t.Errorf("expected no third generation, stat err: %v", err)
 		}
 	})
 
-	t.Run("handles multiple rotations", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("writes an entry larger than the cap without rotating first", func(t *testing.T) {
+		rw, path := newTestWriter(t, 8, "")
 
-		maxLines := 4
-		rw, err := newRotatingWriter(path, maxLines)
+		big := longLine() + "\n"
+		_, err := rw.Write([]byte(big))
 		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-		defer rw.Close()
-
-		// Write 12 lines - should trigger rotation multiple times
-		for i := 0; i < 12; i++ {
-			_, err := rw.Write([]byte("line\n"))
-			if err != nil {
-				t.Fatalf("write %d failed: %v", i, err)
-			}
+			t.Fatalf("oversized write: %v", err)
 		}
 
-		// Should never exceed maxLines (approximately)
-		if rw.lines > maxLines {
-			t.Errorf("expected lines <= %d, got %d", maxLines, rw.lines)
+		err = rw.Flush()
+		if err != nil {
+			t.Fatalf("flush: %v", err)
+		}
+
+		lines := readLogLines(t, path)
+		if len(lines) != 1 || lines[0] != longLine() {
+			t.Errorf("expected the oversized entry to be written whole")
 		}
 	})
 }
 
 func TestRotatingWriter_Close(t *testing.T) {
-	t.Run("flushes data on close", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("closes a writer with no writes", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.log")
 
-		rw, err := newRotatingWriter(path, 100)
+		rw, err := newRotatingWriter(path, 1024)
 		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-
-		_, err = rw.Write([]byte("buffered data\n"))
-		if err != nil {
-			t.Fatalf("write failed: %v", err)
+			t.Fatalf("create rotating writer: %v", err)
 		}
 
 		err = rw.Close()
 		if err != nil {
-			t.Fatalf("close failed: %v", err)
-		}
-
-		// Verify data was flushed
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("failed to read file: %v", err)
-		}
-
-		if string(content) != "buffered data\n" {
-			t.Errorf("expected 'buffered data\\n', got %q", string(content))
+			t.Errorf("close: %v", err)
 		}
 	})
 
-	t.Run("can close empty writer", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("repeated close reports an error", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.log")
 
-		rw, err := newRotatingWriter(path, 100)
+		rw, err := newRotatingWriter(path, 1024)
 		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
+			t.Fatalf("create rotating writer: %v", err)
 		}
 
 		err = rw.Close()
 		if err != nil {
-			t.Errorf("expected no error closing empty writer, got %v", err)
-		}
-	})
-}
-
-func TestCountLines(t *testing.T) {
-	t.Run("counts zero lines in empty file", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "empty.log")
-
-		f, err := os.Create(path)
-		if err != nil {
-			t.Fatalf("failed to create file: %v", err)
-		}
-		defer f.Close()
-
-		count, err := countLines(f)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("first close: %v", err)
 		}
 
-		if count != 0 {
-			t.Errorf("expected 0 lines, got %d", count)
+		err = rw.Close()
+		if err == nil {
+			t.Error("expected an error on the second close")
 		}
 	})
 
-	t.Run("counts lines correctly", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "test.log")
+	t.Run("write and flush after close report errors", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.log")
 
-		content := "line1\nline2\nline3\n"
-		err := os.WriteFile(path, []byte(content), 0o644)
+		rw, err := newRotatingWriter(path, 1024)
 		if err != nil {
-			t.Fatalf("failed to create file: %v", err)
+			t.Fatalf("create rotating writer: %v", err)
 		}
 
-		f, err := os.Open(path)
+		err = rw.Close()
 		if err != nil {
-			t.Fatalf("failed to open file: %v", err)
-		}
-		defer f.Close()
-
-		count, err := countLines(f)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
+			t.Fatalf("close: %v", err)
 		}
 
-		if count != 3 {
-			t.Errorf("expected 3 lines, got %d", count)
+		_, err = rw.Write([]byte("after close\n"))
+		if err == nil {
+			t.Error("expected an error writing to a closed writer")
+		}
+
+		err = rw.Flush()
+		if err == nil {
+			t.Error("expected an error flushing a closed writer")
 		}
 	})
 }
 
 func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
-	t.Run("handles concurrent writes safely", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "concurrent.log")
+	const (
+		goroutines = 5
+		perRoutine = 20
+	)
 
-		rw, err := newRotatingWriter(path, 100)
-		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-		defer rw.Close()
+	entry := "concurrent write\n"
+	maxBytes := int64(20 * len(entry))
 
-		// Spawn multiple goroutines writing concurrently
-		done := make(chan bool, 10)
-		for i := 0; i < 10; i++ {
-			go func(id int) {
-				for j := 0; j < 10; j++ {
-					_, err := rw.Write([]byte("concurrent write\n"))
-					if err != nil {
-						t.Errorf("goroutine %d write %d failed: %v", id, j, err)
-					}
+	rw, path := newTestWriter(t, maxBytes, "")
+
+	errs := make(chan error, goroutines*perRoutine)
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < perRoutine; j++ {
+				_, err := rw.Write([]byte(entry))
+				if err != nil {
+					errs <- err
 				}
-				done <- true
-			}(i)
-		}
+			}
+		}()
+	}
 
-		// Wait for all goroutines
-		for i := 0; i < 10; i++ {
-			<-done
-		}
+	wg.Wait()
+	close(errs)
 
-		// Should have 100 lines (10 goroutines * 10 writes)
-		if rw.lines != 100 {
-			t.Errorf("expected 100 lines, got %d", rw.lines)
-		}
-	})
+	for err := range errs {
+		t.Errorf("concurrent write: %v", err)
+	}
 
-	t.Run("handles concurrent writes with rotation", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "concurrent_rotate.log")
+	err := rw.Flush()
+	if err != nil {
+		t.Fatalf("flush: %v", err)
+	}
 
-		maxLines := 20
-		rw, err := newRotatingWriter(path, maxLines)
-		if err != nil {
-			t.Fatalf("failed to create writer: %v", err)
-		}
-		defer rw.Close()
+	// Interleaving changes nothing observable: both generations stay inside
+	// the byte cap and the live file matches the size counter.
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat live log: %v", err)
+	}
 
-		// Spawn goroutines that will trigger rotation
-		done := make(chan bool, 5)
-		for i := 0; i < 5; i++ {
-			go func(id int) {
-				for j := 0; j < 20; j++ {
-					_, err := rw.Write([]byte("concurrent\n"))
-					if err != nil {
-						t.Errorf("goroutine %d write %d failed: %v", id, j, err)
-					}
-				}
-				done <- true
-			}(i)
-		}
+	if info.Size() != rw.size {
+		t.Errorf("size counter = %d, but the file holds %d bytes", rw.size, info.Size())
+	}
 
-		// Wait for all goroutines
-		for i := 0; i < 5; i++ {
-			<-done
-		}
-
-		// Lines should be within reasonable bounds (rotation keeps it from exploding)
-		if rw.lines > maxLines {
-			t.Errorf("expected lines <= %d after rotations, got %d", maxLines, rw.lines)
-		}
-	})
+	if info.Size() > maxBytes {
+		t.Errorf("live file = %d bytes, want it within the %d byte cap", info.Size(), maxBytes)
+	}
 }

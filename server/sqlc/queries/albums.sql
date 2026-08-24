@@ -1,22 +1,27 @@
 -- name: GetAlbumByID :one
 SELECT
   *
-FROM
-  albums
-WHERE
-  id = ?
-LIMIT
-  1;
+FROM albums
+WHERE id = ?
+LIMIT 1;
 
 -- name: GetAlbumBySpotifyID :one
 SELECT
   *
-FROM
-  albums
-WHERE
-  spotify_id = ?
-LIMIT
-  1;
+FROM albums
+WHERE spotify_id = ?
+LIMIT 1;
+
+-- name: GetAlbumByTitleAndMusician :one
+-- The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
+-- target exactly, so a NULL-musician lookup finds a row written with '' and
+-- vice versa.
+SELECT
+  *
+FROM albums
+WHERE title = ?
+  AND COALESCE(musician, '') = COALESCE(sqlc.arg(musician), '')
+LIMIT 1;
 
 -- name: GetLatestAlbums :many
 SELECT
@@ -25,12 +30,9 @@ SELECT
   cover,
   musician,
   year
-FROM
-  albums
-ORDER BY
-  created_at DESC
-LIMIT
-  12;
+FROM albums
+ORDER BY created_at DESC
+LIMIT 12;
 
 -- name: GetAlbumsAlphabetical :many
 -- Returns albums sorted alphabetically by title with pagination.
@@ -41,46 +43,52 @@ SELECT
   cover,
   musician,
   year
-FROM
-  albums
+FROM albums
 ORDER BY
   CASE
-    WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z'
-    THEN UPPER(SUBSTR(title, 1, 1))
+    WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(title, 1, 1))
     ELSE '#'
   END,
   UPPER(title)
-LIMIT ? OFFSET ?;
+LIMIT ?
+OFFSET ?;
+
+-- name: UpdateAlbumSpotifyCover :one
+UPDATE albums
+SET
+  cover = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
 
 -- name: UpsertAlbum :one
-INSERT INTO
-  albums (
-    title,
-    sort_title,
-    musician,
-    spotify_id,
-    spotify_popularity,
-    release_date,
-    year,
-    total_tracks,
-    cover
-  )
+INSERT INTO albums (
+  title,
+  sort_title,
+  spotify_id,
+  spotify_popularity,
+  musician,
+  release_date,
+  year,
+  total_tracks,
+  cover
+)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (title, musician) DO
-UPDATE
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+-- Matches idx_albums_title_musician, which treats a missing musician as '' so an
+-- untagged album cannot be inserted twice.
+ON CONFLICT (title, COALESCE(musician, '')) DO UPDATE
 SET
   sort_title = excluded.sort_title,
   spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(
-    excluded.spotify_popularity,
-    albums.spotify_popularity
-  ),
+  spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
   cover = COALESCE(excluded.cover, albums.cover),
-  updated_at = CURRENT_TIMESTAMP RETURNING *;
+  updated_at = CURRENT_TIMESTAMP
+RETURNING *;
 
 -- name: DeleteAlbum :exec
--- Deleting an album will cascade delete all associated tracks
-DELETE FROM albums WHERE id = ?;
+DELETE FROM albums
+WHERE id = ?;

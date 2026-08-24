@@ -2,12 +2,30 @@
 // Types for the global audio player state and controls
 
 import type { TrackType } from "./music";
+import type { NullableInt64, NullableString } from "./nullable";
 
 // Album info passed to player when starting playback
 export type AlbumInfoType = {
   cover: string | null;
   title: string;
   musician: string | null;
+};
+
+export type PlayableTrackData = {
+  id: number;
+  title: string;
+  file_path: string;
+  duration: number;
+  codec: string;
+  bit_rate: number;
+  album_id: NullableInt64;
+  musician_id: NullableInt64;
+  album_cover: NullableString;
+  musician_name: NullableString;
+
+  // Present on list/search rows; used to keep the player header accurate in
+  // mixed queues. The shuffle/play-all endpoints may omit it.
+  album_title?: NullableString;
 };
 
 // State for the global audio player
@@ -17,6 +35,9 @@ export type AudioPlayerState = {
   albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
+  isPlaying: boolean;
+  isExpanded: boolean;
+  isKeyboardSuspended: boolean;
 
   // indicates if we are playing tracks in shuffle mode
   isShuffleMode: boolean;
@@ -24,17 +45,25 @@ export type AudioPlayerState = {
   // Whether "play all" mode is enabled (plays through entire library)
   isPlayAllMode: boolean;
 
-  // Set of track IDs already played during shuffle (to avoid repeats)
-  shufflePlayedIds: Set<number>;
+  // How many played tracks were trimmed from the front of an endless
+  // shuffle/play-all queue; keeps the "Track N of M" counter monotonic
+  trimmedCount: number;
 };
 
-// Controls and actions available for the audio player
-export type AudioPlayerControls = {
+// Actions available for the audio player
+export type AudioPlayerActions = {
   // Play a single track within a playlist context
   playTrack: (
     track: TrackType,
     playlist: TrackType[],
     albumInfo: AlbumInfoType
+  ) => void;
+
+  // Play a track from a mixed list (search results, library tracks tab),
+  // queueing the whole list with per-track cover/musician metadata
+  playTrackFromList: (
+    rawTracks: PlayableTrackData[],
+    startTrackId: number
   ) => void;
 
   // Play an entire album from the beginning
@@ -55,18 +84,18 @@ export type AudioPlayerControls = {
   // Stop playback and clear the player
   stop: () => void;
 
-  togglePlay: () => void;
-  isPlaying: boolean;
+  // Pause playback without clearing the player
+  pause: () => void;
 
-  // indicates if the player is in full screen mode or not
-  isExpanded: boolean;
+  togglePlay: () => void;
 
   // Expand the player to fullscreen mode
   expand: () => void;
 
   // Minimize the player to the bottom bar
   minimize: () => void;
-};
 
-// Combined audio player context type
-export type AudioPlayerContextType = AudioPlayerState & AudioPlayerControls;
+  // Suspend/resume global keyboard shortcuts (used when another player has focus)
+  suspendKeyboard: () => void;
+  resumeKeyboard: () => void;
+};

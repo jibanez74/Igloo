@@ -1,23 +1,15 @@
 // MUSIC LIBRARY TYPES
 // Types for albums, tracks, artists, and related music data
 
-// Nullable types - represent nullable database columns from Go backend
-// The `Valid` boolean indicates whether the value is present (not NULL)
+import type {
+  NullableFloat64,
+  NullableInt64,
+  NullableString,
+} from "./nullable";
 
-export type NullableString = {
-  String: string;
-  Valid: boolean;
-};
+export type { NullableFloat64, NullableInt64, NullableString } from "./nullable";
 
-export type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
-
-export type NullableFloat64 = {
-  Float64: number;
-  Valid: boolean;
-};
+export type TrackItemVariant = "album" | "musician" | "library" | "playlist";
 
 // Simplified album type for list views and cards
 export type SimpleAlbumType = {
@@ -122,6 +114,16 @@ export type TracksListResponseType = {
   has_more: boolean;
 };
 
+// Page-based paginated response for liked tracks
+export type LikedTracksResponseType = {
+  tracks: TrackListItemType[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  has_more: boolean;
+};
+
 // Music library statistics for the dashboard
 export type MusicStatsType = {
   total_albums: number;
@@ -141,6 +143,42 @@ export type AlbumsListResponseType = {
   page: number;
   per_page: number;
   total_pages: number;
+};
+
+export type SpotifyStatusType = {
+  available: boolean;
+};
+
+export type SpotifyAlbumSearchRequest = {
+  title: string;
+};
+
+export type SpotifyAlbumSearchResultType = {
+  spotify_id: string;
+  title: string;
+  artist_names: string[];
+  release_date: string;
+  album_type: string;
+  total_tracks: number;
+  cover_url: string;
+  spotify_url: string;
+  already_in_library: boolean;
+  library_album_id?: number;
+};
+
+export type SpotifyTrackSearchRequest = {
+  title: string;
+};
+
+export type SpotifyTrackSearchResultType = {
+  spotify_id: string;
+  title: string;
+  artist_names: string[];
+  album_name: string;
+  release_date: string;
+  duration_ms: number;
+  cover_url: string;
+  spotify_url: string;
 };
 
 // Simplified musician type for list views and cards
@@ -171,6 +209,7 @@ export type VirtualItemLetter = {
 export type VirtualItemTrack = {
   type: "track";
   track: TrackListItemType;
+  trackIndex: number;
 };
 
 export type VirtualItem = VirtualItemLetter | VirtualItemTrack;
@@ -235,7 +274,6 @@ export type PlaylistSummaryType = {
   description: NullableString;
   cover_image: NullableString;
   is_public: boolean;
-  folder_id: NullableInt64;
   created_at: string;
   updated_at: string;
   track_count: number;
@@ -296,7 +334,6 @@ export type PlaylistType = {
   description: NullableString;
   cover_image: NullableString;
   is_public: boolean;
-  folder_id: NullableInt64;
   created_at: string;
   updated_at: string;
 };
@@ -311,108 +348,10 @@ export type PlaylistDetailResponseType = {
   collaborators: PlaylistCollaboratorType[] | null;
 };
 
-// ============================================================================
-// USER LISTENING STATS TYPES
-// ============================================================================
-
-// Overall listening statistics for a user
-export type UserListeningStatsType = {
-  total_plays: number;
-  total_time_listened: number;
-  unique_tracks_played: number;
-  liked_tracks_count: number;
-};
-
-// Top track with play stats
-export type TopTrackType = {
-  play_count: number;
-  total_time_played: number;
-  last_played_at: NullableString;
-  id: number;
-  title: string;
-  duration: number;
-  file_path: string;
-  album_id: NullableInt64;
-  album_title: NullableString;
-  album_cover: NullableString;
-  musician_id: NullableInt64;
-  musician_name: NullableString;
-};
-
-// Top musician with aggregated stats
-export type TopMusicianType = {
-  id: number;
+export type CreatePlaylistRequest = {
   name: string;
-  thumb: NullableString;
-  total_play_count: NullableFloat64;
-  total_time_listened: NullableFloat64;
-  unique_tracks_played: number;
+  description?: string;
+  is_public?: boolean;
 };
 
-// Top genre with aggregated stats
-export type TopGenreType = {
-  id: number;
-  tag: string;
-  total_play_count: NullableFloat64;
-  total_time_listened: NullableFloat64;
-  unique_tracks_played: number;
-};
-
-// Top album with aggregated stats
-export type TopAlbumType = {
-  id: number;
-  title: string;
-  cover: NullableString;
-  musician: NullableString;
-  year: NullableInt64;
-  total_play_count: NullableFloat64;
-  total_time_listened: NullableFloat64;
-  unique_tracks_played: number;
-};
-
-// Recently played track
-export type RecentlyPlayedTrackType = {
-  played_at: string;
-  duration_played: number;
-  id: number;
-  title: string;
-  duration: number;
-  file_path: string;
-  album_id: NullableInt64;
-  album_title: NullableString;
-  album_cover: NullableString;
-  musician_id: NullableInt64;
-  musician_name: NullableString;
-};
-
-// API Response types for user stats
-export type UserListeningStatsResponseType = UserListeningStatsType;
-
-export type TopTracksResponseType = {
-  tracks: TopTrackType[];
-  limit: number;
-  offset: number;
-};
-
-export type TopMusiciansResponseType = {
-  musicians: TopMusicianType[];
-  limit: number;
-  offset: number;
-};
-
-export type TopGenresResponseType = {
-  genres: TopGenreType[];
-  limit: number;
-};
-
-export type TopAlbumsResponseType = {
-  albums: TopAlbumType[];
-  limit: number;
-  offset: number;
-};
-
-export type RecentlyPlayedResponseType = {
-  tracks: RecentlyPlayedTrackType[];
-  limit: number;
-  offset: number;
-};
+export type UpdatePlaylistRequest = CreatePlaylistRequest;
