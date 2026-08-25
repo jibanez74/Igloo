@@ -239,7 +239,7 @@ func isInterlacedFieldOrder(fieldOrder string) bool {
 
 func probeExternalVideoStream(t *testing.T, prober ffprobe.FfprobeInterface, path string) ffprobe.Stream {
 	t.Helper()
-	meta, err := prober.GetMetadata(path)
+	meta, err := prober.GetMetadata(context.Background(), path)
 	if err != nil {
 		t.Fatalf("probe %s: %v", path, err)
 	}

@@ -14,6 +14,12 @@ import (
 
 // Dependencies are the application services used by Scanner. Callbacks keep
 // the scanner independent from the HTTP application package.
+//
+// DB, Queries, Logger and Ffprobe are required. Tmdb is optional -- without it
+// movies are indexed from their filenames alone. The remaining fields are
+// defaulted by New, so a caller that does not care about scan cancellation,
+// shutdown tracking, cross-scanner write serialization, or cache invalidation
+// may leave them zero.
 type Dependencies struct {
 	DB                       *sql.DB
 	Queries                  *database.Queries
@@ -57,22 +63,31 @@ type StartResult struct {
 	Status    StartStatus
 }
 
-// New constructs a scanner. Dependencies are intentionally not validated so
-// startup keeps the same failure behavior as the previous application-owned
-// implementation.
+// New constructs a scanner, defaulting the optional dependencies so the rest
+// of the package can use them unconditionally. The required ones are left
+// as-is: startup keeps the same failure behavior as the previous
+// application-owned implementation.
 func New(deps Dependencies) *Scanner {
+	if deps.ScanContext == nil {
+		deps.ScanContext = context.Background()
+	}
+	if deps.Wait == nil {
+		deps.Wait = &sync.WaitGroup{}
+	}
+	if deps.ScannerDBMu == nil {
+		deps.ScannerDBMu = &sync.Mutex{}
+	}
+	if deps.CurrentMoviesDirectory == nil {
+		deps.CurrentMoviesDirectory = func() sql.NullString { return sql.NullString{} }
+	}
+	if deps.InvalidateCommittedMovie == nil {
+		deps.InvalidateCommittedMovie = func(int64) {}
+	}
+
 	return &Scanner{
 		db: deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		tmdb: deps.Tmdb, scanContext: deps.ScanContext, wait: deps.Wait,
 		scannerDBMu: deps.ScannerDBMu, currentMoviesDirectory: deps.CurrentMoviesDirectory,
 		invalidateCommittedMovie: deps.InvalidateCommittedMovie,
 	}
-}
-
-func (s *Scanner) context() context.Context {
-	if s.scanContext != nil {
-		return s.scanContext
-	}
-
-	return context.Background()
 }

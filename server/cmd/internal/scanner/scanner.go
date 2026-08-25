@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
+	"maps"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -55,6 +56,63 @@ func BuildScanIndex[T any](rows []T, extract func(T) (string, int64)) map[string
 	return index
 }
 
+// ScanCache is a two-level map: transaction-local entries over an optional
+// read-only base layer. The scan-lifetime cache uses just the local layer; the
+// per-item overlay created by Overlay starts empty and reads through to the
+// scan layer. Discarding the overlay after a rolled-back transaction discards
+// its entries, which would otherwise require cloning every map per item --
+// O(items x library) -- and now costs only the new entries.
+//
+// It is shared by the movie and music scanners to memoize entity ids and
+// already-written join rows within a scan.
+type ScanCache[K comparable, V any] struct {
+	local map[K]V
+	base  map[K]V // nil on the scan-lifetime cache
+}
+
+func NewScanCache[K comparable, V any]() ScanCache[K, V] {
+	return ScanCache[K, V]{local: make(map[K]V)}
+}
+
+// Overlay returns an empty transaction-local layer over this cache's entries.
+// Only meaningful on the scan-lifetime cache (base == nil); overlays are never
+// stacked.
+func (c ScanCache[K, V]) Overlay() ScanCache[K, V] {
+	return ScanCache[K, V]{local: make(map[K]V), base: c.local}
+}
+
+func (c ScanCache[K, V]) Get(k K) (V, bool) {
+	v, ok := c.local[k]
+	if ok {
+		return v, true
+	}
+
+	if c.base != nil {
+		v, ok = c.base[k]
+		if ok {
+			return v, true
+		}
+	}
+
+	var zero V
+	return zero, false
+}
+
+func (c ScanCache[K, V]) Has(k K) bool {
+	_, ok := c.Get(k)
+	return ok
+}
+
+func (c ScanCache[K, V]) Set(k K, v V) {
+	c.local[k] = v
+}
+
+// MergeFrom publishes another cache's local entries into this cache's local
+// layer, after the transaction that wrote them committed.
+func (c ScanCache[K, V]) MergeFrom(other ScanCache[K, V]) {
+	maps.Copy(c.local, other.local)
+}
+
 // ScanGuard is a single-flight guard ensuring only one scan of a given kind runs
 // at a time. The zero value is ready to use.
 type ScanGuard struct {
@@ -83,33 +141,12 @@ func (g *ScanGuard) Finish() {
 	g.mu.Unlock()
 }
 
-// WalkMediaLibrary walks root, invoking onFile for each regular file whose
-// extension is in validExts. Per-entry errors are wrapped with context and
-// passed to onError (so the caller can log and count them) and walking
-// continues; an error reading the root itself aborts the walk and is returned.
-func WalkMediaLibrary(
-	root string,
-	validExts map[string]bool,
-	onError func(error),
-	onFile func(ScanFile) error,
-) error {
-	return walkMediaLibrary(context.Background(), root, validExts, onError, onFile)
-}
-
-// WalkMediaLibraryContext walks a media library until it completes or ctx is
-// canceled. It otherwise has the same per-entry error behavior as
-// WalkMediaLibrary.
+// WalkMediaLibraryContext walks root until it completes or ctx is canceled,
+// invoking onFile for each regular file whose extension is in validExts.
+// Per-entry errors are wrapped with context and passed to onError (so the
+// caller can log and count them) and walking continues; an error reading the
+// root itself aborts the walk and is returned.
 func WalkMediaLibraryContext(
-	ctx context.Context,
-	root string,
-	validExts map[string]bool,
-	onError func(error),
-	onFile func(ScanFile) error,
-) error {
-	return walkMediaLibrary(ctx, root, validExts, onError, onFile)
-}
-
-func walkMediaLibrary(
 	ctx context.Context,
 	root string,
 	validExts map[string]bool,

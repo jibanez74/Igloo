@@ -24,18 +24,17 @@ func (s *Scanner) Start() StartResult {
 		return result
 	}
 
-	if s.wait != nil {
-		s.wait.Add(1)
-	}
-	go s.runMovieScan()
+	// Add/Done are paired here so runMovieScan stays callable on its own.
+	s.wait.Add(1)
+	go func() {
+		defer s.wait.Done()
+		s.runMovieScan()
+	}()
 	result.Status = StartStarted
 	return result
 }
 
 func (s *Scanner) runMovieScan() {
-	if s.wait != nil {
-		defer s.wait.Done()
-	}
 	defer s.guard.Finish()
 
 	directory := s.currentMoviesDirectory()
@@ -46,7 +45,7 @@ func (s *Scanner) runMovieScan() {
 
 	s.logger.Info(fmt.Sprintf("scanning movies directory: %s", directory.String))
 
-	ctx := s.context()
+	ctx := s.scanContext
 	errorCount := 0
 	moviesScanned := 0
 	moviesSkipped := 0

@@ -38,9 +38,7 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 	// Both caches describe the committed row, so they are dropped here rather
 	// than inside the transaction: evicting earlier lets a concurrent reader
 	// republish the pre-rescan file path after the new one commits.
-	if s.invalidateCommittedMovie != nil {
-		s.invalidateCommittedMovie(movieID)
-	}
+	s.invalidateCommittedMovie(movieID)
 
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
@@ -60,39 +58,9 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 	}
 
 	if resolved.tmdbMovie != nil {
-		err = qtx.DeleteMovieCast(ctx, movie.ID)
+		err = applyTmdbMetadata(ctx, qtx, scan, movie.ID, resolved.tmdbMovie)
 		if err != nil {
-			return 0, fmt.Errorf("delete existing cast failed: %w", err)
-		}
-
-		err = qtx.DeleteMovieCrew(ctx, movie.ID)
-		if err != nil {
-			return 0, fmt.Errorf("delete existing crew failed: %w", err)
-		}
-
-		err = processProductionCompanies(ctx, qtx, movie.ID, resolved.tmdbMovie.ProductionCompanies)
-		if err != nil {
-			return 0, fmt.Errorf("process production companies failed: %w", err)
-		}
-
-		err = processCast(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Cast)
-		if err != nil {
-			return 0, fmt.Errorf("process cast failed: %w", err)
-		}
-
-		err = processCrew(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Crew)
-		if err != nil {
-			return 0, fmt.Errorf("process crew failed: %w", err)
-		}
-
-		err = processMovieGenres(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Genres)
-		if err != nil {
-			return 0, fmt.Errorf("process genres failed: %w", err)
-		}
-
-		err = processExtraVideos(ctx, qtx, movie.ID, resolved.tmdbMovie.Videos.Results)
-		if err != nil {
-			return 0, fmt.Errorf("process extra videos failed: %w", err)
+			return 0, err
 		}
 	}
 
@@ -115,6 +83,62 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 // ---------------------------------------------------------------------------
 // TMDB metadata entities
 // ---------------------------------------------------------------------------
+
+// ApplyTmdbMetadata replaces every relationship a movie owns by virtue of its
+// TMDB match -- production companies, cast, crew, genres and extra videos --
+// inside qtx's transaction. It is the single definition of "what TMDB owns on
+// a movie", shared by the library scan and the manual identify flow, so the
+// two cannot drift.
+func ApplyTmdbMetadata(ctx context.Context, qtx *database.Queries, movieID int64, tmdbMovie *tmdb.TmdbMovie) error {
+	return applyTmdbMetadata(ctx, qtx, nil, movieID, tmdbMovie)
+}
+
+// applyTmdbMetadata is the scan-aware form: scan memoizes genre and artist ids
+// across a library scan and is nil on the manual identify path.
+func applyTmdbMetadata(
+	ctx context.Context,
+	qtx *database.Queries,
+	scan *movieScanContext,
+	movieID int64,
+	tmdbMovie *tmdb.TmdbMovie,
+) error {
+	err := qtx.DeleteMovieCast(ctx, movieID)
+	if err != nil {
+		return fmt.Errorf("delete existing cast failed: %w", err)
+	}
+
+	err = qtx.DeleteMovieCrew(ctx, movieID)
+	if err != nil {
+		return fmt.Errorf("delete existing crew failed: %w", err)
+	}
+
+	err = processProductionCompanies(ctx, qtx, movieID, tmdbMovie.ProductionCompanies)
+	if err != nil {
+		return fmt.Errorf("process production companies failed: %w", err)
+	}
+
+	err = processCast(ctx, qtx, scan, movieID, tmdbMovie.Credits.Cast)
+	if err != nil {
+		return fmt.Errorf("process cast failed: %w", err)
+	}
+
+	err = processCrew(ctx, qtx, scan, movieID, tmdbMovie.Credits.Crew)
+	if err != nil {
+		return fmt.Errorf("process crew failed: %w", err)
+	}
+
+	err = processMovieGenres(ctx, qtx, scan, movieID, tmdbMovie.Genres)
+	if err != nil {
+		return fmt.Errorf("process genres failed: %w", err)
+	}
+
+	err = processExtraVideos(ctx, qtx, movieID, tmdbMovie.Videos.Results)
+	if err != nil {
+		return fmt.Errorf("process extra videos failed: %w", err)
+	}
+
+	return nil
+}
 
 func processProductionCompanies(
 	ctx context.Context,
@@ -155,16 +179,6 @@ func processProductionCompanies(
 	return nil
 }
 
-// ProcessProductionCompanies updates a movie's production-company links.
-func ProcessProductionCompanies(ctx context.Context, qtx *database.Queries, movieID int64, companies []struct {
-	ID            int    `json:"id"`
-	LogoPath      string `json:"logo_path"`
-	Name          string `json:"name"`
-	OriginCountry string `json:"origin_country"`
-}) error {
-	return processProductionCompanies(ctx, qtx, movieID, companies)
-}
-
 func processCast(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -197,17 +211,6 @@ func processCast(
 	}
 
 	return nil
-}
-
-// ProcessCast updates a movie's cast without scan-local caching.
-func ProcessCast(ctx context.Context, qtx *database.Queries, movieID int64, cast []struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Character   string `json:"character"`
-	ProfilePath string `json:"profile_path"`
-	Order       int    `json:"order"`
-}) error {
-	return processCast(ctx, qtx, nil, movieID, cast)
 }
 
 func processCrew(
@@ -244,17 +247,6 @@ func processCrew(
 	return nil
 }
 
-// ProcessCrew updates a movie's crew without scan-local caching.
-func ProcessCrew(ctx context.Context, qtx *database.Queries, movieID int64, crew []struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Job         string `json:"job"`
-	Department  string `json:"department"`
-	ProfilePath string `json:"profile_path"`
-}) error {
-	return processCrew(ctx, qtx, nil, movieID, crew)
-}
-
 func getOrCreateArtist(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -288,7 +280,8 @@ func getOrCreateArtistID(
 	profilePath string,
 ) (int64, error) {
 	if scan != nil {
-		if artistID, ok := scan.artistIDs[int64(tmdbID)]; ok {
+		artistID, ok := scan.artistIDs.Get(int64(tmdbID))
+		if ok {
 			return artistID, nil
 		}
 	}
@@ -299,7 +292,7 @@ func getOrCreateArtistID(
 	}
 
 	if scan != nil {
-		scan.artistIDs[int64(tmdbID)] = artist.ID
+		scan.artistIDs.Set(int64(tmdbID), artist.ID)
 	}
 	return artist.ID, nil
 }
@@ -338,18 +331,11 @@ func processMovieGenres(
 	return nil
 }
 
-// ProcessMovieGenres updates a movie's genre links without scan-local caching.
-func ProcessMovieGenres(ctx context.Context, qtx *database.Queries, movieID int64, genres []struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}) error {
-	return processMovieGenres(ctx, qtx, nil, movieID, genres)
-}
-
 func getOrCreateMovieGenreID(ctx context.Context, qtx *database.Queries, scan *movieScanContext, tag string) (int64, error) {
 	cacheKey := scanner.NormalizedScanCacheKey(tag, "movie")
 	if scan != nil {
-		if genreID, ok := scan.genreIDs[cacheKey]; ok {
+		genreID, ok := scan.genreIDs.Get(cacheKey)
+		if ok {
 			return genreID, nil
 		}
 	}
@@ -363,7 +349,7 @@ func getOrCreateMovieGenreID(ctx context.Context, qtx *database.Queries, scan *m
 	}
 
 	if scan != nil {
-		scan.genreIDs[cacheKey] = dbGenre.ID
+		scan.genreIDs.Set(cacheKey, dbGenre.ID)
 	}
 	return dbGenre.ID, nil
 }
@@ -414,11 +400,6 @@ func processExtraVideos(
 	return nil
 }
 
-// ProcessExtraVideos updates a movie's extra-video links.
-func ProcessExtraVideos(ctx context.Context, qtx *database.Queries, movieID int64, results []tmdb.TmdbVideoResult) error {
-	return processExtraVideos(ctx, qtx, movieID, results)
-}
-
 func mapTmdbVideoType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "trailer", "teaser":
@@ -440,7 +421,3 @@ func mapTmdbVideoSite(s string) string {
 		return "other"
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Streams and chapters
-// ---------------------------------------------------------------------------

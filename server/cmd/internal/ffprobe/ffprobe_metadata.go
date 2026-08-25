@@ -202,8 +202,8 @@ type Chapter struct {
 	Tags      ChapterTags `json:"tags"`
 }
 
-func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
-	return f.runMetadata(filePath,
+func (f *ffprobe) GetMetadata(ctx context.Context, filePath string) (*FfprobeResult, error) {
+	return f.runMetadata(ctx, filePath,
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_streams",
@@ -213,8 +213,8 @@ func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
 	)
 }
 
-func (f *ffprobe) GetAudioMetadata(filePath string) (*FfprobeResult, error) {
-	return f.runMetadata(filePath,
+func (f *ffprobe) GetAudioMetadata(ctx context.Context, filePath string) (*FfprobeResult, error) {
+	return f.runMetadata(ctx, filePath,
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_format",
@@ -224,20 +224,28 @@ func (f *ffprobe) GetAudioMetadata(filePath string) (*FfprobeResult, error) {
 	)
 }
 
-func (f *ffprobe) runMetadata(filePath string, args ...string) (*FfprobeResult, error) {
+// runMetadata caps every probe at metadataTimeout while still honoring the
+// caller's context, so a canceled library scan kills its in-flight ffprobe
+// instead of leaving shutdown to wait out the timeout.
+func (f *ffprobe) runMetadata(ctx context.Context, filePath string, args ...string) (*FfprobeResult, error) {
 	if strings.TrimSpace(filePath) == "" {
 		return nil, fmt.Errorf("file path is required")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), metadataTimeout)
+	probeCtx, cancel := context.WithTimeout(ctx, metadataTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, f.bin, args...)
+	cmd := exec.CommandContext(probeCtx, f.bin, args...)
 
 	output, err := cmd.Output()
 	if err != nil {
+		// A caller that went away and a probe that outlasted its own deadline are
+		// different failures: only the latter says the file is slow to read.
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("ffprobe timed out for %s after %s: %w", filePath, metadataTimeout, ctx.Err())
+			return nil, fmt.Errorf("ffprobe canceled for %s: %w", filePath, ctx.Err())
+		}
+		if probeCtx.Err() != nil {
+			return nil, fmt.Errorf("ffprobe timed out for %s after %s: %w", filePath, metadataTimeout, probeCtx.Err())
 		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {

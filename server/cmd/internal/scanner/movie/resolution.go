@@ -3,7 +3,6 @@ package movie
 import (
 	"context"
 	"fmt"
-	"maps"
 	"math"
 	"path/filepath"
 	"slices"
@@ -25,15 +24,16 @@ type movieScanContext struct {
 	// across per-movie transactions.
 	movieIndex map[string]int64
 	// genreIDs memoizes genre tag -> id within a scan. It is written inside the
-	// per-movie transaction (getOrCreateMovieGenreID), so clone/mergeFrom isolate
-	// it until commit to avoid caching ids from a rolled-back transaction.
-	genreIDs map[string]int64
+	// per-movie transaction (getOrCreateMovieGenreID), so the clone overlay
+	// isolates it until commit to avoid caching ids from a rolled-back
+	// transaction.
+	genreIDs scanner.ScanCache[string, int64]
 	// artistIDs memoizes TMDB person id -> artist.id within a scan, so a person
 	// appearing in many movies (or in several crew roles of one movie) is
-	// upserted once per scan instead of once per credit. Same clone/mergeFrom
-	// rollback isolation as genreIDs. Artist rows are never deleted, so cached
-	// ids stay valid for the whole scan.
-	artistIDs map[int64]int64
+	// upserted once per scan instead of once per credit. Same overlay rollback
+	// isolation as genreIDs. Artist rows are never deleted, so cached ids stay
+	// valid for the whole scan.
+	artistIDs scanner.ScanCache[int64, int64]
 }
 
 func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
@@ -45,22 +45,22 @@ func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
 	// and the caller discards its reference, so no defensive copy is needed.
 	return &movieScanContext{
 		movieIndex: movieIndex,
-		genreIDs:   make(map[string]int64),
-		artistIDs:  make(map[int64]int64),
+		genreIDs:   scanner.NewScanCache[string, int64](),
+		artistIDs:  scanner.NewScanCache[int64, int64](),
 	}
 }
 
 func (scan *movieScanContext) clone() *movieScanContext {
 	return &movieScanContext{
 		movieIndex: scan.movieIndex, // shared; never written inside the transaction
-		genreIDs:   maps.Clone(scan.genreIDs),
-		artistIDs:  maps.Clone(scan.artistIDs),
+		genreIDs:   scan.genreIDs.Overlay(),
+		artistIDs:  scan.artistIDs.Overlay(),
 	}
 }
 
 func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
-	maps.Copy(scan.genreIDs, other.genreIDs)
-	maps.Copy(scan.artistIDs, other.artistIDs)
+	scan.genreIDs.MergeFrom(other.genreIDs)
+	scan.artistIDs.MergeFrom(other.artistIDs)
 }
 
 func (scan *movieScanContext) movieUnchanged(path string, size int64) bool {
@@ -94,44 +94,14 @@ func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (
 		searchTitle = titleYear.Title
 	}
 
-	var tmdbMovie *tmdb.TmdbMovie
-
-	if s.tmdb != nil {
-		var searchResults []tmdb.TmdbMovie
-		var searchErr error
-		if titleYear.Year > 0 {
-			searchResults, searchErr = s.tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle, titleYear.Year)
-		} else {
-			searchResults, searchErr = s.tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
-		}
-		if searchErr == nil && len(searchResults) > 0 {
-			bestMatch := selectBestTmdbMatch(searchResults, searchTitle, titleYear.Year)
-			if bestMatch != nil {
-				err = s.tmdb.GetTmdbMovieByID(ctx, bestMatch.Movie)
-				if err == nil {
-					tmdbMovie = bestMatch.Movie
-					if bestMatch.Confidence < 70 {
-						s.logger.Warn(
-							"low-confidence TMDB movie match",
-							"path", file.Path,
-							"parsed_title", searchTitle,
-							"parsed_year", titleYear.Year,
-							"tmdb_id", bestMatch.Movie.TmdbID,
-							"tmdb_title", bestMatch.Movie.Title,
-							"tmdb_release_date", bestMatch.Movie.ReleaseDate,
-							"confidence", fmt.Sprintf("%.1f", bestMatch.Confidence),
-							"alternatives", summarizeTmdbCandidates(searchResults, searchTitle, titleYear.Year),
-						)
-					}
-				}
-			}
-		}
-	}
-
-	info, err := s.ffprobe.GetMetadata(file.Path)
+	// ffprobe is required and TMDB is not, so probe first: a file that cannot be
+	// probed is discarded either way, and TMDB search results are never cached.
+	info, err := s.ffprobe.GetMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
+
+	tmdbMovie := s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year)
 
 	mimeType := helpers.VideoMimeTypes[file.Ext]
 	if mimeType == "" {
@@ -192,6 +162,77 @@ func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (
 	}, nil
 }
 
+// lowTmdbConfidence is the match confidence below which a TMDB match is
+// logged with its runner-up candidates for review.
+const lowTmdbConfidence = 70
+
+// lookupTmdbMovie resolves a file's TMDB metadata, returning nil when TMDB is
+// not configured, the search finds nothing, or a lookup fails. TMDB is
+// optional -- a failure leaves the movie with filename-derived metadata -- so
+// failures are logged rather than returned. A canceled scan is not a TMDB
+// problem and is not logged.
+func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string, year int) *tmdb.TmdbMovie {
+	if s.tmdb == nil {
+		return nil
+	}
+
+	var searchResults []tmdb.TmdbMovie
+	var err error
+	if year > 0 {
+		searchResults, err = s.tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle, year)
+	} else {
+		searchResults, err = s.tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
+	}
+	if err != nil {
+		if ctx.Err() == nil {
+			s.logger.Warn(
+				"TMDB movie search failed",
+				"path", path,
+				"parsed_title", searchTitle,
+				"parsed_year", year,
+				"error", err,
+			)
+		}
+		return nil
+	}
+
+	ranked := RankTMDBMovies(searchResults, searchTitle, year)
+	if len(ranked) == 0 {
+		return nil
+	}
+	bestMatch := ranked[0]
+
+	err = s.tmdb.GetTmdbMovieByID(ctx, bestMatch.Movie)
+	if err != nil {
+		if ctx.Err() == nil {
+			s.logger.Warn(
+				"TMDB movie detail lookup failed",
+				"path", path,
+				"parsed_title", searchTitle,
+				"tmdb_id", bestMatch.Movie.TmdbID,
+				"error", err,
+			)
+		}
+		return nil
+	}
+
+	if bestMatch.Confidence < lowTmdbConfidence {
+		s.logger.Warn(
+			"low-confidence TMDB movie match",
+			"path", path,
+			"parsed_title", searchTitle,
+			"parsed_year", year,
+			"tmdb_id", bestMatch.Movie.TmdbID,
+			"tmdb_title", bestMatch.Movie.Title,
+			"tmdb_release_date", bestMatch.Movie.ReleaseDate,
+			"confidence", fmt.Sprintf("%.1f", bestMatch.Confidence),
+			"alternatives", summarizeTmdbCandidates(ranked),
+		)
+	}
+
+	return bestMatch.Movie
+}
+
 func extractYearFromReleaseDate(releaseDate string) int {
 	if releaseDate == "" {
 		return 0
@@ -218,24 +259,19 @@ type TMDBMovieMatch struct {
 	Confidence float64
 }
 
-func selectBestTmdbMatch(results []tmdb.TmdbMovie, targetTitle string, targetYear int) *TMDBMovieMatch {
-	scoredMatches := RankTMDBMovies(results, targetTitle, targetYear)
-	if len(scoredMatches) == 0 {
-		return nil
-	}
-	return scoredMatches[0]
-}
-
 // RankTMDBMovies orders TMDB results by the scanner's title and year score.
 func RankTMDBMovies(results []tmdb.TmdbMovie, targetTitle string, targetYear int) []*TMDBMovieMatch {
 	if len(results) == 0 {
 		return nil
 	}
 
+	normalizedTarget := normalizeComparableMovieTitle(targetTitle)
+	targetSequel := sequelIndicator(normalizedTarget)
+
 	scoredMatches := make([]*TMDBMovieMatch, 0, len(results))
 	for i := range results {
 		movie := &results[i]
-		score := scoreTmdbCandidate(targetTitle, targetYear, movie)
+		score := scoreTmdbCandidate(normalizedTarget, targetSequel, targetYear, movie)
 		scoredMatches = append(scoredMatches, &TMDBMovieMatch{
 			Movie:      movie,
 			Score:      score,
@@ -257,8 +293,10 @@ func RankTMDBMovies(results []tmdb.TmdbMovie, targetTitle string, targetYear int
 	return scoredMatches
 }
 
-func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovie) float64 {
-	normalizedTarget := normalizeComparableMovieTitle(targetTitle)
+// scoreTmdbCandidate scores one candidate against an already-normalized target
+// title and its sequel indicator, both of which are loop-invariant across a
+// ranking pass.
+func scoreTmdbCandidate(normalizedTarget, targetSequel string, targetYear int, movie *tmdb.TmdbMovie) float64 {
 	normalizedTitle := normalizeComparableMovieTitle(movie.Title)
 	normalizedOriginalTitle := normalizeComparableMovieTitle(movie.OriginalTitle)
 
@@ -276,9 +314,9 @@ func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovi
 	score += tokenOverlapScore(normalizedTarget, normalizedTitle) * 35
 	score += tokenOverlapScore(normalizedTarget, normalizedOriginalTitle) * 20
 
-	if sequelIndicator(normalizedTarget) == sequelIndicator(normalizedTitle) {
+	if targetSequel == sequelIndicator(normalizedTitle) {
 		score += 8
-	} else if sequelIndicator(normalizedTarget) != "" {
+	} else if targetSequel != "" {
 		score -= 12
 	}
 
@@ -300,11 +338,18 @@ func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovi
 	return score
 }
 
+// Replacers are immutable and build a trie on construction, so they are built
+// once here rather than per call: ranking a 20-result TMDB search normalizes
+// titles dozens of times per scanned file.
+var (
+	audioLayoutReplacer    = strings.NewReplacer("5.1", " ", "7.1", " ", "2.0", " ")
+	titleSeparatorReplacer = strings.NewReplacer(".", " ", "_", " ", "-", " ", "(", " ", ")", " ", "[", " ", "]", " ")
+)
+
 // NormalizeTitleForSearch removes filename release noise before a TMDB search.
 func NormalizeTitleForSearch(title string) string {
-	title = strings.NewReplacer("5.1", " ", "7.1", " ", "2.0", " ").Replace(title)
-	replacer := strings.NewReplacer(".", " ", "_", " ", "-", " ", "(", " ", ")", " ", "[", " ", "]", " ")
-	normalized := replacer.Replace(strings.ToLower(strings.TrimSpace(title)))
+	title = audioLayoutReplacer.Replace(title)
+	normalized := titleSeparatorReplacer.Replace(strings.ToLower(strings.TrimSpace(title)))
 	tokens := strings.Fields(normalized)
 	cleaned := make([]string, 0, len(tokens))
 	for _, token := range tokens {
@@ -391,12 +436,14 @@ func clampTmdbConfidence(score float64) float64 {
 	}
 }
 
-func summarizeTmdbCandidates(results []tmdb.TmdbMovie, targetTitle string, targetYear int) string {
-	scored := RankTMDBMovies(results, targetTitle, targetYear)
-	limit := min(len(scored), 3)
+// summarizeTmdbCandidates renders the top few already-ranked candidates for a
+// log line. It takes the ranked slice so a low-confidence match does not pay
+// for a second full ranking pass.
+func summarizeTmdbCandidates(ranked []*TMDBMovieMatch) string {
+	limit := min(len(ranked), 3)
 	parts := make([]string, 0, limit)
 	for i := 0; i < limit; i++ {
-		parts = append(parts, fmt.Sprintf("%s (%s, %.1f)", scored[i].Movie.Title, scored[i].Movie.ReleaseDate, scored[i].Confidence))
+		parts = append(parts, fmt.Sprintf("%s (%s, %.1f)", ranked[i].Movie.Title, ranked[i].Movie.ReleaseDate, ranked[i].Confidence))
 	}
 
 	return strings.Join(parts, "; ")
@@ -419,7 +466,3 @@ func absInt(n int) int {
 	}
 	return n
 }
-
-// ---------------------------------------------------------------------------
-// Persistence
-// ---------------------------------------------------------------------------

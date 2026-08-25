@@ -182,11 +182,11 @@ func newHLSTestHandler(t *testing.T, app *Application, userID int64) http.Handle
 // the HLS keyframe lookup.
 type noMetadataProbe struct{}
 
-func (noMetadataProbe) GetMetadata(string) (*ffprobe.FfprobeResult, error) {
+func (noMetadataProbe) GetMetadata(context.Context, string) (*ffprobe.FfprobeResult, error) {
 	return nil, errors.New("metadata lookup is not part of the HLS session path")
 }
 
-func (noMetadataProbe) GetAudioMetadata(string) (*ffprobe.FfprobeResult, error) {
+func (noMetadataProbe) GetAudioMetadata(context.Context, string) (*ffprobe.FfprobeResult, error) {
 	return nil, errors.New("audio metadata lookup is not part of the HLS session path")
 }
 

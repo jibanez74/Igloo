@@ -90,12 +90,12 @@ type countingMusicScannerFfprobe struct {
 	calls  int
 }
 
-func (s *countingMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *countingMusicScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	return s.result, nil
 }
 
-func (s *countingMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *countingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	return s.result, nil
 }
@@ -107,7 +107,7 @@ type failingPathMusicScannerFfprobe struct {
 	calls       int
 }
 
-func (s *failingPathMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *failingPathMusicScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	if filePath == s.failingPath {
 		return nil, errors.New("ffprobe failed")
@@ -116,7 +116,7 @@ func (s *failingPathMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.
 	return s.result, nil
 }
 
-func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	if filePath == s.failingPath {
 		return nil, errors.New("ffprobe failed")
@@ -140,12 +140,12 @@ func newMusicScannerFfprobeByPath(results map[string]*ffprobe.FfprobeResult) *mu
 	}
 }
 
-func (s *musicScannerFfprobeByPath) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *musicScannerFfprobeByPath) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.metadataCalls[filePath]++
 	return s.resultForPath(filePath)
 }
 
-func (s *musicScannerFfprobeByPath) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+func (s *musicScannerFfprobeByPath) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	s.audioCalls[filePath]++
 	return s.resultForPath(filePath)
 }

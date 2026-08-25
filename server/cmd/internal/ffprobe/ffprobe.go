@@ -14,8 +14,8 @@ import (
 const versionCheckTimeout = 5 * time.Second
 
 type FfprobeInterface interface {
-	GetMetadata(filePath string) (*FfprobeResult, error)
-	GetAudioMetadata(filePath string) (*FfprobeResult, error)
+	GetMetadata(ctx context.Context, filePath string) (*FfprobeResult, error)
+	GetAudioMetadata(ctx context.Context, filePath string) (*FfprobeResult, error)
 	KeyframeAtOrBefore(ctx context.Context, filePath string, streamIndex int64, targetSec float64) (float64, error)
 }
 
