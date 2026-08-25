@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 	"maps"
 	"path/filepath"
@@ -58,7 +59,7 @@ func (app *Application) runMusicScan() {
 	tracksScanned := 0
 	tracksSkipped := 0
 	startTime := time.Now()
-	batch := make([]helpers.ScanFile, 0, scannerBatchSize)
+	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
 	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
@@ -77,7 +78,7 @@ func (app *Application) runMusicScan() {
 		batch = batch[:0]
 	}
 
-	err = helpers.WalkMediaLibraryContext(
+	err = scanner.WalkMediaLibraryContext(
 		ctx,
 		settings.MusicDir.String,
 		helpers.ValidAudioExtensions,
@@ -85,7 +86,7 @@ func (app *Application) runMusicScan() {
 			app.Logger.Error(err.Error())
 			errorCount++
 		},
-		func(file helpers.ScanFile) error {
+		func(file scanner.ScanFile) error {
 			if scan.trackUnchanged(file.Path, file.Size) {
 				tracksSkipped++
 				return nil
@@ -93,7 +94,7 @@ func (app *Application) runMusicScan() {
 
 			batch = append(batch, file)
 
-			if len(batch) >= scannerBatchSize {
+			if len(batch) >= scanner.BatchSize {
 				flushBatch()
 			}
 
@@ -116,7 +117,7 @@ func (app *Application) runMusicScan() {
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanContext, files []helpers.ScanFile) (scanned, skipped, errCount int) {
+func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
 		if ctx.Err() != nil {
 			return scanned, skipped, errCount
@@ -152,7 +153,7 @@ func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int6
 		return nil, err
 	}
 
-	return helpers.BuildScanIndex(rows, func(row database.ListMusicTrackScanIndexRow) (string, int64) {
+	return scanner.BuildScanIndex(rows, func(row database.ListMusicTrackScanIndexRow) (string, int64) {
 		return row.FilePath, row.Size
 	}), nil
 }
@@ -296,7 +297,7 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 }
 
 func (scan *musicScanContext) trackUnchanged(path string, size int64) bool {
-	return helpers.ScanIndexUnchanged(scan.trackIndex, path, size)
+	return scanner.ScanIndexUnchanged(scan.trackIndex, path, size)
 }
 
 func musicIDPairKey(left, right int64) string {
@@ -343,7 +344,7 @@ type resolvedAlbum struct {
 	spotifyMatch *resolvedSpotifyMatch
 }
 
-func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file helpers.ScanFile) (*resolvedTrack, error) {
+func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
 	info, err := app.Ffprobe.GetAudioMetadata(file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
@@ -501,7 +502,7 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 }
 
 func (app *Application) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(name, sortName)
+	cacheKey := scanner.NormalizedScanCacheKey(name, sortName)
 	if musicianID, ok := scan.musicianIDs.get(cacheKey); ok {
 		return &resolvedMusician{
 			name:          name,
@@ -537,7 +538,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		}
 	}
 
-	spotifyKey := helpers.NormalizedScanCacheKey(name)
+	spotifyKey := scanner.NormalizedScanCacheKey(name)
 	if cachedMiss, ok := scan.spotifyArtistMisses.get(spotifyKey); ok {
 		resolved.spotifyMatch = &cachedMiss
 		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
@@ -573,7 +574,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 }
 
 func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(title, albumArtist)
+	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	if albumID, ok := scan.albumIDs.get(cacheKey); ok {
 		return &resolvedAlbum{
 			title:         title,
@@ -613,7 +614,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		}
 	}
 
-	spotifyKey := helpers.NormalizedScanCacheKey(title, albumArtist)
+	spotifyKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	if cachedMiss, ok := scan.spotifyAlbumMisses.get(spotifyKey); ok {
 		resolved.spotifyMatch = &cachedMiss
 		return resolved, nil
@@ -715,7 +716,7 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 				continue
 			}
 
-			cacheKey := helpers.NormalizedScanCacheKey(part)
+			cacheKey := scanner.NormalizedScanCacheKey(part)
 			if _, exists := seen[cacheKey]; exists {
 				credits.hasDuplicate = true
 				continue
@@ -911,7 +912,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 }
 
 func (app *Application) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(input.name, input.sortName)
+	cacheKey := scanner.NormalizedScanCacheKey(input.name, input.sortName)
 	if musicianID, ok := scan.musicianIDs.get(cacheKey); ok {
 		return musicianID, nil
 	}
@@ -990,7 +991,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 }
 
 func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(input.title, input.albumArtist)
+	cacheKey := scanner.NormalizedScanCacheKey(input.title, input.albumArtist)
 	if albumID, ok := scan.albumIDs.get(cacheKey); ok {
 		return albumID, nil
 	}
@@ -1211,7 +1212,7 @@ func (app *Application) processSpotifyEntityGenres(
 }
 
 func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(tag, "music")
+	cacheKey := scanner.NormalizedScanCacheKey(tag, "music")
 	if genreID, ok := scan.genreIDs.get(cacheKey); ok {
 		return genreID, nil
 	}

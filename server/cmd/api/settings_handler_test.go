@@ -13,6 +13,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner/movie"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -345,11 +346,7 @@ func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 	current.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
 	app.SetSettings(&current)
 
-	movieScanGuard.Finish()
-	if !movieScanGuard.TryBegin() {
-		t.Fatal("failed to acquire movie scan guard")
-	}
-	defer movieScanGuard.Finish()
+	app.MovieScanner = movieStartResultStub{result: movie.StartResult{Status: movie.StartAlreadyRunning}}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scan/movies", nil)
 	w := httptest.NewRecorder()
@@ -359,6 +356,42 @@ func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
 	}
+}
+
+func TestTriggerMovieScanMapsStartStatusesToAdminResponses(t *testing.T) {
+	tests := []struct {
+		name       string
+		result     movie.StartResult
+		wantStatus int
+	}{
+		{"started", movie.StartResult{Directory: "/movies", Status: movie.StartStarted}, http.StatusOK},
+		{"not configured", movie.StartResult{Status: movie.StartNotConfigured}, http.StatusInternalServerError},
+		{"already running", movie.StartResult{Status: movie.StartAlreadyRunning}, http.StatusConflict},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSettingsTestApp(t)
+			defer app.DB.Close()
+			app.MovieScanner = movieStartResultStub{result: tc.result}
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil)
+			app.TriggerMovieScan(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+type movieStartResultStub struct {
+	result movie.StartResult
+}
+
+func (s movieStartResultStub) Start() movie.StartResult {
+	return s.result
 }
 
 func mountGeneralSettingsRouter(app *Application, userID int64) http.Handler {

@@ -1,13 +1,18 @@
-package helpers
+package scanner
 
 import (
 	"context"
 	"fmt"
+	"igloo/cmd/internal/helpers"
 	"io/fs"
 	"path/filepath"
 	"strings"
 	"sync"
 )
+
+// BatchSize is how many files a library scan buffers before flushing them to
+// the database.
+const BatchSize = 54
 
 // ScanFile is a media file queued for processing during a library scan. It is
 // shared by the movie and music scanners.
@@ -128,7 +133,7 @@ func walkMediaLibrary(
 			return nil
 		}
 
-		ext := GetFileExtension(path)
+		ext := helpers.GetFileExtension(path)
 		if !validExts[ext] {
 			return nil
 		}
