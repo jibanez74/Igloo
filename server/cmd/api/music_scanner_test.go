@@ -19,6 +19,14 @@ import (
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
+// noKeyframeProbe completes ffprobe.FfprobeInterface for music scanner stubs,
+// which never serve HLS.
+type noKeyframeProbe struct{}
+
+func (noKeyframeProbe) KeyframeAtOrBefore(context.Context, string, int64, float64) (float64, error) {
+	return 0, errors.New("keyframe probing is not stubbed")
+}
+
 func (app *Application) processMusicBatchForTest(ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {

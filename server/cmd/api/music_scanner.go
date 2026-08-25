@@ -18,6 +18,18 @@ import (
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
+var musicScanGuard scanner.ScanGuard
+
+// scanContext returns the shutdown-aware context library scans run under, and
+// falls back to a background context when the application has none configured.
+func (app *Application) scanContext() context.Context {
+	if app.ScanContext != nil {
+		return app.ScanContext
+	}
+
+	return context.Background()
+}
+
 // ---------------------------------------------------------------------------
 // Scan orchestration
 // ---------------------------------------------------------------------------

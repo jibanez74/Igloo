@@ -179,7 +179,7 @@ func newHLSTestHandler(t *testing.T, app *Application, userID int64) http.Handle
 }
 
 // noMetadataProbe completes ffprobe.FfprobeInterface for stubs that only serve
-// the HLS keyframe lookup. Mirror of noKeyframeProbe in movies_scanner_test.go.
+// the HLS keyframe lookup.
 type noMetadataProbe struct{}
 
 func (noMetadataProbe) GetMetadata(string) (*ffprobe.FfprobeResult, error) {

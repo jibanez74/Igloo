@@ -25,11 +25,82 @@ func (failingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, errors.New("upstream unavailable")
 }
 
+type stubTmdbClient struct {
+	searchErr     error
+	detailErr     error
+	theatersErr   error
+	searchResults []tmdb.TmdbMovie
+	detailMovies  map[int]tmdb.TmdbMovie
+	theaterMovies []*tmdb.TmdbMovie
+	searchCalls   []stubTmdbSearchCall
+	detailCalls   []int
+}
+
+type stubTmdbSearchCall struct {
+	title string
+	year  []int
+}
+
+func (s *stubTmdbClient) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMovie) error {
+	s.detailCalls = append(s.detailCalls, movie.TmdbID)
+	if s.detailErr != nil {
+		return s.detailErr
+	}
+	if s.detailMovies == nil {
+		return errors.New("tmdb details unavailable")
+	}
+	details, ok := s.detailMovies[movie.TmdbID]
+	if !ok {
+		return errors.New("tmdb details unavailable")
+	}
+	*movie = details
+	return nil
+}
+
+func (s *stubTmdbClient) SearchMoviesByTitleAndYear(_ context.Context, title string, year ...int) ([]tmdb.TmdbMovie, error) {
+	yearCopy := append([]int(nil), year...)
+	s.searchCalls = append(s.searchCalls, stubTmdbSearchCall{title: title, year: yearCopy})
+	if s.searchErr != nil {
+		return nil, s.searchErr
+	}
+	results := make([]tmdb.TmdbMovie, len(s.searchResults))
+	copy(results, s.searchResults)
+	return results, nil
+}
+
+func (s *stubTmdbClient) GetMoviesInTheaters(_ context.Context) ([]*tmdb.TmdbMovie, error) {
+	if s.theatersErr != nil {
+		return nil, s.theatersErr
+	}
+	return s.theaterMovies, nil
+}
+
+func (*stubTmdbClient) ClearCache() {}
+
+func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
+	t.Helper()
+
+	var movie tmdb.TmdbMovie
+	err := json.Unmarshal([]byte(payload), &movie)
+	if err != nil {
+		t.Fatalf("unmarshal TMDB movie fixture: %v", err)
+	}
+	return movie
+}
+
+func movieGenreTags(genres []database.GetGenresByMovieIDRow) string {
+	tags := make([]string, 0, len(genres))
+	for _, genre := range genres {
+		tags = append(tags, genre.Tag)
+	}
+	return strings.Join(tags, ",")
+}
+
 func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.Tmdb = &stubMovieScannerTmdb{
+	app.Tmdb = &stubTmdbClient{
 		searchResults: []tmdb.TmdbMovie{
 			{TmdbID: 1, Title: "Casino Royale", ReleaseDate: "1967-04-13", Popularity: 40, VoteAverage: 6.1},
 			{TmdbID: 2, Title: "Casino Royale", ReleaseDate: "2006-11-14", Popularity: 35, VoteAverage: 7.6},
@@ -92,7 +163,7 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 		t.Fatalf("insert existing movie: %v", err)
 	}
 
-	stub := &stubMovieScannerTmdb{
+	stub := &stubTmdbClient{
 		searchResults: []tmdb.TmdbMovie{
 			{TmdbID: 603, Title: "The Matrix", ReleaseDate: "1999-03-31", PosterPath: "/matrix.jpg"},
 			{TmdbID: 604, Title: "The Matrix Reloaded", ReleaseDate: "2003-05-15", PosterPath: "/reloaded.jpg"},
@@ -151,7 +222,7 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.Tmdb = &stubMovieScannerTmdb{
+	app.Tmdb = &stubTmdbClient{
 		detailMovies: map[int]tmdb.TmdbMovie{
 			603: {
 				TmdbID:      603,
@@ -207,7 +278,7 @@ func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.Tmdb = &stubMovieScannerTmdb{
+	app.Tmdb = &stubTmdbClient{
 		detailMovies: map[int]tmdb.TmdbMovie{
 			603: {TmdbID: 603, Title: "The Matrix"},
 		},
@@ -289,7 +360,7 @@ func TestGetTmdbStatus_HTTP(t *testing.T) {
 		t.Fatal("expected TMDB status to be unavailable when app.Tmdb is nil")
 	}
 
-	app.Tmdb = &stubMovieScannerTmdb{}
+	app.Tmdb = &stubTmdbClient{}
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/tmdb/status", nil)
 	router.ServeHTTP(w, req)
@@ -458,7 +529,7 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 			OriginalLang:  "en",
 		}
 	}
-	app.Tmdb = &stubMovieScannerTmdb{theaterMovies: movies}
+	app.Tmdb = &stubTmdbClient{theaterMovies: movies}
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/in-theaters", nil)
@@ -521,7 +592,7 @@ func TestGetMoviesInTheaters_HTTPError(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.Tmdb = &stubMovieScannerTmdb{theatersErr: errors.New("tmdb unavailable")}
+	app.Tmdb = &stubTmdbClient{theatersErr: errors.New("tmdb unavailable")}
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/in-theaters", nil)
@@ -564,7 +635,7 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 		},
 		"videos": {"results": [{"id": "trailer", "key": "abc", "name": "Trailer", "site": "YouTube", "type": "Trailer"}]}
 	}`)
-	app.Tmdb = &stubMovieScannerTmdb{
+	app.Tmdb = &stubTmdbClient{
 		detailMovies: map[int]tmdb.TmdbMovie{603: tmdbDetails},
 	}
 
@@ -637,7 +708,7 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 		t.Fatalf("unconfigured TMDB status = %d, want 500", w.Code)
 	}
 
-	app.Tmdb = &stubMovieScannerTmdb{detailMovies: map[int]tmdb.TmdbMovie{603: {TmdbID: 603, Title: "The Matrix"}}}
+	app.Tmdb = &stubTmdbClient{detailMovies: map[int]tmdb.TmdbMovie{603: {TmdbID: 603, Title: "The Matrix"}}}
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPut, "/api/movies/bad/identify", strings.NewReader(`{"tmdb_id":603}`))
