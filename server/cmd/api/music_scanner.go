@@ -123,6 +123,11 @@ func (app *Application) runMusicScan() {
 	}
 
 	flushBatch()
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		app.Logger.Info("music library scan canceled")
+		return
+	}
 
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))

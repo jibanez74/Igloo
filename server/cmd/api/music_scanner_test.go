@@ -100,6 +100,22 @@ func (s *countingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePa
 	return s.result, nil
 }
 
+type cancelingMusicScannerFfprobe struct {
+	noKeyframeProbe
+	cancel context.CancelFunc
+	calls  int
+}
+
+func (s *cancelingMusicScannerFfprobe) GetMetadata(_ context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+	return nil, errors.New("generic metadata probing is not expected")
+}
+
+func (s *cancelingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+	s.calls++
+	s.cancel()
+	return nil, context.Canceled
+}
+
 type failingPathMusicScannerFfprobe struct {
 	noKeyframeProbe
 	result      *ffprobe.FfprobeResult
@@ -951,6 +967,44 @@ func TestRunMusicScanDoesNotClearSpotifyRuntimeCache(t *testing.T) {
 
 	if spotifyStub.clearCalls != 0 {
 		t.Fatalf("spotify cache clear calls = %d, want 0", spotifyStub.clearCalls)
+	}
+}
+
+func TestRunMusicScanLogsCancellationFromFinalPartialBatch(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "Canceled Track.m4a")
+	writeMusicScannerTestFile(t, trackPath, "test")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ffprobeStub := &cancelingMusicScannerFfprobe{cancel: cancel}
+	logger := &capturedLogger{}
+	app.ScanContext = ctx
+	app.Ffprobe = ffprobeStub
+	app.Logger = logger
+	app.SetSettings(&database.Setting{
+		MusicDir: sql.NullString{String: musicDir, Valid: true},
+	})
+
+	runMusicScanForTest(t, app)
+
+	if ffprobeStub.calls != 1 {
+		t.Fatalf("audio metadata calls = %d, want 1", ffprobeStub.calls)
+	}
+
+	foundCancellation := false
+	for _, entry := range logger.infoEntries {
+		if entry.msg == "music library scan canceled" {
+			foundCancellation = true
+		}
+		if strings.HasPrefix(entry.msg, "music scanner completed:") {
+			t.Fatalf("canceled scan logged completion: %q", entry.msg)
+		}
+	}
+	if !foundCancellation {
+		t.Fatalf("missing cancellation log; info entries = %+v", logger.infoEntries)
 	}
 }
 

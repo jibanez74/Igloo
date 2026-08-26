@@ -215,12 +215,47 @@ func TestNormalizeMovieTitleForSearch(t *testing.T) {
 			input: "If.I.Had.Legs.Id.Kick.You",
 			want:  "if i had legs id kick you",
 		},
+		{
+			input: "The.Hobbit.An.Unexpected.Journey.2012.1080p.x265.10bit",
+			want:  "the hobbit an unexpected journey 2012",
+		},
+		{
+			input: "Rabbit.Hole.2010.720p.8bit",
+			want:  "rabbit hole 2010",
+		},
+		{
+			input: "Orbit.2022.10bit",
+			want:  "orbit 2022",
+		},
+		{
+			input: "Gambit.2012.8bit",
+			want:  "gambit 2012",
+		},
 	}
 
 	for _, tt := range tests {
 		got := NormalizeTitleForSearch(tt.input)
 		if got != tt.want {
 			t.Errorf("normalizeMovieTitleForSearch(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestNormalizeComparableMovieTitlePreservesWordsEndingInBit(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "The Hobbit: An Unexpected Journey", want: "the hobbit an unexpected journey"},
+		{input: "Rabbit Hole", want: "rabbit hole"},
+		{input: "Orbit!", want: "orbit"},
+		{input: "Gambit (2012)", want: "gambit 2012"},
+	}
+
+	for _, tt := range tests {
+		got := normalizeComparableMovieTitle(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeComparableMovieTitle(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

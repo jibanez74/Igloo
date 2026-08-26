@@ -392,9 +392,17 @@ func isTechnicalToken(token string) bool {
 	if strings.Contains(token, "aac") || strings.Contains(token, "x26") || strings.Contains(token, "h26") {
 		return true
 	}
-	if strings.HasSuffix(token, "bit") {
+
+	bitDepth := strings.TrimSuffix(token, "bit")
+	if bitDepth != token && len(bitDepth) >= 1 && len(bitDepth) <= 2 {
+		for _, digit := range bitDepth {
+			if digit < '0' || digit > '9' {
+				return false
+			}
+		}
 		return true
 	}
+
 	return false
 }
 
