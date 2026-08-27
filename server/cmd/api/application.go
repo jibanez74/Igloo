@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
@@ -77,6 +78,7 @@ type Application struct {
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
+	MovieScanner                  interface{ Start() movie.StartResult }
 }
 
 //go:embed all:webdist
@@ -191,8 +193,24 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
-	app.ScanMoviesLibrary()
-	app.ScanMusicLibrary()
+	app.MovieScanner = movie.New(movie.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Tmdb:        app.Tmdb,
+		ScanContext: app.ScanContext,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
+		CurrentMoviesDirectory: func() sql.NullString {
+			return app.CurrentSettings().MoviesDir
+		},
+		InvalidateCommittedMovie: func(movieID int64) {
+			app.invalidateSubtitleVTTCache(movieID)
+			app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
+			app.invalidateHLSSessionsForMovie(movieID)
+		},
+	})
 
 	app.InitRouter()
 

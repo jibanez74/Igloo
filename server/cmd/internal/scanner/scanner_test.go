@@ -1,4 +1,4 @@
-package helpers
+package scanner
 
 import (
 	"context"
@@ -137,7 +137,7 @@ func TestWalkMediaLibrary(t *testing.T) {
 
 	var got []ScanFile
 	var walkErrors int
-	err := WalkMediaLibrary(root, validExts,
+	err := WalkMediaLibraryContext(context.Background(), root, validExts,
 		func(error) { walkErrors++ },
 		func(f ScanFile) error {
 			got = append(got, f)
@@ -145,7 +145,7 @@ func TestWalkMediaLibrary(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf("WalkMediaLibrary returned error: %v", err)
+		t.Fatalf("WalkMediaLibraryContext returned error: %v", err)
 	}
 	if walkErrors != 0 {
 		t.Fatalf("unexpected walk errors: %d", walkErrors)
@@ -184,7 +184,7 @@ func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
 }
 
 func TestWalkMediaLibraryMissingRoot(t *testing.T) {
-	err := WalkMediaLibrary(filepath.Join(t.TempDir(), "does-not-exist"),
+	err := WalkMediaLibraryContext(context.Background(), filepath.Join(t.TempDir(), "does-not-exist"),
 		map[string]bool{"mkv": true},
 		func(error) {},
 		func(ScanFile) error { return nil },
@@ -201,7 +201,7 @@ func TestWalkMediaLibraryPropagatesOnFileError(t *testing.T) {
 
 	sentinel := errors.New("stop")
 	count := 0
-	err := WalkMediaLibrary(root, map[string]bool{"mkv": true},
+	err := WalkMediaLibraryContext(context.Background(), root, map[string]bool{"mkv": true},
 		func(error) {},
 		func(ScanFile) error {
 			count++

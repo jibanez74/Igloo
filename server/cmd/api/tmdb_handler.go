@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/tmdb"
 	"io"
 	"net/http"
@@ -219,7 +220,7 @@ func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearch
 		return app.mapTmdbSearchResults(ctx, []*tmdb.TmdbMovie{movie}), nil
 	}
 
-	searchTitle := normalizeMovieTitleForSearch(payload.Title)
+	searchTitle := movie.NormalizeTitleForSearch(payload.Title)
 	if searchTitle == "" {
 		searchTitle = payload.Title
 	}
@@ -240,7 +241,7 @@ func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearch
 		return nil, errors.New("TMDB search failed")
 	}
 
-	ranked := rankTmdbMatches(results, searchTitle, payload.Year)
+	ranked := movie.RankTMDBMovies(results, searchTitle, payload.Year)
 	mapped := make([]*tmdb.TmdbMovie, 0, len(results))
 	for _, candidate := range ranked {
 		mapped = append(mapped, candidate.Movie)

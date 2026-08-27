@@ -5,6 +5,7 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	moviescanner "igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/tmdb"
 	"net/http"
 	"os"
@@ -72,42 +73,13 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete existing cast and crew before re-inserting (the other entity
-	// processors already delete-then-insert so they handle this internally).
-	if err = qtx.DeleteMovieCast(ctx, movie.ID); err != nil {
-		app.Logger.Error("failed to delete cast", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update movie cast"))
-		return
-	}
-	if err = qtx.DeleteMovieCrew(ctx, movie.ID); err != nil {
-		app.Logger.Error("failed to delete crew", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update movie crew"))
-		return
-	}
-
-	if err = processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
-		app.Logger.Error("failed to process production companies", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update production companies"))
-		return
-	}
-	if err = processCast(ctx, qtx, nil, movie.ID, tmdbMovie.Credits.Cast); err != nil {
-		app.Logger.Error("failed to process cast", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update cast"))
-		return
-	}
-	if err = processCrew(ctx, qtx, nil, movie.ID, tmdbMovie.Credits.Crew); err != nil {
-		app.Logger.Error("failed to process crew", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update crew"))
-		return
-	}
-	if err = processMovieGenres(ctx, qtx, nil, movie.ID, tmdbMovie.Genres); err != nil {
-		app.Logger.Error("failed to process genres", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update genres"))
-		return
-	}
-	if err = processExtraVideos(ctx, qtx, movie.ID, tmdbMovie.Videos.Results); err != nil {
-		app.Logger.Error("failed to process extra videos", "error", err, "movie_id", movie.ID)
-		helpers.ErrorJSON(w, errors.New("failed to update extra videos"))
+	// The scanner owns the definition of which relationships a TMDB match
+	// replaces, so identifying a movie by hand reuses it. The wrapped error
+	// names the step that failed.
+	err = moviescanner.ApplyTmdbMetadata(ctx, qtx, movie.ID, tmdbMovie)
+	if err != nil {
+		app.Logger.Error("failed to apply tmdb metadata", "error", err, "movie_id", movie.ID)
+		helpers.ErrorJSON(w, errors.New("failed to update movie metadata"))
 		return
 	}
 
@@ -310,10 +282,19 @@ func buildUpdateParamsFromTmdb(movieID int64, m *tmdb.TmdbMovie) database.Update
 
 	if m.ReleaseDate != "" {
 		params.ReleaseDate = helpers.NullString(m.ReleaseDate)
-		if year := extractYearFromReleaseDate(m.ReleaseDate); year > 0 {
+		if year := movieReleaseYear(m.ReleaseDate); year > 0 {
 			params.Year = helpers.NullInt64(int64(year))
 		}
 	}
 
 	return params
+}
+
+func movieReleaseYear(releaseDate string) int {
+	parsed, err := helpers.ParseDate(releaseDate)
+	if err != nil {
+		return 0
+	}
+
+	return parsed.Year()
 }

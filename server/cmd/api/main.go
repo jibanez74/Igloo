@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"igloo/cmd/internal/scanner/movie"
 )
 
 func main() {
@@ -26,6 +28,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	startLibraryScansAtStartup(app)
 
 	app.Server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.Config.Port),
@@ -68,4 +72,19 @@ func main() {
 		app.cleanupStartupResources()
 		os.Exit(1)
 	}
+}
+
+func startMovieScanAtStartup(app *Application) {
+	result := app.MovieScanner.Start()
+	switch result.Status {
+	case movie.StartNotConfigured:
+		app.Logger.Info("skipping movie library scan: movies directory is not configured")
+	case movie.StartAlreadyRunning:
+		app.Logger.Warn("movie library scan is already in progress")
+	}
+}
+
+func startLibraryScansAtStartup(app *Application) {
+	startMovieScanAtStartup(app)
+	app.ScanMusicLibrary()
 }

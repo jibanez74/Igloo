@@ -4,24 +4,7 @@ import (
 	"math"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/helpers"
 )
-
-func chapterStartTimeSeconds(chapter ffprobe.Chapter) int64 {
-	if chapter.StartTime != "" {
-		durationMs, err := helpers.ParseDurationMs(chapter.StartTime)
-		if err == nil {
-			return durationMs / 1000
-		}
-	}
-
-	if chapter.Start > 0 {
-		return int64(chapter.Start) / 1000
-	}
-
-	return 0
-}
 
 func normalizeChapterStartTimeSeconds(startTime int64, durationSec float64) int64 {
 	if startTime <= 0 {

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/ffprobe"
 )
 
 type capturedLogEntry struct {
@@ -83,46 +82,6 @@ func TestLogNormalizedChapterStartTimes(t *testing.T) {
 		if entry.args[i] != wantArgs[i] {
 			t.Fatalf("debug arg %d = %#v, want %#v", i, entry.args[i], wantArgs[i])
 		}
-	}
-}
-
-func TestChapterStartTimeSeconds(t *testing.T) {
-	tests := []struct {
-		name    string
-		chapter ffprobe.Chapter
-		want    int64
-	}{
-		{
-			name: "prefers start_time seconds over raw ffprobe ticks",
-			chapter: ffprobe.Chapter{
-				StartTime: "573.114208",
-				Start:     573114208,
-			},
-			want: 573,
-		},
-		{
-			name: "falls back to raw start when start_time missing",
-			chapter: ffprobe.Chapter{
-				Start: 12000,
-			},
-			want: 12,
-		},
-		{
-			name: "returns zero when chapter starts at zero",
-			chapter: ffprobe.Chapter{
-				StartTime: "0.000000",
-			},
-			want: 0,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := chapterStartTimeSeconds(tc.chapter)
-			if got != tc.want {
-				t.Fatalf("chapterStartTimeSeconds() = %d, want %d", got, tc.want)
-			}
-		})
 	}
 }
 

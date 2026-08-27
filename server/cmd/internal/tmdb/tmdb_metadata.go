@@ -23,53 +23,61 @@ type TmdbVideoResult struct {
 	Official bool   `json:"official"`
 }
 
+type ProductionCompany struct {
+	ID            int    `json:"id"`
+	LogoPath      string `json:"logo_path"`
+	Name          string `json:"name"`
+	OriginCountry string `json:"origin_country"`
+}
+
+type Genre struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type CastCredit struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Character   string `json:"character"`
+	ProfilePath string `json:"profile_path"`
+	Order       int    `json:"order"`
+}
+
+type CrewCredit struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Job         string `json:"job"`
+	Department  string `json:"department"`
+	ProfilePath string `json:"profile_path"`
+}
+
 type TmdbMovie struct {
-	TmdbID              int     `json:"id"`
-	Title               string  `json:"title"`
-	OriginalTitle       string  `json:"original_title"`
-	Overview            string  `json:"overview"`
-	ReleaseDate         string  `json:"release_date"`
-	PosterPath          string  `json:"poster_path"`
-	BackdropPath        string  `json:"backdrop_path"`
-	Popularity          float64 `json:"popularity"`
-	VoteAverage         float64 `json:"vote_average"`
-	VoteCount           int     `json:"vote_count"`
-	Adult               bool    `json:"adult"`
-	OriginalLang        string  `json:"original_language"`
-	GenreIDs            []int   `json:"genre_ids"`
-	Video               bool    `json:"video"`
-	Runtime             int     `json:"runtime"`
-	Status              string  `json:"status"`
-	Tagline             string  `json:"tagline"`
-	Budget              int64   `json:"budget"`
-	Revenue             int64   `json:"revenue"`
-	Homepage            string  `json:"homepage"`
-	ImdbID              string  `json:"imdb_id"`
-	ProductionCompanies []struct {
-		ID            int    `json:"id"`
-		LogoPath      string `json:"logo_path"`
-		Name          string `json:"name"`
-		OriginCountry string `json:"origin_country"`
-	} `json:"production_companies"`
-	Genres []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"genres"`
-	Credits struct {
-		Cast []struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			Character   string `json:"character"`
-			ProfilePath string `json:"profile_path"`
-			Order       int    `json:"order"`
-		} `json:"cast"`
-		Crew []struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			Job         string `json:"job"`
-			Department  string `json:"department"`
-			ProfilePath string `json:"profile_path"`
-		} `json:"crew"`
+	TmdbID              int                 `json:"id"`
+	Title               string              `json:"title"`
+	OriginalTitle       string              `json:"original_title"`
+	Overview            string              `json:"overview"`
+	ReleaseDate         string              `json:"release_date"`
+	PosterPath          string              `json:"poster_path"`
+	BackdropPath        string              `json:"backdrop_path"`
+	Popularity          float64             `json:"popularity"`
+	VoteAverage         float64             `json:"vote_average"`
+	VoteCount           int                 `json:"vote_count"`
+	Adult               bool                `json:"adult"`
+	OriginalLang        string              `json:"original_language"`
+	GenreIDs            []int               `json:"genre_ids"`
+	Video               bool                `json:"video"`
+	Runtime             int                 `json:"runtime"`
+	Status              string              `json:"status"`
+	Tagline             string              `json:"tagline"`
+	Budget              int64               `json:"budget"`
+	Revenue             int64               `json:"revenue"`
+	Homepage            string              `json:"homepage"`
+	ImdbID              string              `json:"imdb_id"`
+	ProductionCompanies []ProductionCompany `json:"production_companies"`
+	Genres              []Genre             `json:"genres"`
+	Credits             struct {
+		Cast []CastCredit `json:"cast"`
+		Crew []CrewCredit `json:"crew"`
 	} `json:"credits"`
 	Videos struct {
 		Results []TmdbVideoResult `json:"results"`

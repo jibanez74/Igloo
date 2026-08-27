@@ -26,12 +26,12 @@ Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same
 
 Movie and music scans treat ffprobe as required infrastructure.
 
-For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each file and persists duration, container, chapters, and a row per video, audio, and subtitle stream — dimensions, codec names and profiles, bit depth, pixel format, frame rates, color metadata, language tags, channel layout, and dispositions. The database schema is the authoritative list; two details are not obvious from it:
+For movies, the scanner (`server/cmd/internal/scanner/movie`) calls `GetMetadata(ctx, path)` while processing each file and persists duration, container, chapters, and a row per video, audio, and subtitle stream — dimensions, codec names and profiles, bit depth, pixel format, frame rates, color metadata, language tags, channel layout, and dispositions. The database schema is the authoritative list; two details are not obvious from it:
 
 - **Rotation** comes from display-matrix side data, and the absence of a matrix is distinct from a zero one: an explicit 0-degree matrix persists as `0`, a stream with no matrix as `NULL`.
 - **Stream tag keys** are normalized like format tags (lowercased, separators stripped, `lang` accepted as a `language` alias), so Matroska muxers writing `TITLE`/`LANGUAGE` still produce labelled, preference-matchable streams.
 
-For music, `ffprobe.GetAudioMetadata` populates track metadata (title, artist, album, genre, track and disc numbers, release date, duration, bitrate, composer, copyright); the library scan supplies each file's size from the filesystem.
+For music, `GetAudioMetadata(ctx, path)` populates track metadata (title, artist, album, genre, track and disc numbers, release date, duration, bitrate, composer, copyright); the library scan supplies each file's size from the filesystem.
 
 The scanner stores stream data in SQLite so playback does not need to run ffprobe on every HLS request. That is intentional. HLS session creation reads movie, video stream, and audio stream rows from the database and starts FFmpeg from that stored metadata. This keeps playback startup predictable and avoids probing the same file repeatedly while users are trying to watch something.
 
@@ -40,6 +40,8 @@ Movie scans run:
 ```bash
 ffprobe -v quiet -print_format json -show_streams -show_format -show_chapters <file>
 ```
+
+Both metadata calls take the caller's context and cap each probe at 60 seconds on top of it. The scan context is the one canceled by shutdown, so stopping the server kills an in-flight ffprobe rather than leaving `app.Wait.Wait()` to sit out the timeout — which matters on slow or network-mounted media. The two failures are reported differently: a canceled caller yields `ffprobe canceled for <file>`, while a probe that outlives its own deadline yields `ffprobe timed out for <file> after 1m0s`, so only the latter indicates a file that is genuinely slow to read.
 
 Music scans limit `-show_entries` to the fields the music scanner needs. The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams, because a scanned item without streams cannot be played or indexed reliably.
 
