@@ -46,12 +46,29 @@ func TestHLSSessionKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := HLSSessionKey(123, "720p_3mbps", &audioTrack, tt.audioProfile, testPlaybackSessionID, 40)
-			want := "movie:123:720p_3mbps:audio:2:" + tt.wantMode + ":session:" + testPlaybackSessionID + ":start:40"
+			key := HLSSessionKey(123, "720p_3mbps", &audioTrack, tt.audioProfile, testPlaybackSessionID, 40, 456)
+			want := "user:456:movie:123:720p_3mbps:audio:2:" + tt.wantMode + ":session:" + testPlaybackSessionID + ":start:40"
 			if key != want {
 				t.Errorf("HLSSessionKey = %q, want %q", key, want)
 			}
 		})
+	}
+
+	base := HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456)
+	otherAudioTrack := 3
+	variants := map[string]string{
+		"owner":            HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 457),
+		"movie":            HLSSessionKey(124, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"profile":          HLSSessionKey(123, "1080p_8mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"audio track":      HLSSessionKey(123, "720p_3mbps", &otherAudioTrack, nil, testPlaybackSessionID, 40, 456),
+		"audio mode":       HLSSessionKey(123, "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), testPlaybackSessionID, 40, 456),
+		"playback session": HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testOtherPlaybackSessionID, 40, 456),
+		"start":            HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 41, 456),
+	}
+	for dimension, key := range variants {
+		if key == base {
+			t.Errorf("changing %s did not change the HLS session key", dimension)
+		}
 	}
 }
 
@@ -503,35 +520,86 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	}
 }
 
-func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	fake := &fakeFFmpeg{
-		plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(safeRemuxFixture),
-		},
+func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
+	tests := []struct {
+		name         string
+		profile      string
+		videoOnly    bool
+		audioCodec   string
+		audioProfile any
+		request      *helpers.HLSAudioProfileRequest
+		wantSlot     bool
+	}{
+		{name: "copy-only remux", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC"},
+		{name: "video-only remux", profile: helpers.HLS_PROFILE_REMUX, videoOnly: true},
+		{name: "legacy audio encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "dts", wantSlot: true},
+		{name: "explicit AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), wantSlot: true},
+		{name: "explicit E-AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6), wantSlot: true},
+		{name: "video encode", profile: helpers.HLS_PROFILE_720P_3MBPS, audioCodec: "aac", audioProfile: "LC", wantSlot: true},
 	}
-	app.FFmpeg = fake
 
-	// Exhaust the only transcode slot; a copy-video (remux) session must not need it.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	defer release()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
+			app.FFmpeg = fake
 
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			audioTrack := testIntPtr(0)
+			if tt.videoOnly {
+				_, err := app.DB.Exec(`DELETE FROM audio_streams WHERE movie_id = ?`, movieID)
+				if err != nil {
+					t.Fatalf("delete audio streams: %v", err)
+				}
+				audioTrack = nil
+			} else {
+				setTestHLSAudioStream(t, app, movieID, tt.audioCodec, tt.audioProfile, 6, "5.1(side)")
+			}
 
-	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err != nil {
-		t.Fatalf("createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
+			app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+			release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+			if err != nil {
+				t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+			}
+			defer release()
 
-	if !session.CopyVideo {
-		t.Fatal("CopyVideo = false, want true for safe remux")
+			session, err := createTestHLSSessionWithAudio(
+				app, context.Background(), movieID, tt.profile, audioTrack,
+				tt.request, testPlaybackSessionID, 0, false,
+			)
+			if tt.wantSlot {
+				var capacityErr *hlsTranscodeCapacityError
+				if !errors.As(err, &capacityErr) {
+					t.Fatalf("error = %v, want hlsTranscodeCapacityError", err)
+				}
+				if fake.CallCount() != 0 {
+					t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
+				}
+
+				release()
+				session, err = createTestHLSSessionWithAudio(
+					app, context.Background(), movieID, tt.profile, audioTrack,
+					tt.request, testPlaybackSessionID, 0, false,
+				)
+				if err != nil {
+					t.Fatalf("createHLSSession after releasing capacity: %v", err)
+				}
+				defer cleanupHLSSession(session)
+				if !session.RequiresTranscodeSlot {
+					t.Fatal("RequiresTranscodeSlot = false, want true")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+			if session.RequiresTranscodeSlot {
+				t.Fatal("RequiresTranscodeSlot = true, want false")
+			}
+		})
 	}
 }
 
@@ -933,6 +1001,7 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 				nil,
 				testPlaybackSessionID,
 				tt.wantStart,
+				userID,
 			)
 			if key != wantKey {
 				t.Fatalf("session key = %q, want %q", key, wantKey)

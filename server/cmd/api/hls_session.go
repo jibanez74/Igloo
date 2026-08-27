@@ -74,6 +74,10 @@ type HLSSession struct {
 	ExitMu        sync.Mutex
 	IsRoom        bool
 	CopyVideo     bool // true when FFmpeg uses -c:v copy for the effective session profile
+	// RequiresTranscodeSlot is true when FFmpeg encodes either video or audio.
+	// It is computed once from the effective session configuration and remains
+	// the source of truth for limiter ownership and idle reclaim.
+	RequiresTranscodeSlot bool
 	// IndependentSegments is true when every segment is guaranteed to start on
 	// an IDR frame, which is the only case where the playlist may carry
 	// #EXT-X-INDEPENDENT-SEGMENTS. FFmpeg's own playlist is gated on the same
@@ -374,8 +378,9 @@ func hlsAudioModeKey(audioProfile *helpers.HLSAudioProfileRequest) string {
 	return fmt.Sprintf("explicit:%s:%d", audioProfile.Codec, audioProfile.MaxChannels)
 }
 
-func HLSSessionKey(movieID int64, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, playbackSession string, startSec int) string {
-	return fmt.Sprintf("movie:%d:%s:%s:%s:session:%s:start:%d", movieID, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), playbackSession, startSec)
+// HLSSessionKey returns an owner-scoped personal HLS session identity.
+func HLSSessionKey(movieID int64, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, playbackSession string, startSec int, ownerUserID int64) string {
+	return fmt.Sprintf("user:%d:movie:%d:%s:%s:%s:session:%s:start:%d", ownerUserID, movieID, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), playbackSession, startSec)
 }
 
 // RoomHLSSessionKey returns the HLS session cache key for a watch room.
@@ -634,7 +639,7 @@ func (app *Application) reservePersonalHLSSession(
 }
 
 // reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
-// transcoding (non-copy-video) session that has been idle for at least
+// session that owns a transcode slot and has been idle for at least
 // hlsIdlePermitReclaimThreshold, freeing its transcode permit. Active clients
 // refresh the TTL on every segment fetch, so a genuinely-playing device is
 // never reclaimed. Returns whether a session was evicted.
@@ -643,7 +648,7 @@ func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64)
 
 	maxExpiration := time.Now().Add(hlsPersonalSessionTTL - hlsIdlePermitReclaimThreshold).UnixNano()
 	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
-		if entry.session.CopyVideo {
+		if !entry.session.RequiresTranscodeSlot {
 			continue
 		}
 		if entry.expiration > maxExpiration {
@@ -870,6 +875,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	}
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
+	requiresTranscodeSlot := !copyVideo || (params.SelectedAudio != nil && !copyAudio)
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
 	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
 	vfrDetected := isVFRStream(params.PrimaryVideo)
@@ -898,10 +904,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	// Copy-video sessions (-c:v copy) use near-zero CPU, so they bypass the
-	// CPU transcode limiter instead of blocking real transcodes.
 	releaseTranscode := func() {}
-	if !copyVideo {
+	if requiresTranscodeSlot {
 		releaseTranscode, err = app.acquireHLSTranscodeSlot(ctx, params.AcquireWait)
 		if err != nil {
 			removeErr := os.RemoveAll(tempDir)
@@ -955,6 +959,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		StartSec:              startSec,
 		IsRoom:                params.IsRoom,
 		CopyVideo:             copyVideo,
+		RequiresTranscodeSlot: requiresTranscodeSlot,
 		IndependentSegments:   ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
 		EffectiveProfile:      params.EffectiveProfile,
 		RequestedAudioProfile: params.RequestedAudioProfile,
@@ -1176,7 +1181,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 }
 
 // GetOrCreateHLSSession returns a cached personal session or creates a new one.
-// Personal sessions are isolated by playback_session and normalized start time.
+// Personal sessions are isolated by owner, playback_session, and normalized start time.
 func (app *Application) GetOrCreateHLSSession(
 	ctx context.Context,
 	movieID int64,
@@ -1187,7 +1192,7 @@ func (app *Application) GetOrCreateHLSSession(
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	requestedKey := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, startSec)
+	requestedKey := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
 
 	// Warm path first, before touching the database. The stored key uses the
 	// normalized start, which equals the raw start whenever it was not clamped
@@ -1212,7 +1217,7 @@ func (app *Application) GetOrCreateHLSSession(
 	if err != nil {
 		return nil, requestedKey, err
 	}
-	key := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec)
+	key := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
 
 	if key != requestedKey {
 		if raw, ok := app.HLSSessionCache.Get(key); ok {

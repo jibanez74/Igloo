@@ -195,7 +195,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := HLSSessionKey(params.MovieID, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec)
+	key := HLSSessionKey(params.MovieID, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec, userID)
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)

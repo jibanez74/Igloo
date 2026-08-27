@@ -1022,7 +1022,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		StartSec:        0,
 		CopyVideo:       false,
 	}
-	app.HLSSessionCache.SetDefault(HLSSessionKey(movieID, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(movieID, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID), session)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -1098,6 +1098,7 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 		nil,
 		testPlaybackSessionID,
 		effectiveStart,
+		userID,
 	)
 	_, cached := app.HLSSessionCache.Get(effectiveKey)
 	if !cached {
@@ -1181,7 +1182,7 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 		Exited:      true,
 		ExitMu:      sync.Mutex{},
 	}
-	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID), session)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -1208,10 +1209,10 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	userID := int64(100)
 	audioTrack := 0
 	matchingDir := t.TempDir()
-	matchingKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0)
-	otherMovieKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0)
-	otherUserKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 4)
-	otherPlaybackKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testOtherPlaybackSessionID, 0)
+	matchingKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+	otherMovieKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+	otherUserKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID+1)
+	otherPlaybackKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testOtherPlaybackSessionID, 0, userID)
 	roomKey := RoomHLSSessionKey(9)
 
 	app.HLSSessionCache.SetDefault(matchingKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: matchingDir})
@@ -1271,7 +1272,7 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 
 	audioTrack := 0
 	userID := int64(100)
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0)
+	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
 	app.HLSSessionCache.SetDefault(key, &HLSSession{
 		MovieID:         5,
 		OwnerUserID:     userID + 1,
@@ -1296,6 +1297,50 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 	}
 	if _, ok := app.HLSSessionCache.Get(key); !ok {
 		t.Fatal("expected mismatched-owner session to remain cached")
+	}
+}
+
+func TestHLSSegment_ResolvesAuthenticatedOwnersCacheEntry(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	audioTrack := 0
+	userIDs := []int64{100, 200}
+	for _, userID := range userIDs {
+		dir := t.TempDir()
+		body := fmt.Sprintf("segment-for-user-%d", userID)
+		err := os.WriteFile(filepath.Join(dir, "segment_0.m4s"), []byte(body), 0o644)
+		if err != nil {
+			t.Fatalf("write owner %d segment: %v", userID, err)
+		}
+		key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+		app.HLSSessionCache.SetDefault(key, &HLSSession{
+			MovieID:         5,
+			OwnerUserID:     userID,
+			PlaybackSession: testPlaybackSessionID,
+			TempDir:         dir,
+			CopyVideo:       true,
+			Exited:          true,
+		})
+	}
+
+	url := fmt.Sprintf(
+		"/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0",
+		testPlaybackSessionID,
+	)
+	for _, userID := range userIDs {
+		recorder := httptest.NewRecorder()
+		newHLSTestHandler(t, app, userID).ServeHTTP(
+			recorder,
+			httptest.NewRequest(http.MethodGet, url, nil),
+		)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("owner %d status = %d, want 200: %s", userID, recorder.Code, recorder.Body.String())
+		}
+		want := fmt.Sprintf("segment-for-user-%d", userID)
+		if recorder.Body.String() != want {
+			t.Fatalf("owner %d body = %q, want %q", userID, recorder.Body.String(), want)
+		}
 	}
 }
 
@@ -1391,7 +1436,7 @@ func TestHLSSegment_RejectsBadRequests(t *testing.T) {
 	// A cache entry of the wrong type can only come from a bug, but leaving it
 	// in place would make every later request for this key fail the same way.
 	t.Run("evicts a cache entry that is not a session", func(t *testing.T) {
-		key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0)
+		key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
 		app.HLSSessionCache.SetDefault(key, "not a session")
 
 		recorder := httptest.NewRecorder()
@@ -1665,6 +1710,7 @@ func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 		&helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 6},
 		testPlaybackSessionID,
 		0,
+		userID,
 	)
 	if _, cached := app.HLSSessionCache.Get(explicitKey); !cached {
 		t.Fatalf("explicit session key %q was not cached", explicitKey)
