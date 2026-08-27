@@ -57,7 +57,7 @@ When a client requests a personal HLS playlist:
 
 `audio_track` is omitted for video-only movies. Igloo loads the movie duration, normalizes the requested start, reserves personal-session capacity, loads the remaining stream metadata, creates a temp directory, starts FFmpeg in the background, converts the reservation into a cached session, and returns a VOD-style playlist to the browser. Segment requests then read files from the session temp directory as FFmpeg produces them.
 
-Personal HLS sessions are keyed by movie ID, requested profile, audio track, playback session ID, and effective normalized start time. If the same request arrives again, Igloo refreshes the cached session TTL and reuses the process. Before FFmpeg starts, Igloo evicts expired entries and removes only superseded windows for the same movie, user, and `playback_session` UUID; sessions from other playback UUIDs remain isolated. Different clients can therefore play the same movie concurrently unless the per-user cap requires an LRU replacement.
+Personal HLS sessions are keyed by authenticated owner user ID, movie ID, requested profile, audio track, audio mode, playback session ID, and effective normalized start time. If the same request from the same owner arrives again, Igloo refreshes the cached session TTL and reuses the process. The owner is also part of the singleflight key, so concurrent identical requests from one user deduplicate while identical URL tuples from different users create distinct FFmpeg sessions and cache entries. Before FFmpeg starts, Igloo evicts expired entries and removes only superseded windows for the same movie, user, and `playback_session` UUID; sessions from other users or playback UUIDs remain isolated. The owner check on a retrieved session remains as defense-in-depth. Different clients can therefore play the same movie concurrently unless the per-user cap requires an LRU replacement.
 
 Cached personal sessions and in-flight creations share the `HLS_MAX_SESSIONS_PER_USER` cap (default 3). Admission reserves capacity before FFmpeg starts. At the cap, the owner's cached personal sessions are evicted in least-recently-used order until the new reservation fits; rooms and other users' sessions are never candidates. If every slot is already held by an in-flight reservation, the manifest request returns `503 Service Unavailable` with `Retry-After`. Remux and transcode creations both participate in this cap. A successful creation atomically exchanges its reservation for the cache entry, while every failure path releases the reservation. Concurrent creation of the same effective key is still deduplicated with singleflight. Clients can also tear a playback session's HLS sessions down explicitly with `POST /api/movies/{id}/hls/session/stop`; the stop endpoint stays scoped to its own playback session ID so a late stop from a closing tab cannot remove a session the user just created after reopening.
 
@@ -214,9 +214,9 @@ Rotation needs no filter work: FFmpeg's CLI applies display-matrix rotation auto
 
 Variable frame rate is detected (`isVFRStream` compares the stored average and nominal frame rates) and logged at session start as `vfr_detected`, but no `fps` filter is applied: forcing a rate can introduce judder on healthy content, and `-force_key_frames` already keeps segmentation correct on VFR sources.
 
-Igloo does not pass `-threads` to FFmpeg. libx264 and the hardware encoders choose their own per-process thread behavior. CPU encoding pressure on a home server is bounded by the HLS transcode limiter: `HLS_MAX_CPU_TRANSCODES` sets the maximum number of concurrent HLS transcode sessions, and the default is `max(1, runtime.NumCPU()/4)`. Copy-video (remux) sessions bypass this CPU limiter because they do not encode video, but they still require a per-user personal-session reservation.
+Igloo does not pass `-threads` to FFmpeg. libx264 and the hardware encoders choose their own per-process thread behavior. Encoding pressure on a home server is bounded by the HLS transcode limiter: `HLS_MAX_CPU_TRANSCODES` sets the maximum number of concurrent HLS sessions that encode video or audio, and the default is `max(1, runtime.NumCPU()/4)`. A copy-video remux bypasses this limiter only when its selected audio is also copied or the movie has no audio. Legacy audio conversion and explicit AC-3/E-AC-3 output require a permit even when video is copied. Every personal session, including a true copy-only remux, still requires a per-user personal-session reservation.
 
-Admission when permits are exhausted runs in three steps. First, personal playback may reclaim the owner's least-recently-used non-remux session, but only when it has been idle for at least 30 seconds and FFmpeg is still running; reclaim skips completed sessions, rooms, other users' sessions, copy-video sessions, and fresh active sessions, continuing through LRU candidates until it finds an eligible running transcode. Second — whether or not reclaim found a victim — Igloo retries the start, and that retry parks on the permit channel for up to `hlsTranscodeAcquireWait` (15 s), releasing early the moment a permit frees or the request is cancelled. Third, a request that outlasts the budget gets the normal `503` plus `Retry-After`.
+Admission when permits are exhausted runs in three steps. First, personal playback may reclaim the owner's least-recently-used session that owns a transcode permit, but only when it has been idle for at least 30 seconds and FFmpeg is still running; reclaim skips completed sessions, rooms, other users' sessions, true copy-only sessions, and fresh active sessions, continuing through LRU candidates until it finds an eligible running encode. This includes copy-video sessions that encode audio. Second — whether or not reclaim found a victim — Igloo retries the start, and that retry parks on the permit channel for up to `hlsTranscodeAcquireWait` (15 s), releasing early the moment a permit frees or the request is cancelled. Third, a request that outlasts the budget gets the normal `503` plus `Retry-After`.
 
 The wait is what guarantees progress. Reclaim only covers the abandoned-client case; when every permit belongs to a stream that is genuinely playing, nothing goes idle and an instant refusal starves the queued stream forever. Parking is a send on the permit channel rather than a poll, so the runtime hands a freed slot straight to the longest-waiting request with no idle-slot gap. A background room warm-up passes a zero budget and never parks.
 
@@ -246,6 +246,27 @@ Otherwise — non-AAC codecs, HE-AAC/xHE-AAC profiles, or AAC whose profile was 
 ```
 
 AAC-LC is the safest baseline for browser HLS playback; browser support for SBR/PS profiles inside fMP4 HLS is spotty, and an unknown profile cannot prove safety. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
+
+### Explicit Audio Profiles (AC-3 / E-AC-3)
+
+The legacy behavior above removes surround channels from DTS, TrueHD, and other incompatible sources. For clients whose playback stack handles Dolby formats (the TV client feeding a Sonos system), the personal movie HLS routes accept an explicit audio profile:
+
+```text
+?audio_codec=<ac3|eac3>&audio_channels=<2|6>
+```
+
+The two parameters form one request: both absent is legacy mode exactly as documented above, both present is explicit mode, and one alone is HTTP 400 — an invalid pair is never silently normalized to legacy stereo, because legacy mode may copy a multichannel AAC-LC track and explicit AAC stereo would change existing playback. `aac` is not an accepted explicit value; AAC output exists only through legacy behavior. Watch-room HLS has no audio-profile contract and always runs in legacy mode.
+
+Explicit requests always encode — the AAC-LC copy gate never applies, so `audio_codec=eac3` cannot return AAC because the source happened to be copy-safe. The server owns every encoding constant (`helpers/hls_audio_profiles.go`): raw query values never reach the FFmpeg command line, only a resolved typed profile validated against those tables. Output is always 48 kHz, with bitrate selected from the codec and the effective channel count:
+
+| Output codec | 1 channel | 2 channels | 3-4 channels | 5-6 channels |
+| --- | ---: | ---: | ---: | ---: |
+| AC-3 | 192k | 384k | 448k | 640k |
+| E-AC-3 | 192k | 384k | 512k | 768k |
+
+`audio_channels` is a ceiling resolved against the selected `audio_track`'s stored `channels`/`channel_layout` row, regardless of source codec: mono and stereo are never upmixed, a source within the ceiling keeps its channel count and stored layout, 7.1 downmixes to standard 5.1 under a maximum of 6, and anything above 2 downmixes to standard stereo under a maximum of 2. Conversion happens through `-ac`, which rematrixes via libswresample so center, surround, and LFE content participate in downmixes. A selected audio row with no stored channel count returns a typed HTTP 422 before any session resources are allocated; a probed FFmpeg build without the resolved encoder returns HTTP 503 (no `Retry-After` — it is an installation problem) before the temp directory is created or a transcode permit acquired. AAC remains required for legacy playback, but AC-3/E-AC-3 may be missing from a swapped external binary without preventing startup.
+
+The normalized pair joins the personal session cache key (`legacy` vs `explicit:<codec>:<max>`), so legacy and explicit requests — and different codecs or ceilings — never share segments, and it is propagated onto every rewritten `init.mp4`/`segment_N.m4s` URL so asset requests compute the same key. The requested profile survives a remux-safety fallback to a video transcode. The manifest response describes the session's actual audio in `X-Igloo-Effective-Audio-Codec`, `X-Igloo-Effective-Audio-Channels`, and `X-Igloo-Effective-Audio-Bitrate` (source values for copied legacy AAC, `aac`/2/`320k` for the legacy transcode, the resolved encode for explicit mode; omitted for video-only sessions). These are diagnostic; the media stream stays the playback authority, and the media playlist gains no `CODECS` attribute or audio rendition group.
 
 ### Audio Track Selection and Direct Play
 
@@ -449,7 +470,7 @@ For binary deployments:
 
 - `TRANSCODE_DIR` seeds the Settings transcode directory on first launch; after that, edit it from Settings.
 - HLS temp output is written below the Settings transcode directory. A session generates the whole remaining movie ahead of the playhead, so Igloo refuses to start one when that filesystem has less than 2 GB free, returning `503` rather than failing mid-stream. A filesystem it cannot measure is not treated as full.
-- `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS transcode sessions; copy-video (remux) sessions are not counted. It is not stored in Settings.
+- `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS sessions that encode video or audio. Copy-video remux sessions count when they encode audio and bypass the limit only when audio is copied or absent. It is not stored in Settings.
 - `HLS_MAX_SESSIONS_PER_USER` is read at startup and limits cached plus in-flight personal HLS sessions per user; remux and transcode sessions are both counted. The default is 3. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 

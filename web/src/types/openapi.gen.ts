@@ -3791,6 +3791,12 @@ export interface components {
                 "X-Igloo-Effective-Profile"?: string;
                 /** @description Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured. */
                 "X-Igloo-Actual-Start"?: number;
+                /** @description Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac for legacy sessions (copied or stereo-encoded). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions. */
+                "X-Igloo-Effective-Audio-Codec"?: "aac" | "ac3" | "eac3";
+                /** @description Effective output channel count, resolved from the selected source stream and the requested maximum. For copied legacy AAC this is the stored source channel count. Omitted for video-only sessions. */
+                "X-Igloo-Effective-Audio-Channels"?: number;
+                /** @description Audio bitrate: the server profile value for encodes (for example 640k or 320k) or the stored source bitrate in bits per second for copied legacy AAC. Omitted for video-only sessions and when the copied source bitrate is unknown. */
+                "X-Igloo-Effective-Audio-Bitrate"?: string;
                 [name: string]: unknown;
             };
             content: {
@@ -4222,6 +4228,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description The request is syntactically valid but the stored media metadata cannot satisfy it, such as an explicit audio profile against a stream without stored channel metadata. */
+        UnprocessableEntity: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Request body is too large. */
         PayloadTooLarge: {
             headers: {
@@ -4365,6 +4380,10 @@ export interface components {
         PlaybackSessionQuery: string;
         /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
         HLSReloadQuery: string;
+        /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+        HLSAudioCodecQuery: "ac3" | "eac3";
+        /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
+        HLSAudioChannelsQuery: 2 | 6;
         /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
         SubtitleStartQuery: number;
     };
@@ -5760,6 +5779,10 @@ export interface operations {
             query: {
                 /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
+                /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
+                audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
                 /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
                 start: components["parameters"]["StartQuery"];
                 /** @description UUID that scopes one personal HLS playback session. */
@@ -5780,6 +5803,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -5789,6 +5813,10 @@ export interface operations {
             query: {
                 /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
+                /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
+                audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
                 /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
                 start: components["parameters"]["StartQuery"];
                 /** @description UUID that scopes one personal HLS playback session. */

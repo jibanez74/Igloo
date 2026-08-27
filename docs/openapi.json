@@ -2129,6 +2129,12 @@
             "$ref": "#/components/parameters/AudioTrackQuery"
           },
           {
+            "$ref": "#/components/parameters/HLSAudioCodecQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioChannelsQuery"
+          },
+          {
             "$ref": "#/components/parameters/StartQuery"
           },
           {
@@ -2150,6 +2156,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2182,6 +2191,12 @@
           },
           {
             "$ref": "#/components/parameters/AudioTrackQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioCodecQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioChannelsQuery"
           },
           {
             "$ref": "#/components/parameters/StartQuery"
@@ -4600,6 +4615,26 @@
           "type": "string"
         }
       },
+      "HLSAudioCodecQuery": {
+        "name": "audio_codec",
+        "in": "query",
+        "required": false,
+        "description": "Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value.",
+        "schema": {
+          "type": "string",
+          "enum": ["ac3", "eac3"]
+        }
+      },
+      "HLSAudioChannelsQuery": {
+        "name": "audio_channels",
+        "in": "query",
+        "required": false,
+        "description": "Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400.",
+        "schema": {
+          "type": "integer",
+          "enum": [2, 6]
+        }
+      },
       "SubtitleStartQuery": {
         "name": "start",
         "in": "query",
@@ -5444,6 +5479,26 @@
               "type": "number",
               "minimum": 0
             }
+          },
+          "X-Igloo-Effective-Audio-Codec": {
+            "description": "Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac for legacy sessions (copied or stereo-encoded). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions.",
+            "schema": {
+              "type": "string",
+              "enum": ["aac", "ac3", "eac3"]
+            }
+          },
+          "X-Igloo-Effective-Audio-Channels": {
+            "description": "Effective output channel count, resolved from the selected source stream and the requested maximum. For copied legacy AAC this is the stored source channel count. Omitted for video-only sessions.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "X-Igloo-Effective-Audio-Bitrate": {
+            "description": "Audio bitrate: the server profile value for encodes (for example 640k or 320k) or the stored source bitrate in bits per second for copied legacy AAC. Omitted for video-only sessions and when the copied source bitrate is unknown.",
+            "schema": {
+              "type": "string"
+            }
           }
         },
         "content": {
@@ -5949,6 +6004,16 @@
       },
       "Conflict": {
         "description": "Request conflicts with existing data.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "The request is syntactically valid but the stored media metadata cannot satisfy it, such as an explicit audio profile against a stream without stored channel metadata.",
         "content": {
           "application/json": {
             "schema": {

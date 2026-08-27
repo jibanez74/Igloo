@@ -10,15 +10,65 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
 
 func TestHLSSessionKey(t *testing.T) {
 	audioTrack := 2
-	key := HLSSessionKey(123, "720p_3mbps", &audioTrack, testPlaybackSessionID, 40)
-	want := "movie:123:720p_3mbps:audio:2:session:" + testPlaybackSessionID + ":start:40"
-	if key != want {
-		t.Errorf("HLSSessionKey = %q, want %q", key, want)
+	tests := []struct {
+		name         string
+		audioProfile *helpers.HLSAudioProfileRequest
+		wantMode     string
+	}{
+		{name: "legacy", wantMode: "legacy"},
+		{
+			name:         "explicit ac3 stereo",
+			audioProfile: &helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecAC3, MaxChannels: 2},
+			wantMode:     "explicit:ac3:2",
+		},
+		{
+			name:         "explicit ac3 surround",
+			audioProfile: &helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecAC3, MaxChannels: 6},
+			wantMode:     "explicit:ac3:6",
+		},
+		{
+			name:         "explicit eac3 stereo",
+			audioProfile: &helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 2},
+			wantMode:     "explicit:eac3:2",
+		},
+		{
+			name:         "explicit eac3 surround",
+			audioProfile: &helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 6},
+			wantMode:     "explicit:eac3:6",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key := HLSSessionKey(123, "720p_3mbps", &audioTrack, tt.audioProfile, testPlaybackSessionID, 40, 456)
+			want := "user:456:movie:123:720p_3mbps:audio:2:" + tt.wantMode + ":session:" + testPlaybackSessionID + ":start:40"
+			if key != want {
+				t.Errorf("HLSSessionKey = %q, want %q", key, want)
+			}
+		})
+	}
+
+	base := HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456)
+	otherAudioTrack := 3
+	variants := map[string]string{
+		"owner":            HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 457),
+		"movie":            HLSSessionKey(124, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"profile":          HLSSessionKey(123, "1080p_8mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"audio track":      HLSSessionKey(123, "720p_3mbps", &otherAudioTrack, nil, testPlaybackSessionID, 40, 456),
+		"audio mode":       HLSSessionKey(123, "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), testPlaybackSessionID, 40, 456),
+		"playback session": HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testOtherPlaybackSessionID, 40, 456),
+		"start":            HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 41, 456),
+	}
+	for dimension, key := range variants {
+		if key == base {
+			t.Errorf("changing %s did not change the HLS session key", dimension)
+		}
 	}
 }
 
@@ -470,35 +520,86 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	}
 }
 
-func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	fake := &fakeFFmpeg{
-		plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(safeRemuxFixture),
-		},
+func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
+	tests := []struct {
+		name         string
+		profile      string
+		videoOnly    bool
+		audioCodec   string
+		audioProfile any
+		request      *helpers.HLSAudioProfileRequest
+		wantSlot     bool
+	}{
+		{name: "copy-only remux", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC"},
+		{name: "video-only remux", profile: helpers.HLS_PROFILE_REMUX, videoOnly: true},
+		{name: "legacy audio encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "dts", wantSlot: true},
+		{name: "explicit AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), wantSlot: true},
+		{name: "explicit E-AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6), wantSlot: true},
+		{name: "video encode", profile: helpers.HLS_PROFILE_720P_3MBPS, audioCodec: "aac", audioProfile: "LC", wantSlot: true},
 	}
-	app.FFmpeg = fake
 
-	// Exhaust the only transcode slot; a copy-video (remux) session must not need it.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	defer release()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
+			app.FFmpeg = fake
 
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			audioTrack := testIntPtr(0)
+			if tt.videoOnly {
+				_, err := app.DB.Exec(`DELETE FROM audio_streams WHERE movie_id = ?`, movieID)
+				if err != nil {
+					t.Fatalf("delete audio streams: %v", err)
+				}
+				audioTrack = nil
+			} else {
+				setTestHLSAudioStream(t, app, movieID, tt.audioCodec, tt.audioProfile, 6, "5.1(side)")
+			}
 
-	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err != nil {
-		t.Fatalf("createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
+			app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+			release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+			if err != nil {
+				t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+			}
+			defer release()
 
-	if !session.CopyVideo {
-		t.Fatal("CopyVideo = false, want true for safe remux")
+			session, err := createTestHLSSessionWithAudio(
+				app, context.Background(), movieID, tt.profile, audioTrack,
+				tt.request, testPlaybackSessionID, 0, false,
+			)
+			if tt.wantSlot {
+				var capacityErr *hlsTranscodeCapacityError
+				if !errors.As(err, &capacityErr) {
+					t.Fatalf("error = %v, want hlsTranscodeCapacityError", err)
+				}
+				if fake.CallCount() != 0 {
+					t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
+				}
+
+				release()
+				session, err = createTestHLSSessionWithAudio(
+					app, context.Background(), movieID, tt.profile, audioTrack,
+					tt.request, testPlaybackSessionID, 0, false,
+				)
+				if err != nil {
+					t.Fatalf("createHLSSession after releasing capacity: %v", err)
+				}
+				defer cleanupHLSSession(session)
+				if !session.RequiresTranscodeSlot {
+					t.Fatal("RequiresTranscodeSlot = false, want true")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+			if session.RequiresTranscodeSlot {
+				t.Fatal("RequiresTranscodeSlot = true, want false")
+			}
+		})
 	}
 }
 
@@ -883,6 +984,7 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 				movieID,
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
+				nil,
 				testPlaybackSessionID,
 				tt.requestedStart,
 				userID,
@@ -896,8 +998,10 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 				movieID,
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
+				nil,
 				testPlaybackSessionID,
 				tt.wantStart,
+				userID,
 			)
 			if key != wantKey {
 				t.Fatalf("session key = %q, want %q", key, wantKey)
@@ -1033,5 +1137,419 @@ func TestResolveHLSActualStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("GetKeyframeIndex error = %v, want sql.ErrNoRows after a failed extraction", err)
+	}
+}
+
+func explicitAudioRequest(codec helpers.HLSAudioCodec, maxChannels int) *helpers.HLSAudioProfileRequest {
+	return &helpers.HLSAudioProfileRequest{Codec: codec, MaxChannels: maxChannels}
+}
+
+// Explicit requests are deterministic about codec and channels: they always
+// encode with the resolved server-owned profile — the legacy AAC copy gate
+// never applies — and the channel maximum is a ceiling resolved against the
+// selected source row regardless of its codec.
+func TestCreateHLSSession_ExplicitAudioResolution(t *testing.T) {
+	tests := []struct {
+		name           string
+		sourceCodec    string
+		sourceProfile  any
+		sourceChannels int64
+		sourceLayout   any
+		request        *helpers.HLSAudioProfileRequest
+		wantEncoder    string
+		wantChannels   int
+		wantBitrate    string
+		wantLayout     string
+	}{
+		{
+			name:        "copy-safe AAC 5.1 encodes to ac3 and keeps six channels",
+			sourceCodec: "aac", sourceProfile: "LC", sourceChannels: 6, sourceLayout: "5.1(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+			wantEncoder: "ac3", wantChannels: 6, wantBitrate: "640k", wantLayout: "5.1(side)",
+		},
+		{
+			name:        "copy-safe AAC 5.1 encodes to eac3 and keeps six channels",
+			sourceCodec: "aac", sourceProfile: "LC", sourceChannels: 6, sourceLayout: "5.1(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6),
+			wantEncoder: "eac3", wantChannels: 6, wantBitrate: "768k", wantLayout: "5.1(side)",
+		},
+		{
+			name:        "DTS-HD MA 5.1 encodes to eac3 with six channels",
+			sourceCodec: "dts", sourceProfile: "DTS-HD MA", sourceChannels: 6, sourceLayout: "5.1(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6),
+			wantEncoder: "eac3", wantChannels: 6, wantBitrate: "768k", wantLayout: "5.1(side)",
+		},
+		{
+			name:        "DTS-HD MA 5.1 encodes to ac3 with six channels",
+			sourceCodec: "dts", sourceProfile: "DTS-HD MA", sourceChannels: 6, sourceLayout: "5.1(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+			wantEncoder: "ac3", wantChannels: 6, wantBitrate: "640k", wantLayout: "5.1(side)",
+		},
+		{
+			// The URL is deterministic: a source that already matches the
+			// requested codec is still encoded in the first version.
+			name:        "matching ac3 source still encodes",
+			sourceCodec: "ac3", sourceProfile: nil, sourceChannels: 6, sourceLayout: "5.1(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+			wantEncoder: "ac3", wantChannels: 6, wantBitrate: "640k", wantLayout: "5.1(side)",
+		},
+		{
+			name:        "mono is never upmixed",
+			sourceCodec: "aac", sourceProfile: "LC", sourceChannels: 1, sourceLayout: "mono",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+			wantEncoder: "ac3", wantChannels: 1, wantBitrate: "192k", wantLayout: "mono",
+		},
+		{
+			name:        "stereo is never upmixed",
+			sourceCodec: "aac", sourceProfile: "LC", sourceChannels: 2, sourceLayout: "stereo",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6),
+			wantEncoder: "eac3", wantChannels: 2, wantBitrate: "384k", wantLayout: "stereo",
+		},
+		{
+			name:        "5.0 keeps its channel count and layout under a maximum of six",
+			sourceCodec: "dts", sourceProfile: nil, sourceChannels: 5, sourceLayout: "5.0(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+			wantEncoder: "ac3", wantChannels: 5, wantBitrate: "640k", wantLayout: "5.0(side)",
+		},
+		{
+			name:        "5.1 downmixes to standard stereo under a maximum of two",
+			sourceCodec: "dts", sourceProfile: "DTS-HD MA", sourceChannels: 6, sourceLayout: "5.1(side)",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecEAC3, 2),
+			wantEncoder: "eac3", wantChannels: 2, wantBitrate: "384k", wantLayout: "stereo",
+		},
+		{
+			name:        "7.1 downmixes to standard 5.1 under a maximum of six",
+			sourceCodec: "truehd", sourceProfile: nil, sourceChannels: 8, sourceLayout: "7.1",
+			request:     explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6),
+			wantEncoder: "eac3", wantChannels: 6, wantBitrate: "768k", wantLayout: "5.1",
+		},
+		{
+			name:        "a row without a stored layout resolves the standard name",
+			sourceCodec: "dts", sourceProfile: nil, sourceChannels: 6, sourceLayout: nil,
+			request:     explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+			wantEncoder: "ac3", wantChannels: 6, wantBitrate: "640k", wantLayout: "5.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+			app.FFmpeg = fake
+
+			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			setTestHLSAudioStream(t, app, movieID, tt.sourceCodec, tt.sourceProfile, tt.sourceChannels, tt.sourceLayout)
+
+			session, err := createTestHLSSessionWithAudio(
+				app,
+				context.Background(),
+				movieID,
+				helpers.HLS_PROFILE_720P_3MBPS,
+				testIntPtr(0),
+				tt.request,
+				testPlaybackSessionID,
+				0,
+				false,
+			)
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+
+			calls := fake.Calls()
+			if len(calls) != 1 {
+				t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+			}
+			if calls[0].CopyAudio {
+				t.Fatal("CopyAudio = true, want false: the legacy copy decision must not leak into explicit mode")
+			}
+			profile := calls[0].AudioProfile
+			if profile == nil {
+				t.Fatal("RunHLS AudioProfile = nil, want the resolved explicit profile")
+			}
+			if profile.Encoder != tt.wantEncoder {
+				t.Errorf("Encoder = %q, want %q", profile.Encoder, tt.wantEncoder)
+			}
+			if profile.Channels != tt.wantChannels {
+				t.Errorf("Channels = %d, want %d", profile.Channels, tt.wantChannels)
+			}
+			if profile.Bitrate != tt.wantBitrate {
+				t.Errorf("Bitrate = %q, want %q", profile.Bitrate, tt.wantBitrate)
+			}
+			if profile.ChannelLayout != tt.wantLayout {
+				t.Errorf("ChannelLayout = %q, want %q", profile.ChannelLayout, tt.wantLayout)
+			}
+			if profile.SampleRate != helpers.HLS_EXPLICIT_AUDIO_SAMPLE_RATE {
+				t.Errorf("SampleRate = %d, want %d", profile.SampleRate, helpers.HLS_EXPLICIT_AUDIO_SAMPLE_RATE)
+			}
+			if profile.Copy {
+				t.Error("Copy = true, want false: explicit requests always encode")
+			}
+			if session.RequestedAudioProfile != tt.request {
+				t.Error("session did not store the requested audio profile")
+			}
+			if session.EffectiveAudioProfile == nil || *session.EffectiveAudioProfile != *profile {
+				t.Errorf("session EffectiveAudioProfile = %+v, want %+v", session.EffectiveAudioProfile, profile)
+			}
+		})
+	}
+}
+
+// The selected audio row, not the first one, drives channel resolution.
+func TestCreateHLSSession_ExplicitAudioUsesSelectedTrack(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+	app.FFmpeg = fake
+
+	// The fixture's first row stays stereo AAC; the second row is a 5.1 DTS
+	// track at absolute index 3, so ordinal 1 must resolve six channels.
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	_, err := app.DB.Exec(`
+		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, channel_layout, language)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, movieID, 3, "dts", 1_500_000, 6, "5.1(side)", "spa")
+	if err != nil {
+		t.Fatalf("insert second audio stream: %v", err)
+	}
+
+	session, err := createTestHLSSessionWithAudio(
+		app,
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(1),
+		explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6),
+		testPlaybackSessionID,
+		0,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].AudioStreamIndex != 3 {
+		t.Fatalf("AudioStreamIndex = %d, want 3", calls[0].AudioStreamIndex)
+	}
+	profile := calls[0].AudioProfile
+	if profile == nil || profile.Channels != 6 || profile.Bitrate != "768k" {
+		t.Fatalf("AudioProfile = %+v, want six channels at 768k from the selected row", profile)
+	}
+}
+
+// A stream without stored channel metadata cannot resolve a safe explicit
+// profile: the typed 422 error must fire before FFmpeg is ever started.
+func TestCreateHLSSession_ExplicitAudioMissingChannelMetadata(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	setTestHLSAudioStream(t, app, movieID, "dts", nil, 0, nil)
+
+	_, err := createTestHLSSessionWithAudio(
+		app,
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(0),
+		explicitAudioRequest(helpers.HLSAudioCodecAC3, 6),
+		testPlaybackSessionID,
+		0,
+		false,
+	)
+
+	var metadataErr *hlsAudioMetadataError
+	if !errors.As(err, &metadataErr) {
+		t.Fatalf("error = %v, want hlsAudioMetadataError", err)
+	}
+	if fake.CallCount() != 0 {
+		t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
+	}
+}
+
+// A missing Dolby encoder is a server installation problem surfaced before any
+// session resources (temp directory, transcode permit) are allocated. Legacy
+// requests must stay unaffected by the same build.
+func TestCreateHLSSession_ExplicitAudioEncoderUnavailable(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	// A probed build that only provides AAC, like a swapped external binary.
+	fake := &fakeFFmpeg{
+		plans:        []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)},
+		capabilities: &ffmpeg.Capabilities{Probed: true, Encoders: map[string]bool{"aac": true}},
+	}
+	app.FFmpeg = fake
+
+	// Exhaust the only transcode permit: the rejection must come from the
+	// encoder gate, which runs before limiter acquisition would block.
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+	}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	setTestHLSAudioStream(t, app, movieID, "aac", "LC", 6, "5.1(side)")
+
+	_, err = createTestHLSSessionWithAudio(
+		app,
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testIntPtr(0),
+		explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6),
+		testPlaybackSessionID,
+		0,
+		false,
+	)
+
+	var encoderErr *hlsAudioEncoderUnavailableError
+	if !errors.As(err, &encoderErr) {
+		t.Fatalf("error = %v, want hlsAudioEncoderUnavailableError", err)
+	}
+	if encoderErr.Encoder != "eac3" {
+		t.Fatalf("Encoder = %q, want eac3", encoderErr.Encoder)
+	}
+	if fake.CallCount() != 0 {
+		t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
+	}
+
+	// The same build keeps serving legacy sessions.
+	release()
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("legacy createHLSSession returned error: %v", err)
+	}
+	cleanupHLSSession(session)
+}
+
+// A remux request that fails the safety gate restarts as a transcode; the
+// explicit audio profile must survive that fallback.
+func TestCreateHLSSession_RemuxFallbackKeepsExplicitAudio(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(unsafeRemuxFixture),
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	setTestHLSAudioStream(t, app, movieID, "aac", "LC", 6, "5.1(side)")
+
+	request := explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6)
+	session, err := createTestHLSSessionWithAudio(
+		app,
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_REMUX,
+		testIntPtr(0),
+		request,
+		testPlaybackSessionID,
+		0,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want false after the remux fallback")
+	}
+	calls := fake.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("RunHLS call count = %d, want 2", len(calls))
+	}
+	for i, call := range calls {
+		if call.AudioProfile == nil ||
+			call.AudioProfile.Encoder != "eac3" ||
+			call.AudioProfile.Channels != 6 ||
+			call.AudioProfile.Bitrate != "768k" {
+			t.Fatalf("RunHLS call %d AudioProfile = %+v, want the explicit eac3 5.1 profile", i, call.AudioProfile)
+		}
+	}
+	if session.RequestedAudioProfile != request {
+		t.Fatal("session lost the requested audio profile across the fallback")
+	}
+}
+
+// Watch rooms stay in legacy audio mode: room creation has no audio-profile
+// contract, so the shared session path must pass none through.
+func TestGetOrCreateRoomHLSSession_UsesLegacyAudioMode(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	session, err := app.GetOrCreateRoomHLSSession(context.Background(), 9, movieID, helpers.HLS_PROFILE_720P_3MBPS, 0, nil, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)
+	}
+	defer app.CleanupRoomHLSSession(9)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].AudioProfile != nil {
+		t.Fatalf("room RunHLS AudioProfile = %+v, want nil (legacy mode)", calls[0].AudioProfile)
+	}
+	if session.RequestedAudioProfile != nil {
+		t.Fatal("room session stored a requested audio profile, want legacy mode")
+	}
+}
+
+// legacyEffectiveHLSAudio backs the effective-audio headers and logs for
+// legacy sessions: copied tracks report their stored source values, encoded
+// tracks report the stereo AAC fallback.
+func TestLegacyEffectiveHLSAudio(t *testing.T) {
+	copied := legacyEffectiveHLSAudio(&database.AudioStream{
+		Codec:         "aac",
+		BitRate:       192000,
+		Channels:      6,
+		ChannelLayout: sql.NullString{String: "5.1(side)", Valid: true},
+		SampleRate:    sql.NullInt64{Int64: 48000, Valid: true},
+	}, true)
+	want := helpers.HLSResolvedAudioProfile{
+		Codec:         helpers.HLSAudioCodecAAC,
+		Channels:      6,
+		ChannelLayout: "5.1(side)",
+		Bitrate:       "192000",
+		SampleRate:    48000,
+		Copy:          true,
+	}
+	if *copied != want {
+		t.Fatalf("copied profile = %+v, want %+v", *copied, want)
+	}
+
+	encoded := legacyEffectiveHLSAudio(&database.AudioStream{Codec: "dts", Channels: 6}, false)
+	wantEncoded := helpers.HLSResolvedAudioProfile{
+		Codec:         helpers.HLSAudioCodecAAC,
+		Encoder:       "aac",
+		Channels:      2,
+		ChannelLayout: "stereo",
+		Bitrate:       helpers.HLS_LEGACY_AUDIO_BITRATE,
+	}
+	if *encoded != wantEncoded {
+		t.Fatalf("encoded profile = %+v, want %+v", *encoded, wantEncoded)
 	}
 }
