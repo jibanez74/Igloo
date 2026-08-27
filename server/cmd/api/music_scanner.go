@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
-	"maps"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,6 +16,18 @@ import (
 
 	spotifylib "github.com/zmb3/spotify/v2"
 )
+
+var musicScanGuard scanner.ScanGuard
+
+// scanContext returns the shutdown-aware context library scans run under, and
+// falls back to a background context when the application has none configured.
+func (app *Application) scanContext() context.Context {
+	if app.ScanContext != nil {
+		return app.ScanContext
+	}
+
+	return context.Background()
+}
 
 // ---------------------------------------------------------------------------
 // Scan orchestration
@@ -58,7 +70,7 @@ func (app *Application) runMusicScan() {
 	tracksScanned := 0
 	tracksSkipped := 0
 	startTime := time.Now()
-	batch := make([]helpers.ScanFile, 0, scannerBatchSize)
+	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
 	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
@@ -77,7 +89,7 @@ func (app *Application) runMusicScan() {
 		batch = batch[:0]
 	}
 
-	err = helpers.WalkMediaLibraryContext(
+	err = scanner.WalkMediaLibraryContext(
 		ctx,
 		settings.MusicDir.String,
 		helpers.ValidAudioExtensions,
@@ -85,7 +97,7 @@ func (app *Application) runMusicScan() {
 			app.Logger.Error(err.Error())
 			errorCount++
 		},
-		func(file helpers.ScanFile) error {
+		func(file scanner.ScanFile) error {
 			if scan.trackUnchanged(file.Path, file.Size) {
 				tracksSkipped++
 				return nil
@@ -93,7 +105,7 @@ func (app *Application) runMusicScan() {
 
 			batch = append(batch, file)
 
-			if len(batch) >= scannerBatchSize {
+			if len(batch) >= scanner.BatchSize {
 				flushBatch()
 			}
 
@@ -111,12 +123,17 @@ func (app *Application) runMusicScan() {
 	}
 
 	flushBatch()
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		app.Logger.Info("music library scan canceled")
+		return
+	}
 
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanContext, files []helpers.ScanFile) (scanned, skipped, errCount int) {
+func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
 		if ctx.Err() != nil {
 			return scanned, skipped, errCount
@@ -152,7 +169,7 @@ func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int6
 		return nil, err
 	}
 
-	return helpers.BuildScanIndex(rows, func(row database.ListMusicTrackScanIndexRow) (string, int64) {
+	return scanner.BuildScanIndex(rows, func(row database.ListMusicTrackScanIndexRow) (string, int64) {
 		return row.FilePath, row.Size
 	}), nil
 }
@@ -160,56 +177,6 @@ func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int6
 // ---------------------------------------------------------------------------
 // Scan context
 // ---------------------------------------------------------------------------
-
-// scanCache is a two-level map: transaction-local entries over an optional
-// read-only base layer. The scan-lifetime context uses just the local layer;
-// the per-track overlay created by clone() starts empty and reads through to
-// the scan layer. Discarding the overlay after a rolled-back transaction
-// discards its entries, which used to require cloning every map per track --
-// O(tracks x library) -- and now costs only the new entries.
-type scanCache[K comparable, V any] struct {
-	local map[K]V
-	base  map[K]V // nil on the scan-lifetime context
-}
-
-func newScanCache[K comparable, V any]() scanCache[K, V] {
-	return scanCache[K, V]{local: make(map[K]V)}
-}
-
-// overlay returns an empty transaction-local layer over this cache's entries.
-// Only meaningful on the scan-lifetime cache (base == nil); overlays are never
-// stacked.
-func (c scanCache[K, V]) overlay() scanCache[K, V] {
-	return scanCache[K, V]{local: make(map[K]V), base: c.local}
-}
-
-func (c scanCache[K, V]) get(k K) (V, bool) {
-	if v, ok := c.local[k]; ok {
-		return v, true
-	}
-	if c.base != nil {
-		if v, ok := c.base[k]; ok {
-			return v, true
-		}
-	}
-	var zero V
-	return zero, false
-}
-
-func (c scanCache[K, V]) has(k K) bool {
-	_, ok := c.get(k)
-	return ok
-}
-
-func (c scanCache[K, V]) set(k K, v V) {
-	c.local[k] = v
-}
-
-// mergeFrom publishes another cache's local entries into this cache's local
-// layer, after the transaction that wrote them committed.
-func (c scanCache[K, V]) mergeFrom(other scanCache[K, V]) {
-	maps.Copy(c.local, other.local)
-}
 
 type musicScanContext struct {
 	// trackIndex maps cleaned file path -> file size for every track already in
@@ -221,24 +188,24 @@ type musicScanContext struct {
 	// scan. They are written inside the per-track transaction, so the clone
 	// overlay isolates them until commit to avoid caching ids from a rolled-back
 	// transaction.
-	musicianIDs scanCache[string, int64]
-	albumIDs    scanCache[string, int64]
-	genreIDs    scanCache[string, int64]
+	musicianIDs scanner.ScanCache[string, int64]
+	albumIDs    scanner.ScanCache[string, int64]
+	genreIDs    scanner.ScanCache[string, int64]
 	// musicianAlbums, musicianGenres, albumGenres and trackGenres remember which
 	// join rows this scan already wrote, keyed by musicIDPairKey. Like the id
 	// caches they are transaction-scoped until commit.
-	musicianAlbums scanCache[string, struct{}]
-	musicianGenres scanCache[string, struct{}]
-	albumGenres    scanCache[string, struct{}]
-	trackGenres    scanCache[string, struct{}]
+	musicianAlbums scanner.ScanCache[string, struct{}]
+	musicianGenres scanner.ScanCache[string, struct{}]
+	albumGenres    scanner.ScanCache[string, struct{}]
+	trackGenres    scanner.ScanCache[string, struct{}]
 	// spotifyArtistMisses and spotifyAlbumMisses cache unmatched/failed Spotify
 	// lookups so a scan queries Spotify at most once per artist or album.
-	spotifyArtistMisses scanCache[string, resolvedSpotifyMatch]
-	spotifyAlbumMisses  scanCache[string, resolvedSpotifyMatch]
+	spotifyArtistMisses scanner.ScanCache[string, resolvedSpotifyMatch]
+	spotifyAlbumMisses  scanner.ScanCache[string, resolvedSpotifyMatch]
 	// spotifyMusicianGenresHandled and spotifyAlbumGenresHandled record entities
 	// whose Spotify genres were fully written, so later tracks skip the work.
-	spotifyMusicianGenresHandled scanCache[int64, struct{}]
-	spotifyAlbumGenresHandled    scanCache[int64, struct{}]
+	spotifyMusicianGenresHandled scanner.ScanCache[int64, struct{}]
+	spotifyAlbumGenresHandled    scanner.ScanCache[int64, struct{}]
 }
 
 func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
@@ -250,53 +217,53 @@ func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
 	// and the caller discards its reference, so no defensive copy is needed.
 	return &musicScanContext{
 		trackIndex:                   trackIndex,
-		musicianIDs:                  newScanCache[string, int64](),
-		albumIDs:                     newScanCache[string, int64](),
-		genreIDs:                     newScanCache[string, int64](),
-		musicianAlbums:               newScanCache[string, struct{}](),
-		musicianGenres:               newScanCache[string, struct{}](),
-		albumGenres:                  newScanCache[string, struct{}](),
-		trackGenres:                  newScanCache[string, struct{}](),
-		spotifyArtistMisses:          newScanCache[string, resolvedSpotifyMatch](),
-		spotifyAlbumMisses:           newScanCache[string, resolvedSpotifyMatch](),
-		spotifyMusicianGenresHandled: newScanCache[int64, struct{}](),
-		spotifyAlbumGenresHandled:    newScanCache[int64, struct{}](),
+		musicianIDs:                  scanner.NewScanCache[string, int64](),
+		albumIDs:                     scanner.NewScanCache[string, int64](),
+		genreIDs:                     scanner.NewScanCache[string, int64](),
+		musicianAlbums:               scanner.NewScanCache[string, struct{}](),
+		musicianGenres:               scanner.NewScanCache[string, struct{}](),
+		albumGenres:                  scanner.NewScanCache[string, struct{}](),
+		trackGenres:                  scanner.NewScanCache[string, struct{}](),
+		spotifyArtistMisses:          scanner.NewScanCache[string, resolvedSpotifyMatch](),
+		spotifyAlbumMisses:           scanner.NewScanCache[string, resolvedSpotifyMatch](),
+		spotifyMusicianGenresHandled: scanner.NewScanCache[int64, struct{}](),
+		spotifyAlbumGenresHandled:    scanner.NewScanCache[int64, struct{}](),
 	}
 }
 
 func (scan *musicScanContext) clone() *musicScanContext {
 	return &musicScanContext{
 		trackIndex:                   scan.trackIndex, // shared; never written inside the transaction
-		musicianIDs:                  scan.musicianIDs.overlay(),
-		albumIDs:                     scan.albumIDs.overlay(),
-		genreIDs:                     scan.genreIDs.overlay(),
-		musicianAlbums:               scan.musicianAlbums.overlay(),
-		musicianGenres:               scan.musicianGenres.overlay(),
-		albumGenres:                  scan.albumGenres.overlay(),
-		trackGenres:                  scan.trackGenres.overlay(),
-		spotifyArtistMisses:          scan.spotifyArtistMisses.overlay(),
-		spotifyAlbumMisses:           scan.spotifyAlbumMisses.overlay(),
-		spotifyMusicianGenresHandled: scan.spotifyMusicianGenresHandled.overlay(),
-		spotifyAlbumGenresHandled:    scan.spotifyAlbumGenresHandled.overlay(),
+		musicianIDs:                  scan.musicianIDs.Overlay(),
+		albumIDs:                     scan.albumIDs.Overlay(),
+		genreIDs:                     scan.genreIDs.Overlay(),
+		musicianAlbums:               scan.musicianAlbums.Overlay(),
+		musicianGenres:               scan.musicianGenres.Overlay(),
+		albumGenres:                  scan.albumGenres.Overlay(),
+		trackGenres:                  scan.trackGenres.Overlay(),
+		spotifyArtistMisses:          scan.spotifyArtistMisses.Overlay(),
+		spotifyAlbumMisses:           scan.spotifyAlbumMisses.Overlay(),
+		spotifyMusicianGenresHandled: scan.spotifyMusicianGenresHandled.Overlay(),
+		spotifyAlbumGenresHandled:    scan.spotifyAlbumGenresHandled.Overlay(),
 	}
 }
 
 func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
-	scan.musicianIDs.mergeFrom(other.musicianIDs)
-	scan.albumIDs.mergeFrom(other.albumIDs)
-	scan.genreIDs.mergeFrom(other.genreIDs)
-	scan.musicianAlbums.mergeFrom(other.musicianAlbums)
-	scan.musicianGenres.mergeFrom(other.musicianGenres)
-	scan.albumGenres.mergeFrom(other.albumGenres)
-	scan.trackGenres.mergeFrom(other.trackGenres)
-	scan.spotifyArtistMisses.mergeFrom(other.spotifyArtistMisses)
-	scan.spotifyAlbumMisses.mergeFrom(other.spotifyAlbumMisses)
-	scan.spotifyMusicianGenresHandled.mergeFrom(other.spotifyMusicianGenresHandled)
-	scan.spotifyAlbumGenresHandled.mergeFrom(other.spotifyAlbumGenresHandled)
+	scan.musicianIDs.MergeFrom(other.musicianIDs)
+	scan.albumIDs.MergeFrom(other.albumIDs)
+	scan.genreIDs.MergeFrom(other.genreIDs)
+	scan.musicianAlbums.MergeFrom(other.musicianAlbums)
+	scan.musicianGenres.MergeFrom(other.musicianGenres)
+	scan.albumGenres.MergeFrom(other.albumGenres)
+	scan.trackGenres.MergeFrom(other.trackGenres)
+	scan.spotifyArtistMisses.MergeFrom(other.spotifyArtistMisses)
+	scan.spotifyAlbumMisses.MergeFrom(other.spotifyAlbumMisses)
+	scan.spotifyMusicianGenresHandled.MergeFrom(other.spotifyMusicianGenresHandled)
+	scan.spotifyAlbumGenresHandled.MergeFrom(other.spotifyAlbumGenresHandled)
 }
 
 func (scan *musicScanContext) trackUnchanged(path string, size int64) bool {
-	return helpers.ScanIndexUnchanged(scan.trackIndex, path, size)
+	return scanner.ScanIndexUnchanged(scan.trackIndex, path, size)
 }
 
 func musicIDPairKey(left, right int64) string {
@@ -343,8 +310,8 @@ type resolvedAlbum struct {
 	spotifyMatch *resolvedSpotifyMatch
 }
 
-func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file helpers.ScanFile) (*resolvedTrack, error) {
-	info, err := app.Ffprobe.GetAudioMetadata(file.Path)
+func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
+	info, err := app.Ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
@@ -501,8 +468,8 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 }
 
 func (app *Application) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(name, sortName)
-	if musicianID, ok := scan.musicianIDs.get(cacheKey); ok {
+	cacheKey := scanner.NormalizedScanCacheKey(name, sortName)
+	if musicianID, ok := scan.musicianIDs.Get(cacheKey); ok {
 		return &resolvedMusician{
 			name:          name,
 			sortName:      sortName,
@@ -529,7 +496,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		if matchErr == nil {
 			if musicSpotifyMatchStatusIsFinal(persisted.Status) {
 				resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(persisted.Status, persisted.Reason)
-				scan.musicianIDs.set(cacheKey, existing.ID)
+				scan.musicianIDs.Set(cacheKey, existing.ID)
 				return resolved, nil
 			}
 		} else if !errors.Is(matchErr, sql.ErrNoRows) {
@@ -537,8 +504,8 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		}
 	}
 
-	spotifyKey := helpers.NormalizedScanCacheKey(name)
-	if cachedMiss, ok := scan.spotifyArtistMisses.get(spotifyKey); ok {
+	spotifyKey := scanner.NormalizedScanCacheKey(name)
+	if cachedMiss, ok := scan.spotifyArtistMisses.Get(spotifyKey); ok {
 		resolved.spotifyMatch = &cachedMiss
 		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
 		return resolved, nil
@@ -546,7 +513,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 
 	if app.Spotify == nil {
 		if found {
-			scan.musicianIDs.set(cacheKey, existing.ID)
+			scan.musicianIDs.Set(cacheKey, existing.ID)
 		}
 		return resolved, nil
 	}
@@ -554,7 +521,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 	artist, err := app.Spotify.SearchArtistByName(ctx, name)
 	if err != nil {
 		match := resolvedSpotifyMatchFromError(err)
-		scan.spotifyArtistMisses.set(spotifyKey, match)
+		scan.spotifyArtistMisses.Set(spotifyKey, match)
 		resolved.spotifyMatch = &match
 		resolved.splitCompoundOnNoMatch = shouldSplitCompoundArtistCredits(err)
 		return resolved, nil
@@ -573,8 +540,8 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 }
 
 func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(title, albumArtist)
-	if albumID, ok := scan.albumIDs.get(cacheKey); ok {
+	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
+	if albumID, ok := scan.albumIDs.Get(cacheKey); ok {
 		return &resolvedAlbum{
 			title:         title,
 			sortTitle:     sortTitle,
@@ -605,7 +572,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		})
 		if matchErr == nil {
 			if musicSpotifyMatchStatusIsFinal(persisted.Status) {
-				scan.albumIDs.set(cacheKey, existing.ID)
+				scan.albumIDs.Set(cacheKey, existing.ID)
 				return resolved, nil
 			}
 		} else if !errors.Is(matchErr, sql.ErrNoRows) {
@@ -613,15 +580,15 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		}
 	}
 
-	spotifyKey := helpers.NormalizedScanCacheKey(title, albumArtist)
-	if cachedMiss, ok := scan.spotifyAlbumMisses.get(spotifyKey); ok {
+	spotifyKey := scanner.NormalizedScanCacheKey(title, albumArtist)
+	if cachedMiss, ok := scan.spotifyAlbumMisses.Get(spotifyKey); ok {
 		resolved.spotifyMatch = &cachedMiss
 		return resolved, nil
 	}
 
 	if app.Spotify == nil {
 		if found {
-			scan.albumIDs.set(cacheKey, existing.ID)
+			scan.albumIDs.Set(cacheKey, existing.ID)
 		}
 		return resolved, nil
 	}
@@ -629,7 +596,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 	albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
 	if err != nil {
 		match := resolvedSpotifyMatchFromError(err)
-		scan.spotifyAlbumMisses.set(spotifyKey, match)
+		scan.spotifyAlbumMisses.Set(spotifyKey, match)
 		resolved.spotifyMatch = &match
 		return resolved, nil
 	}
@@ -715,7 +682,7 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 				continue
 			}
 
-			cacheKey := helpers.NormalizedScanCacheKey(part)
+			cacheKey := scanner.NormalizedScanCacheKey(part)
 			if _, exists := seen[cacheKey]; exists {
 				credits.hasDuplicate = true
 				continue
@@ -911,8 +878,8 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 }
 
 func (app *Application) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(input.name, input.sortName)
-	if musicianID, ok := scan.musicianIDs.get(cacheKey); ok {
+	cacheKey := scanner.NormalizedScanCacheKey(input.name, input.sortName)
+	if musicianID, ok := scan.musicianIDs.Get(cacheKey); ok {
 		return musicianID, nil
 	}
 
@@ -990,8 +957,8 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 }
 
 func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(input.title, input.albumArtist)
-	if albumID, ok := scan.albumIDs.get(cacheKey); ok {
+	cacheKey := scanner.NormalizedScanCacheKey(input.title, input.albumArtist)
+	if albumID, ok := scan.albumIDs.Get(cacheKey); ok {
 		return albumID, nil
 	}
 
@@ -1174,13 +1141,13 @@ func (app *Application) processSpotifyEntityGenres(
 	scan *musicScanContext,
 	entityID int64,
 	spotifyGenres []string,
-	handled scanCache[int64, struct{}],
+	handled scanner.ScanCache[int64, struct{}],
 	processor spotifyGenreProcessor,
 ) {
 	if len(spotifyGenres) == 0 {
 		return
 	}
-	if handled.has(entityID) {
+	if handled.Has(entityID) {
 		return
 	}
 
@@ -1206,13 +1173,13 @@ func (app *Application) processSpotifyEntityGenres(
 	}
 
 	if !hadError {
-		handled.set(entityID, struct{}{})
+		handled.Set(entityID, struct{}{})
 	}
 }
 
 func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
-	cacheKey := helpers.NormalizedScanCacheKey(tag, "music")
-	if genreID, ok := scan.genreIDs.get(cacheKey); ok {
+	cacheKey := scanner.NormalizedScanCacheKey(tag, "music")
+	if genreID, ok := scan.genreIDs.Get(cacheKey); ok {
 		return genreID, nil
 	}
 
@@ -1224,7 +1191,7 @@ func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *databa
 		return 0, err
 	}
 
-	scan.genreIDs.set(cacheKey, genre.ID)
+	scan.genreIDs.Set(cacheKey, genre.ID)
 	return genre.ID, nil
 }
 
@@ -1264,9 +1231,9 @@ func (app *Application) createTrackGenreIfNeeded(ctx context.Context, qtx *datab
 	})
 }
 
-func createCachedMusicRelationshipIfNeeded(cache scanCache[string, struct{}], leftID, rightID int64, create func() error) error {
+func createCachedMusicRelationshipIfNeeded(cache scanner.ScanCache[string, struct{}], leftID, rightID int64, create func() error) error {
 	cacheKey := musicIDPairKey(leftID, rightID)
-	if cache.has(cacheKey) {
+	if cache.Has(cacheKey) {
 		return nil
 	}
 
@@ -1275,7 +1242,7 @@ func createCachedMusicRelationshipIfNeeded(cache scanCache[string, struct{}], le
 		return err
 	}
 
-	cache.set(cacheKey, struct{}{})
+	cache.Set(cacheKey, struct{}{})
 	return nil
 }
 
@@ -1313,7 +1280,7 @@ func (app *Application) upsertMusicSpotifyMatchAndCacheID(
 	entityType string,
 	entityID int64,
 	match *resolvedSpotifyMatch,
-	cache scanCache[string, int64],
+	cache scanner.ScanCache[string, int64],
 	cacheKey string,
 ) error {
 	if match != nil {
@@ -1336,7 +1303,7 @@ func (app *Application) upsertMusicSpotifyMatchAndCacheID(
 		}
 	}
 
-	cache.set(cacheKey, entityID)
+	cache.Set(cacheKey, entityID)
 	return nil
 }
 

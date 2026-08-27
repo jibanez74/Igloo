@@ -1,7 +1,9 @@
 package ffprobe
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,12 +12,12 @@ import (
 func TestRunMetadataRejectsEmptyPath(t *testing.T) {
 	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
 
-	_, err := probe.GetMetadata("")
+	_, err := probe.GetMetadata(context.Background(), "")
 	if err == nil || !strings.Contains(err.Error(), "file path is required") {
 		t.Fatalf("GetMetadata(\"\") error = %v, want missing file path error", err)
 	}
 
-	_, err = probe.GetAudioMetadata("   ")
+	_, err = probe.GetAudioMetadata(context.Background(), "   ")
 	if err == nil || !strings.Contains(err.Error(), "file path is required") {
 		t.Fatalf("GetAudioMetadata(blank) error = %v, want missing file path error", err)
 	}
@@ -26,7 +28,7 @@ func TestRunMetadataValidJSON(t *testing.T) {
 		stdout: `{"streams":[{"index":1,"codec_name":"aac","codec_type":"audio","sample_rate":"44100"}],"format":{"duration":"12.34","tags":{"title":"Song Title"}},"chapters":[]}`,
 	})}
 
-	result, err := probe.GetMetadata("/tmp/song.mp3")
+	result, err := probe.GetMetadata(context.Background(), "/tmp/song.mp3")
 	if err != nil {
 		t.Fatalf("GetMetadata failed: %v", err)
 	}
@@ -50,7 +52,7 @@ func TestRunMetadataInvalidJSONIncludesFilePath(t *testing.T) {
 		stdout: `{invalid json`,
 	})}
 
-	_, err := probe.GetMetadata("/tmp/bad.mp3")
+	_, err := probe.GetMetadata(context.Background(), "/tmp/bad.mp3")
 	if err == nil {
 		t.Fatal("Expected parse error")
 	}
@@ -67,7 +69,7 @@ func TestRunMetadataNonzeroExitSurfacesTrimmedStderr(t *testing.T) {
 		exitCode: 2,
 	})}
 
-	_, err := probe.GetMetadata("/tmp/fail.mp3")
+	_, err := probe.GetMetadata(context.Background(), "/tmp/fail.mp3")
 	if err == nil {
 		t.Fatal("Expected ffprobe failure")
 	}
@@ -89,7 +91,7 @@ func TestRunMetadataNonzeroExitWithoutStderr(t *testing.T) {
 		exitCode: 2,
 	})}
 
-	_, err := probe.GetMetadata("/tmp/fail.mp3")
+	_, err := probe.GetMetadata(context.Background(), "/tmp/fail.mp3")
 	if err == nil {
 		t.Fatal("Expected ffprobe failure")
 	}
@@ -108,13 +110,28 @@ func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
 		stdout: `{"streams":[],"format":{},"chapters":[]}`,
 	})}
 
-	_, err := probe.GetMetadata("/tmp/empty.mp3")
+	_, err := probe.GetMetadata(context.Background(), "/tmp/empty.mp3")
 	if err == nil {
 		t.Fatal("Expected empty streams error")
 	}
 
 	if !strings.Contains(err.Error(), "no streams found in /tmp/empty.mp3") {
 		t.Fatalf("error = %q, want no streams error with file path", err.Error())
+	}
+}
+
+func TestRunMetadataHonorsCallerCancellation(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{})}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := probe.GetMetadata(ctx, "/tmp/movie.mkv")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+	if strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("a canceled scan must not be reported as a timeout: %v", err)
 	}
 }
 
@@ -125,7 +142,7 @@ func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 		argsLog: argsLog,
 	})}
 
-	_, err := probe.GetAudioMetadata("/tmp/song.mp3")
+	_, err := probe.GetAudioMetadata(context.Background(), "/tmp/song.mp3")
 	if err != nil {
 		t.Fatalf("GetAudioMetadata failed: %v", err)
 	}

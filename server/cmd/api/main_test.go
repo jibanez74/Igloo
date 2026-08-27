@@ -17,6 +17,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/scanner/movie"
 
 	cache "github.com/patrickmn/go-cache"
 )
@@ -1177,6 +1178,20 @@ func setupTestApp(t *testing.T) *Application {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
 	app.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
 	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
+	app.MovieScanner = movie.New(movie.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		ScanContext: context.Background(),
+		CurrentMoviesDirectory: func() sql.NullString {
+			return app.CurrentSettings().MoviesDir
+		},
+		InvalidateCommittedMovie: func(movieID int64) {
+			app.invalidateSubtitleVTTCache(movieID)
+			app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
+			app.invalidateHLSSessionsForMovie(movieID)
+		},
+	})
 
 	return app
 }

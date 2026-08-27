@@ -6,6 +6,7 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner/movie"
 	"net/http"
 	"net/url"
 	"os"
@@ -387,23 +388,17 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
-	settings := app.CurrentSettings()
-	if !settings.MoviesDir.Valid || settings.MoviesDir.String == "" {
+	result := app.MovieScanner.Start()
+	switch result.Status {
+	case movie.StartNotConfigured:
 		helpers.ErrorJSON(w, errors.New("movies directory is not configured"))
 		return
-	}
-
-	if !movieScanGuard.TryBegin() {
+	case movie.StartAlreadyRunning:
 		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"), http.StatusConflict)
 		return
 	}
 
-	if app.Wait != nil {
-		app.Wait.Add(1)
-	}
-	go app.runMovieScan()
-
-	app.Logger.Info("movie library scan triggered via API", "path", settings.MoviesDir.String)
+	app.Logger.Info("movie library scan triggered via API", "path", result.Directory)
 
 	res := helpers.JSONResponse{
 		Error:   false,
