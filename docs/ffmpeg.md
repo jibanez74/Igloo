@@ -41,7 +41,7 @@ Movie scans run:
 ffprobe -v quiet -print_format json -show_streams -show_format -show_chapters <file>
 ```
 
-Both metadata calls take the caller's context and cap each probe at 60 seconds on top of it. The scan context is the one cancelled by shutdown, so stopping the server kills an in-flight ffprobe rather than leaving `app.Wait.Wait()` to sit out the timeout — which matters on slow or network-mounted media. The two failures are reported differently: a cancelled caller yields `ffprobe canceled for <file>`, while a probe that outlives its own deadline yields `ffprobe timed out for <file> after 1m0s`, so only the latter indicates a file that is genuinely slow to read.
+Both metadata calls take the caller's context and cap each probe at 60 seconds on top of it. The scan context is the one canceled by shutdown, so stopping the server kills an in-flight ffprobe rather than leaving `app.Wait.Wait()` to sit out the timeout — which matters on slow or network-mounted media. The two failures are reported differently: a canceled caller yields `ffprobe canceled for <file>`, while a probe that outlives its own deadline yields `ffprobe timed out for <file> after 1m0s`, so only the latter indicates a file that is genuinely slow to read.
 
 Music scans limit `-show_entries` to the fields the music scanner needs. The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams, because a scanned item without streams cannot be played or indexed reliably.
 

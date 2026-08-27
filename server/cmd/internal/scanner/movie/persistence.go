@@ -144,12 +144,7 @@ func processProductionCompanies(
 	ctx context.Context,
 	qtx *database.Queries,
 	movieID int64,
-	companies []struct {
-		ID            int    `json:"id"`
-		LogoPath      string `json:"logo_path"`
-		Name          string `json:"name"`
-		OriginCountry string `json:"origin_country"`
-	},
+	companies []tmdb.ProductionCompany,
 ) error {
 	err := qtx.DeleteMovieProductionCompanies(ctx, movieID)
 	if err != nil {
@@ -184,13 +179,7 @@ func processCast(
 	qtx *database.Queries,
 	scan *movieScanContext,
 	movieID int64,
-	cast []struct {
-		ID          int    `json:"id"`
-		Name        string `json:"name"`
-		Character   string `json:"character"`
-		ProfilePath string `json:"profile_path"`
-		Order       int    `json:"order"`
-	},
+	cast []tmdb.CastCredit,
 ) error {
 	for _, castMember := range cast {
 		artistID, err := getOrCreateArtistID(ctx, qtx, scan, castMember.ID, castMember.Name, castMember.ProfilePath)
@@ -218,13 +207,7 @@ func processCrew(
 	qtx *database.Queries,
 	scan *movieScanContext,
 	movieID int64,
-	crew []struct {
-		ID          int    `json:"id"`
-		Name        string `json:"name"`
-		Job         string `json:"job"`
-		Department  string `json:"department"`
-		ProfilePath string `json:"profile_path"`
-	},
+	crew []tmdb.CrewCredit,
 ) error {
 	for _, crewMember := range crew {
 		artistID, err := getOrCreateArtistID(ctx, qtx, scan, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
@@ -302,10 +285,7 @@ func processMovieGenres(
 	qtx *database.Queries,
 	scan *movieScanContext,
 	movieID int64,
-	genres []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	},
+	genres []tmdb.Genre,
 ) error {
 	err := qtx.DeleteMovieGenres(ctx, movieID)
 	if err != nil {

@@ -523,12 +523,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 		t.Fatalf("upsert movie: %v", err)
 	}
 
-	firstCompanies := []struct {
-		ID            int    `json:"id"`
-		LogoPath      string `json:"logo_path"`
-		Name          string `json:"name"`
-		OriginCountry string `json:"origin_country"`
-	}{
+	firstCompanies := []tmdb.ProductionCompany{
 		{ID: 100, LogoPath: "/old-logo.png", Name: "Old Studio", OriginCountry: "US"},
 	}
 	if err := processProductionCompanies(ctx, testScanner.queries, movie.ID, firstCompanies); err != nil {
@@ -542,12 +537,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 		t.Fatalf("process first extra videos: %v", err)
 	}
 
-	secondCompanies := []struct {
-		ID            int    `json:"id"`
-		LogoPath      string `json:"logo_path"`
-		Name          string `json:"name"`
-		OriginCountry string `json:"origin_country"`
-	}{
+	secondCompanies := []tmdb.ProductionCompany{
 		{ID: 100, LogoPath: "/new-logo.png", Name: "New Studio", OriginCountry: "GB"},
 	}
 	if err := processProductionCompanies(ctx, testScanner.queries, movie.ID, secondCompanies); err != nil {

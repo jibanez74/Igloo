@@ -64,10 +64,10 @@ func (s *Scanner) runMovieScan() {
 			return
 		}
 
-		scanned, skipped, errors := s.processMoviesBatch(ctx, scan, batch)
+		scanned, skipped, batchErrors := s.processMoviesBatch(ctx, scan, batch)
 		moviesScanned += scanned
 		moviesSkipped += skipped
-		errorCount += errors
+		errorCount += batchErrors
 		batch = batch[:0]
 	}
 
