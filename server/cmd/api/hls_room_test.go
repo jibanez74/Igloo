@@ -14,7 +14,7 @@ import (
 func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	roomKey := RoomHLSSessionKey(1)
 	audioTrack := 0
-	personalKey := HLSSessionKey(1, "720p_3mbps", &audioTrack, testPlaybackSessionID, 0)
+	personalKey := HLSSessionKey(1, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 0)
 
 	if roomKey == personalKey {
 		t.Errorf("room key %q collides with personal key %q", roomKey, personalKey)
@@ -337,8 +337,8 @@ func TestInvalidateHLSSessionsForMovie(t *testing.T) {
 
 	const roomA = int64(41)
 	const roomB = int64(42)
-	personalKeyA := HLSSessionKey(1, "720p_3mbps", nil, "session-a", 0)
-	personalKeyB := HLSSessionKey(2, "720p_3mbps", nil, "session-b", 0)
+	personalKeyA := HLSSessionKey(1, "720p_3mbps", nil, nil, "session-a", 0)
+	personalKeyB := HLSSessionKey(2, "720p_3mbps", nil, nil, "session-b", 0)
 
 	app.HLSSessionCache.SetDefault(personalKeyA, &HLSSession{MovieID: 1, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomA), &HLSSession{MovieID: 1, IsRoom: true, TempDir: t.TempDir()})

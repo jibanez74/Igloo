@@ -455,3 +455,23 @@ Encoders:
 		t.Fatalf("parsed hardware accelerators = %#v", hwaccels)
 	}
 }
+
+// The -encoders parse must keep recognizing the legacy AAC encoder alongside
+// the explicit Dolby encoders the audio-profile feature gates on.
+func TestCapabilityParsingRecognizesAudioEncoders(t *testing.T) {
+	named := parseFFmpegNamedRows(`
+Encoders:
+ A....D aac AAC (Advanced Audio Coding)
+ A....D ac3 ATSC A/52A (AC-3)
+ A....D eac3 ATSC A/52 E-AC-3
+`)
+	caps := Capabilities{Probed: true, Encoders: named}
+	for _, encoder := range []string{"aac", "ac3", "eac3"} {
+		if !caps.SupportsEncoder(encoder) {
+			t.Fatalf("SupportsEncoder(%q) = false, want true: %#v", encoder, named)
+		}
+	}
+	if caps.SupportsEncoder("dca") {
+		t.Fatal("an unlisted encoder must not report as supported")
+	}
+}

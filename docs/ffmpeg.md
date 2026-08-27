@@ -247,6 +247,27 @@ Otherwise — non-AAC codecs, HE-AAC/xHE-AAC profiles, or AAC whose profile was 
 
 AAC-LC is the safest baseline for browser HLS playback; browser support for SBR/PS profiles inside fMP4 HLS is spotty, and an unknown profile cannot prove safety. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
 
+### Explicit Audio Profiles (AC-3 / E-AC-3)
+
+The legacy behavior above removes surround channels from DTS, TrueHD, and other incompatible sources. For clients whose playback stack handles Dolby formats (the TV client feeding a Sonos system), the personal movie HLS routes accept an explicit audio profile:
+
+```text
+?audio_codec=<ac3|eac3>&audio_channels=<2|6>
+```
+
+The two parameters form one request: both absent is legacy mode exactly as documented above, both present is explicit mode, and one alone is HTTP 400 — an invalid pair is never silently normalized to legacy stereo, because legacy mode may copy a multichannel AAC-LC track and explicit AAC stereo would change existing playback. `aac` is not an accepted explicit value; AAC output exists only through legacy behavior. Watch-room HLS has no audio-profile contract and always runs in legacy mode.
+
+Explicit requests always encode — the AAC-LC copy gate never applies, so `audio_codec=eac3` cannot return AAC because the source happened to be copy-safe. The server owns every encoding constant (`helpers/hls_audio_profiles.go`): raw query values never reach the FFmpeg command line, only a resolved typed profile validated against those tables. Output is always 48 kHz, with bitrate selected from the codec and the effective channel count:
+
+| Output codec | 1 channel | 2 channels | 3-4 channels | 5-6 channels |
+| --- | ---: | ---: | ---: | ---: |
+| AC-3 | 192k | 384k | 448k | 640k |
+| E-AC-3 | 192k | 384k | 512k | 768k |
+
+`audio_channels` is a ceiling resolved against the selected `audio_track`'s stored `channels`/`channel_layout` row, regardless of source codec: mono and stereo are never upmixed, a source within the ceiling keeps its channel count and stored layout, 7.1 downmixes to standard 5.1 under a maximum of 6, and anything above 2 downmixes to standard stereo under a maximum of 2. Conversion happens through `-ac`, which rematrixes via libswresample so center, surround, and LFE content participate in downmixes. A selected audio row with no stored channel count returns a typed HTTP 422 before any session resources are allocated; a probed FFmpeg build without the resolved encoder returns HTTP 503 (no `Retry-After` — it is an installation problem) before the temp directory is created or a transcode permit acquired. AAC remains required for legacy playback, but AC-3/E-AC-3 may be missing from a swapped external binary without preventing startup.
+
+The normalized pair joins the personal session cache key (`legacy` vs `explicit:<codec>:<max>`), so legacy and explicit requests — and different codecs or ceilings — never share segments, and it is propagated onto every rewritten `init.mp4`/`segment_N.m4s` URL so asset requests compute the same key. The requested profile survives a remux-safety fallback to a video transcode. The manifest response describes the session's actual audio in `X-Igloo-Effective-Audio-Codec`, `X-Igloo-Effective-Audio-Channels`, and `X-Igloo-Effective-Audio-Bitrate` (source values for copied legacy AAC, `aac`/2/`320k` for the legacy transcode, the resolved encode for explicit mode; omitted for video-only sessions). These are diagnostic; the media stream stays the playback authority, and the media playlist gains no `CODECS` attribute or audio rendition group.
+
 ### Audio Track Selection and Direct Play
 
 The `audio_track` request parameter is an ordinal into the movie's audio streams ordered by `stream_index`, which is the same order the client's audio picker renders. It is not the ffprobe stream index. Igloo resolves the ordinal to the stored absolute index at session creation and uses that for `-map`.

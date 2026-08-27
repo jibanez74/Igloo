@@ -38,6 +38,10 @@ type fakeFFmpeg struct {
 	plans         []fakeFFmpegRunPlan
 	calls         []ffmpeg.HLSParams
 	subtitleCalls int
+	// capabilities, when non-nil, is what Capabilities() reports. The default
+	// unprobed value is trusted by the explicit-audio encoder gate, matching
+	// ResolveHLSDevice's treatment of unprobed builds.
+	capabilities *ffmpeg.Capabilities
 }
 
 func (f *fakeFFmpeg) RunHLS(
@@ -95,6 +99,9 @@ func (f *fakeFFmpeg) SubtitleCallCount() int {
 }
 
 func (f *fakeFFmpeg) Capabilities() ffmpeg.Capabilities {
+	if f.capabilities != nil {
+		return *f.capabilities
+	}
 	return ffmpeg.Capabilities{}
 }
 
@@ -114,7 +121,8 @@ func (f *fakeFFmpeg) Calls() []ffmpeg.HLSParams {
 }
 
 // createTestHLSSession mirrors the production call sequence: load and
-// normalize via loadHLSMovieForSession, then create the session.
+// normalize via loadHLSMovieForSession, then create the session. Audio stays
+// in legacy mode; explicit-profile tests use createTestHLSSessionWithAudio.
 func createTestHLSSession(
 	app *Application,
 	ctx context.Context,
@@ -125,11 +133,27 @@ func createTestHLSSession(
 	startSec int,
 	isRoom bool,
 ) (*HLSSession, error) {
+	return createTestHLSSessionWithAudio(app, ctx, movieID, profile, audioTrack, nil, playbackSession, startSec, isRoom)
+}
+
+// createTestHLSSessionWithAudio is createTestHLSSession with an explicit
+// audio-profile request.
+func createTestHLSSessionWithAudio(
+	app *Application,
+	ctx context.Context,
+	movieID int64,
+	profile string,
+	audioTrack *int,
+	audioProfile *helpers.HLSAudioProfileRequest,
+	playbackSession string,
+	startSec int,
+	isRoom bool,
+) (*HLSSession, error) {
 	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
 	if err != nil {
 		return nil, err
 	}
-	return app.createHLSSession(ctx, &movie, profile, audioTrack, nil, playbackSession, effectiveStartSec, isRoom, 0)
+	return app.createHLSSession(ctx, &movie, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
 }
 
 type testFMP4Fixture = fmp4testutil.Fixture
@@ -342,6 +366,30 @@ func insertTestHLSMovieFixtureAt(
 	}
 
 	return movieID
+}
+
+// setTestHLSAudioStream rewrites the fixture's audio row so audio tests can
+// model arbitrary source codecs and channel layouts. codecProfile and
+// channelLayout accept nil to model rows scanned before those columns existed.
+func setTestHLSAudioStream(
+	t *testing.T,
+	app *Application,
+	movieID int64,
+	codec string,
+	codecProfile any,
+	channels int64,
+	channelLayout any,
+) {
+	t.Helper()
+
+	_, err := app.DB.Exec(`
+		UPDATE audio_streams
+		SET codec = ?, codec_profile = ?, channels = ?, channel_layout = ?
+		WHERE movie_id = ?
+	`, codec, codecProfile, channels, channelLayout, movieID)
+	if err != nil {
+		t.Fatalf("update audio stream: %v", err)
+	}
 }
 
 func testIntPtr(v int) *int {

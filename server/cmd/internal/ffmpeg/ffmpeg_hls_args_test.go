@@ -533,3 +533,176 @@ func TestBuildHLSArgs_PreservesPathsContainingSpaces(t *testing.T) {
 		t.Fatal("source path was split into multiple arguments")
 	}
 }
+
+// resolveTestAudioProfile builds a resolved profile the way production does:
+// through the server-owned tables, never from raw values.
+func resolveTestAudioProfile(codec helpers.HLSAudioCodec, maxChannels, sourceChannels int, layout string) *helpers.HLSResolvedAudioProfile {
+	profile := helpers.ResolveHLSAudioProfile(
+		helpers.HLSAudioProfileRequest{Codec: codec, MaxChannels: maxChannels},
+		sourceChannels,
+		layout,
+	)
+	return &profile
+}
+
+// Explicit audio profiles produce exactly the resolved encoder arguments and
+// leave every video, seek, keyframe, and HLS flag unchanged.
+func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
+	tests := []struct {
+		name      string
+		profile   string
+		copyVideo bool
+		copyAudio bool
+		audio     *helpers.HLSResolvedAudioProfile
+		want      []string
+		notWant   []string
+	}{
+		{
+			name:    "AAC 5.1 source to ac3 keeps six channels",
+			profile: helpers.HLS_PROFILE_1080P_4MBPS,
+			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
+			want: []string{
+				"-c:a ac3", "-ac 6", "-b:a 640k", "-ar 48000",
+				"libx264", "-force_key_frames:0 expr:gte(t,n_forced*4)",
+				"-hls_segment_type fmp4", "-avoid_negative_ts make_zero",
+			},
+			notWant: []string{"-c:a aac", "-c:a copy", "320k"},
+		},
+		{
+			name:    "DTS-HD MA 5.1 source to eac3 keeps six channels",
+			profile: helpers.HLS_PROFILE_1080P_8MBPS,
+			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
+			want:    []string{"-c:a eac3", "-ac 6", "-b:a 768k", "-ar 48000"},
+			notWant: []string{"-c:a aac", "-c:a copy"},
+		},
+		{
+			name:    "stereo source is not upmixed",
+			profile: helpers.HLS_PROFILE_720P_3MBPS,
+			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 2, "stereo"),
+			want:    []string{"-c:a eac3", "-ac 2", "-b:a 384k", "-ar 48000"},
+		},
+		{
+			name:    "7.1 source downmixes to the resolved 5.1",
+			profile: helpers.HLS_PROFILE_720P_3MBPS,
+			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 8, "7.1"),
+			want:    []string{"-c:a ac3", "-ac 6", "-b:a 640k"},
+		},
+		{
+			name:    "5.1 source downmixes to stereo under a maximum of two",
+			profile: helpers.HLS_PROFILE_720P_3MBPS,
+			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 2, 6, "5.1(side)"),
+			want:    []string{"-c:a eac3", "-ac 2", "-b:a 384k"},
+		},
+		{
+			// The legacy copy decision must not leak into explicit mode even if
+			// a caller sets both: the explicit profile wins.
+			name:      "explicit profile overrides a copy-safe AAC source",
+			profile:   helpers.HLS_PROFILE_720P_3MBPS,
+			copyAudio: true,
+			audio:     resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
+			want:      []string{"-c:a ac3", "-ac 6", "-b:a 640k"},
+			notWant:   []string{"-c:a copy"},
+		},
+		{
+			// A remux request keeps copying video while the explicit profile
+			// encodes audio.
+			name:      "remux copies video while encoding explicit audio",
+			profile:   helpers.HLS_PROFILE_REMUX,
+			copyVideo: true,
+			audio:     resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
+			want:      []string{"-c:v copy", "-c:a eac3", "-ac 6", "-b:a 768k", "-ar 48000"},
+			notWant:   []string{"libx264", "-c:a copy"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := hlsArgs(t, HLSParams{
+				SourcePath:       "/s",
+				OutDir:           t.TempDir(),
+				Profile:          tt.profile,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+				CopyVideo:        tt.copyVideo,
+				CopyAudio:        tt.copyAudio,
+				AudioProfile:     tt.audio,
+			})
+
+			requireArgSubstrings(t, args, tt.want, tt.notWant, nil)
+		})
+	}
+}
+
+// The argument builder only accepts profiles whose fields match the
+// server-owned tables, so raw or tampered values can never reach FFmpeg.
+func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {
+	valid := func() *helpers.HLSResolvedAudioProfile {
+		return resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)")
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(profile *helpers.HLSResolvedAudioProfile)
+		wantErr string
+	}{
+		{
+			name:    "copy is not part of the first version",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Copy = true },
+			wantErr: "copy is not supported",
+		},
+		{
+			name:    "empty encoder",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Encoder = "" },
+			wantErr: "invalid HLS audio encoder",
+		},
+		{
+			name:    "encoder not matching the codec table",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Encoder = "libmp3lame" },
+			wantErr: "invalid HLS audio encoder",
+		},
+		{
+			name:    "zero channels",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Channels = 0 },
+			wantErr: "invalid HLS audio channel count",
+		},
+		{
+			name:    "more than six channels",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Channels = 8 },
+			wantErr: "invalid HLS audio",
+		},
+		{
+			name:    "bitrate not from the profile table",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Bitrate = "999k" },
+			wantErr: "invalid HLS audio bitrate",
+		},
+		{
+			name:    "sample rate other than 48 kHz",
+			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.SampleRate = 44100 },
+			wantErr: "invalid HLS audio sample rate",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := valid()
+			tt.mutate(profile)
+
+			_, err := buildHLSArgs(HLSParams{
+				SourcePath:       "/s",
+				OutDir:           t.TempDir(),
+				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+				AudioProfile:     profile,
+			})
+			if err == nil {
+				t.Fatal("expected a validation error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %q, want it to contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}

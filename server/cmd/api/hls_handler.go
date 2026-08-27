@@ -40,9 +40,12 @@ const (
 	hlsSegmentHTTPContentType = "video/mp4"
 	// The extension FFmpeg's hls muxer appends while writing a file under
 	// -hls_flags temp_file, before the rename to the final name.
-	hlsTempFileSuffix         = ".tmp"
-	hlsEffectiveProfileHeader = "X-Igloo-Effective-Profile"
-	hlsActualStartHeader      = "X-Igloo-Actual-Start"
+	hlsTempFileSuffix              = ".tmp"
+	hlsEffectiveProfileHeader      = "X-Igloo-Effective-Profile"
+	hlsActualStartHeader           = "X-Igloo-Actual-Start"
+	hlsEffectiveAudioCodecHeader   = "X-Igloo-Effective-Audio-Codec"
+	hlsEffectiveAudioChannelsHdr   = "X-Igloo-Effective-Audio-Channels"
+	hlsEffectiveAudioBitrateHeader = "X-Igloo-Effective-Audio-Bitrate"
 )
 
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
@@ -63,9 +66,12 @@ var errHLSSessionEmpty = errors.New("no playable media at this position")
 var errHLSSessionFailed = errors.New("transcoding stopped before publishing a playlist")
 
 type hlsRequestParams struct {
-	MovieID         int64
-	Profile         string
-	AudioTrack      *int
+	MovieID    int64
+	Profile    string
+	AudioTrack *int
+	// AudioProfile is the validated audio_codec/audio_channels pair; nil means
+	// legacy audio behavior.
+	AudioProfile    *helpers.HLSAudioProfileRequest
 	PlaybackSession string
 	StartSec        int
 	Reload          string
@@ -90,6 +96,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		params.MovieID,
 		params.Profile,
 		params.AudioTrack,
+		params.AudioProfile,
 		params.PlaybackSession,
 		params.StartSec,
 		userID,
@@ -109,6 +116,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	effectiveStartSec := int(session.StartSec)
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      params.AudioTrack,
+		AudioProfile:    params.AudioProfile,
 		StartSec:        &effectiveStartSec,
 		PlaybackSession: params.PlaybackSession,
 		Reload:          params.Reload,
@@ -156,6 +164,17 @@ func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
 	if actualStart >= 0 {
 		w.Header().Set(hlsActualStartHeader, strconv.FormatFloat(actualStart, 'f', 3, 64))
 	}
+
+	// Diagnostic description of the session's audio output; the media stream
+	// stays the playback authority. Video-only sessions omit the headers.
+	audio := session.EffectiveAudioProfile
+	if audio != nil {
+		w.Header().Set(hlsEffectiveAudioCodecHeader, string(audio.Codec))
+		w.Header().Set(hlsEffectiveAudioChannelsHdr, strconv.Itoa(audio.Channels))
+		if audio.Bitrate != "" {
+			w.Header().Set(hlsEffectiveAudioBitrateHeader, audio.Bitrate)
+		}
+	}
 }
 
 // FFmpeg writes segments asynchronously; serve only once complete.
@@ -176,7 +195,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := HLSSessionKey(params.MovieID, params.Profile, params.AudioTrack, params.PlaybackSession, params.StartSec)
+	key := HLSSessionKey(params.MovieID, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec)
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
@@ -429,6 +448,23 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	// A syntactically valid explicit request against a stream without enough
+	// stored channel metadata is a media-profile problem, not a bad query.
+	var audioMetadataErr *hlsAudioMetadataError
+	if errors.As(err, &audioMetadataErr) {
+		helpers.ErrorJSON(w, err, http.StatusUnprocessableEntity)
+		return
+	}
+
+	// A missing AC-3/E-AC-3 encoder is a server installation problem. Unlike
+	// the capacity errors below it carries no Retry-After: retrying cannot
+	// install the encoder.
+	var encoderErr *hlsAudioEncoderUnavailableError
+	if errors.As(err, &encoderErr) {
+		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
+		return
+	}
+
 	var capacityErr *hlsTranscodeCapacityError
 	if errors.As(err, &capacityErr) {
 		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
@@ -528,6 +564,33 @@ func parseHLSParams(w http.ResponseWriter, r *http.Request) (hlsRequestParams, b
 		}
 		params.AudioTrack = &audioTrack
 	}
+
+	// audio_codec and audio_channels form one request: both absent is legacy
+	// mode, both present is an explicit profile, and one alone is an error.
+	// An invalid pair must never silently fall back to legacy behavior.
+	hasAudioCodec := query.Has("audio_codec")
+	hasAudioChannels := query.Has("audio_channels")
+	if hasAudioCodec != hasAudioChannels {
+		helpers.ErrorJSON(w, errors.New("audio_codec and audio_channels must be provided together"), http.StatusBadRequest)
+		return params, false
+	}
+	if hasAudioCodec {
+		audioCodec, ok := helpers.ParseHLSAudioCodec(query.Get("audio_codec"))
+		if !ok {
+			helpers.ErrorJSON(w, errors.New("invalid audio_codec"), http.StatusBadRequest)
+			return params, false
+		}
+		audioChannels, err := strconv.Atoi(strings.TrimSpace(query.Get("audio_channels")))
+		if err != nil || !helpers.IsAllowedHLSAudioMaxChannels(audioChannels) {
+			helpers.ErrorJSON(w, errors.New("invalid audio_channels"), http.StatusBadRequest)
+			return params, false
+		}
+		params.AudioProfile = &helpers.HLSAudioProfileRequest{
+			Codec:       audioCodec,
+			MaxChannels: audioChannels,
+		}
+	}
+
 	params.Reload = strings.TrimSpace(query.Get("reload"))
 	return params, true
 }

@@ -47,11 +47,16 @@ type HLSParams struct {
 	HWDevice         string
 	CopyVideo        bool
 	CopyAudio        bool
-	StartSec         float64
-	TonemapHDR       bool // true when source is HDR and the profile requires SDR output
-	Deinterlace      bool // true when the scanned field_order marks the source interlaced
-	SourceFrameRate  float64
-	Capabilities     Capabilities
+	// AudioProfile, when non-nil, is a resolved explicit audio profile
+	// (server-owned encoder, channels, bitrate, sample rate) that replaces the
+	// legacy CopyAudio/AAC-stereo audio arguments. Nil keeps legacy behavior
+	// byte-for-byte.
+	AudioProfile    *helpers.HLSResolvedAudioProfile
+	StartSec        float64
+	TonemapHDR      bool // true when source is HDR and the profile requires SDR output
+	Deinterlace     bool // true when the scanned field_order marks the source interlaced
+	SourceFrameRate float64
+	Capabilities    Capabilities
 }
 
 // hlsHWTranscode maps hardware acceleration device IDs to FFmpeg encoder names
@@ -138,6 +143,13 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 
 	if p.VideoStreamIndex < 0 {
 		return nil, fmt.Errorf("video stream index must be non-negative")
+	}
+
+	if p.AudioProfile != nil {
+		err := validateHLSAudioProfile(p.AudioProfile)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	copyVideo := hlsCopiesVideo(p)
@@ -255,9 +267,21 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	}
 
 	if hasAudio {
-		if p.CopyAudio {
+		switch {
+		case p.AudioProfile != nil:
+			// Explicit mode always encodes with the resolved server-owned
+			// profile; the legacy AAC copy decision never applies here. -ac
+			// converts through libswresample's rematrixing, so downmixes keep
+			// center/surround/LFE content instead of dropping channels.
+			args = append(args,
+				"-c:a", p.AudioProfile.Encoder,
+				"-ac", fmt.Sprintf("%d", p.AudioProfile.Channels),
+				"-b:a", p.AudioProfile.Bitrate,
+				"-ar", fmt.Sprintf("%d", p.AudioProfile.SampleRate),
+			)
+		case p.CopyAudio:
 			args = append(args, "-c:a", "copy")
-		} else {
+		default:
 			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "320k")
 		}
 	}
@@ -302,6 +326,28 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	)
 
 	return args, nil
+}
+
+// validateHLSAudioProfile rejects a resolved audio profile whose fields did
+// not come from the server-owned tables in helpers, so a bug upstream cannot
+// smuggle raw query values into the FFmpeg command line.
+func validateHLSAudioProfile(profile *helpers.HLSResolvedAudioProfile) error {
+	if profile.Copy {
+		return fmt.Errorf("explicit audio profiles always encode; copy is not supported")
+	}
+	if profile.Encoder == "" || profile.Encoder != helpers.HLSAudioEncoder(profile.Codec) {
+		return fmt.Errorf("invalid HLS audio encoder %q for codec %q", profile.Encoder, profile.Codec)
+	}
+	if profile.Channels < 1 || profile.Channels > helpers.HLS_AUDIO_MAX_CHANNELS_SURROUND {
+		return fmt.Errorf("invalid HLS audio channel count %d", profile.Channels)
+	}
+	if profile.Bitrate != helpers.HLSAudioBitrate(profile.Codec, profile.Channels) {
+		return fmt.Errorf("invalid HLS audio bitrate %q for %s %d-channel output", profile.Bitrate, profile.Codec, profile.Channels)
+	}
+	if profile.SampleRate != helpers.HLS_EXPLICIT_AUDIO_SAMPLE_RATE {
+		return fmt.Errorf("invalid HLS audio sample rate %d", profile.SampleRate)
+	}
+	return nil
 }
 
 // appendHLSNvidiaEncoderArgs adds the NVENC encoder settings. -forced-idr is
