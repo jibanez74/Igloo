@@ -20,7 +20,7 @@ import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transit
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
     startPlayAllPlayback: vi.fn(),
     startShufflePlayback: vi.fn(),

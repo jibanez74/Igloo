@@ -241,6 +241,75 @@ describe("playTrackFromList", () => {
       ).toBe(loadCallsAfterStart);
     });
 
+    // The header "Play all"/"Shuffle" buttons go through playQueue, which must
+    // restart even when its first track is the one already playing.
+    it("does not swallow playQueue when the first track is already current", () => {
+      const tracks = [alabaster, basalt].map(convertToAudioTrack);
+
+      function StartOverHarness() {
+        const actions = useAudioPlayerActions();
+
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                actions.playTrack(tracks[0], tracks, {
+                  cover: null,
+                  title: "Stone Record",
+                  musician: "The Band",
+                })
+              }
+            >
+              play track
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                actions.playQueue(tracks, {
+                  cover: null,
+                  title: "Stone Record",
+                  musician: "The Band",
+                })
+              }
+            >
+              play all
+            </button>
+          </>
+        );
+      }
+
+      renderWithQueryClient(
+        <AudioPlayerProvider>
+          <StartOverHarness />
+        </AudioPlayerProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "play track" }));
+
+      const audio = getAudio();
+      markPlaying(audio);
+      audio.currentTime = 42;
+      const loadCallsAfterStart = vi.mocked(HTMLMediaElement.prototype.load)
+        .mock.calls.length;
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Minimize player (Escape)" }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "play all" }));
+
+      // Same track id means the stream URL is unchanged, so the queue restart
+      // has to rewind and resume by hand; the fullscreen view re-opens and the
+      // click is never read as a pause.
+      expect(audio.currentTime).toBe(0);
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+      expect(
+        vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length,
+      ).toBe(loadCallsAfterStart);
+    });
+
     it("toggles through the playTrack entry point as well", () => {
       const tracks = [alabaster, basalt].map(convertToAudioTrack);
 

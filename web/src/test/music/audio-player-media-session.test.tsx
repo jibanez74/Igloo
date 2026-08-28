@@ -739,6 +739,44 @@ describe("AudioPlayer Media Session", () => {
       expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
     });
 
+    // Space is claimed by playback inside the chrome, so Enter must still be
+    // available to activate the focused control (design-system §3.5).
+    it("leaves Enter to activate controls inside the player chrome", () => {
+      const onClose = vi.fn();
+      renderAudioPlayer({ onClose });
+
+      const closeButton = screen.getByRole("button", {
+        name: "Stop playback and close player",
+      });
+      closeButton.focus();
+
+      const playMock = HTMLMediaElement.prototype.play as ReturnType<
+        typeof vi.fn
+      >;
+      const playCallsBefore = playMock.mock.calls.length;
+
+      const defaultNotPrevented = fireEvent.keyDown(closeButton, {
+        key: "Enter",
+      });
+
+      // Not consumed by the shortcut layer, so the browser's own button
+      // activation still runs.
+      expect(defaultNotPrevented).toBe(true);
+      expect(playMock.mock.calls.length).toBe(playCallsBefore);
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+    });
+
+    it("unmutes when the volume keys are used", () => {
+      const { audio } = renderAudioPlayer();
+      audio.muted = true;
+      audio.volume = 0.5;
+
+      fireEvent.keyDown(document.body, { key: "ArrowUp" });
+
+      expect(audio.muted).toBe(false);
+      expect(audio.volume).toBeGreaterThan(0.5);
+    });
+
     it("mirrors the video player's k/j/l/0 aliases", () => {
       const { audio } = renderAudioPlayer();
       setAudioNumber(audio, "duration", 120);

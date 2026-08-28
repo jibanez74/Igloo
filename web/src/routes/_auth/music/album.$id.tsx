@@ -337,7 +337,7 @@ function AlbumDetailsContent({
   const handlePlayAlbum = () => {
     if (tracks.length === 0) return;
 
-    audioPlayer.playAlbum(tracks, {
+    audioPlayer.playQueue(tracks, {
       cover: coverUrl,
       title: album.title,
       musician: musicianName,
@@ -348,7 +348,7 @@ function AlbumDetailsContent({
   const handleShufflePlay = () => {
     if (tracks.length === 0) return;
 
-    audioPlayer.shuffleAlbum(tracks, {
+    audioPlayer.shuffleQueue(tracks, {
       cover: coverUrl,
       title: album.title,
       musician: musicianName,

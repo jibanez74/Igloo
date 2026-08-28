@@ -47,7 +47,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
       const data = await queryClient.fetchQuery(albumDetailsQueryOpts(id));
 
       if (!data.error && data.data?.tracks?.length > 0) {
-        audioPlayer.playAlbum(data.data.tracks, {
+        audioPlayer.playQueue(data.data.tracks, {
           cover: unwrapString(data.data.album.cover),
           title: data.data.album.title,
           musician: unwrapString(data.data.album.musician),

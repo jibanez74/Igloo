@@ -16,9 +16,9 @@ const DETAIL_PAGE_ANIMATION_MARKER =
 
 const { audioPlayerActionsMock, audioPlayerNowPlayingMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
-    shuffleAlbum: vi.fn(),
+    shuffleQueue: vi.fn(),
     togglePlay: vi.fn(),
   },
   audioPlayerNowPlayingMock: {
@@ -408,7 +408,10 @@ describe("musician details route accessibility", () => {
     expect(currentRow).toHaveTextContent("Alabaster");
   });
 
-  it("toggles playback when the currently playing row is clicked instead of restarting the queue", async () => {
+  // Row clicks go through playTrack, which toggles play/pause itself when the
+  // clicked track is already current (covered in audio-player-queue.test.tsx).
+  // playQueue is reserved for the header's start-over buttons.
+  it("routes a row click through playTrack rather than restarting the queue", async () => {
     audioPlayerNowPlayingMock.currentTrackId = 1;
     audioPlayerNowPlayingMock.isPlaying = true;
 
@@ -418,8 +421,12 @@ describe("musician details route accessibility", () => {
       await screen.findByRole("button", { name: "Pause Alabaster" }),
     );
 
-    expect(audioPlayerActionsMock.togglePlay).toHaveBeenCalled();
-    expect(audioPlayerActionsMock.playAlbum).not.toHaveBeenCalled();
+    expect(audioPlayerActionsMock.playTrack).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      expect.arrayContaining([expect.objectContaining({ id: 1 })]),
+      expect.objectContaining({ title: "The Band" }),
+    );
+    expect(audioPlayerActionsMock.playQueue).not.toHaveBeenCalled();
   });
 });
 

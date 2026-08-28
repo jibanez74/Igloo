@@ -16,9 +16,9 @@ const DETAIL_PAGE_ANIMATION_MARKER =
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
-    shuffleAlbum: vi.fn(),
+    shuffleQueue: vi.fn(),
     togglePlay: vi.fn(),
   },
 }));

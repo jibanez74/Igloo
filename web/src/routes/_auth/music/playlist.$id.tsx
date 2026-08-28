@@ -37,7 +37,7 @@ import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerNowPlaying } from "@/hooks/useAudioPlayerNowPlaying";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
@@ -220,12 +220,12 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     },
   });
 
-  // playAlbum/shuffleAlbum instead of playTrack: these header buttons are
+  // playQueue/shuffleQueue instead of playTrack: these header buttons are
   // explicit "start over" entry points and must restart even when the first
   // track is already the current one (playTrack toggles in that case).
   const handlePlayAll = () => {
     if (!allTracks.length) return;
-    audioPlayer.playAlbum(allTracks.map(playlistTrackToAudioTrack), {
+    audioPlayer.playQueue(allTracks.map(playlistTrackToAudioTrack), {
       cover: coverUrl,
       title: playlist.name,
       musician: null,
@@ -234,7 +234,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   const handleShuffle = () => {
     if (!allTracks.length) return;
-    audioPlayer.shuffleAlbum(allTracks.map(playlistTrackToAudioTrack), {
+    audioPlayer.shuffleQueue(allTracks.map(playlistTrackToAudioTrack), {
       cover: coverUrl,
       title: playlist.name,
       musician: null,
@@ -504,7 +504,6 @@ function PlaylistTracksList({
   coverUrl,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
-  const nowPlaying = useAudioPlayerNowPlaying();
 
   // Local optimistic order override keyed by track ids.
   const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
@@ -562,8 +561,6 @@ function PlaylistTracksList({
             onReorder={handleReorder}
             onPlayTrack={handlePlayTrack}
             onRemoveTrack={onRemoveTrack}
-            currentTrackId={nowPlaying.currentTrackId ?? undefined}
-            isPlaying={nowPlaying.isPlaying}
           />
         </Suspense>
         {isFetchingNextPage && (
@@ -586,8 +583,6 @@ function PlaylistTracksList({
       fetchNextPage={fetchNextPage}
       onPlayTrack={handlePlayTrack}
       onRemoveTrack={onRemoveTrack}
-      currentTrackId={nowPlaying.currentTrackId ?? undefined}
-      isPlaying={nowPlaying.isPlaying}
     />
   );
 }
@@ -601,8 +596,6 @@ type VirtualizedPlaylistTracksListProps = {
   fetchNextPage: () => Promise<unknown>;
   onPlayTrack: (track: PlaylistTrackType) => void;
   onRemoveTrack: (trackId: number) => void;
-  currentTrackId: number | undefined;
-  isPlaying: boolean;
 };
 
 function VirtualizedPlaylistTracksList({
@@ -614,11 +607,10 @@ function VirtualizedPlaylistTracksList({
   fetchNextPage,
   onPlayTrack,
   onRemoveTrack,
-  currentTrackId,
-  isPlaying,
 }: VirtualizedPlaylistTracksListProps) {
   "use no memo";
 
+  const matchTrackPlayback = useTrackPlaybackMatcher();
   const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
 
   const onChange = useVirtualizedInfiniteLoader({
@@ -681,8 +673,7 @@ function VirtualizedPlaylistTracksList({
                 musicianId={unwrapInt(track.musician_id)}
                 musicianName={unwrapStringOrUndefined(track.musician_name)}
                 variant="playlist"
-                isPlaying={currentTrackId === track.id && isPlaying}
-                isCurrentTrack={currentTrackId === track.id}
+                {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}
                 showActionsMenu
                 playlistId={playlistId}

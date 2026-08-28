@@ -20,6 +20,7 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import SortableTrackItem from "./SortableTrackItem";
 import TrackItem from "./TrackItem";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import type { PlaylistTrackType } from "@/types";
 
 type DraggableTrackListProps = {
@@ -31,8 +32,6 @@ type DraggableTrackListProps = {
   onReorder: (trackIds: number[]) => void;
   onPlayTrack: (track: PlaylistTrackType) => void;
   onRemoveTrack: (trackId: number) => void;
-  currentTrackId?: number;
-  isPlaying: boolean;
 };
 
 export default function DraggableTrackList({
@@ -42,9 +41,8 @@ export default function DraggableTrackList({
   onReorder,
   onPlayTrack,
   onRemoveTrack,
-  currentTrackId,
-  isPlaying,
 }: DraggableTrackListProps) {
+  const matchTrackPlayback = useTrackPlaybackMatcher();
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 
   // Configure sensors with activation constraints
@@ -157,8 +155,7 @@ export default function DraggableTrackList({
                 musicianId={unwrapInt(track.musician_id)}
                 musicianName={unwrapStringOrUndefined(track.musician_name)}
                 variant="playlist"
-                isPlaying={currentTrackId === track.id && isPlaying}
-                isCurrentTrack={currentTrackId === track.id}
+                {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}
                 showActionsMenu
                 playlistId={playlistId}

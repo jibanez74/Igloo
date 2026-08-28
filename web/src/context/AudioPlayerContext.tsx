@@ -7,7 +7,7 @@ import {
 import type {
   AudioPlayerActions,
   AudioPlayerNowPlaying,
-  AudioPlayerState,
+  AudioPlayerQueueState,
   PlayableTrackData,
   TrackType,
 } from "@/types";
@@ -19,7 +19,9 @@ import {
 } from "@/lib/api";
 import {
   convertToAudioTrack,
+  dedupeById,
   extractTrackMetadata,
+  playMediaElement,
   shuffleArray,
   toggleMediaPlayback,
   trimQueueHistory,
@@ -38,12 +40,7 @@ const ENDLESS_QUEUE_LOAD_AHEAD_TRACKS = 10;
 // this many played tracks stay reachable via previous-track navigation.
 const MAX_TRACKS_BEHIND = 50;
 
-type QueueState = Omit<
-  AudioPlayerState,
-  "isPlaying" | "isExpanded" | "isKeyboardSuspended"
->;
-
-function createInitialQueueState(): QueueState {
+function createInitialQueueState(): AudioPlayerQueueState {
   return {
     currentTrack: null,
     tracks: [],
@@ -56,10 +53,11 @@ function createInitialQueueState(): QueueState {
   };
 }
 
-const AudioPlayerStateContext = createContext<AudioPlayerState | null>(null);
 const AudioPlayerActionsContext = createContext<AudioPlayerActions | null>(null);
-// Split from the state context so track rows (which only need "is this row the
-// current track and is it playing") don't re-render on queue changes.
+// The queue itself is passed to AudioPlayer as props rather than published as
+// a context, so appends to an endless queue re-render only the player. Every
+// other subscriber (track rows, the app shell) reads this primitive-only
+// slice instead.
 const AudioPlayerNowPlayingContext =
   createContext<AudioPlayerNowPlaying | null>(null);
 
@@ -68,7 +66,7 @@ export function AudioPlayerProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [queueState, setQueueState] = useState<QueueState>(() =>
+  const [queueState, setQueueState] = useState<AudioPlayerQueueState>(() =>
     createInitialQueueState(),
   );
   const [isPlaying, setIsPlaying] = useState(false);
@@ -357,6 +355,11 @@ export function AudioPlayerProvider({
     if (rawTracks) {
       populateTrackMetadata(rawTracks);
     }
+    // Restarting a queue whose first track is already the current one leaves
+    // the stream URL unchanged, so AudioPlayer's load effect does not re-fire
+    // — rewind here or "Play all" would silently resume mid-track.
+    const isSameTrack = currentTrack.id === queueState.currentTrack?.id;
+
     setQueueState({
       currentTrack,
       tracks,
@@ -368,6 +371,11 @@ export function AudioPlayerProvider({
       trimmedCount: 0,
     });
     setIsExpanded(true);
+
+    if (isSameTrack && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      void playMediaElement(audioRef.current);
+    }
   };
 
   const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
@@ -393,16 +401,7 @@ export function AudioPlayerProvider({
       return;
     }
 
-    // Mixed lists (search results, library tracks tab) can repeat an id;
-    // dedupe so findIndex-based prev/next navigation stays coherent.
-    const seenIds = new Set<number>();
-    const uniqueRawTracks = rawTracks.filter(track => {
-      if (seenIds.has(track.id)) {
-        return false;
-      }
-      seenIds.add(track.id);
-      return true;
-    });
+    const uniqueRawTracks = dedupeById(rawTracks);
 
     const startRawTrack = uniqueRawTracks.find(
       track => track.id === startTrackId,
@@ -420,13 +419,13 @@ export function AudioPlayerProvider({
     });
   };
 
-  const playAlbum: AudioPlayerActions["playAlbum"] = (tracks, albumInfo) => {
+  const playQueue: AudioPlayerActions["playQueue"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
     startQueue({ currentTrack: tracks[0], tracks, albumInfo });
   };
 
-  const shuffleAlbum: AudioPlayerActions["shuffleAlbum"] = (tracks, albumInfo) => {
+  const shuffleQueue: AudioPlayerActions["shuffleQueue"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
     const shuffled = shuffleArray(tracks);
@@ -441,17 +440,9 @@ export function AudioPlayerProvider({
         return;
       }
 
-      // The shuffle endpoint can repeat an id within one batch; dedupe so
-      // findIndex-based prev/next navigation stays coherent (the append
-      // effect above already dedupes subsequent batches).
-      const seenIds = new Set<number>();
-      const rawTracks = response.data.tracks.filter(track => {
-        if (seenIds.has(track.id)) {
-          return false;
-        }
-        seenIds.add(track.id);
-        return true;
-      });
+      // The append effect above already dedupes subsequent batches; this one
+      // covers repeats within the first batch.
+      const rawTracks = dedupeById(response.data.tracks);
       const tracks = rawTracks.map(convertToAudioTrack);
       const { cover, musician } = extractTrackMetadata(rawTracks[0]);
 
@@ -551,23 +542,17 @@ export function AudioPlayerProvider({
 
   const isKeyboardSuspended = keyboardSuspendCount > 0;
 
-  const stateValue = {
-    ...queueState,
-    isPlaying,
-    isExpanded,
-    isKeyboardSuspended,
-  };
-
   const nowPlayingValue = {
     currentTrackId: queueState.currentTrack?.id ?? null,
     isPlaying,
+    isExpanded,
   };
 
   const actionsValue = {
     playTrack,
     playTrackFromList,
-    playAlbum,
-    shuffleAlbum,
+    playQueue,
+    shuffleQueue,
     startShufflePlayback,
     startPlayAllPlayback,
     setTrack,
@@ -581,35 +566,29 @@ export function AudioPlayerProvider({
   };
 
   return (
-    <AudioPlayerStateContext.Provider value={stateValue}>
-      <AudioPlayerActionsContext.Provider value={actionsValue}>
-        <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
-          {children}
-          <AudioPlayer
-            track={queueState.currentTrack}
-            tracks={queueState.tracks}
-            trimmedCount={queueState.trimmedCount}
-            albumCover={queueState.albumCover}
-            albumTitle={queueState.albumTitle}
-            musicianName={queueState.musicianName}
-            onTrackChange={setTrack}
-            onClose={stop}
-            audioRef={audioRef}
-            isPlaying={isPlaying}
-            onPlayStateChange={handlePlayStateChange}
-            isExpanded={isExpanded}
-            onMinimize={minimize}
-            onExpand={expand}
-            isKeyboardSuspended={isKeyboardSuspended}
-          />
-        </AudioPlayerNowPlayingContext.Provider>
-      </AudioPlayerActionsContext.Provider>
-    </AudioPlayerStateContext.Provider>
+    <AudioPlayerActionsContext.Provider value={actionsValue}>
+      <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
+        {children}
+        <AudioPlayer
+          track={queueState.currentTrack}
+          tracks={queueState.tracks}
+          trimmedCount={queueState.trimmedCount}
+          albumCover={queueState.albumCover}
+          albumTitle={queueState.albumTitle}
+          musicianName={queueState.musicianName}
+          onTrackChange={setTrack}
+          onClose={stop}
+          audioRef={audioRef}
+          isPlaying={isPlaying}
+          onPlayStateChange={handlePlayStateChange}
+          isExpanded={isExpanded}
+          onMinimize={minimize}
+          onExpand={expand}
+          isKeyboardSuspended={isKeyboardSuspended}
+        />
+      </AudioPlayerNowPlayingContext.Provider>
+    </AudioPlayerActionsContext.Provider>
   );
 }
 
-export {
-  AudioPlayerStateContext,
-  AudioPlayerActionsContext,
-  AudioPlayerNowPlayingContext,
-};
+export { AudioPlayerActionsContext, AudioPlayerNowPlayingContext };
