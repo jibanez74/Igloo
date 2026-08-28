@@ -525,16 +525,30 @@ require the full playback test pass.
   screen's non-loading variants and the watch-room error box carry
   `role="alert"` because the player subtree (and its live regions) unmounts
   before they appear.
-- **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`):
-  playing a track opens the **fullscreen Now Playing** view
+- **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`;
+  chrome split into `NowPlayingDialog`, `MiniPlayerBar`, and the shared
+  `PlayerTransportControls`, with `useAudioPlaybackKeyboard` and
+  `useAudioMediaSession` behind it):
+  starting a **new** track opens the **fullscreen Now Playing** view
   (`DialogFullscreenContent`, gradient `from-background via-muted
   to-background`, large art with disc-icon fallback, transport + volume +
   "Track N of M"); "Minimize player (Escape)" collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
   with track info, transport, close, and a bottom progress strip. The bar
   persists across navigation; the current track's row in lists is
-  highlighted (`text-primary` title + tinted row + pause state). Sliders are
-  native ranges (§1.7).
+  highlighted (`text-primary` title + tinted row + pause state), and
+  clicking that row **toggles play/pause in place** — it never rebuilds the
+  queue or re-opens the fullscreen view (the header-level "Play all" /
+  "Shuffle" buttons are the explicit start-over entry points, and they
+  rewind to 0:00 even when their first track is the one already playing).
+  Sliders are native ranges (§1.7). Global keyboard map (mirrors the video
+  player's aliases): Space/K toggle, J/L and ←/→ seek ±10s, ↑/↓ volume
+  (unmuting as it goes), N/P next/previous, R/Home/0 restart, M mute. Inside the player's own chrome
+  these keys always control playback — Space pauses even when a player
+  button holds focus (Enter still activates it); outside the player, Space
+  and navigation keys are left to the focused control (buttons, tabs,
+  radios), and the player's native sliders keep their own arrow/Home
+  handling.
 
 ### 3.6 Toasts & notifications
 

@@ -694,7 +694,7 @@ describe("AudioPlayer Media Session", () => {
       </div>
     );
 
-    it("leaves Space to activate focused controls instead of toggling playback", () => {
+    it("toggles playback with Space on controls inside the player chrome", () => {
       const { audio } = renderAudioPlayer();
       observeAudioCurrentTime(audio, 42);
 
@@ -706,11 +706,99 @@ describe("AudioPlayer Media Session", () => {
       >;
       const playCallsBefore = playMock.mock.calls.length;
 
+      // Video-player parity: Space controls playback anywhere inside the
+      // player's own chrome (jsdom audio reports paused, so toggle plays).
       const defaultNotPrevented = fireEvent.keyDown(prevButton, { key: " " });
+
+      expect(defaultNotPrevented).toBe(false);
+      expect(playMock.mock.calls.length).toBe(playCallsBefore + 1);
+    });
+
+    it("leaves Space to activate focused controls outside the player", () => {
+      const { audio } = renderAudioPlayer({
+        siblings: <button type="button">Outside button</button>,
+      });
+      observeAudioCurrentTime(audio, 42);
+
+      const outsideButton = screen.getByRole("button", {
+        name: "Outside button",
+      });
+      outsideButton.focus();
+
+      const playMock = HTMLMediaElement.prototype.play as ReturnType<
+        typeof vi.fn
+      >;
+      const playCallsBefore = playMock.mock.calls.length;
+
+      const defaultNotPrevented = fireEvent.keyDown(outsideButton, {
+        key: " ",
+      });
 
       expect(defaultNotPrevented).toBe(true);
       expect(playMock.mock.calls.length).toBe(playCallsBefore);
       expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+    });
+
+    // Space is claimed by playback inside the chrome, so Enter must still be
+    // available to activate the focused control (design-system §3.5).
+    it("leaves Enter to activate controls inside the player chrome", () => {
+      const onClose = vi.fn();
+      renderAudioPlayer({ onClose });
+
+      const closeButton = screen.getByRole("button", {
+        name: "Stop playback and close player",
+      });
+      closeButton.focus();
+
+      const playMock = HTMLMediaElement.prototype.play as ReturnType<
+        typeof vi.fn
+      >;
+      const playCallsBefore = playMock.mock.calls.length;
+
+      const defaultNotPrevented = fireEvent.keyDown(closeButton, {
+        key: "Enter",
+      });
+
+      // Not consumed by the shortcut layer, so the browser's own button
+      // activation still runs.
+      expect(defaultNotPrevented).toBe(true);
+      expect(playMock.mock.calls.length).toBe(playCallsBefore);
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+    });
+
+    it("unmutes when the volume keys are used", () => {
+      const { audio } = renderAudioPlayer();
+      audio.muted = true;
+      audio.volume = 0.5;
+
+      fireEvent.keyDown(document.body, { key: "ArrowUp" });
+
+      expect(audio.muted).toBe(false);
+      expect(audio.volume).toBeGreaterThan(0.5);
+    });
+
+    it("mirrors the video player's k/j/l/0 aliases", () => {
+      const { audio } = renderAudioPlayer();
+      setAudioNumber(audio, "duration", 120);
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+      const playMock = HTMLMediaElement.prototype.play as ReturnType<
+        typeof vi.fn
+      >;
+
+      // The observed currentTime tracks each write: 30 → 40 → 30 → 0.
+      fireEvent.keyDown(document.body, { key: "l" });
+      expect(setCurrentTime).toHaveBeenLastCalledWith(40);
+
+      fireEvent.keyDown(document.body, { key: "j" });
+      expect(setCurrentTime).toHaveBeenLastCalledWith(30);
+
+      fireEvent.keyDown(document.body, { key: "0" });
+      expect(setCurrentTime).toHaveBeenLastCalledWith(0);
+      expect(setCurrentTime).toHaveBeenCalledTimes(3);
+
+      const playCallsBefore = playMock.mock.calls.length;
+      fireEvent.keyDown(document.body, { key: "k" });
+      expect(playMock.mock.calls.length).toBe(playCallsBefore + 1);
     });
 
     it("ignores shortcuts fired from inside a foreign dialog", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  dedupeById,
   playMediaElement,
   toggleMediaPlayback,
   trimQueueHistory,
@@ -78,5 +79,48 @@ describe("trimQueueHistory", () => {
     expect(result.tracks[0].id).toBe(30);
     expect(result.tracks.indexOf(tracks[79])).toBe(50);
     expect(result.dropped).toHaveLength(29);
+  });
+  // The endless-queue contract: AudioPlayerProvider trims on every append, so
+  // a queue played for hours stays bounded no matter how many batches arrive.
+  it("keeps an endlessly appended queue bounded", () => {
+    const KEEP_BEHIND = 50;
+    const BATCH = 10;
+    let tracks = makeTracks(BATCH);
+    let nextId = BATCH + 1;
+    let trimmed = 0;
+
+    // Walk 500 tracks forward, appending a batch whenever the lookahead runs
+    // low, exactly as the provider's append effect does.
+    for (let position = 0; position < 500; position++) {
+      const currentId = tracks[Math.min(position - trimmed, tracks.length - 1)].id;
+
+      if (tracks.length - tracks.findIndex(t => t.id === currentId) < 5) {
+        const result = trimQueueHistory(tracks, currentId, KEEP_BEHIND);
+        trimmed += result.dropped.length;
+        tracks = [
+          ...result.tracks,
+          ...Array.from({ length: BATCH }, () => ({ id: nextId++ })),
+        ];
+      }
+    }
+
+    expect(tracks.length).toBeLessThanOrEqual(KEEP_BEHIND + BATCH + 5);
+    expect(trimmed).toBeGreaterThan(0);
+    // Nothing is lost from the "Track N of M" denominator.
+    expect(trimmed + tracks.length).toBe(nextId - 1);
+  });
+});
+
+describe("dedupeById", () => {
+  it("keeps the first occurrence of each id and preserves order", () => {
+    const items = [{ id: 3 }, { id: 1 }, { id: 3 }, { id: 2 }, { id: 1 }];
+
+    expect(dedupeById(items).map(item => item.id)).toEqual([3, 1, 2]);
+  });
+
+  it("returns an equal list when there is nothing to drop", () => {
+    const items = [{ id: 1 }, { id: 2 }];
+
+    expect(dedupeById(items)).toEqual(items);
   });
 });

@@ -324,26 +324,20 @@ function AlbumDetailsContent({
   const pageAnnouncement = `${album.title}${musicianName ? ` by ${musicianName}` : ""}. ${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}. Total duration: ${formatDuration(total_duration)}.${album_genres.length > 0 ? ` Genres: ${album_genres.join(", ")}.` : ""}`;
   const pageAnnouncementId = `album-${album.id}-summary`;
 
-  // Handle playing/pausing a track
+  // playTrack toggles play/pause itself when the clicked track is current
   const handleToggleTrack = (track: TrackType) => {
-    if (matchTrackPlayback(track.id).isCurrentTrack) {
-      // Toggle play/pause for the current track
-      audioPlayer.togglePlay();
-    } else {
-      // Play a new track
-      audioPlayer.playTrack(track, tracks, {
-        cover: coverUrl,
-        title: album.title,
-        musician: musicianName,
-      });
-    }
+    audioPlayer.playTrack(track, tracks, {
+      cover: coverUrl,
+      title: album.title,
+      musician: musicianName,
+    });
   };
 
   // Handle playing the album from the beginning
   const handlePlayAlbum = () => {
     if (tracks.length === 0) return;
 
-    audioPlayer.playAlbum(tracks, {
+    audioPlayer.playQueue(tracks, {
       cover: coverUrl,
       title: album.title,
       musician: musicianName,
@@ -354,7 +348,7 @@ function AlbumDetailsContent({
   const handleShufflePlay = () => {
     if (tracks.length === 0) return;
 
-    audioPlayer.shuffleAlbum(tracks, {
+    audioPlayer.shuffleQueue(tracks, {
       cover: coverUrl,
       title: album.title,
       musician: musicianName,

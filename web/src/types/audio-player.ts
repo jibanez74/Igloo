@@ -28,16 +28,15 @@ export type PlayableTrackData = {
   album_title?: NullableString;
 };
 
-// State for the global audio player
-export type AudioPlayerState = {
+// The queue the player is working through. Held in provider state and passed
+// to AudioPlayer as props — it is deliberately NOT exposed as a context, so a
+// queue append never re-renders the app shell or a track list.
+export type AudioPlayerQueueState = {
   currentTrack: TrackType | null;
   tracks: TrackType[];
   albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
-  isPlaying: boolean;
-  isExpanded: boolean;
-  isKeyboardSuspended: boolean;
 
   // indicates if we are playing tracks in shuffle mode
   isShuffleMode: boolean;
@@ -48,6 +47,15 @@ export type AudioPlayerState = {
   // How many played tracks were trimmed from the front of an endless
   // shuffle/play-all queue; keeps the "Track N of M" counter monotonic
   trimmedCount: number;
+};
+
+// The small slice of player state that app chrome and track rows subscribe
+// to. Everything here is a primitive that changes only on real playback
+// events, so queue growth never re-renders subscribers.
+export type AudioPlayerNowPlaying = {
+  currentTrackId: number | null;
+  isPlaying: boolean;
+  isExpanded: boolean;
 };
 
 // Actions available for the audio player
@@ -66,11 +74,13 @@ export type AudioPlayerActions = {
     startTrackId: number
   ) => void;
 
-  // Play an entire album from the beginning
-  playAlbum: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
+  // Start a finite queue (album, playlist, musician page) from the top. Unlike
+  // playTrack this always restarts, even when the first track is already the
+  // current one — it is the explicit "start over" entry point.
+  playQueue: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
 
-  // Shuffle and play an album's tracks
-  shuffleAlbum: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
+  // Shuffle a finite queue and start it from the top
+  shuffleQueue: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
 
   // Start shuffle playback across entire music library
   startShufflePlayback: () => Promise<void>;

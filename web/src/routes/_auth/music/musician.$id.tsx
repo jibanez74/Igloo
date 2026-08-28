@@ -245,7 +245,7 @@ function MusicianDetailsContent({
     if (tracks.length === 0) return;
 
     const playerTracks = convertTracksForPlayer(tracks);
-    audioPlayer.playAlbum(playerTracks, {
+    audioPlayer.playQueue(playerTracks, {
       cover: thumbUrl,
       title: musician.name,
       musician: musician.name,
@@ -256,22 +256,26 @@ function MusicianDetailsContent({
     if (tracks.length === 0) return;
 
     const playerTracks = convertTracksForPlayer(tracks);
-    audioPlayer.shuffleAlbum(playerTracks, {
+    audioPlayer.shuffleQueue(playerTracks, {
       cover: thumbUrl,
       title: musician.name,
       musician: musician.name,
     });
   };
 
+  // playTrack (not playQueue) so a click on the current row toggles play/pause
+  // instead of restarting — the row button is labeled "Pause X" there.
   const handlePlayTrack = (track: MusicianTrackType) => {
-    const playerTracks = convertTracksForPlayer(tracks);
     const trackIndex = tracks.findIndex((t) => t.id === track.id);
+    if (trackIndex < 0) return;
+
+    const playerTracks = convertTracksForPlayer(tracks);
     const reorderedTracks = [
       ...playerTracks.slice(trackIndex),
       ...playerTracks.slice(0, trackIndex),
     ];
 
-    audioPlayer.playAlbum(reorderedTracks, {
+    audioPlayer.playTrack(reorderedTracks[0], reorderedTracks, {
       cover: unwrapString(track.album_cover) ?? thumbUrl,
       title: musician.name,
       musician: musician.name,

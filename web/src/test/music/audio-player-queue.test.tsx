@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { renderWithQueryClient } from "@/test/helpers/render";
+import { convertToAudioTrack } from "@/lib/audio-utils";
 import type { PlayableTrackData } from "@/types";
 
 vi.mock("@/lib/api", async importOriginal => ({
@@ -180,5 +181,181 @@ describe("playTrackFromList", () => {
     renderQueue([alabaster], 999);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  describe("clicking the current track", () => {
+    function getAudio(): HTMLAudioElement {
+      const audio = document.querySelector("audio");
+      if (!audio) throw new Error("audio element not rendered");
+      return audio;
+    }
+
+    function markPlaying(audio: HTMLAudioElement) {
+      Object.defineProperty(audio, "paused", {
+        get: () => false,
+        configurable: true,
+      });
+      fireEvent(audio, new Event("play"));
+    }
+
+    it("pauses instead of rebuilding the queue and re-opening the player", () => {
+      renderQueue([alabaster, basalt], 1);
+
+      const audio = getAudio();
+      markPlaying(audio);
+      const loadCallsAfterStart = vi.mocked(HTMLMediaElement.prototype.load)
+        .mock.calls.length;
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Minimize player (Escape)" }),
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "start queue" }));
+
+      expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length,
+      ).toBe(loadCallsAfterStart);
+    });
+
+    it("resumes a paused current track without reloading it", () => {
+      renderQueue([alabaster, basalt], 1);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Minimize player (Escape)" }),
+      );
+
+      const loadCallsAfterStart = vi.mocked(HTMLMediaElement.prototype.load)
+        .mock.calls.length;
+      vi.mocked(HTMLMediaElement.prototype.play).mockClear();
+
+      // jsdom's audio element reports paused by default.
+      fireEvent.click(screen.getByRole("button", { name: "start queue" }));
+
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+      expect(
+        vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length,
+      ).toBe(loadCallsAfterStart);
+    });
+
+    // The header "Play all"/"Shuffle" buttons go through playQueue, which must
+    // restart even when its first track is the one already playing.
+    it("does not swallow playQueue when the first track is already current", () => {
+      const tracks = [alabaster, basalt].map(convertToAudioTrack);
+
+      function StartOverHarness() {
+        const actions = useAudioPlayerActions();
+
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                actions.playTrack(tracks[0], tracks, {
+                  cover: null,
+                  title: "Stone Record",
+                  musician: "The Band",
+                })
+              }
+            >
+              play track
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                actions.playQueue(tracks, {
+                  cover: null,
+                  title: "Stone Record",
+                  musician: "The Band",
+                })
+              }
+            >
+              play all
+            </button>
+          </>
+        );
+      }
+
+      renderWithQueryClient(
+        <AudioPlayerProvider>
+          <StartOverHarness />
+        </AudioPlayerProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "play track" }));
+
+      const audio = getAudio();
+      markPlaying(audio);
+      audio.currentTime = 42;
+      const loadCallsAfterStart = vi.mocked(HTMLMediaElement.prototype.load)
+        .mock.calls.length;
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Minimize player (Escape)" }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "play all" }));
+
+      // Same track id means the stream URL is unchanged, so the queue restart
+      // has to rewind and resume by hand; the fullscreen view re-opens and the
+      // click is never read as a pause.
+      expect(audio.currentTime).toBe(0);
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+      expect(
+        vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length,
+      ).toBe(loadCallsAfterStart);
+    });
+
+    it("toggles through the playTrack entry point as well", () => {
+      const tracks = [alabaster, basalt].map(convertToAudioTrack);
+
+      function PlayTrackHarness() {
+        const actions = useAudioPlayerActions();
+
+        return (
+          <button
+            type="button"
+            onClick={() =>
+              actions.playTrack(tracks[0], tracks, {
+                cover: null,
+                title: "Stone Record",
+                musician: "The Band",
+              })
+            }
+          >
+            play track
+          </button>
+        );
+      }
+
+      renderWithQueryClient(
+        <AudioPlayerProvider>
+          <PlayTrackHarness />
+        </AudioPlayerProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "play track" }));
+
+      const audio = getAudio();
+      markPlaying(audio);
+      const loadCallsAfterStart = vi.mocked(HTMLMediaElement.prototype.load)
+        .mock.calls.length;
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Minimize player (Escape)" }),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "play track" }));
+
+      expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(
+        vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length,
+      ).toBe(loadCallsAfterStart);
+    });
   });
 });

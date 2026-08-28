@@ -67,6 +67,21 @@ export function extractTrackMetadata(track: PlayableTrackData): {
   };
 }
 
+// Drop repeated ids, keeping the first occurrence. Mixed lists (search
+// results, the library tracks tab) and the shuffle endpoint can both repeat an
+// id, which would break findIndex-based prev/next navigation.
+export function dedupeById<T extends { id: number }>(items: T[]): T[] {
+  const seenIds = new Set<number>();
+
+  return items.filter(item => {
+    if (seenIds.has(item.id)) {
+      return false;
+    }
+    seenIds.add(item.id);
+    return true;
+  });
+}
+
 // Bound an endless queue's history: keep at most keepBehind tracks before the
 // current one and report what was dropped so callers can prune per-track
 // metadata. Returns the input array untouched when nothing needs trimming.

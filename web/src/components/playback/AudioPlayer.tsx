@@ -1,38 +1,13 @@
 import { useRef, useState, useEffect, useEffectEvent } from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  X,
-  Disc3,
-  SkipBack,
-  SkipForward,
-  Pause,
-  Play,
-} from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFullscreenContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type { TrackType } from "@/types";
-import PlayerLikeButton from "@/components/playback/PlayerLikeButton";
-import ProgressBar from "@/components/playback/ProgressBar";
-import VolumeControl from "@/components/playback/VolumeControl";
+import MiniPlayerBar from "@/components/playback/MiniPlayerBar";
+import NowPlayingDialog from "@/components/playback/NowPlayingDialog";
 import {
-  AUDIO_SEEK_STEP_SECONDS,
-  AUDIO_VOLUME_STEP,
-  FOCUS_VISIBLE_RING_CLASS,
-  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-  MOTION_PLAYER_CHROME_ENTER_CLASS,
-  PLAYER_ICON_BUTTON_CLASS,
-  PLAYER_PRIMARY_BUTTON_CLASS,
-  PLAYER_TRANSPORT_INERT_CLASS,
-} from "@/lib/constants";
+  syncMediaSessionPosition,
+  useAudioMediaSession,
+} from "@/hooks/useAudioMediaSession";
+import { useAudioPlaybackKeyboard } from "@/hooks/useAudioPlaybackKeyboard";
 import { playMediaElement, toggleMediaPlayback } from "@/lib/audio-utils";
-import { cn } from "@/lib/utils";
 
 type AudioPlayerProps = {
   track: TrackType | null;
@@ -59,31 +34,6 @@ type AudioPlayerProps = {
 // has passed this many seconds.
 const RESTART_THRESHOLD_SECONDS = 3;
 const PREVIOUS_TRACK_ARIA_LABEL = "Previous track";
-
-// Controls whose native keyboard interaction must win over the global
-// playback shortcuts.
-const INTERACTIVE_SELECTOR =
-  'button, a[href], select, summary, [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="slider"], [role="spinbutton"]';
-
-// Overlays that own their keyboard interaction entirely. The player's own
-// fullscreen dialog is exempted via the data-audio-player marker.
-const FOREIGN_OVERLAY_SELECTOR =
-  '[role="dialog"]:not([data-audio-player]), [role="alertdialog"], [role="menu"], [role="listbox"]';
-
-const ARROW_KEYS = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-]);
-
-function mediaSessionSupported() {
-  return (
-    typeof navigator !== "undefined" &&
-    "mediaSession" in navigator &&
-    typeof navigator.mediaSession?.setPositionState === "function"
-  );
-}
 
 export default function AudioPlayer({
   track,
@@ -216,149 +166,24 @@ export default function AudioPlayer({
     return () => window.clearTimeout(timer);
   }, [isExpanded]);
 
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) {
-      return;
-    }
+  // Effects below key on currentTrackId (and other primitives) rather than the
+  // track object: queue rebuilds allocate fresh track objects for the same
+  // track, and object-identity deps would tear down and re-register handlers
+  // for no behavioral reason.
+  const trackTitle = track?.title ?? null;
 
-    // Clear stale lock-screen/OS media info once playback stops; otherwise
-    // the last track keeps showing after the player is closed.
-    if (!track || typeof MediaMetadata === "undefined") {
-      navigator.mediaSession.metadata = null;
-      return;
-    }
-
-    // MediaMetadata artwork wants absolute URLs; new URL() leaves already
-    // absolute covers untouched and resolves /api paths against the origin.
-    const artworkUrl = albumCover
-      ? new URL(albumCover, window.location.origin).toString()
-      : null;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title,
-      artist: musicianName ?? albumTitle,
-      album: albumTitle,
-      artwork: artworkUrl ? [{ src: artworkUrl }] : [],
-    });
-  }, [track, albumCover, albumTitle, musicianName]);
-
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-
-    navigator.mediaSession.playbackState = !track
-      ? "none"
-      : isPlaying
-        ? "playing"
-        : "paused";
-  }, [isPlaying, track]);
-
-  const handleMediaSessionPlay = useEffectEvent(() => {
-    void playMediaElement(audioRef.current);
-  });
-
-  const handleMediaSessionPause = useEffectEvent(() => {
-    audioRef.current?.pause();
-  });
-
-  const handleMediaSessionStop = useEffectEvent(() => {
-    onClose?.();
-  });
-
-  const handleMediaSessionPrevious = useEffectEvent(() => {
-    playPrevious();
-  });
-
-  const handleMediaSessionNext = useEffectEvent(() => {
-    if (hasNext) {
-      onTrackChange(tracks[currentIndex + 1]);
-    }
-  });
-
-  const handleMediaSessionSeekBackward = useEffectEvent(
-    ({ seekOffset }: { seekOffset?: number }) => {
-      seekBy(-(seekOffset ?? AUDIO_SEEK_STEP_SECONDS));
-    },
-  );
-
-  const handleMediaSessionSeekForward = useEffectEvent(
-    ({ seekOffset }: { seekOffset?: number }) => {
-      seekBy(seekOffset ?? AUDIO_SEEK_STEP_SECONDS);
-    },
-  );
-
-  const handleMediaSessionSeekTo = useEffectEvent(
-    ({ seekTime }: { seekTime?: number }) => {
-      const audio = audioRef.current;
-      if (!audio || seekTime == null) return;
-
-      audio.currentTime = seekTime;
-    },
-  );
-
-  useEffect(() => {
-    if (!track || !("mediaSession" in navigator)) return;
-
-    navigator.mediaSession.setActionHandler("play", handleMediaSessionPlay);
-    navigator.mediaSession.setActionHandler("pause", handleMediaSessionPause);
-    navigator.mediaSession.setActionHandler("stop", handleMediaSessionStop);
-    navigator.mediaSession.setActionHandler(
-      "previoustrack",
-      handleMediaSessionPrevious,
-    );
-    navigator.mediaSession.setActionHandler("nexttrack", handleMediaSessionNext);
-    navigator.mediaSession.setActionHandler(
-      "seekbackward",
-      handleMediaSessionSeekBackward,
-    );
-    navigator.mediaSession.setActionHandler(
-      "seekforward",
-      handleMediaSessionSeekForward,
-    );
-    navigator.mediaSession.setActionHandler("seekto", handleMediaSessionSeekTo);
-
-    return () => {
-      for (const action of [
-        "play",
-        "pause",
-        "stop",
-        "previoustrack",
-        "nexttrack",
-        "seekbackward",
-        "seekforward",
-        "seekto",
-      ] as const) {
-        navigator.mediaSession.setActionHandler(action, null);
-      }
-    };
-  }, [audioRef, track]);
-
-  const syncMediaSessionPosition = useEffectEvent((audio: HTMLAudioElement) => {
-    if (!mediaSessionSupported()) {
-      return;
-    }
-
-    const audioDuration = audio.duration;
-    if (!Number.isFinite(audioDuration) || audioDuration <= 0) {
-      return;
-    }
-
-    const currentPosition = Number.isFinite(audio.currentTime)
-      ? audio.currentTime
-      : 0;
-    const playbackRate =
-      Number.isFinite(audio.playbackRate) && audio.playbackRate > 0
-        ? audio.playbackRate
-        : 1;
-
-    try {
-      navigator.mediaSession.setPositionState?.({
-        duration: audioDuration,
-        playbackRate,
-        position: Math.max(0, Math.min(currentPosition, audioDuration)),
-      });
-    } catch {
-      // Some browsers expose Media Session but reject position updates.
-    }
+  useAudioMediaSession({
+    audioRef,
+    currentTrackId,
+    trackTitle,
+    albumTitle,
+    albumCover,
+    musicianName,
+    isPlaying,
+    onStop: () => onClose?.(),
+    onPrevious: () => playPrevious(),
+    onNext: () => playNext(),
+    onSeekBy: seekBy,
   });
 
   const handleAudioPlay = useEffectEvent(() => {
@@ -402,7 +227,7 @@ export default function AudioPlayer({
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!track || !audio) return;
+    if (currentTrackId === null || !audio) return;
 
     const onPlay = () => handleAudioPlay();
     const onPause = () => handleAudioPause();
@@ -432,7 +257,7 @@ export default function AudioPlayer({
       audio.removeEventListener("error", onError);
       audio.removeEventListener("ended", onEnded);
     };
-  }, [audioRef, track]);
+  }, [audioRef, currentTrackId]);
 
   const handleTogglePlay = () => {
     // While loading the button is aria-disabled (never `disabled`, which
@@ -440,123 +265,6 @@ export default function AudioPlayer({
     if (isLoading) return;
     toggleMediaPlayback(audioRef.current);
   };
-
-  const handleGlobalKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    const audio = audioRef.current;
-
-    if (!track || !audio || isKeyboardSuspended) {
-      return;
-    }
-
-    const target = event.target instanceof HTMLElement ? event.target : null;
-
-    // The player's own sliders (seek, volume) stay eligible for the global
-    // shortcuts — they never take text input — but their range navigation keys
-    // belong to the native slider. Anything else that takes typing suppresses
-    // shortcuts.
-    const isPlayerRangeInput =
-      target instanceof HTMLInputElement &&
-      target.type === "range" &&
-      target.closest("[data-audio-player]") !== null;
-
-    if (
-      target &&
-      !isPlayerRangeInput &&
-      (target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable)
-    ) {
-      return;
-    }
-
-    if (
-      isPlayerRangeInput &&
-      (ARROW_KEYS.has(event.key) || event.key === "Home")
-    ) {
-      return;
-    }
-
-    if (event.ctrlKey || event.metaKey || event.altKey) {
-      return;
-    }
-
-    if (target) {
-      if (target.closest(FOREIGN_OVERLAY_SELECTOR)) {
-        return;
-      }
-
-      const interactive = target.closest(INTERACTIVE_SELECTOR);
-      if (interactive) {
-        // Space must activate the focused control everywhere, and navigation
-        // keys belong to widgets like tabs and radios — except inside the
-        // player's own chrome, where they keep controlling playback.
-        if (event.key === " ") {
-          return;
-        }
-
-        if (
-          (ARROW_KEYS.has(event.key) || event.key === "Home") &&
-          !interactive.closest("[data-audio-player]")
-        ) {
-          return;
-        }
-      }
-    }
-
-    switch (event.key) {
-      case " ":
-        event.preventDefault();
-        handleTogglePlay();
-        break;
-      case "ArrowLeft":
-        event.preventDefault();
-        seekBy(-AUDIO_SEEK_STEP_SECONDS);
-        break;
-      case "ArrowRight":
-        event.preventDefault();
-        seekBy(AUDIO_SEEK_STEP_SECONDS);
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        audio.volume = Math.min(1, audio.volume + AUDIO_VOLUME_STEP);
-        break;
-      case "ArrowDown":
-        event.preventDefault();
-        audio.volume = Math.max(0, audio.volume - AUDIO_VOLUME_STEP);
-        break;
-      case "n":
-      case "N":
-      case "MediaTrackNext":
-        event.preventDefault();
-        if (hasNext) {
-          onTrackChange(tracks[currentIndex + 1]);
-        }
-        break;
-      case "p":
-      case "P":
-      case "MediaTrackPrevious":
-        event.preventDefault();
-        playPrevious();
-        break;
-      case "r":
-      case "R":
-      case "Home":
-        event.preventDefault();
-        audio.currentTime = 0;
-        break;
-      case "m":
-      case "M":
-        event.preventDefault();
-        audio.muted = !audio.muted;
-        break;
-    }
-  });
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleGlobalKeyDown);
-
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, []);
 
   const playNext = () => {
     if (hasNext) {
@@ -571,6 +279,16 @@ export default function AudioPlayer({
     setCurrentTime(newTime);
   };
 
+  useAudioPlaybackKeyboard({
+    audioRef,
+    enabled: currentTrackId !== null && !isKeyboardSuspended,
+    onTogglePlay: handleTogglePlay,
+    onSeekBy: seekBy,
+    onNextTrack: () => playNext(),
+    onPreviousTrack: () => playPrevious(),
+    onRestart: () => handleSeek(0),
+  });
+
   useEffect(() => {
     if (!audioRef.current || !streamUrl) return;
 
@@ -578,6 +296,18 @@ export default function AudioPlayer({
     audio.load();
     void playMediaElement(audio);
   }, [audioRef, streamUrl]);
+
+  const transport = {
+    isPlaying,
+    isLoading,
+    hasNext,
+    previousAriaLabel,
+    nextAriaLabel,
+    playPauseAriaLabel,
+    onPrevious: playPrevious,
+    onTogglePlay: handleTogglePlay,
+    onNext: playNext,
+  };
 
   if (!track) return null;
 
@@ -595,336 +325,37 @@ export default function AudioPlayer({
         {announcement}
       </div>
 
-      <Dialog
-        open={isExpanded}
-        onOpenChange={open => {
-          if (!open) {
-            handleMinimize();
-          }
-        }}
-      >
-        {isExpanded && (
-          <DialogFullscreenContent
-            data-audio-player=""
-            className={cn(
-              MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-              "flex flex-col bg-linear-to-b from-background via-muted to-background",
-            )}
-            onOpenAutoFocus={event => {
-              event.preventDefault();
-              playPauseButtonRef.current?.focus({ preventScroll: true });
-            }}
-            onCloseAutoFocus={event => {
-              event.preventDefault();
-            }}
-          >
-            <DialogTitle className="sr-only">
-              Now playing: {track.title} by {artist}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Press Escape to minimize.
-            </DialogDescription>
-
-            <header className="flex items-center justify-between px-6 py-4">
-              <button
-                type="button"
-                onClick={handleMinimize}
-                className={cn(
-                  PLAYER_ICON_BUTTON_CLASS,
-                  "size-10 hover:bg-accent/50",
-                )}
-                aria-label="Minimize player (Escape)"
-              >
-                <ChevronDown className="size-5" aria-hidden="true" />
-              </button>
-              <div className="text-center" id="player-header">
-                <p className="text-xs tracking-widest text-muted-foreground uppercase">
-                  Now Playing
-                </p>
-                <p className="mt-0.5 text-sm text-muted-foreground">{albumTitle}</p>
-              </div>
-              {onClose ? (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={cn(
-                    PLAYER_ICON_BUTTON_CLASS,
-                    "size-10 hover:bg-accent/50",
-                  )}
-                  aria-label="Stop playback and close player"
-                >
-                  <X className="size-5" aria-hidden="true" />
-                </button>
-              ) : (
-                <div className="size-10" aria-hidden="true" />
-              )}
-            </header>
-
-            <main className="flex flex-1 flex-col items-center justify-center px-8 pb-8">
-              <div className="mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96">
-                {albumCover ? (
-                  <img
-                    src={albumCover}
-                    alt={`Album cover for ${albumTitle}`}
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="flex size-full items-center justify-center bg-muted"
-                    role="img"
-                    aria-label="No album cover available"
-                  >
-                    <Disc3 className="size-24 text-muted-foreground" aria-hidden="true" />
-                  </div>
-                )}
-              </div>
-
-              <div className="mb-8 flex max-w-md items-center gap-3">
-                <div className="size-10 shrink-0" aria-hidden="true" />
-                <div className="min-w-0 text-center">
-                  <h1
-                    id="track-title"
-                    className="truncate text-2xl font-bold text-foreground sm:text-3xl"
-                  >
-                    {track.title}
-                  </h1>
-                  <p className="mt-1 truncate text-lg text-primary">{artist}</p>
-                </div>
-                <PlayerLikeButton
-                  trackId={track.id}
-                  trackTitle={track.title}
-                  variant="expanded"
-                />
-              </div>
-
-              <ProgressBar
-                currentTime={currentTime}
-                duration={duration}
-                onSeek={handleSeek}
-                variant="expanded"
-                resetKey={track.id}
-              />
-
-              <div
-                className="flex items-center gap-6"
-                role="group"
-                aria-label="Playback controls"
-              >
-                <button
-                  type="button"
-                  onClick={playPrevious}
-                  className={cn(
-                    PLAYER_ICON_BUTTON_CLASS,
-                    "size-14 hover:bg-accent/50",
-                  )}
-                  aria-label={previousAriaLabel}
-                >
-                  <SkipBack className="size-6" aria-hidden="true" />
-                </button>
-
-                <button
-                  type="button"
-                  ref={playPauseButtonRef}
-                  onClick={handleTogglePlay}
-                  aria-disabled={isLoading || undefined}
-                  aria-busy={isLoading || undefined}
-                  className={cn(
-                    PLAYER_PRIMARY_BUTTON_CLASS,
-                    "size-20 shadow-xl shadow-primary/30",
-                  )}
-                  aria-label={isLoading ? "Loading" : playPauseAriaLabel}
-                >
-                  {isLoading ? (
-                    <Spinner className="size-8" />
-                  ) : isPlaying ? (
-                    <Pause className="size-8 fill-current" aria-hidden="true" />
-                  ) : (
-                    <Play className="size-8 fill-current" aria-hidden="true" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={playNext}
-                  aria-disabled={!hasNext}
-                  className={cn(
-                    PLAYER_ICON_BUTTON_CLASS,
-                    PLAYER_TRANSPORT_INERT_CLASS,
-                    "size-14 hover:bg-accent/50",
-                  )}
-                  aria-label={nextAriaLabel}
-                >
-                  <SkipForward className="size-6" aria-hidden="true" />
-                </button>
-              </div>
-
-              <div className="mt-6">
-                <VolumeControl
-                  mediaRef={audioRef}
-                  variant="expanded"
-                />
-              </div>
-
-              <p className="mt-4 text-sm text-muted-foreground">
-                Track {trimmedCount + currentIndex + 1} of{" "}
-                {trimmedCount + tracks.length}
-              </p>
-            </main>
-          </DialogFullscreenContent>
-        )}
-      </Dialog>
+      <NowPlayingDialog
+        track={track}
+        artist={artist}
+        albumTitle={albumTitle}
+        albumCover={albumCover}
+        isExpanded={isExpanded}
+        onMinimize={handleMinimize}
+        onClose={onClose}
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={handleSeek}
+        audioRef={audioRef}
+        trackPosition={trimmedCount + currentIndex + 1}
+        trackTotal={trimmedCount + tracks.length}
+        transport={{ ...transport, playPauseButtonRef }}
+      />
 
       {!isExpanded && (
-        <div
-          role="region"
-          aria-label="Audio player"
-          data-audio-player=""
-          className={cn(
-            MOTION_PLAYER_CHROME_ENTER_CLASS,
-            "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-2xl shadow-black/50 backdrop-blur-lg",
-          )}
-        >
-          <div className="mx-auto max-w-7xl px-4 py-3">
-            <div className="flex items-center gap-4">
-              <button
-                ref={expandButtonRef}
-                type="button"
-                onClick={onExpand}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  "flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left hover:opacity-80",
-                )}
-                aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
-              >
-                <div
-                  className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted shadow-lg"
-                  aria-hidden="true"
-                >
-                  {albumCover ? (
-                    <img
-                      src={albumCover}
-                      alt=""
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex size-full items-center justify-center">
-                      <Disc3 className="size-5 text-muted-foreground" aria-hidden="true" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1" aria-hidden="true">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {track.title}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">{artist}</p>
-                </div>
-              </button>
-
-              <PlayerLikeButton
-                trackId={track.id}
-                trackTitle={track.title}
-                variant="minimized"
-              />
-
-              <div
-                className="flex items-center gap-2"
-                role="group"
-                aria-label="Playback controls"
-              >
-                <button
-                  type="button"
-                  onClick={playPrevious}
-                  className={cn(PLAYER_ICON_BUTTON_CLASS, "size-10 hover:bg-accent")}
-                  aria-label={previousAriaLabel}
-                >
-                  <SkipBack className="size-4" aria-hidden="true" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleTogglePlay}
-                  aria-disabled={isLoading || undefined}
-                  aria-busy={isLoading || undefined}
-                  className={cn(
-                    PLAYER_PRIMARY_BUTTON_CLASS,
-                    "size-12 shadow-lg shadow-primary/20",
-                  )}
-                  aria-label={isLoading ? "Loading" : playPauseAriaLabel}
-                >
-                  {isLoading ? (
-                    <Spinner className="size-5" />
-                  ) : isPlaying ? (
-                    <Pause className="size-5 fill-current" aria-hidden="true" />
-                  ) : (
-                    <Play className="size-5 fill-current" aria-hidden="true" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={playNext}
-                  aria-disabled={!hasNext}
-                  className={cn(
-                    PLAYER_ICON_BUTTON_CLASS,
-                    PLAYER_TRANSPORT_INERT_CLASS,
-                    "size-10 hover:bg-accent",
-                  )}
-                  aria-label={nextAriaLabel}
-                >
-                  <SkipForward className="size-4" aria-hidden="true" />
-                </button>
-              </div>
-
-              <ProgressBar
-                currentTime={currentTime}
-                duration={duration}
-                onSeek={handleSeek}
-                variant="minimized"
-                resetKey={track.id}
-              />
-
-              <div className="hidden sm:block">
-                <VolumeControl
-                  mediaRef={audioRef}
-                  variant="minimized"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={onExpand}
-                className={cn(
-                  PLAYER_ICON_BUTTON_CLASS,
-                  "hidden size-8 hover:bg-accent sm:flex",
-                )}
-                aria-label="Expand to fullscreen player"
-              >
-                <ChevronUp className="size-4" aria-hidden="true" />
-              </button>
-
-              {onClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={cn(PLAYER_ICON_BUTTON_CLASS, "size-8 hover:bg-accent")}
-                  aria-label="Stop playback and close player"
-                >
-                  <X className="size-4" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-
-            <ProgressBar
-              currentTime={currentTime}
-              duration={duration}
-              onSeek={handleSeek}
-              variant="mobile"
-              resetKey={track.id}
-            />
-          </div>
-        </div>
+        <MiniPlayerBar
+          track={track}
+          artist={artist}
+          albumCover={albumCover}
+          onExpand={onExpand}
+          onClose={onClose}
+          expandButtonRef={expandButtonRef}
+          currentTime={currentTime}
+          duration={duration}
+          onSeek={handleSeek}
+          audioRef={audioRef}
+          transport={transport}
+        />
       )}
     </>
   );

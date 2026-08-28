@@ -6,7 +6,8 @@ import {
 } from "react";
 import type {
   AudioPlayerActions,
-  AudioPlayerState,
+  AudioPlayerNowPlaying,
+  AudioPlayerQueueState,
   PlayableTrackData,
   TrackType,
 } from "@/types";
@@ -18,7 +19,9 @@ import {
 } from "@/lib/api";
 import {
   convertToAudioTrack,
+  dedupeById,
   extractTrackMetadata,
+  playMediaElement,
   shuffleArray,
   toggleMediaPlayback,
   trimQueueHistory,
@@ -37,12 +40,7 @@ const ENDLESS_QUEUE_LOAD_AHEAD_TRACKS = 10;
 // this many played tracks stay reachable via previous-track navigation.
 const MAX_TRACKS_BEHIND = 50;
 
-type QueueState = Omit<
-  AudioPlayerState,
-  "isPlaying" | "isExpanded" | "isKeyboardSuspended"
->;
-
-function createInitialQueueState(): QueueState {
+function createInitialQueueState(): AudioPlayerQueueState {
   return {
     currentTrack: null,
     tracks: [],
@@ -55,15 +53,20 @@ function createInitialQueueState(): QueueState {
   };
 }
 
-const AudioPlayerStateContext = createContext<AudioPlayerState | null>(null);
 const AudioPlayerActionsContext = createContext<AudioPlayerActions | null>(null);
+// The queue itself is passed to AudioPlayer as props rather than published as
+// a context, so appends to an endless queue re-render only the player. Every
+// other subscriber (track rows, the app shell) reads this primitive-only
+// slice instead.
+const AudioPlayerNowPlayingContext =
+  createContext<AudioPlayerNowPlaying | null>(null);
 
 export function AudioPlayerProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [queueState, setQueueState] = useState<QueueState>(() =>
+  const [queueState, setQueueState] = useState<AudioPlayerQueueState>(() =>
     createInitialQueueState(),
   );
   const [isPlaying, setIsPlaying] = useState(false);
@@ -170,25 +173,29 @@ export function AudioPlayerProvider({
       ) {
         attempts++;
 
+        // The React Compiler cannot compile components containing
+        // conditional/logical expressions inside try blocks, so the try wraps
+        // only the fetch itself.
+        let response;
         try {
-          const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
-
-          if (response.error || response.data.tracks.length === 0) {
-            break;
-          }
-
-          const rawTracks = response.data.tracks;
-          populateTrackMetadata(rawTracks);
-
-          for (const track of rawTracks) {
-            if (!knownIds.has(track.id)) {
-              knownIds.add(track.id);
-              collected.push(convertToAudioTrack(track));
-            }
-          }
+          response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
         } catch {
           // Silently fail - user can continue with the current queue.
           break;
+        }
+
+        if (response.error || response.data.tracks.length === 0) {
+          break;
+        }
+
+        const rawTracks = response.data.tracks;
+        populateTrackMetadata(rawTracks);
+
+        for (const track of rawTracks) {
+          if (!knownIds.has(track.id)) {
+            knownIds.add(track.id);
+            collected.push(convertToAudioTrack(track));
+          }
         }
       }
 
@@ -228,25 +235,33 @@ export function AudioPlayerProvider({
     const fetchMorePlayAllTracks = async () => {
       isFetchingMoreRef.current = true;
 
+      // Try wraps only the fetch: the React Compiler cannot compile
+      // components containing conditional/logical expressions in try blocks.
+      let response = null;
       try {
-        const response = await getTracksPaginated(
+        response = await getTracksPaginated(
           TRACKS_INFINITE_PAGE_SIZE,
           playAllOffsetRef.current,
         );
-
-        if (!isCancelled && !response.error && response.data.tracks.length > 0) {
-          const rawTracks = response.data.tracks;
-          const newTracks = rawTracks.map(convertToAudioTrack);
-
-          populateTrackMetadata(rawTracks);
-          playAllOffsetRef.current += rawTracks.length;
-
-          if (newTracks.length > 0) {
-            appendToQueue(newTracks);
-          }
-        }
       } catch {
         // Silently fail - user can continue with the current queue.
+      }
+
+      if (
+        response !== null &&
+        !isCancelled &&
+        !response.error &&
+        response.data.tracks.length > 0
+      ) {
+        const rawTracks = response.data.tracks;
+        const newTracks = rawTracks.map(convertToAudioTrack);
+
+        populateTrackMetadata(rawTracks);
+        playAllOffsetRef.current += rawTracks.length;
+
+        if (newTracks.length > 0) {
+          appendToQueue(newTracks);
+        }
       }
 
       isFetchingMoreRef.current = false;
@@ -340,6 +355,11 @@ export function AudioPlayerProvider({
     if (rawTracks) {
       populateTrackMetadata(rawTracks);
     }
+    // Restarting a queue whose first track is already the current one leaves
+    // the stream URL unchanged, so AudioPlayer's load effect does not re-fire
+    // — rewind here or "Play all" would silently resume mid-track.
+    const isSameTrack = currentTrack.id === queueState.currentTrack?.id;
+
     setQueueState({
       currentTrack,
       tracks,
@@ -351,9 +371,23 @@ export function AudioPlayerProvider({
       trimmedCount: 0,
     });
     setIsExpanded(true);
+
+    if (isSameTrack && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      void playMediaElement(audioRef.current);
+    }
   };
 
   const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+    // Track rows are labeled "Pause X"/"Play X" for the current track, so a
+    // repeat click toggles playback instead of rebuilding the queue and
+    // re-opening the fullscreen player — even when clicked from a different
+    // list than the one the queue came from.
+    if (track.id === queueState.currentTrack?.id) {
+      togglePlay();
+      return;
+    }
+
     startQueue({ currentTrack: track, tracks: playlist, albumInfo });
   };
 
@@ -361,16 +395,13 @@ export function AudioPlayerProvider({
     rawTracks,
     startTrackId,
   ) => {
-    // Mixed lists (search results, library tracks tab) can repeat an id;
-    // dedupe so findIndex-based prev/next navigation stays coherent.
-    const seenIds = new Set<number>();
-    const uniqueRawTracks = rawTracks.filter(track => {
-      if (seenIds.has(track.id)) {
-        return false;
-      }
-      seenIds.add(track.id);
-      return true;
-    });
+    // Same toggle-instead-of-rebuild contract as playTrack above.
+    if (startTrackId === queueState.currentTrack?.id) {
+      togglePlay();
+      return;
+    }
+
+    const uniqueRawTracks = dedupeById(rawTracks);
 
     const startRawTrack = uniqueRawTracks.find(
       track => track.id === startTrackId,
@@ -388,13 +419,13 @@ export function AudioPlayerProvider({
     });
   };
 
-  const playAlbum: AudioPlayerActions["playAlbum"] = (tracks, albumInfo) => {
+  const playQueue: AudioPlayerActions["playQueue"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
     startQueue({ currentTrack: tracks[0], tracks, albumInfo });
   };
 
-  const shuffleAlbum: AudioPlayerActions["shuffleAlbum"] = (tracks, albumInfo) => {
+  const shuffleQueue: AudioPlayerActions["shuffleQueue"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
     const shuffled = shuffleArray(tracks);
@@ -409,17 +440,9 @@ export function AudioPlayerProvider({
         return;
       }
 
-      // The shuffle endpoint can repeat an id within one batch; dedupe so
-      // findIndex-based prev/next navigation stays coherent (the append
-      // effect above already dedupes subsequent batches).
-      const seenIds = new Set<number>();
-      const rawTracks = response.data.tracks.filter(track => {
-        if (seenIds.has(track.id)) {
-          return false;
-        }
-        seenIds.add(track.id);
-        return true;
-      });
+      // The append effect above already dedupes subsequent batches; this one
+      // covers repeats within the first batch.
+      const rawTracks = dedupeById(response.data.tracks);
       const tracks = rawTracks.map(convertToAudioTrack);
       const { cover, musician } = extractTrackMetadata(rawTracks[0]);
 
@@ -519,18 +542,17 @@ export function AudioPlayerProvider({
 
   const isKeyboardSuspended = keyboardSuspendCount > 0;
 
-  const stateValue = {
-    ...queueState,
+  const nowPlayingValue = {
+    currentTrackId: queueState.currentTrack?.id ?? null,
     isPlaying,
     isExpanded,
-    isKeyboardSuspended,
   };
 
   const actionsValue = {
     playTrack,
     playTrackFromList,
-    playAlbum,
-    shuffleAlbum,
+    playQueue,
+    shuffleQueue,
     startShufflePlayback,
     startPlayAllPlayback,
     setTrack,
@@ -544,8 +566,8 @@ export function AudioPlayerProvider({
   };
 
   return (
-    <AudioPlayerStateContext.Provider value={stateValue}>
-      <AudioPlayerActionsContext.Provider value={actionsValue}>
+    <AudioPlayerActionsContext.Provider value={actionsValue}>
+      <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
         {children}
         <AudioPlayer
           track={queueState.currentTrack}
@@ -564,9 +586,9 @@ export function AudioPlayerProvider({
           onExpand={expand}
           isKeyboardSuspended={isKeyboardSuspended}
         />
-      </AudioPlayerActionsContext.Provider>
-    </AudioPlayerStateContext.Provider>
+      </AudioPlayerNowPlayingContext.Provider>
+    </AudioPlayerActionsContext.Provider>
   );
 }
 
-export { AudioPlayerStateContext, AudioPlayerActionsContext };
+export { AudioPlayerActionsContext, AudioPlayerNowPlayingContext };
