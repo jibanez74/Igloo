@@ -50,6 +50,13 @@ export type AudioPlayerState = {
   trimmedCount: number;
 };
 
+// Tiny slice of player state that every track row subscribes to; kept in its
+// own context so queue changes don't re-render whole track lists.
+export type AudioPlayerNowPlaying = {
+  currentTrackId: number | null;
+  isPlaying: boolean;
+};
+
 // Actions available for the audio player
 export type AudioPlayerActions = {
   // Play a single track within a playlist context

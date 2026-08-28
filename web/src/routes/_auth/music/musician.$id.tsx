@@ -264,6 +264,13 @@ function MusicianDetailsContent({
   };
 
   const handlePlayTrack = (track: MusicianTrackType) => {
+    // Row buttons are labeled "Pause X" for the current track; playAlbum is a
+    // start-over entry point, so toggle here instead (matches the album route).
+    if (matchTrackPlayback(track.id).isCurrentTrack) {
+      audioPlayer.togglePlay();
+      return;
+    }
+
     const playerTracks = convertTracksForPlayer(tracks);
     const trackIndex = tracks.findIndex((t) => t.id === track.id);
     const reorderedTracks = [

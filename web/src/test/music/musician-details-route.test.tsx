@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -14,15 +14,15 @@ import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
 const DETAIL_PAGE_ANIMATION_MARKER =
   "animate-in fade-in slide-in-from-bottom-2";
 
-const { audioPlayerActionsMock, audioPlayerStateMock } = vi.hoisted(() => ({
+const { audioPlayerActionsMock, audioPlayerNowPlayingMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
     playAlbum: vi.fn(),
     playTrack: vi.fn(),
     shuffleAlbum: vi.fn(),
     togglePlay: vi.fn(),
   },
-  audioPlayerStateMock: {
-    currentTrack: null as { id: number } | null,
+  audioPlayerNowPlayingMock: {
+    currentTrackId: null as number | null,
     isPlaying: false,
   },
 }));
@@ -31,8 +31,8 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
 
-vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => audioPlayerStateMock,
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
+  useAudioPlayerNowPlaying: () => audioPlayerNowPlayingMock,
 }));
 
 function jsonResponse(body: unknown, status = 200) {
@@ -295,8 +295,8 @@ function getLowerMotionWrapper(container: HTMLElement) {
 }
 
 afterEach(() => {
-  audioPlayerStateMock.currentTrack = null;
-  audioPlayerStateMock.isPlaying = false;
+  audioPlayerNowPlayingMock.currentTrackId = null;
+  audioPlayerNowPlayingMock.isPlaying = false;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -394,8 +394,8 @@ describe("musician details route accessibility", () => {
   });
 
   it("marks the currently playing track row with aria-current", async () => {
-    audioPlayerStateMock.currentTrack = { id: 1 };
-    audioPlayerStateMock.isPlaying = true;
+    audioPlayerNowPlayingMock.currentTrackId = 1;
+    audioPlayerNowPlayingMock.isPlaying = true;
 
     const { container } = await renderMusicianDetailsRoute();
 
@@ -406,6 +406,20 @@ describe("musician details route accessibility", () => {
     const currentRow = container.querySelector('[aria-current="true"]');
     expect(currentRow).not.toBeNull();
     expect(currentRow).toHaveTextContent("Alabaster");
+  });
+
+  it("toggles playback when the currently playing row is clicked instead of restarting the queue", async () => {
+    audioPlayerNowPlayingMock.currentTrackId = 1;
+    audioPlayerNowPlayingMock.isPlaying = true;
+
+    await renderMusicianDetailsRoute();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Pause Alabaster" }),
+    );
+
+    expect(audioPlayerActionsMock.togglePlay).toHaveBeenCalled();
+    expect(audioPlayerActionsMock.playAlbum).not.toHaveBeenCalled();
   });
 });
 

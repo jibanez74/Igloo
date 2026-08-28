@@ -32,9 +32,9 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
 
-vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => ({
-    currentTrack: null,
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
+  useAudioPlayerNowPlaying: () => ({
+    currentTrackId: null,
     isPlaying: false,
   }),
 }));

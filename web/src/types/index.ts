@@ -89,6 +89,7 @@ export type {
   AlbumInfoType,
   AudioPlayerState,
   AudioPlayerActions,
+  AudioPlayerNowPlaying,
   PlayableTrackData,
 } from "./audio-player";
 

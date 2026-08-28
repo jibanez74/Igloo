@@ -216,6 +216,12 @@ export default function AudioPlayer({
     return () => window.clearTimeout(timer);
   }, [isExpanded]);
 
+  // Effects below key on currentTrackId (and other primitives) rather than the
+  // track object: queue rebuilds allocate fresh track objects for the same
+  // track, and object-identity deps would tear down and re-register handlers
+  // for no behavioral reason.
+  const trackTitle = track?.title ?? null;
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) {
       return;
@@ -223,7 +229,11 @@ export default function AudioPlayer({
 
     // Clear stale lock-screen/OS media info once playback stops; otherwise
     // the last track keeps showing after the player is closed.
-    if (!track || typeof MediaMetadata === "undefined") {
+    if (
+      currentTrackId === null ||
+      trackTitle === null ||
+      typeof MediaMetadata === "undefined"
+    ) {
       navigator.mediaSession.metadata = null;
       return;
     }
@@ -235,22 +245,19 @@ export default function AudioPlayer({
       : null;
 
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title,
+      title: trackTitle,
       artist: musicianName ?? albumTitle,
       album: albumTitle,
       artwork: artworkUrl ? [{ src: artworkUrl }] : [],
     });
-  }, [track, albumCover, albumTitle, musicianName]);
+  }, [currentTrackId, trackTitle, albumCover, albumTitle, musicianName]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 
-    navigator.mediaSession.playbackState = !track
-      ? "none"
-      : isPlaying
-        ? "playing"
-        : "paused";
-  }, [isPlaying, track]);
+    navigator.mediaSession.playbackState =
+      currentTrackId === null ? "none" : isPlaying ? "playing" : "paused";
+  }, [isPlaying, currentTrackId]);
 
   const handleMediaSessionPlay = useEffectEvent(() => {
     void playMediaElement(audioRef.current);
@@ -296,7 +303,7 @@ export default function AudioPlayer({
   );
 
   useEffect(() => {
-    if (!track || !("mediaSession" in navigator)) return;
+    if (currentTrackId === null || !("mediaSession" in navigator)) return;
 
     navigator.mediaSession.setActionHandler("play", handleMediaSessionPlay);
     navigator.mediaSession.setActionHandler("pause", handleMediaSessionPause);
@@ -330,7 +337,7 @@ export default function AudioPlayer({
         navigator.mediaSession.setActionHandler(action, null);
       }
     };
-  }, [audioRef, track]);
+  }, [audioRef, currentTrackId]);
 
   const syncMediaSessionPosition = useEffectEvent((audio: HTMLAudioElement) => {
     if (!mediaSessionSupported()) {
@@ -350,11 +357,18 @@ export default function AudioPlayer({
         ? audio.playbackRate
         : 1;
 
+    // Optional chaining inside a try block prevents the React Compiler from
+    // compiling the whole component, so check for the method up front.
+    if (typeof navigator.mediaSession.setPositionState !== "function") {
+      return;
+    }
+    const position = Math.max(0, Math.min(currentPosition, audioDuration));
+
     try {
-      navigator.mediaSession.setPositionState?.({
+      navigator.mediaSession.setPositionState({
         duration: audioDuration,
         playbackRate,
-        position: Math.max(0, Math.min(currentPosition, audioDuration)),
+        position,
       });
     } catch {
       // Some browsers expose Media Session but reject position updates.
@@ -402,7 +416,7 @@ export default function AudioPlayer({
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!track || !audio) return;
+    if (currentTrackId === null || !audio) return;
 
     const onPlay = () => handleAudioPlay();
     const onPause = () => handleAudioPause();
@@ -432,7 +446,7 @@ export default function AudioPlayer({
       audio.removeEventListener("error", onError);
       audio.removeEventListener("ended", onEnded);
     };
-  }, [audioRef, track]);
+  }, [audioRef, currentTrackId]);
 
   const handleTogglePlay = () => {
     // While loading the button is aria-disabled (never `disabled`, which
@@ -486,17 +500,16 @@ export default function AudioPlayer({
       }
 
       const interactive = target.closest(INTERACTIVE_SELECTOR);
-      if (interactive) {
-        // Space must activate the focused control everywhere, and navigation
-        // keys belong to widgets like tabs and radios — except inside the
-        // player's own chrome, where they keep controlling playback.
-        if (event.key === " ") {
-          return;
-        }
-
+      if (interactive && !interactive.closest("[data-audio-player]")) {
+        // Outside the player, Space must activate the focused control and
+        // navigation keys belong to widgets like tabs and radios. Inside the
+        // player's own chrome they control playback instead (video-player
+        // parity — Space pauses even when a player button holds focus, which
+        // Enter still activates).
         if (
-          (ARROW_KEYS.has(event.key) || event.key === "Home") &&
-          !interactive.closest("[data-audio-player]")
+          event.key === " " ||
+          ARROW_KEYS.has(event.key) ||
+          event.key === "Home"
         ) {
           return;
         }
@@ -505,14 +518,20 @@ export default function AudioPlayer({
 
     switch (event.key) {
       case " ":
+      case "k":
+      case "K":
         event.preventDefault();
         handleTogglePlay();
         break;
       case "ArrowLeft":
+      case "j":
+      case "J":
         event.preventDefault();
         seekBy(-AUDIO_SEEK_STEP_SECONDS);
         break;
       case "ArrowRight":
+      case "l":
+      case "L":
         event.preventDefault();
         seekBy(AUDIO_SEEK_STEP_SECONDS);
         break;
@@ -541,6 +560,7 @@ export default function AudioPlayer({
       case "r":
       case "R":
       case "Home":
+      case "0":
         event.preventDefault();
         audio.currentTime = 0;
         break;

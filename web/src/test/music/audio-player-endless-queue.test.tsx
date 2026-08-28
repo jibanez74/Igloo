@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { getShuffleTracks } from "@/lib/api";
 import { renderWithQueryClient } from "@/test/helpers/render";
 import type { TrackListItemType } from "@/types";
@@ -141,4 +143,76 @@ describe("endless shuffle queue", () => {
     },
     15000,
   );
+
+  // Regression guard for the now-playing context split: queue appends must not
+  // re-render matcher subscribers (track rows). Also makes a future React
+  // Compiler bail-out in AudioPlayerProvider observable — if the provider stops
+  // memoizing the now-playing value, this starts failing.
+  it("does not re-render matcher subscribers when a batch is appended without a track change", async () => {
+    const pendingBatches: Array<() => void> = [];
+    let fetchCalls = 0;
+    let nextId = 1;
+    const makeBatch = () => ({
+      error: false as const,
+      data: {
+        tracks: Array.from({ length: BATCH_SIZE }, () => rawTrack(nextId++)),
+      },
+    });
+    vi.mocked(getShuffleTracks).mockImplementation(() => {
+      fetchCalls++;
+      if (fetchCalls === 1) return Promise.resolve(makeBatch());
+      // Hold lookahead batches until the test releases them, so the append
+      // can be observed in isolation from track changes.
+      return new Promise(resolve => {
+        pendingBatches.push(() => resolve(makeBatch()));
+      });
+    });
+
+    const probeRenders = { count: 0 };
+    function MatcherProbe() {
+      const matchTrackPlayback = useTrackPlaybackMatcher();
+      const { isCurrentTrack } = matchTrackPlayback(7);
+      useEffect(() => {
+        probeRenders.count++;
+      });
+      return (
+        <output aria-label="probe current">{String(isCurrentTrack)}</output>
+      );
+    }
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <EndlessQueueHarness />
+        <MatcherProbe />
+      </AudioPlayerProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "start shuffle" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("current track id")).toHaveTextContent("1");
+    });
+
+    // Advance into the lookahead threshold so the next batch fetch starts.
+    for (let targetId = 2; targetId <= 7; targetId++) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Next track" }),
+      );
+      await waitFor(() => {
+        expect(screen.getByLabelText("current track id")).toHaveTextContent(
+          String(targetId),
+        );
+      });
+    }
+    await waitFor(() => expect(pendingBatches.length).toBeGreaterThan(0));
+
+    expect(screen.getByLabelText("probe current")).toHaveTextContent("true");
+    const rendersBeforeAppend = probeRenders.count;
+
+    pendingBatches.shift()?.();
+    await waitFor(() => {
+      expect(screen.getByLabelText("queue size")).toHaveTextContent("20");
+    });
+
+    expect(probeRenders.count).toBe(rendersBeforeAppend);
+  });
 });

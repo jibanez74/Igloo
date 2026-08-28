@@ -6,6 +6,7 @@ import {
 } from "react";
 import type {
   AudioPlayerActions,
+  AudioPlayerNowPlaying,
   AudioPlayerState,
   PlayableTrackData,
   TrackType,
@@ -57,6 +58,10 @@ function createInitialQueueState(): QueueState {
 
 const AudioPlayerStateContext = createContext<AudioPlayerState | null>(null);
 const AudioPlayerActionsContext = createContext<AudioPlayerActions | null>(null);
+// Split from the state context so track rows (which only need "is this row the
+// current track and is it playing") don't re-render on queue changes.
+const AudioPlayerNowPlayingContext =
+  createContext<AudioPlayerNowPlaying | null>(null);
 
 export function AudioPlayerProvider({
   children,
@@ -170,25 +175,29 @@ export function AudioPlayerProvider({
       ) {
         attempts++;
 
+        // The React Compiler cannot compile components containing
+        // conditional/logical expressions inside try blocks, so the try wraps
+        // only the fetch itself.
+        let response;
         try {
-          const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
-
-          if (response.error || response.data.tracks.length === 0) {
-            break;
-          }
-
-          const rawTracks = response.data.tracks;
-          populateTrackMetadata(rawTracks);
-
-          for (const track of rawTracks) {
-            if (!knownIds.has(track.id)) {
-              knownIds.add(track.id);
-              collected.push(convertToAudioTrack(track));
-            }
-          }
+          response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
         } catch {
           // Silently fail - user can continue with the current queue.
           break;
+        }
+
+        if (response.error || response.data.tracks.length === 0) {
+          break;
+        }
+
+        const rawTracks = response.data.tracks;
+        populateTrackMetadata(rawTracks);
+
+        for (const track of rawTracks) {
+          if (!knownIds.has(track.id)) {
+            knownIds.add(track.id);
+            collected.push(convertToAudioTrack(track));
+          }
         }
       }
 
@@ -228,25 +237,33 @@ export function AudioPlayerProvider({
     const fetchMorePlayAllTracks = async () => {
       isFetchingMoreRef.current = true;
 
+      // Try wraps only the fetch: the React Compiler cannot compile
+      // components containing conditional/logical expressions in try blocks.
+      let response = null;
       try {
-        const response = await getTracksPaginated(
+        response = await getTracksPaginated(
           TRACKS_INFINITE_PAGE_SIZE,
           playAllOffsetRef.current,
         );
-
-        if (!isCancelled && !response.error && response.data.tracks.length > 0) {
-          const rawTracks = response.data.tracks;
-          const newTracks = rawTracks.map(convertToAudioTrack);
-
-          populateTrackMetadata(rawTracks);
-          playAllOffsetRef.current += rawTracks.length;
-
-          if (newTracks.length > 0) {
-            appendToQueue(newTracks);
-          }
-        }
       } catch {
         // Silently fail - user can continue with the current queue.
+      }
+
+      if (
+        response !== null &&
+        !isCancelled &&
+        !response.error &&
+        response.data.tracks.length > 0
+      ) {
+        const rawTracks = response.data.tracks;
+        const newTracks = rawTracks.map(convertToAudioTrack);
+
+        populateTrackMetadata(rawTracks);
+        playAllOffsetRef.current += rawTracks.length;
+
+        if (newTracks.length > 0) {
+          appendToQueue(newTracks);
+        }
       }
 
       isFetchingMoreRef.current = false;
@@ -354,6 +371,15 @@ export function AudioPlayerProvider({
   };
 
   const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+    // Track rows are labeled "Pause X"/"Play X" for the current track, so a
+    // repeat click toggles playback instead of rebuilding the queue and
+    // re-opening the fullscreen player — even when clicked from a different
+    // list than the one the queue came from.
+    if (track.id === queueState.currentTrack?.id) {
+      togglePlay();
+      return;
+    }
+
     startQueue({ currentTrack: track, tracks: playlist, albumInfo });
   };
 
@@ -361,6 +387,12 @@ export function AudioPlayerProvider({
     rawTracks,
     startTrackId,
   ) => {
+    // Same toggle-instead-of-rebuild contract as playTrack above.
+    if (startTrackId === queueState.currentTrack?.id) {
+      togglePlay();
+      return;
+    }
+
     // Mixed lists (search results, library tracks tab) can repeat an id;
     // dedupe so findIndex-based prev/next navigation stays coherent.
     const seenIds = new Set<number>();
@@ -526,6 +558,11 @@ export function AudioPlayerProvider({
     isKeyboardSuspended,
   };
 
+  const nowPlayingValue = {
+    currentTrackId: queueState.currentTrack?.id ?? null,
+    isPlaying,
+  };
+
   const actionsValue = {
     playTrack,
     playTrackFromList,
@@ -546,27 +583,33 @@ export function AudioPlayerProvider({
   return (
     <AudioPlayerStateContext.Provider value={stateValue}>
       <AudioPlayerActionsContext.Provider value={actionsValue}>
-        {children}
-        <AudioPlayer
-          track={queueState.currentTrack}
-          tracks={queueState.tracks}
-          trimmedCount={queueState.trimmedCount}
-          albumCover={queueState.albumCover}
-          albumTitle={queueState.albumTitle}
-          musicianName={queueState.musicianName}
-          onTrackChange={setTrack}
-          onClose={stop}
-          audioRef={audioRef}
-          isPlaying={isPlaying}
-          onPlayStateChange={handlePlayStateChange}
-          isExpanded={isExpanded}
-          onMinimize={minimize}
-          onExpand={expand}
-          isKeyboardSuspended={isKeyboardSuspended}
-        />
+        <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
+          {children}
+          <AudioPlayer
+            track={queueState.currentTrack}
+            tracks={queueState.tracks}
+            trimmedCount={queueState.trimmedCount}
+            albumCover={queueState.albumCover}
+            albumTitle={queueState.albumTitle}
+            musicianName={queueState.musicianName}
+            onTrackChange={setTrack}
+            onClose={stop}
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            onPlayStateChange={handlePlayStateChange}
+            isExpanded={isExpanded}
+            onMinimize={minimize}
+            onExpand={expand}
+            isKeyboardSuspended={isKeyboardSuspended}
+          />
+        </AudioPlayerNowPlayingContext.Provider>
       </AudioPlayerActionsContext.Provider>
     </AudioPlayerStateContext.Provider>
   );
 }
 
-export { AudioPlayerStateContext, AudioPlayerActionsContext };
+export {
+  AudioPlayerStateContext,
+  AudioPlayerActionsContext,
+  AudioPlayerNowPlayingContext,
+};

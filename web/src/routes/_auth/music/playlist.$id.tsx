@@ -35,9 +35,9 @@ import {
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
-import { convertToAudioTrack, shuffleArray } from "@/lib/audio-utils";
+import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useAudioPlayerNowPlaying } from "@/hooks/useAudioPlayerNowPlaying";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
@@ -51,6 +51,21 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { PlaylistTrackType } from "@/types";
+
+function playlistTrackToAudioTrack(track: PlaylistTrackType) {
+  return convertToAudioTrack({
+    id: track.id,
+    title: track.title,
+    file_path: track.file_path,
+    duration: track.duration,
+    codec: track.codec,
+    bit_rate: track.bit_rate,
+    album_id: track.album_id,
+    musician_id: track.musician_id,
+    album_cover: track.album_cover,
+    musician_name: track.musician_name,
+  });
+}
 
 export const Route = createFileRoute("/_auth/music/playlist/$id")({
   loader: async ({ context, params }) => {
@@ -205,23 +220,12 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     },
   });
 
+  // playAlbum/shuffleAlbum instead of playTrack: these header buttons are
+  // explicit "start over" entry points and must restart even when the first
+  // track is already the current one (playTrack toggles in that case).
   const handlePlayAll = () => {
     if (!allTracks.length) return;
-    const audioTracks = allTracks.map((track) =>
-      convertToAudioTrack({
-        id: track.id,
-        title: track.title,
-        file_path: track.file_path,
-        duration: track.duration,
-        codec: track.codec,
-        bit_rate: track.bit_rate,
-        album_id: track.album_id,
-        musician_id: track.musician_id,
-        album_cover: track.album_cover,
-        musician_name: track.musician_name,
-      })
-    );
-    audioPlayer.playTrack(audioTracks[0], audioTracks, {
+    audioPlayer.playAlbum(allTracks.map(playlistTrackToAudioTrack), {
       cover: coverUrl,
       title: playlist.name,
       musician: null,
@@ -230,22 +234,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   const handleShuffle = () => {
     if (!allTracks.length) return;
-    const shuffled = shuffleArray(allTracks);
-    const audioTracks = shuffled.map((track) =>
-      convertToAudioTrack({
-        id: track.id,
-        title: track.title,
-        file_path: track.file_path,
-        duration: track.duration,
-        codec: track.codec,
-        bit_rate: track.bit_rate,
-        album_id: track.album_id,
-        musician_id: track.musician_id,
-        album_cover: track.album_cover,
-        musician_name: track.musician_name,
-      })
-    );
-    audioPlayer.playTrack(audioTracks[0], audioTracks, {
+    audioPlayer.shuffleAlbum(allTracks.map(playlistTrackToAudioTrack), {
       cover: coverUrl,
       title: playlist.name,
       musician: null,
@@ -515,7 +504,7 @@ function PlaylistTracksList({
   coverUrl,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
-  const audioPlayerState = useAudioPlayerState();
+  const nowPlaying = useAudioPlayerNowPlaying();
 
   // Local optimistic order override keyed by track ids.
   const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
@@ -530,34 +519,10 @@ function PlaylistTracksList({
       : tracks;
 
   const handlePlayTrack = (track: PlaylistTrackType) => {
-    const audioTrack = convertToAudioTrack({
-      id: track.id,
-      title: track.title,
-      file_path: track.file_path,
-      duration: track.duration,
-      codec: track.codec,
-      bit_rate: track.bit_rate,
-      album_id: track.album_id,
-      musician_id: track.musician_id,
-      album_cover: track.album_cover,
-      musician_name: track.musician_name,
-    });
+    const audioTrack = playlistTrackToAudioTrack(track);
 
     // Create playlist of all tracks for continuous playback
-    const allAudioTracks = orderedTracks.map((t) =>
-      convertToAudioTrack({
-        id: t.id,
-        title: t.title,
-        file_path: t.file_path,
-        duration: t.duration,
-        codec: t.codec,
-        bit_rate: t.bit_rate,
-        album_id: t.album_id,
-        musician_id: t.musician_id,
-        album_cover: t.album_cover,
-        musician_name: t.musician_name,
-      })
-    );
+    const allAudioTracks = orderedTracks.map(playlistTrackToAudioTrack);
 
     audioPlayer.playTrack(audioTrack, allAudioTracks, {
       cover: coverUrl,
@@ -597,8 +562,8 @@ function PlaylistTracksList({
             onReorder={handleReorder}
             onPlayTrack={handlePlayTrack}
             onRemoveTrack={onRemoveTrack}
-            currentTrackId={audioPlayerState.currentTrack?.id}
-            isPlaying={audioPlayerState.isPlaying}
+            currentTrackId={nowPlaying.currentTrackId ?? undefined}
+            isPlaying={nowPlaying.isPlaying}
           />
         </Suspense>
         {isFetchingNextPage && (
@@ -621,8 +586,8 @@ function PlaylistTracksList({
       fetchNextPage={fetchNextPage}
       onPlayTrack={handlePlayTrack}
       onRemoveTrack={onRemoveTrack}
-      currentTrackId={audioPlayerState.currentTrack?.id}
-      isPlaying={audioPlayerState.isPlaying}
+      currentTrackId={nowPlaying.currentTrackId ?? undefined}
+      isPlaying={nowPlaying.isPlaying}
     />
   );
 }
