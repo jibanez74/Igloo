@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
@@ -55,7 +56,14 @@ func TestWriteHLSSessionError(t *testing.T) {
 		err            error
 		wantStatus     int
 		wantRetryAfter string
+		wantBody       string
 	}{
+		{
+			name:       "a missing movie is not found",
+			err:        fmt.Errorf("%w: movie 7", errHLSMovieNotFound),
+			wantStatus: http.StatusNotFound,
+			wantBody:   "movie not found",
+		},
 		{
 			name:       "a missing session is not found",
 			err:        errHLSSessionNotFound,
@@ -70,6 +78,7 @@ func TestWriteHLSSessionError(t *testing.T) {
 			name:       "a failed session is a server error",
 			err:        fmt.Errorf("%w: ffmpeg died", errHLSSessionFailed),
 			wantStatus: http.StatusInternalServerError,
+			wantBody:   "failed to prepare HLS media",
 		},
 		{
 			name:           "a full transcode pool is retryable",
@@ -98,9 +107,22 @@ func TestWriteHLSSessionError(t *testing.T) {
 			wantRetryAfter: "1",
 		},
 		{
-			name:       "anything else is a bad request",
-			err:        errors.New("movie 7 has no valid duration in the database"),
+			name:       "an invalid audio selection is a bad request",
+			err:        &hlsInvalidAudioSelectionError{MovieID: 7, PublicMessage: "audio_track is out of range"},
 			wantStatus: http.StatusBadRequest,
+			wantBody:   "audio_track is out of range",
+		},
+		{
+			name:       "unusable stored metadata is unprocessable",
+			err:        &hlsMediaMetadataError{MovieID: 7, Reason: "SQL detail"},
+			wantStatus: http.StatusUnprocessableEntity,
+			wantBody:   "stored media metadata is unusable",
+		},
+		{
+			name:       "unexpected failures are sanitized server errors",
+			err:        errors.New("open /private/movies/example.mkv: permission denied"),
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   internalServerErrorMessage,
 		},
 	}
 
@@ -115,8 +137,15 @@ func TestWriteHLSSessionError(t *testing.T) {
 			if got := recorder.Header().Get("Retry-After"); got != tt.wantRetryAfter {
 				t.Fatalf("Retry-After = %q, want %q", got, tt.wantRetryAfter)
 			}
-			if !strings.Contains(recorder.Body.String(), tt.err.Error()) {
-				t.Fatalf("body = %s, want it to carry %q", recorder.Body.String(), tt.err.Error())
+			wantBody := tt.wantBody
+			if wantBody == "" {
+				wantBody = tt.err.Error()
+			}
+			if !strings.Contains(recorder.Body.String(), wantBody) {
+				t.Fatalf("body = %s, want it to carry %q", recorder.Body.String(), wantBody)
+			}
+			if strings.Contains(recorder.Body.String(), "/private/") {
+				t.Fatalf("body leaked an internal path: %s", recorder.Body.String())
 			}
 		})
 	}
@@ -657,6 +686,39 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		}
 	})
 
+	t.Run("an open descriptor survives concurrent session cleanup", func(t *testing.T) {
+		tempDir := t.TempDir()
+		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+		path := filepath.Join(tempDir, filename)
+		payload := []byte("pinned segment")
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatalf("write segment: %v", err)
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			t.Fatalf("open segment: %v", err)
+		}
+		info, err := file.Stat()
+		if err != nil {
+			_ = file.Close()
+			t.Fatalf("stat segment: %v", err)
+		}
+
+		cleanupHLSSession(&HLSSession{TempDir: tempDir})
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			_ = file.Close()
+			t.Fatalf("segment still exists after cleanup: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		w := httptest.NewRecorder()
+		serveOpenedHLSAsset(w, req, filename, file, info)
+		if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), payload) {
+			t.Fatalf("pinned response = %d %q, want 200 %q", w.Code, w.Body.Bytes(), payload)
+		}
+	})
+
 	t.Run("reports exited transcode before waiting", func(t *testing.T) {
 		session := &HLSSession{TempDir: t.TempDir(), Exited: true, ExitErr: fmt.Errorf("ffmpeg failed")}
 		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
@@ -733,6 +795,110 @@ func TestServeReadyHLSSegment(t *testing.T) {
 			t.Fatalf("abandoned request wrote status %d and %d bytes, want nothing", w.Code, w.Body.Len())
 		}
 	})
+}
+
+func TestPersonalHLSAssetResponsesConformToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	const userID = int64(42)
+	const movieID = int64(7)
+	audioTrack := 0
+	tempDir := t.TempDir()
+	filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	payload := []byte("0123456789abcdef")
+	path := filepath.Join(tempDir, filename)
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write segment: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat segment: %v", err)
+	}
+
+	session := &HLSSession{
+		MovieID:          movieID,
+		OwnerUserID:      userID,
+		PlaybackSession:  testPlaybackSessionID,
+		TempDir:          tempDir,
+		TempFileSegments: true,
+		EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS,
+	}
+	key := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+	app.HLSSessionCache.SetDefault(key, session)
+	handler := newHLSTestHandler(t, app, userID)
+	target := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		filename,
+		testPlaybackSessionID,
+	)
+
+	tests := []struct {
+		name   string
+		header string
+		value  string
+		status int
+	}{
+		{name: "complete", status: http.StatusOK},
+		{name: "single range", header: "Range", value: "bytes=0-3", status: http.StatusPartialContent},
+		{name: "multipart range", header: "Range", value: "bytes=0-1,4-5", status: http.StatusPartialContent},
+		{name: "not modified", header: "If-Modified-Since", value: info.ModTime().UTC().Format(http.TimeFormat), status: http.StatusNotModified},
+		{name: "unsatisfiable range", header: "Range", value: "bytes=100-", status: http.StatusRequestedRangeNotSatisfiable},
+		{name: "malformed range", header: "Range", value: "bytes=wat", status: http.StatusRequestedRangeNotSatisfiable},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, target, nil)
+			addOpenAPITestCookie(request)
+			if tt.header != "" {
+				request.Header.Set(tt.header, tt.value)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", response.Code, tt.status, response.Body.String())
+			}
+			assertOpenAPIExchange(t, "hlsSegment", request, response)
+		})
+	}
+}
+
+func TestHLSRetryable503ConformsToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.FFmpeg = &fakeFFmpeg{}
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("fill transcode limiter: %v", err)
+	}
+	defer release()
+
+	previousWait := hlsTranscodeAcquireWait
+	hlsTranscodeAcquireWait = time.Millisecond
+	t.Cleanup(func() { hlsTranscodeAcquireWait = previousWait })
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	target := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+	)
+	request := httptest.NewRequest(http.MethodGet, target, nil)
+	addOpenAPITestCookie(request)
+	response := httptest.NewRecorder()
+	newHLSTestHandler(t, app, 42).ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503: %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Retry-After") == "" {
+		t.Fatal("retryable HLS 503 omitted Retry-After")
+	}
+	assertOpenAPIExchange(t, "hlsManifest", request, response)
 }
 
 func TestFileReady(t *testing.T) {
@@ -1389,12 +1555,94 @@ func TestHLSManifest_SurfacesSessionCreationFailure(t *testing.T) {
 		nil,
 	))
 
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422: %s", recorder.Code, recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "no valid duration") {
-		t.Fatalf("body = %s, want the session failure reason", recorder.Body.String())
+	if !strings.Contains(recorder.Body.String(), "stored media metadata is unusable") {
+		t.Fatalf("body = %s, want the safe metadata failure", recorder.Body.String())
 	}
+}
+
+func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
+	t.Run("missing movie returns 404", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+
+		target := fmt.Sprintf(
+			"/api/movies/999999/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
+			helpers.HLS_PROFILE_720P_3MBPS,
+			testPlaybackSessionID,
+		)
+		recorder := httptest.NewRecorder()
+		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusNotFound || !strings.Contains(recorder.Body.String(), "movie not found") {
+			t.Fatalf("response = %d %s, want safe movie 404", recorder.Code, recorder.Body.String())
+		}
+	})
+
+	t.Run("invalid audio selection returns 400", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+		target := fmt.Sprintf(
+			"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=9&playback_session=%s&start=0",
+			movieID,
+			helpers.HLS_PROFILE_720P_3MBPS,
+			testPlaybackSessionID,
+		)
+		recorder := httptest.NewRecorder()
+		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "audio_track is out of range") {
+			t.Fatalf("response = %d %s, want audio selection 400", recorder.Code, recorder.Body.String())
+		}
+	})
+
+	t.Run("unexpected ffmpeg failure returns a sanitized 500", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
+			StartErr: errors.New("ffmpeg failed to open /private/media/movie.mkv"),
+		}}}
+		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+		target := fmt.Sprintf(
+			"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
+			movieID,
+			helpers.HLS_PROFILE_720P_3MBPS,
+			testPlaybackSessionID,
+		)
+		recorder := httptest.NewRecorder()
+		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), internalServerErrorMessage) || strings.Contains(recorder.Body.String(), "/private/") {
+			t.Fatalf("response leaked internal ffmpeg detail: %s", recorder.Body.String())
+		}
+	})
+
+	t.Run("missing requested encoder returns a non-retryable 500", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		app.FFmpeg = &fakeFFmpeg{capabilities: &ffmpeg.Capabilities{
+			Probed:   true,
+			Encoders: map[string]bool{"aac": true},
+		}}
+		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+		target := fmt.Sprintf(
+			"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&audio_codec=eac3&audio_channels=6&playback_session=%s&start=0",
+			movieID,
+			helpers.HLS_PROFILE_720P_3MBPS,
+			testPlaybackSessionID,
+		)
+		recorder := httptest.NewRecorder()
+		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		if recorder.Code != http.StatusInternalServerError || recorder.Header().Get("Retry-After") != "" {
+			t.Fatalf("response = %d Retry-After %q, want non-retryable 500: %s", recorder.Code, recorder.Header().Get("Retry-After"), recorder.Body.String())
+		}
+	})
 }
 
 func TestHLSSegment_RejectsBadRequests(t *testing.T) {
@@ -1591,6 +1839,13 @@ func TestWriteHLSPlaylistHeaders_EffectiveAudio(t *testing.T) {
 			wantCodec: "aac", wantChannels: "6", wantBitrate: "192000",
 		},
 		{
+			name: "copied legacy AAC omits an unknown source channel count",
+			audio: &helpers.HLSResolvedAudioProfile{
+				Codec: helpers.HLSAudioCodecAAC, Channels: 0, Bitrate: "192000", Copy: true,
+			},
+			wantCodec: "aac", wantBitrate: "192000",
+		},
+		{
 			name: "encoded legacy AAC reports the stereo fallback",
 			audio: &helpers.HLSResolvedAudioProfile{
 				Codec: helpers.HLSAudioCodecAAC, Encoder: "aac", Channels: 2,
@@ -1743,8 +1998,10 @@ func TestHLSManifest_LegacyAssetsOmitAudioProfileParams(t *testing.T) {
 		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
 		movieID, helpers.HLS_PROFILE_720P_3MBPS, testPlaybackSessionID,
 	)
+	request := httptest.NewRequest(http.MethodGet, manifestURL, nil)
+	addOpenAPITestCookie(request)
 	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, manifestURL, nil))
+	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("manifest status = %d, want 200: %s", recorder.Code, recorder.Body.String())
 	}
@@ -1759,6 +2016,7 @@ func TestHLSManifest_LegacyAssetsOmitAudioProfileParams(t *testing.T) {
 	if got := recorder.Header().Get(hlsEffectiveAudioChannelsHdr); got != "2" {
 		t.Fatalf("audio channels header = %q, want 2", got)
 	}
+	assertOpenAPIExchange(t, "hlsManifest", request, recorder)
 }
 
 func TestWriteHLSSessionError_AudioProfileErrors(t *testing.T) {
@@ -1771,12 +2029,12 @@ func TestWriteHLSSessionError_AudioProfileErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("missing encoder is service unavailable without Retry-After", func(t *testing.T) {
+	t.Run("missing encoder is a non-retryable server error", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		writeHLSSessionError(recorder, &hlsAudioEncoderUnavailableError{Encoder: "eac3"})
 
-		if recorder.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status = %d, want 503: %s", recorder.Code, recorder.Body.String())
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body.String())
 		}
 		if got := recorder.Header().Get("Retry-After"); got != "" {
 			t.Fatalf("Retry-After = %q, want none: retrying cannot install an encoder", got)

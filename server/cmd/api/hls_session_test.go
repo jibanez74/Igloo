@@ -1378,6 +1378,36 @@ func TestCreateHLSSession_ExplicitAudioMissingChannelMetadata(t *testing.T) {
 	}
 }
 
+func TestCreateHLSSession_RejectsExplicitAudioForVideoOnlyMovie(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.FFmpeg = &fakeFFmpeg{}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	if _, err := app.DB.Exec(`DELETE FROM audio_streams WHERE movie_id = ?`, movieID); err != nil {
+		t.Fatalf("delete audio streams: %v", err)
+	}
+
+	_, err := createTestHLSSessionWithAudio(
+		app,
+		context.Background(),
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		nil,
+		explicitAudioRequest(helpers.HLSAudioCodecAC3, 2),
+		testPlaybackSessionID,
+		0,
+		false,
+	)
+	var selectionErr *hlsInvalidAudioSelectionError
+	if !errors.As(err, &selectionErr) {
+		t.Fatalf("error = %v, want hlsInvalidAudioSelectionError", err)
+	}
+	if !strings.Contains(selectionErr.PublicMessage, "video-only") {
+		t.Fatalf("public message = %q, want video-only rejection", selectionErr.PublicMessage)
+	}
+}
+
 // A missing Dolby encoder is a server installation problem surfaced before any
 // session resources (temp directory, transcode permit) are allocated. Legacy
 // requests must stay unaffected by the same build.

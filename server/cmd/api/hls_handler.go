@@ -51,6 +51,7 @@ const (
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
 var errHLSSessionNotFound = errors.New("session not found")
+var errHLSMovieNotFound = errors.New("movie not found")
 
 // errHLSPlaylistNotReady means FFmpeg has not published a usable playlist yet.
 // It is retryable: the session is healthy, it just has not produced output.
@@ -170,7 +171,9 @@ func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
 	audio := session.EffectiveAudioProfile
 	if audio != nil {
 		w.Header().Set(hlsEffectiveAudioCodecHeader, string(audio.Codec))
-		w.Header().Set(hlsEffectiveAudioChannelsHdr, strconv.Itoa(audio.Channels))
+		if audio.Channels > 0 {
+			w.Header().Set(hlsEffectiveAudioChannelsHdr, strconv.Itoa(audio.Channels))
+		}
 		if audio.Bitrate != "" {
 			w.Header().Set(hlsEffectiveAudioBitrateHeader, audio.Bitrate)
 		}
@@ -364,10 +367,23 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 	deadline := time.Now().Add(hlsSegmentWait)
 	for time.Now().Before(deadline) {
 		if segmentReady(session, filename) {
+			file, openErr := os.Open(filePath)
+			if openErr != nil {
+				logHLSAssetServeError(session, filename, filePath, "open", openErr)
+				helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
+				return
+			}
+
+			info, statErr := file.Stat()
+			if statErr != nil {
+				_ = file.Close()
+				logHLSAssetServeError(session, filename, filePath, "stat", statErr)
+				helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
+				return
+			}
+
 			logFirstHLSSegmentServed(session, filename, requestStart)
-			w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
-			w.Header().Set("Cache-Control", "no-store")
-			http.ServeFile(w, r, filePath)
+			serveOpenedHLSAsset(w, r, filename, file, info)
 			return
 		}
 
@@ -395,6 +411,30 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 	// so the client is told to come back rather than left to guess.
 	w.Header().Set("Retry-After", strconv.Itoa(hlsPlaylistRetryAfterSec))
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
+}
+
+// serveOpenedHLSAsset keeps the descriptor pinned until ServeContent returns.
+// Session cleanup may unlink the temp directory concurrently, but an already
+// open descriptor remains readable and preserves range and sendfile behavior.
+func serveOpenedHLSAsset(w http.ResponseWriter, r *http.Request, filename string, file *os.File, info os.FileInfo) {
+	defer file.Close()
+
+	w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeContent(w, r, filename, info.ModTime(), file)
+}
+
+func logHLSAssetServeError(session *HLSSession, filename string, path string, operation string, err error) {
+	if session == nil || session.Logger == nil {
+		return
+	}
+	session.Logger.Error("failed to serve ready hls asset",
+		"movie_id", session.MovieID,
+		"filename", filename,
+		"path", path,
+		"operation", operation,
+		"error", err,
+	)
 }
 
 // logFirstHLSSegmentServed emits the session's one-time cold-start metric the
@@ -438,13 +478,34 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errHLSMovieNotFound) {
+		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+		return
+	}
+
 	if errors.Is(err, errHLSSessionNotFound) || errors.Is(err, errHLSSessionEmpty) {
-		helpers.ErrorJSON(w, err, http.StatusNotFound)
+		message := "HLS session not found"
+		if errors.Is(err, errHLSSessionEmpty) {
+			message = "no playable media at this position"
+		}
+		helpers.ErrorJSON(w, errors.New(message), http.StatusNotFound)
 		return
 	}
 
 	if errors.Is(err, errHLSSessionFailed) {
-		helpers.ErrorJSON(w, err, http.StatusInternalServerError)
+		helpers.ErrorJSON(w, errors.New("failed to prepare HLS media"), http.StatusInternalServerError)
+		return
+	}
+
+	var invalidAudioErr *hlsInvalidAudioSelectionError
+	if errors.As(err, &invalidAudioErr) {
+		helpers.ErrorJSON(w, errors.New(invalidAudioErr.PublicMessage), http.StatusBadRequest)
+		return
+	}
+
+	var mediaMetadataErr *hlsMediaMetadataError
+	if errors.As(err, &mediaMetadataErr) {
+		helpers.ErrorJSON(w, errors.New("stored media metadata is unusable"), http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -452,16 +513,15 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 	// stored channel metadata is a media-profile problem, not a bad query.
 	var audioMetadataErr *hlsAudioMetadataError
 	if errors.As(err, &audioMetadataErr) {
-		helpers.ErrorJSON(w, err, http.StatusUnprocessableEntity)
+		helpers.ErrorJSON(w, errors.New("stored audio metadata is unusable for the requested profile"), http.StatusUnprocessableEntity)
 		return
 	}
 
-	// A missing AC-3/E-AC-3 encoder is a server installation problem. Unlike
-	// the capacity errors below it carries no Retry-After: retrying cannot
-	// install the encoder.
+	// A missing AC-3/E-AC-3 encoder is a non-retryable server installation
+	// problem, so it must not share the retryable 503 contract below.
 	var encoderErr *hlsAudioEncoderUnavailableError
 	if errors.As(err, &encoderErr) {
-		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
+		helpers.ErrorJSON(w, errors.New("requested audio codec is unavailable on this server"), http.StatusInternalServerError)
 		return
 	}
 
@@ -494,7 +554,7 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	helpers.ErrorJSON(w, err, http.StatusBadRequest)
+	helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
 }
 
 func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Request) {

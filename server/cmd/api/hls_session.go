@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -164,15 +165,37 @@ func (e *hlsAudioMetadataError) Error() string {
 }
 
 // hlsAudioEncoderUnavailableError reports that the probed FFmpeg build lacks
-// the encoder an explicit audio request needs. This is a server installation
-// problem (HTTP 503, no Retry-After: waiting will not install the encoder),
-// not an invalid query.
+// the encoder an explicit audio request needs. This is a non-retryable server
+// installation problem (HTTP 500), not an invalid query.
 type hlsAudioEncoderUnavailableError struct {
 	Encoder string
 }
 
 func (e *hlsAudioEncoderUnavailableError) Error() string {
 	return fmt.Sprintf("this server's ffmpeg build does not provide the %q audio encoder", e.Encoder)
+}
+
+// hlsInvalidAudioSelectionError reports a syntactically valid request whose
+// audio selection cannot apply to the stored movie. PublicMessage is safe to
+// return to clients; Error keeps the movie context for server logs.
+type hlsInvalidAudioSelectionError struct {
+	MovieID       int64
+	PublicMessage string
+}
+
+func (e *hlsInvalidAudioSelectionError) Error() string {
+	return fmt.Sprintf("movie %d: %s", e.MovieID, e.PublicMessage)
+}
+
+// hlsMediaMetadataError reports stored media rows that cannot create an HLS
+// session. A rescan may repair these rows, but changing the request cannot.
+type hlsMediaMetadataError struct {
+	MovieID int64
+	Reason  string
+}
+
+func (e *hlsMediaMetadataError) Error() string {
+	return fmt.Sprintf("movie %d has unusable stored media metadata: %s", e.MovieID, e.Reason)
 }
 
 type hlsSessionStartParams struct {
@@ -1440,7 +1463,7 @@ func (app *Application) CleanupRoomHLSSession(roomID int64) {
 // requires, shared by loadHLSMovieForSession and the preloaded-row path.
 func validateHLSMovieDuration(movie database.Movie, movieID int64) error {
 	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
-		return fmt.Errorf("movie %d has no valid duration in the database", movieID)
+		return &hlsMediaMetadataError{MovieID: movieID, Reason: "no valid duration is stored"}
 	}
 	return nil
 }
@@ -1454,7 +1477,10 @@ func (app *Application) loadHLSMovieForSession(
 ) (database.Movie, int, error) {
 	movie, err := app.Queries.GetMovieByID(ctx, movieID)
 	if err != nil {
-		return database.Movie{}, 0, fmt.Errorf("movie not found: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return database.Movie{}, 0, fmt.Errorf("%w: movie %d", errHLSMovieNotFound, movieID)
+		}
+		return database.Movie{}, 0, fmt.Errorf("load movie %d for HLS: %w", movieID, err)
 	}
 	err = validateHLSMovieDuration(movie, movieID)
 	if err != nil {
@@ -1504,7 +1530,7 @@ func (app *Application) createHLSSession(
 	}
 	primaryVideo := primaryVideoStream(videoStreams)
 	if primaryVideo == nil {
-		return nil, fmt.Errorf("no playable video track found for movie %d", movieID)
+		return nil, &hlsMediaMetadataError{MovieID: movieID, Reason: "no playable video track is stored"}
 	}
 
 	// nil means "not preloaded", not "no audio": sqlc returns a nil slice for
@@ -1518,15 +1544,30 @@ func (app *Application) createHLSSession(
 	}
 	var selectedAudio *database.AudioStream
 	if len(audioStreams) == 0 {
+		if audioProfile != nil {
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio profiles are not valid for video-only media",
+			}
+		}
 		if audioTrack != nil {
-			return nil, fmt.Errorf("audio_track is not valid for video-only movie %d", movieID)
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio_track is not valid for video-only media",
+			}
 		}
 	} else {
 		if audioTrack == nil {
-			return nil, fmt.Errorf("audio_track is required for movie %d", movieID)
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio_track is required for media with audio",
+			}
 		}
 		if *audioTrack < 0 || *audioTrack >= len(audioStreams) {
-			return nil, fmt.Errorf("audio track %d out of range (0-%d)", *audioTrack, len(audioStreams)-1)
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio_track is out of range",
+			}
 		}
 		// audioTrack is an ordinal into the stream_index-ordered audio rows, the
 		// same ordering the client's audio picker renders, not an ffprobe index.

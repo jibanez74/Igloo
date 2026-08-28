@@ -11,11 +11,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+
+	"igloo/cmd/internal/helpers"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -180,6 +183,11 @@ func loadOpenAPIContract(t *testing.T) (*openapi3.T, routers.Router) {
 }
 
 func loadOpenAPIContractOnce() {
+	// kin-openapi does not register Apple's HLS playlist media type by
+	// default. It is a textual response, so validate it with the same decoder
+	// used for text/plain instead of skipping the response body.
+	openapi3filter.RegisterBodyDecoder(hlsPlaylistContentType, openapi3filter.PlainBodyDecoder)
+
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		openAPIContractErr = errors.New("failed to locate OpenAPI contract test")
@@ -315,6 +323,65 @@ func TestOpenAPIExchangeCoverageComparison(t *testing.T) {
 		if missing[i] != want[i] {
 			t.Fatalf("missing operations = %v, want %v", missing, want)
 		}
+	}
+}
+
+func TestOpenAPIHLSEnumsMatchServerConstants(t *testing.T) {
+	document, _ := loadOpenAPIContract(t)
+
+	tests := []struct {
+		name   string
+		schema string
+		want   []any
+	}{
+		{
+			name:   "profiles",
+			schema: "HLSProfile",
+			want: func() []any {
+				values := make([]any, len(helpers.HLSAllowedProfiles))
+				for i, profile := range helpers.HLSAllowedProfiles {
+					values[i] = profile
+				}
+				return values
+			}(),
+		},
+		{
+			name:   "requested audio codecs",
+			schema: "HLSRequestedAudioCodec",
+			want: []any{
+				string(helpers.HLSAudioCodecAC3),
+				string(helpers.HLSAudioCodecEAC3),
+			},
+		},
+		{
+			name:   "effective audio codecs",
+			schema: "HLSEffectiveAudioCodec",
+			want: []any{
+				string(helpers.HLSAudioCodecAAC),
+				string(helpers.HLSAudioCodecAC3),
+				string(helpers.HLSAudioCodecEAC3),
+			},
+		},
+		{
+			name:   "audio channel limits",
+			schema: "HLSAudioChannelLimit",
+			want: []any{
+				float64(helpers.HLS_AUDIO_MAX_CHANNELS_STEREO),
+				float64(helpers.HLS_AUDIO_MAX_CHANNELS_SURROUND),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := document.Components.Schemas[tt.schema]
+			if schema == nil || schema.Value == nil {
+				t.Fatalf("OpenAPI schema %q is missing", tt.schema)
+			}
+			if !reflect.DeepEqual(schema.Value.Enum, tt.want) {
+				t.Fatalf("OpenAPI %s enum = %#v, want %#v", tt.schema, schema.Value.Enum, tt.want)
+			}
+		})
 	}
 }
 

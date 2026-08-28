@@ -1838,10 +1838,22 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
 
 	manifestPath := fmt.Sprintf("/api/watch-rooms/%d/hls/playlist.m3u8", roomID)
-	healthy := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath)
+	healthyRequest := httptest.NewRequest(http.MethodGet, manifestPath, nil)
+	healthy := httptest.NewRecorder()
+	handler.ServeHTTP(healthy, healthyRequest)
 	if healthy.Code != http.StatusOK {
 		t.Fatalf("expected 200 before drift, got %d: %s", healthy.Code, healthy.Body.String())
 	}
+	assertOpenAPIExchange(t, "watchRoomHLSManifest", healthyRequest, healthy)
+
+	assetPath := fmt.Sprintf("/api/watch-rooms/%d/hls/segment_0.m4s?audio_track=0", roomID)
+	assetRequest := httptest.NewRequest(http.MethodGet, assetPath, nil)
+	asset := httptest.NewRecorder()
+	handler.ServeHTTP(asset, assetRequest)
+	if asset.Code != http.StatusOK {
+		t.Fatalf("expected room HLS asset 200, got %d: %s", asset.Code, asset.Body.String())
+	}
+	assertOpenAPIExchange(t, "watchRoomHLSSegment", assetRequest, asset)
 
 	// Simulate a rescan of a replaced file whose track layout differs: the
 	// ordinal still resolves, but to a different absolute stream index.

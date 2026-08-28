@@ -1046,7 +1046,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an HLS playlist for a movie */
+        /**
+         * Get an HLS playlist for a movie
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. A cold manifest request can spend up to 15 seconds waiting for transcode capacity and up to 30 seconds waiting for the first copy-video playlist, for a maximum 45-second server wait before a retryable 503.
+         */
         get: operations["hlsManifest"];
         put?: never;
         post?: never;
@@ -1063,7 +1066,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an HLS initialization file or media segment for a movie */
+        /**
+         * Get an HLS initialization file or media segment for a movie
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.
+         */
         get: operations["hlsSegment"];
         put?: never;
         post?: never;
@@ -1361,7 +1367,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the HLS playlist for a watch room */
+        /**
+         * Get the HLS playlist for a watch room
+         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is checked on each request and credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.
+         */
         get: operations["watchRoomHLSManifest"];
         put?: never;
         post?: never;
@@ -1378,7 +1387,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a watch-room HLS initialization file or media segment */
+        /**
+         * Get a watch-room HLS initialization file or media segment
+         * @description Serves an asset from a room HLS session after independently authenticating the requester and checking current room membership. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.
+         */
         get: operations["watchRoomHLSSegment"];
         put?: never;
         post?: never;
@@ -2054,6 +2066,12 @@ export interface components {
         };
         /** @enum {string} */
         HLSProfile: "remux" | "2160p_16mbps" | "1080p_8mbps" | "1080p_6mbps" | "1080p_4mbps" | "720p_3mbps";
+        /** @enum {string} */
+        HLSRequestedAudioCodec: "ac3" | "eac3";
+        /** @enum {string} */
+        HLSEffectiveAudioCodec: "aac" | "ac3" | "eac3";
+        /** @enum {integer} */
+        HLSAudioChannelLimit: 2 | 6;
         /** @enum {string} */
         PlaybackMode: "direct" | "remux" | "2160p_16mbps" | "1080p_8mbps" | "1080p_6mbps" | "1080p_4mbps" | "720p_3mbps";
         LoginRequest: {
@@ -3783,17 +3801,17 @@ export interface components {
                 "application/json": components["schemas"]["SpotifyTrackSearchResultsEnvelope"];
             };
         };
-        /** @description HLS media playlist. */
+        /** @description HLS media playlist. The effective profile header is always present; actual-start and audio diagnostics are present only when known or applicable. */
         HLSPlaylistResponse: {
             headers: {
                 "Cache-Control"?: "no-store";
                 /** @description Profile FFmpeg actually ran. This differs from the requested profile in the path whenever the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here. */
-                "X-Igloo-Effective-Profile"?: string;
+                "X-Igloo-Effective-Profile": components["schemas"]["HLSProfile"];
                 /** @description Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured. */
                 "X-Igloo-Actual-Start"?: number;
                 /** @description Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac for legacy sessions (copied or stereo-encoded). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions. */
-                "X-Igloo-Effective-Audio-Codec"?: "aac" | "ac3" | "eac3";
-                /** @description Effective output channel count, resolved from the selected source stream and the requested maximum. For copied legacy AAC this is the stored source channel count. Omitted for video-only sessions. */
+                "X-Igloo-Effective-Audio-Codec"?: components["schemas"]["HLSEffectiveAudioCodec"];
+                /** @description Effective output channel count, resolved from the selected source stream and the requested maximum. For copied legacy AAC this is the stored source channel count. Omitted for video-only sessions and when a copied source's stored channel count is unknown. */
                 "X-Igloo-Effective-Audio-Channels"?: number;
                 /** @description Audio bitrate: the server profile value for encodes (for example 640k or 320k) or the stored source bitrate in bits per second for copied legacy AAC. Omitted for video-only sessions and when the copied source bitrate is unknown. */
                 "X-Igloo-Effective-Audio-Bitrate"?: string;
@@ -3803,26 +3821,53 @@ export interface components {
                 "application/vnd.apple.mpegurl": string;
             };
         };
-        /** @description Fragmented MP4 initialization file or media segment. */
+        /** @description Complete fragmented MP4 initialization file or media segment. */
         HLSSegmentResponse: {
             headers: {
+                "Accept-Ranges": "bytes";
                 "Cache-Control"?: "no-store";
+                /** @description Modification time of the pinned ready HLS file. */
+                "Last-Modified": string;
                 [name: string]: unknown;
             };
             content: {
                 "video/mp4": string;
             };
         };
-        /** @description Partial fragmented MP4 initialization file or media segment for a byte range. */
+        /** @description Partial fragmented MP4 initialization file or media segment. One satisfiable range has a video/mp4 body and Content-Range; multiple satisfiable ranges have a multipart/byteranges body with one video/mp4 part per range and no response-level Content-Range. */
         PartialHLSSegmentResponse: {
             headers: {
-                "Accept-Ranges"?: "bytes";
+                "Accept-Ranges": "bytes";
                 "Cache-Control"?: "no-store";
+                /** @description Returned for a single range and omitted for a multipart response. */
                 "Content-Range"?: string;
+                /** @description Modification time of the pinned ready HLS file. */
+                "Last-Modified": string;
                 [name: string]: unknown;
             };
             content: {
                 "video/mp4": string;
+                "multipart/byteranges": string;
+            };
+        };
+        /** @description The ready HLS asset has not changed since If-Modified-Since; no body is returned. */
+        HLSNotModifiedResponse: {
+            headers: {
+                "Cache-Control"?: "no-store";
+                "Last-Modified": string;
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
+        /** @description The Range header is malformed or cannot overlap the ready HLS asset. The response is Go's plain-text range error, not the JSON error envelope. Content-Range is returned for a well-formed but unsatisfiable range and may be omitted for a malformed range. */
+        HLSRangeNotSatisfiableResponse: {
+            headers: {
+                /** @description Asset size for a well-formed unsatisfiable range, for example bytes *\/15; omitted for malformed range syntax. */
+                "Content-Range"?: string | null;
+                [name: string]: unknown;
+            };
+            content: {
+                "text/plain": string;
             };
         };
         /** @description Complete media file response. */
@@ -4255,11 +4300,20 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Generated media is not ready yet or HLS session/transcode capacity is temporarily unavailable. */
+        /** @description The service is temporarily unavailable. */
         ServiceUnavailable: {
             headers: {
-                /** @description Seconds to wait before retrying when HLS capacity is unavailable. */
-                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description HLS capacity or transcode storage is temporarily unavailable, or the requested playlist or segment is not ready. Every HLS 503 is retryable and includes Retry-After. */
+        HLSServiceUnavailable: {
+            headers: {
+                /** @description Seconds to wait before retrying this HLS request. */
+                "Retry-After": number;
                 [name: string]: unknown;
             };
             content: {
@@ -4376,14 +4430,16 @@ export interface components {
         StartQuery: number;
         /** @description HTTP byte range for seeking. */
         RangeHeader: string;
+        /** @description Return 304 when the ready HLS asset has not changed since this HTTP date. */
+        IfModifiedSinceHeader: string;
         /** @description UUID that scopes one personal HLS playback session. */
         PlaybackSessionQuery: string;
         /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
         HLSReloadQuery: string;
         /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
-        HLSAudioCodecQuery: "ac3" | "eac3";
+        HLSAudioCodecQuery: components["schemas"]["HLSRequestedAudioCodec"];
         /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
-        HLSAudioChannelsQuery: 2 | 6;
+        HLSAudioChannelsQuery: components["schemas"]["HLSAudioChannelLimit"];
         /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
         SubtitleStartQuery: number;
     };
@@ -5805,7 +5861,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["HLSServiceUnavailable"];
         };
     };
     hlsSegment: {
@@ -5827,6 +5883,8 @@ export interface operations {
             header?: {
                 /** @description HTTP byte range for seeking. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Return 304 when the ready HLS asset has not changed since this HTTP date. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -5840,12 +5898,13 @@ export interface operations {
         responses: {
             200: components["responses"]["HLSSegmentResponse"];
             206: components["responses"]["PartialHLSSegmentResponse"];
+            304: components["responses"]["HLSNotModifiedResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            416: components["responses"]["RangeNotSatisfiable"];
+            416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["HLSServiceUnavailable"];
         };
     };
     streamMovie: {
@@ -6278,17 +6337,24 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["HLSServiceUnavailable"];
         };
     };
     watchRoomHLSSegment: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                audio_track?: components["parameters"]["AudioTrackQuery"];
+            };
             header?: {
                 /** @description HTTP byte range for seeking. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Return 304 when the ready HLS asset has not changed since this HTTP date. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -6301,13 +6367,14 @@ export interface operations {
         responses: {
             200: components["responses"]["HLSSegmentResponse"];
             206: components["responses"]["PartialHLSSegmentResponse"];
+            304: components["responses"]["HLSNotModifiedResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            416: components["responses"]["RangeNotSatisfiable"];
+            416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["HLSServiceUnavailable"];
         };
     };
     getSettings: {
