@@ -65,6 +65,25 @@ func (app *Application) ensureMovieExists(r *http.Request, movieID int64) error 
 	return nil
 }
 
+// rejectWatchProgressWrite turns a failed movie_watch_progress write into a
+// response. The movie_id foreign key already rejects an unknown movie, so the
+// write paths do not pre-check existence -- they pay one query on success and
+// only the failure path probes MovieExists to tell "no such movie" (404) from
+// a real error (500). Same shape, and the same reasoning, as the playlist add
+// path in movie_playlist_handler.go. The read and delete paths keep their
+// pre-check: neither can trip a foreign key, so nothing else would produce the
+// documented 404.
+func (app *Application) rejectWatchProgressWrite(w http.ResponseWriter, r *http.Request, writeErr error, movieID int64, logMessage, userMessage string) {
+	exists, existsErr := app.Queries.MovieExists(r.Context(), movieID)
+	if existsErr == nil && !exists {
+		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+		return
+	}
+
+	app.Logger.Error(logMessage, "error", writeErr, "movie_id", movieID)
+	helpers.ErrorJSON(w, errors.New(userMessage))
+}
+
 func emptyMovieWatchProgressResponse() movieWatchProgressResponse {
 	return movieWatchProgressResponse{
 		ProgressSec: nil,
@@ -165,16 +184,6 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := app.ensureMovieExists(r, movieID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
-			return
-		}
-		app.Logger.Error("failed to verify movie exists for watch progress update", "error", err, "movie_id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to update watch progress"))
-		return
-	}
-
 	var req updateMovieWatchProgressRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
@@ -229,8 +238,8 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 			SaveSequence:  *req.SaveSequence,
 		})
 		if err != nil {
-			app.Logger.Error("failed to mark movie watched from progress update", "error", err, "movie_id", movieID, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update watch progress"))
+			app.rejectWatchProgressWrite(w, r, err, movieID,
+				"failed to mark movie watched from progress update", "failed to update watch progress")
 			return
 		}
 
@@ -252,8 +261,8 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		SaveSequence:  *req.SaveSequence,
 	})
 	if err != nil {
-		app.Logger.Error("failed to upsert movie watch progress", "error", err, "movie_id", movieID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to update watch progress"))
+		app.rejectWatchProgressWrite(w, r, err, movieID,
+			"failed to upsert movie watch progress", "failed to update watch progress")
 		return
 	}
 
@@ -316,16 +325,6 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := app.ensureMovieExists(r, movieID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
-			return
-		}
-		app.Logger.Error("failed to verify movie exists for watched update", "error", err, "movie_id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to update watched status"))
-		return
-	}
-
 	var req setMovieWatchedRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
@@ -344,8 +343,8 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 			UserID:  userID,
 			MovieID: movieID,
 		}); err != nil {
-			app.Logger.Error("failed to mark movie watched", "error", err, "movie_id", movieID, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update watched status"))
+			app.rejectWatchProgressWrite(w, r, err, movieID,
+				"failed to mark movie watched", "failed to update watched status")
 			return
 		}
 	} else {
@@ -353,8 +352,8 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 			UserID:  userID,
 			MovieID: movieID,
 		}); err != nil {
-			app.Logger.Error("failed to mark movie unwatched", "error", err, "movie_id", movieID, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New("failed to update watched status"))
+			app.rejectWatchProgressWrite(w, r, err, movieID,
+				"failed to mark movie unwatched", "failed to update watched status")
 			return
 		}
 	}

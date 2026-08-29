@@ -34,6 +34,16 @@ FROM movies
 WHERE tmdb_id = ?
 LIMIT 1;
 
+-- name: GetMoviesByTmdbIDs :many
+-- Batch form of GetMovieByTmdbID for the TMDB search results mapper, which
+-- annotates a whole page of results with "already in library". One indexed
+-- pass over idx_movies_tmdb_id instead of a point query per result row.
+SELECT
+  id,
+  tmdb_id
+FROM movies
+WHERE tmdb_id IN (sqlc.slice(tmdb_ids));
+
 -- name: GetMoviesByIDs :many
 -- Card-sized projection: the watch-room listing only renders title and poster.
 SELECT

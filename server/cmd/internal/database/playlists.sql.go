@@ -124,7 +124,11 @@ func (q *Queries) DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) 
 const getMoviePlaylistsWithCollaboratorAccess = `-- name: GetMoviePlaylistsWithCollaboratorAccess :many
 SELECT
   accessible.id, accessible.user_id, accessible.name, accessible.description, accessible.cover_image, accessible.is_public, accessible.movie_id, accessible.content_type, accessible.created_at, accessible.updated_at, accessible.is_owner, accessible.can_edit,
-  COALESCE(agg.movie_count, 0) AS movie_count
+  (
+    SELECT COUNT(*)
+    FROM playlist_movies AS pm
+    WHERE pm.playlist_id = accessible.id
+  ) AS movie_count
 FROM (
   SELECT
     p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
@@ -145,14 +149,6 @@ FROM (
     AND p.content_type = 'movie'
     AND p.user_id <> ?1
 ) AS accessible
-LEFT JOIN (
-  SELECT
-    pm.playlist_id,
-    COUNT(*) AS movie_count
-  FROM playlist_movies AS pm
-  GROUP BY pm.playlist_id
-) AS agg
-  ON agg.playlist_id = accessible.id
 ORDER BY accessible.updated_at DESC
 `
 
@@ -267,8 +263,18 @@ func (q *Queries) GetPlaylistWithAccess(ctx context.Context, arg GetPlaylistWith
 const getPlaylistsWithCollaboratorAccess = `-- name: GetPlaylistsWithCollaboratorAccess :many
 SELECT
   accessible.id, accessible.user_id, accessible.name, accessible.description, accessible.cover_image, accessible.is_public, accessible.movie_id, accessible.content_type, accessible.created_at, accessible.updated_at, accessible.is_owner, accessible.can_edit,
-  COALESCE(agg.track_count, 0) AS track_count,
-  COALESCE(agg.total_duration, 0) AS total_duration
+  (
+    SELECT COUNT(*)
+    FROM playlist_tracks AS pt
+    WHERE pt.playlist_id = accessible.id
+  ) AS track_count,
+  (
+    SELECT COALESCE(SUM(t.duration), 0)
+    FROM playlist_tracks AS pt
+    INNER JOIN tracks AS t
+      ON t.id = pt.track_id
+    WHERE pt.playlist_id = accessible.id
+  ) AS total_duration
 FROM (
   SELECT
     p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.movie_id, p.content_type, p.created_at, p.updated_at,
@@ -289,17 +295,6 @@ FROM (
     AND p.content_type = 'track'
     AND p.user_id <> ?1
 ) AS accessible
-LEFT JOIN (
-  SELECT
-    pt.playlist_id,
-    COUNT(*) AS track_count,
-    COALESCE(SUM(t.duration), 0) AS total_duration
-  FROM playlist_tracks AS pt
-  INNER JOIN tracks AS t
-    ON pt.track_id = t.id
-  GROUP BY pt.playlist_id
-) AS agg
-  ON agg.playlist_id = accessible.id
 ORDER BY accessible.updated_at DESC
 `
 
@@ -324,9 +319,15 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 // access paths are separate indexed lookups (idx_playlist_user, then
 // idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
 // scan of every user's playlists -- and they are disjoint because the
-// collaborator branch excludes playlists the user owns. Track count and total
-// duration come from one grouped pass over playlist_tracks instead of two
-// correlated subqueries per row.
+// collaborator branch excludes playlists the user owns.
+//
+// Track count and total duration are correlated subqueries, deliberately. The
+// grouped-pass form that lived here had no correlation to the requesting user,
+// so SQLite materialized it by scanning the whole tracks table and aggregating
+// every playlist in the database to annotate this user's handful of rows. Per
+// row these are index probes on idx_playlist_tracks_position (and the
+// (playlist_id, track_id) primary key), which is bounded by the page the
+// handler actually returns.
 func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error) {
 	rows, err := q.query(ctx, q.getPlaylistsWithCollaboratorAccessStmt, getPlaylistsWithCollaboratorAccess, requestingUserID)
 	if err != nil {

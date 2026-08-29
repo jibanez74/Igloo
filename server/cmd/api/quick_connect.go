@@ -36,6 +36,12 @@ const (
 	// through a handler, such as the stale-device sweep.
 	deviceAuthCacheTTL = 30 * time.Second
 
+	// Room media requests re-authorize on every HLS segment and every
+	// byte-range request, so the joined membership lookup is cached. Only
+	// successful authorizations are cached, never denials, so a user who joins
+	// a room is not locked out for the TTL; deleting a room evicts explicitly.
+	watchRoomAuthCacheTTL = 30 * time.Second
+
 	// Devices whose last_used_at is older than this are revoked automatically,
 	// both lazily at auth time and by the daily sweep.
 	deviceInactivityTTL = 90 * 24 * time.Hour

@@ -192,6 +192,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumsByMusicianIDStmt, err = db.PrepareContext(ctx, getAlbumsByMusicianID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsByMusicianID: %w", err)
 	}
+	if q.getAlbumsBySpotifyIDsStmt, err = db.PrepareContext(ctx, getAlbumsBySpotifyIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsBySpotifyIDs: %w", err)
+	}
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
 	}
@@ -281,6 +284,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMoviesByIDsStmt, err = db.PrepareContext(ctx, getMoviesByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesByIDs: %w", err)
+	}
+	if q.getMoviesByTmdbIDsStmt, err = db.PrepareContext(ctx, getMoviesByTmdbIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMoviesByTmdbIDs: %w", err)
 	}
 	if q.getMoviesCountStmt, err = db.PrepareContext(ctx, getMoviesCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesCount: %w", err)
@@ -879,6 +885,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumsByMusicianIDStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumsBySpotifyIDsStmt != nil {
+		if cerr := q.getAlbumsBySpotifyIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsBySpotifyIDsStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumsCountStmt != nil {
 		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
@@ -1027,6 +1038,11 @@ func (q *Queries) Close() error {
 	if q.getMoviesByIDsStmt != nil {
 		if cerr := q.getMoviesByIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMoviesByIDsStmt: %w", cerr)
+		}
+	}
+	if q.getMoviesByTmdbIDsStmt != nil {
+		if cerr := q.getMoviesByTmdbIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMoviesByTmdbIDsStmt: %w", cerr)
 		}
 	}
 	if q.getMoviesCountStmt != nil {
@@ -1644,6 +1660,7 @@ type Queries struct {
 	getAlbumGenresStmt                          *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
+	getAlbumsBySpotifyIDsStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
 	getAllUsersStmt                             *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
@@ -1674,6 +1691,7 @@ type Queries struct {
 	getMoviesByGenreAscStmt                     *sql.Stmt
 	getMoviesByGenreDescStmt                    *sql.Stmt
 	getMoviesByIDsStmt                          *sql.Stmt
+	getMoviesByTmdbIDsStmt                      *sql.Stmt
 	getMoviesCountStmt                          *sql.Stmt
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
@@ -1840,6 +1858,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumGenresStmt:                          q.getAlbumGenresStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
+		getAlbumsBySpotifyIDsStmt:                   q.getAlbumsBySpotifyIDsStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
@@ -1870,6 +1889,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesByGenreAscStmt:                     q.getMoviesByGenreAscStmt,
 		getMoviesByGenreDescStmt:                    q.getMoviesByGenreDescStmt,
 		getMoviesByIDsStmt:                          q.getMoviesByIDsStmt,
+		getMoviesByTmdbIDsStmt:                      q.getMoviesByTmdbIDsStmt,
 		getMoviesCountStmt:                          q.getMoviesCountStmt,
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,

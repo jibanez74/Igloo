@@ -12,6 +12,15 @@ FROM albums
 WHERE spotify_id = ?
 LIMIT 1;
 
+-- name: GetAlbumsBySpotifyIDs :many
+-- Batch form of GetAlbumBySpotifyID for the Spotify album search results
+-- mapper: it only needs the library id per match, not the whole album row.
+SELECT
+  id,
+  spotify_id
+FROM albums
+WHERE spotify_id IN (sqlc.slice(spotify_ids));
+
 -- name: GetAlbumByTitleAndMusician :one
 -- The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
 -- target exactly, so a NULL-musician lookup finds a row written with '' and

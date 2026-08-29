@@ -17,18 +17,14 @@ SELECT
   a.cover,
   a.year,
   a.release_date,
-  COALESCE(tc.track_count, 0) AS track_count
+  (
+    SELECT COUNT(*)
+    FROM tracks AS t
+    WHERE t.album_id = a.id
+  ) AS track_count
 FROM albums AS a
 INNER JOIN musician_albums AS ma
   ON a.id = ma.album_id
-LEFT JOIN (
-  SELECT
-    album_id,
-    COUNT(*) AS track_count
-  FROM tracks
-  GROUP BY album_id
-) AS tc
-  ON tc.album_id = a.id
 WHERE ma.musician_id = ?
 ORDER BY
   a.release_date DESC,
@@ -45,10 +41,11 @@ type GetAlbumsByMusicianIDRow struct {
 	TrackCount  int64          `json:"track_count"`
 }
 
-// Sorted by release date (newest first), then by title. Track counts come from
-// one grouped pass over idx_track_album instead of a correlated subquery per
-// album; this query has no LIMIT, so it runs for the artist's whole
-// discography.
+// Sorted by release date (newest first), then by title. The track count is a
+// correlated subquery: one probe of idx_track_album per album in the artist's
+// discography, which is tens of rows. The grouped-pass form that lived here
+// was uncorrelated, so SQLite materialized it by scanning every track in the
+// library on each artist-detail request.
 func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error) {
 	rows, err := q.query(ctx, q.getAlbumsByMusicianIDStmt, getAlbumsByMusicianID, musicianID)
 	if err != nil {

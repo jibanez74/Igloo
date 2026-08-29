@@ -967,7 +967,10 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpFailureRollsBackRoom(t *testing.T) {
 	}
 }
 
-func TestGetWatchRoom_HTTP_NotFound(t *testing.T) {
+// An unknown room is indistinguishable from a room the caller cannot see: the
+// single joined authorization query returns no row either way, so both are 403.
+// The other room endpoints have always behaved this way.
+func TestGetWatchRoom_HTTP_UnknownRoomIsForbidden(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
@@ -978,8 +981,8 @@ func TestGetWatchRoom_HTTP_NotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
 	}
 }
 
@@ -1781,7 +1784,7 @@ func TestVerifyWatchRoomStreamPins(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := app.verifyWatchRoomStreamPins(ctx, tc.room)
+			_, err := app.verifyWatchRoomStreamPins(ctx, tc.room)
 			if tc.wantDrift {
 				if !errors.Is(err, errWatchRoomStreamDrift) {
 					t.Fatalf("expected stream drift, got %v", err)

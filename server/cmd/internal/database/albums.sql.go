@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const deleteAlbum = `-- name: DeleteAlbum :exec
@@ -162,6 +163,54 @@ func (q *Queries) GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphab
 			&i.Musician,
 			&i.Year,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAlbumsBySpotifyIDs = `-- name: GetAlbumsBySpotifyIDs :many
+SELECT
+  id,
+  spotify_id
+FROM albums
+WHERE spotify_id IN (/*SLICE:spotify_ids*/?)
+`
+
+type GetAlbumsBySpotifyIDsRow struct {
+	ID        int64          `json:"id"`
+	SpotifyID sql.NullString `json:"spotify_id"`
+}
+
+// Batch form of GetAlbumBySpotifyID for the Spotify album search results
+// mapper: it only needs the library id per match, not the whole album row.
+func (q *Queries) GetAlbumsBySpotifyIDs(ctx context.Context, spotifyIds []sql.NullString) ([]GetAlbumsBySpotifyIDsRow, error) {
+	query := getAlbumsBySpotifyIDs
+	var queryParams []interface{}
+	if len(spotifyIds) > 0 {
+		for _, v := range spotifyIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:spotify_ids*/?", strings.Repeat(",?", len(spotifyIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:spotify_ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAlbumsBySpotifyIDsRow{}
+	for rows.Next() {
+		var i GetAlbumsBySpotifyIDsRow
+		if err := rows.Scan(&i.ID, &i.SpotifyID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

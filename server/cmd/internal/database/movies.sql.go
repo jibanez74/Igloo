@@ -891,6 +891,55 @@ func (q *Queries) GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesB
 	return items, nil
 }
 
+const getMoviesByTmdbIDs = `-- name: GetMoviesByTmdbIDs :many
+SELECT
+  id,
+  tmdb_id
+FROM movies
+WHERE tmdb_id IN (/*SLICE:tmdb_ids*/?)
+`
+
+type GetMoviesByTmdbIDsRow struct {
+	ID     int64         `json:"id"`
+	TmdbID sql.NullInt64 `json:"tmdb_id"`
+}
+
+// Batch form of GetMovieByTmdbID for the TMDB search results mapper, which
+// annotates a whole page of results with "already in library". One indexed
+// pass over idx_movies_tmdb_id instead of a point query per result row.
+func (q *Queries) GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetMoviesByTmdbIDsRow, error) {
+	query := getMoviesByTmdbIDs
+	var queryParams []interface{}
+	if len(tmdbIds) > 0 {
+		for _, v := range tmdbIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", strings.Repeat(",?", len(tmdbIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:tmdb_ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviesByTmdbIDsRow{}
+	for rows.Next() {
+		var i GetMoviesByTmdbIDsRow
+		if err := rows.Scan(&i.ID, &i.TmdbID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMoviesCount = `-- name: GetMoviesCount :one
 SELECT
   COUNT(*)

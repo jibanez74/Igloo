@@ -28,19 +28,16 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	trackOK, err := app.Queries.TrackExists(ctx, trackID)
-	if err != nil {
-		app.Logger.Error("failed to get track for like toggle", "error", err, "id", trackID)
-		helpers.ErrorJSON(w, errors.New("failed to verify track exists"))
-		return
-	}
-	if !trackOK {
-		helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
-		return
-	}
-
+	// user_liked_tracks.track_id rejects an unknown track, so the happy path is
+	// the toggle transaction alone; only a failure pays the TrackExists probe
+	// that tells "no such track" (404) from a real error (500).
 	isLiked, err := app.toggleTrackLike(ctx, userID, trackID)
 	if err != nil {
+		trackOK, existsErr := app.Queries.TrackExists(ctx, trackID)
+		if existsErr == nil && !trackOK {
+			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+			return
+		}
 		app.Logger.Error("failed to toggle track like", "error", err, "trackID", trackID, "userID", userID)
 		helpers.ErrorJSON(w, errors.New("failed to update like"))
 		return
