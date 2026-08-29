@@ -1291,13 +1291,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get watch-room details */
+        /**
+         * Get watch-room details
+         * @description Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds.
+         */
         get: operations["getWatchRoom"];
         put?: never;
         post?: never;
         /**
          * Delete a watch room
-         * @description Only the room owner can delete a room.
+         * @description Only the room owner can delete a room. After the database deletion succeeds, all cached member authorizations for the room are invalidated before HLS and WebSocket cleanup completes.
          */
         delete: operations["deleteWatchRoom"];
         options?: never;
@@ -1346,7 +1349,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Direct-stream a watch-room movie */
+        /**
+         * Direct-stream a watch-room movie
+         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds.
+         */
         get: operations["streamWatchRoomMovie"];
         put?: never;
         post?: never;
@@ -1354,7 +1360,7 @@ export interface paths {
         options?: never;
         /**
          * Headers for a direct watch-room movie stream
-         * @description Identical to GET but returns headers only, with no response body.
+         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds.
          */
         head: operations["streamWatchRoomMovieHead"];
         patch?: never;
@@ -1369,7 +1375,7 @@ export interface paths {
         };
         /**
          * Get the HLS playlist for a watch room
-         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is checked on each request and credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.
+         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.
          */
         get: operations["watchRoomHLSManifest"];
         put?: never;
@@ -1389,7 +1395,7 @@ export interface paths {
         };
         /**
          * Get a watch-room HLS initialization file or media segment
-         * @description Serves an asset from a room HLS session after independently authenticating the requester and checking current room membership. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.
+         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.
          */
         get: operations["watchRoomHLSSegment"];
         put?: never;

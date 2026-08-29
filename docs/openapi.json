@@ -74,7 +74,7 @@
     },
     {
       "name": "Watch Rooms",
-      "description": "Synchronized room playback"
+      "description": "Synchronized room playback. Detail and media requests authenticate and authorize room membership on every request. Successful membership lookups may be cached for up to 30 seconds. Explicit room deletion invalidates every cached member authorization immediately after database deletion and before media and WebSocket cleanup completes."
     },
     {
       "name": "Settings",
@@ -2755,6 +2755,7 @@
           "Watch Rooms"
         ],
         "summary": "Get watch-room details",
+        "description": "Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds.",
         "operationId": "getWatchRoom",
         "parameters": [
           {
@@ -2784,7 +2785,7 @@
           "Watch Rooms"
         ],
         "summary": "Delete a watch room",
-        "description": "Only the room owner can delete a room.",
+        "description": "Only the room owner can delete a room. After the database deletion succeeds, all cached member authorizations for the room are invalidated before HLS and WebSocket cleanup completes.",
         "operationId": "deleteWatchRoom",
         "parameters": [
           {
@@ -2884,6 +2885,7 @@
           "Watch Rooms"
         ],
         "summary": "Direct-stream a watch-room movie",
+        "description": "Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds.",
         "operationId": "streamWatchRoomMovie",
         "parameters": [
           {
@@ -2931,7 +2933,7 @@
           "Watch Rooms"
         ],
         "summary": "Headers for a direct watch-room movie stream",
-        "description": "Identical to GET but returns headers only, with no response body.",
+        "description": "Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds.",
         "operationId": "streamWatchRoomMovieHead",
         "parameters": [
           {
@@ -2981,7 +2983,7 @@
           "Watch Rooms"
         ],
         "summary": "Get the HLS playlist for a watch room",
-        "description": "Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is checked on each request and credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.",
+        "description": "Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.",
         "operationId": "watchRoomHLSManifest",
         "parameters": [
           {
@@ -3025,7 +3027,7 @@
           "Watch Rooms"
         ],
         "summary": "Get a watch-room HLS initialization file or media segment",
-        "description": "Serves an asset from a room HLS session after independently authenticating the requester and checking current room membership. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.",
+        "description": "Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.",
         "operationId": "watchRoomHLSSegment",
         "parameters": [
           {

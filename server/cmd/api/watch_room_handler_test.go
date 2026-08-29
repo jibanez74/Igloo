@@ -1104,6 +1104,41 @@ func TestDeleteWatchRoom_HTTP_SuccessForOwner(t *testing.T) {
 	}
 }
 
+func TestDeleteWatchRoom_HTTP_InvalidatesCachedAuthorization(t *testing.T) {
+	app := setupSessionTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoomWithMode(t, app, ownerID, movieID, watchRoomPlaybackModeDirect)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+	detailPath := fmt.Sprintf("/api/watch-rooms/%d", room.ID)
+	streamPath := fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID)
+
+	warmRequest := httptest.NewRequest(http.MethodGet, detailPath, nil)
+	warmResponse := httptest.NewRecorder()
+	handler.ServeHTTP(warmResponse, warmRequest)
+	if warmResponse.Code != http.StatusOK {
+		t.Fatalf("warm detail request returned %d: %s", warmResponse.Code, warmResponse.Body.String())
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, detailPath, nil)
+	deleteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusOK {
+		t.Fatalf("delete returned %d: %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+
+	for _, path := range []string{detailPath, streamPath} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden {
+			t.Errorf("GET %s returned %d after delete, want 403: %s", path, response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestDeleteWatchRoom_HTTP_CleansUpRoomHLSSession(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()

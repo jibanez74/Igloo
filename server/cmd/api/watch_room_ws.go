@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -544,80 +542,6 @@ var watchRoomUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return isAllowedWatchRoomOrigin(r)
 	},
-}
-
-func watchRoomAuthKey(roomID, userID int64) string {
-	return strconv.FormatInt(roomID, 10) + ":" + strconv.FormatInt(userID, 10)
-}
-
-// forgetWatchRoom drops every cached authorization for a room so a deleted
-// room stops serving media immediately rather than at the end of the TTL.
-func (app *Application) forgetWatchRoom(roomID int64) {
-	prefix := strconv.FormatInt(roomID, 10) + ":"
-	for key := range app.WatchRoomAuthCache.Items() {
-		if strings.HasPrefix(key, prefix) {
-			app.WatchRoomAuthCache.Delete(key)
-		}
-	}
-}
-
-// loadAuthorizedWatchRoom returns the room only when the user is a member.
-// This runs on every room media request -- each HLS segment, and each
-// byte-range request a browser issues while seeking a direct-play file -- so
-// it is a single joined query and the result is cached. sql.ErrNoRows means
-// "no room or no access" and callers do not distinguish the two.
-//
-// Only successful authorizations are cached. Caching a denial would lock a
-// user out of a room for the TTL after they join, and joining is the one way
-// membership changes; the room row itself is never updated after creation.
-// DeleteWatchRoom evicts, so the TTL only bounds the cascade paths that remove
-// a room or a member without going through that handler.
-func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, userID int64) (database.WatchRoom, error) {
-	key := watchRoomAuthKey(roomID, userID)
-
-	if cached, hit := app.WatchRoomAuthCache.Get(key); hit {
-		if room, ok := cached.(database.WatchRoom); ok {
-			return room, nil
-		}
-	}
-
-	room, err := app.Queries.GetWatchRoomForMember(ctx, database.GetWatchRoomForMemberParams{
-		ID:     roomID,
-		UserID: userID,
-	})
-	if err != nil {
-		return database.WatchRoom{}, err
-	}
-
-	app.WatchRoomAuthCache.SetDefault(key, room)
-
-	return room, nil
-}
-
-func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter, r *http.Request) (database.WatchRoom, int64, bool) {
-	userID, ok := app.currentUserID(w, r)
-	if !ok {
-		return database.WatchRoom{}, 0, false
-	}
-
-	roomID, err := parseRoomID(r)
-	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return database.WatchRoom{}, 0, false
-	}
-
-	room, err := app.loadAuthorizedWatchRoom(r.Context(), roomID, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
-			return database.WatchRoom{}, 0, false
-		}
-		app.Logger.Error("failed to authorize watch room", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return database.WatchRoom{}, 0, false
-	}
-
-	return room, userID, true
 }
 
 // Only room members may upgrade. One joined query authorizes the member and

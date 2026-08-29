@@ -74,7 +74,7 @@ type Application struct {
 	AuthLimiter                   *rateLimiter
 	DeviceLastSeen                *cache.Cache
 	DeviceAuthCache               *cache.Cache
-	WatchRoomAuthCache            *cache.Cache
+	WatchRoomAuthCache            *watchRoomAuthCache
 	StreamFileCache               *streamFileCache
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
@@ -257,8 +257,7 @@ func (app *Application) initRuntimeCaches() {
 	// Keeps bearer-token resolution off SQLite on the media hot path.
 	app.DeviceAuthCache = cache.New(deviceAuthCacheTTL, deviceAuthCacheTTL)
 
-	// Keeps room membership off SQLite on the room media hot path.
-	app.WatchRoomAuthCache = cache.New(watchRoomAuthCacheTTL, watchRoomAuthCacheTTL)
+	app.WatchRoomAuthCache = newWatchRoomAuthCache()
 
 	// Keeps the per-range-request file lookup off SQLite.
 	app.StreamFileCache = newStreamFileCache(streamFileCacheTTL, streamFileCacheSweep)

@@ -65,7 +65,7 @@ Personal sessions use a 5-minute idle TTL that every manifest and segment reques
 
 HLS requests additionally accept an optional `reload` query parameter. It is an opaque client-supplied value that is echoed into the rewritten playlist asset URLs; it is not part of the session cache key.
 
-Authentication is checked on every personal and watch-room manifest and asset request. Rewritten playlists never embed credentials, so native clients must send their cookie or bearer token again for each `init.mp4` and `segment_N.m4s` fetch. Personal asset URLs propagate the selected audio track, explicit audio profile, normalized start, playback-session UUID, and reload value so every request resolves the session that created the playlist; watch-room asset URLs propagate the room's selected audio track.
+Authentication is checked on every personal and watch-room manifest and asset request. Watch-room requests also authorize current membership each time; successful membership lookups are cached for 30 seconds, while denials and query failures are never cached. Rewritten playlists never embed credentials, so native clients must send their cookie or bearer token again for each `init.mp4` and `segment_N.m4s` fetch. Personal asset URLs propagate the selected audio track, explicit audio profile, normalized start, playback-session UUID, and reload value so every request resolves the session that created the playlist; watch-room asset URLs propagate the room's selected audio track.
 
 FFmpeg runs with `context.Background()` after session creation. This is deliberate: an HLS process must outlive the HTTP request that created it, because the browser will request the manifest and segments as separate requests. The session cache owns the lifecycle. Expiration, eviction, room cleanup, or server shutdown stops the process and removes the temp directory.
 
@@ -436,7 +436,7 @@ room:<room_id>
 
 A room stores its audio track when it is created, so the value is validated up front rather than at first playback. Room creation rejects an `audio_track` beyond the movie's audio stream count, a non-zero `audio_track` on a movie without audio, and a non-zero `audio_track` combined with direct playback, which would serve the container's first track to every member regardless of the stored value.
 
-Room sessions are isolated from personal playback sessions so a watch room cannot collide with a user's individual HLS session for the same movie. Watch rooms warm up HLS from the beginning so participants can join a prepared stream. When a room is deleted, Igloo marks the room session deleted, removes the cached session, kills the FFmpeg process if it is still running, and removes the temp directory.
+Room sessions are isolated from personal playback sessions so a watch room cannot collide with a user's individual HLS session for the same movie. Watch rooms warm up HLS from the beginning so participants can join a prepared stream. When a room is explicitly deleted, Igloo deletes the database row and immediately advances the authorization-cache generation and removes every cached member authorization for that room. Only then does it mark the HLS room session deleted, remove the cached session, kill FFmpeg if it is still running, remove the temp directory, and close room WebSockets. A membership lookup that began before deletion may finish its already-authorized request, but its older generation cannot publish a late cache fill that restores direct-play or HLS access after deletion.
 
 ## Subtitle Conversion
 

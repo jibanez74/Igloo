@@ -534,7 +534,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	if req.Mode != watchRoomPlaybackModeDirect {
 		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack), &movie, audioStreams)
 		if warmErr != nil {
-			deleteErr := app.Queries.DeleteWatchRoom(background, room.ID)
+			deleteErr := app.deleteWatchRoom(background, room.ID)
 			if deleteErr != nil {
 				app.Logger.Error(
 					"hls warm-up failed and watch room rollback delete failed",
@@ -629,7 +629,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = app.Queries.DeleteWatchRoom(r.Context(), roomID)
+	err = app.deleteWatchRoom(r.Context(), roomID)
 	if err != nil {
 		app.Logger.Error("failed to delete watch room", "error", err, "room_id", roomID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
@@ -639,7 +639,6 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 	// No-op for direct-play rooms or rooms that never warmed up.
 	app.CleanupRoomHLSSession(roomID)
 	app.WatchRoomHub.deleteRoom(roomID)
-	app.forgetWatchRoom(roomID)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
