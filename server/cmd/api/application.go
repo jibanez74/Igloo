@@ -75,7 +75,8 @@ type Application struct {
 	DeviceLastSeen                *cache.Cache
 	DeviceAuthCache               *cache.Cache
 	WatchRoomAuthCache            *watchRoomAuthCache
-	StreamFileCache               *streamFileCache
+	StreamFileCache               *generationCache[streamFile]
+	MovieStreamsCache             *generationCache[movieStreams]
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
@@ -206,16 +207,23 @@ func InitApp() (initializedApp *Application, err error) {
 		CurrentMoviesDirectory: func() sql.NullString {
 			return app.CurrentSettings().MoviesDir
 		},
-		InvalidateCommittedMovie: func(movieID int64) {
-			app.invalidateSubtitleVTTCache(movieID)
-			app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
-			app.invalidateHLSSessionsForMovie(movieID)
-		},
+		InvalidateCommittedMovie: app.invalidateCommittedMovie,
 	})
 
 	app.InitRouter()
 
 	return &app, nil
+}
+
+// invalidateCommittedMovie drops everything derived from one movie's rows after
+// the scanner commits a rescan of it. It is a method rather than a closure so
+// the test harness can wire the same list; a cache missing from here serves
+// pre-rescan data until its TTL expires.
+func (app *Application) invalidateCommittedMovie(movieID int64) {
+	app.invalidateSubtitleVTTCache(movieID)
+	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
+	app.MovieStreamsCache.invalidate(movieStreamsKey(movieID))
+	app.invalidateHLSSessionsForMovie(movieID)
 }
 
 func (app *Application) initRuntimeCaches() {
@@ -260,5 +268,8 @@ func (app *Application) initRuntimeCaches() {
 	app.WatchRoomAuthCache = newWatchRoomAuthCache()
 
 	// Keeps the per-range-request file lookup off SQLite.
-	app.StreamFileCache = newStreamFileCache(streamFileCacheTTL, streamFileCacheSweep)
+	app.StreamFileCache = newGenerationCache[streamFile](streamFileCacheTTL, streamFileCacheSweep)
+
+	// Keeps the watch-room stream-pin checks off SQLite on the same hot path.
+	app.MovieStreamsCache = newGenerationCache[movieStreams](movieStreamsCacheTTL, movieStreamsCacheSweep)
 }

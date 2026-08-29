@@ -1186,11 +1186,7 @@ func setupTestApp(t *testing.T) *Application {
 		CurrentMoviesDirectory: func() sql.NullString {
 			return app.CurrentSettings().MoviesDir
 		},
-		InvalidateCommittedMovie: func(movieID int64) {
-			app.invalidateSubtitleVTTCache(movieID)
-			app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
-			app.invalidateHLSSessionsForMovie(movieID)
-		},
+		InvalidateCommittedMovie: app.invalidateCommittedMovie,
 	})
 
 	return app

@@ -321,6 +321,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMusiciansCountStmt, err = db.PrepareContext(ctx, getMusiciansCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansCount: %w", err)
 	}
+	if q.getNotificationBadgeForUserStmt, err = db.PrepareContext(ctx, getNotificationBadgeForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNotificationBadgeForUser: %w", err)
+	}
 	if q.getOrCreateGenreStmt, err = db.PrepareContext(ctx, getOrCreateGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrCreateGenre: %w", err)
 	}
@@ -1100,6 +1103,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMusiciansCountStmt: %w", cerr)
 		}
 	}
+	if q.getNotificationBadgeForUserStmt != nil {
+		if cerr := q.getNotificationBadgeForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNotificationBadgeForUserStmt: %w", cerr)
+		}
+	}
 	if q.getOrCreateGenreStmt != nil {
 		if cerr := q.getOrCreateGenreStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getOrCreateGenreStmt: %w", cerr)
@@ -1703,6 +1711,7 @@ type Queries struct {
 	getMusiciansAlphabeticalStmt                *sql.Stmt
 	getMusiciansByAlbumIDStmt                   *sql.Stmt
 	getMusiciansCountStmt                       *sql.Stmt
+	getNotificationBadgeForUserStmt             *sql.Stmt
 	getOrCreateGenreStmt                        *sql.Stmt
 	getPlaylistCollaboratorsStmt                *sql.Stmt
 	getPlaylistMoviesPaginatedAscStmt           *sql.Stmt
@@ -1901,6 +1910,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,
 		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:                       q.getMusiciansCountStmt,
+		getNotificationBadgeForUserStmt:             q.getNotificationBadgeForUserStmt,
 		getOrCreateGenreStmt:                        q.getOrCreateGenreStmt,
 		getPlaylistCollaboratorsStmt:                q.getPlaylistCollaboratorsStmt,
 		getPlaylistMoviesPaginatedAscStmt:           q.getPlaylistMoviesPaginatedAscStmt,
