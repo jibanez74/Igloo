@@ -394,3 +394,47 @@ func TestDeleteNotification_RemovesAndThen404(t *testing.T) {
 		t.Fatalf("second delete status = %d, want 404, body = %s", w.Code, w.Body.String())
 	}
 }
+
+// The polled badge resolves the viewer's admin flag and the unread count in one
+// statement, so both halves need pinning: an admin sees the queue, and a
+// non-admin sees zero rather than the admin queue's backlog.
+func TestUnreadNotificationCount_CountsForAdminAndZeroesForNonAdmin(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
+	seedAdminQueueNotification(t, app, requester.ID, "request one")
+	seedAdminQueueNotification(t, app, requester.ID, "request two")
+
+	unreadCountFor := func(userID int64) int64 {
+		t.Helper()
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil)
+		addOpenAPITestCookie(req)
+		notificationTestServer(app, userID).ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("unread-count status = %d, want 200, body = %s", w.Code, w.Body.String())
+		}
+		assertOpenAPIExchange(t, "getUnreadNotificationCount", req, w)
+
+		var resp struct {
+			Data struct {
+				UnreadCount int64 `json:"unread_count"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		return resp.Data.UnreadCount
+	}
+
+	if got := unreadCountFor(admin.ID); got != 2 {
+		t.Errorf("admin unread_count = %d, want 2", got)
+	}
+	if got := unreadCountFor(requester.ID); got != 0 {
+		t.Errorf("non-admin unread_count = %d, want 0; the queue is admin-only", got)
+	}
+}

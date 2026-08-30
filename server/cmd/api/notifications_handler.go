@@ -52,23 +52,30 @@ func newNotificationResponse(row database.ListNotificationsForUserRow) notificat
 	}
 }
 
+// writeNotificationViewerError answers a failed viewer lookup. No user row means
+// the session outlived its user, which is a stale session (401) rather than a
+// server fault.
+func (app *Application) writeNotificationViewerError(w http.ResponseWriter, r *http.Request, userID int64, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		destroyErr := app.SessionManager.Destroy(r.Context())
+		if destroyErr != nil {
+			app.Logger.Error("failed to destroy stale notification session", "error", destroyErr, "user_id", userID)
+		}
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
+		return
+	}
+
+	app.Logger.Error("failed to load user for notifications", "error", err, "user_id", userID)
+	helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+}
+
 // notificationViewerIsAdmin reports whether the current user is an admin, which
 // determines whether the shared admin request queue is visible to them. It
 // writes the error response and returns ok=false on failure.
 func (app *Application) notificationViewerIsAdmin(w http.ResponseWriter, r *http.Request, userID int64) (bool, bool) {
 	isAdmin, err := app.Queries.GetUserIsAdmin(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			destroyErr := app.SessionManager.Destroy(r.Context())
-			if destroyErr != nil {
-				app.Logger.Error("failed to destroy stale notification session", "error", destroyErr, "user_id", userID)
-			}
-			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
-			return false, false
-		}
-
-		app.Logger.Error("failed to load user for notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		app.writeNotificationViewerError(w, r, userID, err)
 		return false, false
 	}
 
@@ -211,33 +218,25 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 }
 
 // GetUnreadNotificationCount returns just the unread count. It is intentionally
-// lightweight because the client polls it on an interval to drive the bell badge.
+// lightweight because the client polls it on an interval to drive the bell badge:
+// GetNotificationBadgeForUser folds the admin check and the count into a single
+// statement, so a poll costs one round trip on the shared connection.
 func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	isAdmin, ok := app.notificationViewerIsAdmin(w, r, userID)
-	if !ok {
+	badge, err := app.Queries.GetNotificationBadgeForUser(r.Context(), userID)
+	if err != nil {
+		app.writeNotificationViewerError(w, r, userID, err)
 		return
-	}
-
-	var unreadCount int64
-	if isAdmin {
-		var err error
-		unreadCount, err = app.Queries.CountUnreadNotificationsForUser(r.Context(), userID)
-		if err != nil {
-			app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-			return
-		}
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"unread_count": unreadCount,
+			"unread_count": badge.UnreadCount,
 		},
 	})
 }

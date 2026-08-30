@@ -81,6 +81,45 @@ func (q *Queries) DeleteNotificationForUser(ctx context.Context, notificationID 
 	return result.RowsAffected()
 }
 
+const getNotificationBadgeForUser = `-- name: GetNotificationBadgeForUser :one
+SELECT
+  u.is_admin,
+  CASE
+    WHEN u.is_admin THEN (
+      SELECT COUNT(*)
+      FROM notifications AS n
+      WHERE n.is_admin = true
+        AND NOT EXISTS (
+          SELECT 1
+          FROM notification_reads AS nr
+          WHERE nr.notification_id = n.id
+            AND nr.user_id = u.id
+        )
+    )
+    ELSE 0
+  END AS unread_count
+FROM users AS u
+WHERE u.id = ?1
+`
+
+type GetNotificationBadgeForUserRow struct {
+	IsAdmin     bool  `json:"is_admin"`
+	UnreadCount int64 `json:"unread_count"`
+}
+
+// The bell badge in one round trip. The client polls this endpoint, and the
+// database runs on a single shared connection (InitDB), so the admin check and
+// the count are folded into one statement instead of GetUserIsAdmin followed by
+// CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
+// short-circuits to 0 without touching notifications at all. No rows means the
+// session outlived its user, which the handler treats as a stale session.
+func (q *Queries) GetNotificationBadgeForUser(ctx context.Context, userID int64) (GetNotificationBadgeForUserRow, error) {
+	row := q.queryRow(ctx, q.getNotificationBadgeForUserStmt, getNotificationBadgeForUser, userID)
+	var i GetNotificationBadgeForUserRow
+	err := row.Scan(&i.IsAdmin, &i.UnreadCount)
+	return i, err
+}
+
 const listNotificationsForUser = `-- name: ListNotificationsForUser :many
 SELECT
   n.id,

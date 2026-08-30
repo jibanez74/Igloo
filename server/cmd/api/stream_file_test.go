@@ -254,10 +254,10 @@ func TestDeleteAlbumEvictsTrackStreamFileCache(t *testing.T) {
 // delete can land in between. The generation guard is what stops that reader
 // from republishing what it read.
 func TestStreamFileCacheDropsFillRacingAnInvalidation(t *testing.T) {
-	c := newStreamFileCache(time.Minute, 2*time.Minute)
+	c := newGenerationCache[streamFile](time.Minute, 2*time.Minute)
 	key := movieStreamFileKey(1)
 
-	// Captured before the query, as resolveStreamFile does.
+	// Captured before the query, as generationCache.resolve does.
 	gen := c.generation()
 
 	// The row is deleted and the key evicted while that query is in flight.

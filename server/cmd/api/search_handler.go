@@ -92,7 +92,23 @@ SELECT
   m.thumb,
   m.sort_name,
   (SELECT COUNT(*) FROM musician_albums AS ma WHERE ma.musician_id = m.id) AS album_count,
-  (SELECT COUNT(*) FROM tracks AS t WHERE t.musician_id = m.id) AS track_count
+  -- Must stay identical to GetMusiciansAlphabetical's track_count in
+  -- sqlc/queries/musicians.sql: both scan into GetMusiciansAlphabeticalRow, so a
+  -- divergence shows the same artist card with two different track counts. The
+  -- UNION of two indexed lookups is what that query uses; the equivalent OR over
+  -- tracks and track_musicians cannot use an index.
+  (
+    SELECT COUNT(*)
+    FROM (
+      SELECT t.id
+      FROM tracks AS t
+      WHERE t.musician_id = m.id
+      UNION
+      SELECT tm.track_id
+      FROM track_musicians AS tm
+      WHERE tm.musician_id = m.id
+    )
+  ) AS track_count
 FROM musicians_fts
 INNER JOIN musicians AS m ON m.id = musicians_fts.rowid
 WHERE musicians_fts MATCH ?

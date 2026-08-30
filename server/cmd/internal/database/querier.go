@@ -168,6 +168,13 @@ type Querier interface {
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
+	// The bell badge in one round trip. The client polls this endpoint, and the
+	// database runs on a single shared connection (InitDB), so the admin check and
+	// the count are folded into one statement instead of GetUserIsAdmin followed by
+	// CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
+	// short-circuits to 0 without touching notifications at all. No rows means the
+	// session outlived its user, which the handler treats as a stale session.
+	GetNotificationBadgeForUser(ctx context.Context, userID int64) (GetNotificationBadgeForUserRow, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.

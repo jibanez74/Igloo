@@ -1899,6 +1899,9 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("shift audio stream index: %v", err)
 	}
+	// A real rescan ends by calling this; the raw UPDATE above has to do the
+	// same or the pin check keeps reading the pre-drift streams from cache.
+	app.invalidateCommittedMovie(movieID)
 
 	drifted := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath)
 	if drifted.Code != http.StatusConflict {
