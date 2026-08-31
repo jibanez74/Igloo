@@ -1,20 +1,16 @@
 import {
   expect,
   test,
-  type APIResponse,
   type Locator,
   type Page,
-  type Response,
 } from "@playwright/test";
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
-import { isIgnorableFailedRequest } from "./e2e-browser-issues";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import { trackBrowserIssues } from "./e2e-browser-issues";
+import {
+  readJSON,
+} from "./e2e-api";
+import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
 
 type PlaybackProfile = {
   id: string;
@@ -88,35 +84,9 @@ type AdminCreateUserData = {
 const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
   "Download speed must be between 0 and 10000 Mbps.";
 
-async function readJSON<T>(response: APIResponse | Response) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
 function expectDefined<T>(value: T, message: string): NonNullable<T> {
   expect(value, message).not.toBeNull();
   return value as NonNullable<T>;
-}
-
-async function login(
-  page: Page,
-  env: E2EEnv,
-  email = env.email,
-  password = env.password,
-) {
-  const response = await page.context().request.post(apiURL(env, "/api/auth/login"), {
-    data: { email, password },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
-}
-
-async function logout(page: Page, env: E2EEnv) {
-  await page.context().request.delete(apiURL(env, "/api/auth/logout"), {
-    failOnStatusCode: false,
-  });
 }
 
 async function fetchPlaybackSettings(page: Page, env: E2EEnv) {
@@ -188,49 +158,6 @@ async function deleteUser(page: Page, env: E2EEnv, userId: number) {
   expect(response.status()).toBe(200);
 }
 
-function isAppApiResponse(response: Response) {
-  return new URL(response.url()).pathname.startsWith("/api/");
-}
-
-function trackBrowserIssues(page: Page) {
-  const consoleIssues: string[] = [];
-  const pageErrors: string[] = [];
-  const failedRequests: string[] = [];
-  const responseErrors: string[] = [];
-
-  page.on("console", message => {
-    if (message.type() === "error" || message.type() === "warning") {
-      consoleIssues.push(`${message.type()}: ${message.text()}`);
-    }
-  });
-  page.on("pageerror", error => pageErrors.push(error.message));
-  page.on("requestfailed", request => {
-    if (isIgnorableFailedRequest(request)) {
-      return;
-    }
-
-    failedRequests.push(
-      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
-    );
-  });
-  page.on("response", response => {
-    if (isAppApiResponse(response) && response.status() >= 500) {
-      responseErrors.push(
-        `${response.status()} ${response.request().method()} ${response.url()}`,
-      );
-    }
-  });
-
-  return {
-    assertClean() {
-      expect(consoleIssues).toEqual([]);
-      expect(pageErrors).toEqual([]);
-      expect(failedRequests).toEqual([]);
-      expect(responseErrors).toEqual([]);
-    },
-  };
-}
-
 async function expectDescriptionIncludes(
   page: Page,
   locator: Locator,
@@ -250,7 +177,7 @@ async function expectDescriptionIncludes(
   expect(descriptionText).toContain(expectedText);
 }
 
-async function expectNoHorizontalOverflow(page: Page) {
+async function expectPageFitsViewport(page: Page) {
   await expect
     .poll(() =>
       page.evaluate(
@@ -272,7 +199,7 @@ test.describe("Playback settings", () => {
     page,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, { minResponseStatus: 500 });
     const capturedRequest = {
       body: null as UpdatePlaybackSettingsRequest | null,
     };
@@ -288,7 +215,7 @@ test.describe("Playback settings", () => {
       }
     });
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
     const baselineSettings = await fetchPlaybackSettings(page, env);
 
     try {
@@ -359,7 +286,7 @@ test.describe("Playback settings", () => {
       await expect(
         page.getByRole("button", { name: "Save Settings" }),
       ).toBeVisible();
-      await expectNoHorizontalOverflow(page);
+      await expectPageFitsViewport(page);
       await page.setViewportSize({ width: 1440, height: 900 });
 
       const putResponsePromise = page.waitForResponse(response => {
@@ -426,7 +353,7 @@ test.describe("Playback settings", () => {
     page,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, { minResponseStatus: 500 });
     let playbackPutCount = 0;
 
     page.on("request", request => {
@@ -439,7 +366,7 @@ test.describe("Playback settings", () => {
       }
     });
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
 
     await page.goto(apiURL(env, "/settings/playback"), {
       waitUntil: "networkidle",
@@ -482,12 +409,12 @@ test.describe("Playback settings", () => {
   // other tab's field away.
   test("keeps preferences set in another tab", async ({ page, context }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, { minResponseStatus: 500 });
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
 
     const second = await context.newPage();
-    const secondTracker = trackBrowserIssues(second);
+    const secondTracker = trackBrowserIssues(second, { minResponseStatus: 500 });
 
     try {
       await page.goto(apiURL(env, "/settings/playback"), {
@@ -541,7 +468,7 @@ test.describe("Playback settings", () => {
   }) => {
     const env = readE2EEnv();
     const stamp = Date.now();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, { minResponseStatus: 500 });
     let regularUser: AdminUser | null = null;
     let regularPassword = "";
     const capturedRequest = {
@@ -559,7 +486,7 @@ test.describe("Playback settings", () => {
       }
     });
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
     const baselineSettings = await fetchPlaybackSettings(page, env);
 
     try {
@@ -567,8 +494,11 @@ test.describe("Playback settings", () => {
       regularUser = created.user;
       regularPassword = created.password;
 
-      await logout(page, env);
-      await login(page, env, regularUser.email, regularPassword);
+      await logoutViaApi(page.context().request, env);
+      await loginPageViaApi(page, env, {
+        email: regularUser.email,
+        password: regularPassword,
+      });
 
       await page.goto(apiURL(env, "/settings/playback"), {
         waitUntil: "networkidle",
@@ -621,8 +551,8 @@ test.describe("Playback settings", () => {
 
       await clearDevicePreferences(page);
     } finally {
-      await logout(page, env);
-      await login(page, env);
+      await logoutViaApi(page.context().request, env);
+      await loginPageViaApi(page, env);
       await restorePlaybackSettings(page, env, baselineSettings);
       if (regularUser) {
         await deleteUser(page, env, regularUser.id);

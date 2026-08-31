@@ -7,6 +7,7 @@ import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { getShuffleTracks } from "@/lib/api";
 import { renderWithQueryClient } from "@/test/helpers/render";
 import type { TrackListItemType } from "@/types";
+import { stubMediaElement } from "../helpers/dom";
 
 vi.mock("@/lib/api", () => ({
   getShuffleTracks: vi.fn(),
@@ -18,10 +19,6 @@ vi.mock("@/lib/api", () => ({
   }),
   toggleLikeTrack: vi.fn(),
 }));
-
-const originalLoad = HTMLMediaElement.prototype.load;
-const originalPlay = HTMLMediaElement.prototype.play;
-const originalPause = HTMLMediaElement.prototype.pause;
 
 const BATCH_SIZE = 10;
 
@@ -64,9 +61,7 @@ function EndlessQueueHarness() {
 
 describe("endless shuffle queue", () => {
   beforeEach(() => {
-    HTMLMediaElement.prototype.load = vi.fn();
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-    HTMLMediaElement.prototype.pause = vi.fn();
+    stubMediaElement();
 
     let nextId = 1;
     vi.mocked(getShuffleTracks).mockImplementation(async () => ({
@@ -80,9 +75,6 @@ describe("endless shuffle queue", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-    HTMLMediaElement.prototype.load = originalLoad;
-    HTMLMediaElement.prototype.play = originalPlay;
-    HTMLMediaElement.prototype.pause = originalPause;
   });
 
   it(

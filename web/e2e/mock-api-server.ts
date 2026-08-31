@@ -5,12 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import {
-  ALBUMS_PER_PAGE,
-  LIKED_TRACKS_PER_PAGE,
   MOVIES_PER_PAGE,
-  MUSICIANS_PER_PAGE,
-  SEARCH_PER_PAGE,
-  TRACKS_INFINITE_PAGE_SIZE,
 } from "../src/lib/constants";
 
 type ApiData = Record<string, unknown>;
@@ -107,8 +102,6 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword";
 const startedAt = new Date().toISOString();
 
 let nextUserId = 2;
-let nextPlaylistId = 2;
-let nextWatchRoomId = 1;
 let nextDeviceId = 1;
 
 const sessions = new Map<string, number>();
@@ -119,7 +112,6 @@ const sessions = new Map<string, number>();
 const devices: MockDevice[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
 const likedMovieIds = new Set<number>();
-const likedTrackIds = new Set<number>();
 const watchProgress = new Map<number, MovieWatchProgress>();
 const moviePlaylists = [
   {
@@ -719,102 +711,7 @@ function movieTechnicalDetails(id: number) {
   };
 }
 
-function albumDetails(id: number) {
-  const album = latestAlbums.find(item => item.id === id) ?? latestAlbums[0];
-  const albumTracks = tracks.filter(track => track.album_id.Int64 === album.id);
-  const albumMusician = musicians.find(
-    item => item.name === album.musician.String,
-  );
 
-  return {
-    album: {
-      id: album.id,
-      title: album.title,
-      sort_title: album.title,
-      musician: album.musician,
-      spotify_id: nullableString(null),
-      spotify_popularity: nullableFloat(null),
-      release_date: nullableString("2024-01-19"),
-      year: album.year,
-      total_tracks: nullableInt(albumTracks.length),
-      cover: album.cover,
-      created_at: startedAt,
-      updated_at: startedAt,
-    },
-    tracks: albumTracks.map((track, index) => ({
-      ...track,
-      sort_title: track.title,
-      file_name: `${track.title}.flac`,
-      container: "flac",
-      mime_type: "audio/flac",
-      size: 42_000_000,
-      track_index: index + 1,
-      disc: 1,
-      channels: "2",
-      channel_layout: "stereo",
-      profile: "",
-      release_date: nullableString("2024-01-19"),
-      year: album.year,
-      composer: nullableString(null),
-      copyright: nullableString(null),
-      language: nullableString("eng"),
-      created_at: startedAt,
-      updated_at: startedAt,
-    })),
-    artists: [
-      {
-        id: albumMusician?.id ?? 1,
-        name: album.musician.String || "Unknown Artist",
-        thumb:
-          albumMusician?.thumb ??
-          nullableString("/api/static/musicians/the-signals.svg"),
-        spotify_id: nullableString(null),
-      },
-    ],
-    track_genres: [],
-    album_genres: ["Indie"],
-    total_duration: albumTracks.reduce((sum, track) => sum + track.duration, 0),
-  };
-}
-
-function musicianDetails(id: number) {
-  const musician = musicians.find(item => item.id === id) ?? musicians[0];
-  const musicianTracks = tracks.filter(track => track.musician_id.Int64 === musician.id);
-
-  return {
-    musician: {
-      id: musician.id,
-      name: musician.name,
-      sort_name: musician.sort_name,
-      summary: nullableString(`${musician.name} is part of the E2E mock library.`),
-      spotify_popularity: nullableFloat(82),
-      spotify_followers: nullableInt(1234567),
-      spotify_id: nullableString(null),
-      thumb: musician.thumb,
-      created_at: startedAt,
-      updated_at: startedAt,
-    },
-    albums: latestAlbums
-      .filter(album => album.musician.String === musician.name)
-      .map(album => ({
-        id: album.id,
-        title: album.title,
-        cover: album.cover,
-        year: album.year,
-        release_date: nullableString("2024-01-19"),
-        spotify_popularity: nullableFloat(null),
-        track_count: tracks.filter(track => track.album_id.Int64 === album.id).length,
-      })),
-    tracks: musicianTracks.map((track, index) => ({
-      ...track,
-      sort_title: track.title,
-      track_index: index + 1,
-      disc: 1,
-    })),
-    genres: ["Indie", "Electronic"],
-    total_duration: musicianTracks.reduce((sum, track) => sum + track.duration, 0),
-  };
-}
 
 function playbackSettingsResponse() {
   return {
@@ -1058,32 +955,9 @@ async function handleUserRoutes(
     return true;
   }
 
-  if (url.pathname === "/api/user/pin/verify" && method === "POST") {
-    const body = await readJSONBody(request);
-    const pin = stringField(body, "pin");
-    if (!/^\d{4}$/.test(pin)) {
-      sendFailure(response, 400, "pin must be exactly 4 digits");
-      return true;
-    }
-    if (user.pin === null) {
-      sendFailure(response, 400, "no PIN is set for this account");
-      return true;
-    }
-    sendSuccess(response, { valid: pin === user.pin });
-    return true;
-  }
-
   if (url.pathname === "/api/user/avatar" && method === "PUT") {
     const body = await readJSONBody(request);
     user.avatar = stringField(body, "avatar", user.avatar ?? "").trim() || null;
-    touchUser(user);
-    sendSuccess(response, { user: publicUser(user) });
-    return true;
-  }
-
-  if (url.pathname === "/api/user/avatar/upload" && method === "POST") {
-    await readRequestBody(request);
-    user.avatar = "/api/static/avatars/uploaded.svg";
     touchUser(user);
     sendSuccess(response, { user: publicUser(user) });
     return true;
@@ -1347,15 +1221,6 @@ async function handleSettingsRoutes(
     return true;
   }
 
-  if (
-    (url.pathname === "/api/settings/scan/music" ||
-      url.pathname === "/api/settings/scan/movies") &&
-    method === "POST"
-  ) {
-    sendSuccess(response, { message: "Library scan started" }, 200, "Library scan started");
-    return true;
-  }
-
   return false;
 }
 
@@ -1412,74 +1277,8 @@ function handleMoviesRoutes(
     return true;
   }
 
-  const genreMoviesMatch = url.pathname.match(/^\/api\/movies\/genres\/(\d+)\/movies$/);
-  if (genreMoviesMatch && method === "GET") {
-    const { page, perPage, sort } = paginationParams(url);
-    const genreId = Number(genreMoviesMatch[1]);
-    const filtered = sortedMovies(sort).filter((_, index) =>
-      genreId === 10 ? index < 2 : index >= 1,
-    );
-    const { items, total, total_pages } = paginate(filtered, page, perPage);
-    sendSuccess(response, {
-      movies: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-      sort,
-    });
-    return true;
-  }
-
   if (url.pathname === "/api/movies/playlists" && method === "GET") {
     sendSuccess(response, { playlists: moviePlaylists });
-    return true;
-  }
-
-  if (url.pathname === "/api/movies/playlists" && method === "POST") {
-    const playlist = {
-      ...moviePlaylists[0],
-      id: nextPlaylistId,
-      name: `Playlist ${nextPlaylistId}`,
-      movie_count: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    nextPlaylistId += 1;
-    moviePlaylists.push(playlist);
-    sendSuccess(response, { playlist }, 201);
-    return true;
-  }
-
-  const playlistDetailsMatch = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)$/);
-  if (playlistDetailsMatch && method === "GET") {
-    const playlist =
-      moviePlaylists.find(item => item.id === Number(playlistDetailsMatch[1])) ??
-      moviePlaylists[0];
-    sendSuccess(response, {
-      playlist,
-      movie_count: playlist.movie_count,
-      is_owner: true,
-      can_edit: true,
-      collaborators: [],
-    });
-    return true;
-  }
-
-  const playlistMoviesMatch = url.pathname.match(
-    /^\/api\/movies\/playlists\/(\d+)\/movies$/,
-  );
-  if (playlistMoviesMatch && method === "GET") {
-    const { page, perPage, sort } = paginationParams(url);
-    const { items, total, total_pages } = paginate(sortedMovies(sort).slice(0, 1), page, perPage);
-    sendSuccess(response, {
-      movies: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-      sort,
-    });
     return true;
   }
 
@@ -1509,29 +1308,6 @@ function handleMoviesRoutes(
   );
   if (technicalMatch && method === "GET") {
     sendSuccess(response, movieTechnicalDetails(Number(technicalMatch[1])));
-    return true;
-  }
-
-  const likeStatusMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/like-status$/);
-  if (likeStatusMatch && method === "GET") {
-    sendSuccess(response, {
-      is_liked: likedMovieIds.has(Number(likeStatusMatch[1])),
-    });
-    return true;
-  }
-
-  const likeMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/like$/);
-  if (likeMatch && method === "POST") {
-    const movieId = Number(likeMatch[1]);
-    if (likedMovieIds.has(movieId)) {
-      likedMovieIds.delete(movieId);
-    } else {
-      likedMovieIds.add(movieId);
-    }
-    sendSuccess(response, {
-      movie_id: movieId,
-      is_liked: likedMovieIds.has(movieId),
-    });
     return true;
   }
 
@@ -1568,27 +1344,6 @@ function handleMoviesRoutes(
     return true;
   }
 
-  const watchedMatch = url.pathname.match(
-    /^\/api\/movies\/(\d+)\/watch-progress\/watched$/,
-  );
-  if (watchedMatch && method === "PUT") {
-    const movieId = Number(watchedMatch[1]);
-    const current = watchProgress.get(movieId) ?? {
-      progress_sec: null,
-      duration_sec: null,
-      watched: false,
-      updated_at: null,
-    };
-    const next = {
-      ...current,
-      watched: !current.watched,
-      updated_at: new Date().toISOString(),
-    };
-    watchProgress.set(movieId, next);
-    sendSuccess(response, { movie_id: movieId, watched: next.watched });
-    return true;
-  }
-
   const streamMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/stream$/);
   if (streamMatch && method === "GET") {
     sendNoContent(response);
@@ -1619,136 +1374,6 @@ function handleMusicRoutes(
     return true;
   }
 
-  if (url.pathname === "/api/music/albums" && method === "GET") {
-    const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
-    const perPage = Math.max(
-      1,
-      Number.parseInt(url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE), 10),
-    );
-    const { items, total, total_pages } = paginate(latestAlbums, page, perPage);
-    sendSuccess(response, {
-      albums: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-    });
-    return true;
-  }
-
-  const albumDetailsMatch = url.pathname.match(/^\/api\/music\/albums\/details\/(\d+)$/);
-  if (albumDetailsMatch && method === "GET") {
-    sendSuccess(response, albumDetails(Number(albumDetailsMatch[1])));
-    return true;
-  }
-
-  if (url.pathname === "/api/music/musicians" && method === "GET") {
-    const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
-    const perPage = Math.max(
-      1,
-      Number.parseInt(
-        url.searchParams.get("per_page") ?? String(MUSICIANS_PER_PAGE),
-        10,
-      ),
-    );
-    const { items, total, total_pages } = paginate(musicians, page, perPage);
-    sendSuccess(response, {
-      musicians: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-    });
-    return true;
-  }
-
-  const musicianDetailsMatch = url.pathname.match(/^\/api\/music\/musicians\/(\d+)$/);
-  if (musicianDetailsMatch && method === "GET") {
-    sendSuccess(response, musicianDetails(Number(musicianDetailsMatch[1])));
-    return true;
-  }
-
-  if (url.pathname === "/api/music/playlists" && method === "GET") {
-    sendSuccess(response, {
-      playlists: [
-        {
-          id: 1,
-          user_id: 1,
-          name: "Mock listening",
-          description: nullableString("E2E playlist"),
-          cover_image: nullableString("/api/static/albums/warm-static.svg"),
-          is_public: false,
-          created_at: startedAt,
-          updated_at: startedAt,
-          track_count: 2,
-          total_duration: 402_000,
-          is_owner: true,
-          can_edit: true,
-        },
-      ],
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
-    sendSuccess(response, { liked_track_ids: [...likedTrackIds] });
-    return true;
-  }
-
-  const trackLikeMatch = url.pathname.match(/^\/api\/music\/tracks\/(\d+)\/like$/);
-  if (trackLikeMatch && method === "POST") {
-    const trackId = Number(trackLikeMatch[1]);
-    if (likedTrackIds.has(trackId)) {
-      likedTrackIds.delete(trackId);
-    } else {
-      likedTrackIds.add(trackId);
-    }
-    sendSuccess(response, {
-      track_id: trackId,
-      is_liked: likedTrackIds.has(trackId),
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/music/tracks" && method === "GET") {
-    const limit = Math.max(
-      1,
-      Number.parseInt(
-        url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
-        10,
-      ),
-    );
-    const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") ?? "0", 10));
-    sendSuccess(response, {
-      tracks: tracks.slice(offset, offset + limit),
-      total: tracks.length,
-      offset,
-      limit,
-      has_more: offset + limit < tracks.length,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/music/tracks/liked" && method === "GET") {
-    const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
-    const perPage = Math.max(
-      1,
-      Number.parseInt(
-        url.searchParams.get("per_page") ?? String(LIKED_TRACKS_PER_PAGE),
-        10,
-      ),
-    );
-    sendSuccess(response, {
-      tracks: [],
-      total: 0,
-      page,
-      per_page: perPage,
-      total_pages: 1,
-      has_more: false,
-    });
-    return true;
-  }
-
   return false;
 }
 
@@ -1769,66 +1394,6 @@ function handleTmdbRoutes(
     return true;
   }
 
-  const detailsMatch = url.pathname.match(/^\/api\/tmdb\/movies\/(\d+)$/);
-  if (detailsMatch && method === "GET") {
-    const movie = theaterMovies.find(item => item.id === Number(detailsMatch[1])) ?? theaterMovies[0];
-    sendSuccess(response, {
-      movie: {
-        ...movie,
-        runtime: 104,
-        status: "Released",
-        tagline: "Dinner service above the atmosphere.",
-        budget: 1_000_000,
-        revenue: 4_000_000,
-        homepage: "",
-        imdb_id: "tt601601",
-        production_companies: [
-          {
-            id: 1,
-            logo_path: "/igloo-pictures.svg",
-            name: "Igloo Pictures",
-            origin_country: "US",
-          },
-        ],
-        genres: [
-          { id: 12, name: "Adventure" },
-          { id: 35, name: "Comedy" },
-        ],
-        credits: {
-          cast: [
-            {
-              id: 1,
-              name: "Riley Stone",
-              character: "Mika",
-              profile_path: "/riley-stone.jpg",
-              order: 0,
-            },
-          ],
-          crew: [
-            {
-              id: 1,
-              name: "Jordan Vale",
-              job: "Director",
-              department: "Directing",
-              profile_path: "/jordan-vale.jpg",
-            },
-          ],
-        },
-        videos: { results: [] },
-      },
-    });
-    return true;
-  }
-
-  if (
-    (url.pathname === "/api/tmdb/movies/search" ||
-      /^\/api\/movies\/\d+\/tmdb-search$/.test(url.pathname)) &&
-    method === "POST"
-  ) {
-    sendSuccess(response, { results: [] });
-    return true;
-  }
-
   return false;
 }
 
@@ -1836,134 +1401,11 @@ function handleWatchRoomRoutes(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  user: User,
 ) {
   const method = request.method ?? "GET";
-
-  if (url.pathname === "/api/users" && method === "GET") {
-    sendSuccess(response, {
-      users: users
-        .filter(item => item.id !== user.id)
-        .map(item => ({
-          id: item.id,
-          name: item.name,
-          email: item.email,
-          avatar: item.avatar,
-        })),
-    });
-    return true;
-  }
 
   if (url.pathname === "/api/watch-rooms" && method === "GET") {
     sendSuccess(response, { rooms: [] });
-    return true;
-  }
-
-  if (url.pathname === "/api/watch-rooms" && method === "POST") {
-    const roomId = nextWatchRoomId;
-    nextWatchRoomId += 1;
-    sendSuccess(response, { room_id: roomId }, 201);
-    return true;
-  }
-
-  const roomMatch = url.pathname.match(/^\/api\/watch-rooms\/(\d+)$/);
-  if (roomMatch && method === "DELETE") {
-    sendSuccess(response, {});
-    return true;
-  }
-
-  if (roomMatch && method === "GET") {
-    const movie = libraryMovies[0];
-    sendSuccess(response, {
-      room: {
-        id: Number(roomMatch[1]),
-        movie_id: movie.id,
-        movie_title: movie.title,
-        movie_poster: movie.poster_path.String,
-        owner: {
-          id: user.id,
-          name: user.name,
-          avatar: user.avatar,
-        },
-        members: [
-          {
-            id: user.id,
-            name: user.name,
-            avatar: user.avatar,
-          },
-        ],
-        playback_mode: "direct",
-        audio_track: 0,
-        subtitle_track: null,
-        is_owner: true,
-        created_at: startedAt,
-      },
-    });
-    return true;
-  }
-
-  return false;
-}
-
-function handleSearchRoutes(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-) {
-  const method = request.method ?? "GET";
-  if (method !== "GET") return false;
-
-  if (url.pathname === "/api/search") {
-    sendSuccess(response, {
-      movies: libraryMovies.slice(0, 2),
-      albums: latestAlbums,
-      musicians,
-      tracks,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/search/movies") {
-    sendSuccess(response, {
-      movies: libraryMovies,
-      total: libraryMovies.length,
-      page: 1,
-      per_page: SEARCH_PER_PAGE,
-      total_pages: 1,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/search/albums") {
-    sendSuccess(response, {
-      albums: latestAlbums,
-      total: latestAlbums.length,
-      page: 1,
-      per_page: SEARCH_PER_PAGE,
-      total_pages: 1,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/search/musicians") {
-    sendSuccess(response, {
-      musicians,
-      total: musicians.length,
-      page: 1,
-      per_page: SEARCH_PER_PAGE,
-      total_pages: 1,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/search/tracks") {
-    sendSuccess(response, {
-      tracks,
-      total: tracks.length,
-      page: 1,
-      per_page: SEARCH_PER_PAGE,
-      total_pages: 1,
-    });
     return true;
   }
 
@@ -2068,11 +1510,6 @@ function handleNotificationRoutes(
     return true;
   }
 
-  if (url.pathname === "/api/notifications" && method === "GET") {
-    sendSuccess(response, { notifications: [], unread_count: 0 });
-    return true;
-  }
-
   return false;
 }
 
@@ -2129,8 +1566,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (handleMoviesRoutes(request, response, url)) return;
       if (handleMusicRoutes(request, response, url)) return;
       if (handleTmdbRoutes(request, response, url)) return;
-      if (handleWatchRoomRoutes(request, response, url, user)) return;
-      if (handleSearchRoutes(request, response, url)) return;
+      if (handleWatchRoomRoutes(request, response, url)) return;
       if (handleNotificationRoutes(request, response, url)) return;
       if (await handleDeviceRoutes(request, response, url)) return;
     }

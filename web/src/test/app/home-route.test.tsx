@@ -1,38 +1,18 @@
 import type React from "react";
-import { act, render, screen } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
 } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { renderRoute } from "../helpers/render-route";
 
 vi.mock("@/components/app/AppShell", () => ({
   default: ({ children }: { children: React.ReactNode }) => (
     <main id="main">{children}</main>
   ),
 }));
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
 
 function authUser() {
   return {
@@ -153,55 +133,11 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
   return fetchMock;
 }
 
-function createHomeQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderHomeRoute(options: MockHomeFetchOptions = {}) {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockHomeFetch(options);
-  const queryClient = createHomeQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: ["/"],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
 
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return {
-    queryClient,
-    router,
-    ...view,
-  };
+  return renderRoute("/");
 }
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
 
 describe("home route motion", () => {
   it("renders the home route with section-level motion contracts", async () => {

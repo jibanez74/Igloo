@@ -5,6 +5,7 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { renderWithQueryClient } from "@/test/helpers/render";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import type { PlayableTrackData } from "@/types";
+import { stubMediaElement } from "../helpers/dom";
 
 vi.mock("@/lib/api", async importOriginal => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -13,10 +14,6 @@ vi.mock("@/lib/api", async importOriginal => ({
     data: { liked_track_ids: [] },
   }),
 }));
-
-const originalLoad = HTMLMediaElement.prototype.load;
-const originalPlay = HTMLMediaElement.prototype.play;
-const originalPause = HTMLMediaElement.prototype.pause;
 
 function rawTrack({
   id,
@@ -82,16 +79,11 @@ function renderQueue(rawTracks: PlayableTrackData[], startTrackId: number) {
 
 describe("playTrackFromList", () => {
   beforeEach(() => {
-    HTMLMediaElement.prototype.load = vi.fn();
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-    HTMLMediaElement.prototype.pause = vi.fn();
+    stubMediaElement();
   });
 
   afterEach(() => {
     cleanup();
-    HTMLMediaElement.prototype.load = originalLoad;
-    HTMLMediaElement.prototype.play = originalPlay;
-    HTMLMediaElement.prototype.pause = originalPause;
   });
 
   const alabaster = rawTrack({

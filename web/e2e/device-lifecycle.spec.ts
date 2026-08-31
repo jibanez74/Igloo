@@ -1,12 +1,8 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import { readE2EEnv } from "./e2e-env";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import type { ApiResponse } from "./e2e-api";
+import { loginPageViaApi } from "./e2e-auth";
 
 type InitiateData = {
   code: string;
@@ -28,14 +24,6 @@ type DevicesData = {
 const env = readE2EEnv();
 const deviceName = "Mock Living Room TV";
 const renamedDeviceName = "Mock Bedroom TV";
-
-async function login(page: Page) {
-  const response = await page.request.post("/api/auth/login", {
-    data: { email: env.email, password: env.password },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-}
 
 async function initiate(request: APIRequestContext): Promise<InitiateData> {
   const response = await request.post("/api/quick-connect/initiate", {
@@ -77,7 +65,7 @@ test.describe("Device lifecycle (mocked)", () => {
 
   test.beforeEach(async ({ page }) => {
     // Mock device state persists across specs in a run; clean up leftovers.
-    await login(page);
+    await loginPageViaApi(page, env, { assertBody: false });
     const response = await page.request.get("/api/devices", {
       failOnStatusCode: false,
     });

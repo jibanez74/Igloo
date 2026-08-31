@@ -1,15 +1,10 @@
 import type React from "react";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
-import { routeTree } from "@/routeTree.gen";
 import type { AuthUser } from "@/types";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { renderRoute } from "../helpers/render-route";
 
 const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
@@ -48,21 +43,6 @@ function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
 }
 
 function setupAccountFetch(user: AuthUser = testUser()) {
@@ -126,43 +106,9 @@ function setupAccountFetch(user: AuthUser = testUser()) {
   return { requests };
 }
 
-function createAccountQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderAccountRoute(user = testUser()) {
-  window.scrollTo = vi.fn();
   const { requests } = setupAccountFetch(user);
-  const queryClient = createAccountQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: ["/settings/account"],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
+  const { router } = await renderRoute("/settings/account");
 
   await screen.findByText("Profile Information");
   return { requests, router };

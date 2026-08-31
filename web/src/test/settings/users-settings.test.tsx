@@ -1,14 +1,9 @@
 import type React from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
-import { routeTree } from "@/routeTree.gen";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { renderRoute } from "../helpers/render-route";
 
 const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
@@ -72,21 +67,6 @@ function defaultUsers() {
       is_admin: false,
     }),
   ];
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
 }
 
 function setupUsersFetch(users: TestAdminUser[] = defaultUsers()) {
@@ -153,43 +133,9 @@ function setupUsersFetch(users: TestAdminUser[] = defaultUsers()) {
   return { requests };
 }
 
-function createUsersQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderUsersRoute(users = defaultUsers()) {
-  window.scrollTo = vi.fn();
   const { requests } = setupUsersFetch(users);
-  const queryClient = createUsersQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: ["/settings/users"],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
+  await renderRoute("/settings/users");
 
   await screen.findByRole("button", { name: "Add User" });
   await screen.findByText("Dana Scully");

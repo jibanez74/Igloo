@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useMovieWatchProgressSaver } from "@/hooks/useMovieWatchProgressSaver";
 
 const updateMovieWatchProgress = vi.hoisted(() => vi.fn());
@@ -25,10 +25,6 @@ const successfulUpdate = {
   error: false as const,
   data: { watched: false },
 };
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe("movie watch progress saver", () => {
   it("queues the exit snapshot after an in-flight save", async () => {

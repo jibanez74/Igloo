@@ -1,19 +1,15 @@
 import {
   expect,
   test,
-  type APIResponse,
   type Page,
-  type Response,
 } from "@playwright/test";
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
-import { isIgnorableFailedRequest } from "./e2e-browser-issues";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import { trackBrowserIssues } from "./e2e-browser-issues";
+import {
+  readJSON,
+} from "./e2e-api";
+import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
 
 type AdminUser = {
   id: number;
@@ -28,75 +24,6 @@ type AdminUser = {
 type UsersData = {
   users: AdminUser[];
 };
-
-async function readJSON<T>(response: APIResponse) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
-function isAppApiResponse(response: Response) {
-  return new URL(response.url()).pathname.startsWith("/api/");
-}
-
-function trackBrowserIssues(page: Page) {
-  const consoleIssues: string[] = [];
-  const pageErrors: string[] = [];
-  const failedRequests: string[] = [];
-  const responseErrors: string[] = [];
-
-  page.on("console", message => {
-    if (message.type() === "error" || message.type() === "warning") {
-      consoleIssues.push(`${message.type()}: ${message.text()}`);
-    }
-  });
-  page.on("pageerror", error => pageErrors.push(error.message));
-  page.on("requestfailed", request => {
-    if (isIgnorableFailedRequest(request)) {
-      return;
-    }
-
-    failedRequests.push(
-      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
-    );
-  });
-  page.on("response", response => {
-    if (isAppApiResponse(response) && response.status() >= 400) {
-      responseErrors.push(
-        `${response.status()} ${response.request().method()} ${response.url()}`,
-      );
-    }
-  });
-
-  return {
-    assertClean() {
-      expect(consoleIssues).toEqual([]);
-      expect(pageErrors).toEqual([]);
-      expect(failedRequests).toEqual([]);
-      expect(responseErrors).toEqual([]);
-    },
-  };
-}
-
-async function login(
-  page: Page,
-  env: E2EEnv,
-  email = env.email,
-  password = env.password,
-) {
-  const response = await page.context().request.post(apiURL(env, "/api/auth/login"), {
-    data: { email, password },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
-}
-
-async function logout(page: Page, env: E2EEnv) {
-  await page.context().request.delete(apiURL(env, "/api/auth/logout"), {
-    failOnStatusCode: false,
-  });
-}
 
 async function fetchAdminUsers(page: Page, env: E2EEnv) {
   const response = await page.context().request.get(
@@ -167,7 +94,7 @@ test.describe("Users settings", () => {
       }
     });
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
     await cleanupAuditUsers(page, env, prefix);
 
     try {
@@ -257,16 +184,19 @@ test.describe("Users settings", () => {
       await expect(page.getByRole("dialog", { name: "Reset Password" })).toBeHidden();
       expect(resetPasswordPutCount).toBe(1);
 
-      await logout(page, env);
-      await login(page, env, editedEmail, resetPassword);
+      await logoutViaApi(page.context().request, env);
+      await loginPageViaApi(page, env, {
+        email: editedEmail,
+        password: resetPassword,
+      });
       await page.goto(apiURL(env, "/settings/users"), { waitUntil: "networkidle" });
       await expectAppPath(page, env, "/settings/account");
       await expect(page.getByRole("tab", { name: "Account" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Playback" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Users" })).toHaveCount(0);
 
-      await logout(page, env);
-      await login(page, env);
+      await logoutViaApi(page.context().request, env);
+      await loginPageViaApi(page, env);
       await page.goto(apiURL(env, "/settings/users"), { waitUntil: "networkidle" });
       await expect(page.getByText(editedName)).toBeVisible();
 
@@ -323,8 +253,8 @@ test.describe("Users settings", () => {
       );
       expect(deletedLogin.status()).toBe(401);
     } finally {
-      await logout(page, env);
-      await login(page, env);
+      await logoutViaApi(page.context().request, env);
+      await loginPageViaApi(page, env);
       await cleanupAuditUsers(page, env, prefix);
     }
 

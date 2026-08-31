@@ -3,19 +3,16 @@ import {
   test,
   type APIResponse,
   type Page,
-  type Response,
 } from "@playwright/test";
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
 import { isIgnorableFailedRequest } from "./e2e-browser-issues";
+import {
+  readJSON,
+} from "./e2e-api";
+import { loginPageViaApi } from "./e2e-auth";
 
 type RouteHandlerRoute = Parameters<Parameters<Page["route"]>[1]>[0];
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
 
 type GeneralSettings = {
   tmdb_key: string | null;
@@ -65,10 +62,6 @@ function requestFromSettings(settings: GeneralSettings): GeneralSettingsRequest 
   };
 }
 
-async function readJSON<T>(response: APIResponse | Response) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
 function expectDefined<T>(value: T, message: string): NonNullable<T> {
   expect(value, message).not.toBeNull();
   return value as NonNullable<T>;
@@ -81,25 +74,6 @@ async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
   expect(body.error, body.message).toBe(false);
   expect(body.data).toBeTruthy();
   return body.data!;
-}
-
-async function login(page: Page, env: E2EEnv) {
-  const loginResponse = await page.context().request.post(apiURL(env, "/api/auth/login"), {
-    data: {
-      email: env.email,
-      password: env.password,
-    },
-    failOnStatusCode: false,
-  });
-  expect(loginResponse.status()).toBe(200);
-
-  const loginBody = await readJSON<unknown>(loginResponse);
-  expect(loginBody.error, loginBody.message).toBe(false);
-
-  const authResponse = await page.context().request.get(apiURL(env, "/api/auth/user"), {
-    failOnStatusCode: false,
-  });
-  expect(authResponse.status()).toBe(200);
 }
 
 async function fetchGeneralSettings(page: Page, env: E2EEnv) {
@@ -357,7 +331,7 @@ test.describe("General settings", () => {
       }
     });
 
-    await login(page, env);
+    await loginPageViaApi(page, env, { verifyUser: true });
     const baselineSettings = await fetchGeneralSettings(page, env);
     const baselineRequest = requestFromSettings(baselineSettings);
     const stamp = Date.now();

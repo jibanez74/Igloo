@@ -15,7 +15,9 @@ export default defineConfig(({ mode }) => {
 
       proxy: {
         "/api": {
-          target: "http://127.0.0.1:8080",
+          // E2E_MOCK_API_PORT lets the Playwright run put the mock API on a
+          // free port; plain `bun run dev` keeps talking to the Go server.
+          target: `http://127.0.0.1:${process.env.E2E_MOCK_API_PORT ?? "8080"}`,
           changeOrigin: true,
         },
       },
@@ -79,6 +81,23 @@ export default defineConfig(({ mode }) => {
       // 5s vitest default under parallel-suite load and cold module import,
       // producing flaky timeouts in CI. Give them headroom.
       testTimeout: 15000,
+      // Undo spies and stubbed globals between tests so no suite can leak setup
+      // into the next. Individual files therefore need no restore hooks.
+      restoreMocks: true,
+      unstubGlobals: true,
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "json-summary", "html"],
+        reportsDirectory: "./coverage",
+        include: ["src/**/*.{ts,tsx}"],
+        exclude: [
+          "src/test/**",
+          "src/routeTree.gen.ts",
+          "src/types/openapi.gen.ts",
+          "src/main.tsx",
+          "src/**/*.d.ts",
+        ],
+      },
     },
 
     plugins: [

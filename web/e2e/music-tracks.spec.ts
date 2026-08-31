@@ -1,33 +1,14 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   ALBUMS_PER_PAGE,
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "../src/lib/constants";
-
-type NullableString = {
-  String: string;
-  Valid: boolean;
-};
-
-type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
-
-function nullableString(value = ""): NullableString {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null): NullableInt64 {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
+import {
+  fulfillJSON,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
 
 function apiResponse(data: unknown) {
   return {
@@ -100,14 +81,6 @@ const mockPlaylist = {
   is_owner: true,
   can_edit: true,
 };
-
-async function fulfillJSON(route: Route, body: unknown) {
-  await route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
-}
 
 async function mockMusicApi(
   page: Page,
@@ -222,7 +195,7 @@ async function mockMusicApi(
   });
 }
 
-async function expectNoHorizontalOverflow(page: Page) {
+async function expectNoOverflowingElements(page: Page) {
   const overflow = await page.evaluate(() => {
     const root = document.scrollingElement ?? document.documentElement;
     const offenders = Array.from(document.querySelectorAll<HTMLElement>("body *"))
@@ -360,7 +333,7 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
       return Number(statusText?.match(/^\d+/)?.[0] ?? 0);
     })
     .toBeGreaterThanOrEqual(TRACKS_INFINITE_PAGE_SIZE);
-  await expectNoHorizontalOverflow(page);
+  await expectNoOverflowingElements(page);
 
   for (let index = 0; index < 8; index += 1) {
     await page.evaluate(() => {
@@ -402,7 +375,7 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
   });
 
   await expect(page.getByRole("button", { name: "More actions for Track 0001" })).toBeVisible();
-  await expectNoHorizontalOverflow(page);
+  await expectNoOverflowingElements(page);
   expect(consoleIssues).toEqual([]);
 });
 
@@ -422,6 +395,6 @@ test("tracks tab fits on mobile", async ({ page }) => {
 
   await expect(page.getByRole("list", { name: "Tracks" })).toBeVisible();
   await expect(page.getByRole("button", { name: "More actions for Track 0001" })).toBeVisible();
-  await expectNoHorizontalOverflow(page);
+  await expectNoOverflowingElements(page);
   expect(consoleIssues).toEqual([]);
 });

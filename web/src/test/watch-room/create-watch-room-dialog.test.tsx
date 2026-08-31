@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps, PropsWithChildren } from "react";
@@ -21,6 +21,7 @@ import type {
   SubtitleType,
   VideoStreamType,
 } from "@/types/movies";
+import { createTestQueryClient } from "../helpers/render";
 
 const createWatchRoomMock = vi.fn();
 const getMovieTechnicalDetailsMock = vi.fn();
@@ -67,19 +68,6 @@ vi.mock("@/lib/toast-helpers", async () => {
       showValidationErrorMock(...args),
   };
 });
-
-function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
 
 function success<T extends Record<string, unknown>>(
   data: T,

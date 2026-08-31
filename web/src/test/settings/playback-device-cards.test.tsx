@@ -61,7 +61,6 @@ describe("device playback cards", () => {
   beforeEach(() => {
     localStorage.clear();
     resetDevicePlaybackPreferencesCache();
-    vi.restoreAllMocks();
   });
 
   function renderCards() {

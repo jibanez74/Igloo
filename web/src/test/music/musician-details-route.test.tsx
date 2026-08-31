@@ -1,18 +1,16 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
 import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
-
-const DETAIL_PAGE_ANIMATION_MARKER =
-  "animate-in fade-in slide-in-from-bottom-2";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { renderRoute } from "../helpers/render-route";
+import {
+  getDetailMotionWrappers,
+  getHeroMotionWrapper,
+  getLowerMotionWrapper,
+} from "../helpers/motion";
 
 const { audioPlayerActionsMock, audioPlayerNowPlayingMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
@@ -34,42 +32,6 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
 vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
   useAudioPlayerNowPlaying: () => audioPlayerNowPlayingMock,
 }));
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function musicianTrack(
   id: number,
@@ -230,75 +192,15 @@ function mockMusicianDetailsFetch() {
   vi.stubGlobal("fetch", fetchMock);
 }
 
-function createMusicianDetailsQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderMusicianDetailsRoute(initialEntry = "/music/musician/20") {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockMusicianDetailsFetch();
 
-  const queryClient = createMusicianDetailsQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return {
-    router,
-    queryClient,
-    ...view,
-  };
-}
-
-function getDetailMotionWrappers(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("div")).filter((element) =>
-    element.className.includes(DETAIL_PAGE_ANIMATION_MARKER),
-  );
-}
-
-function getHeroMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-75"),
-  );
-}
-
-function getLowerMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-150"),
-  );
+  return renderRoute(initialEntry);
 }
 
 afterEach(() => {
   audioPlayerNowPlayingMock.currentTrackId = null;
   audioPlayerNowPlayingMock.isPlaying = false;
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 describe("musician details route accessibility", () => {

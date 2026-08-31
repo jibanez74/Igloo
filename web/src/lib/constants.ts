@@ -413,6 +413,11 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 
 // Shared motion tokens and class contracts. Keep reduced-motion behavior in
 // these constants so components stay consistent.
+//
+// MICRO and PAGE have no direct importer: they are the declared duration scale
+// that the class strings below are checked against (motion-contracts.test.ts
+// derives `duration-150` / `duration-300` from them). They are load-bearing, not
+// dead — deleting them silently removes that agreement check.
 export const MOTION_DURATION_MICRO_MS = 150;
 export const MOTION_DURATION_STANDARD_MS = 200;
 export const MOTION_DURATION_PAGE_MS = 300;

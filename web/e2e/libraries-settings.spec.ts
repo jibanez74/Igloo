@@ -7,17 +7,14 @@ import {
   type APIResponse,
   type Locator,
   type Page,
-  type Response,
 } from "@playwright/test";
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
-import { isIgnorableFailedRequest } from "./e2e-browser-issues";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import { trackBrowserIssues } from "./e2e-browser-issues";
+import {
+  readJSON,
+} from "./e2e-api";
+import { loginPageViaApi } from "./e2e-auth";
 
 type LibrarySettings = {
   movies_dir: string | null;
@@ -45,10 +42,6 @@ const requiredControlNames = [
   "Save library paths",
 ];
 
-async function readJSON<T>(response: APIResponse | Response) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
 async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
   expect(response.status()).toBe(expectedStatus);
 
@@ -56,20 +49,6 @@ async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
   expect(body.error, body.message).toBe(false);
   expect(body.data).toBeTruthy();
   return body.data!;
-}
-
-async function login(page: Page, env: E2EEnv) {
-  const response = await page.context().request.post(apiURL(env, "/api/auth/login"), {
-    data: {
-      email: env.email,
-      password: env.password,
-    },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
 }
 
 async function fetchLibrarySettings(page: Page, env: E2EEnv) {
@@ -96,49 +75,6 @@ async function restoreLibrarySettings(
 
   const body = await readJSON<{ settings: LibrarySettings }>(response);
   expect(body.error, body.message).toBe(false);
-}
-
-function isAppApiResponse(response: Response) {
-  return new URL(response.url()).pathname.startsWith("/api/");
-}
-
-function trackBrowserIssues(page: Page) {
-  const consoleIssues: string[] = [];
-  const pageErrors: string[] = [];
-  const failedRequests: string[] = [];
-  const responseErrors: string[] = [];
-
-  page.on("console", message => {
-    if (message.type() === "error" || message.type() === "warning") {
-      consoleIssues.push(`${message.type()}: ${message.text()}`);
-    }
-  });
-  page.on("pageerror", error => pageErrors.push(error.message));
-  page.on("requestfailed", request => {
-    if (isIgnorableFailedRequest(request)) {
-      return;
-    }
-
-    failedRequests.push(
-      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
-    );
-  });
-  page.on("response", response => {
-    if (isAppApiResponse(response) && response.status() >= 400) {
-      responseErrors.push(
-        `${response.status()} ${response.request().method()} ${response.url()}`,
-      );
-    }
-  });
-
-  return {
-    assertClean() {
-      expect(consoleIssues).toEqual([]);
-      expect(pageErrors).toEqual([]);
-      expect(failedRequests).toEqual([]);
-      expect(responseErrors).toEqual([]);
-    },
-  };
 }
 
 async function expectDescriptionIncludes(
@@ -301,7 +237,7 @@ test.describe("Libraries settings", () => {
       Object.values(paths).map(path => mkdir(path, { recursive: true })),
     );
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
     const baseline = await fetchLibrarySettings(page, env);
     const tracker = trackBrowserIssues(page);
 

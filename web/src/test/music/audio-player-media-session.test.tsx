@@ -1,5 +1,5 @@
 import { createRef, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -18,6 +18,9 @@ import {
   MOTION_PLAYER_CHROME_ENTER_CLASS,
 } from "@/lib/constants";
 import type { TrackType } from "@/types";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
+import { createTestQueryClient } from "../helpers/render";
+import { stubMediaElement } from "../helpers/dom";
 
 vi.mock("@/lib/api", async importOriginal => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -32,12 +35,7 @@ vi.mock("@/lib/api", async importOriginal => ({
 function Providers({ children }: PropsWithChildren) {
   const [queryClient] = useState(
     () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: false },
-          mutations: { retry: false },
-        },
-      }),
+      createTestQueryClient(),
   );
 
   return (
@@ -53,24 +51,6 @@ const originalNavigatorMediaSessionDescriptor = Object.getOwnPropertyDescriptor(
   navigator,
   "mediaSession",
 );
-const originalLoad = HTMLMediaElement.prototype.load;
-const originalPlay = HTMLMediaElement.prototype.play;
-const originalPause = HTMLMediaElement.prototype.pause;
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
 function track(overrides: Partial<TrackType> = {}): TrackType {
   return {
     id: 42,
@@ -237,9 +217,7 @@ function restoreProperty(
 
 describe("AudioPlayer Media Session", () => {
   beforeEach(() => {
-    HTMLMediaElement.prototype.load = vi.fn();
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-    HTMLMediaElement.prototype.pause = vi.fn();
+    stubMediaElement();
 
     Object.defineProperty(globalThis, "MediaMetadata", {
       configurable: true,
@@ -263,9 +241,6 @@ describe("AudioPlayer Media Session", () => {
       originalMediaMetadataDescriptor,
     );
 
-    HTMLMediaElement.prototype.load = originalLoad;
-    HTMLMediaElement.prototype.play = originalPlay;
-    HTMLMediaElement.prototype.pause = originalPause;
   });
 
   it("does not sync position when audio duration is NaN", async () => {

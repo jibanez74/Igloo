@@ -11,6 +11,9 @@ function envInt(name: string, fallback: number) {
 const hasExternalBaseURL = Boolean(process.env.E2E_BASE_URL);
 const webPort = envInt("E2E_WEB_PORT", 3000);
 const defaultBaseURL = `http://127.0.0.1:${webPort}`;
+// Must match the port the mock server binds (e2e/mock-api-server.ts) and the
+// one Vite proxies /api to (vite.config.ts). All three read this variable.
+const mockApiPort = envInt("E2E_MOCK_API_PORT", 8080);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -32,13 +35,15 @@ export default defineConfig({
     : [
         {
           command: "bun ./e2e/mock-api-server.ts",
-          url: "http://127.0.0.1:8080/health",
+          url: `http://127.0.0.1:${mockApiPort}/health`,
           reuseExistingServer: false,
           timeout: 30_000,
+          env: { E2E_MOCK_API_PORT: String(mockApiPort) },
         },
         {
           command:
             `bun run dev --host 127.0.0.1 --port ${webPort} --strictPort --open=false`,
+          env: { E2E_MOCK_API_PORT: String(mockApiPort) },
           url: defaultBaseURL,
           reuseExistingServer: false,
           timeout: 60_000,

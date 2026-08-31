@@ -16,6 +16,7 @@ import type {
   LibraryMovieDetailsMovieType,
   MovieWatchProgressType,
 } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const toggleLikeMovieMock = vi.fn();
 const setMovieWatchedMock = vi.fn();
@@ -78,19 +79,6 @@ vi.mock("@/lib/toast-helpers", async () => {
     showActionFailed: (...args: unknown[]) => showActionFailedMock(...args),
   };
 });
-
-function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
 
 function success<T extends Record<string, unknown>>(
   data: T,
