@@ -19,10 +19,7 @@ export default function MediaNotFound({
 }) {
   return (
     <div>
-      <Alert
-        variant="destructive"
-        className="border-destructive/20 bg-destructive/10 text-destructive"
-      >
+      <Alert className="border-destructive/20 bg-destructive/10 text-destructive">
         <AlertCircle className="size-4" aria-hidden="true" />
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>{message}</AlertDescription>
