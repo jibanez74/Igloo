@@ -532,29 +532,6 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 	return i, err
 }
 
-const getMovieByTmdbID = `-- name: GetMovieByTmdbID :one
-SELECT
-  id,
-  title,
-  year
-FROM movies
-WHERE tmdb_id = ?
-LIMIT 1
-`
-
-type GetMovieByTmdbIDRow struct {
-	ID    int64         `json:"id"`
-	Title string        `json:"title"`
-	Year  sql.NullInt64 `json:"year"`
-}
-
-func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (GetMovieByTmdbIDRow, error) {
-	row := q.queryRow(ctx, q.getMovieByTmdbIDStmt, getMovieByTmdbID, tmdbID)
-	var i GetMovieByTmdbIDRow
-	err := row.Scan(&i.ID, &i.Title, &i.Year)
-	return i, err
-}
-
 const getMovieExtraVideos = `-- name: GetMovieExtraVideos :many
 SELECT
   ev.id,
@@ -904,9 +881,9 @@ type GetMoviesByTmdbIDsRow struct {
 	TmdbID sql.NullInt64 `json:"tmdb_id"`
 }
 
-// Batch form of GetMovieByTmdbID for the TMDB search results mapper, which
-// annotates a whole page of results with "already in library". One indexed
-// pass over idx_movies_tmdb_id instead of a point query per result row.
+// Resolves a whole page of TMDB ids for the search results mapper, which
+// annotates each result with "already in library". One indexed pass over
+// idx_movies_tmdb_id instead of a point query per result row.
 func (q *Queries) GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetMoviesByTmdbIDsRow, error) {
 	query := getMoviesByTmdbIDs
 	var queryParams []interface{}

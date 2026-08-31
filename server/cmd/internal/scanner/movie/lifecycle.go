@@ -37,12 +37,8 @@ func (s *Scanner) Start() StartResult {
 func (s *Scanner) runMovieScan() {
 	defer s.guard.Finish()
 
+	// Start has already rejected an unset directory before spawning this.
 	directory := s.currentMoviesDirectory()
-	if !directory.Valid || directory.String == "" {
-		s.logger.Info("skipping movie library scan: movies directory is not configured")
-		return
-	}
-
 	s.logger.Info(fmt.Sprintf("scanning movies directory: %s", directory.String))
 
 	ctx := s.scanContext

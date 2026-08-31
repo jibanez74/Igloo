@@ -53,10 +53,8 @@ func BestFitHLSFallbackProfile(sourceHeight int64) string {
 			continue
 		}
 
-		cfg, ok := HLSProfileConfigs[profileID]
-		if !ok {
-			continue
-		}
+		// Every allowed profile except remux has a config entry.
+		cfg := HLSProfileConfigs[profileID]
 		if sourceHeight >= int64(cfg.Height) {
 			return profileID
 		}

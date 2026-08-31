@@ -1284,9 +1284,6 @@ func TestCreateHLSSession_ExplicitAudioResolution(t *testing.T) {
 			if profile.SampleRate != helpers.HLS_EXPLICIT_AUDIO_SAMPLE_RATE {
 				t.Errorf("SampleRate = %d, want %d", profile.SampleRate, helpers.HLS_EXPLICIT_AUDIO_SAMPLE_RATE)
 			}
-			if profile.Copy {
-				t.Error("Copy = true, want false: explicit requests always encode")
-			}
 			if session.RequestedAudioProfile != tt.request {
 				t.Error("session did not store the requested audio profile")
 			}
@@ -1565,7 +1562,6 @@ func TestLegacyEffectiveHLSAudio(t *testing.T) {
 		ChannelLayout: "5.1(side)",
 		Bitrate:       "192000",
 		SampleRate:    48000,
-		Copy:          true,
 	}
 	if *copied != want {
 		t.Fatalf("copied profile = %+v, want %+v", *copied, want)

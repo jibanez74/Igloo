@@ -46,7 +46,6 @@ type HLSResolvedAudioProfile struct {
 	ChannelLayout string
 	Bitrate       string
 	SampleRate    int
-	Copy          bool
 }
 
 // hlsAudioEncoderByCodec maps public codec values to FFmpeg encoder names.

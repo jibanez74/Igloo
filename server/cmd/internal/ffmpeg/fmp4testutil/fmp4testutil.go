@@ -119,7 +119,7 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 	})
 	mdatPayload = append(mdatPayload, videoSample...)
 
-	mfhd := mp4TestMFHD(0)
+	mfhd := mp4TestMFHD()
 	moofSize := mp4TestBoxHeaderSize + len(mfhd)
 	for range tracks {
 		moofSize += mp4TestTrafSize(1)
@@ -133,7 +133,7 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 		trafsWithOffsets = append(trafsWithOffsets, Box(
 			"traf",
 			mp4TestTFHD(track.trackID),
-			mp4TestTFDT(0),
+			mp4TestTFDT(),
 			mp4TestTRUN([]sampleSpec{sample}),
 		))
 		currentOffset += len(sample.Data)
@@ -226,12 +226,14 @@ func mp4TestMVHD() []byte {
 	return Box("mvhd", payload)
 }
 
-func mp4TestMFHD(sequenceNumber uint32) []byte {
-	return Box("mfhd", FullBoxPayload(0, U32(sequenceNumber)))
+// mp4TestMFHD and mp4TestTFDT write the single-fragment values the fixtures
+// need: sequence number 0 and base media decode time 0.
+func mp4TestMFHD() []byte {
+	return Box("mfhd", FullBoxPayload(0, U32(0)))
 }
 
-func mp4TestTFDT(baseMediaDecodeTime uint32) []byte {
-	return Box("tfdt", FullBoxPayload(0, U32(baseMediaDecodeTime)))
+func mp4TestTFDT() []byte {
+	return Box("tfdt", FullBoxPayload(0, U32(0)))
 }
 
 func mp4TestTFHD(trackID uint32) []byte {
@@ -284,7 +286,7 @@ func mp4TestTRUNSize(sampleCount int) int {
 }
 
 func mp4TestTrafSize(sampleCount int) int {
-	return mp4TestBoxHeaderSize + len(mp4TestTFHD(0)) + len(mp4TestTFDT(0)) + mp4TestTRUNSize(sampleCount)
+	return mp4TestBoxHeaderSize + len(mp4TestTFHD(0)) + len(mp4TestTFDT()) + mp4TestTRUNSize(sampleCount)
 }
 
 // FullBoxPayload builds an ISO-BMFF full-box payload: a zero version byte, the

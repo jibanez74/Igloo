@@ -25,19 +25,10 @@ SELECT
     WHERE id = ?
   );
 
--- name: GetMovieByTmdbID :one
-SELECT
-  id,
-  title,
-  year
-FROM movies
-WHERE tmdb_id = ?
-LIMIT 1;
-
 -- name: GetMoviesByTmdbIDs :many
--- Batch form of GetMovieByTmdbID for the TMDB search results mapper, which
--- annotates a whole page of results with "already in library". One indexed
--- pass over idx_movies_tmdb_id instead of a point query per result row.
+-- Resolves a whole page of TMDB ids for the search results mapper, which
+-- annotates each result with "already in library". One indexed pass over
+-- idx_movies_tmdb_id instead of a point query per result row.
 SELECT
   id,
   tmdb_id

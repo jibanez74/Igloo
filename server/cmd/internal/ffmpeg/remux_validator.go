@@ -338,11 +338,11 @@ func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize i
 		for _, run := range fragment.Runs {
 			if run.DataOffset != nil {
 				dataOffset := int64(*run.DataOffset)
+				// baseOffset is always >= 0 (a moof start, or a base_data_offset
+				// parseTFHD rejected above MaxInt64) and dataOffset is an int32,
+				// so only the positive side can overflow.
 				if dataOffset > 0 && baseOffset > math.MaxInt64-dataOffset {
 					return 0, fmt.Errorf("sample data offset overflows")
-				}
-				if dataOffset < 0 && baseOffset < math.MinInt64-dataOffset {
-					return 0, fmt.Errorf("sample data offset underflows")
 				}
 				cursor = baseOffset + dataOffset
 				cursorInitialized = true

@@ -169,6 +169,9 @@ SELECT
   -- track_musicians. A UNION of two indexed lookups rather than an OR over both
   -- tables: the OR form cannot use an index and scans every track per musician.
   -- UNION (not UNION ALL) preserves the distinct-track count.
+  -- searchMusiciansSQL in cmd/api/search_handler.go must keep this identical: it
+  -- scans into this same row type, so a divergence shows the same artist card
+  -- with two different track counts.
   (
     SELECT COUNT(*)
     FROM (

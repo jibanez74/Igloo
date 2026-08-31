@@ -1834,14 +1834,14 @@ func TestWriteHLSPlaylistHeaders_EffectiveAudio(t *testing.T) {
 			name: "copied legacy AAC reports the stored source values",
 			audio: &helpers.HLSResolvedAudioProfile{
 				Codec: helpers.HLSAudioCodecAAC, Channels: 6, ChannelLayout: "5.1(side)",
-				Bitrate: "192000", SampleRate: 48000, Copy: true,
+				Bitrate: "192000", SampleRate: 48000,
 			},
 			wantCodec: "aac", wantChannels: "6", wantBitrate: "192000",
 		},
 		{
 			name: "copied legacy AAC omits an unknown source channel count",
 			audio: &helpers.HLSResolvedAudioProfile{
-				Codec: helpers.HLSAudioCodecAAC, Channels: 0, Bitrate: "192000", Copy: true,
+				Codec: helpers.HLSAudioCodecAAC, Channels: 0, Bitrate: "192000",
 			},
 			wantCodec: "aac", wantBitrate: "192000",
 		},
