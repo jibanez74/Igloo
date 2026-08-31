@@ -399,6 +399,8 @@ func parseRunLengthEntries(payload []byte, boxName string, decode func(raw uint3
 		return nil, fmt.Errorf("invalid %s payload", boxName)
 	}
 	entryCount := int(binary.BigEndian.Uint32(payload[4:8]))
+	// entryCount < 0 needs a 32-bit int, so it cannot fire on the supported
+	// platforms; it keeps the size arithmetic below sound regardless.
 	if entryCount < 0 || len(payload) < 8+entryCount*8 {
 		return nil, fmt.Errorf("truncated %s table", boxName)
 	}
@@ -438,6 +440,8 @@ func parseStss(moov []byte, stbl isoBox, totalSamples uint64) ([]uint64, error) 
 		return nil, fmt.Errorf("invalid stss payload")
 	}
 	entryCount := int(binary.BigEndian.Uint32(payload[4:8]))
+	// entryCount < 0 needs a 32-bit int, so it cannot fire on the supported
+	// platforms; it keeps the size arithmetic below sound regardless.
 	if entryCount < 0 || len(payload) < 8+entryCount*4 {
 		return nil, fmt.Errorf("truncated stss table")
 	}
@@ -492,6 +496,8 @@ func parseElstShift(moov []byte, trak isoBox, mediaTimescale, movieTimescale uin
 	if version == 1 {
 		entrySize = 20
 	}
+	// entryCount < 0 needs a 32-bit int, so it cannot fire on the supported
+	// platforms; it keeps the size arithmetic below sound regardless.
 	if entryCount < 0 || len(payload) < 8+entryCount*entrySize {
 		return 0, fmt.Errorf("truncated elst table")
 	}

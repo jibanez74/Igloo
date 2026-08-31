@@ -112,6 +112,10 @@ func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext
 			return scanned, skipped, errCount
 		}
 
+		// runMovieScan's walk already filters unchanged files before batching,
+		// so this never fires on that path. It is what makes the function
+		// correct when called on its own, and it is covered by
+		// TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe.
 		if scan.movieUnchanged(file.Path, file.Size) {
 			skipped++
 			continue

@@ -602,6 +602,9 @@ func parseTRUN(
 			}
 			position -= 4
 		}
+		// position starts below perSampleBytes and the loop runs once per set
+		// field, so one of the returns above always fires. Go still needs a
+		// terminating statement here.
 		return trackRun{}, fmt.Errorf("invalid trun sample fields")
 	}
 
@@ -680,6 +683,10 @@ func parseTRUN(
 }
 
 func validateSyncSample(sample []byte, nalLengthSize int) error {
+	// Production callers get nalLengthSize from parseVideoTrackConfig, which
+	// can only return 1..4, so this rejects nothing there. Kept because the
+	// loop below would read past the sample otherwise, and because the parser
+	// tests call this directly with out-of-range sizes.
 	if nalLengthSize < 1 || nalLengthSize > 4 {
 		return fmt.Errorf("invalid NAL length size %d", nalLengthSize)
 	}

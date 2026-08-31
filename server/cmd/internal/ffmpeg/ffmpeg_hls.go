@@ -99,6 +99,9 @@ func hlsEncoderForcesIDR(encoder string, caps Capabilities) bool {
 	case "h264_qsv":
 		return caps.SupportsEncoderOption("h264_qsv", "forced_idr")
 	default:
+		// hlsVideoEncoder only ever produces the four encoders above, so this
+		// is unreachable today; refusing to claim the guarantee is the right
+		// answer for any encoder added to that table without a case here.
 		return false
 	}
 }

@@ -52,6 +52,9 @@ type Scanner struct {
 type StartStatus int
 
 const (
+	// Callers only branch on the two failure statuses and let the success case
+	// fall through, so StartStarted is never named outside tests. It is the
+	// zero value and cannot be dropped.
 	StartStarted StartStatus = iota
 	StartNotConfigured
 	StartAlreadyRunning

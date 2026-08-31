@@ -51,6 +51,11 @@ type CrewCredit struct {
 	ProfilePath string `json:"profile_path"`
 }
 
+// TmdbMovie is serialized straight to the client by GetMovieByTmdbID, so a
+// field with no Go reader is not necessarily unused: Homepage and Status are
+// in the required list of the TmdbMovie schema in docs/openapi.json, and the
+// in-theaters page reads status and genre ids. Check the contract and web/src
+// before dropping anything here.
 type TmdbMovie struct {
 	TmdbID              int                 `json:"id"`
 	Title               string              `json:"title"`
@@ -299,6 +304,8 @@ func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, in
 		return bodyBytes, resp.StatusCode, nil
 	}
 
+	// Every path on the final attempt returns, so this is unreachable; Go still
+	// needs a terminating statement.
 	return nil, 0, errors.New("tmdb request failed")
 }
 
