@@ -92,7 +92,6 @@ describe("theme preference", () => {
 
     afterEach(() => {
       vi.useRealTimers();
-      vi.unstubAllGlobals();
     });
 
     const hasSwitchClass = () =>

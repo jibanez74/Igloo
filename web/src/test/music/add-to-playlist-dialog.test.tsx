@@ -1,13 +1,13 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
 import { PLAYLISTS_KEY } from "@/lib/constants";
 import type { ApiResponseType, PlaylistsListResponseType } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const getPlaylistsMock = vi.fn();
-const addTracksToPlaylistMock = vi.fn();
 
 vi.mock("@/lib/api", async () => {
   const actual =
@@ -15,8 +15,8 @@ vi.mock("@/lib/api", async () => {
 
   return {
     ...actual,
-    addTracksToPlaylist: (...args: unknown[]) =>
-      addTracksToPlaylistMock(...args),
+    // Stubbed only to keep the dialog off the network; no test asserts on it.
+    addTracksToPlaylist: vi.fn(),
     getPlaylists: () => getPlaylistsMock(),
   };
 });
@@ -50,13 +50,7 @@ function playlists(): ApiResponseType<PlaylistsListResponseType> {
 }
 
 function renderDialog() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
+  const queryClient = createTestQueryClient();
   const playlistsResponse = playlists();
   queryClient.setQueryData([PLAYLISTS_KEY], playlistsResponse);
   getPlaylistsMock.mockResolvedValue(playlistsResponse);
@@ -82,7 +76,6 @@ function renderDialog() {
 
 beforeEach(() => {
   getPlaylistsMock.mockReset();
-  addTracksToPlaylistMock.mockReset();
 });
 
 describe("AddToPlaylistDialog", () => {

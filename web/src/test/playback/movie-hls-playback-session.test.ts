@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   getOrCreateMovieHlsPlaybackSessionId,
   stopMovieHlsPlaybackSession,
@@ -20,11 +20,6 @@ function createMemoryStorage(initial: Record<string, string> = {}): MemoryStorag
     entries: () => Array.from(values.entries()),
   };
 }
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
 
 describe("movie HLS playback sessions", () => {
   it("reuses the same stored UUID for the same movie", () => {

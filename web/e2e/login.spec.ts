@@ -1,7 +1,6 @@
 import {
   expect,
   test,
-  type APIResponse,
   type BrowserContext,
   type Page,
   type Response,
@@ -9,23 +8,14 @@ import {
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
 import {
+  isAppApiResponse,
   isExpectedUnauthorizedResourceMessage,
   isIgnorableFailedRequest,
 } from "./e2e-browser-issues";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
-
-async function readJSON<T>(response: APIResponse | Response) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
-function isAppApiResponse(response: Response) {
-  return new URL(response.url()).pathname.startsWith("/api/");
-}
+import {
+  readJSON,
+} from "./e2e-api";
+import { logoutViaApi } from "./e2e-auth";
 
 function isExpectedLoggedOutAuthResponse(response: Response) {
   return response.status() === 401 && response.url().includes("/api/auth/user");
@@ -112,12 +102,6 @@ async function expectAppPath(page: Page, env: E2EEnv, pathname: string) {
     new URL(env.baseURL).origin,
   );
   await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
-}
-
-async function logout(context: BrowserContext, env: E2EEnv) {
-  await context.request.delete(apiURL(env, "/api/auth/logout"), {
-    failOnStatusCode: false,
-  });
 }
 
 async function expectUnauthenticated(context: BrowserContext, env: E2EEnv) {
@@ -323,7 +307,7 @@ async function expectLoginLayout(page: Page) {
 
 test.describe("Login screen", () => {
   test.afterEach(async ({ context }) => {
-    await logout(context, readE2EEnv());
+    await logoutViaApi(context.request, readE2EEnv());
   });
 
   test("renders accessibly and blocks empty submissions before the API call", async ({
@@ -343,7 +327,7 @@ test.describe("Login screen", () => {
       }
     });
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
     await page.goto(apiURL(env, "/login"), { waitUntil: "networkidle" });
     await expectLoginControls(page);
 
@@ -399,7 +383,7 @@ test.describe("Login screen", () => {
         isExpectedInvalidLoginResponse(response),
     );
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
     await page.goto(apiURL(env, "/login"), { waitUntil: "networkidle" });
     await expectLoginControls(page);
 
@@ -430,7 +414,7 @@ test.describe("Login screen", () => {
     const env = readE2EEnv();
     let tracker = trackBrowserIssues(page);
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
     await page.goto(apiURL(env, "/login"), {
       waitUntil: "networkidle",
     });
@@ -447,7 +431,7 @@ test.describe("Login screen", () => {
     await expectAuthenticated(context, env);
     tracker.assertClean();
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
     await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
       waitUntil: "networkidle",
     });
@@ -470,7 +454,7 @@ test.describe("Login screen", () => {
     });
     await expectAppPath(page, env, "/settings/account");
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
     await page.goto(apiURL(env, "/login?redirect=https://example.com"), {
       waitUntil: "networkidle",
     });
@@ -499,7 +483,7 @@ test.describe("Login screen", () => {
     const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
     await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
       waitUntil: "networkidle",
     });
@@ -546,7 +530,7 @@ test.describe("Login screen", () => {
     const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
 
-    await logout(context, env);
+    await logoutViaApi(context.request, env);
 
     for (const viewport of [
       { width: 1440, height: 900 },

@@ -75,7 +75,6 @@ describe("ProgressBar", () => {
         onSeek={vi.fn()}
         variant="trailer"
         ariaLabel="Seek through trailer"
-        groupLabel="Playback progress"
       />,
     );
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   expectNoHorizontalOverflow,
@@ -12,49 +12,22 @@ import type {
   SearchTracksResponseType,
 } from "../src/types/search";
 import { SEARCH_PER_PAGE } from "../src/lib/constants";
-
-type NullableString = {
-  String: string;
-  Valid: boolean;
-};
-
-type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
+import {
+  fulfillJSON,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
 
 type ApiResponse<T> = {
   error: false;
   data: T;
 };
 
-function nullableString(value = ""): NullableString {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null): NullableInt64 {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
 function apiResponse<T>(data: T): ApiResponse<T> {
   return {
     error: false,
     data,
   };
-}
-
-async function fulfillJSON(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
 }
 
 const movieResult = {

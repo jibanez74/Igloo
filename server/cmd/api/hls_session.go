@@ -302,7 +302,6 @@ func legacyEffectiveHLSAudio(stream *database.AudioStream, copyAudio bool) *help
 			ChannelLayout: strings.TrimSpace(stream.ChannelLayout.String),
 			Bitrate:       bitrate,
 			SampleRate:    int(stream.SampleRate.Int64),
-			Copy:          true,
 		}
 	}
 

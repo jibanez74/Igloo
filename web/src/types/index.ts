@@ -163,7 +163,6 @@ export type {
   WatchRoomMemberType,
   WatchRoomType,
   WatchRoomDetailType,
-  WatchRoomInviteUserType,
   WatchRoomInviteUsersResponseType,
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,

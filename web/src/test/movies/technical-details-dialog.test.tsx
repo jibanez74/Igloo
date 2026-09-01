@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import TechnicalDetailsDialog from "@/components/movies/TechnicalDetailsDialog";
@@ -7,20 +7,8 @@ import type {
   ApiResponseType,
   MovieTechnicalDetailsResponse,
 } from "@/types";
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
+import { nullableFloat64, nullableInt64 } from "../helpers/fixtures";
+import { createTestQueryClient } from "../helpers/render";
 
 function technicalDetails(
   runtimeMinutes: number | null,
@@ -46,13 +34,7 @@ function technicalDetails(
 }
 
 function createQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
+  return createTestQueryClient();
 }
 
 function renderDialog(runtimeMinutes: number | null) {

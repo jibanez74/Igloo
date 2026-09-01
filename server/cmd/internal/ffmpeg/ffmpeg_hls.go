@@ -59,16 +59,14 @@ type HLSParams struct {
 	Capabilities    Capabilities
 }
 
-// hlsHWTranscode maps hardware acceleration device IDs to FFmpeg encoder names
-// and any direct decode flag used by that path. CPU and unknown devices fall
-// back to libx264.
-var hlsHWTranscodeByDevice = map[string]struct {
-	HWAccel string
-	Encoder string
-}{
-	helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:  {HWAccel: "videotoolbox", Encoder: "h264_videotoolbox"},
-	helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA: {HWAccel: "cuda", Encoder: "h264_nvenc"},
-	helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:  {HWAccel: "qsv", Encoder: "h264_qsv"},
+// hlsEncoderByDevice maps hardware acceleration device IDs to FFmpeg encoder
+// names. CPU and unknown devices fall back to libx264. Decode flags are not
+// table-driven: only two of the three devices enable one, and each is gated on
+// a different condition (see the -hwaccel switch in buildHLSArgs).
+var hlsEncoderByDevice = map[string]string{
+	helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:  "h264_videotoolbox",
+	helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA: "h264_nvenc",
+	helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:  "h264_qsv",
 }
 
 // hlsCopiesVideo reports whether a session hands FFmpeg -c:v copy. The remux
@@ -80,11 +78,11 @@ func hlsCopiesVideo(p HLSParams) bool {
 // hlsVideoEncoder resolves the encoder a transcode uses for an already-resolved
 // hardware device. Unknown devices fall back to libx264, same as the CPU path.
 func hlsVideoEncoder(hwDevice string) string {
-	hw, ok := hlsHWTranscodeByDevice[hwDevice]
+	encoder, ok := hlsEncoderByDevice[hwDevice]
 	if !ok {
 		return "libx264"
 	}
-	return hw.Encoder
+	return encoder
 }
 
 // hlsEncoderForcesIDR reports whether -force_key_frames yields IDR frames on
@@ -101,6 +99,9 @@ func hlsEncoderForcesIDR(encoder string, caps Capabilities) bool {
 	case "h264_qsv":
 		return caps.SupportsEncoderOption("h264_qsv", "forced_idr")
 	default:
+		// hlsVideoEncoder only ever produces the four encoders above, so this
+		// is unreachable today; refusing to claim the guarantee is the right
+		// answer for any encoder added to that table without a case here.
 		return false
 	}
 }
@@ -174,7 +175,6 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 
 	deviceDecision := ResolveHLSDevice(p.HWDevice, p.Capabilities)
 	hwLower := deviceDecision.Effective
-	hw, hwKnown := hlsHWTranscodeByDevice[hwLower]
 	useNvidiaCUDAFilters := !copyVideo && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA &&
 		p.Capabilities.SupportsNvidiaCUDAFilters(p.TonemapHDR)
 	useIntelQSVScale := !copyVideo &&
@@ -202,8 +202,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		// is intentionally not enabled here: its generic hwaccel does not fall
 		// back as reliably across driver stacks.
 		switch {
-		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
-			args = append(args, "-hwaccel", hw.HWAccel)
+		case hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+			args = append(args, "-hwaccel", "videotoolbox")
 		case hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA && p.Capabilities.SupportsHWAccel("cuda"):
 			args = append(args, "-hwaccel", "cuda")
 		}
@@ -332,9 +332,6 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 // not come from the server-owned tables in helpers, so a bug upstream cannot
 // smuggle raw query values into the FFmpeg command line.
 func validateHLSAudioProfile(profile *helpers.HLSResolvedAudioProfile) error {
-	if profile.Copy {
-		return fmt.Errorf("explicit audio profiles always encode; copy is not supported")
-	}
 	if profile.Encoder == "" || profile.Encoder != helpers.HLSAudioEncoder(profile.Codec) {
 		return fmt.Errorf("invalid HLS audio encoder %q for codec %q", profile.Encoder, profile.Codec)
 	}

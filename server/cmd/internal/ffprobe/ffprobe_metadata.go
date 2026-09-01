@@ -67,15 +67,13 @@ func (s Stream) Rotation() (int64, bool) {
 	return 0, false
 }
 
+// StreamDisposition carries only the flags Igloo acts on: cover-art detection
+// and the default/forced track hints that reach the database and direct-play
+// eligibility. ffprobe reports several more; decoding them earns nothing.
 type StreamDisposition struct {
-	AttachedPic     int `json:"attached_pic"`
-	Default         int `json:"default"`
-	Forced          int `json:"forced"`
-	Comment         int `json:"comment"`
-	Dub             int `json:"dub"`
-	Original        int `json:"original"`
-	HearingImpaired int `json:"hearing_impaired"`
-	VisualImpaired  int `json:"visual_impaired"`
+	AttachedPic int `json:"attached_pic"`
+	Default     int `json:"default"`
+	Forced      int `json:"forced"`
 }
 
 type StreamTags struct {

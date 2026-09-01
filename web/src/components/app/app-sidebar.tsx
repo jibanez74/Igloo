@@ -109,7 +109,6 @@ export default function AppSidebar({
 
   return (
     <Sidebar
-      collapsible="icon"
       className="border-sidebar-border bg-sidebar **:data-[slot=sidebar-inner]:bg-sidebar"
       {...props}
     >

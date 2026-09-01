@@ -13,25 +13,31 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-if (!window.matchMedia) {
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
-}
+// jsdom implements none of the following, so each is a stub rather than a
+// fallback: matchMedia, scrollIntoView, scrollTo, and ResizeObserver are all
+// undefined under jsdom 29.
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
 
-if (!window.HTMLElement.prototype.scrollIntoView) {
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
-}
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
+
+// Route transitions and list virtualization call scrollTo; jsdom logs a loud
+// "Not implemented" for it otherwise.
+Object.defineProperty(window, "scrollTo", {
+  writable: true,
+  value: vi.fn(),
+});
 
 // jsdom's canPlayType answers "" for everything, which would make the
 // direct-play probe refuse every file in unit tests. Mimic Chrome instead:
@@ -42,19 +48,17 @@ if (!window.HTMLElement.prototype.scrollIntoView) {
 window.HTMLMediaElement.prototype.canPlayType = (type: string) =>
   type.toLowerCase().includes("mpegurl") ? "" : "probably";
 
-if (!window.ResizeObserver) {
-  class ResizeObserverMock {
-    observe = vi.fn();
-    unobserve = vi.fn();
-    disconnect = vi.fn();
-  }
-
-  Object.defineProperty(window, "ResizeObserver", {
-    writable: true,
-    value: ResizeObserverMock,
-  });
-  Object.defineProperty(globalThis, "ResizeObserver", {
-    writable: true,
-    value: ResizeObserverMock,
-  });
+class ResizeObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
 }
+
+Object.defineProperty(window, "ResizeObserver", {
+  writable: true,
+  value: ResizeObserverMock,
+});
+Object.defineProperty(globalThis, "ResizeObserver", {
+  writable: true,
+  value: ResizeObserverMock,
+});

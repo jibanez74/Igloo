@@ -1,10 +1,11 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import { DEVICES_KEY } from "@/lib/constants";
 import type { DeviceType } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const lookupQuickConnectMock = vi.fn();
 const approveQuickConnectMock = vi.fn();
@@ -46,12 +47,7 @@ function devicesResponse(devices: DeviceType[]) {
 }
 
 function renderCard() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      mutations: { retry: false },
-      queries: { retry: false },
-    },
-  });
+  const queryClient = createTestQueryClient();
 
   render(
     <QueryClientProvider client={queryClient}>

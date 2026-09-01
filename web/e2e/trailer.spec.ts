@@ -1,23 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { apiURL, readE2EEnv } from "./e2e-env";
 import { mockYouTubePlayer } from "./mock-youtube-player";
 import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
-
-async function login(page: Page, env: E2EEnv) {
-  const response = await page.context().request.post(
-    apiURL(env, "/api/auth/login"),
-    {
-      data: {
-        email: env.email,
-        password: env.password,
-      },
-      failOnStatusCode: false,
-    },
-  );
-  expect(response.status()).toBe(200);
-}
+import { loginPageViaApi } from "./e2e-auth";
 
 async function expectTrailerChrome(page: Page) {
   await expect(page.getByRole("dialog", { name: "Trailer" })).toBeVisible();
@@ -64,7 +51,7 @@ test.describe("Trailer playback chrome", () => {
       const env = readE2EEnv();
       const browserIssues = trackBrowserIssues(page);
 
-      await login(page, env);
+      await loginPageViaApi(page, env, { assertBody: false });
       await mockYouTubePlayer(page);
       await page.emulateMedia({ reducedMotion });
       await page.setViewportSize(viewport);
@@ -87,7 +74,7 @@ test.describe("Trailer playback chrome", () => {
     const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await login(page, env);
+    await loginPageViaApi(page, env, { assertBody: false });
     await mockYouTubePlayer(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(
@@ -119,7 +106,7 @@ test.describe("Trailer playback chrome", () => {
     const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await login(page, env);
+    await loginPageViaApi(page, env, { assertBody: false });
     await mockYouTubePlayer(page, { failFirstLoad: true });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(
@@ -146,7 +133,7 @@ test.describe("Trailer playback chrome", () => {
     const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await login(page, env);
+    await loginPageViaApi(page, env, { assertBody: false });
     await mockYouTubePlayer(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(

@@ -42,6 +42,12 @@ const (
 	mkvVideoTrackNumber = 1
 	mkvAudioTrackNumber = 2
 	defaultScaleNs      = 1_000_000
+
+	// Fixed timescales for MP4 fixtures: the media (mdhd) timescale every
+	// video trak is built with, and the movie (mvhd) timescale edit-list
+	// durations are expressed in.
+	mp4FixtureTimescale      = 12800
+	mp4FixtureMovieTimescale = 1000
 )
 
 // BuildMKV renders a minimal but structurally valid Matroska file.
@@ -53,7 +59,7 @@ func BuildMKV(opts MKVOptions) []byte {
 
 	info := buildMKVInfo(scale, opts.DurationSec)
 	tracks := buildMKVTracks(opts.CueExtraTrack || opts.CueOnlyExtraTrack)
-	cluster := ebmlElement(0x1F43B675, ebmlChild(0xE7, ebmlUintPayload(0))) // Timestamp 0
+	cluster := ebmlElement(0x1F43B675, ebmlElement(0xE7, ebmlUintPayload(0))) // Timestamp 0
 	var cues []byte
 	if !opts.OmitCues {
 		cues = buildMKVCues(opts, scale)
@@ -97,11 +103,11 @@ func BuildMKV(opts MKVOptions) []byte {
 	}
 
 	ebmlHeader := ebmlElement(0x1A45DFA3, concat(
-		ebmlChild(0x4286, ebmlUintPayload(1)), // EBMLVersion
-		ebmlChild(0x42F7, ebmlUintPayload(1)), // EBMLReadVersion
-		ebmlChild(0x4282, []byte("matroska")), // DocType
-		ebmlChild(0x4287, ebmlUintPayload(4)), // DocTypeVersion
-		ebmlChild(0x4285, ebmlUintPayload(2)), // DocTypeReadVersion
+		ebmlElement(0x4286, ebmlUintPayload(1)), // EBMLVersion
+		ebmlElement(0x42F7, ebmlUintPayload(1)), // EBMLReadVersion
+		ebmlElement(0x4282, []byte("matroska")), // DocType
+		ebmlElement(0x4287, ebmlUintPayload(4)), // DocTypeVersion
+		ebmlElement(0x4285, ebmlUintPayload(2)), // DocTypeReadVersion
 	))
 	segment := ebmlElement(0x18538067, segmentPayload)
 
@@ -109,27 +115,27 @@ func BuildMKV(opts MKVOptions) []byte {
 }
 
 func buildMKVInfo(scaleNs uint64, durationSec float64) []byte {
-	children := ebmlChild(0x2AD7B1, ebmlUintPayload(scaleNs))
+	children := ebmlElement(0x2AD7B1, ebmlUintPayload(scaleNs))
 	if durationSec > 0 {
 		durationTicks := durationSec * 1e9 / float64(scaleNs)
 		raw := make([]byte, 8)
 		binary.BigEndian.PutUint64(raw, math.Float64bits(durationTicks))
-		children = concat(children, ebmlChild(0x4489, raw))
+		children = concat(children, ebmlElement(0x4489, raw))
 	}
 	return ebmlElement(0x1549A966, children)
 }
 
 func buildMKVTracks(withAudio bool) []byte {
-	video := ebmlChild(0xAE, concat(
-		ebmlChild(0xD7, ebmlUintPayload(mkvVideoTrackNumber)),
-		ebmlChild(0x83, ebmlUintPayload(1)), // video
+	video := ebmlElement(0xAE, concat(
+		ebmlElement(0xD7, ebmlUintPayload(mkvVideoTrackNumber)),
+		ebmlElement(0x83, ebmlUintPayload(1)), // video
 	))
 	if !withAudio {
 		return ebmlElement(0x1654AE6B, video)
 	}
-	audio := ebmlChild(0xAE, concat(
-		ebmlChild(0xD7, ebmlUintPayload(mkvAudioTrackNumber)),
-		ebmlChild(0x83, ebmlUintPayload(2)), // audio
+	audio := ebmlElement(0xAE, concat(
+		ebmlElement(0xD7, ebmlUintPayload(mkvAudioTrackNumber)),
+		ebmlElement(0x83, ebmlUintPayload(2)), // audio
 	))
 	// Audio first, so "first video track" selection is exercised.
 	return ebmlElement(0x1654AE6B, concat(audio, video))
@@ -150,12 +156,12 @@ func buildMKVCues(opts MKVOptions, scaleNs uint64) []byte {
 }
 
 func buildCuePoint(timeTicks, track uint64) []byte {
-	positions := ebmlChild(0xB7, concat(
-		ebmlChild(0xF7, ebmlUintPayload(track)),
-		ebmlChild(0xF1, ebmlUintPayload(0)), // CueClusterPosition (unused by parser)
+	positions := ebmlElement(0xB7, concat(
+		ebmlElement(0xF7, ebmlUintPayload(track)),
+		ebmlElement(0xF1, ebmlUintPayload(0)), // CueClusterPosition (unused by parser)
 	))
-	return ebmlChild(0xBB, concat(
-		ebmlChild(0xB3, ebmlUintPayload(timeTicks)),
+	return ebmlElement(0xBB, concat(
+		ebmlElement(0xB3, ebmlUintPayload(timeTicks)),
 		positions,
 	))
 }
@@ -173,9 +179,9 @@ func buildSeekHead(entries ...seekEntry) []byte {
 		idBytes := encodeEBMLID(entry.targetID)
 		position := make([]byte, 8)
 		binary.BigEndian.PutUint64(position, uint64(entry.position))
-		payload = concat(payload, ebmlChild(0x4DBB, concat(
-			ebmlChild(0x53AB, idBytes),
-			ebmlChild(0x53AC, position),
+		payload = concat(payload, ebmlElement(0x4DBB, concat(
+			ebmlElement(0x53AB, idBytes),
+			ebmlElement(0x53AC, position),
 		)))
 	}
 	return ebmlElement(0x114D9B74, payload)
@@ -194,14 +200,9 @@ func seekHeadLen(entries int) int {
 // --- EBML encoding primitives ---
 
 // ebmlElement wraps a payload for element IDs written with their full marker
-// bytes (as Matroska ID constants are).
+// bytes (as Matroska ID constants are). In-payload children encode identically.
 func ebmlElement(id uint32, payload []byte) []byte {
 	return concat(encodeEBMLID(id), encodeEBMLSize(len(payload)), payload)
-}
-
-// ebmlChild is ebmlElement for in-payload children; identical encoding.
-func ebmlChild(id uint32, payload []byte) []byte {
-	return ebmlElement(id, payload)
 }
 
 func encodeEBMLID(id uint32) []byte {
@@ -246,10 +247,9 @@ func ebmlUintPayload(value uint64) []byte {
 	return out
 }
 
-// MP4Options shapes a BuildMP4 fixture.
+// MP4Options shapes a BuildMP4 fixture. The media and movie timescales are
+// fixed at mp4FixtureTimescale and mp4FixtureMovieTimescale.
 type MP4Options struct {
-	// Timescale is the media timescale (ticks per second); zero means 12800.
-	Timescale uint32
 	// SampleDeltas is the stts table as (count, delta) pairs.
 	SampleDeltas [][2]uint32
 	// SyncSamples are 1-based stss entries; nil with OmitStss=false writes an
@@ -263,10 +263,6 @@ type MP4Options struct {
 	CttsVersion byte
 	// Elst controls the edit list: nil omits edts/elst.
 	Elst []ElstEntry
-	// MovieTimescale is the mvhd timescale; zero means 1000.
-	MovieTimescale uint32
-	// MovieDurationSec sets the mvhd duration.
-	MovieDurationSec float64
 	// MediaDurationTicks sets the mdhd duration in media ticks.
 	MediaDurationTicks uint64
 	// MoovAtEnd places moov after mdat (the un-faststarted layout).
@@ -285,15 +281,6 @@ type ElstEntry struct {
 
 // BuildMP4 renders a minimal but structurally valid MP4 file.
 func BuildMP4(opts MP4Options) []byte {
-	timescale := opts.Timescale
-	if timescale == 0 {
-		timescale = 12800
-	}
-	movieTimescale := opts.MovieTimescale
-	if movieTimescale == 0 {
-		movieTimescale = 1000
-	}
-
 	ftyp := mp4Box("ftyp", concat([]byte("isom"), u32(0x200), []byte("isomiso2avc1mp41")))
 
 	var mdat []byte
@@ -308,7 +295,7 @@ func BuildMP4(opts MP4Options) []byte {
 		mdat = mp4Box("mdat", make([]byte, 32))
 	}
 
-	moov := buildMoov(opts, timescale, movieTimescale)
+	moov := buildMoov(opts)
 
 	if opts.MoovAtEnd {
 		return concat(ftyp, mdat, moov)
@@ -316,18 +303,18 @@ func BuildMP4(opts MP4Options) []byte {
 	return concat(ftyp, moov, mdat)
 }
 
-func buildMoov(opts MP4Options, timescale, movieTimescale uint32) []byte {
+func buildMoov(opts MP4Options) []byte {
 	mvhdPayload := concat(
 		[]byte{0, 0, 0, 0}, // version 0 + flags
 		u32(0), u32(0),     // creation, modification
-		u32(movieTimescale),
-		u32(uint32(math.Round(opts.MovieDurationSec*float64(movieTimescale)))),
+		u32(mp4FixtureMovieTimescale),
+		u32(0), // duration; parsers fall back to the track's mdhd
 	)
 	// Pad out the remaining fixed mvhd fields (rate..next_track_ID).
 	mvhdPayload = concat(mvhdPayload, make([]byte, 80))
 	mvhd := mp4Box("mvhd", mvhdPayload)
 
-	videoTrak := buildTrak(opts, "vide", timescale)
+	videoTrak := buildTrak(opts, "vide", mp4FixtureTimescale)
 	if opts.AudioTrackFirst {
 		audioTrak := buildTrak(MP4Options{
 			SampleDeltas: [][2]uint32{{1, 1024}},

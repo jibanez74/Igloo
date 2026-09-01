@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMoviePlaybackData } from "@/hooks/useMoviePlaybackData";
 import {
   AUTH_USER_KEY,
@@ -27,6 +27,7 @@ import type {
   PlaybackSettingsType,
   StreamModeId,
 } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const playbackSessionId = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 const authenticatedUserId = 1;
@@ -217,16 +218,10 @@ beforeEach(() => {
   resetDevicePlaybackPreferencesCache();
 });
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("useMoviePlaybackData", () => {
   it("clamps a stale start before deriving every HLS timing value", () => {
     const movieId = 7;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -290,9 +285,7 @@ describe("useMoviePlaybackData", () => {
 
   it("keeps requested session identity while mapping playback through the measured start", () => {
     const movieId = 74;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedSettledPlaybackPreferences(queryClient);
     const search = {
@@ -380,9 +373,7 @@ describe("useMoviePlaybackData", () => {
   // "plays as-is" claim.
   it("names the playing audio language in the direct mode label", () => {
     const movieId = 22;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedSettledPlaybackPreferences(queryClient);
 
@@ -409,9 +400,7 @@ describe("useMoviePlaybackData", () => {
 
   it("keeps the generic mode label for non-direct playback", () => {
     const movieId = 23;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedSettledPlaybackPreferences(queryClient);
 
@@ -441,9 +430,7 @@ describe("useMoviePlaybackData", () => {
   // request can be issued.
   it("marks every mode unavailable when metadata has no video stream", () => {
     const movieId = 21;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -499,9 +486,7 @@ describe("useMoviePlaybackData", () => {
 
   it("drops a subtitle_track URL param that points at a bitmap subtitle", () => {
     const movieId = 8;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -566,9 +551,7 @@ describe("useMoviePlaybackData", () => {
 
   it("applies subtitle preferences only when the route selection is omitted", async () => {
     const movieId = 81;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedSettledPlaybackPreferences(queryClient);
     seedDevicePreferences({ preferredSubtitleLanguage: "es" });
@@ -603,9 +586,7 @@ describe("useMoviePlaybackData", () => {
 
   it("keeps an explicit subtitle-off route selection over preferences", () => {
     const movieId = 82;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedSettledPlaybackPreferences(queryClient);
     seedDevicePreferences({ preferredSubtitleLanguage: "es" });
@@ -634,9 +615,7 @@ describe("useMoviePlaybackData", () => {
 
   it("streams a direct-play deep link through remux when it asks for a non-first audio track", () => {
     const movieId = 9;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -698,9 +677,7 @@ describe("useMoviePlaybackData", () => {
 
   it("uses provisional remux while valid non-first-audio metadata is pending", async () => {
     const movieId = 91;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedMovieWithoutTechnicalDetails(queryClient, movieId);
     const technicalDetailsRequest = createDeferredResponse();
     vi.stubGlobal("fetch", vi.fn(() => technicalDetailsRequest.promise));
@@ -764,9 +741,7 @@ describe("useMoviePlaybackData", () => {
 
   it("never falls back to the raw stream after technical-details failure", () => {
     const movieId = 92;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedMovieWithoutTechnicalDetails(queryClient, movieId);
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
       error: true,
@@ -802,9 +777,7 @@ describe("useMoviePlaybackData", () => {
 
   it("keeps cold direct playback preparing until technical details resolve", async () => {
     const movieId = 93;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedMovieWithoutTechnicalDetails(queryClient, movieId);
     const technicalDetailsRequest = createDeferredResponse();
     vi.stubGlobal("fetch", vi.fn(() => technicalDetailsRequest.promise));
@@ -862,9 +835,7 @@ describe("useMoviePlaybackData", () => {
   // download speed that needs the server catalog to size a recommendation.
   it("waits for the server catalog before recommending a profile from download speed", async () => {
     const movieId = 10;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedDevicePreferences({
       downloadMbps: 25,
@@ -963,9 +934,7 @@ describe("useMoviePlaybackData", () => {
   // profile needs nothing from the network, so playback starts right away.
   it("resolves immediately from a stored profile while the catalog is still loading", async () => {
     const movieId = 12;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedAuthenticatedUser(queryClient);
     seedDevicePreferences({
@@ -1019,9 +988,7 @@ describe("useMoviePlaybackData", () => {
   // would immediately restart.
   it("waits for the catalog when the stored profile is unavailable for the file", async () => {
     const movieId = 13;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedAuthenticatedUser(queryClient);
     // 4K is a storable profile, but this 1080p source never offers it.
@@ -1080,9 +1047,7 @@ describe("useMoviePlaybackData", () => {
 
   it("normalizes through existing defaults after playback settings fail", async () => {
     const movieId = 11;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = createTestQueryClient();
     seedPreferenceResolutionMovie(queryClient, movieId);
     seedAuthenticatedUser(queryClient);
     // A download speed with no stored profile is the one case that still needs

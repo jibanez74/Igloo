@@ -256,21 +256,18 @@ func scoreArtistName(query, candidate string) int {
 
 	if tokensContainedInOrder(queryTokens, candidateTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		score := 92 - min(extraTokens*6, 18)
 		if len(queryTokens) == 1 && extraTokens > 0 {
-			score = 68
+			return 68
 		}
-		return max(score, 0)
+		return 92 - min(extraTokens*6, 18)
 	}
 
+	// A single query token can only reach here when it is absent from the
+	// candidate, so matched is 0 and this block is a multi-token path.
 	matched := countMatchedTokens(queryTokens, candidateTokens)
 	if matched == len(queryTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		score := 86 - min(extraTokens*5, 20)
-		if len(queryTokens) == 1 && extraTokens > 0 {
-			score = 68
-		}
-		return max(score, 0)
+		return 86 - min(extraTokens*5, 20)
 	}
 
 	if tokensContainedInOrder(candidateTokens, queryTokens) {
@@ -318,18 +315,18 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 
 	if tokensContainedInOrder(queryTokens, candidateTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		return max(90-min(extraTokens*4, 16), 0)
+		return 90 - min(extraTokens*4, 16)
 	}
 
 	if tokensContainedInOrder(candidateTokens, queryTokens) {
 		missingTokens := len(queryTokens) - len(candidateTokens)
-		return max(84-min(missingTokens*5, 20), 0)
+		return 84 - min(missingTokens*5, 20)
 	}
 
 	matched := countMatchedTokens(queryTokens, candidateTokens)
 	if matched == len(queryTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		return max(86-min(extraTokens*4, 16), 0)
+		return 86 - min(extraTokens*4, 16)
 	}
 
 	return matched * 70 / len(queryTokens)

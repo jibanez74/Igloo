@@ -157,17 +157,12 @@ func locateEBMLIndexElements(ctx context.Context, r io.ReaderAt, segmentDataStar
 func locateViaSeekHead(ctx context.Context, r io.ReaderAt, segmentDataStart, segmentEnd int64) (ebmlIndexLocations, error) {
 	locations := ebmlIndexLocations{}
 
-	first, err := readEBMLElementHeader(r, segmentDataStart, segmentEnd)
-	if err != nil {
-		return locations, fmt.Errorf("read first segment child: %w", err)
-	}
-	if first.ID != seekHeadID {
-		return locations, nil
-	}
-
+	// The first iteration reads the segment's first child; a file whose first
+	// child is not a SeekHead falls out of the loop immediately.
 	seekHeadOffset := segmentDataStart
 	for hop := 0; hop < maxSeekHeadHops && seekHeadOffset != 0; hop++ {
-		if err = checkContext(ctx); err != nil {
+		err := checkContext(ctx)
+		if err != nil {
 			return locations, err
 		}
 

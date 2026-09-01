@@ -20,9 +20,11 @@ type ProgressBarProps = {
   onSeek: (newTime: number) => void;
   variant: ProgressBarVariant;
   ariaLabel?: string;
-  groupLabel?: string;
   resetKey?: string | number;
 };
+
+// Names the slider's wrapping group for assistive technology.
+const GROUP_LABEL = "Playback progress";
 
 // Variant-specific styles
 const variantStyles: Record<
@@ -98,7 +100,6 @@ export default function ProgressBar({
   onSeek,
   variant,
   ariaLabel = "Seek through track",
-  groupLabel = "Playback progress",
   resetKey,
 }: ProgressBarProps) {
   const styles = variantStyles[variant];
@@ -235,7 +236,7 @@ export default function ProgressBar({
       <div
         className={styles.container}
         role="group"
-        aria-label={groupLabel}
+        aria-label={GROUP_LABEL}
       >
         <span className={`${styles.timeText} text-right`} aria-hidden="true">
           {currentTimeLabel}
@@ -252,7 +253,7 @@ export default function ProgressBar({
     <div
       className={styles.container}
       role="group"
-      aria-label={groupLabel}
+      aria-label={GROUP_LABEL}
     >
       {slider}
       {styles.showTimes && (

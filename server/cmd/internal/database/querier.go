@@ -134,7 +134,6 @@ type Querier interface {
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
-	GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (GetMovieByTmdbIDRow, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
@@ -148,9 +147,9 @@ type Querier interface {
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
 	// Card-sized projection: the watch-room listing only renders title and poster.
 	GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error)
-	// Batch form of GetMovieByTmdbID for the TMDB search results mapper, which
-	// annotates a whole page of results with "already in library". One indexed
-	// pass over idx_movies_tmdb_id instead of a point query per result row.
+	// Resolves a whole page of TMDB ids for the search results mapper, which
+	// annotates each result with "already in library". One indexed pass over
+	// idx_movies_tmdb_id instead of a point query per result row.
 	GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetMoviesByTmdbIDsRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).

@@ -647,11 +647,6 @@ func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "copy is not part of the first version",
-			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Copy = true },
-			wantErr: "copy is not supported",
-		},
-		{
 			name:    "empty encoder",
 			mutate:  func(p *helpers.HLSResolvedAudioProfile) { p.Encoder = "" },
 			wantErr: "invalid HLS audio encoder",

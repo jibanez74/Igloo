@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PlaybackSettingsDialog from "@/components/movies/PlaybackSettingsDialog";
@@ -16,6 +16,8 @@ import type {
   SubtitleType,
   VideoStreamType,
 } from "@/types";
+import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { createTestQueryClient } from "../helpers/render";
 
 const prefersCoarse = vi.hoisted(() => ({ value: false }));
 vi.mock("@/hooks/use-coarse-pointer", () => ({
@@ -25,27 +27,6 @@ vi.mock("@/hooks/use-coarse-pointer", () => ({
 afterEach(() => {
   prefersCoarse.value = false;
 });
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function videoStream(): VideoStreamType {
   return {
@@ -139,13 +120,7 @@ function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
 }
 
 function createQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
+  return createTestQueryClient();
 }
 
 describe("PlaybackSettingsDialog", () => {

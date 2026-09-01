@@ -3,7 +3,6 @@ import type { components } from "./openapi.gen";
 type Schema = components["schemas"];
 
 export type WatchRoomMemberType = Schema["WatchRoomMember"];
-export type WatchRoomInviteUserType = Schema["InviteUser"];
 export type WatchRoomType = Schema["WatchRoomListItem"];
 export type WatchRoomDetailType = Schema["WatchRoomDetail"];
 export type WatchRoomInviteUsersResponseType = Schema["InviteUsersData"];
