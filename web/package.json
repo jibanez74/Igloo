@@ -37,7 +37,7 @@
     "test:e2e:watch-room": "playwright test e2e/watch-room.spec.ts",
     "test:e2e:quick-connect": "playwright test e2e/quick-connect.spec.ts",
     "preview": "vite preview",
-    "doctor": "bun x react-doctor@latest --yes"
+    "doctor": "bun x react-doctor@0.9.12 --yes"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
