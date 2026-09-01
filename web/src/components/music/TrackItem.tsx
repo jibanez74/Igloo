@@ -50,6 +50,11 @@ type TrackItemProps = {
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 };
 
+// The flag count is arity, not complexity: each one drives a single independent
+// thing (a class, an icon, one rendered block) and none is read together with
+// another, so the nominal combinations never arise. Every call site passes a
+// fixed preset determined by `variant`.
+// react-doctor-disable-next-line react-doctor/no-many-boolean-props
 export default function TrackItem({
   id,
   title,
