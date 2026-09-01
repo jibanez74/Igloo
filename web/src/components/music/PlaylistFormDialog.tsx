@@ -128,7 +128,7 @@ function PlaylistForm({
   // Initialize form state based on mode
   const [name, setName] = useState(playlist?.name ?? "");
   const [description, setDescription] = useState(
-    unwrapString(playlist?.description) ?? ""
+    () => unwrapString(playlist?.description) ?? ""
   );
 
   // Create mutation

@@ -245,8 +245,23 @@ export const uploadUserAvatar = async (
       credentials: "include",
     });
 
-    const data: unknown = await response.json();
-    return data as ApiResponseType<{ user: AuthUser }>;
+    if (response.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data = (await response.json()) as ApiResponseType<{ user: AuthUser }>;
+
+    // An HTTP failure whose body is not already an error envelope would
+    // otherwise be reported to the caller as a successful upload.
+    if (!response.ok && !data.error) {
+      return {
+        error: true,
+        message: `${response.status} - The avatar could not be uploaded.`,
+        status: response.status,
+      };
+    }
+
+    return data;
   } catch {
     return NETWORK_ERROR;
   }
