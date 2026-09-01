@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   dedupeById,
   playMediaElement,
+  shuffleArray,
   toggleMediaPlayback,
   trimQueueHistory,
 } from "@/lib/audio-utils";
@@ -122,5 +123,57 @@ describe("dedupeById", () => {
     const items = [{ id: 1 }, { id: 2 }];
 
     expect(dedupeById(items)).toEqual(items);
+  });
+});
+
+describe("shuffleArray", () => {
+  it("returns a permutation of the input", () => {
+    const input = makeTracks(50);
+
+    const shuffled = shuffleArray(input);
+
+    expect(shuffled).toHaveLength(input.length);
+    expect([...shuffled].sort((a, b) => a.id - b.id)).toEqual(input);
+  });
+
+  it("does not mutate the input", () => {
+    const input = makeTracks(20);
+    const snapshot = [...input];
+
+    shuffleArray(input);
+
+    expect(input).toEqual(snapshot);
+  });
+
+  it("handles empty and single-element arrays", () => {
+    expect(shuffleArray([])).toEqual([]);
+    expect(shuffleArray([{ id: 1 }])).toEqual([{ id: 1 }]);
+  });
+
+  // Fisher-Yates walks i from the end down to 1 and swaps with a random j in
+  // [0, i]. Forcing j to its maximum makes every swap a no-op, which pins the
+  // draw range: an off-by-one that let j exceed i would throw the ordering off.
+  it("leaves the order untouched when every draw picks the highest index", () => {
+    const randomSpy = vi
+      .spyOn(Math, "random")
+      .mockReturnValue(0.999999999999);
+    const input = makeTracks(8);
+
+    expect(shuffleArray(input)).toEqual(input);
+
+    randomSpy.mockRestore();
+  });
+
+  // The mirror case: forcing j to 0 swaps each element into slot 0 in turn,
+  // which rotates the array left by one. That only holds if j is drawn from
+  // [0, i] inclusive of 0 and i counts down from length - 1.
+  it("rotates left by one when every draw picks index zero", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+
+    expect(shuffleArray(makeTracks(4)).map(track => track.id)).toEqual([
+      2, 3, 4, 1,
+    ]);
+
+    randomSpy.mockRestore();
   });
 });

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
 import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -35,7 +36,7 @@ import {
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
-import { convertToAudioTrack } from "@/lib/audio-utils";
+import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -50,10 +51,16 @@ import {
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { PlaylistTrackType } from "@/types";
+import type { PlayableTrackData, PlaylistTrackType } from "@/types";
 
-function playlistTrackToAudioTrack(track: PlaylistTrackType) {
-  return convertToAudioTrack({
+// A playlist row already carries every field the player needs, including the
+// per-track album/artist. Keep it as PlayableTrackData and hand that to the
+// player alongside the queue, or a mixed playlist shows the playlist's own name
+// and cover for every track.
+function playlistTrackToPlayableData(
+  track: PlaylistTrackType,
+): PlayableTrackData {
+  return {
     id: track.id,
     title: track.title,
     file_path: track.file_path,
@@ -64,7 +71,8 @@ function playlistTrackToAudioTrack(track: PlaylistTrackType) {
     musician_id: track.musician_id,
     album_cover: track.album_cover,
     musician_name: track.musician_name,
-  });
+    album_title: track.album_title,
+  };
 }
 
 export const Route = createFileRoute("/_auth/music/playlist/$id")({
@@ -138,6 +146,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const audioPlayer = useAudioPlayerActions();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isStartingPlayback, setIsStartingPlayback] = useState(false);
   const editButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -220,25 +229,72 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     },
   });
 
+  // The tracks list is an infinite query, so allTracks only holds the pages the
+  // user has scrolled into. The header buttons promise the playlist's full
+  // track_count, so drain the rest before queueing. fetchNextPage resolves with
+  // the updated observer result, so the loop reads hasNextPage off that instead
+  // of the stale value captured in this closure.
+  const loadAllTracks = async () => {
+    if (!hasNextPage) return allTracks;
+
+    let result = await fetchNextPage();
+    while (result.hasNextPage) {
+      result = await fetchNextPage();
+    }
+
+    return (
+      result.data?.pages.flatMap((page) =>
+        page.error === false ? (page.data?.tracks ?? []) : [],
+      ) ?? allTracks
+    );
+  };
+
   // playQueue/shuffleQueue instead of playTrack: these header buttons are
   // explicit "start over" entry points and must restart even when the first
   // track is already the current one (playTrack toggles in that case).
+  const startPlaylistQueue = async (shuffle: boolean) => {
+    setIsStartingPlayback(true);
+
+    // The try wraps only the fetch: the React Compiler cannot compile
+    // components with conditional/logical expressions inside a try block.
+    let tracks: PlaylistTrackType[] = [];
+    let didFail = false;
+    try {
+      tracks = await loadAllTracks();
+    } catch {
+      didFail = true;
+    }
+
+    if (didFail) {
+      showActionFailed(shuffle ? "shuffle playlist" : "play playlist");
+    } else if (tracks.length > 0) {
+      // A playlist may hold the same track at two positions. The player finds
+      // the current track with findIndex, so a repeated id would make next/prev
+      // jump back to the first copy — dedupe as playTrackFromList does.
+      const rawTracks = dedupeById(tracks.map(playlistTrackToPlayableData));
+      const audioTracks = rawTracks.map(convertToAudioTrack);
+      const albumInfo = {
+        cover: coverUrl,
+        title: playlist.name,
+        musician: null,
+      };
+
+      if (shuffle) {
+        audioPlayer.shuffleQueue(audioTracks, albumInfo, rawTracks);
+      } else {
+        audioPlayer.playQueue(audioTracks, albumInfo, rawTracks);
+      }
+    }
+
+    setIsStartingPlayback(false);
+  };
+
   const handlePlayAll = () => {
-    if (!allTracks.length) return;
-    audioPlayer.playQueue(allTracks.map(playlistTrackToAudioTrack), {
-      cover: coverUrl,
-      title: playlist.name,
-      musician: null,
-    });
+    void startPlaylistQueue(false);
   };
 
   const handleShuffle = () => {
-    if (!allTracks.length) return;
-    audioPlayer.shuffleQueue(allTracks.map(playlistTrackToAudioTrack), {
-      cover: coverUrl,
-      title: playlist.name,
-      musician: null,
-    });
+    void startPlaylistQueue(true);
   };
 
   const handleDeletePlaylist = () => {
@@ -320,30 +376,38 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {/* Play buttons */}
           {track_count > 0 && (
             <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
-              <button
+              <Button
                 type="button"
+                variant="accent-pill"
+                size="lg"
                 onClick={handlePlayAll}
-                className={cn(
-                  MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden sm:px-6 sm:py-3 sm:text-base",
-                )}
+                disabled={isStartingPlayback}
+                className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                 aria-label={`Play all ${track_count} tracks`}
               >
-                <Play className="size-4 fill-current" aria-hidden="true" />
-                Play All
-              </button>
-              <button
-                type="button"
-                onClick={handleShuffle}
-                className={cn(
-                  MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden sm:px-6 sm:py-3 sm:text-base",
+                {isStartingPlayback ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Play className="size-4 fill-current" aria-hidden="true" />
                 )}
+                Play All
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={handleShuffle}
+                disabled={isStartingPlayback}
+                className="w-full rounded-full font-semibold sm:w-auto"
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
-                <Shuffle className="size-4" aria-hidden="true" />
+                {isStartingPlayback ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Shuffle className="size-4" aria-hidden="true" />
+                )}
                 Shuffle
-              </button>
+              </Button>
             </div>
           )}
 
@@ -517,17 +581,14 @@ function PlaylistTracksList({
           .filter((track): track is PlaylistTrackType => track !== undefined)
       : tracks;
 
+  // playTrackFromList, not playTrack: it keeps the same toggle-on-repeat-click
+  // contract but queues the raw rows, so each track keeps its own cover and
+  // artist as the queue advances instead of inheriting the playlist's.
   const handlePlayTrack = (track: PlaylistTrackType) => {
-    const audioTrack = playlistTrackToAudioTrack(track);
-
-    // Create playlist of all tracks for continuous playback
-    const allAudioTracks = orderedTracks.map(playlistTrackToAudioTrack);
-
-    audioPlayer.playTrack(audioTrack, allAudioTracks, {
-      cover: coverUrl,
-      title: playlistName,
-      musician: null,
-    });
+    audioPlayer.playTrackFromList(
+      orderedTracks.map(playlistTrackToPlayableData),
+      track.id,
+    );
   };
 
   // Handle reorder with optimistic update

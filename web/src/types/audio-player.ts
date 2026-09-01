@@ -23,8 +23,9 @@ export type PlayableTrackData = {
   album_cover: NullableString;
   musician_name: NullableString;
 
-  // Present on list/search rows; used to keep the player header accurate in
-  // mixed queues. The shuffle/play-all endpoints may omit it.
+  // Used to keep the player header accurate in mixed queues. Optional because
+  // not every producer of this shape carries it; the list, search, shuffle and
+  // play-all endpoints all do.
   album_title?: NullableString;
 };
 
@@ -32,6 +33,12 @@ export type PlayableTrackData = {
 // to AudioPlayer as props — it is deliberately NOT exposed as a context, so a
 // queue append never re-renders the app shell or a track list.
 export type AudioPlayerQueueState = {
+  // Bumped every time a queue is started or cleared. An endless-queue batch is
+  // fetched against one queueId and appended only if that is still the live
+  // one, so a batch that lands late cannot splice itself into a queue the user
+  // has since replaced.
+  queueId: number;
+
   currentTrack: TrackType | null;
   tracks: TrackType[];
   albumCover: string | null;
@@ -77,10 +84,24 @@ export type AudioPlayerActions = {
   // Start a finite queue (album, playlist, musician page) from the top. Unlike
   // playTrack this always restarts, even when the first track is already the
   // current one — it is the explicit "start over" entry point.
-  playQueue: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
+  //
+  // rawTracks is optional and only matters for mixed queues (playlists): pass
+  // it and the player resolves each track's own cover/artist/album as the queue
+  // advances instead of showing the queue-wide albumInfo for every track. Album
+  // and musician queues are single-artist, so they omit it on purpose.
+  playQueue: (
+    tracks: TrackType[],
+    albumInfo: AlbumInfoType,
+    rawTracks?: PlayableTrackData[]
+  ) => void;
 
-  // Shuffle a finite queue and start it from the top
-  shuffleQueue: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
+  // Shuffle a finite queue and start it from the top. Same rawTracks contract
+  // as playQueue.
+  shuffleQueue: (
+    tracks: TrackType[],
+    albumInfo: AlbumInfoType,
+    rawTracks?: PlayableTrackData[]
+  ) => void;
 
   // Start shuffle playback across entire music library
   startShufflePlayback: () => Promise<void>;

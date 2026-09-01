@@ -183,3 +183,100 @@ describe("endless shuffle queue", () => {
     expect(probeRenders.count).toBe(rendersBeforeAppend);
   });
 });
+
+describe("endless shuffle queue on an exhausted library", () => {
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  // Stand in for the server: honour the exclusion list the client sends, which
+  // is the whole point of the parameter. A library this small used to hand the
+  // same ids back on every refill, so the client burned three round trips per
+  // track advance and then went quiet.
+  function mockLibrary(size: number) {
+    vi.mocked(getShuffleTracks).mockImplementation(
+      async (limit = 50, excludeTrackIds: number[] = []) => {
+        const excluded = new Set(excludeTrackIds);
+        const available = Array.from({ length: size }, (_, i) => i + 1)
+          .filter(id => !excluded.has(id))
+          .slice(0, limit);
+
+        return {
+          error: false as const,
+          data: { tracks: available.map(rawTrack) },
+        };
+      },
+    );
+  }
+
+  it("sends the queued track ids so a refill never repeats them", async () => {
+    mockLibrary(24);
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <EndlessQueueHarness />
+      </AudioPlayerProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "start shuffle" }));
+    await waitFor(() => expectCounterAt(1));
+
+    // The opening fetch has nothing to exclude yet.
+    expect(vi.mocked(getShuffleTracks).mock.calls[0][1]).toBeUndefined();
+
+    // Walk into the lookahead window so a refill fires.
+    for (let position = 2; position <= 16; position++) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Next track" }),
+      );
+      await waitFor(() => expectCounterAt(position));
+    }
+
+    await waitFor(() =>
+      expect(vi.mocked(getShuffleTracks).mock.calls.length).toBeGreaterThan(1),
+    );
+
+    const refillExclusions = vi.mocked(getShuffleTracks).mock.calls[1][1] ?? [];
+    expect(refillExclusions.length).toBeGreaterThan(0);
+
+    // Every id the queue already holds is excluded, so nothing can come back
+    // twice and the "Track N of M" denominator only ever counts fresh tracks.
+    const total = Number(trackCounter().match(/of (\d+)$/)?.[1]);
+    expect(total).toBeLessThanOrEqual(24);
+  });
+
+  it("says so when the library has nothing left instead of going quiet", async () => {
+    const { toast } = await import("sonner");
+    const infoSpy = vi.spyOn(toast, "info");
+
+    mockLibrary(12);
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <EndlessQueueHarness />
+      </AudioPlayerProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "start shuffle" }));
+    await waitFor(() => expectCounterAt(1));
+
+    // 12 tracks queued, lookahead is 10, so the refill fires almost at once and
+    // the server has nothing left that the queue does not already hold.
+    for (let position = 2; position <= 4; position++) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Next track" }),
+      );
+      await waitFor(() => expectCounterAt(position));
+    }
+
+    await waitFor(() => expect(infoSpy).toHaveBeenCalled());
+    expect(infoSpy.mock.calls[0][0]).toBe("That's the whole library");
+
+    infoSpy.mockRestore();
+  });
+});

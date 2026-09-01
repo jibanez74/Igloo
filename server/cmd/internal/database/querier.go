@@ -208,7 +208,12 @@ type Querier interface {
 	// musician joins run only for the chosen rows instead of the whole library.
 	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
 	// stays random too.
-	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
+	//
+	// exclude_ids lets an endless shuffle queue say what it already holds. Without
+	// it every refill re-samples the whole table blind, so a library smaller than
+	// the queue returns nothing but duplicates and the client burns a full scan per
+	// retry.
+	GetRandomTracks(ctx context.Context, arg GetRandomTracksParams) ([]GetRandomTracksRow, error)
 	// Persisted remux-safety verdict for one video stream; the caller compares
 	// the stored fingerprint and treats a mismatch as a miss.
 	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (RemuxSafetyVerdict, error)

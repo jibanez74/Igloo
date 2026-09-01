@@ -108,6 +108,9 @@ export const TRACKS_INFINITE_PAGE_SIZE = 50;
 export const PLAYLIST_TRACKS_PAGE_SIZE = 50;
 export const LIKED_TRACKS_PER_PAGE = 50;
 export const SHUFFLE_TRACKS_LIMIT = 50;
+// How many already-queued track ids a shuffle refill sends back so the server
+// samples around them. Matches the server's own cap.
+export const SHUFFLE_EXCLUDE_LIMIT = 200;
 
 // Route search defaults. Reuse these when navigating so links and loaders agree
 // on the canonical starting search state for a route.
