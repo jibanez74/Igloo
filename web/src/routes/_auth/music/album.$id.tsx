@@ -256,6 +256,9 @@ function AlbumDetailsContent({
         "delete album",
         "An unexpected error occurred. Please try again.",
       );
+      // This line is the catch-block reset. The success path deliberately stays busy
+      // while navigating away to /music.
+      // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
       setIsDeleting(false);
     }
   };

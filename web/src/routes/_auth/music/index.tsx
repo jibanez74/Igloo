@@ -293,6 +293,9 @@ function MoreMenu() {
 
     setRefreshingLibrary(true);
     await refreshLibraryWithToasts(queryClient, refreshMusicLibraryCache, "Music");
+    // refreshLibraryWithToasts owns the try/catch and never throws (see its doc
+    // comment), so this reset runs on every outcome.
+    // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
     setRefreshingLibrary(false);
     setMenuOpen(false);
   };
@@ -825,6 +828,9 @@ function VirtualizedTracksList({
     <div
       ref={listRef}
       className={TRACK_LIST_CONTAINER_CLASS}
+      // Tailwind's preflight sets list-style:none on every <ul>, which drops list
+      // semantics in Safari/VoiceOver; the role restores them.
+      // react-doctor-disable-next-line react-doctor/prefer-tag-over-role
       role="list"
       aria-label="Tracks"
     >

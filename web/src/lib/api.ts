@@ -245,8 +245,34 @@ export const uploadUserAvatar = async (
       credentials: "include",
     });
 
-    const data: unknown = await response.json();
-    return data as ApiResponseType<{ user: AuthUser }>;
+    if (response.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const uploadFailed: ApiFailureType = {
+      error: true,
+      message: `${response.status} - The avatar could not be uploaded.`,
+      status: response.status,
+    };
+
+    // A malformed body — empty, non-JSON, or literal `null` — must not fall
+    // through to the catch below, which would report the generic 500 instead
+    // of the status the server actually sent.
+    const data: unknown = await response.json().catch(() => null);
+
+    if (typeof data !== "object" || data === null) {
+      return response.ok ? NETWORK_ERROR : uploadFailed;
+    }
+
+    const body = data as ApiResponseType<{ user: AuthUser }>;
+
+    // An HTTP failure whose body is not already an error envelope would
+    // otherwise be reported to the caller as a successful upload.
+    if (!response.ok && !body.error) {
+      return uploadFailed;
+    }
+
+    return body;
   } catch {
     return NETWORK_ERROR;
   }

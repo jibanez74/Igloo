@@ -27,6 +27,9 @@ export function useHlsSessionRecovery({
       trackedKeyRef.current = streamWindowKey;
       attemptsRef.current = 0;
       lastAttemptAtRef.current = 0;
+      // recoveryAttempt mirrors a ref driven by hls.js error callbacks; the reset
+      // clears those refs too, so it cannot move into render.
+      // react-doctor-disable-next-line react-doctor/no-adjust-state-on-prop-change
       setRecoveryAttempt(0);
     }
   }, [streamWindowKey]);

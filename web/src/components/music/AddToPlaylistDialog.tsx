@@ -117,17 +117,20 @@ export default function AddToPlaylistDialog({
   };
 
   const togglePlaylist = (id: number, playlistName: string) => {
-    setSelectedPlaylists((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        setAnnouncement(`${playlistName} deselected. ${next.size} playlist${next.size !== 1 ? "s" : ""} selected.`);
-      } else {
-        next.add(id);
-        setAnnouncement(`${playlistName} selected. ${next.size} playlist${next.size !== 1 ? "s" : ""} selected.`);
-      }
-      return next;
-    });
+    // Computed outside the updater: React may invoke an updater more than once,
+    // and announcing from inside it is a render-phase update.
+    const next = new Set(selectedPlaylists);
+    const wasSelected = next.delete(id);
+    if (!wasSelected) {
+      next.add(id);
+    }
+
+    setSelectedPlaylists(next);
+    setAnnouncement(
+      wasSelected
+        ? `${playlistName} deselected. ${next.size} playlist${next.size !== 1 ? "s" : ""} selected.`
+        : `${playlistName} selected. ${next.size} playlist${next.size !== 1 ? "s" : ""} selected.`,
+    );
   };
 
   const handleAdd = () => {

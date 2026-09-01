@@ -68,6 +68,9 @@ function SidebarProvider({
   }
 
   return (
+    // The React Compiler memoizes contextValue; a manual useMemo here would go
+    // against web/AGENTS.md.
+    // react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"

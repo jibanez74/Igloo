@@ -12,6 +12,7 @@ import type { ApiResponseType } from "@/types";
 
 type LikedTrackIdsPayload = { liked_track_ids: number[] };
 const TRACK_LIKE_MUTATION_KEY = "track-like-toggle";
+const LIKED_IDS_QUERY_KEY = [LIKED_TRACK_IDS_KEY] as const;
 
 const likedIdsResponse = (
   ids: number[],
@@ -32,7 +33,6 @@ function setTrackLiked(ids: number[], trackId: number, isLiked: boolean) {
  */
 function useTrackLikeToggle(trackId: number) {
   const queryClient = useQueryClient();
-  const key = [LIKED_TRACK_IDS_KEY] as const;
   const mutationKey = [TRACK_LIKE_MUTATION_KEY, trackId] as const;
   const likedIdsQuery = useQuery({
     ...likedTrackIdsQueryOpts(),
@@ -47,14 +47,14 @@ function useTrackLikeToggle(trackId: number) {
 
   const rollback = (previousIsLiked: boolean | undefined) => {
     const current =
-      queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(key);
+      queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(LIKED_IDS_QUERY_KEY);
     if (previousIsLiked === undefined || current?.error !== false) {
-      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: LIKED_IDS_QUERY_KEY });
       return;
     }
 
     queryClient.setQueryData(
-      key,
+      LIKED_IDS_QUERY_KEY,
       likedIdsResponse(
         setTrackLiked(
           current.data.liked_track_ids,
@@ -69,13 +69,13 @@ function useTrackLikeToggle(trackId: number) {
     mutationKey,
     mutationFn: () => toggleLikeTrack(trackId),
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: key });
+      await queryClient.cancelQueries({ queryKey: LIKED_IDS_QUERY_KEY });
       const previous =
-        queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(key);
+        queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(LIKED_IDS_QUERY_KEY);
       if (previous?.error === false) {
         const ids = previous.data.liked_track_ids;
         queryClient.setQueryData(
-          key,
+          LIKED_IDS_QUERY_KEY,
           likedIdsResponse(
             setTrackLiked(ids, trackId, !ids.includes(trackId)),
           ),
@@ -102,10 +102,10 @@ function useTrackLikeToggle(trackId: number) {
         return;
       }
       const current =
-        queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(key);
+        queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(LIKED_IDS_QUERY_KEY);
       if (current?.error === false) {
         queryClient.setQueryData(
-          key,
+          LIKED_IDS_QUERY_KEY,
           likedIdsResponse(
             setTrackLiked(
               current.data.liked_track_ids,
@@ -115,7 +115,7 @@ function useTrackLikeToggle(trackId: number) {
           ),
         );
       } else {
-        void queryClient.invalidateQueries({ queryKey: key });
+        void queryClient.invalidateQueries({ queryKey: LIKED_IDS_QUERY_KEY });
       }
       void queryClient.invalidateQueries({ queryKey: [LIKED_TRACKS_KEY] });
     },

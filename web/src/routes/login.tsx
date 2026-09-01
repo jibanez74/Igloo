@@ -106,6 +106,9 @@ function LoginPage() {
         "Login failed",
         "Something went wrong after sign-in. Please try again.",
       );
+      // This line is the catch-block reset. After a successful login the form stays
+      // disabled on purpose while the router navigates away.
+      // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
       setIsSubmitting(false);
     }
   };

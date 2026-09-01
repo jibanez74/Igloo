@@ -297,6 +297,9 @@ export default function VideoPlayer({
   // playlist URL can stay identical while the resume target changes (any seek
   // inside the rewind buffer keeps start=0 in the URL), and rebuilding with
   // `startPosition` is what applies that seek.
+  // The cleanup calls disposeHls() -> hls.destroy(), which removes every listener
+  // registered below; the rule does not model destroy().
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
@@ -623,6 +626,8 @@ export default function VideoPlayer({
             : "aspect-video w-full max-w-6xl"
         }
       >
+        {/* Subtitle tracks are attached imperatively below, keyed on subtitleUrl. */}
+        {/* react-doctor-disable-next-line react-doctor/media-has-caption */}
         <video
           ref={videoRef}
           className={`size-full bg-black object-contain ${isFullscreen ? "rounded-none" : "rounded-lg"}`}

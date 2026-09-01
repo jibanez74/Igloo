@@ -322,6 +322,9 @@ function ManualTab({
     }
 
     const res = await updateMovieMetadata(movieId, body);
+    // updateMovieMetadata resolves an envelope and never rejects, so this clears on
+    // both outcomes; `finally` would bail the React Compiler out of the component.
+    // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
     setSaving(false);
 
     if (res.error) {

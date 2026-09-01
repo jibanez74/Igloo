@@ -106,9 +106,8 @@ export function AudioPlayerProvider({
   };
 
   // Append a fetched batch to an endless queue, trimming played tracks beyond
-  // MAX_TRACKS_BEHIND and pruning their metadata so multi-hour shuffle or
-  // play-all sessions stay bounded. The map deletions are idempotent, so
-  // StrictMode's double-invoked updater is harmless.
+  // MAX_TRACKS_BEHIND so multi-hour shuffle or play-all sessions stay bounded.
+  // The updater stays pure: their metadata is pruned by the effect below.
   const appendToQueue = (appended: TrackType[]) => {
     setQueueState(prev => {
       const { tracks: kept, dropped } = trimQueueHistory(
@@ -117,12 +116,6 @@ export function AudioPlayerProvider({
         MAX_TRACKS_BEHIND,
       );
 
-      for (const track of dropped) {
-        trackCoversRef.current?.delete(track.id);
-        trackMusiciansRef.current?.delete(track.id);
-        trackAlbumTitlesRef.current?.delete(track.id);
-      }
-
       return {
         ...prev,
         tracks: [...kept, ...appended],
@@ -130,6 +123,34 @@ export function AudioPlayerProvider({
       };
     });
   };
+
+  // Drop metadata for tracks that have left the queue, keyed on the committed
+  // queue rather than done inside the updater above: React may run an updater
+  // for a render it discards, and these deletions are permanent, which would
+  // strand a still-queued track without its cover or artist (see setTrack's
+  // has() lookups). Reconciling against the commit is idempotent instead.
+  useEffect(() => {
+    const liveIds = new Set(queueState.tracks.map(track => track.id));
+    if (queueState.currentTrack) {
+      liveIds.add(queueState.currentTrack.id);
+    }
+
+    const maps = [
+      trackCoversRef.current,
+      trackMusiciansRef.current,
+      trackAlbumTitlesRef.current,
+    ];
+
+    for (const map of maps) {
+      if (!map) continue;
+
+      for (const id of [...map.keys()]) {
+        if (!liveIds.has(id)) {
+          map.delete(id);
+        }
+      }
+    }
+  }, [queueState.tracks, queueState.currentTrack]);
 
   const clearMetadataRefs = () => {
     trackCoversRef.current?.clear();
@@ -566,7 +587,13 @@ export function AudioPlayerProvider({
   };
 
   return (
+    // The React Compiler memoizes both provider values - this component is kept
+    // compilable on purpose (see the try-block comments above). Splitting actions
+    // from now-playing is already the structural fix for consumer re-renders.
+    // react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal
     <AudioPlayerActionsContext.Provider value={actionsValue}>
+      {/* Compiler-memoized, as above. */}
+      {/* react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal */}
       <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
         {children}
         <AudioPlayer
