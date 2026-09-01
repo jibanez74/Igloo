@@ -36,6 +36,9 @@ export function useHlsCapacityRetry({
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    // Not derivable from props: the flag is set by hls.js 503 responses. The reset
+    // also cancels a live timer, which render-phase adjustment cannot do.
+    // react-doctor-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setWaitingForCapacity(false);
   }, [streamWindowKey]);
 

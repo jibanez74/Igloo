@@ -260,6 +260,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   }
 
   const connectedMembers = room.members.filter((member) =>
+    // connectedUserIds is live presence for one watch room - a handful of people.
+    // react-doctor-disable-next-line react-doctor/js-set-map-lookups
     connectedUserIds.includes(member.id),
   );
 
@@ -732,6 +734,8 @@ function WatchRoomMembersPanel({
 
       <ul className="mt-4 space-y-3">
         {members.map((member) => {
+          // Same room-sized presence list as above.
+          // react-doctor-disable-next-line react-doctor/js-set-map-lookups
           const isConnected = connectedUserIds.includes(member.id);
           return (
             <li

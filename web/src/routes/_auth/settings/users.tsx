@@ -211,6 +211,9 @@ function UsersSettings() {
     },
   });
 
+  // An admin password reset changes nothing the [ADMIN_USERS_KEY] list renders,
+  // which is why it is the only mutation here without an invalidate.
+  // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const resetPasswordMutation = useMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) =>
       adminResetUserPassword(id, password),

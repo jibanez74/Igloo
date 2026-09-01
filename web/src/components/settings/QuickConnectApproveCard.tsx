@@ -107,6 +107,9 @@ export default function QuickConnectApproveCard() {
     }
   }, [step]);
 
+  // A pure in-memory lookup, POST only because the code travels in the body.
+  // It changes no server state and no query caches it.
+  // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const lookupMutation = useMutation({
     mutationFn: (deviceCode: string) => lookupQuickConnect(deviceCode),
     onSuccess: res => {
@@ -124,6 +127,9 @@ export default function QuickConnectApproveCard() {
     },
   });
 
+  // The mutationFn refreshes [DEVICES_KEY] itself via fetchQuery, and the poll
+  // below keeps it current, so there is nothing left to invalidate.
+  // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const approveMutation = useMutation({
     mutationFn: async (deviceCode: string): Promise<ApprovalResult> => {
       let baselineDeviceIds: number[] | null = null;
@@ -198,6 +204,9 @@ export default function QuickConnectApproveCard() {
 
       const fresh = devices.find(
         device =>
+          // One user's own devices - a handful of entries, and inside a 2s poll rather
+          // than a render path.
+          // react-doctor-disable-next-line react-doctor/js-set-map-lookups
           !currentKnownDeviceIds.includes(device.id) &&
           matchesPendingDevice(device, pendingDevice),
       );

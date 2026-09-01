@@ -20,6 +20,9 @@ export function useHlsSessionKeepalive({
   enabled,
   streamUrl,
 }: HlsSessionKeepaliveOptions) {
+  // Not data fetching: the response is discarded. The ping exists only for its
+  // server-side effect of refreshing the HLS session TTL.
+  // react-doctor-disable-next-line react-doctor/no-fetch-in-effect
   useEffect(() => {
     if (!enabled || !streamUrl) return;
 

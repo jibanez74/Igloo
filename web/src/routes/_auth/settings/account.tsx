@@ -210,6 +210,8 @@ function AccountSettings() {
   });
 
   // Password update mutation
+  // A password change touches no field held by any cached query.
+  // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const updatePasswordMutation = useMutation({
     mutationFn: ({
       currentPassword,

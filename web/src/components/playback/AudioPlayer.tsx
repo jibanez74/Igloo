@@ -58,6 +58,9 @@ export default function AudioPlayer({
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Driven by the <audio> element's loadstart/canplay/error events, not by a
+  // state transition, so useTransition does not apply.
+  // react-doctor-disable-next-line react-doctor/rendering-usetransition-loading
   const [isLoading, setIsLoading] = useState(false);
 
   const artist = musicianName || albumTitle;
@@ -313,6 +316,8 @@ export default function AudioPlayer({
 
   return (
     <>
+      {/* Audio-only music playback; captions do not apply. */}
+      {/* react-doctor-disable-next-line react-doctor/media-has-caption */}
       <audio ref={audioRef} preload="metadata" className="hidden">
         {streamUrl && (
           <source src={streamUrl} type={track.mime_type || undefined} />

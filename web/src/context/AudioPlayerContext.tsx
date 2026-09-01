@@ -587,7 +587,13 @@ export function AudioPlayerProvider({
   };
 
   return (
+    // The React Compiler memoizes both provider values - this component is kept
+    // compilable on purpose (see the try-block comments above). Splitting actions
+    // from now-playing is already the structural fix for consumer re-renders.
+    // react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal
     <AudioPlayerActionsContext.Provider value={actionsValue}>
+      {/* Compiler-memoized, as above. */}
+      {/* react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal */}
       <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
         {children}
         <AudioPlayer

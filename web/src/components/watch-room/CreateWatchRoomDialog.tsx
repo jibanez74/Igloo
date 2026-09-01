@@ -91,6 +91,9 @@ export default function CreateWatchRoomDialog({
           );
         });
   const selectedUsers = inviteUsers.filter(user =>
+    // selectedUserIds is what the operator checked in this dialog - single digits,
+    // hard-bounded by the account roster.
+    // react-doctor-disable-next-line react-doctor/js-set-map-lookups
     selectedUserIds.includes(user.id),
   );
 
@@ -365,6 +368,8 @@ export default function CreateWatchRoomDialog({
                 ) : (
                   <ul className="divide-y divide-border">
                     {filteredUsers.map(user => {
+                      // Same short selectedUserIds list as above.
+                      // react-doctor-disable-next-line react-doctor/js-set-map-lookups
                       const checked = selectedUserIds.includes(user.id);
                       return (
                         <li key={user.id}>

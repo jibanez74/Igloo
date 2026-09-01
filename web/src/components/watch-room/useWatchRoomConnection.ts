@@ -241,6 +241,9 @@ export function useWatchRoomConnection({
     setPlaybackError("Realtime sync connection failed for this watch room.");
   });
 
+  // The cleanup closes the socket, which releases its four listeners, and clears
+  // both the heartbeat interval and the reconnect timeout.
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
     roomDeletionHandledRef.current = false;
     intentionalCloseRef.current = false;
