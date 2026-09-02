@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
-import { getShuffleTracks } from "@/lib/api";
+import { getShuffleTracks, getTracksPaginated } from "@/lib/api";
 import { renderWithQueryClient } from "@/test/helpers/render";
 import type { TrackListItemType } from "@/types";
 import { stubMediaElement } from "../helpers/dom";
@@ -277,6 +277,208 @@ describe("endless shuffle queue on an exhausted library", () => {
     await waitFor(() => expect(infoSpy).toHaveBeenCalled());
     expect(infoSpy.mock.calls[0][0]).toBe("That's the whole library");
 
+    // The refill effect re-runs on every advance because the runway keeps
+    // shrinking. Without a latch that means one round trip and one identical
+    // toast per remaining track, stacked on screen.
+    const callsWhenExhausted = vi.mocked(getShuffleTracks).mock.calls.length;
+
+    for (let position = 5; position <= 9; position++) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Next track" }),
+      );
+      await waitFor(() => expectCounterAt(position));
+    }
+
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getShuffleTracks).mock.calls.length).toBe(
+      callsWhenExhausted,
+    );
+
     infoSpy.mockRestore();
+  });
+
+  it("resumes refilling when a new shuffle is started after exhaustion", async () => {
+    const { toast } = await import("sonner");
+    const infoSpy = vi.spyOn(toast, "info");
+
+    mockLibrary(12);
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <EndlessQueueHarness />
+      </AudioPlayerProvider>,
+    );
+
+    const startButton = screen.getByRole("button", { name: "start shuffle" });
+
+    fireEvent.click(startButton);
+    await waitFor(() => expectCounterAt(1));
+
+    // 12 queued against a lookahead of 10: the runway only gets short at 4.
+    for (let position = 2; position <= 4; position++) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Next track" }),
+      );
+      await waitFor(() => expectCounterAt(position));
+    }
+    await waitFor(() => expect(infoSpy).toHaveBeenCalledTimes(1));
+
+    // The latch is keyed on the queue, not the provider, so starting over must
+    // ask the server again rather than staying permanently exhausted.
+    const callsBeforeRestart = vi.mocked(getShuffleTracks).mock.calls.length;
+
+    fireEvent.click(startButton);
+    await waitFor(() => expectCounterAt(1));
+
+    await waitFor(() =>
+      expect(vi.mocked(getShuffleTracks).mock.calls.length).toBeGreaterThan(
+        callsBeforeRestart,
+      ),
+    );
+
+    infoSpy.mockRestore();
+  });
+});
+
+describe("endless play-all queue", () => {
+  const LIBRARY_SIZE = 1000;
+
+  function PlayAllHarness() {
+    const actions = useAudioPlayerActions();
+
+    return (
+      <button type="button" onClick={() => void actions.startPlayAllPlayback()}>
+        start play all
+      </button>
+    );
+  }
+
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  // Play-all walks the library by offset, and that cursor lives in a ref rather
+  // than in queue state — so the queueId guard on the queue array does not
+  // protect it. A refill that resolves after the user restarted play-all used to
+  // add its page length on top of the *new* queue's cursor, skipping a page of
+  // the library for the rest of the session.
+  it("does not advance the offset for a batch belonging to a replaced queue", async () => {
+    // An array rather than a nullable let: TypeScript narrows a variable only
+    // ever assigned inside a callback to null at the release site.
+    const heldPages: Array<() => void> = [];
+    const requestedOffsets: number[] = [];
+
+    const page = (offset: number) => ({
+      error: false as const,
+      data: {
+        tracks: Array.from({ length: BATCH_SIZE }, (_, index) =>
+          rawTrack(offset + index + 1),
+        ),
+        total: LIBRARY_SIZE,
+        offset,
+        limit: BATCH_SIZE,
+        has_more: offset + BATCH_SIZE < LIBRARY_SIZE,
+      },
+    });
+
+    vi.mocked(getTracksPaginated).mockImplementation(
+      async (_limit: number, offset: number) => {
+        requestedOffsets.push(offset);
+
+        // Hold only the first refill (the one the restart will orphan).
+        if (offset === BATCH_SIZE && heldPages.length === 0) {
+          return new Promise(resolve => {
+            heldPages.push(() => resolve(page(offset)));
+          });
+        }
+
+        return page(offset);
+      },
+    );
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <PlayAllHarness />
+      </AudioPlayerProvider>,
+    );
+
+    const startButton = screen.getByRole("button", { name: "start play all" });
+
+    fireEvent.click(startButton);
+    await waitFor(() => expectCounterAt(1));
+
+    // One advance puts the runway under the lookahead and fires the refill.
+    fireEvent.click(await screen.findByRole("button", { name: "Next track" }));
+    await waitFor(() => expectCounterAt(2));
+    await waitFor(() => expect(heldPages).toHaveLength(1));
+
+    // Restart while that page is still in flight: the new queue re-reads the
+    // library from the top and puts the cursor back at BATCH_SIZE.
+    fireEvent.click(startButton);
+    await waitFor(() => expectCounterAt(1));
+
+    heldPages[0]();
+
+    const offsetsBeforeRefill = requestedOffsets.length;
+    fireEvent.click(await screen.findByRole("button", { name: "Next track" }));
+    await waitFor(() => expectCounterAt(2));
+    await waitFor(() =>
+      expect(requestedOffsets.length).toBeGreaterThan(offsetsBeforeRefill),
+    );
+
+    // The stale page must not have pushed the cursor to 2 * BATCH_SIZE.
+    expect(requestedOffsets.at(-1)).toBe(BATCH_SIZE);
+  });
+
+  // An empty page below the reported total means the library shrank under us.
+  // Re-requesting the same hole on every advance is the failure mode the
+  // shuffle exhaustion latch exists to prevent.
+  it("stops asking once a page comes back empty", async () => {
+    vi.mocked(getTracksPaginated).mockImplementation(
+      async (_limit: number, offset: number) => ({
+        error: false as const,
+        data: {
+          tracks:
+            offset === 0
+              ? Array.from({ length: BATCH_SIZE }, (_, index) =>
+                  rawTrack(index + 1),
+                )
+              : [],
+          total: LIBRARY_SIZE,
+          offset,
+          limit: BATCH_SIZE,
+          has_more: true,
+        },
+      }),
+    );
+
+    renderWithQueryClient(
+      <AudioPlayerProvider>
+        <PlayAllHarness />
+      </AudioPlayerProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "start play all" }));
+    await waitFor(() => expectCounterAt(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Next track" }));
+    await waitFor(() => expectCounterAt(2));
+    await waitFor(() =>
+      expect(vi.mocked(getTracksPaginated).mock.calls.length).toBe(2),
+    );
+
+    for (let position = 3; position <= 6; position++) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Next track" }),
+      );
+      await waitFor(() => expectCounterAt(position));
+    }
+
+    expect(vi.mocked(getTracksPaginated).mock.calls.length).toBe(2);
   });
 });

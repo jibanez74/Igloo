@@ -53,7 +53,15 @@ const playlistDetails = {
   collaborators: null,
 };
 
-async function mockPlaylistApi(page: Page) {
+type MockOptions = {
+  // Hold every page after the first for this long, so the test can watch
+  // playback start on what is already loaded while the rest is still coming.
+  pageDelayMs?: number;
+  // Serve an error envelope for this offset, as a mid-drain network blip does.
+  failAtOffset?: number;
+};
+
+async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
   const unexpectedApiRequests: string[] = [];
   const trackPageRequests: number[] = [];
 
@@ -95,6 +103,19 @@ async function mockPlaylistApi(page: Page) {
       const slice = allPlaylistTracks.slice(offset, offset + limit);
 
       trackPageRequests.push(offset);
+
+      if (offset === options.failAtOffset) {
+        await fulfillJSON(
+          route,
+          { error: true, message: "Failed to fetch playlist tracks" },
+          500,
+        );
+        return;
+      }
+
+      if (offset > 0 && options.pageDelayMs) {
+        await new Promise(resolve => setTimeout(resolve, options.pageDelayMs));
+      }
 
       await fulfillJSON(route, apiResponse({
         tracks: slice,
@@ -214,4 +235,47 @@ test("play all queues every track too", async ({ page }) => {
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
   await expect(page.getByRole("heading", { level: 1, name: "Track 1" })).toBeVisible();
   expect(trackPageRequests).toEqual([0, 50, 100]);
+});
+
+test("playback starts on the loaded page while the rest downloads behind it", async ({
+  page,
+}) => {
+  const { trackPageRequests } = await mockPlaylistApi(page, { pageDelayMs: 1500 });
+
+  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+
+  await page.getByRole("button", { name: `Play all ${TOTAL_TRACKS} tracks` }).click();
+
+  // The first note must not wait on the drain: a long playlist is dozens of
+  // sequential round trips, and the header buttons used to sit disabled behind
+  // all of them.
+  // (The header buttons are behind the expanded player at this point, so the
+  // counter is what proves playback began on the first page alone.)
+  await expect(trackCounter(page)).toHaveText(`Track 1 of ${PAGE_SIZE}`);
+
+  // ...and the rest still lands.
+  await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`, {
+    timeout: 15_000,
+  });
+  expect(trackPageRequests).toEqual([0, 50, 100]);
+});
+
+test("says so when a page of the drain fails instead of quietly playing a short queue", async ({
+  page,
+}) => {
+  await mockPlaylistApi(page, { failAtOffset: 50 });
+
+  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+
+  await page.getByRole("button", { name: `Shuffle all ${TOTAL_TRACKS} tracks` }).click();
+
+  // The button promised 120. Playing 50 without a word is the defect this whole
+  // feature was audited for, so a failed page has to surface.
+  await expect(page.getByText("Failed to shuffle playlist")).toBeVisible();
+  await expect(
+    page.getByText(`Only ${PAGE_SIZE} of ${TOTAL_TRACKS} tracks could be loaded.`),
+  ).toBeVisible();
+  await expect(trackCounter(page)).toHaveText(`Track 1 of ${PAGE_SIZE}`);
 });

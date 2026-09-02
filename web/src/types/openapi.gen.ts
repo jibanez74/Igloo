@@ -4425,7 +4425,7 @@ export interface components {
         SortQuery: "asc" | "desc";
         LimitQuery: number;
         ShuffleLimitQuery: number;
-        /** @description Track ids the client already holds. Repeat the parameter (or pass a comma-separated list) and those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
+        /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
         ShuffleExcludeQuery: number[];
         StatsLimitQuery: number;
         OffsetQuery: number;
@@ -6645,7 +6645,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: components["parameters"]["ShuffleLimitQuery"];
-                /** @description Track ids the client already holds. Repeat the parameter (or pass a comma-separated list) and those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
+                /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
                 exclude?: components["parameters"]["ShuffleExcludeQuery"];
             };
             header?: never;

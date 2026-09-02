@@ -307,16 +307,28 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 // the exclusion list stops being worth the round trip.
 const maxShuffleExcludeIDs = 200
 
+// Ids are skipped rather than rejected, so the accepted-id cap alone does not
+// bound the work: a request made entirely of junk never reaches it. Cap the
+// fields examined too, generously enough that no honest client notices.
+const maxShuffleExcludeFields = maxShuffleExcludeIDs * 4
+
 // parseShuffleExcludeIDs turns repeated `exclude=` query values into the JSON
 // array GetRandomTracks binds to json_each. Unparseable or out-of-range values
 // are skipped rather than rejected: an exclusion is an optimization, and
 // failing the whole request over one bad id would stop playback.
 func parseShuffleExcludeIDs(values []string) string {
-	ids := make([]int64, 0, len(values))
-	seen := make(map[int64]struct{}, len(values))
+	capacity := min(len(values), maxShuffleExcludeIDs)
+	ids := make([]int64, 0, capacity)
+	seen := make(map[int64]struct{}, capacity)
+	scanned := 0
 
 	for _, value := range values {
-		for _, field := range strings.Split(value, ",") {
+		for field := range strings.SplitSeq(value, ",") {
+			if scanned == maxShuffleExcludeFields {
+				break
+			}
+			scanned++
+
 			field = strings.TrimSpace(field)
 			if field == "" {
 				continue
@@ -340,6 +352,10 @@ func parseShuffleExcludeIDs(values []string) string {
 				}
 				return string(encoded)
 			}
+		}
+
+		if scanned == maxShuffleExcludeFields {
+			break
 		}
 	}
 

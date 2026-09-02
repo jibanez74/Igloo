@@ -16,6 +16,7 @@ const { audioPlayerActionsMock, audioPlayerNowPlayingMock } = vi.hoisted(() => (
   audioPlayerActionsMock: {
     playQueue: vi.fn(),
     playTrack: vi.fn(),
+    playTrackFromList: vi.fn(),
     shuffleQueue: vi.fn(),
     togglePlay: vi.fn(),
   },
@@ -62,6 +63,9 @@ type MusicianDetailsFixtureOptions = {
   summary?: string;
   albumId?: number;
   albumTitle?: string;
+  // Per-track album titles, for an artist whose tracks span several albums.
+  // Falls back to albumTitle for any track it does not cover.
+  trackAlbumTitles?: string[];
   trackIds?: number[];
   trackTitles?: string[];
   genres?: string[];
@@ -74,6 +78,7 @@ function musicianDetailsResponse({
   summary = "A focused test artist with two tracks.",
   albumId = 7,
   albumTitle = "Blue Record",
+  trackAlbumTitles = [],
   trackIds = [1, 2],
   trackTitles = ["Alabaster", "Borrowed Light"],
   genres = ["Alternative"],
@@ -83,7 +88,7 @@ function musicianDetailsResponse({
       trackIds[index] ?? id * 100 + index,
       title,
       albumId,
-      albumTitle,
+      trackAlbumTitles[index] ?? albumTitle,
     ),
   );
 
@@ -135,6 +140,18 @@ function mockMusicianDetailsFetch() {
         trackIds: [3],
         trackTitles: ["Silver Path"],
         genres: ["Ambient"],
+      }),
+    ],
+    [
+      22,
+      musicianDetailsResponse({
+        id: 22,
+        name: "The Journeyman",
+        sortName: "Journeyman, The",
+        summary: "An artist whose tracks span more than one album.",
+        trackIds: [4, 5],
+        trackTitles: ["Cobalt", "Driftwood"],
+        trackAlbumTitles: ["Blue Record", "Dark Record"],
       }),
     ],
   ]);
@@ -310,10 +327,11 @@ describe("musician details route accessibility", () => {
     expect(currentRow).toHaveTextContent("Alabaster");
   });
 
-  // Row clicks go through playTrack, which toggles play/pause itself when the
-  // clicked track is already current (covered in audio-player-queue.test.tsx).
-  // playQueue is reserved for the header's start-over buttons.
-  it("routes a row click through playTrack rather than restarting the queue", async () => {
+  // Row clicks go through playTrackFromList, which toggles play/pause itself
+  // when the clicked track is already current (covered in
+  // audio-player-queue.test.tsx). playQueue is reserved for the header's
+  // start-over buttons.
+  it("routes a row click through playTrackFromList rather than restarting the queue", async () => {
     audioPlayerNowPlayingMock.currentTrackId = 1;
     audioPlayerNowPlayingMock.isPlaying = true;
 
@@ -323,12 +341,43 @@ describe("musician details route accessibility", () => {
       await screen.findByRole("button", { name: "Pause Alabaster" }),
     );
 
-    expect(audioPlayerActionsMock.playTrack).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 1 }),
+    expect(audioPlayerActionsMock.playTrackFromList).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ id: 1 })]),
-      expect.objectContaining({ title: "The Band" }),
+      1,
     );
     expect(audioPlayerActionsMock.playQueue).not.toHaveBeenCalled();
+  });
+
+  // A musician's tracks span every album they appear on, so the queue-wide
+  // albumInfo cannot describe them: without the raw rows the player shows the
+  // musician's name in the album slot and their photo as the cover for every
+  // track, which is the defect the playlist header had.
+  it("hands the header buttons each track's own album details", async () => {
+    await renderMusicianDetailsRoute("/music/musician/22");
+
+    expect(
+      await screen.findByRole("heading", { name: "The Journeyman" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Play all/ }),
+    );
+
+    const rawTracks = audioPlayerActionsMock.playQueue.mock.calls[0][2];
+    expect(rawTracks).toHaveLength(2);
+    expect(rawTracks[0].album_title).toEqual(nullableString("Blue Record"));
+    expect(rawTracks[1].album_title).toEqual(nullableString("Dark Record"));
+    // The artist is the one field that genuinely is queue-wide here.
+    expect(rawTracks[1].musician_name).toEqual(
+      nullableString("The Journeyman"),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Shuffle/ }),
+    );
+    expect(audioPlayerActionsMock.shuffleQueue.mock.calls[0][2]).toEqual(
+      rawTracks,
+    );
   });
 });
 

@@ -146,7 +146,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const audioPlayer = useAudioPlayerActions();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [isStartingPlayback, setIsStartingPlayback] = useState(false);
+  // The rest of the playlist downloading behind playback that has already
+  // started — a progress hint on the buttons, not a block on using them.
+  const [isLoadingRest, setIsLoadingRest] = useState(false);
   const editButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -230,22 +232,33 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   });
 
   // The tracks list is an infinite query, so allTracks only holds the pages the
-  // user has scrolled into. The header buttons promise the playlist's full
-  // track_count, so drain the rest before queueing. fetchNextPage resolves with
-  // the updated observer result, so the loop reads hasNextPage off that instead
-  // of the stale value captured in this closure.
-  const loadAllTracks = async () => {
-    if (!hasNextPage) return allTracks;
-
+  // user has scrolled into, while the header buttons promise the playlist's
+  // full track_count. Drain the rest in the background: on a long playlist this
+  // is dozens of sequential round trips, and making the first note wait on them
+  // is worse than starting with what is already here.
+  //
+  // fetchNextPage resolves with the updated observer result, so the loop reads
+  // hasNextPage off that instead of the stale value captured in this closure.
+  // It never rejects (TanStack swallows the error, and apiRequest returns an
+  // error envelope rather than throwing), so a failed page shows up only as a
+  // short result — hence the page-count guard, which stops the loop if a round
+  // ever fails to add a page.
+  const loadRemainingTracks = async () => {
     let result = await fetchNextPage();
+    let pageCount = result.data?.pages.length ?? 0;
+
     while (result.hasNextPage) {
       result = await fetchNextPage();
+
+      const nextCount = result.data?.pages.length ?? 0;
+      if (nextCount <= pageCount) break;
+      pageCount = nextCount;
     }
 
     return (
       result.data?.pages.flatMap((page) =>
         page.error === false ? (page.data?.tracks ?? []) : [],
-      ) ?? allTracks
+      ) ?? []
     );
   };
 
@@ -253,40 +266,45 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   // explicit "start over" entry points and must restart even when the first
   // track is already the current one (playTrack toggles in that case).
   const startPlaylistQueue = async (shuffle: boolean) => {
-    setIsStartingPlayback(true);
+    const action = shuffle ? "shuffle playlist" : "play playlist";
 
-    // The try wraps only the fetch: the React Compiler cannot compile
-    // components with conditional/logical expressions inside a try block.
-    let tracks: PlaylistTrackType[] = [];
-    let didFail = false;
-    try {
-      tracks = await loadAllTracks();
-    } catch {
-      didFail = true;
+    if (allTracks.length === 0) {
+      showActionFailed(action, "This playlist has no tracks to play yet.");
+      return;
     }
 
-    if (didFail) {
-      showActionFailed(shuffle ? "shuffle playlist" : "play playlist");
-    } else if (tracks.length > 0) {
-      // A playlist may hold the same track at two positions. The player finds
-      // the current track with findIndex, so a repeated id would make next/prev
-      // jump back to the first copy — dedupe as playTrackFromList does.
-      const rawTracks = dedupeById(tracks.map(playlistTrackToPlayableData));
-      const audioTracks = rawTracks.map(convertToAudioTrack);
-      const albumInfo = {
-        cover: coverUrl,
-        title: playlist.name,
-        musician: null,
-      };
+    // A playlist may hold the same track at two positions. The player finds the
+    // current track with findIndex, so a repeated id would make next/prev jump
+    // back to the first copy — dedupe as playTrackFromList does.
+    const loaded = dedupeById(allTracks.map(playlistTrackToPlayableData));
+    const albumInfo = { cover: coverUrl, title: playlist.name, musician: null };
+    const audioTracks = loaded.map(convertToAudioTrack);
 
-      if (shuffle) {
-        audioPlayer.shuffleQueue(audioTracks, albumInfo, rawTracks);
-      } else {
-        audioPlayer.playQueue(audioTracks, albumInfo, rawTracks);
-      }
+    const queueId = shuffle
+      ? audioPlayer.shuffleQueue(audioTracks, albumInfo, loaded)
+      : audioPlayer.playQueue(audioTracks, albumInfo, loaded);
+
+    if (queueId === null || !hasNextPage) return;
+
+    setIsLoadingRest(true);
+    const tracks = await loadRemainingTracks();
+    setIsLoadingRest(false);
+
+    // reshuffleTail: the button said "Shuffle all N", so the tracks that only
+    // arrived now have to be mixed through the part the user has not reached
+    // yet, not tacked onto the end in a block.
+    audioPlayer.extendQueue(
+      dedupeById(tracks.map(playlistTrackToPlayableData)),
+      queueId,
+      { reshuffleTail: shuffle },
+    );
+
+    if (tracks.length < track_count) {
+      showActionFailed(
+        action,
+        `Only ${tracks.length} of ${track_count} tracks could be loaded.`,
+      );
     }
-
-    setIsStartingPlayback(false);
   };
 
   const handlePlayAll = () => {
@@ -373,7 +391,11 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             )}
           </ul>
 
-          {/* Play buttons */}
+          {/* Play buttons. Deliberately never disabled: playback starts from the
+              pages already loaded, and the spinner only reports the rest
+              arriving behind it. A disabled media control is also unreachable
+              under iOS VoiceOver. `size` re-declares rounded-md, so both
+              buttons re-assert rounded-full to stay a matching pair. */}
           {track_count > 0 && (
             <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
               <Button
@@ -381,11 +403,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 variant="accent-pill"
                 size="lg"
                 onClick={handlePlayAll}
-                disabled={isStartingPlayback}
-                className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
+                className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                 aria-label={`Play all ${track_count} tracks`}
               >
-                {isStartingPlayback ? (
+                {isLoadingRest ? (
                   <Spinner className="size-4" />
                 ) : (
                   <Play className="size-4 fill-current" aria-hidden="true" />
@@ -397,11 +418,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 variant="outline"
                 size="lg"
                 onClick={handleShuffle}
-                disabled={isStartingPlayback}
                 className="w-full rounded-full font-semibold sm:w-auto"
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
-                {isStartingPlayback ? (
+                {isLoadingRest ? (
                   <Spinner className="size-4" />
                 ) : (
                   <Shuffle className="size-4" aria-hidden="true" />

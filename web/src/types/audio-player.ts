@@ -85,22 +85,42 @@ export type AudioPlayerActions = {
   // playTrack this always restarts, even when the first track is already the
   // current one — it is the explicit "start over" entry point.
   //
-  // rawTracks is optional and only matters for mixed queues (playlists): pass
-  // it and the player resolves each track's own cover/artist/album as the queue
-  // advances instead of showing the queue-wide albumInfo for every track. Album
-  // and musician queues are single-artist, so they omit it on purpose.
+  // rawTracks is optional and matters whenever the queue is mixed — a playlist,
+  // or a musician whose tracks span several albums: pass it and the player
+  // resolves each track's own cover/artist/album as the queue advances instead
+  // of showing the queue-wide albumInfo for every track. Only a single-album
+  // queue can safely omit it, because there albumInfo already describes every
+  // track.
+  //
+  // Returns the new queue's id, or null when there was nothing to play. Hold on
+  // to it if more tracks are still downloading — extendQueue needs it.
   playQueue: (
     tracks: TrackType[],
     albumInfo: AlbumInfoType,
     rawTracks?: PlayableTrackData[]
-  ) => void;
+  ) => number | null;
 
   // Shuffle a finite queue and start it from the top. Same rawTracks contract
-  // as playQueue.
+  // and same return as playQueue.
   shuffleQueue: (
     tracks: TrackType[],
     albumInfo: AlbumInfoType,
     rawTracks?: PlayableTrackData[]
+  ) => number | null;
+
+  // Add tracks to a queue that is already playing, for a caller whose full list
+  // was not available when playback started (a playlist still downloading its
+  // later pages). queueId must be the value playQueue/shuffleQueue returned:
+  // tracks arriving for a queue the user has since replaced are discarded.
+  // Ids already in the queue are ignored, so overlapping pages are safe.
+  //
+  // reshuffleTail re-randomizes everything after the current track instead of
+  // appending in order — what a "Shuffle all N" button needs, since a shuffled
+  // batch appended to a shuffled queue is not a shuffle of the whole thing.
+  extendQueue: (
+    rawTracks: PlayableTrackData[],
+    queueId: number,
+    options?: { reshuffleTail?: boolean }
   ) => void;
 
   // Start shuffle playback across entire music library

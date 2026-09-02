@@ -200,6 +200,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`/`data-size`.
 
+- **`accent-pill` and `size` don't compose.** cva emits base → variant → size →
+  `className`, and `cn` is `twMerge`, so the last conflicting class wins:
+  `size` re-declares `rounded-md` and silently squares off the pill. Pass no
+  `size` with `accent-pill` (what every call site does), or re-assert
+  `rounded-full` in `className`. Watch for this whenever two sibling buttons
+  are meant to match — one picking up a `size` is enough to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer

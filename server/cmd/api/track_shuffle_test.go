@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -75,6 +76,43 @@ func TestParseShuffleExcludeIDsCapsTheList(t *testing.T) {
 	}
 	if count+1 != maxShuffleExcludeIDs {
 		t.Fatalf("expected %d ids, got %d", maxShuffleExcludeIDs, count+1)
+	}
+}
+
+// The accepted-id cap alone does not bound the work: skipped values never reach
+// it, so a request made entirely of junk would be walked in full.
+func TestParseShuffleExcludeIDsBoundsSkippedFields(t *testing.T) {
+	junk := make([]string, 0, maxShuffleExcludeFields+100)
+	for range maxShuffleExcludeFields + 100 {
+		junk = append(junk, "abc")
+	}
+
+	// A real id parked past the field budget must not be reached — that is the
+	// observable proof the walk stopped.
+	junk = append(junk, "42")
+
+	if got := parseShuffleExcludeIDs(junk); got != "[]" {
+		t.Errorf("parseShuffleExcludeIDs(junk) = %s, want []", got)
+	}
+
+	// The same id inside the budget is still collected, so the bound is not
+	// simply dropping everything.
+	if got := parseShuffleExcludeIDs([]string{"42"}); got != "[42]" {
+		t.Errorf("parseShuffleExcludeIDs([42]) = %s, want [42]", got)
+	}
+}
+
+// One value holding many comma-separated fields is the same walk, so the budget
+// has to apply inside a value as well as across them.
+func TestParseShuffleExcludeIDsBoundsOneLongValue(t *testing.T) {
+	fields := make([]string, 0, maxShuffleExcludeFields+100)
+	for range maxShuffleExcludeFields + 100 {
+		fields = append(fields, "abc")
+	}
+	fields = append(fields, "42")
+
+	if got := parseShuffleExcludeIDs([]string{strings.Join(fields, ",")}); got != "[]" {
+		t.Errorf("parseShuffleExcludeIDs(one long value) = %s, want []", got)
 	}
 }
 

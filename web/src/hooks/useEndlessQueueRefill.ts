@@ -42,12 +42,15 @@ export function useEndlessQueueRefill<T>({
   fetchBatch,
   onAppend,
 }: EndlessQueueRefillOptions<T>) {
-  // A ref rather than state: flipping it must not re-render, and the effect
-  // re-evaluates on the next track advance anyway.
-  const isFetchingRef = useRef(false);
+  // The queue a fetch is currently in flight for, or null when idle. Keyed by
+  // queue rather than a plain boolean so a refill for a queue the user has
+  // since replaced does not lock the new one out: that batch will be discarded
+  // on arrival anyway, and the new queue may be short enough to need topping up
+  // immediately. A ref rather than state — flipping it must not re-render.
+  const inFlightQueueIdRef = useRef<number | null>(null);
 
   const runRefill = useEffectEvent(async (activeQueueId: number) => {
-    isFetchingRef.current = true;
+    inFlightQueueIdRef.current = activeQueueId;
 
     let batch: T[] = [];
     try {
@@ -56,11 +59,16 @@ export function useEndlessQueueRefill<T>({
       // Swallowed on purpose - playback continues with the current queue.
     }
 
+    // Only the fetch that is still the in-flight one may clear the flag; a
+    // straggler from a replaced queue must not unlock a live fetch. Cleared
+    // before the append so the re-render it causes sees an idle hook.
+    if (inFlightQueueIdRef.current === activeQueueId) {
+      inFlightQueueIdRef.current = null;
+    }
+
     if (batch.length > 0) {
       onAppend(batch, activeQueueId);
     }
-
-    isFetchingRef.current = false;
   });
 
   useEffect(() => {
@@ -68,7 +76,7 @@ export function useEndlessQueueRefill<T>({
       enabled &&
       tracksAhead >= 0 &&
       tracksAhead < lookahead &&
-      !isFetchingRef.current;
+      inFlightQueueIdRef.current !== queueId;
 
     if (!shouldFetch) {
       return;
