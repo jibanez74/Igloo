@@ -239,42 +239,18 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// One joined query authorizes the member and returns the room, the same way
+// the media handlers and the WebSocket upgrade do. An unknown room and a room
+// the caller is not a member of both come back as 403, which is deliberate:
+// the room id is guessable, and the other room endpoints already refuse to
+// distinguish the two.
 func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.currentUserID(w, r)
+	room, userID, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {
 		return
 	}
 
-	roomID, err := parseRoomID(r)
-	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
-	}
-
-	room, err := app.Queries.GetWatchRoomByID(r.Context(), roomID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
-			return
-		}
-		app.Logger.Error("failed to fetch watch room", "error", err, "room_id", roomID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	isMember, err := app.Queries.IsWatchRoomMember(r.Context(), database.IsWatchRoomMemberParams{
-		RoomID: roomID,
-		UserID: userID,
-	})
-	if err != nil {
-		app.Logger.Error("failed to check room membership", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-	if !isMember {
-		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
-		return
-	}
+	roomID := room.ID
 
 	movie, err := app.Queries.GetMovieByID(r.Context(), room.MovieID)
 	if err != nil {
@@ -558,7 +534,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	if req.Mode != watchRoomPlaybackModeDirect {
 		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack), &movie, audioStreams)
 		if warmErr != nil {
-			deleteErr := app.Queries.DeleteWatchRoom(background, room.ID)
+			deleteErr := app.deleteWatchRoom(background, room.ID)
 			if deleteErr != nil {
 				app.Logger.Error(
 					"hls warm-up failed and watch room rollback delete failed",
@@ -653,7 +629,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = app.Queries.DeleteWatchRoom(r.Context(), roomID)
+	err = app.deleteWatchRoom(r.Context(), roomID)
 	if err != nil {
 		app.Logger.Error("failed to delete watch room", "error", err, "room_id", roomID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))

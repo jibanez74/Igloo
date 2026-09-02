@@ -239,6 +239,10 @@ export function useMoviePlaybackData({
       return;
     }
 
+    // The 'parent' is the router's URL search params, not a component holding
+    // duplicate state. The URL is also the upstream input, so this is a one-way
+    // reconciliation guarded above against a navigate loop.
+    // react-doctor-disable-next-line react-doctor/no-pass-data-to-parent, react-doctor/no-pass-live-state-to-parent
     syncSearch(resolvedSettings);
   }, [
     audioTrack,

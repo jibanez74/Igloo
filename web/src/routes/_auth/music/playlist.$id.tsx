@@ -21,6 +21,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
 import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -35,9 +36,9 @@ import {
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
-import { convertToAudioTrack, shuffleArray } from "@/lib/audio-utils";
+import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
@@ -50,7 +51,29 @@ import {
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { PlaylistTrackType } from "@/types";
+import type { PlayableTrackData, PlaylistTrackType } from "@/types";
+
+// A playlist row already carries every field the player needs, including the
+// per-track album/artist. Keep it as PlayableTrackData and hand that to the
+// player alongside the queue, or a mixed playlist shows the playlist's own name
+// and cover for every track.
+function playlistTrackToPlayableData(
+  track: PlaylistTrackType,
+): PlayableTrackData {
+  return {
+    id: track.id,
+    title: track.title,
+    file_path: track.file_path,
+    duration: track.duration,
+    codec: track.codec,
+    bit_rate: track.bit_rate,
+    album_id: track.album_id,
+    musician_id: track.musician_id,
+    album_cover: track.album_cover,
+    musician_name: track.musician_name,
+    album_title: track.album_title,
+  };
+}
 
 export const Route = createFileRoute("/_auth/music/playlist/$id")({
   loader: async ({ context, params }) => {
@@ -123,6 +146,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const audioPlayer = useAudioPlayerActions();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  // The rest of the playlist downloading behind playback that has already
+  // started — a progress hint on the buttons, not a block on using them.
+  const [isLoadingRest, setIsLoadingRest] = useState(false);
   const editButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -205,51 +231,88 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     },
   });
 
-  const handlePlayAll = () => {
-    if (!allTracks.length) return;
-    const audioTracks = allTracks.map((track) =>
-      convertToAudioTrack({
-        id: track.id,
-        title: track.title,
-        file_path: track.file_path,
-        duration: track.duration,
-        codec: track.codec,
-        bit_rate: track.bit_rate,
-        album_id: track.album_id,
-        musician_id: track.musician_id,
-        album_cover: track.album_cover,
-        musician_name: track.musician_name,
-      })
+  // The tracks list is an infinite query, so allTracks only holds the pages the
+  // user has scrolled into, while the header buttons promise the playlist's
+  // full track_count. Drain the rest in the background: on a long playlist this
+  // is dozens of sequential round trips, and making the first note wait on them
+  // is worse than starting with what is already here.
+  //
+  // fetchNextPage resolves with the updated observer result, so the loop reads
+  // hasNextPage off that instead of the stale value captured in this closure.
+  // It never rejects (TanStack swallows the error, and apiRequest returns an
+  // error envelope rather than throwing), so a failed page shows up only as a
+  // short result — hence the page-count guard, which stops the loop if a round
+  // ever fails to add a page.
+  const loadRemainingTracks = async () => {
+    let result = await fetchNextPage();
+    let pageCount = result.data?.pages.length ?? 0;
+
+    while (result.hasNextPage) {
+      result = await fetchNextPage();
+
+      const nextCount = result.data?.pages.length ?? 0;
+      if (nextCount <= pageCount) break;
+      pageCount = nextCount;
+    }
+
+    return (
+      result.data?.pages.flatMap((page) =>
+        page.error === false ? (page.data?.tracks ?? []) : [],
+      ) ?? []
     );
-    audioPlayer.playTrack(audioTracks[0], audioTracks, {
-      cover: coverUrl,
-      title: playlist.name,
-      musician: null,
-    });
+  };
+
+  // playQueue/shuffleQueue instead of playTrack: these header buttons are
+  // explicit "start over" entry points and must restart even when the first
+  // track is already the current one (playTrack toggles in that case).
+  const startPlaylistQueue = async (shuffle: boolean) => {
+    const action = shuffle ? "shuffle playlist" : "play playlist";
+
+    if (allTracks.length === 0) {
+      showActionFailed(action, "This playlist has no tracks to play yet.");
+      return;
+    }
+
+    // A playlist may hold the same track at two positions. The player finds the
+    // current track with findIndex, so a repeated id would make next/prev jump
+    // back to the first copy — dedupe as playTrackFromList does.
+    const loaded = dedupeById(allTracks.map(playlistTrackToPlayableData));
+    const albumInfo = { cover: coverUrl, title: playlist.name, musician: null };
+    const audioTracks = loaded.map(convertToAudioTrack);
+
+    const queueId = shuffle
+      ? audioPlayer.shuffleQueue(audioTracks, albumInfo, loaded)
+      : audioPlayer.playQueue(audioTracks, albumInfo, loaded);
+
+    if (queueId === null || !hasNextPage) return;
+
+    setIsLoadingRest(true);
+    const tracks = await loadRemainingTracks();
+    setIsLoadingRest(false);
+
+    // reshuffleTail: the button said "Shuffle all N", so the tracks that only
+    // arrived now have to be mixed through the part the user has not reached
+    // yet, not tacked onto the end in a block.
+    audioPlayer.extendQueue(
+      dedupeById(tracks.map(playlistTrackToPlayableData)),
+      queueId,
+      { reshuffleTail: shuffle },
+    );
+
+    if (tracks.length < track_count) {
+      showActionFailed(
+        action,
+        `Only ${tracks.length} of ${track_count} tracks could be loaded.`,
+      );
+    }
+  };
+
+  const handlePlayAll = () => {
+    void startPlaylistQueue(false);
   };
 
   const handleShuffle = () => {
-    if (!allTracks.length) return;
-    const shuffled = shuffleArray(allTracks);
-    const audioTracks = shuffled.map((track) =>
-      convertToAudioTrack({
-        id: track.id,
-        title: track.title,
-        file_path: track.file_path,
-        duration: track.duration,
-        codec: track.codec,
-        bit_rate: track.bit_rate,
-        album_id: track.album_id,
-        musician_id: track.musician_id,
-        album_cover: track.album_cover,
-        musician_name: track.musician_name,
-      })
-    );
-    audioPlayer.playTrack(audioTracks[0], audioTracks, {
-      cover: coverUrl,
-      title: playlist.name,
-      musician: null,
-    });
+    void startPlaylistQueue(true);
   };
 
   const handleDeletePlaylist = () => {
@@ -328,33 +391,43 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             )}
           </ul>
 
-          {/* Play buttons */}
+          {/* Play buttons. Deliberately never disabled: playback starts from the
+              pages already loaded, and the spinner only reports the rest
+              arriving behind it. A disabled media control is also unreachable
+              under iOS VoiceOver. `size` re-declares rounded-md, so both
+              buttons re-assert rounded-full to stay a matching pair. */}
           {track_count > 0 && (
             <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
-              <button
+              <Button
                 type="button"
+                variant="accent-pill"
+                size="lg"
                 onClick={handlePlayAll}
-                className={cn(
-                  MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden sm:px-6 sm:py-3 sm:text-base",
-                )}
+                className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                 aria-label={`Play all ${track_count} tracks`}
               >
-                <Play className="size-4 fill-current" aria-hidden="true" />
-                Play All
-              </button>
-              <button
-                type="button"
-                onClick={handleShuffle}
-                className={cn(
-                  MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden sm:px-6 sm:py-3 sm:text-base",
+                {isLoadingRest ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Play className="size-4 fill-current" aria-hidden="true" />
                 )}
+                Play All
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={handleShuffle}
+                className="w-full rounded-full font-semibold sm:w-auto"
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
-                <Shuffle className="size-4" aria-hidden="true" />
+                {isLoadingRest ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Shuffle className="size-4" aria-hidden="true" />
+                )}
                 Shuffle
-              </button>
+              </Button>
             </div>
           )}
 
@@ -515,7 +588,6 @@ function PlaylistTracksList({
   coverUrl,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
-  const audioPlayerState = useAudioPlayerState();
 
   // Local optimistic order override keyed by track ids.
   const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
@@ -529,41 +601,14 @@ function PlaylistTracksList({
           .filter((track): track is PlaylistTrackType => track !== undefined)
       : tracks;
 
+  // playTrackFromList, not playTrack: it keeps the same toggle-on-repeat-click
+  // contract but queues the raw rows, so each track keeps its own cover and
+  // artist as the queue advances instead of inheriting the playlist's.
   const handlePlayTrack = (track: PlaylistTrackType) => {
-    const audioTrack = convertToAudioTrack({
-      id: track.id,
-      title: track.title,
-      file_path: track.file_path,
-      duration: track.duration,
-      codec: track.codec,
-      bit_rate: track.bit_rate,
-      album_id: track.album_id,
-      musician_id: track.musician_id,
-      album_cover: track.album_cover,
-      musician_name: track.musician_name,
-    });
-
-    // Create playlist of all tracks for continuous playback
-    const allAudioTracks = orderedTracks.map((t) =>
-      convertToAudioTrack({
-        id: t.id,
-        title: t.title,
-        file_path: t.file_path,
-        duration: t.duration,
-        codec: t.codec,
-        bit_rate: t.bit_rate,
-        album_id: t.album_id,
-        musician_id: t.musician_id,
-        album_cover: t.album_cover,
-        musician_name: t.musician_name,
-      })
+    audioPlayer.playTrackFromList(
+      orderedTracks.map(playlistTrackToPlayableData),
+      track.id,
     );
-
-    audioPlayer.playTrack(audioTrack, allAudioTracks, {
-      cover: coverUrl,
-      title: playlistName,
-      musician: null,
-    });
   };
 
   // Handle reorder with optimistic update
@@ -597,8 +642,6 @@ function PlaylistTracksList({
             onReorder={handleReorder}
             onPlayTrack={handlePlayTrack}
             onRemoveTrack={onRemoveTrack}
-            currentTrackId={audioPlayerState.currentTrack?.id}
-            isPlaying={audioPlayerState.isPlaying}
           />
         </Suspense>
         {isFetchingNextPage && (
@@ -621,8 +664,6 @@ function PlaylistTracksList({
       fetchNextPage={fetchNextPage}
       onPlayTrack={handlePlayTrack}
       onRemoveTrack={onRemoveTrack}
-      currentTrackId={audioPlayerState.currentTrack?.id}
-      isPlaying={audioPlayerState.isPlaying}
     />
   );
 }
@@ -636,8 +677,6 @@ type VirtualizedPlaylistTracksListProps = {
   fetchNextPage: () => Promise<unknown>;
   onPlayTrack: (track: PlaylistTrackType) => void;
   onRemoveTrack: (trackId: number) => void;
-  currentTrackId: number | undefined;
-  isPlaying: boolean;
 };
 
 function VirtualizedPlaylistTracksList({
@@ -649,11 +688,10 @@ function VirtualizedPlaylistTracksList({
   fetchNextPage,
   onPlayTrack,
   onRemoveTrack,
-  currentTrackId,
-  isPlaying,
 }: VirtualizedPlaylistTracksListProps) {
   "use no memo";
 
+  const matchTrackPlayback = useTrackPlaybackMatcher();
   const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
 
   const onChange = useVirtualizedInfiniteLoader({
@@ -716,8 +754,7 @@ function VirtualizedPlaylistTracksList({
                 musicianId={unwrapInt(track.musician_id)}
                 musicianName={unwrapStringOrUndefined(track.musician_name)}
                 variant="playlist"
-                isPlaying={currentTrackId === track.id && isPlaying}
-                isCurrentTrack={currentTrackId === track.id}
+                {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}
                 showActionsMenu
                 playlistId={playlistId}

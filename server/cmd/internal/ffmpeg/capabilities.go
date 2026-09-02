@@ -291,6 +291,11 @@ func (c Capabilities) SupportsNvidiaCUDATonemapOptions() bool {
 	return true
 }
 
+// The four recorders below lazily create their map before writing to it. That
+// branch is unreachable from probeCapabilities, which pre-builds every map
+// except MuxerFlags, so a dead-code sweep will keep flagging it: it is kept
+// because tests build a partial Capabilities by hand and call the recorders
+// directly, and because a nil map here panics rather than degrading.
 func (c *Capabilities) recordCLIOptions(bin string, options []string) {
 	output, err := runFFmpegProbe(bin, "-hide_banner", "-h", "long")
 	if err != nil {

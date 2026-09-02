@@ -1,47 +1,20 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
-
-type NullableString = {
-  String: string;
-  Valid: boolean;
-};
-
-type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
-
-function nullableString(value = ""): NullableString {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null): NullableInt64 {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
+import {
+  fulfillJSON,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
 
 function apiResponse(data: unknown) {
   return {
     error: false,
     data,
   };
-}
-
-async function fulfillJSON(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
 }
 
 function placeholderSvg(label: string, background: string, foreground = "#f8fafc") {

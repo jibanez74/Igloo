@@ -9,6 +9,8 @@ import (
 )
 
 func TestBuildHLSAssetQuerySuffix(t *testing.T) {
+	// Legacy requests must keep producing exactly the same asset URLs: no
+	// audio_codec or audio_channels parameter may appear.
 	got := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      testIntPtr(2),
 		StartSec:        testIntPtr(120),
@@ -18,6 +20,23 @@ func TestBuildHLSAssetQuerySuffix(t *testing.T) {
 
 	if got != "?audio_track=2&playback_session=4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4&reload=7&start=120" {
 		t.Fatalf("buildHLSAssetQuerySuffix() = %q", got)
+	}
+
+	// An explicit audio profile rides on every asset URL alongside the existing
+	// parameters, in url.Values' deterministic (sorted) encoding.
+	got = buildHLSAssetQuerySuffix(hlsAssetQueryParams{
+		AudioTrack: testIntPtr(2),
+		AudioProfile: &helpers.HLSAudioProfileRequest{
+			Codec:       helpers.HLSAudioCodecEAC3,
+			MaxChannels: 6,
+		},
+		StartSec:        testIntPtr(120),
+		PlaybackSession: "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
+		Reload:          "7",
+	})
+
+	if got != "?audio_channels=6&audio_codec=eac3&audio_track=2&playback_session=4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4&reload=7&start=120" {
+		t.Fatalf("buildHLSAssetQuerySuffix() with audio profile = %q", got)
 	}
 }
 

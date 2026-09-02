@@ -343,8 +343,49 @@ func (app *Application) ensureTmdbAvailable(w http.ResponseWriter) bool {
 	return false
 }
 
+// libraryMovieIDsByTmdbID resolves a whole page of TMDB ids in one query. A
+// lookup per result row would be ~20 serialized point queries per search on a
+// pool pinned to a single connection. A failure is not fatal: the caller falls
+// back to an empty map and every result is reported as not-in-library.
+func (app *Application) libraryMovieIDsByTmdbID(ctx context.Context, movies []*tmdb.TmdbMovie) map[int64]int64 {
+	tmdbIDs := make([]sql.NullInt64, 0, len(movies))
+	seen := make(map[int64]struct{}, len(movies))
+
+	for _, movie := range movies {
+		if movie == nil {
+			continue
+		}
+		id := int64(movie.TmdbID)
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		tmdbIDs = append(tmdbIDs, helpers.NullInt64(id))
+	}
+
+	if len(tmdbIDs) == 0 {
+		return nil
+	}
+
+	rows, err := app.Queries.GetMoviesByTmdbIDs(ctx, tmdbIDs)
+	if err != nil {
+		app.Logger.Error("failed to look up existing movies by tmdb id", "error", err, "count", len(tmdbIDs))
+		return nil
+	}
+
+	existing := make(map[int64]int64, len(rows))
+	for _, row := range rows {
+		if row.TmdbID.Valid {
+			existing[row.TmdbID.Int64] = row.ID
+		}
+	}
+
+	return existing
+}
+
 func (app *Application) mapTmdbSearchResults(ctx context.Context, movies []*tmdb.TmdbMovie) []tmdbSearchResult {
 	mapped := make([]tmdbSearchResult, 0, len(movies))
+	existing := app.libraryMovieIDsByTmdbID(ctx, movies)
 
 	for _, movie := range movies {
 		if movie == nil {
@@ -359,12 +400,9 @@ func (app *Application) mapTmdbSearchResults(ctx context.Context, movies []*tmdb
 			PosterPath:  movie.PosterPath,
 		}
 
-		existingMovie, err := app.Queries.GetMovieByTmdbID(ctx, helpers.NullInt64(int64(movie.TmdbID)))
-		if err == nil {
+		if movieID, found := existing[int64(movie.TmdbID)]; found {
 			result.AlreadyInLibrary = true
-			result.LibraryMovieID = &existingMovie.ID
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			app.Logger.Error("failed to look up existing movie by tmdb id", "error", err, "tmdb_id", movie.TmdbID)
+			result.LibraryMovieID = &movieID
 		}
 
 		mapped = append(mapped, result)

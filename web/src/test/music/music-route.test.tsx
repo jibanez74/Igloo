@@ -1,11 +1,5 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ALBUMS_PER_PAGE,
@@ -15,12 +9,15 @@ import {
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
+import { jsonResponse, requestURL } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
+import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
+import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
+import { renderRoute } from "../helpers/render-route";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
     startPlayAllPlayback: vi.fn(),
     startShufflePlayback: vi.fn(),
@@ -31,43 +28,12 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
 
-vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => ({
-    currentTrack: null,
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
+  useAudioPlayerNowPlaying: () => ({
+    currentTrackId: null,
     isPlaying: false,
   }),
 }));
-
-const defaultMatchMedia = window.matchMedia;
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function track(id: number, title: string) {
   return {
@@ -99,20 +65,9 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     const url = requestURL(input);
 
     if (url === "/api/auth/user") {
-      return jsonResponse({
-        error: false,
-        data: {
-          user: {
-            id: 1,
-            name: "Music User",
-            email: "music@example.com",
-            is_admin: false,
-            avatar: null,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
-        },
-      });
+      return jsonResponse(
+        authUser({ name: "Music User", email: "music@example.com" }),
+      );
     }
 
     if (url === "/api/spotify/status") {
@@ -234,81 +189,19 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   vi.stubGlobal("fetch", fetchMock);
 }
 
-function createMusicQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderMusicRoute(
   initialEntry: string,
   options: MockMusicFetchOptions = {},
 ) {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockMusicFetch(options);
 
-  const queryClient = createMusicQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return {
-    queryClient,
-    router,
-    ...view,
-  };
-}
-
-function setReducedMotionPreference(prefersReducedMotion: boolean) {
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches:
-        query === "(prefers-reduced-motion: reduce)" && prefersReducedMotion,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
+  return renderRoute(initialEntry);
 }
 
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: defaultMatchMedia,
-  });
+  restoreMatchMedia();
 });
 
 describe("music route tab transitions", () => {

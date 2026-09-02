@@ -31,13 +31,29 @@ WHERE p.id = sqlc.arg(playlist_id);
 -- access paths are separate indexed lookups (idx_playlist_user, then
 -- idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
 -- scan of every user's playlists -- and they are disjoint because the
--- collaborator branch excludes playlists the user owns. Track count and total
--- duration come from one grouped pass over playlist_tracks instead of two
--- correlated subqueries per row.
+-- collaborator branch excludes playlists the user owns.
+--
+-- Track count and total duration are correlated subqueries, deliberately. The
+-- grouped-pass form that lived here had no correlation to the requesting user,
+-- so SQLite materialized it by scanning the whole tracks table and aggregating
+-- every playlist in the database to annotate this user's handful of rows. Per
+-- row these are index probes on idx_playlist_tracks_position (and the
+-- (playlist_id, track_id) primary key), which is bounded by the page the
+-- handler actually returns.
 SELECT
   accessible.*,
-  COALESCE(agg.track_count, 0) AS track_count,
-  COALESCE(agg.total_duration, 0) AS total_duration
+  (
+    SELECT COUNT(*)
+    FROM playlist_tracks AS pt
+    WHERE pt.playlist_id = accessible.id
+  ) AS track_count,
+  (
+    SELECT COALESCE(SUM(t.duration), 0)
+    FROM playlist_tracks AS pt
+    INNER JOIN tracks AS t
+      ON t.id = pt.track_id
+    WHERE pt.playlist_id = accessible.id
+  ) AS total_duration
 FROM (
   SELECT
     p.*,
@@ -58,17 +74,6 @@ FROM (
     AND p.content_type = 'track'
     AND p.user_id <> sqlc.arg(requesting_user_id)
 ) AS accessible
-LEFT JOIN (
-  SELECT
-    pt.playlist_id,
-    COUNT(*) AS track_count,
-    COALESCE(SUM(t.duration), 0) AS total_duration
-  FROM playlist_tracks AS pt
-  INNER JOIN tracks AS t
-    ON pt.track_id = t.id
-  GROUP BY pt.playlist_id
-) AS agg
-  ON agg.playlist_id = accessible.id
 ORDER BY accessible.updated_at DESC;
 
 -- name: UpdatePlaylist :one
@@ -124,7 +129,11 @@ RETURNING *;
 -- The movie twin of GetPlaylistsWithCollaboratorAccess; see the notes there.
 SELECT
   accessible.*,
-  COALESCE(agg.movie_count, 0) AS movie_count
+  (
+    SELECT COUNT(*)
+    FROM playlist_movies AS pm
+    WHERE pm.playlist_id = accessible.id
+  ) AS movie_count
 FROM (
   SELECT
     p.*,
@@ -145,12 +154,4 @@ FROM (
     AND p.content_type = 'movie'
     AND p.user_id <> sqlc.arg(requesting_user_id)
 ) AS accessible
-LEFT JOIN (
-  SELECT
-    pm.playlist_id,
-    COUNT(*) AS movie_count
-  FROM playlist_movies AS pm
-  GROUP BY pm.playlist_id
-) AS agg
-  ON agg.playlist_id = accessible.id
 ORDER BY accessible.updated_at DESC;

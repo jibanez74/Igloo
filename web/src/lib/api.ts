@@ -245,8 +245,34 @@ export const uploadUserAvatar = async (
       credentials: "include",
     });
 
-    const data: unknown = await response.json();
-    return data as ApiResponseType<{ user: AuthUser }>;
+    if (response.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const uploadFailed: ApiFailureType = {
+      error: true,
+      message: `${response.status} - The avatar could not be uploaded.`,
+      status: response.status,
+    };
+
+    // A malformed body — empty, non-JSON, or literal `null` — must not fall
+    // through to the catch below, which would report the generic 500 instead
+    // of the status the server actually sent.
+    const data: unknown = await response.json().catch(() => null);
+
+    if (typeof data !== "object" || data === null) {
+      return response.ok ? NETWORK_ERROR : uploadFailed;
+    }
+
+    const body = data as ApiResponseType<{ user: AuthUser }>;
+
+    // An HTTP failure whose body is not already an error envelope would
+    // otherwise be reported to the caller as a successful upload.
+    if (!response.ok && !body.error) {
+      return uploadFailed;
+    }
+
+    return body;
   } catch {
     return NETWORK_ERROR;
   }
@@ -485,9 +511,20 @@ export const getTracksPaginated = (limit: number, offset: number) =>
     withQuery("/api/music/tracks", { limit, offset }),
   );
 
-export const getShuffleTracks = (limit: number = SHUFFLE_TRACKS_LIMIT) =>
+// excludeTrackIds tells the server what the caller already holds so the random
+// sample is drawn around it. Sent comma-separated rather than as repeated
+// params - the server accepts either and one entry keeps the URL short.
+export const getShuffleTracks = (
+  limit: number = SHUFFLE_TRACKS_LIMIT,
+  excludeTrackIds: number[] = [],
+) =>
   apiRequest<ShuffleTracksResponseType>(
-    withQuery("/api/music/tracks/shuffle", { limit }),
+    withQuery("/api/music/tracks/shuffle", {
+      limit,
+      ...(excludeTrackIds.length > 0
+        ? { exclude: excludeTrackIds.join(",") }
+        : {}),
+    }),
   );
 
 export const toggleLikeTrack = (trackId: number) =>

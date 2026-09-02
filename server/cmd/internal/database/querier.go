@@ -91,11 +91,15 @@ type Querier interface {
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
 	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
-	// Sorted by release date (newest first), then by title. Track counts come from
-	// one grouped pass over idx_track_album instead of a correlated subquery per
-	// album; this query has no LIMIT, so it runs for the artist's whole
-	// discography.
+	// Sorted by release date (newest first), then by title. The track count is a
+	// correlated subquery: one probe of idx_track_album per album in the artist's
+	// discography, which is tens of rows. The grouped-pass form that lived here
+	// was uncorrelated, so SQLite materialized it by scanning every track in the
+	// library on each artist-detail request.
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
+	// Batch form of GetAlbumBySpotifyID for the Spotify album search results
+	// mapper: it only needs the library id per match, not the whole album row.
+	GetAlbumsBySpotifyIDs(ctx context.Context, spotifyIds []sql.NullString) ([]GetAlbumsBySpotifyIDsRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
 	// has_pin instead of the PIN itself: the admin listing only shows whether one
 	// is set, so the values never leave the database.
@@ -130,7 +134,6 @@ type Querier interface {
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
-	GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (GetMovieByTmdbIDRow, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
@@ -144,6 +147,10 @@ type Querier interface {
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
 	// Card-sized projection: the watch-room listing only renders title and poster.
 	GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error)
+	// Resolves a whole page of TMDB ids for the search results mapper, which
+	// annotates each result with "already in library". One indexed pass over
+	// idx_movies_tmdb_id instead of a point query per result row.
+	GetMoviesByTmdbIDs(ctx context.Context, tmdbIds []sql.NullInt64) ([]GetMoviesByTmdbIDsRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
@@ -160,6 +167,13 @@ type Querier interface {
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
+	// The bell badge in one round trip. The client polls this endpoint, and the
+	// database runs on a single shared connection (InitDB), so the admin check and
+	// the count are folded into one statement instead of GetUserIsAdmin followed by
+	// CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
+	// short-circuits to 0 without touching notifications at all. No rows means the
+	// session outlived its user, which the handler treats as a stale session.
+	GetNotificationBadgeForUser(ctx context.Context, userID int64) (GetNotificationBadgeForUserRow, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.
@@ -178,9 +192,15 @@ type Querier interface {
 	// access paths are separate indexed lookups (idx_playlist_user, then
 	// idx_playlist_collaborators_user) glued with UNION ALL -- an OR would force a
 	// scan of every user's playlists -- and they are disjoint because the
-	// collaborator branch excludes playlists the user owns. Track count and total
-	// duration come from one grouped pass over playlist_tracks instead of two
-	// correlated subqueries per row.
+	// collaborator branch excludes playlists the user owns.
+	//
+	// Track count and total duration are correlated subqueries, deliberately. The
+	// grouped-pass form that lived here had no correlation to the requesting user,
+	// so SQLite materialized it by scanning the whole tracks table and aggregating
+	// every playlist in the database to annotate this user's handful of rows. Per
+	// row these are index probes on idx_playlist_tracks_position (and the
+	// (playlist_id, track_id) primary key), which is bounded by the page the
+	// handler actually returns.
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
@@ -188,7 +208,12 @@ type Querier interface {
 	// musician joins run only for the chosen rows instead of the whole library.
 	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
 	// stays random too.
-	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
+	//
+	// exclude_ids lets an endless shuffle queue say what it already holds. Without
+	// it every refill re-samples the whole table blind, so a library smaller than
+	// the queue returns nothing but duplicates and the client burns a full scan per
+	// retry.
+	GetRandomTracks(ctx context.Context, arg GetRandomTracksParams) ([]GetRandomTracksRow, error)
 	// Persisted remux-safety verdict for one video stream; the caller compares
 	// the stored fingerprint and treats a mismatch as a miss.
 	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (RemuxSafetyVerdict, error)

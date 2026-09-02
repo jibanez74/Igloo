@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -35,36 +36,21 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	trackOK, err := app.Queries.TrackExists(ctx, req.TrackID)
+	// The play-event log and the aggregate stats are one fact recorded twice;
+	// they used to be two untransacted writes, so a failure in between left
+	// them disagreeing. The track_id foreign key replaces the TrackExists
+	// pre-check that ran first: an unknown track fails the insert, and only
+	// then do we probe to tell 404 from 500.
+	err := app.recordTrackPlay(ctx, userID, req)
 	if err != nil {
-		app.Logger.Error("failed to get track for play event", "error", err)
+		trackOK, existsErr := app.Queries.TrackExists(ctx, req.TrackID)
+		if existsErr == nil && !trackOK {
+			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to record play event", "error", err, "track_id", req.TrackID, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to record play event"))
 		return
-	}
-	if !trackOK {
-		helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
-		return
-	}
-
-	err = app.Queries.RecordPlayEvent(ctx, database.RecordPlayEventParams{
-		UserID:         userID,
-		TrackID:        req.TrackID,
-		DurationPlayed: req.DurationPlayed,
-		Completed:      req.Completed,
-	})
-	if err != nil {
-		app.Logger.Error("failed to record play event", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to record play event"))
-		return
-	}
-
-	err = app.Queries.UpsertUserTrackStats(ctx, database.UpsertUserTrackStatsParams{
-		UserID:          userID,
-		TrackID:         req.TrackID,
-		TotalTimePlayed: req.DurationPlayed,
-	})
-	if err != nil {
-		app.Logger.Error("failed to update track stats", "error", err)
 	}
 
 	res := helpers.JSONResponse{
@@ -72,6 +58,39 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 		Data:  map[string]any{"recorded": true},
 	}
 	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// recordTrackPlay writes the play event and the rolled-up per-track stats in
+// one transaction so the two cannot diverge.
+func (app *Application) recordTrackPlay(ctx context.Context, userID int64, req RecordPlayEventRequest) error {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := app.Queries.WithTx(tx)
+
+	err = qtx.RecordPlayEvent(ctx, database.RecordPlayEventParams{
+		UserID:         userID,
+		TrackID:        req.TrackID,
+		DurationPlayed: req.DurationPlayed,
+		Completed:      req.Completed,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = qtx.UpsertUserTrackStats(ctx, database.UpsertUserTrackStatsParams{
+		UserID:          userID,
+		TrackID:         req.TrackID,
+		TotalTimePlayed: req.DurationPlayed,
+	})
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Request) {

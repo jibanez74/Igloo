@@ -1,17 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
+import { QueryClient } from "@tanstack/react-query";
 import {
   AUTH_USER_KEY,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
 import type {
   ApiResponseType,
   AuthUser,
@@ -19,11 +13,20 @@ import type {
   MovieTechnicalDetailsResponse,
   PlaybackSettingsType,
 } from "@/types";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetDevicePlaybackPreferencesCache,
   setDevicePlaybackPreferences,
 } from "@/lib/playback-preferences";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { createTestQueryClient } from "../helpers/render";
+import { renderRoute } from "../helpers/render-route";
+import {
+  getDetailMotionWrappers,
+  getHeroMotionWrapper,
+  getLowerMotionWrapper,
+} from "../helpers/motion";
 
 beforeEach(() => {
   localStorage.clear();
@@ -38,49 +41,10 @@ vi.mock("@/hooks/use-coarse-pointer", () => ({
   usePrefersCoarsePointer: () => prefersCoarse.value,
 }));
 
-const DETAIL_PAGE_ANIMATION_MARKER =
-  "animate-in fade-in slide-in-from-bottom-2";
-
 function success<T extends Record<string, unknown>>(data: T): ApiResponseType<T> {
   return {
     error: false,
     data,
-  };
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
   };
 }
 
@@ -355,75 +319,17 @@ function mockMovieDetailsFetch() {
   return fetchMock;
 }
 
-function createMovieDetailsQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderMovieDetailsRoute(initialEntry: string) {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockMovieDetailsFetch();
 
-  const queryClient = createMovieDetailsQueryClient();
-  return renderMovieDetailsRouteWithQueryClient(initialEntry, queryClient);
+  return renderRoute(initialEntry);
 }
 
 async function renderMovieDetailsRouteWithQueryClient(
   initialEntry: string,
   queryClient: QueryClient,
 ) {
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return {
-    router,
-    queryClient,
-    ...view,
-  };
-}
-
-function getDetailMotionWrappers(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("div")).filter((element) =>
-    element.className.includes(DETAIL_PAGE_ANIMATION_MARKER),
-  );
-}
-
-function getHeroMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-75"),
-  );
-}
-
-function getLowerMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-150"),
-  );
+  return renderRoute(initialEntry, { queryClient });
 }
 
 function getPlayLink() {
@@ -436,11 +342,6 @@ function getPlayLinkMode() {
 
   return new URL(href ?? "", "http://localhost").searchParams.get("mode");
 }
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
 
 describe("movie details route motion", () => {
   it("renders the library movie detail page with the three-stage stagger contract", async () => {
@@ -525,10 +426,9 @@ describe("movie details route motion", () => {
 
 describe("movie details route playback settings sync", () => {
   it("uses the seeded smart default mode on the initial render", async () => {
-    vi.stubGlobal("scrollTo", vi.fn());
     mockMovieDetailsFetch();
 
-    const queryClient = createMovieDetailsQueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData([AUTH_USER_KEY], success({ user: authUser() }));
     queryClient.setQueryData(
       [PLAYBACK_SETTINGS_KEY],

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -165,8 +166,51 @@ func (app *Application) ensureSpotifyAvailable(w http.ResponseWriter) bool {
 	return false
 }
 
+// libraryAlbumIDsBySpotifyID resolves a whole page of Spotify ids in one query,
+// for the same reason as libraryMovieIDsByTmdbID: a lookup per result row is
+// ~20 serialized point queries on a single-connection pool.
+func (app *Application) libraryAlbumIDsBySpotifyID(ctx context.Context, albums []spotifylib.SimpleAlbum) (map[string]int64, error) {
+	spotifyIDs := make([]sql.NullString, 0, len(albums))
+	seen := make(map[string]struct{}, len(albums))
+
+	for _, album := range albums {
+		id := album.ID.String()
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		spotifyIDs = append(spotifyIDs, helpers.NullString(id))
+	}
+
+	if len(spotifyIDs) == 0 {
+		return nil, nil
+	}
+
+	rows, err := app.Queries.GetAlbumsBySpotifyIDs(ctx, spotifyIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up existing albums by spotify id: %w", err)
+	}
+
+	existing := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if row.SpotifyID.Valid {
+			existing[row.SpotifyID.String] = row.ID
+		}
+	}
+
+	return existing, nil
+}
+
 func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []spotifylib.SimpleAlbum) ([]spotifyAlbumSearchResult, error) {
 	mapped := make([]spotifyAlbumSearchResult, 0, len(albums))
+
+	existing, err := app.libraryAlbumIDsBySpotifyID(r.Context(), albums)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, album := range albums {
 		spotifyID := album.ID.String()
@@ -185,12 +229,9 @@ func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []s
 			SpotifyURL:  album.ExternalURLs["spotify"],
 		}
 
-		existingAlbum, err := app.Queries.GetAlbumBySpotifyID(r.Context(), helpers.NullString(spotifyID))
-		if err == nil {
+		if albumID, found := existing[spotifyID]; found {
 			result.AlreadyInLibrary = true
-			result.LibraryAlbumID = &existingAlbum.ID
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to look up existing album by spotify id %q: %w", spotifyID, err)
+			result.LibraryAlbumID = &albumID
 		}
 
 		mapped = append(mapped, result)

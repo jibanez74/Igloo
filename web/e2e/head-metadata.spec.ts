@@ -1,12 +1,7 @@
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import { apiURL, readE2EEnv } from "./e2e-env";
+import { loginPageViaApi } from "./e2e-auth";
 
 const BOOTSTRAP_DESCRIPTION =
   "Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library.";
@@ -14,27 +9,6 @@ const MOVIES_DESCRIPTION =
   "Browse and organize your personal movie collection in your Igloo media library.";
 const SETTINGS_DESCRIPTION =
   "Configure your Igloo media center settings and preferences.";
-
-async function readJSON<T>(response: APIResponse) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
-async function login(page: Page, env: E2EEnv) {
-  const loginResponse = await page.context().request.post(
-    apiURL(env, "/api/auth/login"),
-    {
-      data: {
-        email: env.email,
-        password: env.password,
-      },
-      failOnStatusCode: false,
-    },
-  );
-  expect(loginResponse.status()).toBe(200);
-
-  const loginBody = await readJSON<unknown>(loginResponse);
-  expect(loginBody.error, loginBody.message).toBe(false);
-}
 
 async function readActiveHeadMetadata(page: Page) {
   return page.evaluate(() => ({
@@ -51,7 +25,7 @@ test("restores bootstrap metadata on routes without page-specific head tags", as
 }) => {
   const env = readE2EEnv();
 
-  await login(page, env);
+  await loginPageViaApi(page, env);
   await page.goto(apiURL(env, "/movies"), { waitUntil: "networkidle" });
 
   await expect(page).toHaveTitle("Movies - Igloo");

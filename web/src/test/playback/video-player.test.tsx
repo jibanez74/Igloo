@@ -135,7 +135,6 @@ afterAll(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.unstubAllGlobals();
   fakeHlsInstances.length = 0;
   fakeHlsSupport.supported = true;
   nativeHlsSupport.supported = false;

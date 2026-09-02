@@ -377,6 +377,9 @@ function MoreMenu({
 
     setRefreshingLibrary(true);
     await refreshLibraryWithToasts(queryClient, refreshMovieLibraryCache, "Movie");
+    // refreshLibraryWithToasts owns the try/catch and never throws, precisely so
+    // this reset can be plain sequential code (see its doc comment).
+    // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
     setRefreshingLibrary(false);
     setMenuOpen(false);
   };

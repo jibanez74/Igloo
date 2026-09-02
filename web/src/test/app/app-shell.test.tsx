@@ -1,11 +1,12 @@
 import type React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import AppShell from "@/components/app/AppShell";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { renderWithQueryClient } from "@/test/helpers/render";
+import { stubMediaElement } from "../helpers/dom";
 
 vi.mock("@/lib/api", async importOriginal => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -105,20 +106,8 @@ describe("AppShell", () => {
   });
 
   describe("minimized player spacing", () => {
-    const originalLoad = HTMLMediaElement.prototype.load;
-    const originalPlay = HTMLMediaElement.prototype.play;
-    const originalPause = HTMLMediaElement.prototype.pause;
-
     beforeEach(() => {
-      HTMLMediaElement.prototype.load = vi.fn();
-      HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-      HTMLMediaElement.prototype.pause = vi.fn();
-    });
-
-    afterEach(() => {
-      HTMLMediaElement.prototype.load = originalLoad;
-      HTMLMediaElement.prototype.play = originalPlay;
-      HTMLMediaElement.prototype.pause = originalPause;
+      stubMediaElement();
     });
 
     it("reserves bottom space only while the minimized player is visible", () => {

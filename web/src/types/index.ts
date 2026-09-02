@@ -87,8 +87,9 @@ export type {
 // Audio player types
 export type {
   AlbumInfoType,
-  AudioPlayerState,
+  AudioPlayerQueueState,
   AudioPlayerActions,
+  AudioPlayerNowPlaying,
   PlayableTrackData,
 } from "./audio-player";
 
@@ -162,7 +163,6 @@ export type {
   WatchRoomMemberType,
   WatchRoomType,
   WatchRoomDetailType,
-  WatchRoomInviteUserType,
   WatchRoomInviteUsersResponseType,
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,

@@ -1,14 +1,9 @@
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { apiURL, readE2EEnv } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import { loginPageViaApi } from "./e2e-auth";
 
 type ComingSoonPage = {
   path: string;
@@ -30,27 +25,6 @@ const comingSoonPages: ComingSoonPage[] = [
       "Your TV show library is coming soon. Track episodes, discover new series, and never miss a premiere.",
   },
 ];
-
-async function readJSON<T>(response: APIResponse) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
-async function login(page: Page, env: E2EEnv) {
-  const loginResponse = await page.context().request.post(
-    apiURL(env, "/api/auth/login"),
-    {
-      data: {
-        email: env.email,
-        password: env.password,
-      },
-      failOnStatusCode: false,
-    },
-  );
-  expect(loginResponse.status()).toBe(200);
-
-  const loginBody = await readJSON<unknown>(loginResponse);
-  expect(loginBody.error, loginBody.message).toBe(false);
-}
 
 async function expectDecorativeAnimationsStopped(page: Page) {
   const decorativeStates = await page.evaluate(() =>
@@ -111,7 +85,7 @@ test.describe("Reduced motion", () => {
     const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await login(page, env);
+    await loginPageViaApi(page, env);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ width: 1280, height: 900 });
 

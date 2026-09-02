@@ -6,11 +6,13 @@ import {
 } from "react";
 import type {
   AudioPlayerActions,
-  AudioPlayerState,
+  AudioPlayerNowPlaying,
+  AudioPlayerQueueState,
   PlayableTrackData,
   TrackType,
 } from "@/types";
 import AudioPlayer from "@/components/playback/AudioPlayer";
+import { useEndlessQueueRefill } from "@/hooks/useEndlessQueueRefill";
 import {
   getShuffleTracks,
   getTracksPaginated,
@@ -18,32 +20,33 @@ import {
 } from "@/lib/api";
 import {
   convertToAudioTrack,
+  dedupeById,
   extractTrackMetadata,
+  playMediaElement,
   shuffleArray,
   toggleMediaPlayback,
   trimQueueHistory,
 } from "@/lib/audio-utils";
 import {
+  SHUFFLE_EXCLUDE_LIMIT,
   SHUFFLE_TRACKS_LIMIT,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
+import { showInfo } from "@/lib/toast-helpers";
 
 const MINIMUM_PLAY_SECONDS = 30;
 const COMPLETION_THRESHOLD = 0.8;
 const PLAY_CHECK_INTERVAL_MS = 5000;
-const MAX_SHUFFLE_FETCH_ATTEMPTS = 3;
+// Both endless modes (shuffle, play all) top up at the same runway: start
+// fetching once this few tracks remain ahead of the current one.
 const ENDLESS_QUEUE_LOAD_AHEAD_TRACKS = 10;
 // Endless queues (shuffle, play all) are trimmed when a new batch is appended;
 // this many played tracks stay reachable via previous-track navigation.
 const MAX_TRACKS_BEHIND = 50;
 
-type QueueState = Omit<
-  AudioPlayerState,
-  "isPlaying" | "isExpanded" | "isKeyboardSuspended"
->;
-
-function createInitialQueueState(): QueueState {
+function createInitialQueueState(): AudioPlayerQueueState {
   return {
+    queueId: 0,
     currentTrack: null,
     tracks: [],
     albumCover: null,
@@ -55,21 +58,25 @@ function createInitialQueueState(): QueueState {
   };
 }
 
-const AudioPlayerStateContext = createContext<AudioPlayerState | null>(null);
 const AudioPlayerActionsContext = createContext<AudioPlayerActions | null>(null);
+// The queue itself is passed to AudioPlayer as props rather than published as
+// a context, so appends to an endless queue re-render only the player. Every
+// other subscriber (track rows, the app shell) reads this primitive-only
+// slice instead.
+const AudioPlayerNowPlayingContext =
+  createContext<AudioPlayerNowPlaying | null>(null);
 
 export function AudioPlayerProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [queueState, setQueueState] = useState<QueueState>(() =>
+  const [queueState, setQueueState] = useState<AudioPlayerQueueState>(() =>
     createInitialQueueState(),
   );
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [keyboardSuspendCount, setKeyboardSuspendCount] = useState(0);
-  const isFetchingMoreRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const playStartTimeRef = useRef<number | null>(null);
@@ -82,6 +89,18 @@ export function AudioPlayerProvider({
 
   const playAllOffsetRef = useRef(0);
   const playAllTotalRef = useRef(0);
+
+  // The live queue's identity, mirrored out of state so code running after an
+  // await can test it synchronously. setQueueState is the source of truth for
+  // rendering; this ref is the source of truth for "is the queue I fetched for
+  // still the one playing?", which a state snapshot cannot answer.
+  const liveQueueIdRef = useRef(0);
+
+  // The queue a shuffle refill has already been told the library is exhausted
+  // for. Without it the refill re-fires on every track advance, re-asking a
+  // server that has nothing left and re-toasting the same message each time.
+  // Cleared implicitly: startQueue mints a new id, which can never match.
+  const exhaustedQueueIdRef = useRef<number | null>(null);
 
   const populateTrackMetadata = (tracks: PlayableTrackData[]) => {
     if (trackCoversRef.current === null) {
@@ -103,22 +122,24 @@ export function AudioPlayerProvider({
   };
 
   // Append a fetched batch to an endless queue, trimming played tracks beyond
-  // MAX_TRACKS_BEHIND and pruning their metadata so multi-hour shuffle or
-  // play-all sessions stay bounded. The map deletions are idempotent, so
-  // StrictMode's double-invoked updater is harmless.
-  const appendToQueue = (appended: TrackType[]) => {
+  // MAX_TRACKS_BEHIND so multi-hour shuffle or play-all sessions stay bounded.
+  // The updater stays pure: their metadata is pruned by the effect below.
+  //
+  // queueId is the queue the batch was fetched for. A batch that lands after
+  // the user started something else is dropped here rather than in an effect
+  // cleanup: this is the only place that can see which queue is actually live,
+  // so a batch cancelled merely by a track advance still gets kept.
+  const appendToQueue = (appended: TrackType[], queueId: number) => {
     setQueueState(prev => {
+      if (prev.queueId !== queueId) {
+        return prev;
+      }
+
       const { tracks: kept, dropped } = trimQueueHistory(
         prev.tracks,
         prev.currentTrack?.id ?? null,
         MAX_TRACKS_BEHIND,
       );
-
-      for (const track of dropped) {
-        trackCoversRef.current?.delete(track.id);
-        trackMusiciansRef.current?.delete(track.id);
-        trackAlbumTitlesRef.current?.delete(track.id);
-      }
 
       return {
         ...prev,
@@ -126,6 +147,60 @@ export function AudioPlayerProvider({
         trimmedCount: prev.trimmedCount + dropped.length,
       };
     });
+  };
+
+  // Drop metadata for tracks that have left the queue, keyed on the committed
+  // queue rather than done inside the updater above: React may run an updater
+  // for a render it discards, and these deletions are permanent, which would
+  // strand a still-queued track without its cover or artist (see setTrack's
+  // has() lookups). Reconciling against the commit is idempotent instead.
+  useEffect(() => {
+    const liveIds = new Set(queueState.tracks.map(track => track.id));
+    if (queueState.currentTrack) {
+      liveIds.add(queueState.currentTrack.id);
+    }
+
+    const maps = [
+      trackCoversRef.current,
+      trackMusiciansRef.current,
+      trackAlbumTitlesRef.current,
+    ];
+
+    for (const map of maps) {
+      if (!map) continue;
+
+      for (const id of [...map.keys()]) {
+        if (!liveIds.has(id)) {
+          map.delete(id);
+        }
+      }
+    }
+  }, [queueState.tracks, queueState.currentTrack]);
+
+  // Resolve one track's display metadata: the per-track values when the queue
+  // carries them (mixed lists - playlists, shuffle, play all, search results),
+  // otherwise the queue-wide fallback, which is what album and musician queues
+  // rely on. A track can legitimately map to null (no cover, no musician), so
+  // "unmapped" and "mapped to null" are distinguished via has().
+  const resolveTrackDisplay = (
+    trackId: number,
+    fallback: { cover: string | null; title: string; musician: string | null },
+  ) => {
+    const covers = trackCoversRef.current;
+    const musicians = trackMusiciansRef.current;
+    const albumTitles = trackAlbumTitlesRef.current;
+
+    return {
+      albumCover: covers?.has(trackId)
+        ? (covers.get(trackId) ?? null)
+        : fallback.cover,
+      musicianName: musicians?.has(trackId)
+        ? (musicians.get(trackId) ?? null)
+        : fallback.musician,
+      albumTitle: albumTitles?.has(trackId)
+        ? (albumTitles.get(trackId) ?? "")
+        : fallback.title,
+    };
   };
 
   const clearMetadataRefs = () => {
@@ -140,128 +215,117 @@ export function AudioPlayerProvider({
     ? queueState.tracks.findIndex(track => track.id === queueState.currentTrack?.id)
     : -1;
 
-  useEffect(() => {
-    const shouldFetchMore =
-      queueState.isShuffleMode &&
-      currentTrackIndex >= 0 &&
-      queueState.tracks.length - currentTrackIndex < 5 &&
-      !isFetchingMoreRef.current;
+  // Runway left ahead of the current track; negative when the current track is
+  // not in the queue (which the refill hook treats as "do nothing").
+  const tracksAhead = currentTrackIndex >= 0
+    ? queueState.tracks.length - currentTrackIndex
+    : -1;
 
-    if (!shouldFetchMore) {
-      return;
+  // Tell the server which tracks the queue already holds so it samples around
+  // them. It used to re-sample the whole library blind, which on a library
+  // smaller than the queue returned nothing but duplicates and burned a full
+  // table scan per retry.
+  const fetchShuffleBatch = async () => {
+    // The library had nothing left for this queue last time we asked, and the
+    // exclusions only grow. Checked here rather than in the `enabled` flag so
+    // the ref is not read during render.
+    if (exhaustedQueueIdRef.current === liveQueueIdRef.current) {
+      return [];
     }
 
-    let isCancelled = false;
+    const knownIds = [...new Set(queueState.tracks.map(track => track.id))];
 
-    const fetchMoreShuffleTracks = async () => {
-      isFetchingMoreRef.current = true;
-
-      // The shuffle endpoint returns purely random tracks with no awareness of
-      // what we've already queued, so dedupe against the existing queue. Retry a
-      // few times when a batch is all duplicates so playback doesn't stall.
-      const knownIds = new Set(queueState.tracks.map(track => track.id));
-      const collected: TrackType[] = [];
-      let attempts = 0;
-
-      while (
-        attempts < MAX_SHUFFLE_FETCH_ATTEMPTS &&
-        collected.length === 0 &&
-        !isCancelled
-      ) {
-        attempts++;
-
-        try {
-          const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
-
-          if (response.error || response.data.tracks.length === 0) {
-            break;
-          }
-
-          const rawTracks = response.data.tracks;
-          populateTrackMetadata(rawTracks);
-
-          for (const track of rawTracks) {
-            if (!knownIds.has(track.id)) {
-              knownIds.add(track.id);
-              collected.push(convertToAudioTrack(track));
-            }
-          }
-        } catch {
-          // Silently fail - user can continue with the current queue.
-          break;
-        }
-      }
-
-      if (!isCancelled && collected.length > 0) {
-        appendToQueue(collected);
-      }
-
-      isFetchingMoreRef.current = false;
-    };
-
-    void fetchMoreShuffleTracks();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    queueState.isShuffleMode,
-    currentTrackIndex,
-    queueState.tracks,
-  ]);
-
-  useEffect(() => {
-    const shouldFetchMore =
-      queueState.isPlayAllMode &&
-      currentTrackIndex >= 0 &&
-      queueState.tracks.length - currentTrackIndex <
-        ENDLESS_QUEUE_LOAD_AHEAD_TRACKS &&
-      !isFetchingMoreRef.current &&
-      playAllOffsetRef.current < playAllTotalRef.current;
-
-    if (!shouldFetchMore) {
-      return;
+    const response = await getShuffleTracks(
+      SHUFFLE_TRACKS_LIMIT,
+      // The most recent ids matter most if the queue ever outgrows the cap.
+      knownIds.slice(-SHUFFLE_EXCLUDE_LIMIT),
+    );
+    if (response.error) {
+      return [];
     }
 
-    let isCancelled = false;
+    // An empty batch now means the exclusions covered everything left, so say
+    // so instead of letting the queue quietly run dry. Latch it against the
+    // live queue: tracksAhead keeps shrinking as the tail plays out, and
+    // without the latch every advance would re-ask and re-toast.
+    if (response.data.tracks.length === 0) {
+      exhaustedQueueIdRef.current = liveQueueIdRef.current;
+      showInfo(
+        "That's the whole library",
+        "Shuffle has played everything it hasn't already queued.",
+      );
+      return [];
+    }
 
-    const fetchMorePlayAllTracks = async () => {
-      isFetchingMoreRef.current = true;
+    // Defensive: the server honours only the first SHUFFLE_EXCLUDE_LIMIT ids,
+    // and a repeated id would break the player's findIndex navigation.
+    const excluded = new Set(knownIds);
+    const rawTracks = response.data.tracks.filter(
+      track => !excluded.has(track.id),
+    );
 
-      try {
-        const response = await getTracksPaginated(
-          TRACKS_INFINITE_PAGE_SIZE,
-          playAllOffsetRef.current,
-        );
+    populateTrackMetadata(rawTracks);
 
-        if (!isCancelled && !response.error && response.data.tracks.length > 0) {
-          const rawTracks = response.data.tracks;
-          const newTracks = rawTracks.map(convertToAudioTrack);
+    return rawTracks.map(convertToAudioTrack);
+  };
 
-          populateTrackMetadata(rawTracks);
-          playAllOffsetRef.current += rawTracks.length;
+  const fetchPlayAllBatch = async () => {
+    // Play-all walks the library in order, so it stops once the last page has
+    // been fetched. Checked here rather than in the `enabled` flag so the refs
+    // are not read during render.
+    if (playAllOffsetRef.current >= playAllTotalRef.current) {
+      return [];
+    }
 
-          if (newTracks.length > 0) {
-            appendToQueue(newTracks);
-          }
-        }
-      } catch {
-        // Silently fail - user can continue with the current queue.
-      }
+    // Both the queue this page belongs to and the offset it starts at are read
+    // before the await. The offset must not be re-read afterwards: restarting
+    // play-all resets it, and a `+=` landing after that reset would push the
+    // cursor past a page the new queue has not fetched, silently skipping it
+    // for the rest of the session.
+    const fetchedForQueueId = liveQueueIdRef.current;
+    const offset = playAllOffsetRef.current;
 
-      isFetchingMoreRef.current = false;
-    };
+    const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, offset);
+    if (response.error) {
+      return [];
+    }
 
-    void fetchMorePlayAllTracks();
+    if (liveQueueIdRef.current !== fetchedForQueueId) {
+      return [];
+    }
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    queueState.isPlayAllMode,
-    currentTrackIndex,
-    queueState.tracks.length,
-  ]);
+    // An empty page below the reported total means the library shrank under
+    // us. Treat the cursor as the real end rather than re-requesting the same
+    // hole on every track advance.
+    if (response.data.tracks.length === 0) {
+      playAllTotalRef.current = offset;
+      return [];
+    }
+
+    const rawTracks = response.data.tracks;
+    populateTrackMetadata(rawTracks);
+    playAllOffsetRef.current = offset + rawTracks.length;
+
+    return rawTracks.map(convertToAudioTrack);
+  };
+
+  useEndlessQueueRefill({
+    enabled: queueState.isShuffleMode,
+    queueId: queueState.queueId,
+    tracksAhead,
+    lookahead: ENDLESS_QUEUE_LOAD_AHEAD_TRACKS,
+    fetchBatch: fetchShuffleBatch,
+    onAppend: appendToQueue,
+  });
+
+  useEndlessQueueRefill({
+    enabled: queueState.isPlayAllMode,
+    queueId: queueState.queueId,
+    tracksAhead,
+    lookahead: ENDLESS_QUEUE_LOAD_AHEAD_TRACKS,
+    fetchBatch: fetchPlayAllBatch,
+    onAppend: appendToQueue,
+  });
 
   useEffect(() => {
     const trackId = queueState.currentTrack?.id ?? null;
@@ -340,20 +404,53 @@ export function AudioPlayerProvider({
     if (rawTracks) {
       populateTrackMetadata(rawTracks);
     }
+    // Restarting a queue whose first track is already the current one leaves
+    // the stream URL unchanged, so AudioPlayer's load effect does not re-fire
+    // — rewind here or "Play all" would silently resume mid-track.
+    const isSameTrack = currentTrack.id === queueState.currentTrack?.id;
+
+    // Resolve the opening track the same way navigation does, or a mixed queue
+    // would show the queue-wide albumInfo for track 1 and each track's own
+    // details only from track 2 onward.
+    const display = resolveTrackDisplay(currentTrack.id, albumInfo);
+
+    // A fresh identity so any batch still in flight for the previous queue is
+    // dropped by appendToQueue instead of landing here. Minted from the ref
+    // rather than inside the updater so callers (and code resuming after an
+    // await) can name this queue without waiting for a commit.
+    const queueId = ++liveQueueIdRef.current;
+
     setQueueState({
+      queueId,
       currentTrack,
       tracks,
-      albumCover: albumInfo.cover,
-      albumTitle: albumInfo.title,
-      musicianName: albumInfo.musician,
+      albumCover: display.albumCover,
+      albumTitle: display.albumTitle,
+      musicianName: display.musicianName,
       isShuffleMode,
       isPlayAllMode,
       trimmedCount: 0,
     });
     setIsExpanded(true);
+
+    if (isSameTrack && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      void playMediaElement(audioRef.current);
+    }
+
+    return queueId;
   };
 
   const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+    // Track rows are labeled "Pause X"/"Play X" for the current track, so a
+    // repeat click toggles playback instead of rebuilding the queue and
+    // re-opening the fullscreen player — even when clicked from a different
+    // list than the one the queue came from.
+    if (track.id === queueState.currentTrack?.id) {
+      togglePlay();
+      return;
+    }
+
     startQueue({ currentTrack: track, tracks: playlist, albumInfo });
   };
 
@@ -361,16 +458,13 @@ export function AudioPlayerProvider({
     rawTracks,
     startTrackId,
   ) => {
-    // Mixed lists (search results, library tracks tab) can repeat an id;
-    // dedupe so findIndex-based prev/next navigation stays coherent.
-    const seenIds = new Set<number>();
-    const uniqueRawTracks = rawTracks.filter(track => {
-      if (seenIds.has(track.id)) {
-        return false;
-      }
-      seenIds.add(track.id);
-      return true;
-    });
+    // Same toggle-instead-of-rebuild contract as playTrack above.
+    if (startTrackId === queueState.currentTrack?.id) {
+      togglePlay();
+      return;
+    }
+
+    const uniqueRawTracks = dedupeById(rawTracks);
 
     const startRawTrack = uniqueRawTracks.find(
       track => track.id === startTrackId,
@@ -388,45 +482,119 @@ export function AudioPlayerProvider({
     });
   };
 
-  const playAlbum: AudioPlayerActions["playAlbum"] = (tracks, albumInfo) => {
-    if (tracks.length === 0) return;
+  const playQueue: AudioPlayerActions["playQueue"] = (
+    tracks,
+    albumInfo,
+    rawTracks,
+  ) => {
+    if (tracks.length === 0) return null;
 
-    startQueue({ currentTrack: tracks[0], tracks, albumInfo });
+    return startQueue({
+      currentTrack: tracks[0],
+      tracks,
+      albumInfo,
+      rawTracks,
+    });
   };
 
-  const shuffleAlbum: AudioPlayerActions["shuffleAlbum"] = (tracks, albumInfo) => {
-    if (tracks.length === 0) return;
+  const shuffleQueue: AudioPlayerActions["shuffleQueue"] = (
+    tracks,
+    albumInfo,
+    rawTracks,
+  ) => {
+    if (tracks.length === 0) return null;
 
+    // rawTracks only seeds the id-keyed metadata maps, so it stays in its
+    // original order while the queue itself is shuffled.
     const shuffled = shuffleArray(tracks);
 
-    startQueue({ currentTrack: shuffled[0], tracks: shuffled, albumInfo });
+    return startQueue({
+      currentTrack: shuffled[0],
+      tracks: shuffled,
+      albumInfo,
+      rawTracks,
+    });
+  };
+
+  // Add tracks to a queue that is already playing, for a caller that could not
+  // supply them all up front — a playlist whose remaining pages are still
+  // downloading while the first one plays. The queueId is the one playQueue or
+  // shuffleQueue handed back, so a load that finishes after the user started
+  // something else is dropped rather than spliced into the wrong queue.
+  const extendQueue: AudioPlayerActions["extendQueue"] = (
+    rawTracks,
+    queueId,
+    options,
+  ) => {
+    if (rawTracks.length === 0 || liveQueueIdRef.current !== queueId) return;
+
+    populateTrackMetadata(rawTracks);
+
+    setQueueState(prev => {
+      if (prev.queueId !== queueId) return prev;
+
+      const present = new Set(prev.tracks.map(track => track.id));
+      const appended = rawTracks
+        .filter(track => !present.has(track.id))
+        .map(convertToAudioTrack);
+
+      if (appended.length === 0) return prev;
+
+      const currentIndex = prev.currentTrack
+        ? prev.tracks.findIndex(track => track.id === prev.currentTrack?.id)
+        : -1;
+
+      if (!options?.reshuffleTail || currentIndex < 0) {
+        return { ...prev, tracks: [...prev.tracks, ...appended] };
+      }
+
+      // A shuffled tail appended after a shuffled head is not a shuffle of the
+      // whole playlist, and the button promised one. Re-shuffle everything the
+      // user has not reached yet; played tracks stay put so previous-track
+      // navigation still works.
+      //
+      // shuffleArray makes this updater impure. That is safe here in a way a
+      // deletion would not be: re-running it yields a different order, not a
+      // wrong one, and only the committed run is kept.
+      return {
+        ...prev,
+        tracks: [
+          ...prev.tracks.slice(0, currentIndex + 1),
+          ...shuffleArray([
+            ...prev.tracks.slice(currentIndex + 1),
+            ...appended,
+          ]),
+        ],
+      };
+    });
   };
 
   const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
     async () => {
       const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
-      if (response.error || response.data.tracks.length === 0) {
+      // apiRequest resolves an error envelope rather than rejecting, so throw
+      // here or the caller's catch (and its toast) never runs.
+      if (response.error) {
+        throw new Error(response.message || "Failed to fetch shuffle tracks");
+      }
+      if (response.data.tracks.length === 0) {
+        showInfo("Nothing to shuffle", "Your library has no tracks yet.");
         return;
       }
 
-      // The shuffle endpoint can repeat an id within one batch; dedupe so
-      // findIndex-based prev/next navigation stays coherent (the append
-      // effect above already dedupes subsequent batches).
-      const seenIds = new Set<number>();
-      const rawTracks = response.data.tracks.filter(track => {
-        if (seenIds.has(track.id)) {
-          return false;
-        }
-        seenIds.add(track.id);
-        return true;
-      });
+      // The append effect above already dedupes subsequent batches; this one
+      // covers repeats within the first batch.
+      const rawTracks = dedupeById(response.data.tracks);
       const tracks = rawTracks.map(convertToAudioTrack);
-      const { cover, musician } = extractTrackMetadata(rawTracks[0]);
+      // The first track's own album, not a "Shuffle All" placeholder: setTrack
+      // resolves the real title from track 2 onward, so a literal here would
+      // show a bogus album for exactly one track.
+      const { cover, musician, albumTitle } = extractTrackMetadata(rawTracks[0]);
 
       startQueue({
         currentTrack: tracks[0],
         tracks,
-        albumInfo: { cover, title: "Shuffle All", musician },
+        albumInfo: { cover, title: albumTitle, musician },
         rawTracks,
         isShuffleMode: true,
       });
@@ -435,18 +603,23 @@ export function AudioPlayerProvider({
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
     async () => {
       const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, 0);
-      if (response.error || response.data.tracks.length === 0) {
+      // Same error-envelope caveat as startShufflePlayback above.
+      if (response.error) {
+        throw new Error(response.message || "Failed to fetch tracks");
+      }
+      if (response.data.tracks.length === 0) {
+        showInfo("Nothing to play", "Your library has no tracks yet.");
         return;
       }
 
       const rawTracks = response.data.tracks;
       const tracks = rawTracks.map(convertToAudioTrack);
-      const { cover, musician } = extractTrackMetadata(rawTracks[0]);
+      const { cover, musician, albumTitle } = extractTrackMetadata(rawTracks[0]);
 
       startQueue({
         currentTrack: tracks[0],
         tracks,
-        albumInfo: { cover, title: "All Tracks", musician },
+        albumInfo: { cover, title: albumTitle, musician },
         rawTracks,
         isPlayAllMode: true,
       });
@@ -457,34 +630,28 @@ export function AudioPlayerProvider({
     };
 
   const setTrack: AudioPlayerActions["setTrack"] = track => {
-    setQueueState(prev => {
-      // Album/playlist flows clear the metadata maps, so their lookups miss
-      // and the queue-wide values carry over; mixed queues (shuffle, play
-      // all, search/library lists) resolve per-track metadata here. A track
-      // can legitimately map to null (no cover/musician), so distinguish
-      // "unmapped" from "mapped to null" via has().
-      const covers = trackCoversRef.current;
-      const musicians = trackMusiciansRef.current;
-
-      return {
-        ...prev,
-        currentTrack: track,
-        albumCover: covers?.has(track.id)
-          ? (covers.get(track.id) ?? null)
-          : prev.albumCover,
-        musicianName: musicians?.has(track.id)
-          ? (musicians.get(track.id) ?? null)
-          : prev.musicianName,
-        albumTitle: trackAlbumTitlesRef.current?.has(track.id)
-          ? (trackAlbumTitlesRef.current.get(track.id) ?? "")
-          : prev.albumTitle,
-      };
-    });
+    setQueueState(prev => ({
+      ...prev,
+      currentTrack: track,
+      // Album and musician queues leave the maps empty, so the values already
+      // on the queue are the fallback.
+      ...resolveTrackDisplay(track.id, {
+        cover: prev.albumCover,
+        title: prev.albumTitle,
+        musician: prev.musicianName,
+      }),
+    }));
   };
 
   const stop: AudioPlayerActions["stop"] = () => {
     clearMetadataRefs();
-    setQueueState(createInitialQueueState());
+    // Keep advancing the identity so a batch still in flight is not appended
+    // into the cleared queue.
+    const queueId = ++liveQueueIdRef.current;
+    setQueueState({
+      ...createInitialQueueState(),
+      queueId,
+    });
     setIsPlaying(false);
     setIsExpanded(false);
   };
@@ -519,18 +686,18 @@ export function AudioPlayerProvider({
 
   const isKeyboardSuspended = keyboardSuspendCount > 0;
 
-  const stateValue = {
-    ...queueState,
+  const nowPlayingValue = {
+    currentTrackId: queueState.currentTrack?.id ?? null,
     isPlaying,
     isExpanded,
-    isKeyboardSuspended,
   };
 
   const actionsValue = {
     playTrack,
     playTrackFromList,
-    playAlbum,
-    shuffleAlbum,
+    playQueue,
+    shuffleQueue,
+    extendQueue,
     startShufflePlayback,
     startPlayAllPlayback,
     setTrack,
@@ -544,8 +711,14 @@ export function AudioPlayerProvider({
   };
 
   return (
-    <AudioPlayerStateContext.Provider value={stateValue}>
-      <AudioPlayerActionsContext.Provider value={actionsValue}>
+    // The React Compiler memoizes both provider values - this component is kept
+    // compilable on purpose (see the try-block comments above). Splitting actions
+    // from now-playing is already the structural fix for consumer re-renders.
+    // react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal
+    <AudioPlayerActionsContext.Provider value={actionsValue}>
+      {/* Compiler-memoized, as above. */}
+      {/* react-doctor-disable-next-line react-doctor/context-provider-value-from-unmemoized-local-literal */}
+      <AudioPlayerNowPlayingContext.Provider value={nowPlayingValue}>
         {children}
         <AudioPlayer
           track={queueState.currentTrack}
@@ -564,9 +737,9 @@ export function AudioPlayerProvider({
           onExpand={expand}
           isKeyboardSuspended={isKeyboardSuspended}
         />
-      </AudioPlayerActionsContext.Provider>
-    </AudioPlayerStateContext.Provider>
+      </AudioPlayerNowPlayingContext.Provider>
+    </AudioPlayerActionsContext.Provider>
   );
 }
 
-export { AudioPlayerStateContext, AudioPlayerActionsContext };
+export { AudioPlayerActionsContext, AudioPlayerNowPlayingContext };

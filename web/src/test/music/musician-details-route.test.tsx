@@ -1,28 +1,27 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
 import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { renderRoute } from "../helpers/render-route";
+import {
+  getDetailMotionWrappers,
+  getHeroMotionWrapper,
+  getLowerMotionWrapper,
+} from "../helpers/motion";
 
-const DETAIL_PAGE_ANIMATION_MARKER =
-  "animate-in fade-in slide-in-from-bottom-2";
-
-const { audioPlayerActionsMock, audioPlayerStateMock } = vi.hoisted(() => ({
+const { audioPlayerActionsMock, audioPlayerNowPlayingMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
-    shuffleAlbum: vi.fn(),
+    playTrackFromList: vi.fn(),
+    shuffleQueue: vi.fn(),
     togglePlay: vi.fn(),
   },
-  audioPlayerStateMock: {
-    currentTrack: null as { id: number } | null,
+  audioPlayerNowPlayingMock: {
+    currentTrackId: null as number | null,
     isPlaying: false,
   },
 }));
@@ -31,45 +30,9 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
 
-vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => audioPlayerStateMock,
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
+  useAudioPlayerNowPlaying: () => audioPlayerNowPlayingMock,
 }));
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function musicianTrack(
   id: number,
@@ -100,6 +63,9 @@ type MusicianDetailsFixtureOptions = {
   summary?: string;
   albumId?: number;
   albumTitle?: string;
+  // Per-track album titles, for an artist whose tracks span several albums.
+  // Falls back to albumTitle for any track it does not cover.
+  trackAlbumTitles?: string[];
   trackIds?: number[];
   trackTitles?: string[];
   genres?: string[];
@@ -112,6 +78,7 @@ function musicianDetailsResponse({
   summary = "A focused test artist with two tracks.",
   albumId = 7,
   albumTitle = "Blue Record",
+  trackAlbumTitles = [],
   trackIds = [1, 2],
   trackTitles = ["Alabaster", "Borrowed Light"],
   genres = ["Alternative"],
@@ -121,7 +88,7 @@ function musicianDetailsResponse({
       trackIds[index] ?? id * 100 + index,
       title,
       albumId,
-      albumTitle,
+      trackAlbumTitles[index] ?? albumTitle,
     ),
   );
 
@@ -173,6 +140,18 @@ function mockMusicianDetailsFetch() {
         trackIds: [3],
         trackTitles: ["Silver Path"],
         genres: ["Ambient"],
+      }),
+    ],
+    [
+      22,
+      musicianDetailsResponse({
+        id: 22,
+        name: "The Journeyman",
+        sortName: "Journeyman, The",
+        summary: "An artist whose tracks span more than one album.",
+        trackIds: [4, 5],
+        trackTitles: ["Cobalt", "Driftwood"],
+        trackAlbumTitles: ["Blue Record", "Dark Record"],
       }),
     ],
   ]);
@@ -230,75 +209,15 @@ function mockMusicianDetailsFetch() {
   vi.stubGlobal("fetch", fetchMock);
 }
 
-function createMusicianDetailsQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderMusicianDetailsRoute(initialEntry = "/music/musician/20") {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockMusicianDetailsFetch();
 
-  const queryClient = createMusicianDetailsQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return {
-    router,
-    queryClient,
-    ...view,
-  };
-}
-
-function getDetailMotionWrappers(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("div")).filter((element) =>
-    element.className.includes(DETAIL_PAGE_ANIMATION_MARKER),
-  );
-}
-
-function getHeroMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-75"),
-  );
-}
-
-function getLowerMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-150"),
-  );
+  return renderRoute(initialEntry);
 }
 
 afterEach(() => {
-  audioPlayerStateMock.currentTrack = null;
-  audioPlayerStateMock.isPlaying = false;
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
+  audioPlayerNowPlayingMock.currentTrackId = null;
+  audioPlayerNowPlayingMock.isPlaying = false;
 });
 
 describe("musician details route accessibility", () => {
@@ -394,8 +313,8 @@ describe("musician details route accessibility", () => {
   });
 
   it("marks the currently playing track row with aria-current", async () => {
-    audioPlayerStateMock.currentTrack = { id: 1 };
-    audioPlayerStateMock.isPlaying = true;
+    audioPlayerNowPlayingMock.currentTrackId = 1;
+    audioPlayerNowPlayingMock.isPlaying = true;
 
     const { container } = await renderMusicianDetailsRoute();
 
@@ -406,6 +325,59 @@ describe("musician details route accessibility", () => {
     const currentRow = container.querySelector('[aria-current="true"]');
     expect(currentRow).not.toBeNull();
     expect(currentRow).toHaveTextContent("Alabaster");
+  });
+
+  // Row clicks go through playTrackFromList, which toggles play/pause itself
+  // when the clicked track is already current (covered in
+  // audio-player-queue.test.tsx). playQueue is reserved for the header's
+  // start-over buttons.
+  it("routes a row click through playTrackFromList rather than restarting the queue", async () => {
+    audioPlayerNowPlayingMock.currentTrackId = 1;
+    audioPlayerNowPlayingMock.isPlaying = true;
+
+    await renderMusicianDetailsRoute();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Pause Alabaster" }),
+    );
+
+    expect(audioPlayerActionsMock.playTrackFromList).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 1 })]),
+      1,
+    );
+    expect(audioPlayerActionsMock.playQueue).not.toHaveBeenCalled();
+  });
+
+  // A musician's tracks span every album they appear on, so the queue-wide
+  // albumInfo cannot describe them: without the raw rows the player shows the
+  // musician's name in the album slot and their photo as the cover for every
+  // track, which is the defect the playlist header had.
+  it("hands the header buttons each track's own album details", async () => {
+    await renderMusicianDetailsRoute("/music/musician/22");
+
+    expect(
+      await screen.findByRole("heading", { name: "The Journeyman" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Play all/ }),
+    );
+
+    const rawTracks = audioPlayerActionsMock.playQueue.mock.calls[0][2];
+    expect(rawTracks).toHaveLength(2);
+    expect(rawTracks[0].album_title).toEqual(nullableString("Blue Record"));
+    expect(rawTracks[1].album_title).toEqual(nullableString("Dark Record"));
+    // The artist is the one field that genuinely is queue-wide here.
+    expect(rawTracks[1].musician_name).toEqual(
+      nullableString("The Journeyman"),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Shuffle/ }),
+    );
+    expect(audioPlayerActionsMock.shuffleQueue.mock.calls[0][2]).toEqual(
+      rawTracks,
+    );
   });
 });
 

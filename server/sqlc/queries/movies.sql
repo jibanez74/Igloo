@@ -25,14 +25,15 @@ SELECT
     WHERE id = ?
   );
 
--- name: GetMovieByTmdbID :one
+-- name: GetMoviesByTmdbIDs :many
+-- Resolves a whole page of TMDB ids for the search results mapper, which
+-- annotates each result with "already in library". One indexed pass over
+-- idx_movies_tmdb_id instead of a point query per result row.
 SELECT
   id,
-  title,
-  year
+  tmdb_id
 FROM movies
-WHERE tmdb_id = ?
-LIMIT 1;
+WHERE tmdb_id IN (sqlc.slice(tmdb_ids));
 
 -- name: GetMoviesByIDs :many
 -- Card-sized projection: the watch-room listing only renders title and poster.

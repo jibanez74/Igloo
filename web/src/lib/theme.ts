@@ -11,7 +11,7 @@ import { MOTION_DURATION_STANDARD_MS } from "./constants";
 import { getPrefersReducedMotion } from "./motion";
 import { THEME_STORAGE_KEY, tokenHex } from "./theme-tokens";
 
-export type Theme = "light" | "dark";
+type Theme = "light" | "dark";
 
 export { THEME_STORAGE_KEY };
 

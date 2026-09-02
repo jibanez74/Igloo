@@ -656,6 +656,9 @@ function PlayMoviePage() {
   const handleStartFromBeginning = async () => {
     setResumeActionPending(true);
     const res = await deleteMovieWatchProgress(movieId);
+    // deleteMovieWatchProgress resolves an envelope and never rejects, so this
+    // clears on both outcomes; `finally` would bail out the React Compiler.
+    // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
     setResumeActionPending(false);
 
     if (res.error) {
@@ -865,6 +868,7 @@ function PlayMoviePage() {
         // Click-to-toggle is a pointer convenience only; the same toggle is
         // reachable from the footer play button and Space/K, so the surface
         // carries no button role (audit D14).
+        // react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions
         <div
           className="relative flex min-h-0 flex-1 flex-col"
           onClick={handlePlaybackSurfaceClick}

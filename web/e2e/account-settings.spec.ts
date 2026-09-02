@@ -2,23 +2,19 @@ import {
   expect,
   test,
   type APIRequestContext,
-  type APIResponse,
   type Locator,
   type Page,
-  type Response,
 } from "@playwright/test";
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
 import {
   isExpectedUnauthorizedResourceMessage,
-  isIgnorableFailedRequest,
+  trackBrowserIssues,
 } from "./e2e-browser-issues";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import {
+  readJSON,
+} from "./e2e-api";
+import { loginViaApi, logoutViaApi } from "./e2e-auth";
 
 type AdminUser = {
   id: number;
@@ -60,36 +56,6 @@ const responsiveViewports = [
   { name: "desktop", width: 1440, height: 900 },
 ];
 
-function isAppApiResponse(response: Response) {
-  return new URL(response.url()).pathname.startsWith("/api/");
-}
-
-async function readJSON<T>(response: APIResponse) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
-async function login(
-  request: APIRequestContext,
-  env: E2EEnv,
-  email = env.email,
-  password = env.password,
-) {
-  const response = await request.post(apiURL(env, "/api/auth/login"), {
-    data: { email, password },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
-}
-
-async function logout(request: APIRequestContext, env: E2EEnv) {
-  await request.delete(apiURL(env, "/api/auth/logout"), {
-    failOnStatusCode: false,
-  });
-}
-
 async function fetchAdminUsers(
   request: APIRequestContext,
   env: E2EEnv,
@@ -121,57 +87,13 @@ async function cleanupAuditUsers(
   env: E2EEnv,
   prefix: string,
 ) {
-  await login(request, env);
+  await loginViaApi(request, env);
   const users = await fetchAdminUsers(request, env);
   for (const user of users) {
     if (user.email.startsWith(prefix)) {
       await deleteUser(request, env, user.id);
     }
   }
-}
-
-function trackBrowserIssues(page: Page) {
-  const consoleIssues: string[] = [];
-  const pageErrors: string[] = [];
-  const failedRequests: string[] = [];
-  const responseErrors: string[] = [];
-
-  page.on("console", message => {
-    if (
-      message.type() === "error" &&
-      !isExpectedUnauthorizedResourceMessage(message.text()) &&
-      message.text() !==
-        "Failed to load resource: the server responded with a status of 409 (Conflict)"
-    ) {
-      consoleIssues.push(`${message.type()}: ${message.text()}`);
-    }
-  });
-  page.on("pageerror", error => pageErrors.push(error.message));
-  page.on("requestfailed", request => {
-    if (isIgnorableFailedRequest(request)) {
-      return;
-    }
-
-    failedRequests.push(
-      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
-    );
-  });
-  page.on("response", response => {
-    if (isAppApiResponse(response) && response.status() >= 500) {
-      responseErrors.push(
-        `${response.status()} ${response.request().method()} ${response.url()}`,
-      );
-    }
-  });
-
-  return {
-    assertClean() {
-      expect(consoleIssues).toEqual([]);
-      expect(pageErrors).toEqual([]);
-      expect(failedRequests).toEqual([]);
-      expect(responseErrors).toEqual([]);
-    },
-  };
 }
 
 async function expectDescriptionIncludes(
@@ -421,7 +343,14 @@ test.describe("Account settings", () => {
     request,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, {
+      minResponseStatus: 500,
+      trackConsoleWarnings: false,
+      ignoreConsole: (_type, text) =>
+        isExpectedUnauthorizedResourceMessage(text) ||
+        text ===
+          "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    });
     const stamp = Date.now();
     const prefix = `playwright-account-settings-${stamp}`;
     const name = `Playwright Account Settings ${stamp}`;
@@ -441,7 +370,7 @@ test.describe("Account settings", () => {
 
     await cleanupAuditUsers(request, env, prefix);
 
-    await login(request, env);
+    await loginViaApi(request, env);
     const createResponse = await request.post(
       apiURL(env, "/api/admin/users"),
       {
@@ -455,8 +384,8 @@ test.describe("Account settings", () => {
       },
     );
     expect(createResponse.status()).toBe(201);
-    await logout(page.context().request, env);
-    await login(page.context().request, env, email, password);
+    await logoutViaApi(page.context().request, env);
+    await loginViaApi(page.context().request, env, { email, password });
 
     try {
       await page.goto(apiURL(env, "/settings/account"), {
@@ -664,7 +593,7 @@ test.describe("Account settings", () => {
       });
       expect(deletedLogin.status()).toBe(401);
 
-      await login(request, env);
+      await loginViaApi(request, env);
       const usersResponse = await request.get(apiURL(env, "/api/admin/users"), {
         failOnStatusCode: false,
       });
@@ -686,7 +615,14 @@ test.describe("Account settings", () => {
     request,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, {
+      minResponseStatus: 500,
+      trackConsoleWarnings: false,
+      ignoreConsole: (_type, text) =>
+        isExpectedUnauthorizedResourceMessage(text) ||
+        text ===
+          "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    });
     const stamp = Date.now();
     const prefix = `playwright-profile-pin-${stamp}`;
     const email = `${prefix}@example.com`;
@@ -694,7 +630,7 @@ test.describe("Account settings", () => {
 
     await cleanupAuditUsers(request, env, prefix);
 
-    await login(request, env);
+    await loginViaApi(request, env);
     const createResponse = await request.post(apiURL(env, "/api/admin/users"), {
       data: {
         name: `Playwright Profile PIN ${stamp}`,
@@ -705,8 +641,8 @@ test.describe("Account settings", () => {
       failOnStatusCode: false,
     });
     expect(createResponse.status()).toBe(201);
-    await logout(page.context().request, env);
-    await login(page.context().request, env, email, password);
+    await logoutViaApi(page.context().request, env);
+    await loginViaApi(page.context().request, env, { email, password });
 
     try {
       await page.goto(apiURL(env, "/settings/account"), {
@@ -815,9 +751,16 @@ test.describe("Account settings", () => {
 
   test("hides the danger zone from admin accounts", async ({ page }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    const tracker = trackBrowserIssues(page, {
+      minResponseStatus: 500,
+      trackConsoleWarnings: false,
+      ignoreConsole: (_type, text) =>
+        isExpectedUnauthorizedResourceMessage(text) ||
+        text ===
+          "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    });
 
-    await login(page.context().request, env);
+    await loginViaApi(page.context().request, env);
 
     await page.goto(apiURL(env, "/settings/account"), {
       waitUntil: "networkidle",

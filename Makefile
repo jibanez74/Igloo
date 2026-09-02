@@ -13,6 +13,11 @@ DEV_BINARY_PATH := $(SERVER_DIR)/$(DEV_BINARY)
 PID_FILE := $(DIST_DIR)/$(BINARY_NAME).pid
 LOG_FILE := $(DIST_DIR)/$(BINARY_NAME).log
 
+# Pinned so a CI run cannot pick up a tool release that changes the analysis.
+DEADCODE_TOOL := golang.org/x/tools/cmd/deadcode@v0.49.0
+DEADCODE_REPORT_REL := dist/deadcode.txt
+DEADCODE_REPORT := $(SERVER_DIR)/$(DEADCODE_REPORT_REL)
+
 GO_TAGS := sqlite_fts5
 DEV_TAGS := externalbin sqlite_fts5
 PROFILE_TAGS := externalbin sqlite_fts5 pprofdebug
@@ -30,7 +35,7 @@ FFPROBE_PAYLOAD_ZST := $(FFPROBE_PAYLOAD).zst
 
 .DEFAULT_GOAL := dev
 
-.PHONY: dev dev-profile build start stop clean help check test test-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
+.PHONY: dev dev-profile build start stop clean help check test test-server lint-server test-tmdb-integration test-web lint-web build-web test-openapi lint-openapi generate-openapi check-openapi preview-openapi
 .PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads compress-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-webdist-placeholder
@@ -119,9 +124,10 @@ help:
 	@echo "  make start         Build and run the full application in the background"
 	@echo "  make stop          Stop the background application"
 	@echo "  make clean         Remove ignored build artifacts"
-	@echo "  make check         Run contract checks, backend tests, web lint, web tests, and web build"
+	@echo "  make check         Run contract checks, backend lint and tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
 	@echo "  make test-server   Run backend tests with required build tags"
+	@echo "  make lint-server   Run go vet and the dead-code reachability check"
 	@echo "  make test-tmdb-integration Run live TMDB API tests (requires TMDB_API_KEY)"
 	@echo "  make test-web      Run frontend unit tests"
 	@echo "  make lint-web      Run frontend lint"
@@ -132,12 +138,25 @@ help:
 	@echo "  make check-openapi Verify committed generated OpenAPI schemas are current"
 	@echo "  make preview-openapi Build and serve local OpenAPI documentation on localhost"
 
-check: test-openapi check-openapi test-server lint-web test-web build-web
+check: test-openapi check-openapi lint-server test-server lint-web test-web build-web
 
 test: test-server test-web
 
 test-server: check-server-test-tools prepare-webdist-placeholder
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS)" ./...
+
+# go vet plus a whole-program reachability check. deadcode roots at the tests as
+# well as main, so the baseline is empty and needs no allowlist; the trade-off is
+# that a function reached only from a test still passes. Only the externalbin
+# configuration can be checked here — the release build needs the ffmpeg/ffprobe
+# payloads, which are gitignored. deadcode exits 0 whether or not it finds
+# anything, so the emptiness of its output is what fails the target.
+lint-server: check-server-test-tools prepare-webdist-placeholder
+	@mkdir -p $(DIST_DIR)
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go vet -tags "$(TEST_TAGS)" ./...
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -test -tags "$(TEST_TAGS)" ./... > $(DEADCODE_REPORT_REL)
+	@test ! -s $(DEADCODE_REPORT) || (echo "unreachable code:"; cat $(DEADCODE_REPORT); rm -f $(DEADCODE_REPORT); exit 1)
+	@rm -f $(DEADCODE_REPORT)
 
 test-tmdb-integration: check-go-tools
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/tmdb/

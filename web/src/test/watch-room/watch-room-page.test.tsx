@@ -368,7 +368,6 @@ describe("WatchRoomPageContent", () => {
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
     vi.useRealTimers();
-    vi.restoreAllMocks();
   });
 
   it("does not send a redundant join message when the websocket opens", async () => {

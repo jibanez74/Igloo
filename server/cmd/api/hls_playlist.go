@@ -11,7 +11,11 @@ import (
 )
 
 type hlsAssetQueryParams struct {
-	AudioTrack      *int
+	AudioTrack *int
+	// AudioProfile propagates the normalized explicit audio pair onto every
+	// rewritten init/segment URL so asset requests compute the same session
+	// key as the manifest. Nil (legacy) adds nothing.
+	AudioProfile    *helpers.HLSAudioProfileRequest
 	StartSec        *int
 	PlaybackSession string
 	Reload          string
@@ -21,6 +25,10 @@ func buildHLSAssetQuerySuffix(query hlsAssetQueryParams) string {
 	params := url.Values{}
 	if query.AudioTrack != nil {
 		params.Set("audio_track", strconv.Itoa(*query.AudioTrack))
+	}
+	if query.AudioProfile != nil {
+		params.Set("audio_codec", string(query.AudioProfile.Codec))
+		params.Set("audio_channels", strconv.Itoa(query.AudioProfile.MaxChannels))
 	}
 	if query.StartSec != nil {
 		params.Set("start", strconv.Itoa(*query.StartSec))

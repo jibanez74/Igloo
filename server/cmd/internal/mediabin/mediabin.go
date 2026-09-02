@@ -1,3 +1,8 @@
+// Package mediabin resolves the ffmpeg/ffprobe binaries for both build
+// configurations. Exactly one half is live in any given build — ResolveExternal
+// under the externalbin tag, ExtractEmbeddedZstd and its helpers without it —
+// so a reachability analysis always reports the other half as unreachable. Run
+// it under both tag sets before concluding anything here is dead.
 package mediabin
 
 import (

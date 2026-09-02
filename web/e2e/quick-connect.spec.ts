@@ -1,12 +1,8 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import { readE2EEnv } from "./e2e-env";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import type { ApiResponse } from "./e2e-api";
+import { loginPageViaApi } from "./e2e-auth";
 
 type InitiateData = {
   code: string;
@@ -23,14 +19,6 @@ type RedeemData = {
 
 const env = readE2EEnv();
 const deviceName = `E2E Quick Connect ${Date.now().toString(36)}`;
-
-async function login(page: Page) {
-  const response = await page.request.post("/api/auth/login", {
-    data: { email: env.email, password: env.password },
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-}
 
 async function initiate(request: APIRequestContext): Promise<InitiateData> {
   const response = await request.post("/api/quick-connect/initiate", {
@@ -78,7 +66,7 @@ test.describe("Quick Connect pairing", () => {
     expect(pending.status).toBe("pending");
 
     // The user approves the code from account settings.
-    await login(page);
+    await loginPageViaApi(page, env, { assertBody: false });
     await page.goto("/settings/account");
 
     const codeInput = page.getByRole("textbox", { name: "Quick Connect code" });

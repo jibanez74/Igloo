@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import EditMovieDialog from "@/components/movies/EditMovieDialog";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { ApiResponseType, LibraryMovieDetailsMovieType, TmdbSearchResultType } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const apiMocks = vi.hoisted(() => ({
   identifyMovie: vi.fn(),
@@ -113,12 +114,7 @@ type DialogHarnessProps = {
 };
 
 function createQueryClient() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      mutations: { retry: false },
-      queries: { retry: false },
-    },
-  });
+  const queryClient = createTestQueryClient();
 
   return queryClient;
 }
@@ -202,10 +198,6 @@ function renderDialog(options: Partial<DialogHarnessProps> = {}) {
     },
   };
 }
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
 
 describe("EditMovieDialog", () => {
   it("resets TMDB and manual initial values when switching movies while open", async () => {

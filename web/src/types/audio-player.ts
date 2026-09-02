@@ -23,21 +23,27 @@ export type PlayableTrackData = {
   album_cover: NullableString;
   musician_name: NullableString;
 
-  // Present on list/search rows; used to keep the player header accurate in
-  // mixed queues. The shuffle/play-all endpoints may omit it.
+  // Used to keep the player header accurate in mixed queues. Optional because
+  // not every producer of this shape carries it; the list, search, shuffle and
+  // play-all endpoints all do.
   album_title?: NullableString;
 };
 
-// State for the global audio player
-export type AudioPlayerState = {
+// The queue the player is working through. Held in provider state and passed
+// to AudioPlayer as props — it is deliberately NOT exposed as a context, so a
+// queue append never re-renders the app shell or a track list.
+export type AudioPlayerQueueState = {
+  // Bumped every time a queue is started or cleared. An endless-queue batch is
+  // fetched against one queueId and appended only if that is still the live
+  // one, so a batch that lands late cannot splice itself into a queue the user
+  // has since replaced.
+  queueId: number;
+
   currentTrack: TrackType | null;
   tracks: TrackType[];
   albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
-  isPlaying: boolean;
-  isExpanded: boolean;
-  isKeyboardSuspended: boolean;
 
   // indicates if we are playing tracks in shuffle mode
   isShuffleMode: boolean;
@@ -48,6 +54,15 @@ export type AudioPlayerState = {
   // How many played tracks were trimmed from the front of an endless
   // shuffle/play-all queue; keeps the "Track N of M" counter monotonic
   trimmedCount: number;
+};
+
+// The small slice of player state that app chrome and track rows subscribe
+// to. Everything here is a primitive that changes only on real playback
+// events, so queue growth never re-renders subscribers.
+export type AudioPlayerNowPlaying = {
+  currentTrackId: number | null;
+  isPlaying: boolean;
+  isExpanded: boolean;
 };
 
 // Actions available for the audio player
@@ -66,11 +81,47 @@ export type AudioPlayerActions = {
     startTrackId: number
   ) => void;
 
-  // Play an entire album from the beginning
-  playAlbum: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
+  // Start a finite queue (album, playlist, musician page) from the top. Unlike
+  // playTrack this always restarts, even when the first track is already the
+  // current one — it is the explicit "start over" entry point.
+  //
+  // rawTracks is optional and matters whenever the queue is mixed — a playlist,
+  // or a musician whose tracks span several albums: pass it and the player
+  // resolves each track's own cover/artist/album as the queue advances instead
+  // of showing the queue-wide albumInfo for every track. Only a single-album
+  // queue can safely omit it, because there albumInfo already describes every
+  // track.
+  //
+  // Returns the new queue's id, or null when there was nothing to play. Hold on
+  // to it if more tracks are still downloading — extendQueue needs it.
+  playQueue: (
+    tracks: TrackType[],
+    albumInfo: AlbumInfoType,
+    rawTracks?: PlayableTrackData[]
+  ) => number | null;
 
-  // Shuffle and play an album's tracks
-  shuffleAlbum: (tracks: TrackType[], albumInfo: AlbumInfoType) => void;
+  // Shuffle a finite queue and start it from the top. Same rawTracks contract
+  // and same return as playQueue.
+  shuffleQueue: (
+    tracks: TrackType[],
+    albumInfo: AlbumInfoType,
+    rawTracks?: PlayableTrackData[]
+  ) => number | null;
+
+  // Add tracks to a queue that is already playing, for a caller whose full list
+  // was not available when playback started (a playlist still downloading its
+  // later pages). queueId must be the value playQueue/shuffleQueue returned:
+  // tracks arriving for a queue the user has since replaced are discarded.
+  // Ids already in the queue are ignored, so overlapping pages are safe.
+  //
+  // reshuffleTail re-randomizes everything after the current track instead of
+  // appending in order — what a "Shuffle all N" button needs, since a shuffled
+  // batch appended to a shuffled queue is not a shuffle of the whole thing.
+  extendQueue: (
+    rawTracks: PlayableTrackData[],
+    queueId: number,
+    options?: { reshuffleTail?: boolean }
+  ) => void;
 
   // Start shuffle playback across entire music library
   startShufflePlayback: () => Promise<void>;

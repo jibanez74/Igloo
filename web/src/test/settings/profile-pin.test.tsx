@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
 import type { AuthUser } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const getAuthUserMock = vi.fn();
 const getUserPinMock = vi.fn();
@@ -43,12 +44,7 @@ function authUserResponse(user: AuthUser) {
 }
 
 function renderCard() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      mutations: { retry: false },
-      queries: { retry: false },
-    },
-  });
+  const queryClient = createTestQueryClient();
 
   render(
     <QueryClientProvider client={queryClient}>

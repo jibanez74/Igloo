@@ -9,12 +9,7 @@ import {
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import type { ApiResponse } from "./e2e-api";
 
 type AdminUser = {
   id: number;

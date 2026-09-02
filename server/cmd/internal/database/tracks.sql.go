@@ -76,13 +76,26 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE t.id IN (
-  SELECT id
-  FROM tracks
+  SELECT candidate.id
+  FROM tracks AS candidate
+  -- The exclusions arrive as a JSON array rather than sqlc.slice() so the SQL
+  -- text stays constant and the statement can still be prepared. It also gets
+  -- the empty case right for free: json_each('[]') yields no rows, and
+  -- NOT IN (empty set) is true, whereas an empty slice renders as
+  -- ` + "`" + `NOT IN (NULL)` + "`" + `, which is NULL and would match nothing.
+  WHERE candidate.id NOT IN (
+    SELECT value FROM json_each(CAST(?1 AS TEXT))
+  )
   ORDER BY RANDOM()
-  LIMIT ?1
+  LIMIT ?2
 )
 ORDER BY RANDOM()
 `
+
+type GetRandomTracksParams struct {
+	ExcludeIds string `json:"exclude_ids"`
+	RowLimit   int64  `json:"row_limit"`
+}
 
 type GetRandomTracksRow struct {
 	ID           int64          `json:"id"`
@@ -102,8 +115,13 @@ type GetRandomTracksRow struct {
 // musician joins run only for the chosen rows instead of the whole library.
 // The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
 // stays random too.
-func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error) {
-	rows, err := q.query(ctx, q.getRandomTracksStmt, getRandomTracks, limit)
+//
+// exclude_ids lets an endless shuffle queue say what it already holds. Without
+// it every refill re-samples the whole table blind, so a library smaller than
+// the queue returns nothing but duplicates and the client burns a full scan per
+// retry.
+func (q *Queries) GetRandomTracks(ctx context.Context, arg GetRandomTracksParams) ([]GetRandomTracksRow, error) {
+	rows, err := q.query(ctx, q.getRandomTracksStmt, getRandomTracks, arg.ExcludeIds, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

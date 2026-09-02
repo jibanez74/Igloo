@@ -1,13 +1,7 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AudioPlayerStateContext } from "@/context/AudioPlayerContext";
+import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
 import {
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
@@ -15,29 +9,15 @@ import {
   PLAYBACK_SETTINGS_KEY,
   SETTINGS_KEY,
 } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
-import type { AudioPlayerState } from "@/types";
+import type { AudioPlayerNowPlaying } from "@/types";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { renderRoute } from "../helpers/render-route";
 
 const defaultMatchMedia = window.matchMedia;
 const originalStartViewTransition = (document as Document & {
   startViewTransition?: unknown;
 }).startViewTransition;
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
 
 function authUser() {
   return {
@@ -146,49 +126,19 @@ function mockSettingsFetch() {
   vi.stubGlobal("fetch", fetchMock);
 }
 
-function createSettingsQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderSettingsRoute(
   initialEntry: string,
-  playerState: AudioPlayerState | null = null,
+  nowPlaying: AudioPlayerNowPlaying | null = null,
 ) {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockSettingsFetch();
 
-  const queryClient = createSettingsQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
+  const { queryClient, router } = await renderRoute(initialEntry, {
+    wrapper: children => (
+      <AudioPlayerNowPlayingContext.Provider value={nowPlaying}>
+        {children}
+      </AudioPlayerNowPlayingContext.Provider>
+    ),
   });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <AudioPlayerStateContext.Provider value={playerState}>
-        <RouterProvider router={router} context={{ queryClient }} />
-      </AudioPlayerStateContext.Provider>
-    </QueryClientProvider>,
-  );
 
   return { queryClient, router };
 }
@@ -196,8 +146,6 @@ async function renderSettingsRoute(
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: defaultMatchMedia,
@@ -280,17 +228,9 @@ describe("settings route tab transitions", () => {
 
   it("keeps sticky actions above the minimized audio player", async () => {
     await renderSettingsRoute("/settings", {
-      currentTrack: { id: 1 } as NonNullable<AudioPlayerState["currentTrack"]>,
-      tracks: [],
-      albumCover: null,
-      albumTitle: "",
-      musicianName: null,
+      currentTrackId: 1,
       isPlaying: true,
       isExpanded: false,
-      isKeyboardSuspended: false,
-      isShuffleMode: false,
-      isPlayAllMode: false,
-      trimmedCount: 0,
     });
 
     const savePanel =

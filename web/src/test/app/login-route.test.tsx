@@ -1,15 +1,10 @@
 import type React from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MOVIES_IN_THEATERS_KEY, MOVIES_PER_PAGE } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({
   showError: vi.fn(),
@@ -26,21 +21,6 @@ vi.mock("@/lib/toast-helpers", () => ({
   showError: toastMocks.showError,
   showSuccess: toastMocks.showSuccess,
 }));
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
 
 function authUser() {
   return {
@@ -173,57 +153,23 @@ function mockLoginFetch({
   return fetchMock;
 }
 
-function createLoginQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderLoginRoute(initialEntry: string) {
-  const result = await renderRoute(initialEntry);
+  const result = await renderLoginRouteTree(initialEntry);
 
   await screen.findByRole("button", { name: "Sign in" });
   return result;
 }
 
-async function renderRoute(
+async function renderLoginRouteTree(
   initialEntry: string,
   options: MockLoginFetchOptions | ReturnType<typeof authUser> | null = {},
 ) {
-  vi.stubGlobal("scrollTo", vi.fn());
   const fetchOptions =
     options == null || "email" in options
       ? { initialUser: options }
       : options;
   const fetchMock = mockLoginFetch(fetchOptions);
-  const queryClient = createLoginQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
+  const { queryClient, router } = await renderRoute(initialEntry);
 
   return { fetchMock, queryClient, router };
 }
@@ -239,12 +185,6 @@ async function signIn() {
   await user.click(screen.getByRole("button", { name: "Sign in" }));
 }
 
-afterEach(() => {
-  vi.clearAllMocks();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
-
 describe("login route redirects", () => {
   it("redirects unauthenticated Home before loading in-theaters data", async () => {
     const { fetchMock, router } = await renderLoginRoute("/");
@@ -258,7 +198,7 @@ describe("login route redirects", () => {
   });
 
   it("renders in-theaters data for authenticated Home", async () => {
-    await renderRoute("/", authUser());
+    await renderLoginRouteTree("/", authUser());
 
     expect(await screen.findByText("Theater Fresh")).toBeInTheDocument();
   });
@@ -278,7 +218,7 @@ describe("login route redirects", () => {
   });
 
   it("reenables login controls after an API error response", async () => {
-    const { router } = await renderRoute("/login", {
+    const { router } = await renderLoginRouteTree("/login", {
       loginResponse: {
         body: {
           error: true,

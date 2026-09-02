@@ -1,10 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
-// Shared helpers for the opt-in real-media suites (hls-transcode,
-// direct-play-media), which run against a live Igloo instance via
-// E2E_BASE_URL instead of the mock API server.
+// Shared media helpers. `loginWithCredentials` is used by the default mocked
+// specs too (movie-player, direct-play-fallback); the fetch/progress helpers
+// below serve only the opt-in real-media suites (hls-transcode,
+// direct-play-media), which run against a live instance via E2E_BASE_URL.
 
-export type MediaApiResponse<T> = {
+type MediaApiResponse<T> = {
   error: boolean;
   message?: string;
   data?: T;

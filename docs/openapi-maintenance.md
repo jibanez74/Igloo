@@ -44,3 +44,8 @@ Conventions:
   `assertOpenAPIExchange` from a successful focused handler test. An unfiltered
   API package test run fails at package completion if any such operation was not
   observed; filtered `go test -run ...` commands skip that package-wide check.
+- HLS contract changes also require live `assertOpenAPIExchange` coverage for
+  both personal and watch-room manifests and assets. Cover the non-JSON success
+  variants the contract distinguishes: complete, single-range, multipart-range,
+  conditional 304, and malformed or unsatisfiable 416 responses. Validate at
+  least one retryable HLS 503 so the required `Retry-After` header cannot drift.

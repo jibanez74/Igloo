@@ -7,12 +7,10 @@ import { cn } from "@/lib/utils"
 // variant record + cn() per the house cva policy (docs/design-system.md §1.6).
 const badgeVariants = {
   default: "bg-primary text-primary-foreground",
-  aurora: "bg-aurora text-aurora-foreground",
-  muted: "bg-muted text-foreground",
   outline: "border border-border bg-background/60 text-muted-foreground",
 }
 
-export type BadgeVariant = keyof typeof badgeVariants
+type BadgeVariant = keyof typeof badgeVariants
 
 function Badge({
   className,

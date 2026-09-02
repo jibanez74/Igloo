@@ -217,9 +217,12 @@ export function useWatchRoomConnection({
   });
 
   const handleSocketClose = useEffectEvent((closedInstanceId: number) => {
+    // Guard first: a replaced socket's close event can land after the new one
+    // has opened, and clearing the heartbeat/ready flag here would silence the
+    // live connection until the server dropped it.
+    if (closedInstanceId !== socketInstanceIdRef.current) return;
     setConnectionReady(false);
     clearHeartbeat();
-    if (closedInstanceId !== socketInstanceIdRef.current) return;
     if (!intentionalCloseRef.current) {
       const delay = Math.min(
         1000 * 2 ** Math.min(reconnectAttemptsRef.current, 10),
@@ -238,6 +241,9 @@ export function useWatchRoomConnection({
     setPlaybackError("Realtime sync connection failed for this watch room.");
   });
 
+  // The cleanup closes the socket, which releases its four listeners, and clears
+  // both the heartbeat interval and the reconnect timeout.
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
     roomDeletionHandledRef.current = false;
     intentionalCloseRef.current = false;
@@ -297,6 +303,8 @@ export function useWatchRoomConnection({
       }
 
       clearHeartbeat();
+      // Teardown owns this now that a stale close returns early above.
+      setConnectionReady(false);
 
       if (socketRef.current === socket) {
         socketRef.current = null;

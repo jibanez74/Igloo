@@ -1,38 +1,11 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type APIResponse,
-  type Page,
-} from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { apiURL as appURL, readE2EEnv, type E2EEnv } from "./e2e-env";
-
-type ApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+import { apiURL, readE2EEnv } from "./e2e-env";
+import { loginViaApi } from "./e2e-auth";
 
 const desktopViewport = { width: 1440, height: 1200 };
 const moviesAllPath =
   "/movies?tab=all&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
-
-async function readJSON<T>(response: APIResponse) {
-  return (await response.json()) as ApiResponse<T>;
-}
-
-async function login(request: APIRequestContext, env: E2EEnv) {
-  const response = await request.post(appURL(env, "/api/auth/login"), {
-    data: { email: env.email, password: env.password },
-    failOnStatusCode: false,
-  });
-
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<unknown>(response);
-  expect(body.error, body.message).toBe(false);
-}
 
 async function expectMoviesPageLoaded(page: Page) {
   await expect(page).toHaveTitle("Movies - Igloo");
@@ -187,11 +160,11 @@ test.describe("movies page", () => {
     page,
   }) => {
     const env = readE2EEnv();
-    await login(page.context().request, env);
+    await loginViaApi(page.context().request, env);
 
     const browserIssues = trackBrowserIssues(page);
     await page.setViewportSize(desktopViewport);
-    await page.goto(appURL(env, moviesAllPath));
+    await page.goto(apiURL(env, moviesAllPath));
 
     await expectMoviesPageLoaded(page);
     await expectGenresSmoke(page);

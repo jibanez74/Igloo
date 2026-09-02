@@ -71,6 +71,9 @@ SELECT
   -- track_musicians. A UNION of two indexed lookups rather than an OR over both
   -- tables: the OR form cannot use an index and scans every track per musician.
   -- UNION (not UNION ALL) preserves the distinct-track count.
+  -- searchMusiciansSQL in cmd/api/search_handler.go must keep this identical: it
+  -- scans into this same row type, so a divergence shows the same artist card
+  -- with two different track counts.
   (
     SELECT COUNT(*)
     FROM (
@@ -101,28 +104,25 @@ WHERE id = ?
 LIMIT 1;
 
 -- name: GetAlbumsByMusicianID :many
--- Sorted by release date (newest first), then by title. Track counts come from
--- one grouped pass over idx_track_album instead of a correlated subquery per
--- album; this query has no LIMIT, so it runs for the artist's whole
--- discography.
+-- Sorted by release date (newest first), then by title. The track count is a
+-- correlated subquery: one probe of idx_track_album per album in the artist's
+-- discography, which is tens of rows. The grouped-pass form that lived here
+-- was uncorrelated, so SQLite materialized it by scanning every track in the
+-- library on each artist-detail request.
 SELECT
   a.id,
   a.title,
   a.cover,
   a.year,
   a.release_date,
-  COALESCE(tc.track_count, 0) AS track_count
+  (
+    SELECT COUNT(*)
+    FROM tracks AS t
+    WHERE t.album_id = a.id
+  ) AS track_count
 FROM albums AS a
 INNER JOIN musician_albums AS ma
   ON a.id = ma.album_id
-LEFT JOIN (
-  SELECT
-    album_id,
-    COUNT(*) AS track_count
-  FROM tracks
-  GROUP BY album_id
-) AS tc
-  ON tc.album_id = a.id
 WHERE ma.musician_id = ?
 ORDER BY
   a.release_date DESC,

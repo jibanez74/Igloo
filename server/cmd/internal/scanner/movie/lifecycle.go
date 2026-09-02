@@ -37,12 +37,8 @@ func (s *Scanner) Start() StartResult {
 func (s *Scanner) runMovieScan() {
 	defer s.guard.Finish()
 
+	// Start has already rejected an unset directory before spawning this.
 	directory := s.currentMoviesDirectory()
-	if !directory.Valid || directory.String == "" {
-		s.logger.Info("skipping movie library scan: movies directory is not configured")
-		return
-	}
-
 	s.logger.Info(fmt.Sprintf("scanning movies directory: %s", directory.String))
 
 	ctx := s.scanContext
@@ -116,6 +112,10 @@ func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext
 			return scanned, skipped, errCount
 		}
 
+		// runMovieScan's walk already filters unchanged files before batching,
+		// so this never fires on that path. It is what makes the function
+		// correct when called on its own, and it is covered by
+		// TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe.
 		if scan.movieUnchanged(file.Path, file.Size) {
 			skipped++
 			continue

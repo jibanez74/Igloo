@@ -967,7 +967,10 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpFailureRollsBackRoom(t *testing.T) {
 	}
 }
 
-func TestGetWatchRoom_HTTP_NotFound(t *testing.T) {
+// An unknown room is indistinguishable from a room the caller cannot see: the
+// single joined authorization query returns no row either way, so both are 403.
+// The other room endpoints have always behaved this way.
+func TestGetWatchRoom_HTTP_UnknownRoomIsForbidden(t *testing.T) {
 	app := setupSessionTestApp(t)
 	defer app.DB.Close()
 
@@ -978,8 +981,8 @@ func TestGetWatchRoom_HTTP_NotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
 	}
 }
 
@@ -1098,6 +1101,41 @@ func TestDeleteWatchRoom_HTTP_SuccessForOwner(t *testing.T) {
 	_, err := app.Queries.GetWatchRoomByID(context.Background(), room.ID)
 	if err != sql.ErrNoRows {
 		t.Errorf("expected room to be deleted, got: %v", err)
+	}
+}
+
+func TestDeleteWatchRoom_HTTP_InvalidatesCachedAuthorization(t *testing.T) {
+	app := setupSessionTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoomWithMode(t, app, ownerID, movieID, watchRoomPlaybackModeDirect)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	handler := mountWatchRoomRouter(t, app, ownerID)
+	detailPath := fmt.Sprintf("/api/watch-rooms/%d", room.ID)
+	streamPath := fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID)
+
+	warmRequest := httptest.NewRequest(http.MethodGet, detailPath, nil)
+	warmResponse := httptest.NewRecorder()
+	handler.ServeHTTP(warmResponse, warmRequest)
+	if warmResponse.Code != http.StatusOK {
+		t.Fatalf("warm detail request returned %d: %s", warmResponse.Code, warmResponse.Body.String())
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, detailPath, nil)
+	deleteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusOK {
+		t.Fatalf("delete returned %d: %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+
+	for _, path := range []string{detailPath, streamPath} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden {
+			t.Errorf("GET %s returned %d after delete, want 403: %s", path, response.Code, response.Body.String())
+		}
 	}
 }
 
@@ -1781,7 +1819,7 @@ func TestVerifyWatchRoomStreamPins(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := app.verifyWatchRoomStreamPins(ctx, tc.room)
+			_, err := app.verifyWatchRoomStreamPins(ctx, tc.room)
 			if tc.wantDrift {
 				if !errors.Is(err, errWatchRoomStreamDrift) {
 					t.Fatalf("expected stream drift, got %v", err)
@@ -1838,10 +1876,22 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
 
 	manifestPath := fmt.Sprintf("/api/watch-rooms/%d/hls/playlist.m3u8", roomID)
-	healthy := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath)
+	healthyRequest := httptest.NewRequest(http.MethodGet, manifestPath, nil)
+	healthy := httptest.NewRecorder()
+	handler.ServeHTTP(healthy, healthyRequest)
 	if healthy.Code != http.StatusOK {
 		t.Fatalf("expected 200 before drift, got %d: %s", healthy.Code, healthy.Body.String())
 	}
+	assertOpenAPIExchange(t, "watchRoomHLSManifest", healthyRequest, healthy)
+
+	assetPath := fmt.Sprintf("/api/watch-rooms/%d/hls/segment_0.m4s?audio_track=0", roomID)
+	assetRequest := httptest.NewRequest(http.MethodGet, assetPath, nil)
+	asset := httptest.NewRecorder()
+	handler.ServeHTTP(asset, assetRequest)
+	if asset.Code != http.StatusOK {
+		t.Fatalf("expected room HLS asset 200, got %d: %s", asset.Code, asset.Body.String())
+	}
+	assertOpenAPIExchange(t, "watchRoomHLSSegment", assetRequest, asset)
 
 	// Simulate a rescan of a replaced file whose track layout differs: the
 	// ordinal still resolves, but to a different absolute stream index.
@@ -1849,6 +1899,9 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("shift audio stream index: %v", err)
 	}
+	// A real rescan ends by calling this; the raw UPDATE above has to do the
+	// same or the pin check keeps reading the pre-drift streams from cache.
+	app.invalidateCommittedMovie(movieID)
 
 	drifted := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath)
 	if drifted.Code != http.StatusConflict {

@@ -108,6 +108,9 @@ export const TRACKS_INFINITE_PAGE_SIZE = 50;
 export const PLAYLIST_TRACKS_PAGE_SIZE = 50;
 export const LIKED_TRACKS_PER_PAGE = 50;
 export const SHUFFLE_TRACKS_LIMIT = 50;
+// How many already-queued track ids a shuffle refill sends back so the server
+// samples around them. Matches the server's own cap.
+export const SHUFFLE_EXCLUDE_LIMIT = 200;
 
 // Route search defaults. Reuse these when navigating so links and loaders agree
 // on the canonical starting search state for a route.
@@ -413,6 +416,11 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 
 // Shared motion tokens and class contracts. Keep reduced-motion behavior in
 // these constants so components stay consistent.
+//
+// MICRO and PAGE have no direct importer: they are the declared duration scale
+// that the class strings below are checked against (motion-contracts.test.ts
+// derives `duration-150` / `duration-300` from them). They are load-bearing, not
+// dead — deleting them silently removes that agreement check.
 export const MOTION_DURATION_MICRO_MS = 150;
 export const MOTION_DURATION_STANDARD_MS = 200;
 export const MOTION_DURATION_PAGE_MS = 300;

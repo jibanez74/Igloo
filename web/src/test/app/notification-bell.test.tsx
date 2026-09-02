@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren } from "react";
@@ -10,6 +10,7 @@ import type {
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
 } from "@/types";
+import { createTestQueryClient } from "../helpers/render";
 
 const apiMocks = vi.hoisted(() => ({
   getNotifications: vi.fn(),
@@ -99,12 +100,7 @@ function countResponse(
 }
 
 function createQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: { retry: false },
-      queries: { retry: false },
-    },
-  });
+  return createTestQueryClient();
 }
 
 function renderBell() {

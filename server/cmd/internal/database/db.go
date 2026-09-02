@@ -192,6 +192,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumsByMusicianIDStmt, err = db.PrepareContext(ctx, getAlbumsByMusicianID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsByMusicianID: %w", err)
 	}
+	if q.getAlbumsBySpotifyIDsStmt, err = db.PrepareContext(ctx, getAlbumsBySpotifyIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsBySpotifyIDs: %w", err)
+	}
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
 	}
@@ -252,9 +255,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMovieByIDStmt, err = db.PrepareContext(ctx, getMovieByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieByID: %w", err)
 	}
-	if q.getMovieByTmdbIDStmt, err = db.PrepareContext(ctx, getMovieByTmdbID); err != nil {
-		return nil, fmt.Errorf("error preparing query GetMovieByTmdbID: %w", err)
-	}
 	if q.getMovieExtraVideosStmt, err = db.PrepareContext(ctx, getMovieExtraVideos); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieExtraVideos: %w", err)
 	}
@@ -281,6 +281,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMoviesByIDsStmt, err = db.PrepareContext(ctx, getMoviesByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesByIDs: %w", err)
+	}
+	if q.getMoviesByTmdbIDsStmt, err = db.PrepareContext(ctx, getMoviesByTmdbIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMoviesByTmdbIDs: %w", err)
 	}
 	if q.getMoviesCountStmt, err = db.PrepareContext(ctx, getMoviesCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesCount: %w", err)
@@ -314,6 +317,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMusiciansCountStmt, err = db.PrepareContext(ctx, getMusiciansCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansCount: %w", err)
+	}
+	if q.getNotificationBadgeForUserStmt, err = db.PrepareContext(ctx, getNotificationBadgeForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNotificationBadgeForUser: %w", err)
 	}
 	if q.getOrCreateGenreStmt, err = db.PrepareContext(ctx, getOrCreateGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrCreateGenre: %w", err)
@@ -879,6 +885,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumsByMusicianIDStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumsBySpotifyIDsStmt != nil {
+		if cerr := q.getAlbumsBySpotifyIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsBySpotifyIDsStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumsCountStmt != nil {
 		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
@@ -979,11 +990,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMovieByIDStmt: %w", cerr)
 		}
 	}
-	if q.getMovieByTmdbIDStmt != nil {
-		if cerr := q.getMovieByTmdbIDStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getMovieByTmdbIDStmt: %w", cerr)
-		}
-	}
 	if q.getMovieExtraVideosStmt != nil {
 		if cerr := q.getMovieExtraVideosStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMovieExtraVideosStmt: %w", cerr)
@@ -1027,6 +1033,11 @@ func (q *Queries) Close() error {
 	if q.getMoviesByIDsStmt != nil {
 		if cerr := q.getMoviesByIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMoviesByIDsStmt: %w", cerr)
+		}
+	}
+	if q.getMoviesByTmdbIDsStmt != nil {
+		if cerr := q.getMoviesByTmdbIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMoviesByTmdbIDsStmt: %w", cerr)
 		}
 	}
 	if q.getMoviesCountStmt != nil {
@@ -1082,6 +1093,11 @@ func (q *Queries) Close() error {
 	if q.getMusiciansCountStmt != nil {
 		if cerr := q.getMusiciansCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusiciansCountStmt: %w", cerr)
+		}
+	}
+	if q.getNotificationBadgeForUserStmt != nil {
+		if cerr := q.getNotificationBadgeForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNotificationBadgeForUserStmt: %w", cerr)
 		}
 	}
 	if q.getOrCreateGenreStmt != nil {
@@ -1644,6 +1660,7 @@ type Queries struct {
 	getAlbumGenresStmt                          *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
+	getAlbumsBySpotifyIDsStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
 	getAllUsersStmt                             *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
@@ -1664,7 +1681,6 @@ type Queries struct {
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
 	getLikedTracksForUserStmt                   *sql.Stmt
 	getMovieByIDStmt                            *sql.Stmt
-	getMovieByTmdbIDStmt                        *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
 	getMovieForDirectStreamStmt                 *sql.Stmt
 	getMovieGenresWithCountsStmt                *sql.Stmt
@@ -1674,6 +1690,7 @@ type Queries struct {
 	getMoviesByGenreAscStmt                     *sql.Stmt
 	getMoviesByGenreDescStmt                    *sql.Stmt
 	getMoviesByIDsStmt                          *sql.Stmt
+	getMoviesByTmdbIDsStmt                      *sql.Stmt
 	getMoviesCountStmt                          *sql.Stmt
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
@@ -1685,6 +1702,7 @@ type Queries struct {
 	getMusiciansAlphabeticalStmt                *sql.Stmt
 	getMusiciansByAlbumIDStmt                   *sql.Stmt
 	getMusiciansCountStmt                       *sql.Stmt
+	getNotificationBadgeForUserStmt             *sql.Stmt
 	getOrCreateGenreStmt                        *sql.Stmt
 	getPlaylistCollaboratorsStmt                *sql.Stmt
 	getPlaylistMoviesPaginatedAscStmt           *sql.Stmt
@@ -1840,6 +1858,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumGenresStmt:                          q.getAlbumGenresStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
+		getAlbumsBySpotifyIDsStmt:                   q.getAlbumsBySpotifyIDsStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
@@ -1860,7 +1879,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
 		getLikedTracksForUserStmt:                   q.getLikedTracksForUserStmt,
 		getMovieByIDStmt:                            q.getMovieByIDStmt,
-		getMovieByTmdbIDStmt:                        q.getMovieByTmdbIDStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
 		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
 		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,
@@ -1870,6 +1888,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesByGenreAscStmt:                     q.getMoviesByGenreAscStmt,
 		getMoviesByGenreDescStmt:                    q.getMoviesByGenreDescStmt,
 		getMoviesByIDsStmt:                          q.getMoviesByIDsStmt,
+		getMoviesByTmdbIDsStmt:                      q.getMoviesByTmdbIDsStmt,
 		getMoviesCountStmt:                          q.getMoviesCountStmt,
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
@@ -1881,6 +1900,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,
 		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:                       q.getMusiciansCountStmt,
+		getNotificationBadgeForUserStmt:             q.getNotificationBadgeForUserStmt,
 		getOrCreateGenreStmt:                        q.getOrCreateGenreStmt,
 		getPlaylistCollaboratorsStmt:                q.getPlaylistCollaboratorsStmt,
 		getPlaylistMoviesPaginatedAscStmt:           q.getPlaylistMoviesPaginatedAscStmt,

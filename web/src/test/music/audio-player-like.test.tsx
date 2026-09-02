@@ -1,11 +1,12 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { getLikedTrackIds, toggleLikeTrack } from "@/lib/api";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { renderWithQueryClient } from "@/test/helpers/render";
 import type { PlayableTrackData } from "@/types";
+import { stubMediaElement } from "../helpers/dom";
 
 vi.mock("@/lib/api", async importOriginal => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -18,10 +19,6 @@ vi.mock("@/lib/toast-helpers", async importOriginal => ({
   ...(await importOriginal<typeof import("@/lib/toast-helpers")>()),
   showActionFailed: vi.fn(),
 }));
-
-const originalLoad = HTMLMediaElement.prototype.load;
-const originalPlay = HTMLMediaElement.prototype.play;
-const originalPause = HTMLMediaElement.prototype.pause;
 
 const TRACK_ID = 42;
 const ADD_LABEL = "Add Alabaster to liked";
@@ -86,15 +83,7 @@ function renderPlayer() {
 
 describe("audio player like button", () => {
   beforeEach(() => {
-    HTMLMediaElement.prototype.load = vi.fn();
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-    HTMLMediaElement.prototype.pause = vi.fn();
-  });
-
-  afterEach(() => {
-    HTMLMediaElement.prototype.load = originalLoad;
-    HTMLMediaElement.prototype.play = originalPlay;
-    HTMLMediaElement.prototype.pause = originalPause;
+    stubMediaElement();
   });
 
   it("disables the action until the liked state is known", async () => {

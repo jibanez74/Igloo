@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -74,6 +75,10 @@ type HLSSession struct {
 	ExitMu        sync.Mutex
 	IsRoom        bool
 	CopyVideo     bool // true when FFmpeg uses -c:v copy for the effective session profile
+	// RequiresTranscodeSlot is true when FFmpeg encodes either video or audio.
+	// It is computed once from the effective session configuration and remains
+	// the source of truth for limiter ownership and idle reclaim.
+	RequiresTranscodeSlot bool
 	// IndependentSegments is true when every segment is guaranteed to start on
 	// an IDR frame, which is the only case where the playlist may carry
 	// #EXT-X-INDEPENDENT-SEGMENTS. FFmpeg's own playlist is gated on the same
@@ -82,6 +87,14 @@ type HLSSession struct {
 	// EffectiveProfile is the profile FFmpeg actually ran, which differs from
 	// the requested one whenever the remux safety gate forced a transcode.
 	EffectiveProfile string
+	// RequestedAudioProfile is the validated audio_codec/audio_channels query
+	// pair; nil means legacy audio behavior.
+	RequestedAudioProfile *helpers.HLSAudioProfileRequest
+	// EffectiveAudioProfile describes the audio the session actually produces:
+	// the resolved explicit encode, the copied source values, or the legacy
+	// stereo AAC fallback. Nil for video-only sessions. Set once at
+	// construction and read-only afterwards.
+	EffectiveAudioProfile *helpers.HLSResolvedAudioProfile
 	// TempFileSegments is true when FFmpeg runs with -hls_flags temp_file, so
 	// a segment's final name existing on disk means it is complete. False
 	// only for a swapped binary whose hls muxer lacks the flag; readiness
@@ -136,6 +149,55 @@ func (s *HLSSession) exitStatus() (bool, error) {
 	return s.Exited, s.ExitErr
 }
 
+// hlsAudioMetadataError reports an explicit audio request against a stream
+// whose stored channel metadata cannot resolve a safe output profile. It is a
+// media-profile problem (HTTP 422), not a malformed query.
+type hlsAudioMetadataError struct {
+	MovieID    int64
+	AudioTrack int
+}
+
+func (e *hlsAudioMetadataError) Error() string {
+	return fmt.Sprintf(
+		"audio track %d of movie %d has no stored channel metadata; cannot resolve the requested audio profile",
+		e.AudioTrack, e.MovieID,
+	)
+}
+
+// hlsAudioEncoderUnavailableError reports that the probed FFmpeg build lacks
+// the encoder an explicit audio request needs. This is a non-retryable server
+// installation problem (HTTP 500), not an invalid query.
+type hlsAudioEncoderUnavailableError struct {
+	Encoder string
+}
+
+func (e *hlsAudioEncoderUnavailableError) Error() string {
+	return fmt.Sprintf("this server's ffmpeg build does not provide the %q audio encoder", e.Encoder)
+}
+
+// hlsInvalidAudioSelectionError reports a syntactically valid request whose
+// audio selection cannot apply to the stored movie. PublicMessage is safe to
+// return to clients; Error keeps the movie context for server logs.
+type hlsInvalidAudioSelectionError struct {
+	MovieID       int64
+	PublicMessage string
+}
+
+func (e *hlsInvalidAudioSelectionError) Error() string {
+	return fmt.Sprintf("movie %d: %s", e.MovieID, e.PublicMessage)
+}
+
+// hlsMediaMetadataError reports stored media rows that cannot create an HLS
+// session. A rescan may repair these rows, but changing the request cannot.
+type hlsMediaMetadataError struct {
+	MovieID int64
+	Reason  string
+}
+
+func (e *hlsMediaMetadataError) Error() string {
+	return fmt.Sprintf("movie %d has unusable stored media metadata: %s", e.MovieID, e.Reason)
+}
+
 type hlsSessionStartParams struct {
 	Movie            *database.Movie
 	PrimaryVideo     *database.VideoStream
@@ -143,10 +205,16 @@ type hlsSessionStartParams struct {
 	RequestedProfile string
 	EffectiveProfile string
 	AudioTrack       *int
-	PlaybackSession  string
-	StartSec         int
-	DurationSec      float64
-	IsRoom           bool
+	// RequestedAudioProfile is the validated query pair (nil = legacy) and
+	// ResolvedAudioProfile its channel/bitrate resolution against the selected
+	// audio row. Both ride on the params so the remux-safety fallback restart,
+	// which copies this struct, keeps the explicit audio profile in force.
+	RequestedAudioProfile *helpers.HLSAudioProfileRequest
+	ResolvedAudioProfile  *helpers.HLSResolvedAudioProfile
+	PlaybackSession       string
+	StartSec              int
+	DurationSec           float64
+	IsRoom                bool
 
 	// AcquireWait is how long the start may park for a CPU transcode permit
 	// before giving up with a capacity error; zero means do not park. It rides
@@ -216,6 +284,34 @@ func isCopySafeAACStream(stream *database.AudioStream) bool {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(stream.CodecProfile.String), "LC")
+}
+
+// legacyEffectiveHLSAudio describes legacy audio output for diagnostics
+// (headers and logs): the stored source values when the track is copied, or
+// the stereo AAC fallback when it is transcoded. It never feeds FFmpeg
+// argument construction — legacy sessions keep the CopyAudio flag path.
+func legacyEffectiveHLSAudio(stream *database.AudioStream, copyAudio bool) *helpers.HLSResolvedAudioProfile {
+	if copyAudio {
+		bitrate := ""
+		if stream.BitRate > 0 {
+			bitrate = strconv.FormatInt(stream.BitRate, 10)
+		}
+		return &helpers.HLSResolvedAudioProfile{
+			Codec:         helpers.HLSAudioCodecAAC,
+			Channels:      int(stream.Channels),
+			ChannelLayout: strings.TrimSpace(stream.ChannelLayout.String),
+			Bitrate:       bitrate,
+			SampleRate:    int(stream.SampleRate.Int64),
+		}
+	}
+
+	return &helpers.HLSResolvedAudioProfile{
+		Codec:         helpers.HLSAudioCodecAAC,
+		Encoder:       "aac",
+		Channels:      2,
+		ChannelLayout: "stereo",
+		Bitrate:       helpers.HLS_LEGACY_AUDIO_BITRATE,
+	}
 }
 
 func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string) {
@@ -293,8 +389,20 @@ func audioTrackCacheKey(audioTrack *int) string {
 	return fmt.Sprintf("audio:%d", *audioTrack)
 }
 
-func HLSSessionKey(movieID int64, profile string, audioTrack *int, playbackSession string, startSec int) string {
-	return fmt.Sprintf("movie:%d:%s:%s:session:%s:start:%d", movieID, profile, audioTrackCacheKey(audioTrack), playbackSession, startSec)
+// hlsAudioModeKey normalizes the requested audio mode for session identity:
+// "legacy" when the query pair is absent, "explicit:<codec>:<max>" otherwise.
+// The effective channel count is deliberately not part of the key — it is
+// deterministically resolved from the movie and selected stored audio row.
+func hlsAudioModeKey(audioProfile *helpers.HLSAudioProfileRequest) string {
+	if audioProfile == nil {
+		return "legacy"
+	}
+	return fmt.Sprintf("explicit:%s:%d", audioProfile.Codec, audioProfile.MaxChannels)
+}
+
+// HLSSessionKey returns an owner-scoped personal HLS session identity.
+func HLSSessionKey(movieID int64, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, playbackSession string, startSec int, ownerUserID int64) string {
+	return fmt.Sprintf("user:%d:movie:%d:%s:%s:%s:session:%s:start:%d", ownerUserID, movieID, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), playbackSession, startSec)
 }
 
 // RoomHLSSessionKey returns the HLS session cache key for a watch room.
@@ -553,7 +661,7 @@ func (app *Application) reservePersonalHLSSession(
 }
 
 // reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
-// transcoding (non-copy-video) session that has been idle for at least
+// session that owns a transcode slot and has been idle for at least
 // hlsIdlePermitReclaimThreshold, freeing its transcode permit. Active clients
 // refresh the TTL on every segment fetch, so a genuinely-playing device is
 // never reclaimed. Returns whether a session was evicted.
@@ -562,7 +670,7 @@ func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64)
 
 	maxExpiration := time.Now().Add(hlsPersonalSessionTTL - hlsIdlePermitReclaimThreshold).UnixNano()
 	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
-		if entry.session.CopyVideo {
+		if !entry.session.RequiresTranscodeSlot {
 			continue
 		}
 		if entry.expiration > maxExpiration {
@@ -769,16 +877,27 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	audioCodecProfile := ""
 	copyAudio := false
 	audioStreamIndex := -1
+	explicitAudio := params.ResolvedAudioProfile != nil
+	var effectiveAudio *helpers.HLSResolvedAudioProfile
 	if params.SelectedAudio != nil {
 		audioCodec = strings.ToLower(params.SelectedAudio.Codec)
 		audioCodecProfile = params.SelectedAudio.CodecProfile.String
-		copyAudio = isCopySafeAACStream(params.SelectedAudio)
+		// Explicit requests always encode with the resolved profile; the legacy
+		// AAC copy decision must not leak into explicit mode.
+		copyAudio = !explicitAudio && isCopySafeAACStream(params.SelectedAudio)
 		// ffmpeg's -map 0:N addresses the container's global stream numbering,
 		// so hand it the absolute ffprobe index rather than the ordinal.
 		audioStreamIndex = int(params.SelectedAudio.StreamIndex)
+
+		if explicitAudio {
+			effectiveAudio = params.ResolvedAudioProfile
+		} else {
+			effectiveAudio = legacyEffectiveHLSAudio(params.SelectedAudio, copyAudio)
+		}
 	}
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
+	requiresTranscodeSlot := !copyVideo || (params.SelectedAudio != nil && !copyAudio)
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
 	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
 	vfrDetected := isVFRStream(params.PrimaryVideo)
@@ -807,10 +926,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	// Copy-video sessions (-c:v copy) use near-zero CPU, so they bypass the
-	// CPU transcode limiter instead of blocking real transcodes.
 	releaseTranscode := func() {}
-	if !copyVideo {
+	if requiresTranscodeSlot {
 		releaseTranscode, err = app.acquireHLSTranscodeSlot(ctx, params.AcquireWait)
 		if err != nil {
 			removeErr := os.RemoveAll(tempDir)
@@ -829,6 +946,13 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
 	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
 
+	// The FFmpeg wrapper only ever receives the resolved explicit profile;
+	// legacy sessions pass nil and keep the CopyAudio/AAC-stereo arguments.
+	var runAudioProfile *helpers.HLSResolvedAudioProfile
+	if explicitAudio {
+		runAudioProfile = params.ResolvedAudioProfile
+	}
+
 	hlsRunParams := ffmpeg.HLSParams{
 		SourcePath:       params.Movie.FilePath,
 		OutDir:           tempDir,
@@ -838,6 +962,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		HWDevice:         deviceDecision.Effective,
 		CopyVideo:        copyVideo,
 		CopyAudio:        copyAudio,
+		AudioProfile:     runAudioProfile,
 		StartSec:         startSec,
 		TonemapHDR:       tonemapHDR,
 		Deinterlace:      deinterlace,
@@ -847,18 +972,21 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
-		MovieID:             params.Movie.ID,
-		PlaybackSession:     params.PlaybackSession,
-		TempDir:             tempDir,
-		Cancel:              cancel,
-		Logger:              app.Logger,
-		DurationSec:         params.DurationSec,
-		StartSec:            startSec,
-		IsRoom:              params.IsRoom,
-		CopyVideo:           copyVideo,
-		IndependentSegments: ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
-		EffectiveProfile:    params.EffectiveProfile,
-		TempFileSegments:    ffmpeg.HLSUsesTempFile(hlsRunParams),
+		MovieID:               params.Movie.ID,
+		PlaybackSession:       params.PlaybackSession,
+		TempDir:               tempDir,
+		Cancel:                cancel,
+		Logger:                app.Logger,
+		DurationSec:           params.DurationSec,
+		StartSec:              startSec,
+		IsRoom:                params.IsRoom,
+		CopyVideo:             copyVideo,
+		RequiresTranscodeSlot: requiresTranscodeSlot,
+		IndependentSegments:   ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
+		EffectiveProfile:      params.EffectiveProfile,
+		RequestedAudioProfile: params.RequestedAudioProfile,
+		EffectiveAudioProfile: effectiveAudio,
+		TempFileSegments:      ffmpeg.HLSUsesTempFile(hlsRunParams),
 		// Re-encoding seeks accurately, so a transcode starts exactly where it
 		// was asked to. Copy-video cannot and is measured below.
 		ActualStartSec: startSec,
@@ -921,7 +1049,12 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		rotationLogValue = strconv.FormatInt(params.PrimaryVideo.Rotation.Int64, 10)
 	}
 
-	app.Logger.Info("hls session starting",
+	requestedAudioMode := "legacy"
+	if params.RequestedAudioProfile != nil {
+		requestedAudioMode = "explicit"
+	}
+
+	startLogAttrs := []any{
 		"session_dir", filepath.Base(tempDir),
 		"playback_session", params.PlaybackSession,
 		"movie_id", params.Movie.ID,
@@ -937,6 +1070,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		"audio_codec_profile", audioCodecProfile,
 		"copy_video", copyVideo,
 		"copy_audio", copyAudio,
+		"requested_audio_mode", requestedAudioMode,
 		"source_is_hdr", sourceIsHDR,
 		"tonemap_hdr", tonemapHDR,
 		"deinterlace", deinterlace,
@@ -946,7 +1080,41 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		"configured_hw_device", deviceDecision.Configured,
 		"effective_hw_device", deviceDecision.Effective,
 		"hw_fallback_reason", deviceDecision.Reason,
-	)
+	}
+	if params.RequestedAudioProfile != nil {
+		startLogAttrs = append(startLogAttrs,
+			"requested_audio_codec", string(params.RequestedAudioProfile.Codec),
+			"requested_audio_max_channels", params.RequestedAudioProfile.MaxChannels,
+		)
+	}
+	if params.SelectedAudio != nil {
+		startLogAttrs = append(startLogAttrs,
+			"source_audio_channels", params.SelectedAudio.Channels,
+			"source_audio_channel_layout", params.SelectedAudio.ChannelLayout.String,
+		)
+	}
+	if effectiveAudio != nil {
+		audioDownmix := params.SelectedAudio != nil &&
+			int64(effectiveAudio.Channels) < params.SelectedAudio.Channels
+		startLogAttrs = append(startLogAttrs,
+			"effective_audio_codec", string(effectiveAudio.Codec),
+			"effective_audio_channels", effectiveAudio.Channels,
+			"effective_audio_channel_layout", effectiveAudio.ChannelLayout,
+			"effective_audio_bitrate", effectiveAudio.Bitrate,
+			"effective_audio_sample_rate", effectiveAudio.SampleRate,
+			"audio_downmix", audioDownmix,
+		)
+	}
+	app.Logger.Info("hls session starting", startLogAttrs...)
+
+	// Captured outside the closure so a runtime FFmpeg failure can be tied to
+	// the audio profile that produced it. Empty/zero for video-only sessions.
+	exitAudioCodec := ""
+	exitAudioChannels := 0
+	if effectiveAudio != nil {
+		exitAudioCodec = string(effectiveAudio.Codec)
+		exitAudioChannels = effectiveAudio.Channels
+	}
 
 	onExit := func(exitErr error, stderrTail []string) {
 		// Published for failed exits too, not just clean ones. Whatever FFmpeg
@@ -981,6 +1149,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 					"movie_id", params.Movie.ID,
 					"requested_profile", params.RequestedProfile,
 					"effective_profile", params.EffectiveProfile,
+					"effective_audio_codec", exitAudioCodec,
+					"effective_audio_channels", exitAudioChannels,
 					"elapsed", elapsed.String(),
 				)
 				return
@@ -991,6 +1161,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 				"movie_id", params.Movie.ID,
 				"requested_profile", params.RequestedProfile,
 				"effective_profile", params.EffectiveProfile,
+				"effective_audio_codec", exitAudioCodec,
+				"effective_audio_channels", exitAudioChannels,
 				"elapsed", elapsed.String(),
 				"error", exitErr.Error(),
 				"ffmpeg_tail", strings.Join(stderrTail, "\n"),
@@ -1003,6 +1175,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 			"movie_id", params.Movie.ID,
 			"requested_profile", params.RequestedProfile,
 			"effective_profile", params.EffectiveProfile,
+			"effective_audio_codec", exitAudioCodec,
+			"effective_audio_channels", exitAudioChannels,
 			"elapsed", elapsed.String(),
 		)
 	}
@@ -1029,17 +1203,18 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 }
 
 // GetOrCreateHLSSession returns a cached personal session or creates a new one.
-// Personal sessions are isolated by playback_session and normalized start time.
+// Personal sessions are isolated by owner, playback_session, and normalized start time.
 func (app *Application) GetOrCreateHLSSession(
 	ctx context.Context,
 	movieID int64,
 	profile string,
 	audioTrack *int,
+	audioProfile *helpers.HLSAudioProfileRequest,
 	playbackSession string,
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	requestedKey := HLSSessionKey(movieID, profile, audioTrack, playbackSession, startSec)
+	requestedKey := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
 
 	// Warm path first, before touching the database. The stored key uses the
 	// normalized start, which equals the raw start whenever it was not clamped
@@ -1064,7 +1239,7 @@ func (app *Application) GetOrCreateHLSSession(
 	if err != nil {
 		return nil, requestedKey, err
 	}
-	key := HLSSessionKey(movieID, profile, audioTrack, playbackSession, effectiveStartSec)
+	key := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
 
 	if key != requestedKey {
 		if raw, ok := app.HLSSessionCache.Get(key); ok {
@@ -1112,6 +1287,7 @@ func (app *Application) GetOrCreateHLSSession(
 			&movie,
 			profile,
 			audioTrack,
+			audioProfile,
 			nil,
 			playbackSession,
 			effectiveStartSec,
@@ -1139,6 +1315,7 @@ func (app *Application) GetOrCreateHLSSession(
 					&movie,
 					profile,
 					audioTrack,
+					audioProfile,
 					nil,
 					playbackSession,
 					effectiveStartSec,
@@ -1239,7 +1416,9 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		}
 
 		audioTrackCopy := audioTrack
-		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, preloadedAudio, "", 0, true, 0)
+		// Watch rooms always use legacy audio mode: room audio output is a
+		// room-level persisted setting concern, not a query-parameter one.
+		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, nil, preloadedAudio, "", 0, true, 0)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -1283,7 +1462,7 @@ func (app *Application) CleanupRoomHLSSession(roomID int64) {
 // requires, shared by loadHLSMovieForSession and the preloaded-row path.
 func validateHLSMovieDuration(movie database.Movie, movieID int64) error {
 	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
-		return fmt.Errorf("movie %d has no valid duration in the database", movieID)
+		return &hlsMediaMetadataError{MovieID: movieID, Reason: "no valid duration is stored"}
 	}
 	return nil
 }
@@ -1297,7 +1476,10 @@ func (app *Application) loadHLSMovieForSession(
 ) (database.Movie, int, error) {
 	movie, err := app.Queries.GetMovieByID(ctx, movieID)
 	if err != nil {
-		return database.Movie{}, 0, fmt.Errorf("movie not found: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return database.Movie{}, 0, fmt.Errorf("%w: movie %d", errHLSMovieNotFound, movieID)
+		}
+		return database.Movie{}, 0, fmt.Errorf("load movie %d for HLS: %w", movieID, err)
 	}
 	err = validateHLSMovieDuration(movie, movieID)
 	if err != nil {
@@ -1331,6 +1513,7 @@ func (app *Application) createHLSSession(
 	movie *database.Movie,
 	profile string,
 	audioTrack *int,
+	audioProfile *helpers.HLSAudioProfileRequest,
 	preloadedAudio []database.AudioStream,
 	playbackSession string,
 	startSec int,
@@ -1346,7 +1529,7 @@ func (app *Application) createHLSSession(
 	}
 	primaryVideo := primaryVideoStream(videoStreams)
 	if primaryVideo == nil {
-		return nil, fmt.Errorf("no playable video track found for movie %d", movieID)
+		return nil, &hlsMediaMetadataError{MovieID: movieID, Reason: "no playable video track is stored"}
 	}
 
 	// nil means "not preloaded", not "no audio": sqlc returns a nil slice for
@@ -1360,19 +1543,63 @@ func (app *Application) createHLSSession(
 	}
 	var selectedAudio *database.AudioStream
 	if len(audioStreams) == 0 {
+		if audioProfile != nil {
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio profiles are not valid for video-only media",
+			}
+		}
 		if audioTrack != nil {
-			return nil, fmt.Errorf("audio_track is not valid for video-only movie %d", movieID)
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio_track is not valid for video-only media",
+			}
 		}
 	} else {
 		if audioTrack == nil {
-			return nil, fmt.Errorf("audio_track is required for movie %d", movieID)
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio_track is required for media with audio",
+			}
 		}
 		if *audioTrack < 0 || *audioTrack >= len(audioStreams) {
-			return nil, fmt.Errorf("audio track %d out of range (0-%d)", *audioTrack, len(audioStreams)-1)
+			return nil, &hlsInvalidAudioSelectionError{
+				MovieID:       movieID,
+				PublicMessage: "audio_track is out of range",
+			}
 		}
 		// audioTrack is an ordinal into the stream_index-ordered audio rows, the
 		// same ordering the client's audio picker renders, not an ffprobe index.
 		selectedAudio = &audioStreams[*audioTrack]
+	}
+
+	// Explicit audio requests are resolved against the selected audio row and
+	// gated on encoder availability here, before any temp directory is created
+	// or a transcode permit acquired inside startHLSSession. The resolved
+	// profile rides on the start params, so a remux-safety fallback restart
+	// keeps it in force.
+	var resolvedAudio *helpers.HLSResolvedAudioProfile
+	if audioProfile != nil && selectedAudio != nil {
+		if selectedAudio.Channels <= 0 {
+			return nil, &hlsAudioMetadataError{MovieID: movieID, AudioTrack: *audioTrack}
+		}
+
+		resolved := helpers.ResolveHLSAudioProfile(
+			*audioProfile,
+			int(selectedAudio.Channels),
+			selectedAudio.ChannelLayout.String,
+		)
+		resolvedAudio = &resolved
+
+		// AAC is required for legacy playback, but a swapped external FFmpeg
+		// build may lack the Dolby encoders without preventing startup.
+		// Unprobed capabilities (only possible in tests) are trusted, matching
+		// ResolveHLSDevice.
+		caps := app.FFmpeg.Capabilities()
+		encoderSupported := !caps.Probed || caps.SupportsEncoder(resolved.Encoder)
+		if !encoderSupported {
+			return nil, &hlsAudioEncoderUnavailableError{Encoder: resolved.Encoder}
+		}
 	}
 
 	requestedProfile := profile
@@ -1425,17 +1652,19 @@ func (app *Application) createHLSSession(
 	}
 
 	hlsParams := hlsSessionStartParams{
-		Movie:            movie,
-		PrimaryVideo:     primaryVideo,
-		SelectedAudio:    selectedAudio,
-		RequestedProfile: requestedProfile,
-		EffectiveProfile: effectiveProfile,
-		AudioTrack:       audioTrack,
-		PlaybackSession:  playbackSession,
-		StartSec:         startSec,
-		DurationSec:      durationSec,
-		IsRoom:           isRoom,
-		AcquireWait:      acquireWait,
+		Movie:                 movie,
+		PrimaryVideo:          primaryVideo,
+		SelectedAudio:         selectedAudio,
+		RequestedProfile:      requestedProfile,
+		EffectiveProfile:      effectiveProfile,
+		AudioTrack:            audioTrack,
+		RequestedAudioProfile: audioProfile,
+		ResolvedAudioProfile:  resolvedAudio,
+		PlaybackSession:       playbackSession,
+		StartSec:              startSec,
+		DurationSec:           durationSec,
+		IsRoom:                isRoom,
+		AcquireWait:           acquireWait,
 	}
 
 	session, err := app.startHLSSession(ctx, &hlsParams)

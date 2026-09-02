@@ -22,41 +22,52 @@ var errWatchRoomStreamDrift = errors.New("this room's movie file was replaced an
 // verifyWatchRoomAudioPin re-resolves the room's stored audio ordinal against
 // the movie's current streams and compares it with the identity pinned at
 // creation. A NULL pin (legacy room, silent movie) skips the check.
-func (app *Application) verifyWatchRoomAudioPin(ctx context.Context, room database.WatchRoom) error {
+//
+// It returns the audio streams it loaded so the caller can hand them to
+// GetOrCreateRoomHLSSession as preloadedAudio; on a session miss that branch
+// would otherwise re-run this exact query. A nil slice (pin check skipped)
+// simply degrades to the fetch inside createHLSSession.
+//
+// The streams come from MovieStreamsCache because this runs on every manifest
+// refresh; a rescan invalidates it, so drift is still caught.
+func (app *Application) verifyWatchRoomAudioPin(ctx context.Context, room database.WatchRoom) ([]database.AudioStream, error) {
 	if !room.AudioStreamIndex.Valid {
-		return nil
+		return nil, nil
 	}
 
-	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, room.MovieID)
+	streams, err := app.movieStreamsFor(ctx, room.MovieID)
 	if err != nil {
-		return fmt.Errorf("failed to load audio streams for pin check: %w", err)
+		return nil, fmt.Errorf("failed to load audio streams for pin check: %w", err)
 	}
+	audioStreams := streams.Audio
 	if room.AudioTrack >= int64(len(audioStreams)) {
-		return errWatchRoomStreamDrift
+		return nil, errWatchRoomStreamDrift
 	}
 	current := audioStreams[room.AudioTrack]
 	if current.StreamIndex != room.AudioStreamIndex.Int64 {
-		return errWatchRoomStreamDrift
+		return nil, errWatchRoomStreamDrift
 	}
 	if room.AudioLanguage.Valid && current.Language.String != room.AudioLanguage.String {
-		return errWatchRoomStreamDrift
+		return nil, errWatchRoomStreamDrift
 	}
-	return nil
+	return audioStreams, nil
 }
 
 // verifyWatchRoomSubtitlePin is the subtitle counterpart of
 // verifyWatchRoomAudioPin. It is also the only pin a direct-mode room checks:
 // direct playback serves the container's own default audio, so only the
-// subtitle ordinal can silently repoint after a rescan.
+// subtitle ordinal can silently repoint after a rescan. A direct-play client
+// calls this once per byte-range request, which is why it reads the cache.
 func (app *Application) verifyWatchRoomSubtitlePin(ctx context.Context, room database.WatchRoom) error {
 	if !room.SubtitleStreamIndex.Valid || !room.SubtitleTrack.Valid {
 		return nil
 	}
 
-	subtitles, err := app.Queries.GetSubtitlesByMovieID(ctx, room.MovieID)
+	streams, err := app.movieStreamsFor(ctx, room.MovieID)
 	if err != nil {
 		return fmt.Errorf("failed to load subtitles for pin check: %w", err)
 	}
+	subtitles := streams.Subtitles
 	if room.SubtitleTrack.Int64 >= int64(len(subtitles)) {
 		return errWatchRoomStreamDrift
 	}
@@ -70,12 +81,12 @@ func (app *Application) verifyWatchRoomSubtitlePin(ctx context.Context, room dat
 	return nil
 }
 
-func (app *Application) verifyWatchRoomStreamPins(ctx context.Context, room database.WatchRoom) error {
-	err := app.verifyWatchRoomAudioPin(ctx, room)
+func (app *Application) verifyWatchRoomStreamPins(ctx context.Context, room database.WatchRoom) ([]database.AudioStream, error) {
+	audioStreams, err := app.verifyWatchRoomAudioPin(ctx, room)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return app.verifyWatchRoomSubtitlePin(ctx, room)
+	return audioStreams, app.verifyWatchRoomSubtitlePin(ctx, room)
 }
 
 func (app *Application) rejectDriftedWatchRoom(w http.ResponseWriter, room database.WatchRoom, err error) bool {
@@ -102,11 +113,12 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if app.rejectDriftedWatchRoom(w, room, app.verifyWatchRoomStreamPins(r.Context(), room)) {
+	audioStreams, pinErr := app.verifyWatchRoomStreamPins(r.Context(), room)
+	if app.rejectDriftedWatchRoom(w, room, pinErr) {
 		return
 	}
 
-	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack), nil, nil)
+	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack), nil, audioStreams)
 	if err != nil {
 		app.Logger.Error("watch room hls session failed", "error", err, "room_id", room.ID)
 		writeHLSSessionError(w, err)

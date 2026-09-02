@@ -74,7 +74,7 @@
     },
     {
       "name": "Watch Rooms",
-      "description": "Synchronized room playback"
+      "description": "Synchronized room playback. Detail and media requests authenticate and authorize room membership on every request. Successful membership lookups may be cached for up to 30 seconds. Explicit room deletion invalidates every cached member authorization immediately after database deletion and before media and WebSocket cleanup completes."
     },
     {
       "name": "Settings",
@@ -2117,6 +2117,7 @@
           "Movies"
         ],
         "summary": "Get an HLS playlist for a movie",
+        "description": "Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. A cold manifest request can spend up to 15 seconds waiting for transcode capacity and up to 30 seconds waiting for the first copy-video playlist, for a maximum 45-second server wait before a retryable 503.",
         "operationId": "hlsManifest",
         "parameters": [
           {
@@ -2127,6 +2128,12 @@
           },
           {
             "$ref": "#/components/parameters/AudioTrackQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioCodecQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioChannelsQuery"
           },
           {
             "$ref": "#/components/parameters/StartQuery"
@@ -2151,11 +2158,14 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           },
           "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
+            "$ref": "#/components/responses/HLSServiceUnavailable"
           }
         }
       }
@@ -2166,6 +2176,7 @@
           "Movies"
         ],
         "summary": "Get an HLS initialization file or media segment for a movie",
+        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.",
         "operationId": "hlsSegment",
         "parameters": [
           {
@@ -2181,7 +2192,16 @@
             "$ref": "#/components/parameters/RangeHeader"
           },
           {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
             "$ref": "#/components/parameters/AudioTrackQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioCodecQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioChannelsQuery"
           },
           {
             "$ref": "#/components/parameters/StartQuery"
@@ -2200,6 +2220,9 @@
           "206": {
             "$ref": "#/components/responses/PartialHLSSegmentResponse"
           },
+          "304": {
+            "$ref": "#/components/responses/HLSNotModifiedResponse"
+          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -2210,13 +2233,13 @@
             "$ref": "#/components/responses/NotFound"
           },
           "416": {
-            "$ref": "#/components/responses/RangeNotSatisfiable"
+            "$ref": "#/components/responses/HLSRangeNotSatisfiableResponse"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           },
           "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
+            "$ref": "#/components/responses/HLSServiceUnavailable"
           }
         }
       }
@@ -2732,6 +2755,7 @@
           "Watch Rooms"
         ],
         "summary": "Get watch-room details",
+        "description": "Authenticates the requester and authorizes current room membership. Successful membership lookups may be cached for up to 30 seconds.",
         "operationId": "getWatchRoom",
         "parameters": [
           {
@@ -2751,9 +2775,6 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
@@ -2764,7 +2785,7 @@
           "Watch Rooms"
         ],
         "summary": "Delete a watch room",
-        "description": "Only the room owner can delete a room.",
+        "description": "Only the room owner can delete a room. After the database deletion succeeds, all cached member authorizations for the room are invalidated before HLS and WebSocket cleanup completes.",
         "operationId": "deleteWatchRoom",
         "parameters": [
           {
@@ -2864,6 +2885,7 @@
           "Watch Rooms"
         ],
         "summary": "Direct-stream a watch-room movie",
+        "description": "Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds.",
         "operationId": "streamWatchRoomMovie",
         "parameters": [
           {
@@ -2911,7 +2933,7 @@
           "Watch Rooms"
         ],
         "summary": "Headers for a direct watch-room movie stream",
-        "description": "Identical to GET but returns headers only, with no response body.",
+        "description": "Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds.",
         "operationId": "streamWatchRoomMovieHead",
         "parameters": [
           {
@@ -2961,6 +2983,7 @@
           "Watch Rooms"
         ],
         "summary": "Get the HLS playlist for a watch room",
+        "description": "Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.",
         "operationId": "watchRoomHLSManifest",
         "parameters": [
           {
@@ -2980,11 +3003,17 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
           "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
+            "$ref": "#/components/responses/HLSServiceUnavailable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2998,6 +3027,7 @@
           "Watch Rooms"
         ],
         "summary": "Get a watch-room HLS initialization file or media segment",
+        "description": "Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.",
         "operationId": "watchRoomHLSSegment",
         "parameters": [
           {
@@ -3008,6 +3038,12 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AudioTrackQuery"
           }
         ],
         "responses": {
@@ -3016,6 +3052,9 @@
           },
           "206": {
             "$ref": "#/components/responses/PartialHLSSegmentResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/HLSNotModifiedResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -3030,13 +3069,13 @@
             "$ref": "#/components/responses/NotFound"
           },
           "416": {
-            "$ref": "#/components/responses/RangeNotSatisfiable"
+            "$ref": "#/components/responses/HLSRangeNotSatisfiableResponse"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           },
           "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
+            "$ref": "#/components/responses/HLSServiceUnavailable"
           }
         }
       }
@@ -3476,6 +3515,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ShuffleLimitQuery"
+          },
+          {
+            "$ref": "#/components/parameters/ShuffleExcludeQuery"
           }
         ],
         "responses": {
@@ -4515,6 +4557,23 @@
           "default": 50
         }
       },
+      "ShuffleExcludeQuery": {
+        "name": "exclude",
+        "in": "query",
+        "required": false,
+        "description": "Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected.",
+        "style": "form",
+        "explode": false,
+        "schema": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
       "StatsLimitQuery": {
         "name": "limit",
         "in": "query",
@@ -4581,6 +4640,16 @@
           "example": "bytes=0-1048575"
         }
       },
+      "IfModifiedSinceHeader": {
+        "name": "If-Modified-Since",
+        "in": "header",
+        "required": false,
+        "description": "Return 304 when the ready HLS asset has not changed since this HTTP date.",
+        "schema": {
+          "type": "string",
+          "format": "http-date"
+        }
+      },
       "PlaybackSessionQuery": {
         "name": "playback_session",
         "in": "query",
@@ -4598,6 +4667,24 @@
         "description": "Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key.",
         "schema": {
           "type": "string"
+        }
+      },
+      "HLSAudioCodecQuery": {
+        "name": "audio_codec",
+        "in": "query",
+        "required": false,
+        "description": "Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value.",
+        "schema": {
+          "$ref": "#/components/schemas/HLSRequestedAudioCodec"
+        }
+      },
+      "HLSAudioChannelsQuery": {
+        "name": "audio_channels",
+        "in": "query",
+        "required": false,
+        "description": "Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400.",
+        "schema": {
+          "$ref": "#/components/schemas/HLSAudioChannelLimit"
         }
       },
       "SubtitleStartQuery": {
@@ -5424,7 +5511,7 @@
         }
       },
       "HLSPlaylistResponse": {
-        "description": "HLS media playlist.",
+        "description": "HLS media playlist. The effective profile header is always present; actual-start and audio diagnostics are present only when known or applicable.",
         "headers": {
           "Cache-Control": {
             "schema": {
@@ -5434,8 +5521,9 @@
           },
           "X-Igloo-Effective-Profile": {
             "description": "Profile FFmpeg actually ran. This differs from the requested profile in the path whenever the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here.",
+            "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/HLSProfile"
             }
           },
           "X-Igloo-Actual-Start": {
@@ -5443,6 +5531,25 @@
             "schema": {
               "type": "number",
               "minimum": 0
+            }
+          },
+          "X-Igloo-Effective-Audio-Codec": {
+            "description": "Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac for legacy sessions (copied or stereo-encoded). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions.",
+            "schema": {
+              "$ref": "#/components/schemas/HLSEffectiveAudioCodec"
+            }
+          },
+          "X-Igloo-Effective-Audio-Channels": {
+            "description": "Effective output channel count, resolved from the selected source stream and the requested maximum. For copied legacy AAC this is the stored source channel count. Omitted for video-only sessions and when a copied source's stored channel count is unknown.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "X-Igloo-Effective-Audio-Bitrate": {
+            "description": "Audio bitrate: the server profile value for encodes (for example 640k or 320k) or the stored source bitrate in bits per second for copied legacy AAC. Omitted for video-only sessions and when the copied source bitrate is unknown.",
+            "schema": {
+              "type": "string"
             }
           }
         },
@@ -5455,12 +5562,26 @@
         }
       },
       "HLSSegmentResponse": {
-        "description": "Fragmented MP4 initialization file or media segment.",
+        "description": "Complete fragmented MP4 initialization file or media segment.",
         "headers": {
+          "Accept-Ranges": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "bytes"
+            }
+          },
           "Cache-Control": {
             "schema": {
               "type": "string",
               "const": "no-store"
+            }
+          },
+          "Last-Modified": {
+            "required": true,
+            "description": "Modification time of the pinned ready HLS file.",
+            "schema": {
+              "type": "string"
             }
           }
         },
@@ -5474,9 +5595,10 @@
         }
       },
       "PartialHLSSegmentResponse": {
-        "description": "Partial fragmented MP4 initialization file or media segment for a byte range.",
+        "description": "Partial fragmented MP4 initialization file or media segment. One satisfiable range has a video/mp4 body and Content-Range; multiple satisfiable ranges have a multipart/byteranges body with one video/mp4 part per range and no response-level Content-Range.",
         "headers": {
           "Accept-Ranges": {
+            "required": true,
             "schema": {
               "type": "string",
               "const": "bytes"
@@ -5489,9 +5611,17 @@
             }
           },
           "Content-Range": {
+            "description": "Returned for a single range and omitted for a multipart response.",
             "schema": {
               "type": "string",
               "example": "bytes 0-1048575/4194304"
+            }
+          },
+          "Last-Modified": {
+            "required": true,
+            "description": "Modification time of the pinned ready HLS file.",
+            "schema": {
+              "type": "string"
             }
           }
         },
@@ -5500,6 +5630,54 @@
             "schema": {
               "type": "string",
               "format": "binary"
+            }
+          },
+          "multipart/byteranges": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      },
+      "HLSNotModifiedResponse": {
+        "description": "The ready HLS asset has not changed since If-Modified-Since; no body is returned.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          },
+          "Last-Modified": {
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "HLSRangeNotSatisfiableResponse": {
+        "description": "The Range header is malformed or cannot overlap the ready HLS asset. The response is Go's plain-text range error, not the JSON error envelope. Content-Range is returned for a well-formed but unsatisfiable range and may be omitted for a malformed range.",
+        "headers": {
+          "Content-Range": {
+            "description": "Asset size for a well-formed unsatisfiable range, for example bytes */15; omitted for malformed range syntax.",
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string",
+              "examples": [
+                "invalid range\n",
+                "invalid range: failed to overlap\n"
+              ]
             }
           }
         }
@@ -5957,6 +6135,16 @@
           }
         }
       },
+      "UnprocessableEntity": {
+        "description": "The request is syntactically valid but the stored media metadata cannot satisfy it, such as an explicit audio profile against a stream without stored channel metadata.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
       "PayloadTooLarge": {
         "description": "Request body is too large.",
         "content": {
@@ -5978,10 +6166,21 @@
         }
       },
       "ServiceUnavailable": {
-        "description": "Generated media is not ready yet or HLS session/transcode capacity is temporarily unavailable.",
+        "description": "The service is temporarily unavailable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "HLSServiceUnavailable": {
+        "description": "HLS capacity or transcode storage is temporarily unavailable, or the requested playlist or segment is not ready. Every HLS 503 is retryable and includes Retry-After.",
         "headers": {
           "Retry-After": {
-            "description": "Seconds to wait before retrying when HLS capacity is unavailable.",
+            "required": true,
+            "description": "Seconds to wait before retrying this HLS request.",
             "schema": {
               "type": "integer",
               "minimum": 1
@@ -6197,6 +6396,28 @@
           "1080p_6mbps",
           "1080p_4mbps",
           "720p_3mbps"
+        ]
+      },
+      "HLSRequestedAudioCodec": {
+        "type": "string",
+        "enum": [
+          "ac3",
+          "eac3"
+        ]
+      },
+      "HLSEffectiveAudioCodec": {
+        "type": "string",
+        "enum": [
+          "aac",
+          "ac3",
+          "eac3"
+        ]
+      },
+      "HLSAudioChannelLimit": {
+        "type": "integer",
+        "enum": [
+          2,
+          6
         ]
       },
       "PlaybackMode": {

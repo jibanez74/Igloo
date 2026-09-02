@@ -30,6 +30,8 @@ export const DEFAULT_DEVICE_PLAYBACK_PREFERENCES: DevicePlaybackPreferences = {
 
 // The profiles a client may pick as a default, mirroring the server's catalog:
 // transcode profiles only, so neither "direct" nor "remux" can be stored here.
+// Module scope: runs once at import over a handful of constant entries.
+// react-doctor-disable-next-line react-doctor/js-combine-iterations
 const SELECTABLE_PROFILE_IDS: readonly string[] = STREAM_MODES.filter(
   mode => mode.type === "transcode",
 ).map(mode => mode.id);

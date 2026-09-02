@@ -1,25 +1,15 @@
-import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
-
-type NullableString = { String: string; Valid: boolean };
-type NullableInt64 = { Int64: number; Valid: boolean };
-type NullableFloat64 = { Float64: number; Valid: boolean };
-
-function nullableString(value = ""): NullableString {
-  return { String: value, Valid: value.length > 0 };
-}
-
-function nullableInt64(value: number | null = null): NullableInt64 {
-  return { Int64: value ?? 0, Valid: value != null };
-}
-
-function nullableFloat64(value: number | null = null): NullableFloat64 {
-  return { Float64: value ?? 0, Valid: value != null };
-}
+import {
+  fulfillJSON,
+  nullableFloat64,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
 
 function apiResponse(data: unknown) {
   return { error: false, data };
@@ -124,14 +114,6 @@ const musicianDetails = {
   genres: ["Ambient"],
   total_duration: 0,
 };
-
-async function fulfillJSON(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
-}
 
 async function mockAlbumDetailsApi(page: Page, { isAdmin = true }: { isAdmin?: boolean } = {}) {
   const unexpectedApiRequests: string[] = [];

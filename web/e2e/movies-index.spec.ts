@@ -1,25 +1,19 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
-import { trackBrowserIssues } from "./e2e-browser-issues";
+import { expect, test, type Page } from "@playwright/test";
+import {
+  assertMockSuiteClean,
+  trackBrowserIssues,
+} from "./e2e-browser-issues";
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
-
-type NullableString = {
-  String: string;
-  Valid: boolean;
-};
-
-type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
-
-type NullableFloat64 = {
-  Float64: number;
-  Valid: boolean;
-};
+import {
+  fulfillJSON,
+  nullableFloat64,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
 
 type CreateMoviePlaylistRequest = {
   name: string;
@@ -27,27 +21,6 @@ type CreateMoviePlaylistRequest = {
   is_public?: boolean;
   movie_id?: number;
 };
-
-function nullableString(value = ""): NullableString {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null): NullableInt64 {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null): NullableFloat64 {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function apiResponse(data: unknown) {
   return {
@@ -246,22 +219,6 @@ function movieDetails(movieSummary: ReturnType<typeof movie>) {
     production_companies: [],
     extra_videos: [],
   };
-}
-
-async function fulfillJSON(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(body),
-  });
-}
-
-function assertMockSuiteClean(
-  browserIssues: ReturnType<typeof trackBrowserIssues>,
-  unexpectedApiRequests: string[],
-) {
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
 }
 
 async function mockMoviesApi(

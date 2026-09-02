@@ -1,24 +1,22 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
 import type { AlbumDetailsResponseType, TrackType } from "@/types";
-
-const DETAIL_PAGE_ANIMATION_MARKER =
-  "animate-in fade-in slide-in-from-bottom-2";
+import { jsonResponse, requestURL } from "../helpers/api";
+import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import { renderRoute } from "../helpers/render-route";
+import {
+  getDetailMotionWrappers,
+  getHeroMotionWrapper,
+  getLowerMotionWrapper,
+} from "../helpers/motion";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
-    shuffleAlbum: vi.fn(),
+    shuffleQueue: vi.fn(),
     togglePlay: vi.fn(),
   },
 }));
@@ -32,9 +30,9 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
 
-vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => ({
-    currentTrack: null,
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
+  useAudioPlayerNowPlaying: () => ({
+    currentTrackId: null,
     isPlaying: false,
   }),
 }));
@@ -43,42 +41,6 @@ vi.mock("@/lib/toast-helpers", () => ({
   showActionFailed: toastMocks.showActionFailed,
   showDeleted: toastMocks.showDeleted,
 }));
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-function requestURL(input: RequestInfo | URL) {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  return input.url;
-}
-
-function nullableString(value = "") {
-  return {
-    String: value,
-    Valid: value.length > 0,
-  };
-}
-
-function nullableInt64(value: number | null = null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
-function nullableFloat64(value: number | null = null) {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
-}
 
 function albumTrack(
   id: number,
@@ -241,78 +203,14 @@ function mockAlbumDetailsFetch({
   return fetchMock;
 }
 
-function createAlbumDetailsQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
-
 async function renderAlbumDetailsRoute(
   initialEntry: string,
   options?: MockAlbumDetailsFetchOptions,
 ) {
-  vi.stubGlobal("scrollTo", vi.fn());
   mockAlbumDetailsFetch(options);
 
-  const queryClient = createAlbumDetailsQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
-
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return {
-    router,
-    queryClient,
-    ...view,
-  };
+  return renderRoute(initialEntry);
 }
-
-function getDetailMotionWrappers(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("div")).filter((element) =>
-    element.className.includes(DETAIL_PAGE_ANIMATION_MARKER),
-  );
-}
-
-function getHeroMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-75"),
-  );
-}
-
-function getLowerMotionWrapper(container: HTMLElement) {
-  return getDetailMotionWrappers(container).find((element) =>
-    element.className.includes("delay-150"),
-  );
-}
-
-afterEach(() => {
-  vi.clearAllMocks();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
 
 describe("album details route motion", () => {
   it("renders the album detail page with the three-stage stagger contract", async () => {

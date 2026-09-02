@@ -1,10 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRouter,
-} from "@tanstack/react-router";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -13,12 +7,14 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
 } from "@/lib/constants";
-import { routeTree } from "@/routeTree.gen";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
+import { jsonResponse } from "../helpers/api";
+import { renderRoute } from "../helpers/render-route";
+import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
-    playAlbum: vi.fn(),
+    playQueue: vi.fn(),
     playTrack: vi.fn(),
   },
 }));
@@ -27,36 +23,12 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
 
-vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => ({
-    currentTrack: null,
+vi.mock("@/hooks/useAudioPlayerNowPlaying", () => ({
+  useAudioPlayerNowPlaying: () => ({
+    currentTrackId: null,
     isPlaying: false,
   }),
 }));
-
-function jsonResponse(body: unknown, status = 200) {
-  return Promise.resolve(
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
-}
-
-const defaultMatchMedia = window.matchMedia;
-
-function createSearchQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      mutations: {
-        retry: false,
-      },
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
 
 function mockSearchFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -173,57 +145,14 @@ function mockSearchFetch() {
 
 async function renderSearchRoute(initialEntry: string) {
   const fetchMock = mockSearchFetch();
-  const queryClient = createSearchQueryClient();
-  const history = createMemoryHistory({
-    initialEntries: [initialEntry],
-  });
-  const router = createRouter({
-    routeTree,
-    context: {
-      queryClient,
-    },
-    history,
-  });
 
-  await act(async () => {
-    await router.load();
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
-    </QueryClientProvider>,
-  );
-
-  return { fetchMock, router, ...view };
-}
-
-function setReducedMotionPreference(prefersReducedMotion: boolean) {
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches:
-        query === "(prefers-reduced-motion: reduce)" && prefersReducedMotion,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
+  return { fetchMock, ...(await renderRoute(initialEntry)) };
 }
 
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: defaultMatchMedia,
-  });
+  restoreMatchMedia();
 });
 
 describe("search route", () => {
@@ -256,7 +185,6 @@ describe("search route", () => {
   });
 
   it("shows the server-clamped page for overlarge requested pages", async () => {
-    window.scrollTo = vi.fn();
     const { fetchMock, router } = await renderSearchRoute(
       "/search/?q=Casino&tab=movies&page=999",
     );
@@ -285,7 +213,6 @@ describe("search route", () => {
   });
 
   it("delays swapping from all results to albums until the fade-out completes", async () => {
-    window.scrollTo = vi.fn();
     const user = userEvent.setup();
     const setTimeoutSpy = vi.spyOn(window, "setTimeout");
 

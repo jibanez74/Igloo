@@ -480,6 +480,17 @@ CREATE TABLE
 
 CREATE INDEX IF NOT EXISTS idx_cast_order ON cast (movie_id, cast_order);
 
+-- FK-cascade index audit (2026-08-29): every foreign key in this schema has an
+-- index leading with its child column except seven, all pointing at catalog
+-- parents no query ever deletes -- cast.artist_id and crew.artist_id (-> artist),
+-- movie_production_companies.production_company_id, movie_extra_videos.extra_video_id,
+-- and genre_id on track_genres, album_genres and musician_genres (-> genres).
+-- SQLite only needs those indexes to find the children of a deleted parent, and
+-- there is no DeleteArtist, DeleteGenre, DeleteProductionCompany or
+-- DeleteExtraVideo, so they would be seven more indexes written on every scanner
+-- insert for no read. Add them the moment an orphan-cleanup or parent-delete path
+-- appears.
+
 -- Movie crew credits.
 CREATE TABLE
   IF NOT EXISTS crew (
@@ -495,7 +506,17 @@ CREATE TABLE
     UNIQUE (movie_id, artist_id, job, department)
   );
 
-CREATE INDEX IF NOT EXISTS idx_crew_department ON crew (movie_id, department);
+-- Serves GetCrewByMovieID's filter and its (department, job) ordering in one
+-- pass; without job the movie detail page temp-sorts every crew credit it reads.
+--
+-- This replaces idx_crew_department (movie_id, department). It gets a new name
+-- rather than a DROP + re-CREATE of the old one because this schema re-runs at
+-- every startup: CREATE INDEX IF NOT EXISTS would silently keep the old
+-- definition, and dropping unconditionally would rebuild a 70k-row index on
+-- every boot. Under the new name both statements are no-ops after the first run.
+CREATE INDEX IF NOT EXISTS idx_crew_movie_department_job ON crew (movie_id, department, job);
+
+DROP INDEX IF EXISTS idx_crew_department;
 
 -- Shared catalog relationships
 
@@ -660,9 +681,17 @@ CREATE TABLE
     FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE SET NULL ON UPDATE CASCADE
   );
 
-CREATE INDEX IF NOT EXISTS idx_playlist_user ON playlists (user_id);
+-- Serves both playlist listings, which select one user's playlists of one
+-- content_type (GetPlaylistsWithCollaboratorAccess and its movie twin), and backs
+-- the users -> playlists delete cascade. Replaces idx_playlist_user (user_id) and
+-- idx_playlist_content_type (content_type); new name for the same reason as
+-- idx_crew_movie_department_job above. Nothing filters on content_type alone, so
+-- that second index was write cost with no read.
+CREATE INDEX IF NOT EXISTS idx_playlist_user_content ON playlists (user_id, content_type);
 
-CREATE INDEX IF NOT EXISTS idx_playlist_content_type ON playlists (content_type);
+DROP INDEX IF EXISTS idx_playlist_user;
+
+DROP INDEX IF EXISTS idx_playlist_content_type;
 
 -- Backs the movies -> playlists (movie_id SET NULL) cascade.
 CREATE INDEX IF NOT EXISTS idx_playlists_movie ON playlists (movie_id);

@@ -167,7 +167,7 @@ constant exists — and when you create a new recurring one, add it there so
   whole-card surface tints use 200ms (`MOTION_SETTINGS_SURFACE_CLASS`).
   Applied to floating surfaces: modal surfaces (dialog, sheet, alert-dialog)
   enter/exit at 200ms standard; anchored transient popups (popover, dropdown,
-  select, tooltip) at 150ms micro — this split is deliberate, don't unify it.
+  select) at 150ms micro — this split is deliberate, don't unify it.
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
@@ -193,26 +193,30 @@ constant exists — and when you create a new recurring one, add it there so
 ### 1.6 Component variants — the contract
 
 The `Button` (`web/src/components/ui/button.tsx`) is the clearest expression
-of the system. Beyond stock shadcn (`default`, `destructive`, `outline`,
-`secondary`, `ghost`, `link`) it adds Igloo variants: **`accent`** (primary +
-`shadow-md`), **`accent-pill`** (rounded-full primary), **`aurora`** (amber).
-Extra sizes: `xs`, and icon sizes `icon-xs`/`icon-sm`/`icon`/`icon-lg`. The
-base string carries the focus ring, disabled opacity, `aria-invalid` styling,
-a property-scoped 150ms transition with `motion-reduce:transition-none`, and
-stamps `data-variant`/`data-size`.
+of the system. Its supported variants are `default`, `destructive`, `outline`,
+`ghost`, **`accent`** (primary + `shadow-md`), and **`accent-pill`**
+(rounded-full primary). Its supported sizes are `default`, `sm`, `lg`, `icon`,
+and `icon-sm`. The base string carries the focus ring, disabled opacity,
+`aria-invalid` styling, a property-scoped 150ms transition with
+`motion-reduce:transition-none`, and stamps `data-variant`/`data-size`.
 
+- **`accent-pill` and `size` don't compose.** cva emits base → variant → size →
+  `className`, and `cn` is `twMerge`, so the last conflicting class wins:
+  `size` re-declares `rounded-md` and silently squares off the pill. Pass no
+  `size` with `accent-pill` (what every call site does), or re-assert
+  `rounded-full` in `className`. Watch for this whenever two sibling buttons
+  are meant to match — one picking up a `size` is enough to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer
   responsive grid sizing on top via `LIBRARY_TABS_LIST_CLASS` /
   `LIBRARY_TAB_TRIGGER_CLASS` from `constants.ts`. Tab state lives in URL
   search params (validated in `types/route-search.ts`), never local state.
-- **cva policy**: only `button.tsx`, `alert.tsx`, and `sidebar.tsx` use
-  `class-variance-authority` (as shipped by shadcn). Everything else composes
-  plain `cn(...)` — `badge.tsx` (a plain variant record:
-  `default`/`aurora`/`muted`/`outline`) is the model. Don't introduce cva into
-  new components; either add a variant to an existing cva component or export
-  a class-string constant (§2.3).
+- **cva policy**: `button.tsx` is the only primitive that uses
+  `class-variance-authority`. Everything else composes plain `cn(...)` —
+  `badge.tsx` (a plain `default`/`outline` variant record) is the model. Don't
+  introduce cva into new components; either add a variant to an existing cva
+  component or export a class-string constant (§2.3).
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
   `span`); actionable chips are Buttons. Rating-tier colors come from the
@@ -222,6 +226,10 @@ stamps `data-variant`/`data-size`.
   pill) are `Link`s composing the pill classes with
   `FOCUS_VISIBLE_RING_CLASS` — deliberately not Badge, which stays
   non-interactive.
+- **Narrow primitive contracts are intentional.** Alert is destructive-only;
+  AlertDialog has one default size; dropdown items are non-inset; Select uses
+  its default trigger size and item-aligned content; Separator is horizontal
+  and decorative. Add a branch only when a production surface requires it.
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an
@@ -310,16 +318,21 @@ stamps `data-variant`/`data-size`.
   (`web/components.json`). Components import from the consolidated
   **`radix-ui`** package (`import { Slot } from "radix-ui"`), not
   `@radix-ui/react-*`.
-- 23 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
+- 21 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
   badge, button, card, checkbox, dialog, dropdown-menu, input, label,
   pagination, popover, select, separator, sheet, sidebar
-  (+ `sidebar-context.tsx`), skeleton, sonner, spinner, tabs, tooltip.
+  (+ `sidebar-context.tsx`), sonner, spinner, tabs.
+- Their exported subcomponents are intentionally limited to production use.
+  Portal, overlay, and Select scroll helpers stay private to their owning
+  primitive. Sheet is the left mobile-navigation surface, and Sidebar exports
+  only the provider, shell/inset, trigger/rail, and the header/content/footer,
+  group, and menu pieces used by `AppSidebar`.
 - **Customize in place** — these files are ours. House customizations to
   preserve when regenerating: the Button/Tabs variants (§1.6), the
   house-written `badge.tsx` (plain variant record, no cva), `CardTitle`'s
   `asChild` heading support (§3.7), `motion-reduce:` escapes appended to every
-  animated primitive, `skeleton.tsx`/`spinner.tsx` consuming the shared motion
-  constants, and `sonner.tsx` (§3.6).
+  animated primitive, `spinner.tsx` consuming the shared motion constants,
+  the fixed navigation contracts, and `sonner.tsx` (§3.6).
 - **No new dependencies** without explicit approval (project rule). Before
   adding a primitive, check whether an existing one + a constant covers it.
 
@@ -393,9 +406,11 @@ and meta correctly, and a hard reload shows no theme flash.
 
 ### 3.1 App shell
 
-`AppShell.tsx`: skip link → shadcn `SidebarProvider` + `AppSidebar`
-(`collapsible="icon"`; 16rem expanded / 3rem icon rail / 18rem mobile sheet
-that auto-closes on nav) + `SidebarInset` content column.
+`AppShell.tsx`: skip link → shadcn `SidebarProvider` + `AppSidebar` (a fixed
+left-side, icon-collapsible contract; 16rem expanded / 3rem icon rail / 18rem
+mobile sheet that auto-closes on nav) + `SidebarInset` content column. The
+provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
+collapse, while the mobile trigger controls the sheet.
 
 - Sidebar: logo tile + "Igloo" wordmark linking home; Home / Movies / TV Shows
   / Music / Photos / Settings with lucide icons (active =
@@ -482,9 +497,10 @@ extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars.
   page, each query renders a **skeleton that matches the real layout's grid
   geometry exactly** (same columns, same aspect boxes) so content arrival
   causes no layout shift — see `AllMoviesTabSkeleton`, `MovieDetailsSkeleton`.
-  Primitives: `ui/skeleton.tsx`, `ui/spinner.tsx` (`role="status"`), both on
-  the shared `MOTION_LOADING/SPINNER_STATE_CLASS` (pulse/spin +
-  `motion-reduce:animate-none`). Skeletons hide their visuals with
+  Skeleton geometry is authored directly in each loading layout with muted
+  boxes and the shared `MOTION_LOADING_STATE_CLASS`; this keeps the placeholder
+  beside the real layout it must mirror. `ui/spinner.tsx` (`role="status"`)
+  uses `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
   `aria-hidden` under a single `role="status"` + `sr-only` label.
 - **Empty, two variants.** Minimal: centered `text-muted-foreground` with a
   large faded lucide icon and one sentence (search no-results, empty tabs).
@@ -525,16 +541,30 @@ require the full playback test pass.
   screen's non-loading variants and the watch-room error box carry
   `role="alert"` because the player subtree (and its live regions) unmounts
   before they appear.
-- **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`):
-  playing a track opens the **fullscreen Now Playing** view
+- **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`;
+  chrome split into `NowPlayingDialog`, `MiniPlayerBar`, and the shared
+  `PlayerTransportControls`, with `useAudioPlaybackKeyboard` and
+  `useAudioMediaSession` behind it):
+  starting a **new** track opens the **fullscreen Now Playing** view
   (`DialogFullscreenContent`, gradient `from-background via-muted
   to-background`, large art with disc-icon fallback, transport + volume +
   "Track N of M"); "Minimize player (Escape)" collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
   with track info, transport, close, and a bottom progress strip. The bar
   persists across navigation; the current track's row in lists is
-  highlighted (`text-primary` title + tinted row + pause state). Sliders are
-  native ranges (§1.7).
+  highlighted (`text-primary` title + tinted row + pause state), and
+  clicking that row **toggles play/pause in place** — it never rebuilds the
+  queue or re-opens the fullscreen view (the header-level "Play all" /
+  "Shuffle" buttons are the explicit start-over entry points, and they
+  rewind to 0:00 even when their first track is the one already playing).
+  Sliders are native ranges (§1.7). Global keyboard map (mirrors the video
+  player's aliases): Space/K toggle, J/L and ←/→ seek ±10s, ↑/↓ volume
+  (unmuting as it goes), N/P next/previous, R/Home/0 restart, M mute. Inside the player's own chrome
+  these keys always control playback — Space pauses even when a player
+  button holds focus (Enter still activates it); outside the player, Space
+  and navigation keys are left to the focused control (buttons, tabs,
+  radios), and the player's native sliders keep their own arrow/Home
+  handling.
 
 ### 3.6 Toasts & notifications
 
@@ -643,9 +673,9 @@ Each item maps to a §4 finding; the chosen resolution is recorded here.
    + TemplateElement selectors). The Spotify-green constants carry inline
    `eslint-disable` comments; the input-styles/login allowlist block is
    unchanged; the TV Shows library card's purple moved to `accent-teal`.
-6. **`Badge` primitive (§4.6) — added** (`ui/badge.tsx`,
-   `default/aurora/muted/outline`, plain variant record per the cva policy,
-   non-interactive). Rating tiers folded into `lib/rating.ts`
+6. **`Badge` primitive (§4.6) — added** (`ui/badge.tsx`, non-interactive;
+   subsequently narrowed to the production-used `default`/`outline` record).
+   Rating tiers folded into `lib/rating.ts`
    (`criticRatingClass`/`audienceRatingClass`, mid tier standardized on
    `/80`). Adopted where it consolidates: both rating badges and the
    `HomeMediaSection` count pill. Deliberately left: `ComingSoon` chip

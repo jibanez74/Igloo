@@ -30,7 +30,8 @@ export function useMovieWatchProgressSaver({
   durationRef,
   fallbackDurationSec,
 }: MovieWatchProgressSaverOptions) {
-  const pendingSaveRef = useRef<Promise<void>>(Promise.resolve());
+  // Null until the first save; the chain starts from a resolved promise then.
+  const pendingSaveRef = useRef<Promise<void> | null>(null);
   const fallbackDurationRef = useRef(fallbackDurationSec ?? 0);
   const saveSessionIdRef = useRef<string | null>(null);
   const saveSequenceRef = useRef(0);
@@ -51,7 +52,7 @@ export function useMovieWatchProgressSaver({
   const queueProgressSave = useCallback(
     (progressSec: number, durationSec: number) => {
       const saveSequence = ++saveSequenceRef.current;
-      const save = pendingSaveRef.current.then(() =>
+      const save = (pendingSaveRef.current ?? Promise.resolve()).then(() =>
         persistMovieWatchProgress(
           movieId,
           progressSec,

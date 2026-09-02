@@ -64,3 +64,29 @@ ON CONFLICT (notification_id, user_id) DO NOTHING;
 DELETE FROM notifications
 WHERE id = sqlc.arg(notification_id)
   AND is_admin = true;
+
+-- name: GetNotificationBadgeForUser :one
+-- The bell badge in one round trip. The client polls this endpoint, and the
+-- database runs on a single shared connection (InitDB), so the admin check and
+-- the count are folded into one statement instead of GetUserIsAdmin followed by
+-- CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
+-- short-circuits to 0 without touching notifications at all. No rows means the
+-- session outlived its user, which the handler treats as a stale session.
+SELECT
+  u.is_admin,
+  CASE
+    WHEN u.is_admin THEN (
+      SELECT COUNT(*)
+      FROM notifications AS n
+      WHERE n.is_admin = true
+        AND NOT EXISTS (
+          SELECT 1
+          FROM notification_reads AS nr
+          WHERE nr.notification_id = n.id
+            AND nr.user_id = u.id
+        )
+    )
+    ELSE 0
+  END AS unread_count
+FROM users AS u
+WHERE u.id = sqlc.arg(user_id);
