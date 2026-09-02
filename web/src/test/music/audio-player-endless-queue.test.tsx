@@ -215,7 +215,10 @@ describe("endless shuffle queue on an exhausted library", () => {
   }
 
   it("sends the queued track ids so a refill never repeats them", async () => {
-    mockLibrary(24);
+    // Bigger than SHUFFLE_TRACKS_LIMIT on purpose. With a library that fits in
+    // one batch the opening fetch takes everything, the refill comes back empty,
+    // and the test passes without ever appending anything.
+    mockLibrary(80);
 
     renderWithQueryClient(
       <AudioPlayerProvider>
@@ -229,8 +232,9 @@ describe("endless shuffle queue on an exhausted library", () => {
     // The opening fetch has nothing to exclude yet.
     expect(vi.mocked(getShuffleTracks).mock.calls[0][1]).toBeUndefined();
 
-    // Walk into the lookahead window so a refill fires.
-    for (let position = 2; position <= 16; position++) {
+    // Walk into the lookahead window so a refill fires. The opening batch is
+    // SHUFFLE_TRACKS_LIMIT (50) tracks, so the runway only gets short at 42.
+    for (let position = 2; position <= 42; position++) {
       fireEvent.click(
         await screen.findByRole("button", { name: "Next track" }),
       );
@@ -242,12 +246,16 @@ describe("endless shuffle queue on an exhausted library", () => {
     );
 
     const refillExclusions = vi.mocked(getShuffleTracks).mock.calls[1][1] ?? [];
-    expect(refillExclusions.length).toBeGreaterThan(0);
+    expect(refillExclusions).toHaveLength(50);
 
-    // Every id the queue already holds is excluded, so nothing can come back
-    // twice and the "Track N of M" denominator only ever counts fresh tracks.
-    const total = Number(trackCounter().match(/of (\d+)$/)?.[1]);
-    expect(total).toBeLessThanOrEqual(24);
+    // Exactly the whole library, which is only reachable if the refill appended
+    // all 30 tracks the opening batch missed and repeated none of the 50 it
+    // already held. Nothing has been trimmed yet at this position, so the
+    // denominator is the real queue length.
+    await waitFor(() => {
+      const total = Number(trackCounter().match(/of (\d+)$/)?.[1]);
+      expect(total).toBe(80);
+    });
   });
 
   it("says so when the library has nothing left instead of going quiet", async () => {
