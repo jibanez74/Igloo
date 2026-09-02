@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -300,9 +302,76 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+// A shuffle client sends back what it already holds so a refill does not hand
+// it the same tracks again. The cap matches the shuffle limit cap: beyond that
+// the exclusion list stops being worth the round trip.
+const maxShuffleExcludeIDs = 200
+
+// Ids are skipped rather than rejected, so the accepted-id cap alone does not
+// bound the work: a request made entirely of junk never reaches it. Cap the
+// fields examined too, generously enough that no honest client notices.
+const maxShuffleExcludeFields = maxShuffleExcludeIDs * 4
+
+// parseShuffleExcludeIDs turns repeated `exclude=` query values into the JSON
+// array GetRandomTracks binds to json_each. Unparseable or out-of-range values
+// are skipped rather than rejected: an exclusion is an optimization, and
+// failing the whole request over one bad id would stop playback.
+func parseShuffleExcludeIDs(values []string) string {
+	capacity := min(len(values), maxShuffleExcludeIDs)
+	ids := make([]int64, 0, capacity)
+	seen := make(map[int64]struct{}, capacity)
+	scanned := 0
+
+	for _, value := range values {
+		for field := range strings.SplitSeq(value, ",") {
+			if scanned == maxShuffleExcludeFields {
+				break
+			}
+			scanned++
+
+			field = strings.TrimSpace(field)
+			if field == "" {
+				continue
+			}
+
+			id, err := strconv.ParseInt(field, 10, 64)
+			if err != nil || id <= 0 {
+				continue
+			}
+			if _, duplicate := seen[id]; duplicate {
+				continue
+			}
+
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+
+			if len(ids) == maxShuffleExcludeIDs {
+				encoded, err := json.Marshal(ids)
+				if err != nil {
+					return "[]"
+				}
+				return string(encoded)
+			}
+		}
+
+		if scanned == maxShuffleExcludeFields {
+			break
+		}
+	}
+
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return "[]"
+	}
+
+	return string(encoded)
+}
+
 func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
 	limit := int64(50)
-	if l := r.URL.Query().Get("limit"); l != "" {
+	if l := query.Get("limit"); l != "" {
 		parsed, err := strconv.ParseInt(l, 10, 64)
 		if err == nil && parsed > 0 {
 			limit = parsed
@@ -312,7 +381,10 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 		limit = 200
 	}
 
-	tracks, err := app.Queries.GetRandomTracks(r.Context(), limit)
+	tracks, err := app.Queries.GetRandomTracks(r.Context(), database.GetRandomTracksParams{
+		ExcludeIds: parseShuffleExcludeIDs(query["exclude"]),
+		RowLimit:   limit,
+	})
 	if err != nil {
 		app.Logger.Error("failed to get random tracks", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch random tracks"))

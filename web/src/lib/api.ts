@@ -511,9 +511,20 @@ export const getTracksPaginated = (limit: number, offset: number) =>
     withQuery("/api/music/tracks", { limit, offset }),
   );
 
-export const getShuffleTracks = (limit: number = SHUFFLE_TRACKS_LIMIT) =>
+// excludeTrackIds tells the server what the caller already holds so the random
+// sample is drawn around it. Sent comma-separated rather than as repeated
+// params - the server accepts either and one entry keeps the URL short.
+export const getShuffleTracks = (
+  limit: number = SHUFFLE_TRACKS_LIMIT,
+  excludeTrackIds: number[] = [],
+) =>
   apiRequest<ShuffleTracksResponseType>(
-    withQuery("/api/music/tracks/shuffle", { limit }),
+    withQuery("/api/music/tracks/shuffle", {
+      limit,
+      ...(excludeTrackIds.length > 0
+        ? { exclude: excludeTrackIds.join(",") }
+        : {}),
+    }),
   );
 
 export const toggleLikeTrack = (trackId: number) =>

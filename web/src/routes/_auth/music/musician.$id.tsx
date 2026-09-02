@@ -42,6 +42,7 @@ import type {
   MusicianAlbumType,
   MusicianDetailsResponseType,
   MusicianTrackType,
+  PlayableTrackData,
 } from "@/types";
 
 export const Route = createFileRoute("/_auth/music/musician/$id")({
@@ -224,62 +225,71 @@ function MusicianDetailsContent({
   const pageTitle = `${musician.name} - Igloo`;
   const pageDescription = `Listen to ${musician.name} - ${albums.length} albums, ${tracks.length} tracks in your Igloo music library.`;
 
-  const convertTracksForPlayer = (musicianTracks: MusicianTrackType[]) => {
-    return musicianTracks.map((track) =>
-      convertToAudioTrack({
-        id: track.id,
-        title: track.title,
-        duration: track.duration,
-        file_path: track.file_path,
-        codec: track.codec,
-        bit_rate: track.bit_rate,
-        album_id: track.album_id,
-        musician_id: { Int64: musician.id, Valid: true },
-        album_cover: track.album_cover,
-        musician_name: { String: musician.name, Valid: true },
-      }),
-    );
+  // A musician's tracks span every album they appear on, so each row carries its
+  // own album title and cover. Keep them as PlayableTrackData and hand them to
+  // the player, or the queue-wide fallback shows the musician's name in the
+  // album slot and their photo as the cover for every track. Only the artist is
+  // genuinely queue-wide here, so that one is filled in from the page.
+  const toPlayableData = (
+    musicianTracks: MusicianTrackType[],
+  ): PlayableTrackData[] =>
+    musicianTracks.map((track) => ({
+      id: track.id,
+      title: track.title,
+      duration: track.duration,
+      file_path: track.file_path,
+      codec: track.codec,
+      bit_rate: track.bit_rate,
+      album_id: track.album_id,
+      album_title: track.album_title,
+      album_cover: track.album_cover,
+      musician_id: { Int64: musician.id, Valid: true },
+      musician_name: { String: musician.name, Valid: true },
+    }));
+
+  const albumInfo = {
+    cover: thumbUrl,
+    title: musician.name,
+    musician: musician.name,
   };
 
   const handlePlayAll = () => {
     if (tracks.length === 0) return;
 
-    const playerTracks = convertTracksForPlayer(tracks);
-    audioPlayer.playQueue(playerTracks, {
-      cover: thumbUrl,
-      title: musician.name,
-      musician: musician.name,
-    });
+    const rawTracks = toPlayableData(tracks);
+    audioPlayer.playQueue(
+      rawTracks.map(convertToAudioTrack),
+      albumInfo,
+      rawTracks,
+    );
   };
 
   const handleShufflePlay = () => {
     if (tracks.length === 0) return;
 
-    const playerTracks = convertTracksForPlayer(tracks);
-    audioPlayer.shuffleQueue(playerTracks, {
-      cover: thumbUrl,
-      title: musician.name,
-      musician: musician.name,
-    });
+    const rawTracks = toPlayableData(tracks);
+    audioPlayer.shuffleQueue(
+      rawTracks.map(convertToAudioTrack),
+      albumInfo,
+      rawTracks,
+    );
   };
 
-  // playTrack (not playQueue) so a click on the current row toggles play/pause
-  // instead of restarting — the row button is labeled "Pause X" there.
+  // playTrackFromList (not playQueue) so a click on the current row toggles
+  // play/pause instead of restarting — the row button is labeled "Pause X"
+  // there. The list is rotated to start at the clicked track, which is what the
+  // page has always done, and passing the raw rows keeps each track's own album
+  // details as the queue advances.
   const handlePlayTrack = (track: MusicianTrackType) => {
     const trackIndex = tracks.findIndex((t) => t.id === track.id);
     if (trackIndex < 0) return;
 
-    const playerTracks = convertTracksForPlayer(tracks);
-    const reorderedTracks = [
-      ...playerTracks.slice(trackIndex),
-      ...playerTracks.slice(0, trackIndex),
-    ];
+    const rawTracks = toPlayableData([
+      ...tracks.slice(trackIndex),
+      ...tracks.slice(0, trackIndex),
+    ]);
 
-    audioPlayer.playTrack(reorderedTracks[0], reorderedTracks, {
-      cover: unwrapString(track.album_cover) ?? thumbUrl,
-      title: musician.name,
-      musician: musician.name,
-    });
+    audioPlayer.playTrackFromList(rawTracks, track.id);
   };
 
   // Screen reader announcement summarizing the page

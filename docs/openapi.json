@@ -3515,6 +3515,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ShuffleLimitQuery"
+          },
+          {
+            "$ref": "#/components/parameters/ShuffleExcludeQuery"
           }
         ],
         "responses": {
@@ -4552,6 +4555,23 @@
           "minimum": 1,
           "maximum": 200,
           "default": 50
+        }
+      },
+      "ShuffleExcludeQuery": {
+        "name": "exclude",
+        "in": "query",
+        "required": false,
+        "description": "Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected.",
+        "style": "form",
+        "explode": false,
+        "schema": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
         }
       },
       "StatsLimitQuery": {

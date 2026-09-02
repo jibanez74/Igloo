@@ -136,6 +136,11 @@ SELECT
 -- musician joins run only for the chosen rows instead of the whole library.
 -- The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
 -- stays random too.
+--
+-- exclude_ids lets an endless shuffle queue say what it already holds. Without
+-- it every refill re-samples the whole table blind, so a library smaller than
+-- the queue returns nothing but duplicates and the client burns a full scan per
+-- retry.
 SELECT
   t.id,
   t.title,
@@ -154,9 +159,17 @@ LEFT JOIN albums AS a
 LEFT JOIN musicians AS m
   ON t.musician_id = m.id
 WHERE t.id IN (
-  SELECT id
-  FROM tracks
+  SELECT candidate.id
+  FROM tracks AS candidate
+  -- The exclusions arrive as a JSON array rather than sqlc.slice() so the SQL
+  -- text stays constant and the statement can still be prepared. It also gets
+  -- the empty case right for free: json_each('[]') yields no rows, and
+  -- NOT IN (empty set) is true, whereas an empty slice renders as
+  -- `NOT IN (NULL)`, which is NULL and would match nothing.
+  WHERE candidate.id NOT IN (
+    SELECT value FROM json_each(CAST(sqlc.arg(exclude_ids) AS TEXT))
+  )
   ORDER BY RANDOM()
-  LIMIT ?1
+  LIMIT sqlc.arg(row_limit)
 )
 ORDER BY RANDOM();
