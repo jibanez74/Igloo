@@ -528,7 +528,7 @@ func (q *Queries) MusicTrackAffectedArtists(ctx context.Context, filePath string
 
 const reconcileMusicAlbumDate = `-- name: ReconcileMusicAlbumDate :exec
 UPDATE albums SET release_date=COALESCE((SELECT t.release_date FROM tracks t WHERE t.album_id=albums.id AND t.release_date IS NOT NULL
-GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id))
+GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id)), updated_at = CURRENT_TIMESTAMP
 WHERE albums.id=? AND release_date IS NOT COALESCE((SELECT t.release_date FROM tracks t WHERE t.album_id=albums.id AND t.release_date IS NOT NULL
 GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id))
 `
@@ -540,7 +540,7 @@ func (q *Queries) ReconcileMusicAlbumDate(ctx context.Context, id int64) error {
 
 const reconcileMusicAlbumSort = `-- name: ReconcileMusicAlbumSort :exec
 UPDATE albums SET sort_title=COALESCE((SELECT m.album_sort FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
-WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title)
+WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title), updated_at = CURRENT_TIMESTAMP
 WHERE albums.id=? AND sort_title IS NOT COALESCE((SELECT m.album_sort FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
 WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title)
 `
@@ -551,7 +551,7 @@ func (q *Queries) ReconcileMusicAlbumSort(ctx context.Context, id int64) error {
 }
 
 const reconcileMusicAlbumYear = `-- name: ReconcileMusicAlbumYear :exec
-UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER) WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER)
+UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER)
 `
 
 func (q *Queries) ReconcileMusicAlbumYear(ctx context.Context, id int64) error {
@@ -562,7 +562,7 @@ func (q *Queries) ReconcileMusicAlbumYear(ctx context.Context, id int64) error {
 const reconcileMusicArtistSort = `-- name: ReconcileMusicArtistSort :exec
 UPDATE musicians SET sort_name=COALESCE((SELECT vote FROM (SELECT MIN(sort_name COLLATE BINARY) AS vote FROM music_credit_metadata
 WHERE musician_id=musicians.id AND sort_name<>'' GROUP BY track_id) GROUP BY vote
-ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1), name)
+ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1), name), updated_at = CURRENT_TIMESTAMP
 WHERE id=? AND sort_name IS NOT COALESCE((SELECT vote FROM (SELECT MIN(sort_name COLLATE BINARY) AS vote FROM music_credit_metadata
 WHERE musician_id=musicians.id AND sort_name<>'' GROUP BY track_id) GROUP BY vote
 ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1), name)
@@ -699,7 +699,7 @@ func (q *Queries) SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrack
 }
 
 const setMusicAlbumSpotifyID = `-- name: SetMusicAlbumSpotifyID :exec
-UPDATE albums SET spotify_id=? WHERE id=?
+UPDATE albums SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
 `
 
 type SetMusicAlbumSpotifyIDParams struct {
@@ -713,7 +713,7 @@ func (q *Queries) SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumS
 }
 
 const setMusicArtistSpotifyID = `-- name: SetMusicArtistSpotifyID :exec
-UPDATE musicians SET spotify_id=? WHERE id=?
+UPDATE musicians SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
 `
 
 type SetMusicArtistSpotifyIDParams struct {
@@ -727,7 +727,7 @@ func (q *Queries) SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtis
 }
 
 const updateMusicAlbumEnrichment = `-- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=? WHERE id=?
+UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
 `
 
 type UpdateMusicAlbumEnrichmentParams struct {
@@ -742,7 +742,7 @@ func (q *Queries) UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusi
 }
 
 const updateMusicArtistEnrichment = `-- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=? WHERE id=?
+UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
 `
 
 type UpdateMusicArtistEnrichmentParams struct {

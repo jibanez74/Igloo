@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -272,6 +273,57 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 		count := countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id = tm.musician_id JOIN tracks t ON t.id = tm.track_id WHERE t.file_path = ? AND m.name IN ('One', 'Two')", file.Path)
 		if count != 2 {
 			t.Fatalf("track %d has %d split credits", i, count)
+		}
+	}
+}
+
+func TestArtistSuffixCredits(t *testing.T) {
+	for _, suffix := range []string{"Jr", "Sr", "II", "III", "IV", "V", "Vi"} {
+		for _, value := range []string{suffix, strings.ToLower(suffix), " \t" + strings.ToUpper(suffix) + " \t"} {
+			for _, period := range []string{"", "."} {
+				credit := strings.TrimSpace(value) + period
+				input := "Artist, " + " \t" + credit + " \t"
+				want := []string{"Artist, " + credit}
+				if period == "" && (suffix == "V" || suffix == "Vi") {
+					want = []string{"Artist", credit}
+				}
+				t.Run(input, func(t *testing.T) {
+					got := parseCompoundArtistCredits(input)
+					if !slices.Equal(got.parts, want) {
+						t.Fatalf("parts = %q, want %q", got.parts, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestBareArtistCreditsAfterSpotifyNonMatch(t *testing.T) {
+	for _, second := range []string{"V", "Vi"} {
+		for _, reason := range []string{"offline", "no_results", "score_below_threshold"} {
+			t.Run(second+"/"+reason, func(t *testing.T) {
+				s := setupMusicScanner(t)
+				defer s.db.Close()
+				combined := "Jungkook, " + second
+				if reason != "offline" {
+					s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Lookup: "artist", Input: combined, Reason: reason}}}
+				}
+				scanTaggedTrack(t, s, newMusicScanContext(nil), "/track.m4a", 1, ffprobe.FormatTags{Title: "Track", Artist: combined})
+				names := []string{combined}
+				if reason != "offline" {
+					names = []string{"Jungkook", second}
+				}
+				count := countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians")
+				if count != len(names) {
+					t.Fatalf("credit count = %d, want %d", count, len(names))
+				}
+				for _, name := range names {
+					count = countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id=tm.musician_id WHERE m.name=?", name)
+					if count != 1 {
+						t.Fatalf("persisted credit %q count = %d", name, count)
+					}
+				}
+			})
 		}
 	}
 }

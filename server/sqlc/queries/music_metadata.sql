@@ -33,25 +33,25 @@ ON CONFLICT(album_id) DO UPDATE SET spotify_date=excluded.spotify_date;
 -- name: ReconcileMusicArtistSort :exec
 UPDATE musicians SET sort_name=COALESCE((SELECT vote FROM (SELECT MIN(sort_name COLLATE BINARY) AS vote FROM music_credit_metadata
 WHERE musician_id=musicians.id AND sort_name<>'' GROUP BY track_id) GROUP BY vote
-ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1), name)
+ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1), name), updated_at = CURRENT_TIMESTAMP
 WHERE id=? AND sort_name IS NOT COALESCE((SELECT vote FROM (SELECT MIN(sort_name COLLATE BINARY) AS vote FROM music_credit_metadata
 WHERE musician_id=musicians.id AND sort_name<>'' GROUP BY track_id) GROUP BY vote
 ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1), name);
 
 -- name: ReconcileMusicAlbumSort :exec
 UPDATE albums SET sort_title=COALESCE((SELECT m.album_sort FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
-WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title)
+WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title), updated_at = CURRENT_TIMESTAMP
 WHERE albums.id=? AND sort_title IS NOT COALESCE((SELECT m.album_sort FROM music_track_metadata m JOIN tracks t ON t.id=m.track_id
 WHERE t.album_id=albums.id AND m.album_sort<>'' GROUP BY m.album_sort ORDER BY COUNT(*) DESC,m.album_sort COLLATE BINARY LIMIT 1),title);
 
 -- name: ReconcileMusicAlbumDate :exec
 UPDATE albums SET release_date=COALESCE((SELECT t.release_date FROM tracks t WHERE t.album_id=albums.id AND t.release_date IS NOT NULL
-GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id))
+GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id)), updated_at = CURRENT_TIMESTAMP
 WHERE albums.id=? AND release_date IS NOT COALESCE((SELECT t.release_date FROM tracks t WHERE t.album_id=albums.id AND t.release_date IS NOT NULL
 GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT spotify_date FROM music_album_metadata WHERE album_id=albums.id));
 
 -- name: ReconcileMusicAlbumYear :exec
-UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER) WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER);
+UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER);
 
 -- name: MusicTrackAffectedArtists :many
 SELECT musician_id FROM track_musicians WHERE track_id=(SELECT id FROM tracks WHERE file_path=?);
@@ -138,10 +138,10 @@ SELECT track_id FROM track_musicians WHERE musician_id=?;
 SELECT id FROM tracks WHERE album_id=?;
 
 -- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=? WHERE id=?;
+UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
 
 -- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=? WHERE id=?;
+UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
 
 -- name: MusicCompoundReconciliationCandidates :many
 SELECT e.* FROM musicians e JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
@@ -152,7 +152,7 @@ WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.ar
 ORDER BY e.id LIMIT 100;
 
 -- name: SetMusicArtistSpotifyID :exec
-UPDATE musicians SET spotify_id=? WHERE id=?;
+UPDATE musicians SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
 
 -- name: SetMusicAlbumSpotifyID :exec
-UPDATE albums SET spotify_id=? WHERE id=?;
+UPDATE albums SET spotify_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;

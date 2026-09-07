@@ -468,7 +468,7 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 	app := setupMusicScanner(t)
 	defer app.db.Close()
 
-	seededMusician, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+	_, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:      "Existing Artist",
 		SortName:  "Existing Artist",
 		SpotifyID: sql.NullString{String: "artist123", Valid: true},
@@ -478,7 +478,7 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		t.Fatalf("seed musician: %v", err)
 	}
 
-	seededAlbum, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	_, err = app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Existing Album",
 		SortTitle: "Existing Album",
 		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
@@ -489,16 +489,13 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		t.Fatalf("seed album: %v", err)
 	}
 
-	var seededMusicianUpdatedAt string
-	err = app.db.QueryRow("SELECT updated_at FROM musicians WHERE id = ?", seededMusician.ID).Scan(&seededMusicianUpdatedAt)
+	_, err = app.db.Exec(`
+ CREATE TABLE image_writes(entity TEXT);
+ CREATE TRIGGER count_artist_image AFTER UPDATE OF thumb ON musicians BEGIN INSERT INTO image_writes VALUES('artist'); END;
+ CREATE TRIGGER count_album_image AFTER UPDATE OF cover ON albums BEGIN INSERT INTO image_writes VALUES('album'); END;
+ `)
 	if err != nil {
-		t.Fatalf("get seeded musician updated_at: %v", err)
-	}
-
-	var seededAlbumUpdatedAt string
-	err = app.db.QueryRow("SELECT updated_at FROM albums WHERE id = ?", seededAlbum.ID).Scan(&seededAlbumUpdatedAt)
-	if err != nil {
-		t.Fatalf("get seeded album updated_at: %v", err)
+		t.Fatal(err)
 	}
 
 	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
@@ -530,22 +527,9 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	var musicianUpdatedAt string
-	err = app.db.QueryRow("SELECT updated_at FROM musicians WHERE id = ?", seededMusician.ID).Scan(&musicianUpdatedAt)
-	if err != nil {
-		t.Fatalf("get musician updated_at: %v", err)
-	}
-	if musicianUpdatedAt != seededMusicianUpdatedAt {
-		t.Fatalf("musician updated_at = %q, want unchanged %q", musicianUpdatedAt, seededMusicianUpdatedAt)
-	}
-
-	var albumUpdatedAt string
-	err = app.db.QueryRow("SELECT updated_at FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumUpdatedAt)
-	if err != nil {
-		t.Fatalf("get album updated_at: %v", err)
-	}
-	if albumUpdatedAt != seededAlbumUpdatedAt {
-		t.Fatalf("album updated_at = %q, want unchanged %q", albumUpdatedAt, seededAlbumUpdatedAt)
+	count := countScannerRows(t, app.db, "SELECT count(*) FROM image_writes")
+	if count != 0 {
+		t.Fatalf("unchanged images caused %d writes", count)
 	}
 }
 
