@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -223,5 +225,61 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func TestWalkMediaLibrarySymlinksAndSpecialFiles(t *testing.T) {
+	for _, ext := range []string{"m4a", "mkv"} {
+		t.Run(ext, func(t *testing.T) {
+			root := t.TempDir()
+			targets := t.TempDir()
+			target := filepath.Join(targets, "target")
+			err := os.WriteFile(target, []byte("target content with a different size than its link"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			regular := filepath.Join(root, "regular."+ext)
+			err = os.WriteFile(regular, []byte("regular"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(root, "linked."+ext)
+			broken := filepath.Join(root, "broken."+ext)
+			directory := filepath.Join(root, "directory."+ext)
+			fifo := filepath.Join(root, "fifo."+ext)
+			err = syscall.Mkfifo(fifo, 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for path, dest := range map[string]string{link: target, broken: filepath.Join(targets, "missing"), directory: targets, filepath.Join(root, "fifo-link."+ext): fifo} {
+				err = os.Symlink(dest, path)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A directory link must never expose descendants to the walker.
+			err = os.WriteFile(filepath.Join(targets, "hidden."+ext), []byte("hidden"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var failures []error
+			var files []ScanFile
+			err = WalkMediaLibraryContext(context.Background(), root, map[string]bool{ext: true}, func(err error) { failures = append(failures, err) }, func(file ScanFile) error { files = append(files, file); return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := []ScanFile{{Path: link, Ext: ext}, {Path: regular, Ext: ext, Size: 7}}
+			info, err := os.Stat(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected[0].Size = info.Size()
+			if !reflect.DeepEqual(files, expected) {
+				t.Fatalf("files=%+v, want %+v", files, expected)
+			}
+			if len(failures) != 1 || !strings.Contains(failures[0].Error(), broken) || !errors.Is(failures[0], os.ErrNotExist) {
+				t.Fatalf("walk errors=%v", failures)
+			}
+		})
 	}
 }

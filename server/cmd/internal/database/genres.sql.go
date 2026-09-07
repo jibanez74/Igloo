@@ -10,7 +10,7 @@ import (
 )
 
 const getAlbumGenres = `-- name: GetAlbumGenres :many
-SELECT
+SELECT DISTINCT
   g.id,
   g.tag
 FROM genres AS g
@@ -50,7 +50,7 @@ func (q *Queries) GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbum
 }
 
 const getGenresByMusicianID = `-- name: GetGenresByMusicianID :many
-SELECT
+SELECT DISTINCT
   g.id,
   g.tag
 FROM genres AS g
@@ -127,7 +127,7 @@ INSERT INTO album_genres (
 )
 VALUES
   (?, ?)
-ON CONFLICT (album_id, genre_id) DO NOTHING
+ON CONFLICT (album_id, genre_id, source) DO NOTHING
 `
 
 type UpsertAlbumGenreParams struct {
@@ -148,7 +148,7 @@ INSERT INTO musician_genres (
 )
 VALUES
   (?, ?)
-ON CONFLICT (musician_id, genre_id) DO NOTHING
+ON CONFLICT (musician_id, genre_id, source) DO NOTHING
 `
 
 type UpsertMusicianGenreParams struct {

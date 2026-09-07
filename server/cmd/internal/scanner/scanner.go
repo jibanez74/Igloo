@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -175,9 +176,20 @@ func WalkMediaLibraryContext(
 			return nil
 		}
 
-		info, err := entry.Info()
+		var info fs.FileInfo
+		isSymlink := entry.Type()&fs.ModeSymlink != 0
+		if isSymlink {
+			info, err = os.Stat(path)
+		} else {
+			info, err = entry.Info()
+		}
 		if err != nil {
 			onError(fmt.Errorf("failed to get file info for %s: %w", path, err))
+			return nil
+		}
+
+		regular := info.Mode().IsRegular()
+		if !regular {
 			return nil
 		}
 

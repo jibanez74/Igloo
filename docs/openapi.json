@@ -3236,7 +3236,7 @@
           "Settings"
         ],
         "summary": "Trigger a music library scan",
-        "description": "Admin-only endpoint. The scan runs asynchronously.",
+        "description": "Admin-only endpoint. The scan runs asynchronously. Music files are selected by catalog path and size. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes reconcile local artist, album, and genre relationships. No forced refresh or missing-file cleanup is performed.",
         "operationId": "triggerMusicScan",
         "responses": {
           "200": {
@@ -9469,6 +9469,7 @@
       },
       "Album": {
         "type": "object",
+        "description": "Album sort title uses the most common explicit local sort tag, with binary lexical ties and display-title fallback. Release date uses the most common valid local track date, choosing the earliest tied date, then Spotify as fallback; year follows that date.",
         "required": ["id", "title", "sort_title", "spotify_id", "spotify_popularity", "musician", "release_date", "year", "total_tracks", "cover", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "sort_title": { "type": "string" }, "spotify_id": { "$ref": "#/components/schemas/SqlNullString" }, "spotify_popularity": { "$ref": "#/components/schemas/SqlNullFloat64" }, "musician": { "$ref": "#/components/schemas/SqlNullString" }, "release_date": { "$ref": "#/components/schemas/SqlNullString" }, "year": { "$ref": "#/components/schemas/SqlNullInt64" }, "total_tracks": { "$ref": "#/components/schemas/SqlNullInt64" }, "cover": { "$ref": "#/components/schemas/SqlNullString" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }

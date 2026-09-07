@@ -13,6 +13,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	applogger "igloo/cmd/internal/logger"
 	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
@@ -81,6 +82,7 @@ type Application struct {
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
 	MovieScanner                  interface{ Start() movie.StartResult }
+	MusicScanner                  interface{ Start() music.StartResult }
 }
 
 //go:embed all:webdist
@@ -195,6 +197,23 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
+	app.MusicScanner = music.New(music.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Spotify:     app.Spotify,
+		ScanContext: app.ScanContext,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
+		CurrentMusicDirectory: func() sql.NullString {
+			return app.CurrentSettings().MusicDir
+		},
+		InvalidateCommittedTrack: func(trackID int64) {
+			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
+		},
+	})
+
 	app.MovieScanner = movie.New(movie.Dependencies{
 		DB:          app.DB,
 		Queries:     app.Queries,

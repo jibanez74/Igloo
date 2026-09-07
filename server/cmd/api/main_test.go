@@ -18,6 +18,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
 	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
 
 	cache "github.com/patrickmn/go-cache"
 )
@@ -1178,6 +1179,23 @@ func setupTestApp(t *testing.T) *Application {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
 	app.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
 	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
+	app.MusicScanner = music.New(music.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Spotify:     app.Spotify,
+		ScanContext: app.ScanContext,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
+		CurrentMusicDirectory: func() sql.NullString {
+			return app.CurrentSettings().MusicDir
+		},
+		InvalidateCommittedTrack: func(trackID int64) {
+			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
+		},
+	})
+
 	app.MovieScanner = movie.New(movie.Dependencies{
 		DB:          app.DB,
 		Queries:     app.Queries,
@@ -1238,18 +1256,6 @@ func authSessionCookies(t *testing.T, app *Application, userID int64) []*http.Co
 	defer resp.Body.Close()
 
 	return resp.Cookies()
-}
-
-func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow(query, args...).Scan(&count)
-	if err != nil {
-		t.Fatalf("count rows: %v", err)
-	}
-
-	return count
 }
 
 // setupSettingsTestApp is setupSessionTestApp for handler tests that read or

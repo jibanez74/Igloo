@@ -47,6 +47,9 @@ type Querier interface {
 	DeleteDevice(ctx context.Context, id int64) error
 	DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUserParams) (int64, error)
 	DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (int64, error)
+	DeleteMergedMusicAlbum(ctx context.Context, id int64) error
+	DeleteMergedMusicArtist(ctx context.Context, id int64) error
+	DeleteMergedMusicMatch(ctx context.Context, arg DeleteMergedMusicMatchParams) error
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie
@@ -68,6 +71,9 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
+	DeleteMusicAlbumSpotifyGenres(ctx context.Context, albumID int64) error
+	DeleteMusicArtistSpotifyGenres(ctx context.Context, musicianID int64) error
+	DeleteMusicCreditMetadata(ctx context.Context, trackID int64) error
 	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	// Deletes all genre relationships for a track.
@@ -79,6 +85,9 @@ type Querier interface {
 	DeleteTrackMusiciansExcept(ctx context.Context, arg DeleteTrackMusiciansExceptParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteWatchRoom(ctx context.Context, id int64) error
+	FindMusicAlbumIdentity(ctx context.Context, arg FindMusicAlbumIdentityParams) (Album, error)
+	FindMusicArtistIdentity(ctx context.Context, identityKey string) (Musician, error)
+	FindMusicGenreIdentity(ctx context.Context, identityKey string) (Genre, error)
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
@@ -285,9 +294,30 @@ type Querier interface {
 	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
 	// Idempotent: marking an already-read or nonexistent notification is a no-op.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
+	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
+	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
+	MoveMusicAlbumGenres(ctx context.Context, arg MoveMusicAlbumGenresParams) error
+	MoveMusicAlbumTracks(ctx context.Context, arg MoveMusicAlbumTracksParams) error
+	MoveMusicArtistAliases(ctx context.Context, arg MoveMusicArtistAliasesParams) error
+	MoveMusicArtistContributions(ctx context.Context, arg MoveMusicArtistContributionsParams) error
+	MoveMusicArtistCredits(ctx context.Context, arg MoveMusicArtistCreditsParams) error
+	MoveMusicArtistGenres(ctx context.Context, arg MoveMusicArtistGenresParams) error
+	MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtistTracksParams) error
 	// Existence probe for handlers that only need to 404 on an unknown movie;
 	// avoids shipping the full 27-column row.
 	MovieExists(ctx context.Context, id int64) (bool, error)
+	MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]Album, error)
+	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
+	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]Musician, error)
+	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
+	MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicTrackMetadatum, error)
+	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]Musician, error)
+	MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error)
+	MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error)
+	ReconcileMusicAlbumDate(ctx context.Context, id int64) error
+	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
+	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
+	ReconcileMusicArtistSort(ctx context.Context, id int64) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
@@ -297,6 +327,16 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
+	SaveMusicAlbumDate(ctx context.Context, arg SaveMusicAlbumDateParams) error
+	SaveMusicAlbumIdentity(ctx context.Context, arg SaveMusicAlbumIdentityParams) error
+	SaveMusicAlbumSpotifyGenre(ctx context.Context, arg SaveMusicAlbumSpotifyGenreParams) error
+	SaveMusicArtistIdentity(ctx context.Context, arg SaveMusicArtistIdentityParams) error
+	SaveMusicArtistSpotifyGenre(ctx context.Context, arg SaveMusicArtistSpotifyGenreParams) error
+	SaveMusicCreditMetadata(ctx context.Context, arg SaveMusicCreditMetadataParams) error
+	SaveMusicGenreIdentity(ctx context.Context, arg SaveMusicGenreIdentityParams) error
+	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
+	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
+	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error
 	// Existence probe for handlers that only need to 404 on an unknown track.
 	TrackExists(ctx context.Context, id int64) (bool, error)
 	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) (int64, error)
@@ -309,6 +349,9 @@ type Querier interface {
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
+	UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error
+	UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error
+	UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error
 	UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (Musician, error)
 	UpdatePlaybackServerSettings(ctx context.Context, arg UpdatePlaybackServerSettingsParams) (Setting, error)
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
