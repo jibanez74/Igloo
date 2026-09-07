@@ -43,7 +43,15 @@ ffprobe -v quiet -print_format json -show_streams -show_format -show_chapters <f
 
 Both metadata calls take the caller's context and cap each probe at 60 seconds on top of it. The scan context is the one canceled by shutdown, so stopping the server kills an in-flight ffprobe rather than leaving `app.Wait.Wait()` to sit out the timeout — which matters on slow or network-mounted media. The two failures are reported differently: a canceled caller yields `ffprobe canceled for <file>`, while a probe that outlives its own deadline yields `ffprobe timed out for <file> after 1m0s`, so only the latter indicates a file that is genuinely slow to read.
 
-Music scans limit `-show_entries` to the fields the music scanner needs. The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams, because a scanned item without streams cannot be played or indexed reliably.
+Music scans limit `-show_entries` to the fields the music scanner needs. The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams, because a scanned item without streams cannot be played or indexed reliably. Music scanning additionally requires an audio stream before resolving Spotify metadata or writing database rows. It selects the first audio stream; embedded artwork alongside audio remains accepted. Artwork-only files are rejected.
+
+### Library scan lifecycle and persistence
+
+Music scans process files sequentially in batches. Each scanner instance admits one scan at a time, captures its configured directory when starting, and tracks the launched goroutine in the shutdown wait group. Cancellation or expiry of the scan context interrupts index loading, walking, probing, metadata resolution, and persistence, including the final partial batch. Interrupted scans do not report successful completion or record cancellation as a Spotify lookup failure.
+
+Each music track is persisted in one SQLite transaction, including musician and album enrichment, Spotify match bookkeeping, genres, and relationships. Any database failure rolls back the track transaction. Spotify lookup failures still permit local-tag fallback. After a successful commit, the scanner invalidates the track's runtime cache and then publishes transaction cache entries and the path/size scan index, while holding the shared scanner database mutex. Lookup misses and compound-artist splitting decisions last for the scan; database IDs and relationship caches use transaction overlays. Track-genre links are inserted idempotently after stale links are removed, so changing a genre back within the same scan restores the relationship. Musician and album relationships continue to accumulate.
+
+Both scanners use the shared filesystem walker. It follows file symlinks to inspect the target's type and size, while retaining the symlink path as the catalog identity. Only regular-file targets with an accepted path extension are processed. Broken links with accepted extensions are reported through the walk-error callback; special files are skipped, and directory symlinks are not traversed. Unchanged-file detection continues to compare catalog path and file size. Scans do not automatically delete missing files.
 
 ## HLS Playback
 
