@@ -344,6 +344,15 @@ func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
 		t.Fatalf("seed album: %v", err)
 	}
 
+	err = app.queries.SaveMusicArtistIdentity(context.Background(), database.SaveMusicArtistIdentityParams{IdentityKey: scanner.NormalizedScanCacheKey(musician.Name), MusicianID: musician.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = app.queries.SaveMusicAlbumIdentity(context.Background(), database.SaveMusicAlbumIdentityParams{TitleKey: scanner.NormalizedScanCacheKey(album.Title), ArtistKey: scanner.NormalizedScanCacheKey(album.Musician.String), AlbumID: album.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = app.queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
 		EntityType: musicSpotifyEntityMusician,
 		EntityID:   musician.ID,

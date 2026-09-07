@@ -105,8 +105,18 @@ func (s *Scanner) runMusicScan(directory string) {
 		return
 	}
 
-	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
-		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
+	err = s.retrySpotify(ctx, scan)
+	if err != nil {
+		contextErr = ctx.Err()
+		if contextErr != nil {
+			s.logger.Info("music library scan interrupted")
+		} else {
+			s.logger.Error("music Spotify retry failed", "error", err)
+		}
+		return
+	}
+	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s; Spotify: %d matched, %d failed, %d unmatched",
+		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.enrichmentCounts[musicSpotifyStatusMatched], scan.enrichmentCounts[musicSpotifyStatusFailed], scan.enrichmentCounts[musicSpotifyStatusUnmatched]))
 }
 
 func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {

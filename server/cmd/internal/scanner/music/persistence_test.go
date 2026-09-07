@@ -446,7 +446,7 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 		if scan.trackUnchanged(resolved.params.FilePath, resolved.params.Size) {
 			t.Error("track index updated before invalidation")
 		}
-		if scan.musicianIDs.Has(scanner.NormalizedScanCacheKey("Artist", "Artist")) {
+		if scan.musicianIDs.Has(scanner.NormalizedScanCacheKey("Artist")) {
 			t.Error("entity caches merged before invalidation")
 		}
 		unlocked := s.scannerDBMu.TryLock()
@@ -478,7 +478,7 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 	if !scan.trackUnchanged(resolved.params.FilePath, resolved.params.Size) {
 		t.Error("committed track missing from scan index")
 	}
-	if !scan.musicianIDs.Has(scanner.NormalizedScanCacheKey("Artist", "Artist")) {
+	if !scan.musicianIDs.Has(scanner.NormalizedScanCacheKey("Artist")) {
 		t.Error("committed musician missing from scan cache")
 	}
 }
@@ -535,7 +535,14 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			if count != 1 {
 				t.Fatal("original track changed on rollback")
 			}
-			if !reflect.DeepEqual(scan, newMusicScanContext(nil)) {
+			// External lookup outcomes survive rollback; database IDs never do.
+			expected := newMusicScanContext(nil)
+			expected.artistAttempts = scan.artistAttempts
+			expected.albumAttempts = scan.albumAttempts
+			expected.enrichmentCounts = scan.enrichmentCounts
+			expected.artistAttemptsByID = scan.artistAttemptsByID
+			expected.albumAttemptsByID = scan.albumAttemptsByID
+			if !reflect.DeepEqual(scan, expected) {
 				t.Fatalf("failed transaction published cache entries: %+v", scan)
 			}
 			logs := s.logger.(*capturedLogger)

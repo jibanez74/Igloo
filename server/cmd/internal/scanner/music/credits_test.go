@@ -252,6 +252,11 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = s.queries.SaveMusicArtistIdentity(ctx, database.SaveMusicArtistIdentityParams{IdentityKey: scanner.NormalizedScanCacheKey(musician.Name), MusicianID: musician.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = s.db.Exec("INSERT INTO music_spotify_matches(entity_type, entity_id, status, reason) VALUES ('musician', ?, 'unmatched', 'no_results')", musician.ID)
 	if err != nil {
 		t.Fatal(err)

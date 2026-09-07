@@ -1499,7 +1499,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a music library scan
-         * @description Admin-only endpoint. The scan runs asynchronously.
+         * @description Admin-only endpoint. The scan runs asynchronously. Music files are selected by catalog path and size. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes reconcile local artist, album, and genre relationships. No forced refresh or missing-file cleanup is performed.
          */
         post: operations["triggerMusicScan"];
         delete?: never;
@@ -2923,6 +2923,7 @@ export interface components {
             musician: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
         };
+        /** @description Album sort title uses the most common explicit local sort tag, with binary lexical ties and display-title fallback. Release date uses the most common valid local track date, choosing the earliest tied date, then Spotify as fallback; year follows that date. */
         Album: {
             /** Format: int64 */
             id: number;

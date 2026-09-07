@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,12 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
 		}
 		assertOpenAPIExchange(t, operationID, req, response)
+		for _, key := range []string{"identity_key", "title_key", "artist_key", "artist_tag", "artist_sort", "album_sort", "spotify_date", "source"} {
+			exposed := strings.Contains(response.Body.String(), fmt.Sprintf("%q:", key))
+			if exposed {
+				t.Fatalf("%s exposed internal field %s", operationID, key)
+			}
+		}
 	}
 
 	emptyGetOperations := []struct {
@@ -64,6 +71,16 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 	musicianID := createSearchMusician(t, app, "Contract Artist")
 	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
 	trackID := createSearchTrack(t, app, "Contract Track", "/music/contract.flac", albumID, musicianID)
+	_, err := app.DB.Exec(`
+ INSERT INTO music_artist_identity(identity_key,musician_id) VALUES('contract artist',?);
+ INSERT INTO music_album_identity(title_key,artist_key,album_id) VALUES('contract album','contract artist',?);
+ INSERT INTO music_track_metadata(track_id,artist_tag,artist_key,artist_sort,album_sort) VALUES(?,'Contract Artist','contract artist','Artist, Contract','Album, Contract');
+ INSERT INTO music_album_metadata(album_id,spotify_date) VALUES(?,'2000-01-01');
+ `, musicianID, albumID, trackID, albumID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	movieIDString := strconv.FormatInt(movieID, 10)
 	albumIDString := strconv.FormatInt(albumID, 10)
 	musicianIDString := strconv.FormatInt(musicianID, 10)

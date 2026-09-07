@@ -174,6 +174,14 @@ type MusicSpotifyMatch struct {
 	UpdatedAt       string         `json:"updated_at"`
 }
 
+type MusicTrackMetadatum struct {
+	TrackID    int64  `json:"track_id"`
+	ArtistTag  string `json:"artist_tag"`
+	ArtistKey  string `json:"artist_key"`
+	ArtistSort string `json:"artist_sort"`
+	AlbumSort  string `json:"album_sort"`
+}
+
 type Musician struct {
 	ID                int64           `json:"id"`
 	Name              string          `json:"name"`

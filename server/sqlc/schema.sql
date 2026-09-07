@@ -566,9 +566,10 @@ CREATE TABLE
   IF NOT EXISTS musician_genres (
     musician_id INTEGER NOT NULL,
     genre_id INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'spotify')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (musician_id, genre_id),
+    PRIMARY KEY (musician_id, genre_id, source),
     FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
@@ -602,9 +603,10 @@ CREATE TABLE
   IF NOT EXISTS album_genres (
     album_id INTEGER NOT NULL,
     genre_id INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'spotify')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (album_id, genre_id),
+    PRIMARY KEY (album_id, genre_id, source),
     FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
@@ -1127,3 +1129,144 @@ CREATE TABLE
 
 CREATE INDEX IF NOT EXISTS idx_notification_reads_user
 ON notification_reads (user_id);
+
+-- Scanner identity aliases use Go's Unicode trim/lower normalization.
+CREATE TABLE IF NOT EXISTS music_artist_identity (
+ identity_key TEXT PRIMARY KEY, musician_id INTEGER NOT NULL REFERENCES musicians(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS music_artist_identity_owner ON music_artist_identity(musician_id);
+CREATE TABLE IF NOT EXISTS music_album_identity (
+ title_key TEXT NOT NULL, artist_key TEXT NOT NULL,
+ album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+ PRIMARY KEY(title_key, artist_key)
+);
+CREATE INDEX IF NOT EXISTS music_album_identity_owner ON music_album_identity(album_id);
+CREATE TABLE IF NOT EXISTS music_genre_identity (
+ identity_key TEXT PRIMARY KEY, genre_id INTEGER NOT NULL REFERENCES genres(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS music_track_metadata (
+ track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+ artist_tag TEXT NOT NULL, artist_key TEXT NOT NULL, artist_sort TEXT NOT NULL, album_sort TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS music_credit_metadata (
+ track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+ musician_id INTEGER NOT NULL REFERENCES musicians(id) ON DELETE CASCADE,
+ sort_name TEXT NOT NULL,
+ FOREIGN KEY(track_id,musician_id) REFERENCES track_musicians(track_id,musician_id) ON DELETE CASCADE,
+ PRIMARY KEY(track_id, musician_id, sort_name)
+);
+CREATE INDEX IF NOT EXISTS music_credit_metadata_votes ON music_credit_metadata(musician_id, sort_name, track_id);
+CREATE TABLE IF NOT EXISTS music_album_metadata (
+ album_id INTEGER PRIMARY KEY REFERENCES albums(id) ON DELETE CASCADE,
+ spotify_date TEXT
+);
+CREATE INDEX IF NOT EXISTS music_track_dates ON tracks(album_id, release_date);
+
+-- Explicit UPSERT clauses keep relationship inserts idempotent even when an
+-- outer track UPSERT supplies its own conflict policy. Cascades run these same
+-- reconciliation rules during album deletion.
+CREATE TRIGGER IF NOT EXISTS music_track_musicians_insert_relationships
+AFTER INSERT ON track_musicians
+BEGIN
+  INSERT INTO musician_albums(musician_id, album_id)
+  SELECT NEW.musician_id, album_id FROM tracks
+  WHERE id = NEW.track_id AND album_id IS NOT NULL ON CONFLICT DO NOTHING;
+  INSERT INTO musician_genres(musician_id, genre_id, source)
+  SELECT NEW.musician_id, genre_id, 'local' FROM track_genres
+  WHERE track_id = NEW.track_id ON CONFLICT DO NOTHING;
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_track_musicians_delete_relationships
+AFTER DELETE ON track_musicians
+BEGIN
+  DELETE FROM musician_albums WHERE musician_id = OLD.musician_id AND NOT EXISTS (
+    SELECT 1 FROM tracks t JOIN track_musicians tm ON tm.track_id = t.id
+    WHERE tm.musician_id = musician_albums.musician_id AND t.album_id = musician_albums.album_id
+  );
+  DELETE FROM musician_genres WHERE source = 'local' AND musician_id = OLD.musician_id AND NOT EXISTS (
+    SELECT 1 FROM track_musicians tm JOIN track_genres tg ON tg.track_id = tm.track_id
+    WHERE tm.musician_id = musician_genres.musician_id AND tg.genre_id = musician_genres.genre_id
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_track_genres_insert_relationships
+AFTER INSERT ON track_genres
+BEGIN
+  INSERT INTO musician_genres(musician_id, genre_id, source)
+  SELECT musician_id, NEW.genre_id, 'local' FROM track_musicians
+  WHERE track_id = NEW.track_id ON CONFLICT DO NOTHING;
+  INSERT INTO album_genres(album_id, genre_id, source)
+  SELECT album_id, NEW.genre_id, 'local' FROM tracks
+  WHERE id = NEW.track_id AND album_id IS NOT NULL ON CONFLICT DO NOTHING;
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_track_genres_delete_relationships
+AFTER DELETE ON track_genres
+BEGIN
+  DELETE FROM musician_genres WHERE source = 'local' AND genre_id = OLD.genre_id
+  AND musician_id IN (SELECT musician_id FROM track_musicians WHERE track_id = OLD.track_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM track_musicians tm JOIN track_genres tg ON tg.track_id = tm.track_id
+    WHERE tm.musician_id = musician_genres.musician_id AND tg.genre_id = musician_genres.genre_id
+  );
+  DELETE FROM album_genres WHERE source = 'local' AND genre_id = OLD.genre_id
+  AND album_id = (SELECT album_id FROM tracks WHERE id = OLD.track_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM tracks t JOIN track_genres tg ON tg.track_id = t.id
+    WHERE t.album_id = album_genres.album_id AND tg.genre_id = album_genres.genre_id
+  );
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_tracks_update_relationships
+AFTER UPDATE OF album_id ON tracks WHEN OLD.album_id IS NOT NEW.album_id
+BEGIN
+  DELETE FROM musician_albums WHERE album_id = OLD.album_id
+  AND musician_id IN (SELECT musician_id FROM track_musicians WHERE track_id = OLD.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM tracks t JOIN track_musicians tm ON tm.track_id = t.id
+    WHERE tm.musician_id = musician_albums.musician_id AND t.album_id = musician_albums.album_id
+  );
+  INSERT INTO musician_albums(musician_id, album_id)
+  SELECT musician_id, NEW.album_id FROM track_musicians
+  WHERE track_id = NEW.id AND NEW.album_id IS NOT NULL ON CONFLICT DO NOTHING;
+  DELETE FROM album_genres WHERE source = 'local' AND album_id = OLD.album_id AND NOT EXISTS (
+    SELECT 1 FROM tracks t JOIN track_genres tg ON tg.track_id = t.id
+    WHERE t.album_id = album_genres.album_id AND tg.genre_id = album_genres.genre_id
+  );
+  INSERT INTO album_genres(album_id, genre_id, source)
+  SELECT NEW.album_id, genre_id, 'local' FROM track_genres
+  WHERE track_id = NEW.id AND NEW.album_id IS NOT NULL ON CONFLICT DO NOTHING;
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_tracks_delete_album_genres
+AFTER DELETE ON tracks
+BEGIN
+  DELETE FROM album_genres WHERE source = 'local' AND album_id = OLD.album_id AND NOT EXISTS (
+    SELECT 1 FROM tracks t JOIN track_genres tg ON tg.track_id = t.id
+    WHERE t.album_id = album_genres.album_id AND tg.genre_id = album_genres.genre_id
+  );
+END;
+
+-- Album deletion removes track contributions by cascade. Select the surviving
+-- votes before those rows disappear so only the affected artists are touched.
+CREATE TRIGGER IF NOT EXISTS music_album_delete_artist_sorts
+BEFORE DELETE ON albums
+BEGIN
+  UPDATE musicians SET sort_name = COALESCE((
+    SELECT vote FROM (
+      SELECT MIN(m.sort_name COLLATE BINARY) AS vote
+      FROM music_credit_metadata m JOIN tracks t ON t.id = m.track_id
+      WHERE m.musician_id = musicians.id AND m.sort_name <> '' AND t.album_id IS NOT OLD.id
+      GROUP BY m.track_id
+    ) GROUP BY vote ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1
+  ), name)
+  WHERE id IN (SELECT tm.musician_id FROM track_musicians tm JOIN tracks t ON t.id = tm.track_id WHERE t.album_id = OLD.id)
+  AND sort_name IS NOT COALESCE((
+    SELECT vote FROM (
+      SELECT MIN(m.sort_name COLLATE BINARY) AS vote
+      FROM music_credit_metadata m JOIN tracks t ON t.id = m.track_id
+      WHERE m.musician_id = musicians.id AND m.sort_name <> '' AND t.album_id IS NOT OLD.id
+      GROUP BY m.track_id
+    ) GROUP BY vote ORDER BY COUNT(*) DESC, vote COLLATE BINARY LIMIT 1
+  ), name);
+END;

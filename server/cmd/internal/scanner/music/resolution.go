@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -16,10 +17,13 @@ import (
 )
 
 type resolvedTrack struct {
-	params    database.UpsertTrackParams
-	musicians []resolvedMusician
-	album     *resolvedAlbum
-	genreTag  string
+	params     database.UpsertTrackParams
+	musicians  []resolvedMusician
+	album      *resolvedAlbum
+	genreTag   string
+	artistTag  string
+	artistSort string
+	albumSort  string
 }
 
 type resolvedMusician struct {
@@ -27,9 +31,8 @@ type resolvedMusician struct {
 	sortName      string
 	existingID    int64
 	hasExistingID bool
-	// existing carries the row findExistingMusician already fetched, so the
-	// Spotify-matched persist path can skip re-reading it when the spotify_id
-	// matches.
+	// Persistence refreshes this identity inside the transaction because an
+	// earlier credit may have merged its owner.
 	existing               *database.Musician
 	spotifyArtist          *spotifylib.FullArtist
 	spotifyMatch           *resolvedSpotifyMatch
@@ -42,8 +45,7 @@ type resolvedAlbum struct {
 	albumArtist   string
 	existingID    int64
 	hasExistingID bool
-	// existing carries the row findExistingAlbum already fetched; see
-	// resolvedMusician.existing.
+	// Persistence refreshes this identity inside the transaction.
 	existing     *database.Album
 	spotifyAlbum *spotifylib.FullAlbum
 	spotifyMatch *resolvedSpotifyMatch
@@ -152,11 +154,13 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	}
 
 	resolved := &resolvedTrack{
-		params:   params,
-		genreTag: tags.Genre,
+		params:    params,
+		genreTag:  strings.TrimSpace(tags.Genre),
+		artistTag: tags.Artist, artistSort: tags.SortArtist, albumSort: strings.TrimSpace(tags.SortAlbum),
 	}
 
-	if tags.Artist != "" {
+	artistTag := strings.TrimSpace(tags.Artist)
+	if artistTag != "" {
 		musicians, resolveErr := s.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist)
 		if resolveErr != nil {
 			return nil, resolveErr
@@ -164,15 +168,16 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		resolved.musicians = musicians
 	}
 
-	if tags.Album != "" {
+	albumTag := strings.TrimSpace(tags.Album)
+	if albumTag != "" {
 		sortAlbum := tags.SortAlbum
 		if sortAlbum == "" {
 			sortAlbum = tags.Album
 		}
 
-		effectiveAlbumArtist := tags.AlbumArtist
+		effectiveAlbumArtist := strings.TrimSpace(tags.AlbumArtist)
 		if effectiveAlbumArtist == "" {
-			effectiveAlbumArtist = tags.Artist
+			effectiveAlbumArtist = artistTag
 		}
 
 		album, resolveErr := s.resolveAlbum(ctx, scan, tags.Album, sortAlbum, effectiveAlbumArtist)
@@ -186,9 +191,6 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 }
 
 func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string) ([]resolvedMusician, error) {
-	if sortArtist == "" {
-		sortArtist = artistTag
-	}
 
 	credits := parseCompoundArtistCredits(artistTag)
 	splitLocally := shouldSplitCompoundArtistCreditsLocally(credits)
@@ -204,8 +206,13 @@ func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanCont
 	}
 
 	musicians := make([]resolvedMusician, 0, len(credits.parts))
-	for _, part := range credits.parts {
-		musician, err := s.resolveMusician(ctx, scan, part, part)
+	sortCredits := parseCompoundArtistCredits(sortArtist)
+	for i, part := range credits.parts {
+		explicitSort := ""
+		if len(sortCredits.parts) == len(credits.parts) {
+			explicitSort = sortCredits.parts[i]
+		}
+		musician, err := s.resolveMusician(ctx, scan, part, explicitSort)
 		if err != nil {
 			return nil, fmt.Errorf("compound musician failed for %q: %w", part, err)
 		}
@@ -216,7 +223,9 @@ func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanCont
 }
 
 func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
-	cacheKey := scanner.NormalizedScanCacheKey(name, sortName)
+	name = strings.TrimSpace(name)
+	sortName = strings.TrimSpace(sortName)
+	cacheKey := scanner.NormalizedScanCacheKey(name)
 	musicianID, ok := scan.musicianIDs.Get(cacheKey)
 	if ok {
 		return &resolvedMusician{
@@ -228,7 +237,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		}, nil
 	}
 
-	resolved := &resolvedMusician{name: name, sortName: sortName}
+	resolved := &resolvedMusician{name: strings.TrimSpace(name), sortName: strings.TrimSpace(sortName)}
 
 	existing, found, err := s.findExistingMusician(ctx, name)
 	if err != nil {
@@ -259,6 +268,16 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		}
 	}
 
+	if found {
+		attempted, ok := scan.artistAttemptsByID[existing.ID]
+		if ok {
+			resolved.spotifyArtist = attempted.spotifyArtist
+			resolved.spotifyMatch = attempted.spotifyMatch
+			resolved.splitCompoundOnNoMatch = attempted.splitCompoundOnNoMatch
+			return resolved, nil
+		}
+	}
+
 	spotifyKey := scanner.NormalizedScanCacheKey(name)
 	cachedMiss, ok := scan.spotifyArtistMisses[spotifyKey]
 	if ok {
@@ -275,6 +294,25 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		return resolved, nil
 	}
 
+	attempted, attemptedBefore := scan.artistAttempts[spotifyKey]
+	if attemptedBefore {
+		resolved.spotifyArtist = attempted.spotifyArtist
+		resolved.spotifyMatch = attempted.spotifyMatch
+		resolved.splitCompoundOnNoMatch = attempted.splitCompoundOnNoMatch
+		return resolved, nil
+	}
+	defer func() {
+		contextErr := ctx.Err()
+		if contextErr == nil {
+			scan.artistAttempts[spotifyKey] = resolved
+			if found {
+				scan.artistAttemptsByID[existing.ID] = resolved
+			}
+			if resolved.spotifyMatch != nil {
+				scan.enrichmentCounts[resolved.spotifyMatch.status]++
+			}
+		}
+	}()
 	artist, err := s.spotify.SearchArtistByName(ctx, name)
 	contextErr := ctx.Err()
 	if contextErr != nil {
@@ -302,6 +340,9 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 }
 
 func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
+	title = strings.TrimSpace(title)
+	albumArtist = strings.TrimSpace(albumArtist)
+	sortTitle = strings.TrimSpace(sortTitle)
 	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	albumID, ok := scan.albumIDs.Get(cacheKey)
 	if ok {
@@ -347,6 +388,16 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 		}
 	}
 
+	if found {
+		attempted, ok := scan.albumAttemptsByID[existing.ID]
+		if ok {
+			resolved.spotifyAlbum = attempted.spotifyAlbum
+			resolved.spotifyMatch = attempted.spotifyMatch
+
+			return resolved, nil
+		}
+	}
+
 	spotifyKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	cachedMiss, ok := scan.spotifyAlbumMisses[spotifyKey]
 	if ok {
@@ -361,6 +412,25 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 		return resolved, nil
 	}
 
+	attempted, attemptedBefore := scan.albumAttempts[spotifyKey]
+	if attemptedBefore {
+		resolved.spotifyAlbum = attempted.spotifyAlbum
+		resolved.spotifyMatch = attempted.spotifyMatch
+
+		return resolved, nil
+	}
+	defer func() {
+		contextErr := ctx.Err()
+		if contextErr == nil {
+			scan.albumAttempts[spotifyKey] = resolved
+			if found {
+				scan.albumAttemptsByID[existing.ID] = resolved
+			}
+			if resolved.spotifyMatch != nil {
+				scan.enrichmentCounts[resolved.spotifyMatch.status]++
+			}
+		}
+	}()
 	albumDetails, err := s.spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
 	contextErr := ctx.Err()
 	if contextErr != nil {
@@ -386,7 +456,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 }
 
 func (s *Scanner) findExistingMusician(ctx context.Context, name string) (database.Musician, bool, error) {
-	musician, err := s.queries.GetMusicianByName(ctx, name)
+	musician, err := s.queries.FindMusicArtistIdentity(ctx, scanner.NormalizedScanCacheKey(name))
 	if err == nil {
 		return musician, true, nil
 	}
@@ -398,9 +468,9 @@ func (s *Scanner) findExistingMusician(ctx context.Context, name string) (databa
 }
 
 func (s *Scanner) findExistingAlbum(ctx context.Context, title, albumArtist string) (database.Album, bool, error) {
-	album, err := s.queries.GetAlbumByTitleAndMusician(ctx, database.GetAlbumByTitleAndMusicianParams{
-		Title:    title,
-		Musician: helpers.NullString(albumArtist),
+	album, err := s.queries.FindMusicAlbumIdentity(ctx, database.FindMusicAlbumIdentityParams{
+		TitleKey:  scanner.NormalizedScanCacheKey(title),
+		ArtistKey: scanner.NormalizedScanCacheKey(albumArtist),
 	})
 	if err == nil {
 		return album, true, nil

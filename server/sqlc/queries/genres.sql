@@ -18,7 +18,7 @@ INSERT INTO musician_genres (
 )
 VALUES
   (?, ?)
-ON CONFLICT (musician_id, genre_id) DO NOTHING;
+ON CONFLICT (musician_id, genre_id, source) DO NOTHING;
 
 -- name: UpsertAlbumGenre :exec
 -- Creates a relationship between an album and a genre (idempotent)
@@ -28,11 +28,11 @@ INSERT INTO album_genres (
 )
 VALUES
   (?, ?)
-ON CONFLICT (album_id, genre_id) DO NOTHING;
+ON CONFLICT (album_id, genre_id, source) DO NOTHING;
 
 -- name: GetGenresByMusicianID :many
 -- Returns all genres associated with a musician
-SELECT
+SELECT DISTINCT
   g.id,
   g.tag
 FROM genres AS g
@@ -43,7 +43,7 @@ ORDER BY g.tag ASC;
 
 -- name: GetAlbumGenres :many
 -- Returns all genres associated with an album
-SELECT
+SELECT DISTINCT
   g.id,
   g.tag
 FROM genres AS g
