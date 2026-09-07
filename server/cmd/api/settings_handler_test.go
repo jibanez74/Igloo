@@ -14,6 +14,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -97,6 +98,11 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupSettingsTestApp(t)
 	defer app.DB.Close()
 	app.Wait = &sync.WaitGroup{}
+	app.MusicScanner = music.New(music.Dependencies{
+		DB: app.DB, Queries: app.Queries, Logger: app.Logger, Wait: app.Wait,
+		ScannerDBMu:           &app.ScannerDBMu,
+		CurrentMusicDirectory: func() sql.NullString { return app.CurrentSettings().MusicDir },
+	})
 
 	assertRequest := func(operationID string, req *http.Request, serve func(http.ResponseWriter, *http.Request), wantStatus int) {
 		t.Helper()
@@ -323,11 +329,7 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 	current.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
 	app.SetSettings(&current)
 
-	musicScanGuard.Finish()
-	if !musicScanGuard.TryBegin() {
-		t.Fatal("failed to acquire music scan guard")
-	}
-	defer musicScanGuard.Finish()
+	app.MusicScanner = musicStartFunc(func() music.StartResult { return music.StartResult{Status: music.StartAlreadyRunning} })
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scan/music", nil)
 	w := httptest.NewRecorder()
@@ -378,6 +380,34 @@ func TestTriggerMovieScanMapsStartStatusesToAdminResponses(t *testing.T) {
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil)
 			app.TriggerMovieScan(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestTriggerMusicScanMapsStartStatusesToAdminResponses(t *testing.T) {
+	tests := []struct {
+		name       string
+		result     music.StartResult
+		wantStatus int
+	}{
+		{"started", music.StartResult{Directory: "/music", Status: music.StartStarted}, http.StatusOK},
+		{"not configured", music.StartResult{Status: music.StartNotConfigured}, http.StatusInternalServerError},
+		{"already running", music.StartResult{Status: music.StartAlreadyRunning}, http.StatusConflict},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSettingsTestApp(t)
+			defer app.DB.Close()
+			app.MusicScanner = musicStartFunc(func() music.StartResult { return tc.result })
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil)
+			app.TriggerMusicScan(w, req)
 
 			if w.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())

@@ -1,4 +1,4 @@
-package main
+package music
 
 import (
 	"context"
@@ -6,24 +6,91 @@ import (
 	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/logger"
 	"igloo/cmd/internal/scanner"
 	spotifyapi "igloo/cmd/internal/spotify"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
+// Dependencies are the application services used by Scanner. DB, Queries,
+// Logger and Ffprobe are required. Spotify and shutdown tracking are optional.
+type Dependencies struct {
+	DB                       *sql.DB
+	Queries                  *database.Queries
+	Logger                   logger.LoggerInterface
+	Ffprobe                  ffprobe.FfprobeInterface
+	Spotify                  spotifyapi.SpotifyInterface
+	ScanContext              context.Context
+	Wait                     *sync.WaitGroup
+	ScannerDBMu              *sync.Mutex
+	CurrentMusicDirectory    func() sql.NullString
+	InvalidateCommittedTrack func(trackID int64)
+}
+
+// Scanner scans and persists the configured music library.
+type Scanner struct {
+	db                       *sql.DB
+	queries                  *database.Queries
+	logger                   logger.LoggerInterface
+	ffprobe                  ffprobe.FfprobeInterface
+	spotify                  spotifyapi.SpotifyInterface
+	shutdownContext          context.Context
+	wait                     *sync.WaitGroup
+	scannerDBMu              *sync.Mutex
+	currentMusicDirectory    func() sql.NullString
+	invalidateCommittedTrack func(int64)
+}
+
+// StartStatus describes whether a scan goroutine was launched.
+type StartStatus int
+
+const (
+	StartStarted StartStatus = iota
+	StartNotConfigured
+	StartAlreadyRunning
+)
+
+// StartResult records the observed directory and start outcome.
+type StartResult struct {
+	Directory string
+	Status    StartStatus
+}
+
+// New constructs a scanner with optional directory and invalidation callbacks.
+func New(deps Dependencies) *Scanner {
+	if deps.ScannerDBMu == nil {
+		deps.ScannerDBMu = &sync.Mutex{}
+	}
+	if deps.CurrentMusicDirectory == nil {
+		deps.CurrentMusicDirectory = func() sql.NullString { return sql.NullString{} }
+	}
+	if deps.InvalidateCommittedTrack == nil {
+		deps.InvalidateCommittedTrack = func(int64) {}
+	}
+	return &Scanner{
+		db: deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
+		spotify: deps.Spotify, shutdownContext: deps.ScanContext, wait: deps.Wait,
+		scannerDBMu: deps.ScannerDBMu, currentMusicDirectory: deps.CurrentMusicDirectory,
+		invalidateCommittedTrack: deps.InvalidateCommittedTrack,
+	}
+}
+
+// The guard remains process-wide, including across Scanner instances.
 var musicScanGuard scanner.ScanGuard
 
 // scanContext returns the shutdown-aware context library scans run under, and
-// falls back to a background context when the application has none configured.
-func (app *Application) scanContext() context.Context {
-	if app.ScanContext != nil {
-		return app.ScanContext
+// falls back to a background context when the scanner has none configured.
+func (s *Scanner) scanContext() context.Context {
+	if s.shutdownContext != nil {
+		return s.shutdownContext
 	}
 
 	return context.Background()
@@ -33,47 +100,48 @@ func (app *Application) scanContext() context.Context {
 // Scan orchestration
 // ---------------------------------------------------------------------------
 
-func (app *Application) ScanMusicLibrary() {
-	settings := app.CurrentSettings()
-	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
-		app.Logger.Info("skipping music library scan: music directory is not configured")
-		return
+// Start launches a scan asynchronously when configured and no music scan is running.
+func (s *Scanner) Start() StartResult {
+	directory := s.currentMusicDirectory()
+	if !directory.Valid || directory.String == "" {
+		return StartResult{Status: StartNotConfigured}
 	}
 
-	if !musicScanGuard.TryBegin() {
-		app.Logger.Warn("music library scan is already in progress")
-		return
+	started := musicScanGuard.TryBegin()
+	if !started {
+		return StartResult{Directory: directory.String, Status: StartAlreadyRunning}
 	}
 
-	if app.Wait != nil {
-		app.Wait.Add(1)
+	if s.wait != nil {
+		s.wait.Add(1)
 	}
-	go app.runMusicScan()
+	go s.runMusicScan()
+	return StartResult{Directory: directory.String, Status: StartStarted}
 }
 
-func (app *Application) runMusicScan() {
-	if app.Wait != nil {
-		defer app.Wait.Done()
+func (s *Scanner) runMusicScan() {
+	if s.wait != nil {
+		defer s.wait.Done()
 	}
 	defer musicScanGuard.Finish()
 
-	settings := app.CurrentSettings()
-	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
-		app.Logger.Info("skipping music library scan: music directory is not configured")
+	directory := s.currentMusicDirectory()
+	if !directory.Valid || directory.String == "" {
+		s.logger.Info("skipping music library scan: music directory is not configured")
 		return
 	}
 
-	app.Logger.Info(fmt.Sprintf("scanning music directory: %s", settings.MusicDir.String))
+	s.logger.Info(fmt.Sprintf("scanning music directory: %s", directory.String))
 
-	ctx := app.scanContext()
+	ctx := s.scanContext()
 	errorCount := 0
 	tracksScanned := 0
 	tracksSkipped := 0
 	startTime := time.Now()
 	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
-	scanIndex, err := app.loadMusicScanIndex(ctx)
+	scanIndex, err := s.loadMusicScanIndex(ctx)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
+		s.logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
@@ -82,7 +150,7 @@ func (app *Application) runMusicScan() {
 			return
 		}
 
-		scanned, skipped, errors := app.processMusicBatch(ctx, scan, batch)
+		scanned, skipped, errors := s.processMusicBatch(ctx, scan, batch)
 		tracksScanned += scanned
 		tracksSkipped += skipped
 		errorCount += errors
@@ -91,10 +159,10 @@ func (app *Application) runMusicScan() {
 
 	err = scanner.WalkMediaLibraryContext(
 		ctx,
-		settings.MusicDir.String,
+		directory.String,
 		helpers.ValidAudioExtensions,
 		func(err error) {
-			app.Logger.Error(err.Error())
+			s.logger.Error(err.Error())
 			errorCount++
 		},
 		func(file scanner.ScanFile) error {
@@ -115,25 +183,25 @@ func (app *Application) runMusicScan() {
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			app.Logger.Info("music library scan canceled")
+			s.logger.Info("music library scan canceled")
 			return
 		}
-		app.Logger.Error(fmt.Sprintf("unexpected error walking music directory: %s", err.Error()))
+		s.logger.Error(fmt.Sprintf("unexpected error walking music directory: %s", err.Error()))
 		return
 	}
 
 	flushBatch()
 	contextErr := ctx.Err()
 	if contextErr != nil {
-		app.Logger.Info("music library scan canceled")
+		s.logger.Info("music library scan canceled")
 		return
 	}
 
-	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
+	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
+func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
 		if ctx.Err() != nil {
 			return scanned, skipped, errCount
@@ -144,15 +212,15 @@ func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanCo
 			continue
 		}
 
-		resolved, err := app.resolveTrackFile(ctx, scan, file)
+		resolved, err := s.resolveTrackFile(ctx, scan, file)
 		if err != nil {
 			errCount++
 			continue
 		}
 
-		_, err = app.persistResolvedTrack(ctx, scan, resolved)
+		_, err = s.persistResolvedTrack(ctx, scan, resolved)
 		if err != nil {
-			app.Logger.Warn("failed to persist music track", "path", file.Path, "error", err)
+			s.logger.Warn("failed to persist music track", "path", file.Path, "error", err)
 			errCount++
 			continue
 		}
@@ -163,8 +231,8 @@ func (app *Application) processMusicBatch(ctx context.Context, scan *musicScanCo
 	return scanned, skipped, errCount
 }
 
-func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int64, error) {
-	rows, err := app.Queries.ListMusicTrackScanIndex(ctx)
+func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]int64, error) {
+	rows, err := s.queries.ListMusicTrackScanIndex(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -310,8 +378,8 @@ type resolvedAlbum struct {
 	spotifyMatch *resolvedSpotifyMatch
 }
 
-func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
-	info, err := app.Ffprobe.GetAudioMetadata(ctx, file.Path)
+func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
+	info, err := s.ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
@@ -409,7 +477,7 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	}
 
 	if tags.Artist != "" {
-		musicians, resolveErr := app.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist)
+		musicians, resolveErr := s.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
@@ -427,7 +495,7 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 			effectiveAlbumArtist = tags.Artist
 		}
 
-		album, resolveErr := app.resolveAlbum(ctx, scan, tags.Album, sortAlbum, effectiveAlbumArtist)
+		album, resolveErr := s.resolveAlbum(ctx, scan, tags.Album, sortAlbum, effectiveAlbumArtist)
 		if resolveErr != nil {
 			return nil, fmt.Errorf("album failed: %w", resolveErr)
 		}
@@ -437,14 +505,14 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	return resolved, nil
 }
 
-func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string) ([]resolvedMusician, error) {
+func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string) ([]resolvedMusician, error) {
 	if sortArtist == "" {
 		sortArtist = artistTag
 	}
 
 	credits := parseCompoundArtistCredits(artistTag)
 	if !shouldSplitCompoundArtistCreditsLocally(credits) {
-		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
+		musician, err := s.resolveMusician(ctx, scan, artistTag, sortArtist)
 		if err != nil {
 			return nil, fmt.Errorf("musician failed: %w", err)
 		}
@@ -456,9 +524,9 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 
 	musicians := make([]resolvedMusician, 0, len(credits.parts))
 	for _, part := range credits.parts {
-		musician, err := app.resolveMusician(ctx, scan, part, part)
+		musician, err := s.resolveMusician(ctx, scan, part, part)
 		if err != nil {
-			app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
+			s.logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
 			return nil, fmt.Errorf("compound musician failed for %q: %w", part, err)
 		}
 		musicians = append(musicians, *musician)
@@ -467,7 +535,7 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 	return musicians, nil
 }
 
-func (app *Application) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
+func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
 	cacheKey := scanner.NormalizedScanCacheKey(name, sortName)
 	if musicianID, ok := scan.musicianIDs.Get(cacheKey); ok {
 		return &resolvedMusician{
@@ -480,7 +548,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 
 	resolved := &resolvedMusician{name: name, sortName: sortName}
 
-	existing, found, err := app.findExistingMusician(ctx, name)
+	existing, found, err := s.findExistingMusician(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +557,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		resolved.hasExistingID = true
 		resolved.existing = &existing
 
-		persisted, matchErr := app.Queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
+		persisted, matchErr := s.queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
 			EntityType: musicSpotifyEntityMusician,
 			EntityID:   existing.ID,
 		})
@@ -511,14 +579,14 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		return resolved, nil
 	}
 
-	if app.Spotify == nil {
+	if s.spotify == nil {
 		if found {
 			scan.musicianIDs.Set(cacheKey, existing.ID)
 		}
 		return resolved, nil
 	}
 
-	artist, err := app.Spotify.SearchArtistByName(ctx, name)
+	artist, err := s.spotify.SearchArtistByName(ctx, name)
 	if err != nil {
 		match := resolvedSpotifyMatchFromError(err)
 		scan.spotifyArtistMisses.Set(spotifyKey, match)
@@ -539,7 +607,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 	return resolved, nil
 }
 
-func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
+func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
 	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
 	if albumID, ok := scan.albumIDs.Get(cacheKey); ok {
 		return &resolvedAlbum{
@@ -557,7 +625,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		albumArtist: albumArtist,
 	}
 
-	existing, found, err := app.findExistingAlbum(ctx, title, albumArtist)
+	existing, found, err := s.findExistingAlbum(ctx, title, albumArtist)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +634,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		resolved.hasExistingID = true
 		resolved.existing = &existing
 
-		persisted, matchErr := app.Queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
+		persisted, matchErr := s.queries.GetMusicSpotifyMatch(ctx, database.GetMusicSpotifyMatchParams{
 			EntityType: musicSpotifyEntityAlbum,
 			EntityID:   existing.ID,
 		})
@@ -586,14 +654,14 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		return resolved, nil
 	}
 
-	if app.Spotify == nil {
+	if s.spotify == nil {
 		if found {
 			scan.albumIDs.Set(cacheKey, existing.ID)
 		}
 		return resolved, nil
 	}
 
-	albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
+	albumDetails, err := s.spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
 	if err != nil {
 		match := resolvedSpotifyMatchFromError(err)
 		scan.spotifyAlbumMisses.Set(spotifyKey, match)
@@ -613,8 +681,8 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 	return resolved, nil
 }
 
-func (app *Application) findExistingMusician(ctx context.Context, name string) (database.Musician, bool, error) {
-	musician, err := app.Queries.GetMusicianByName(ctx, name)
+func (s *Scanner) findExistingMusician(ctx context.Context, name string) (database.Musician, bool, error) {
+	musician, err := s.queries.GetMusicianByName(ctx, name)
 	if err == nil {
 		return musician, true, nil
 	}
@@ -624,8 +692,8 @@ func (app *Application) findExistingMusician(ctx context.Context, name string) (
 	return database.Musician{}, false, err
 }
 
-func (app *Application) findExistingAlbum(ctx context.Context, title, albumArtist string) (database.Album, bool, error) {
-	album, err := app.Queries.GetAlbumByTitleAndMusician(ctx, database.GetAlbumByTitleAndMusicianParams{
+func (s *Scanner) findExistingAlbum(ctx context.Context, title, albumArtist string) (database.Album, bool, error) {
+	album, err := s.queries.GetAlbumByTitleAndMusician(ctx, database.GetAlbumByTitleAndMusicianParams{
 		Title:    title,
 		Musician: helpers.NullString(albumArtist),
 	})
@@ -738,20 +806,20 @@ func isArtistSuffix(value string) bool {
 // Persistence
 // ---------------------------------------------------------------------------
 
-func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
+func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
 	txScan := scan.clone()
 
-	app.ScannerDBMu.Lock()
-	defer app.ScannerDBMu.Unlock()
+	s.scannerDBMu.Lock()
+	defer s.scannerDBMu.Unlock()
 
-	tx, err := app.DB.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to start music track transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	qtx := app.Queries.WithTx(tx)
-	trackID, err := app.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+	qtx := s.queries.WithTx(tx)
+	trackID, err := s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
 	if err != nil {
 		return 0, err
 	}
@@ -763,7 +831,7 @@ func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicSca
 
 	// A rescan can move the file or change its type, so the cached lookup is
 	// dropped here, after the new row is committed.
-	app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
+	s.invalidateCommittedTrack(trackID)
 
 	// trackIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a track whose transaction
@@ -774,13 +842,13 @@ func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicSca
 	return trackID, nil
 }
 
-func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *database.Queries, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
+func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Queries, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
 	params := resolved.params
 	musicianIDs := make([]int64, 0, len(resolved.musicians))
 	seenMusicianIDs := make(map[int64]struct{}, len(resolved.musicians))
 
 	for _, musicianInput := range resolved.musicians {
-		musicianID, err := app.persistMusician(ctx, qtx, scan, musicianInput)
+		musicianID, err := s.persistMusician(ctx, qtx, scan, musicianInput)
 		if err != nil {
 			return 0, fmt.Errorf("musician failed: %w", err)
 		}
@@ -796,7 +864,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 
 	var albumID sql.NullInt64
 	if resolved.album != nil {
-		id, err := app.persistAlbum(ctx, qtx, scan, *resolved.album)
+		id, err := s.persistAlbum(ctx, qtx, scan, *resolved.album)
 		if err != nil {
 			return 0, fmt.Errorf("album failed: %w", err)
 		}
@@ -806,9 +874,9 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 
 	if albumID.Valid {
 		for _, musicianID := range musicianIDs {
-			err := app.createMusicianAlbumIfNeeded(ctx, qtx, scan, musicianID, albumID.Int64)
+			err := s.createMusicianAlbumIfNeeded(ctx, qtx, scan, musicianID, albumID.Int64)
 			if err != nil {
-				app.Logger.Warn("failed to create musician-album relationship",
+				s.logger.Warn("failed to create musician-album relationship",
 					"error", err,
 					"musician_id", musicianID,
 					"album_id", albumID.Int64,
@@ -822,7 +890,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 		return 0, fmt.Errorf("upsert track failed: %w", err)
 	}
 
-	err = app.syncTrackMusicians(ctx, qtx, track.ID, musicianIDs)
+	err = s.syncTrackMusicians(ctx, qtx, track.ID, musicianIDs)
 	if err != nil {
 		return 0, fmt.Errorf("track-musician relationships failed: %w", err)
 	}
@@ -833,7 +901,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("delete track genres failed: %w", err)
 		}
 	} else {
-		genreID, err := app.getOrCreateMusicGenreID(ctx, qtx, scan, resolved.genreTag)
+		genreID, err := s.getOrCreateMusicGenreID(ctx, qtx, scan, resolved.genreTag)
 		if err != nil {
 			return 0, fmt.Errorf("genre failed: %w", err)
 		}
@@ -846,15 +914,15 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("delete stale genres failed: %w", err)
 		}
 
-		err = app.createTrackGenreIfNeeded(ctx, qtx, scan, track.ID, genreID)
+		err = s.createTrackGenreIfNeeded(ctx, qtx, scan, track.ID, genreID)
 		if err != nil {
 			return 0, fmt.Errorf("track-genre relationship failed: %w", err)
 		}
 
 		for _, musicianID := range musicianIDs {
-			err = app.createMusicianGenreIfNeeded(ctx, qtx, scan, musicianID, genreID)
+			err = s.createMusicianGenreIfNeeded(ctx, qtx, scan, musicianID, genreID)
 			if err != nil {
-				app.Logger.Warn("failed to create musician-genre relationship",
+				s.logger.Warn("failed to create musician-genre relationship",
 					"error", err,
 					"musician_id", musicianID,
 					"genre_id", genreID,
@@ -863,9 +931,9 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 		}
 
 		if albumID.Valid {
-			err = app.createAlbumGenreIfNeeded(ctx, qtx, scan, albumID.Int64, genreID)
+			err = s.createAlbumGenreIfNeeded(ctx, qtx, scan, albumID.Int64, genreID)
 			if err != nil {
-				app.Logger.Warn("failed to create album-genre relationship",
+				s.logger.Warn("failed to create album-genre relationship",
 					"error", err,
 					"album_id", albumID.Int64,
 					"genre_id", genreID,
@@ -877,7 +945,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 	return track.ID, nil
 }
 
-func (app *Application) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
+func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
 	cacheKey := scanner.NormalizedScanCacheKey(input.name, input.sortName)
 	if musicianID, ok := scan.musicianIDs.Get(cacheKey); ok {
 		return musicianID, nil
@@ -896,12 +964,12 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 			musician, err = qtx.GetMusicianBySpotifyID(ctx, spotifyID)
 		}
 		if err == nil {
-			musician, err = app.updateMusicianThumbIfChanged(ctx, qtx, musician, firstImageURL(input.spotifyArtist.Images))
+			musician, err = s.updateMusicianThumbIfChanged(ctx, qtx, musician, firstImageURL(input.spotifyArtist.Images))
 			if err != nil {
 				return 0, err
 			}
-			app.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
-			err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
+			s.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
+			err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
 			if err != nil {
 				return 0, err
 			}
@@ -924,8 +992,8 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 		if err != nil {
 			return 0, err
 		}
-		app.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
+		s.processSpotifyGenres(ctx, qtx, scan, musician.ID, input.spotifyArtist.Genres)
+		err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
 		if err != nil {
 			return 0, err
 		}
@@ -933,7 +1001,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 	}
 
 	if input.hasExistingID {
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, input.existingID, input.spotifyMatch, scan.musicianIDs, cacheKey)
+		err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, input.existingID, input.spotifyMatch, scan.musicianIDs, cacheKey)
 		if err != nil {
 			return 0, err
 		}
@@ -948,7 +1016,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 		return 0, err
 	}
 
-	err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
+	err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityMusician, musician.ID, input.spotifyMatch, scan.musicianIDs, cacheKey)
 	if err != nil {
 		return 0, err
 	}
@@ -956,7 +1024,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 	return musician.ID, nil
 }
 
-func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
+func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
 	cacheKey := scanner.NormalizedScanCacheKey(input.title, input.albumArtist)
 	if albumID, ok := scan.albumIDs.Get(cacheKey); ok {
 		return albumID, nil
@@ -974,12 +1042,12 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 			album, err = qtx.GetAlbumBySpotifyID(ctx, spotifyID)
 		}
 		if err == nil {
-			album, err = app.updateAlbumCoverIfChanged(ctx, qtx, album, firstImageURL(input.spotifyAlbum.Images))
+			album, err = s.updateAlbumCoverIfChanged(ctx, qtx, album, firstImageURL(input.spotifyAlbum.Images))
 			if err != nil {
 				return 0, err
 			}
-			app.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
-			err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
+			s.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
+			err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
 			if err != nil {
 				return 0, err
 			}
@@ -1011,8 +1079,8 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 		if err != nil {
 			return 0, err
 		}
-		app.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
+		s.processSpotifyAlbumGenres(ctx, qtx, scan, album.ID, input.spotifyAlbum.Genres)
+		err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
 		if err != nil {
 			return 0, err
 		}
@@ -1020,7 +1088,7 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 	}
 
 	if input.hasExistingID {
-		err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, input.existingID, input.spotifyMatch, scan.albumIDs, cacheKey)
+		err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, input.existingID, input.spotifyMatch, scan.albumIDs, cacheKey)
 		if err != nil {
 			return 0, err
 		}
@@ -1040,7 +1108,7 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 		return 0, err
 	}
 
-	err = app.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
+	err = s.upsertMusicSpotifyMatchAndCacheID(ctx, qtx, musicSpotifyEntityAlbum, album.ID, input.spotifyMatch, scan.albumIDs, cacheKey)
 	if err != nil {
 		return 0, err
 	}
@@ -1048,7 +1116,7 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 	return album.ID, nil
 }
 
-func (app *Application) updateMusicianThumbIfChanged(ctx context.Context, qtx *database.Queries, musician database.Musician, thumbURL string) (database.Musician, error) {
+func (s *Scanner) updateMusicianThumbIfChanged(ctx context.Context, qtx *database.Queries, musician database.Musician, thumbURL string) (database.Musician, error) {
 	if thumbURL == "" {
 		return musician, nil
 	}
@@ -1062,7 +1130,7 @@ func (app *Application) updateMusicianThumbIfChanged(ctx context.Context, qtx *d
 	})
 }
 
-func (app *Application) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Queries, album database.Album, coverURL string) (database.Album, error) {
+func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Queries, album database.Album, coverURL string) (database.Album, error) {
 	if coverURL == "" {
 		return album, nil
 	}
@@ -1076,7 +1144,7 @@ func (app *Application) updateAlbumCoverIfChanged(ctx context.Context, qtx *data
 	})
 }
 
-func (app *Application) syncTrackMusicians(ctx context.Context, qtx *database.Queries, trackID int64, musicianIDs []int64) error {
+func (s *Scanner) syncTrackMusicians(ctx context.Context, qtx *database.Queries, trackID int64, musicianIDs []int64) error {
 	if len(musicianIDs) == 0 {
 		return qtx.DeleteTrackMusicians(ctx, trackID)
 	}
@@ -1106,22 +1174,22 @@ func (app *Application) syncTrackMusicians(ctx context.Context, qtx *database.Qu
 // Genres and relationships
 // ---------------------------------------------------------------------------
 
-func (app *Application) processSpotifyGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID int64, spotifyGenres []string) {
-	app.processSpotifyEntityGenres(ctx, qtx, scan, musicianID, spotifyGenres, scan.spotifyMusicianGenresHandled, spotifyGenreProcessor{
+func (s *Scanner) processSpotifyGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID int64, spotifyGenres []string) {
+	s.processSpotifyEntityGenres(ctx, qtx, scan, musicianID, spotifyGenres, scan.spotifyMusicianGenresHandled, spotifyGenreProcessor{
 		getGenreLogMessage:      "failed to get/create Spotify genre",
 		relationshipLogMessage:  "failed to create musician-genre relationship for Spotify genre",
-		createGenreRelationship: func(genreID int64) error { return app.createMusicianGenreIfNeeded(ctx, qtx, scan, musicianID, genreID) },
+		createGenreRelationship: func(genreID int64) error { return s.createMusicianGenreIfNeeded(ctx, qtx, scan, musicianID, genreID) },
 		genreRelationshipLogContext: func(genreID int64, genreTag string) []any {
 			return []any{"musician_id", musicianID, "genre_id", genreID, "genre", genreTag}
 		},
 	})
 }
 
-func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, albumID int64, spotifyGenres []string) {
-	app.processSpotifyEntityGenres(ctx, qtx, scan, albumID, spotifyGenres, scan.spotifyAlbumGenresHandled, spotifyGenreProcessor{
+func (s *Scanner) processSpotifyAlbumGenres(ctx context.Context, qtx *database.Queries, scan *musicScanContext, albumID int64, spotifyGenres []string) {
+	s.processSpotifyEntityGenres(ctx, qtx, scan, albumID, spotifyGenres, scan.spotifyAlbumGenresHandled, spotifyGenreProcessor{
 		getGenreLogMessage:      "failed to get/create Spotify genre for album",
 		relationshipLogMessage:  "failed to create album-genre relationship for Spotify genre",
-		createGenreRelationship: func(genreID int64) error { return app.createAlbumGenreIfNeeded(ctx, qtx, scan, albumID, genreID) },
+		createGenreRelationship: func(genreID int64) error { return s.createAlbumGenreIfNeeded(ctx, qtx, scan, albumID, genreID) },
 		genreRelationshipLogContext: func(genreID int64, genreTag string) []any {
 			return []any{"album_id", albumID, "genre_id", genreID, "genre", genreTag}
 		},
@@ -1135,7 +1203,7 @@ type spotifyGenreProcessor struct {
 	genreRelationshipLogContext func(genreID int64, genreTag string) []any
 }
 
-func (app *Application) processSpotifyEntityGenres(
+func (s *Scanner) processSpotifyEntityGenres(
 	ctx context.Context,
 	qtx *database.Queries,
 	scan *musicScanContext,
@@ -1153,10 +1221,10 @@ func (app *Application) processSpotifyEntityGenres(
 
 	hadError := false
 	for _, genreTag := range spotifyGenres {
-		genreID, err := app.getOrCreateMusicGenreID(ctx, qtx, scan, genreTag)
+		genreID, err := s.getOrCreateMusicGenreID(ctx, qtx, scan, genreTag)
 		if err != nil {
 			hadError = true
-			app.Logger.Warn(processor.getGenreLogMessage,
+			s.logger.Warn(processor.getGenreLogMessage,
 				"error", err,
 				"genre", genreTag,
 			)
@@ -1168,7 +1236,7 @@ func (app *Application) processSpotifyEntityGenres(
 			hadError = true
 			args := []any{"error", err}
 			args = append(args, processor.genreRelationshipLogContext(genreID, genreTag)...)
-			app.Logger.Warn(processor.relationshipLogMessage, args...)
+			s.logger.Warn(processor.relationshipLogMessage, args...)
 		}
 	}
 
@@ -1177,7 +1245,7 @@ func (app *Application) processSpotifyEntityGenres(
 	}
 }
 
-func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
+func (s *Scanner) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
 	cacheKey := scanner.NormalizedScanCacheKey(tag, "music")
 	if genreID, ok := scan.genreIDs.Get(cacheKey); ok {
 		return genreID, nil
@@ -1195,7 +1263,7 @@ func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *databa
 	return genre.ID, nil
 }
 
-func (app *Application) createMusicianAlbumIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID, albumID int64) error {
+func (s *Scanner) createMusicianAlbumIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID, albumID int64) error {
 	return createCachedMusicRelationshipIfNeeded(scan.musicianAlbums, musicianID, albumID, func() error {
 		return qtx.CreateMusicianAlbum(ctx, database.CreateMusicianAlbumParams{
 			MusicianID: musicianID,
@@ -1204,7 +1272,7 @@ func (app *Application) createMusicianAlbumIfNeeded(ctx context.Context, qtx *da
 	})
 }
 
-func (app *Application) createMusicianGenreIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID, genreID int64) error {
+func (s *Scanner) createMusicianGenreIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, musicianID, genreID int64) error {
 	return createCachedMusicRelationshipIfNeeded(scan.musicianGenres, musicianID, genreID, func() error {
 		return qtx.UpsertMusicianGenre(ctx, database.UpsertMusicianGenreParams{
 			MusicianID: musicianID,
@@ -1213,7 +1281,7 @@ func (app *Application) createMusicianGenreIfNeeded(ctx context.Context, qtx *da
 	})
 }
 
-func (app *Application) createAlbumGenreIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, albumID, genreID int64) error {
+func (s *Scanner) createAlbumGenreIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, albumID, genreID int64) error {
 	return createCachedMusicRelationshipIfNeeded(scan.albumGenres, albumID, genreID, func() error {
 		return qtx.UpsertAlbumGenre(ctx, database.UpsertAlbumGenreParams{
 			AlbumID: albumID,
@@ -1222,7 +1290,7 @@ func (app *Application) createAlbumGenreIfNeeded(ctx context.Context, qtx *datab
 	})
 }
 
-func (app *Application) createTrackGenreIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, trackID, genreID int64) error {
+func (s *Scanner) createTrackGenreIfNeeded(ctx context.Context, qtx *database.Queries, scan *musicScanContext, trackID, genreID int64) error {
 	return createCachedMusicRelationshipIfNeeded(scan.trackGenres, trackID, genreID, func() error {
 		return qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
 			TrackID: trackID,
@@ -1274,7 +1342,7 @@ type resolvedSpotifyMatch struct {
 	errorText       sql.NullString
 }
 
-func (app *Application) upsertMusicSpotifyMatchAndCacheID(
+func (s *Scanner) upsertMusicSpotifyMatchAndCacheID(
 	ctx context.Context,
 	qtx *database.Queries,
 	entityType string,

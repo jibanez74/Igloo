@@ -31,7 +31,7 @@ For movies, the scanner (`server/cmd/internal/scanner/movie`) calls `GetMetadata
 - **Rotation** comes from display-matrix side data, and the absence of a matrix is distinct from a zero one: an explicit 0-degree matrix persists as `0`, a stream with no matrix as `NULL`.
 - **Stream tag keys** are normalized like format tags (lowercased, separators stripped, `lang` accepted as a `language` alias), so Matroska muxers writing `TITLE`/`LANGUAGE` still produce labelled, preference-matchable streams.
 
-For music, `GetAudioMetadata(ctx, path)` populates track metadata (title, artist, album, genre, track and disc numbers, release date, duration, bitrate, composer, copyright); the library scan supplies each file's size from the filesystem.
+For music, the scanner (`server/cmd/internal/scanner/music`) calls `GetAudioMetadata(ctx, path)` to populate track metadata (title, artist, album, genre, track and disc numbers, release date, duration, bitrate, composer, copyright); the library scan supplies each file's size from the filesystem.
 
 The scanner stores stream data in SQLite so playback does not need to run ffprobe on every HLS request. That is intentional. HLS session creation reads movie, video stream, and audio stream rows from the database and starts FFmpeg from that stored metadata. This keeps playback startup predictable and avoids probing the same file repeatedly while users are trying to watch something.
 

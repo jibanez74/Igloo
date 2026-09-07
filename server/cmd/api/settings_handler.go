@@ -7,6 +7,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
 	"net/http"
 	"net/url"
 	"os"
@@ -361,23 +362,17 @@ func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
 }
 
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
-	settings := app.CurrentSettings()
-	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
+	result := app.MusicScanner.Start()
+	switch result.Status {
+	case music.StartNotConfigured:
 		helpers.ErrorJSON(w, errors.New("music directory is not configured"))
 		return
-	}
-
-	if !musicScanGuard.TryBegin() {
+	case music.StartAlreadyRunning:
 		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"), http.StatusConflict)
 		return
 	}
 
-	if app.Wait != nil {
-		app.Wait.Add(1)
-	}
-	go app.runMusicScan()
-
-	app.Logger.Info("music library scan triggered via API", "path", settings.MusicDir.String)
+	app.Logger.Info("music library scan triggered via API", "path", result.Directory)
 
 	res := helpers.JSONResponse{
 		Error:   false,
