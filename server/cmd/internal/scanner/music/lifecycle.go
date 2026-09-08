@@ -109,7 +109,12 @@ func (s *Scanner) runMusicScan(directory string) {
 	deleted, err := s.cleanupMissingMusic(ctx, scan, reconciliation)
 	s.logger.Info("music missing-file cleanup", "deleted", deleted)
 	if err != nil {
-		s.logger.Error("music missing-file cleanup interrupted", "error", err)
+		contextErr = ctx.Err()
+		if contextErr != nil {
+			s.logger.Info("music library scan interrupted")
+			return
+		}
+		s.logger.Error("music missing-file cleanup failed", "error", err)
 		return
 	}
 

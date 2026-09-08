@@ -1,3 +1,5 @@
+//go:build externalbin
+
 package music
 
 import (

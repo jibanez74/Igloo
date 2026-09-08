@@ -4,15 +4,117 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/sqlc"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/scanner"
 )
+
+func TestMusicCleanupDeletionFailure(t *testing.T) {
+	for _, scenario := range []string{"canceled", "database error"} {
+		t.Run(scenario, func(t *testing.T) {
+			// Cancellation can discard the connection, so rollback needs a file database.
+			db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			db.SetMaxOpenConns(1)
+			_, err = db.Exec(sqlc.Schema)
+			if err != nil {
+				t.Fatal(err)
+			}
+			queries, err := database.Prepare(context.Background(), db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer queries.Close()
+			metadata := testMusicMetadata()
+			metadata.Format.Tags.Genre = "Rock"
+			s := New(Dependencies{
+				DB: db, Queries: queries, Logger: &capturedLogger{},
+				Now:     func() time.Time { return time.Now().Add(2 * time.Minute) },
+				Ffprobe: &countingMusicScannerFfprobe{result: metadata},
+			})
+			root := t.TempDir()
+			path := filepath.Join(root, "missing.m4a")
+			imported, _, failures := s.processMusicFixtureBatch(t, context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a", Size: 1}})
+			if imported != 1 || failures != 0 {
+				t.Fatalf("import=%d errors=%d", imported, failures)
+			}
+			err = os.Remove(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			conn, err := db.Conn(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			deletionAttempted := false
+			err = conn.Raw(func(raw any) error {
+				return raw.(*sqlite3.SQLiteConn).RegisterFunc("fail_music_cleanup", func() (int, error) {
+					deletionAttempted = true
+					if scenario == "canceled" {
+						cancel()
+						return 0, nil
+					}
+					return 0, errors.New("delete failed")
+				}, false)
+			})
+			conn.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = db.Exec("CREATE TRIGGER fail_cleanup AFTER DELETE ON tracks BEGIN SELECT fail_music_cleanup(); END")
+			if err != nil {
+				t.Fatal(err)
+			}
+			invalidations := 0
+			s.invalidateCommittedTrack = func(int64) { invalidations++ }
+			s.scanContext = ctx
+			spotify := &musicScannerSpotifyStub{}
+			s.spotify = spotify
+			logs := &capturedLogger{}
+			s.logger = logs
+			s.runMusicScan(root)
+
+			if !deletionAttempted || invalidations != 0 {
+				t.Fatalf("deletion attempted=%v invalidations=%d", deletionAttempted, invalidations)
+			}
+			for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "tracks_search_fts"} {
+				count := countScannerRows(t, db, "SELECT count(*) FROM "+table)
+				if count != 1 {
+					t.Fatalf("rollback left %d rows in %s", count, table)
+				}
+			}
+			if spotify.artistCalls != 0 || spotify.albumCalls != 0 {
+				t.Fatal("failed cleanup caused Spotify retries")
+			}
+			if scenario == "canceled" {
+				assertMusicInterrupted(t, s)
+				return
+			}
+			if len(logs.errorEntries) != 1 || logs.errorEntries[0].msg != "music missing-file cleanup failed" {
+				t.Fatalf("cleanup error logs=%+v", logs.errorEntries)
+			}
+			for _, entry := range logs.infoEntries {
+				if entry.msg == "music library scan interrupted" || strings.Contains(entry.msg, "completed:") {
+					t.Errorf("failed cleanup logged %q", entry.msg)
+				}
+			}
+		})
+	}
+}
 
 func TestMissingMusicCleanupLifecycle(t *testing.T) {
 	for _, scenario := range []string{"deleted", "removed subdirectory", "broken symlink", "no fingerprint", "outside directory", "unavailable root"} {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -30,25 +31,69 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 	}
 
 	testScanner.moviesDir = sql.NullString{String: t.TempDir(), Valid: true}
+	path := filepath.Join(testScanner.moviesDir.String, "Lifecycle.2024.mkv")
+	err := os.WriteFile(path, []byte("movie"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
 	wait := &sync.WaitGroup{}
 	testScanner.scanner.wait = wait
+	ctx, cancel := context.WithCancel(context.Background())
+	testScanner.scanner.scanContext = ctx
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	releaseProbe := sync.OnceFunc(func() { close(release) })
+	testScanner.scanner.ffprobe = &fingerprintProbe{callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+		select {
+		case entered <- struct{}{}:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		select {
+		case <-release:
+			return movieScannerMetadataFixture("120"), nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}}
+	defer func() {
+		cancel()
+		releaseProbe()
+		wait.Wait()
+	}()
+	waitForScan := func() {
+		t.Helper()
+		done := make(chan struct{})
+		go func() { wait.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("movie scan did not stop")
+		}
+	}
 
 	started := testScanner.scanner.Start()
 	if started.Status != StartStarted || started.Directory != testScanner.moviesDir.String {
 		t.Fatalf("configured Start result = %+v, want started for %q", started, testScanner.moviesDir.String)
 	}
 
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("movie scan did not reach probing")
+	}
 	alreadyRunning := testScanner.scanner.Start()
 	if alreadyRunning.Status != StartAlreadyRunning {
 		t.Fatalf("concurrent Start status = %v, want %v", alreadyRunning.Status, StartAlreadyRunning)
 	}
 
-	wait.Wait()
+	releaseProbe()
+	waitForScan()
 	restarted := testScanner.scanner.Start()
 	if restarted.Status != StartStarted {
 		t.Fatalf("Start after scan completion = %v, want %v", restarted.Status, StartStarted)
 	}
-	wait.Wait()
+	waitForScan()
 }
 
 func TestNewDefaultsOptionalDependencies(t *testing.T) {
