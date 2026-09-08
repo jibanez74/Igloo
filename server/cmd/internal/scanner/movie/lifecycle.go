@@ -28,18 +28,16 @@ func (s *Scanner) Start() StartResult {
 	s.wait.Add(1)
 	go func() {
 		defer s.wait.Done()
-		s.runMovieScan()
+		s.runMovieScan(directory.String)
 	}()
 	result.Status = StartStarted
 	return result
 }
 
-func (s *Scanner) runMovieScan() {
+func (s *Scanner) runMovieScan(directory string) {
 	defer s.guard.Finish()
 
-	// Start has already rejected an unset directory before spawning this.
-	directory := s.currentMoviesDirectory()
-	s.logger.Info(fmt.Sprintf("scanning movies directory: %s", directory.String))
+	s.logger.Info(fmt.Sprintf("scanning movies directory: %s", directory))
 
 	ctx := s.scanContext
 	errorCount := 0
@@ -47,12 +45,17 @@ func (s *Scanner) runMovieScan() {
 	moviesSkipped := 0
 	startTime := time.Now()
 
-	scanIndex, err := s.loadMovieScanIndex(ctx)
+	scanIndex, files, err := s.loadMovieScanIndex(ctx)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("failed to load movie scan index: %s", err.Error()))
 		return
 	}
 	scan := newMovieScanContext(scanIndex)
+	reconciliation, err := scanner.NewReconciliation(directory, files)
+	if err != nil {
+		s.logger.Error("cannot reconcile movie library", "error", err)
+		return
+	}
 
 	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
 	flushBatch := func() {
@@ -69,13 +72,14 @@ func (s *Scanner) runMovieScan() {
 
 	err = scanner.WalkMediaLibraryContext(
 		ctx,
-		directory.String,
+		directory,
 		helpers.ValidVideoExtensions,
 		func(err error) {
 			s.logger.Error(err.Error())
 			errorCount++
 		},
 		func(file scanner.ScanFile) error {
+			reconciliation.MarkSeen(file.Path)
 			batch = append(batch, file)
 
 			if len(batch) >= scanner.BatchSize {
@@ -99,6 +103,13 @@ func (s *Scanner) runMovieScan() {
 	contextErr := ctx.Err()
 	if contextErr != nil {
 		s.logger.Info("movie library scan interrupted")
+		return
+	}
+
+	deleted, err := s.cleanupMissingMovie(ctx, scan, reconciliation)
+	s.logger.Info("movie missing-file cleanup", "deleted", deleted)
+	if err != nil {
+		s.logger.Error("movie missing-file cleanup interrupted", "error", err)
 		return
 	}
 
@@ -173,17 +184,22 @@ func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file 
 	return outcome, err
 }
 
-func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, error) {
+func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
 	rows, err := s.queries.GetMovieScanIndex(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	index := make(map[string]scanner.FileFingerprint, len(rows))
+	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
+		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
+		if !row.MtimeNs.Valid {
+			continue
+		}
 		index[filepath.Clean(row.FilePath)] = scanner.FileFingerprint{
-			Size: row.Size, MtimeNS: row.MtimeNs, CtimeNS: row.CtimeNs,
-			Device: row.Device, Inode: row.Inode, SHA256: [32]byte(row.Sha256),
+			Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
+			Device: row.Device.String, Inode: row.Inode.String, SHA256: [32]byte(row.Sha256),
 		}
 	}
-	return index, nil
+	return index, files, nil
 }

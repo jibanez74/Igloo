@@ -123,6 +123,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteMergedMusicMatchStmt, err = db.PrepareContext(ctx, deleteMergedMusicMatch); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMergedMusicMatch: %w", err)
 	}
+	if q.deleteMissingMovieStmt, err = db.PrepareContext(ctx, deleteMissingMovie); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMissingMovie: %w", err)
+	}
+	if q.deleteMissingTrackStmt, err = db.PrepareContext(ctx, deleteMissingTrack); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMissingTrack: %w", err)
+	}
 	if q.deleteMovieStmt, err = db.PrepareContext(ctx, deleteMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovie: %w", err)
 	}
@@ -909,6 +915,16 @@ func (q *Queries) Close() error {
 	if q.deleteMergedMusicMatchStmt != nil {
 		if cerr := q.deleteMergedMusicMatchStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteMergedMusicMatchStmt: %w", cerr)
+		}
+	}
+	if q.deleteMissingMovieStmt != nil {
+		if cerr := q.deleteMissingMovieStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMissingMovieStmt: %w", cerr)
+		}
+	}
+	if q.deleteMissingTrackStmt != nil {
+		if cerr := q.deleteMissingTrackStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMissingTrackStmt: %w", cerr)
 		}
 	}
 	if q.deleteMovieStmt != nil {
@@ -2013,6 +2029,8 @@ type Queries struct {
 	deleteMergedMusicAlbumStmt                  *sql.Stmt
 	deleteMergedMusicArtistStmt                 *sql.Stmt
 	deleteMergedMusicMatchStmt                  *sql.Stmt
+	deleteMissingMovieStmt                      *sql.Stmt
+	deleteMissingTrackStmt                      *sql.Stmt
 	deleteMovieStmt                             *sql.Stmt
 	deleteMovieAudioStreamsStmt                 *sql.Stmt
 	deleteMovieCastStmt                         *sql.Stmt
@@ -2258,6 +2276,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMergedMusicAlbumStmt:                  q.deleteMergedMusicAlbumStmt,
 		deleteMergedMusicArtistStmt:                 q.deleteMergedMusicArtistStmt,
 		deleteMergedMusicMatchStmt:                  q.deleteMergedMusicMatchStmt,
+		deleteMissingMovieStmt:                      q.deleteMissingMovieStmt,
+		deleteMissingTrackStmt:                      q.deleteMissingTrackStmt,
 		deleteMovieStmt:                             q.deleteMovieStmt,
 		deleteMovieAudioStreamsStmt:                 q.deleteMovieAudioStreamsStmt,
 		deleteMovieCastStmt:                         q.deleteMovieCastStmt,

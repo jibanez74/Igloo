@@ -10,6 +10,23 @@ import (
 	"database/sql"
 )
 
+const deleteMissingTrack = `-- name: DeleteMissingTrack :execrows
+DELETE FROM tracks WHERE id = ? AND file_path = ?
+`
+
+type DeleteMissingTrackParams struct {
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+func (q *Queries) DeleteMissingTrack(ctx context.Context, arg DeleteMissingTrackParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteMissingTrackStmt, deleteMissingTrack, arg.ID, arg.FilePath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAlbumsCount = `-- name: GetAlbumsCount :one
 SELECT
   COUNT(*)
@@ -351,19 +368,20 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 }
 
 const listMusicTrackScanIndex = `-- name: ListMusicTrackScanIndex :many
-SELECT c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
 FROM tracks c
-JOIN track_file_fingerprints f ON f.track_id = c.id
+LEFT JOIN track_file_fingerprints f ON f.track_id = c.id
 `
 
 type ListMusicTrackScanIndexRow struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
-	MtimeNs  int64  `json:"mtime_ns"`
-	CtimeNs  int64  `json:"ctime_ns"`
-	Device   string `json:"device"`
-	Inode    string `json:"inode"`
-	Sha256   []byte `json:"sha256"`
+	ID       int64          `json:"id"`
+	FilePath string         `json:"file_path"`
+	Size     int64          `json:"size"`
+	MtimeNs  sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs  sql.NullInt64  `json:"ctime_ns"`
+	Device   sql.NullString `json:"device"`
+	Inode    sql.NullString `json:"inode"`
+	Sha256   []byte         `json:"sha256"`
 }
 
 func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error) {
@@ -376,6 +394,7 @@ func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrack
 	for rows.Next() {
 		var i ListMusicTrackScanIndexRow
 		if err := rows.Scan(
+			&i.ID,
 			&i.FilePath,
 			&i.Size,
 			&i.MtimeNs,

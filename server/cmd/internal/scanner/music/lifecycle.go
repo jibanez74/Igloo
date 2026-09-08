@@ -41,7 +41,7 @@ func (s *Scanner) runMusicScan(directory string) {
 	tracksSkipped := 0
 	startTime := time.Now()
 	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
-	scanIndex, err := s.loadMusicScanIndex(ctx)
+	scanIndex, files, err := s.loadMusicScanIndex(ctx)
 	if err != nil {
 		contextErr := ctx.Err()
 		if contextErr != nil {
@@ -52,6 +52,11 @@ func (s *Scanner) runMusicScan(directory string) {
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
+	reconciliation, err := scanner.NewReconciliation(directory, files)
+	if err != nil {
+		s.logger.Error("cannot reconcile music library", "error", err)
+		return
+	}
 	flushBatch := func() {
 		if len(batch) == 0 {
 			return
@@ -73,6 +78,7 @@ func (s *Scanner) runMusicScan(directory string) {
 			errorCount++
 		},
 		func(file scanner.ScanFile) error {
+			reconciliation.MarkSeen(file.Path)
 			batch = append(batch, file)
 
 			if len(batch) >= scanner.BatchSize {
@@ -97,6 +103,13 @@ func (s *Scanner) runMusicScan(directory string) {
 	contextErr := ctx.Err()
 	if contextErr != nil {
 		s.logger.Info("music library scan interrupted")
+		return
+	}
+
+	deleted, err := s.cleanupMissingMusic(ctx, scan, reconciliation)
+	s.logger.Info("music missing-file cleanup", "deleted", deleted)
+	if err != nil {
+		s.logger.Error("music missing-file cleanup interrupted", "error", err)
 		return
 	}
 
@@ -181,17 +194,22 @@ func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file 
 	return outcome, err
 }
 
-func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, error) {
+func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
 	rows, err := s.queries.ListMusicTrackScanIndex(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	index := make(map[string]scanner.FileFingerprint, len(rows))
+	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
+		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
+		if !row.MtimeNs.Valid {
+			continue
+		}
 		index[filepath.Clean(row.FilePath)] = scanner.FileFingerprint{
-			Size: row.Size, MtimeNS: row.MtimeNs, CtimeNS: row.CtimeNs,
-			Device: row.Device, Inode: row.Inode, SHA256: [32]byte(row.Sha256),
+			Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
+			Device: row.Device.String, Inode: row.Inode.String, SHA256: [32]byte(row.Sha256),
 		}
 	}
-	return index, nil
+	return index, files, nil
 }

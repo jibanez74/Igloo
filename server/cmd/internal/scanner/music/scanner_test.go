@@ -89,7 +89,7 @@ func (noKeyframeProbe) KeyframeAtOrBefore(context.Context, string, int64, float6
 }
 
 func (app *Scanner) processMusicBatchForTest(t testing.TB, ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
-	scanIndex, err := app.loadMusicScanIndex(ctx)
+	scanIndex, _, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
 		app.logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
 		return 0, 0, len(files)

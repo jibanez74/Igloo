@@ -88,6 +88,23 @@ func (q *Queries) CreateMovieProductionCompany(ctx context.Context, arg CreateMo
 	return err
 }
 
+const deleteMissingMovie = `-- name: DeleteMissingMovie :execrows
+DELETE FROM movies WHERE id = ? AND file_path = ?
+`
+
+type DeleteMissingMovieParams struct {
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+func (q *Queries) DeleteMissingMovie(ctx context.Context, arg DeleteMissingMovieParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteMissingMovieStmt, deleteMissingMovie, arg.ID, arg.FilePath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteMovie = `-- name: DeleteMovie :exec
 DELETE FROM movies
 WHERE id = ?
@@ -662,19 +679,20 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 }
 
 const getMovieScanIndex = `-- name: GetMovieScanIndex :many
-SELECT c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
 FROM movies c
-JOIN movie_file_fingerprints f ON f.movie_id = c.id
+LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
 `
 
 type GetMovieScanIndexRow struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
-	MtimeNs  int64  `json:"mtime_ns"`
-	CtimeNs  int64  `json:"ctime_ns"`
-	Device   string `json:"device"`
-	Inode    string `json:"inode"`
-	Sha256   []byte `json:"sha256"`
+	ID       int64          `json:"id"`
+	FilePath string         `json:"file_path"`
+	Size     int64          `json:"size"`
+	MtimeNs  sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs  sql.NullInt64  `json:"ctime_ns"`
+	Device   sql.NullString `json:"device"`
+	Inode    sql.NullString `json:"inode"`
+	Sha256   []byte         `json:"sha256"`
 }
 
 func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error) {
@@ -687,6 +705,7 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 	for rows.Next() {
 		var i GetMovieScanIndexRow
 		if err := rows.Scan(
+			&i.ID,
 			&i.FilePath,
 			&i.Size,
 			&i.MtimeNs,

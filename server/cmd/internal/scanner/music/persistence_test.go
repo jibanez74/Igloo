@@ -398,7 +398,7 @@ func TestProcessMusicBatchDoesNotMergeFailedPersistIntoScanContext(t *testing.T)
 		}),
 	})
 
-	scanIndex, err := app.loadMusicScanIndex(context.Background())
+	scanIndex, _, err := app.loadMusicScanIndex(context.Background())
 	if err != nil {
 		t.Fatalf("load scan index: %v", err)
 	}

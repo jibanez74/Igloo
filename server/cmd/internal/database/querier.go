@@ -50,6 +50,8 @@ type Querier interface {
 	DeleteMergedMusicAlbum(ctx context.Context, id int64) error
 	DeleteMergedMusicArtist(ctx context.Context, id int64) error
 	DeleteMergedMusicMatch(ctx context.Context, arg DeleteMergedMusicMatchParams) error
+	DeleteMissingMovie(ctx context.Context, arg DeleteMissingMovieParams) (int64, error)
+	DeleteMissingTrack(ctx context.Context, arg DeleteMissingTrackParams) (int64, error)
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie

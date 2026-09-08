@@ -241,7 +241,7 @@ func TestProcessMoviesBatchRollbackLeavesScanCachesUnpolluted(t *testing.T) {
 	}
 }
 
-func TestRunMovieScanPreservesMissingMovieRows(t *testing.T) {
+func TestRunMovieScanDeletesMissingMovieWithoutFingerprint(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -262,11 +262,11 @@ func TestRunMovieScanPreservesMissingMovieRows(t *testing.T) {
 	}
 
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
-	testScanner.scanner.runMovieScan()
+	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
 
 	_, err = testScanner.queries.GetMovieByID(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("expected missing movie row to be preserved: %v", err)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected missing movie row to be deleted: %v", err)
 	}
 }
 
@@ -294,7 +294,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
 
-	testScanner.scanner.runMovieScan()
+	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
 
 	if ffprobeStub.calls != len(files) {
 		t.Fatalf("ffprobe calls = %d, want %d", ffprobeStub.calls, len(files))
@@ -338,7 +338,7 @@ func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
 
-	testScanner.scanner.runMovieScan()
+	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
 
 	if ffprobeStub.calls != scanner.BatchSize+1 {
 		t.Fatalf("ffprobe calls = %d, want %d video files only", ffprobeStub.calls, scanner.BatchSize+1)
