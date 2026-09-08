@@ -9,7 +9,7 @@ import (
 
 type compoundArtistCredits struct {
 	parts        []string
-	hasDelimiter bool
+	occurrences  []string
 	hasComma     bool
 	hasDuplicate bool
 }
@@ -35,8 +35,7 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 	}
 
 	credits := compoundArtistCredits{
-		hasDelimiter: strings.Contains(artistTag, " & ") || strings.Contains(artistTag, ","),
-		hasComma:     strings.Contains(artistTag, ","),
+		hasComma: strings.Contains(artistTag, ","),
 	}
 	seen := make(map[string]struct{}, len(commaParts))
 
@@ -48,6 +47,7 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 				continue
 			}
 
+			credits.occurrences = append(credits.occurrences, part)
 			cacheKey := scanner.NormalizedScanCacheKey(part)
 			_, exists := seen[cacheKey]
 			if exists {
@@ -103,4 +103,38 @@ func isArtistSuffix(value string) bool {
 	default:
 		return false
 	}
+}
+
+// parseArtistSortCredits retains positions and repeated values. Ampersands
+// delimit inverted names without treating their internal commas as credits.
+func parseArtistSortCredits(value string, count int) []string {
+	parts := strings.Split(" "+value+" ", " & ")
+	if len(parts) == count {
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
+	}
+
+	commaParts := []string{}
+	for _, raw := range strings.Split(value, ",") {
+		part := strings.TrimSpace(raw)
+		isSuffix := isArtistSuffix(part)
+		if isSuffix && len(commaParts) > 0 {
+			last := len(commaParts) - 1
+			commaParts[last] += ", " + part
+		} else {
+			commaParts = append(commaParts, part)
+		}
+	}
+	parts = nil
+	for _, part := range commaParts {
+		for _, credit := range strings.Split(" "+part+" ", " & ") {
+			parts = append(parts, strings.TrimSpace(credit))
+		}
+	}
+	if len(parts) == count {
+		return parts
+	}
+	return nil
 }

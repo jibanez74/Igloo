@@ -498,6 +498,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listNotificationsForUserStmt, err = db.PrepareContext(ctx, listNotificationsForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query ListNotificationsForUser: %w", err)
 	}
+	if q.listWatchRoomIDsByMovieIDStmt, err = db.PrepareContext(ctx, listWatchRoomIDsByMovieID); err != nil {
+		return nil, fmt.Errorf("error preparing query ListWatchRoomIDsByMovieID: %w", err)
+	}
 	if q.markAllNotificationsReadForUserStmt, err = db.PrepareContext(ctx, markAllNotificationsReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkAllNotificationsReadForUser: %w", err)
 	}
@@ -1542,6 +1545,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listNotificationsForUserStmt: %w", cerr)
 		}
 	}
+	if q.listWatchRoomIDsByMovieIDStmt != nil {
+		if cerr := q.listWatchRoomIDsByMovieIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listWatchRoomIDsByMovieIDStmt: %w", cerr)
+		}
+	}
 	if q.markAllNotificationsReadForUserStmt != nil {
 		if cerr := q.markAllNotificationsReadForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markAllNotificationsReadForUserStmt: %w", cerr)
@@ -2154,6 +2162,7 @@ type Queries struct {
 	likeTrackStmt                               *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
 	listNotificationsForUserStmt                *sql.Stmt
+	listWatchRoomIDsByMovieIDStmt               *sql.Stmt
 	markAllNotificationsReadForUserStmt         *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
 	markMovieWatchedStmt                        *sql.Stmt
@@ -2401,6 +2410,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		likeTrackStmt:                               q.likeTrackStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		listNotificationsForUserStmt:                q.listNotificationsForUserStmt,
+		listWatchRoomIDsByMovieIDStmt:               q.listWatchRoomIDsByMovieIDStmt,
 		markAllNotificationsReadForUserStmt:         q.markAllNotificationsReadForUserStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,

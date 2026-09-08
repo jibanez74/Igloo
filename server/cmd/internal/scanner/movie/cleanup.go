@@ -40,6 +40,11 @@ func (s *Scanner) deleteMissingMovie(ctx context.Context, scan *movieScanContext
 	defer tx.Rollback()
 	qtx := s.queries.WithTx(tx)
 
+	roomIDs, err := qtx.ListWatchRoomIDsByMovieID(ctx, file.ID)
+	if err != nil {
+		return false, err
+	}
+
 	rows, err := qtx.DeleteMissingMovie(ctx, database.DeleteMissingMovieParams{ID: file.ID, FilePath: file.Path})
 	if err != nil {
 		return false, err
@@ -56,6 +61,7 @@ func (s *Scanner) deleteMissingMovie(ctx context.Context, scan *movieScanContext
 	if err != nil {
 		return false, err
 	}
+	s.invalidateDeletedWatchRooms(roomIDs)
 	s.invalidateCommittedMovie(file.ID)
 	delete(scan.movieIndex, filepath.Clean(file.Path))
 	return true, nil

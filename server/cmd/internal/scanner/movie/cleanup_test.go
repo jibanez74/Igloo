@@ -7,6 +7,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -92,12 +93,13 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 }
 
 func TestMissingMovieDeletionTransaction(t *testing.T) {
-	for _, scenario := range []string{"commit", "rollback", "reappeared", "root replaced", "path changed", "id changed"} {
+	for _, scenario := range []string{"commit", "rollback", "query failure", "canceled", "reappeared", "root replaced", "path changed", "id changed"} {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
 			defer s.db.Close()
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
 			err := os.Mkdir(root, 0700)
 			if err != nil {
@@ -118,6 +120,11 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			_, err = s.db.Exec(`INSERT INTO users(id,name,email,password) VALUES(1,'Viewer','viewer@test','unused');
+ INSERT INTO watch_rooms(id,owner_user_id,movie_id,playback_mode) VALUES(11,1,?,'direct'),(12,1,?,'direct');`, files[0].ID, files[0].ID)
+			if err != nil {
+				t.Fatal(err)
+			}
 			reconciliation, err := scanner.NewReconciliation(root, files)
 			if err != nil {
 				t.Fatal(err)
@@ -127,6 +134,10 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 				t.Fatal(err)
 			}
 			switch scenario {
+			case "query failure":
+				_, err = s.db.Exec("ALTER TABLE watch_rooms RENAME TO unavailable_watch_rooms")
+			case "canceled":
+				cancel()
 			case "rollback":
 				_, err = s.db.Exec("CREATE TRIGGER reject_delete AFTER DELETE ON movies BEGIN SELECT RAISE(ABORT,'delete failed'); END")
 			case "path changed":
@@ -175,9 +186,23 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			roomInvalidations := 0
+			s.invalidateDeletedWatchRooms = func(ids []int64) {
+				roomInvalidations++
+				if !slices.Equal(ids, []int64{11, 12}) {
+					t.Errorf("room IDs = %v", ids)
+				}
+				count := countScannerRows(t, s.db, "SELECT count(*) FROM watch_rooms")
+				if count != 0 {
+					t.Error("room callback preceded commit")
+				}
+			}
 			invalidations := 0
 			s.invalidateCommittedMovie = func(id int64) {
 				invalidations++
+				if roomInvalidations != 1 {
+					t.Error("movie invalidation preceded room invalidation")
+				}
 				count := countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE id = ?", id)
 				if count != 0 {
 					t.Error("invalidation preceded commit")
@@ -193,10 +218,10 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			if scenario == "commit" {
 				wantDeleted = 1
 			}
-			if scenario == "rollback" && err == nil {
+			if (scenario == "rollback" || scenario == "query failure" || scenario == "canceled") && err == nil {
 				t.Fatal("expected transaction failure")
 			}
-			if deleted != wantDeleted || invalidations != wantDeleted {
+			if deleted != wantDeleted || invalidations != wantDeleted || roomInvalidations != wantDeleted {
 				t.Fatalf("deleted=%d invalidations=%d err=%v", deleted, invalidations, err)
 			}
 			_, indexed := scan.movieIndex[path]

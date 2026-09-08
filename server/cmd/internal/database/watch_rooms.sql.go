@@ -419,3 +419,32 @@ func (q *Queries) IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberPa
 	err := row.Scan(&is_member)
 	return is_member, err
 }
+
+const listWatchRoomIDsByMovieID = `-- name: ListWatchRoomIDsByMovieID :many
+SELECT id FROM watch_rooms
+WHERE movie_id = ?
+ORDER BY id
+`
+
+func (q *Queries) ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.listWatchRoomIDsByMovieIDStmt, listWatchRoomIDsByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

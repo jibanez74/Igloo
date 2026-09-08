@@ -1200,11 +1200,15 @@ func setupTestApp(t *testing.T) *Application {
 		DB:          app.DB,
 		Queries:     app.Queries,
 		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
 		ScanContext: context.Background(),
 		CurrentMoviesDirectory: func() sql.NullString {
 			return app.CurrentSettings().MoviesDir
 		},
-		InvalidateCommittedMovie: app.invalidateCommittedMovie,
+		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
+		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
 	})
 
 	return app

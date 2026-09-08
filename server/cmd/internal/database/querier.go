@@ -292,6 +292,7 @@ type Querier interface {
 	// enforced by the handlers; user_id here only selects the viewer's read state
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
+	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
