@@ -50,7 +50,7 @@ func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -123,7 +123,7 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -183,7 +183,7 @@ func TestProcessMusicBatchPreservesExistingImagesWithoutSpotifyMatch(t *testing.
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -254,7 +254,7 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -299,7 +299,7 @@ func TestProcessMusicBatchIgnoresEmbeddedArtworkWithoutSpotifyMatch(t *testing.T
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -386,7 +386,7 @@ func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -452,7 +452,7 @@ func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -522,7 +522,7 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		Size: 5,
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -558,7 +558,7 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 		Ext:  "m4a",
 		Size: 5,
 	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -635,7 +635,7 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 		Ext:  "m4a",
 		Size: 5,
 	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -776,7 +776,7 @@ func TestProcessMusicBatchPersistsSpotifyUnmatchedDetails(t *testing.T) {
 		Ext:  "m4a",
 		Size: 5,
 	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
@@ -848,7 +848,7 @@ func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
 		Ext:  "m4a",
 		Size: 5,
 	}
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{file})
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}

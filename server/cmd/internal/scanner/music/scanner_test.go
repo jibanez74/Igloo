@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -64,7 +65,7 @@ func setupMusicScanner(t testing.TB) *Scanner {
 		t.Fatalf("prepare queries: %v", err)
 	}
 	t.Cleanup(func() { queries.Close() })
-	return New(Dependencies{DB: db, Queries: queries, Logger: &capturedLogger{}})
+	return New(Dependencies{DB: db, Queries: queries, Logger: &capturedLogger{}, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }})
 }
 
 func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
@@ -87,14 +88,14 @@ func (noKeyframeProbe) KeyframeAtOrBefore(context.Context, string, int64, float6
 	return 0, errors.New("keyframe probing is not stubbed")
 }
 
-func (app *Scanner) processMusicBatchForTest(ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
+func (app *Scanner) processMusicBatchForTest(t testing.TB, ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
 		app.logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
 		return 0, 0, len(files)
 	}
 
-	return app.processMusicBatch(ctx, newMusicScanContext(scanIndex), files)
+	return app.processMusicFixtureBatch(t, ctx, newMusicScanContext(scanIndex), files)
 }
 
 func testMusicMetadata() *ffprobe.FfprobeResult {
@@ -311,4 +312,39 @@ func writeMusicScannerTestFile(t *testing.T, path, contents string) int64 {
 	}
 
 	return int64(len(contents))
+}
+
+// Metadata tests use synthetic media bytes with stubbed ffprobe responses.
+// Resize only when a fixture requests a content change; repeated calls preserve
+// timestamps so they exercise the actual unchanged-file path.
+func prepareMusicFixtures(t testing.TB, files []scanner.ScanFile) {
+	t.Helper()
+	for _, file := range files {
+		info, err := os.Stat(file.Path)
+		if err == nil && info.Size() == file.Size {
+			continue
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		err = os.MkdirAll(filepath.Dir(file.Path), 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := os.OpenFile(file.Path, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = f.Truncate(file.Size)
+		closeErr := f.Close()
+		if err != nil || closeErr != nil {
+			t.Fatal(errors.Join(err, closeErr))
+		}
+	}
+}
+
+func (s *Scanner) processMusicFixtureBatch(t testing.TB, ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (int, int, int) {
+	t.Helper()
+	prepareMusicFixtures(t, files)
+	return s.processMusicBatch(ctx, scan, files)
 }

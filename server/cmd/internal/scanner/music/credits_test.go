@@ -28,7 +28,7 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 		}),
 	})
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{
 		{Path: trackPath, Ext: "m4a", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -108,7 +108,7 @@ func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) 
 		}),
 	})
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{
 		{Path: trackPath, Ext: "m4a", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -153,7 +153,7 @@ func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T)
 		},
 	}
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{
 		{Path: trackPath, Ext: "m4a", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -205,7 +205,7 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 	})
 	app.ffprobe = ffprobeStub
 
-	scanned, skipped, errCount := app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{
 		{Path: trackPath, Ext: "m4a", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -217,7 +217,7 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 		Artist: "Solo Artist",
 	})
 
-	scanned, skipped, errCount = app.processMusicBatchForTest(context.Background(), []scanner.ScanFile{
+	scanned, skipped, errCount = app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{
 		{Path: trackPath, Ext: "m4a", Size: 8},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -245,6 +245,8 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 }
 
 func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
+	fixtureDir := t.TempDir()
+	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	ctx := context.Background()
@@ -265,8 +267,8 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 	s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadataWithTags(ffprobe.FormatTags{Title: "Track", Artist: combined})}
 	scan := newMusicScanContext(nil)
 	for i := 0; i < 3; i++ {
-		file := scanner.ScanFile{Path: fmt.Sprintf("/music/%d.m4a", i), Ext: "m4a", Size: 1}
-		scanned, _, failures := s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
+		file := scanner.ScanFile{Path: fmt.Sprintf(musicDir+fixtureDir+"/%d.m4a", i), Ext: "m4a", Size: 1}
+		scanned, _, failures := s.processMusicFixtureBatch(t, ctx, scan, []scanner.ScanFile{file})
 		if scanned != 1 || failures != 0 {
 			t.Fatalf("track %d: scanned=%d errors=%d", i, scanned, failures)
 		}
@@ -299,6 +301,7 @@ func TestArtistSuffixCredits(t *testing.T) {
 }
 
 func TestBareArtistCreditsAfterSpotifyNonMatch(t *testing.T) {
+	fixtureDir := t.TempDir()
 	for _, second := range []string{"V", "Vi"} {
 		for _, reason := range []string{"offline", "no_results", "score_below_threshold"} {
 			t.Run(second+"/"+reason, func(t *testing.T) {
@@ -308,7 +311,7 @@ func TestBareArtistCreditsAfterSpotifyNonMatch(t *testing.T) {
 				if reason != "offline" {
 					s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Lookup: "artist", Input: combined, Reason: reason}}}
 				}
-				scanTaggedTrack(t, s, newMusicScanContext(nil), "/track.m4a", 1, ffprobe.FormatTags{Title: "Track", Artist: combined})
+				scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/track.m4a", 1, ffprobe.FormatTags{Title: "Track", Artist: combined})
 				names := []string{combined}
 				if reason != "offline" {
 					names = []string{"Jungkook", second}

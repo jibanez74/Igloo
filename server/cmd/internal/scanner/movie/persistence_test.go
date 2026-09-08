@@ -32,13 +32,22 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 
 	resolved := &resolvedMovie{params: database.UpsertMovieParams{
 		Title:     "Committed Movie",
-		FilePath:  "/movies/committed.mkv",
+		FilePath:  filepath.Join(t.TempDir(), "committed.mkv"),
 		FileName:  "committed.mkv",
 		Size:      1,
 		Container: "mkv",
 		MimeType:  helpers.VideoMimeTypes["mkv"],
 	}}
-	err := testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err := os.WriteFile(resolved.params.FilePath, []byte("m"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved.inspection, err = scanner.InspectFile(context.Background(), resolved.params.FilePath, nil, testScanner.scanner.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resolved.inspection.Close()
+	err = testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err == nil {
 		t.Fatal("persist without a video stream unexpectedly succeeded")
 	}
@@ -397,6 +406,10 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	tmdbStub.detailMovies[1000] = secondDetails
+	err := os.WriteFile(path, []byte("edited"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
 	scanned, skipped, errCount = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 6},
 	})
@@ -416,7 +429,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 		RunTime       sql.NullInt64
 		Duration      sql.NullFloat64
 	}{}
-	err := testScanner.db.QueryRowContext(ctx, `
+	err = testScanner.db.QueryRowContext(ctx, `
 		SELECT id, title, tmdb_id, size, year, release_date, certification, language, run_time, duration
 		FROM movies
 		WHERE file_path = ?

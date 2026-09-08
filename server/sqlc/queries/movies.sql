@@ -45,11 +45,9 @@ FROM movies
 WHERE id IN (sqlc.slice(ids));
 
 -- name: GetMovieScanIndex :many
-SELECT
-  file_path,
-  size
-FROM movies
-ORDER BY id;
+SELECT c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM movies c
+JOIN movie_file_fingerprints f ON f.movie_id = c.id;
 
 -- name: GetLatestMovies :many
 SELECT

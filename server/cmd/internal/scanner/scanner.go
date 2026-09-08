@@ -36,27 +36,6 @@ func NormalizedScanCacheKey(parts ...string) string {
 	return strings.Join(normalized, "\x00")
 }
 
-// ScanIndexUnchanged reports whether path is present in the scan index with the
-// same size, i.e. the file does not need rescanning. Keys are compared with
-// filepath.Clean.
-func ScanIndexUnchanged(index map[string]int64, path string, size int64) bool {
-	existingSize, ok := index[filepath.Clean(path)]
-	return ok && existingSize == size
-}
-
-// BuildScanIndex builds a cleaned-path -> size index from DB rows. extract pulls
-// the (path, size) pair out of each row. The extract closure lives in the
-// caller's package, so this helper never needs to import the database package.
-func BuildScanIndex[T any](rows []T, extract func(T) (string, int64)) map[string]int64 {
-	index := make(map[string]int64, len(rows))
-	for _, row := range rows {
-		path, size := extract(row)
-		index[filepath.Clean(path)] = size
-	}
-
-	return index
-}
-
 // ScanCache is a two-level map: transaction-local entries over an optional
 // read-only base layer. The scan-lifetime cache uses just the local layer; the
 // per-item overlay created by Overlay starts empty and reads through to the

@@ -351,15 +351,19 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 }
 
 const listMusicTrackScanIndex = `-- name: ListMusicTrackScanIndex :many
-SELECT
-  file_path,
-  size
-FROM tracks
+SELECT c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM tracks c
+JOIN track_file_fingerprints f ON f.track_id = c.id
 `
 
 type ListMusicTrackScanIndexRow struct {
 	FilePath string `json:"file_path"`
 	Size     int64  `json:"size"`
+	MtimeNs  int64  `json:"mtime_ns"`
+	CtimeNs  int64  `json:"ctime_ns"`
+	Device   string `json:"device"`
+	Inode    string `json:"inode"`
+	Sha256   []byte `json:"sha256"`
 }
 
 func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error) {
@@ -371,7 +375,15 @@ func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrack
 	items := []ListMusicTrackScanIndexRow{}
 	for rows.Next() {
 		var i ListMusicTrackScanIndexRow
-		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
+		if err := rows.Scan(
+			&i.FilePath,
+			&i.Size,
+			&i.MtimeNs,
+			&i.CtimeNs,
+			&i.Device,
+			&i.Inode,
+			&i.Sha256,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

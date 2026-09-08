@@ -62,7 +62,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 		trackPath: metadata,
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(map[string]int64{}), scanner.ScanFile{
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{
 		Path: trackPath,
 		Ext:  "flac",
 		Size: 42,
@@ -138,7 +138,7 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 		},
 	})
 
-	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(map[string]int64{}), scanner.ScanFile{
+	resolved, err := app.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{
 		Path: trackPath,
 		Ext:  "mp3",
 		Size: 7,
@@ -169,6 +169,7 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 }
 
 func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
+	musicDir := t.TempDir()
 	for _, streams := range [][]ffprobe.Stream{nil, {{CodecType: "video", CodecName: "mjpeg"}}, {{CodecType: "subtitle"}}} {
 		t.Run(fmt.Sprint(streams), func(t *testing.T) {
 			s := setupMusicScanner(t)
@@ -178,7 +179,7 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 			s.ffprobe = &countingMusicScannerFfprobe{result: metadata}
 			spotify := &musicScannerSpotifyStub{}
 			s.spotify = spotify
-			scanned, _, failures := s.processMusicBatch(context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: "/music/no-audio.m4a", Ext: "m4a", Size: 1}})
+			scanned, _, failures := s.processMusicFixtureBatch(t, context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: musicDir + "/no-audio.m4a", Ext: "m4a", Size: 1}})
 			if scanned != 0 || failures != 1 || spotify.artistCalls != 0 || spotify.albumCalls != 0 {
 				t.Fatalf("scanned=%d errors=%d Spotify=%+v", scanned, failures, spotify)
 			}
@@ -189,7 +190,7 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 				}
 			}
 			logs := s.logger.(*capturedLogger)
-			if len(logs.warnEntries) != 1 || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), "/music/no-audio.m4a") || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), "no audio stream") {
+			if len(logs.warnEntries) != 1 || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), musicDir+"/no-audio.m4a") || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), "no audio stream") {
 				t.Fatalf("failure logs: %+v", logs.warnEntries)
 			}
 		})
@@ -197,18 +198,25 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 }
 
 func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
+	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	metadata := testMusicMetadata()
 	metadata.Streams = []ffprobe.Stream{{CodecType: "video", CodecName: "mjpeg"}, {CodecType: "audio", CodecName: "aac", Channels: 2}, {CodecType: "audio", CodecName: "mp3", Channels: 1}}
 	s.ffprobe = &countingMusicScannerFfprobe{result: metadata}
-	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: "/music/art.m4a", Ext: "m4a", Size: 1})
+	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if resolved.params.Codec != "aac" || resolved.params.Channels != "2" {
 		t.Fatalf("audio selection: %+v", resolved.params)
 	}
+	prepareMusicFixtures(t, []scanner.ScanFile{{Path: resolved.params.FilePath, Size: resolved.params.Size}})
+	resolved.inspection, err = scanner.InspectFile(context.Background(), resolved.params.FilePath, nil, s.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resolved.inspection.Close()
 	_, err = s.persistResolvedTrack(context.Background(), newMusicScanContext(nil), resolved)
 	if err != nil {
 		t.Fatal(err)

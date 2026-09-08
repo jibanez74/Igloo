@@ -95,6 +95,11 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 		t.Fatalf("resolve movie with bare dependencies: %v", err)
 	}
 
+	resolved.inspection, err = scanner.InspectFile(context.Background(), path, nil, testScanner.scanner.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resolved.inspection.Close()
 	err = bare.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err != nil {
 		t.Fatalf("persist movie with bare dependencies: %v", err)
@@ -119,7 +124,12 @@ func TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe(t *testing.T) {
 	ffprobeStub := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 	testScanner.scanner.ffprobe = ffprobeStub
 
-	scan := newMovieScanContext(map[string]int64{path: 5})
+	scan := newMovieScanContext(nil)
+	first, _, failures := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv", Size: 5}})
+	if first != 1 || failures != 0 {
+		t.Fatal("initial import failed")
+	}
+	ffprobeStub.calls = 0
 	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})

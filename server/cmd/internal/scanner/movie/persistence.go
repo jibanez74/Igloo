@@ -13,6 +13,9 @@ import (
 )
 
 func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanContext, resolved *resolvedMovie) error {
+	if resolved.inspection == nil {
+		return fmt.Errorf("missing file inspection")
+	}
 	txScan := scan.clone()
 
 	s.scannerDBMu.Lock()
@@ -30,6 +33,25 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		return err
 	}
 
+	// Content changes invalidate persisted playback work in the same transaction.
+	err = qtx.DeleteMovieRemuxSafetyVerdicts(ctx, movieID)
+	if err != nil {
+		return err
+	}
+	err = qtx.DeleteMovieKeyframeIndexes(ctx, movieID)
+	if err != nil {
+		return err
+	}
+
+	err = storeMovieFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
+	if err != nil {
+		return err
+	}
+	err = resolved.inspection.Validate(ctx)
+	if err != nil {
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("failed to commit movie: %w", err)
@@ -43,7 +65,8 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
 	// failed is never recorded as scanned/unchanged.
-	scan.movieIndex[filepath.Clean(resolved.params.FilePath)] = resolved.params.Size
+	scan.movieIndex[filepath.Clean(resolved.params.FilePath)] = resolved.inspection.Fingerprint
+
 	scan.mergeFrom(txScan)
 
 	return nil

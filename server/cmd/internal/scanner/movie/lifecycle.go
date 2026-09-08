@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 )
@@ -76,11 +76,6 @@ func (s *Scanner) runMovieScan() {
 			errorCount++
 		},
 		func(file scanner.ScanFile) error {
-			if scan.movieUnchanged(file.Path, file.Size) {
-				moviesSkipped++
-				return nil
-			}
-
 			batch = append(batch, file)
 
 			if len(batch) >= scanner.BatchSize {
@@ -101,53 +96,94 @@ func (s *Scanner) runMovieScan() {
 	}
 
 	flushBatch()
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		s.logger.Info("movie library scan interrupted")
+		return
+	}
 
-	s.logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s",
-		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
+	s.logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s; %d deferred",
+		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.deferred))
 }
 
 func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
-		if ctx.Err() != nil {
+		outcome, err := s.processFile(ctx, scan, file)
+		contextErr := ctx.Err()
+		if contextErr != nil {
 			return scanned, skipped, errCount
 		}
-
-		// runMovieScan's walk already filters unchanged files before batching,
-		// so this never fires on that path. It is what makes the function
-		// correct when called on its own, and it is covered by
-		// TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe.
-		if scan.movieUnchanged(file.Path, file.Size) {
-			skipped++
-			continue
-		}
-
-		resolved, err := s.resolveMovieFile(ctx, file)
-		if err != nil {
-			s.logger.Error(fmt.Sprintf("failed to process %s: %s", file.Path, err.Error()))
+		var deferred *scanner.FileDeferral
+		isDeferred := errors.As(err, &deferred)
+		if isDeferred {
+			scan.deferred++
+			s.logger.Debug("deferred movie", "path", file.Path, "reason", deferred.Reason, "eligible_at", deferred.EligibleAt)
+		} else if err != nil {
+			s.logger.Warn("failed to process movie", "path", file.Path, "error", err)
 			errCount++
-			continue
+		} else {
+			switch outcome {
+			case scanner.FileDeferred:
+				scan.deferred++
+			case scanner.FileUnchanged, scanner.FileFingerprintOnly:
+				skipped++
+			case scanner.FileNeedsProcessing:
+				scanned++
+			}
 		}
-
-		err = s.persistResolvedMovie(ctx, scan, resolved)
-		if err != nil {
-			s.logger.Error(fmt.Sprintf("failed to process %s: %s", file.Path, err.Error()))
-			errCount++
-			continue
-		}
-
-		scanned++
 	}
-
 	return scanned, skipped, errCount
 }
 
-func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]int64, error) {
+func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file scanner.ScanFile) (outcome scanner.FileOutcome, err error) {
+	file.Path = filepath.Clean(file.Path)
+	var previous *scanner.FileFingerprint
+	baseline, exists := scan.movieIndex[file.Path]
+	if exists {
+		previous = &baseline
+	}
+	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now)
+	if err != nil {
+		return outcome, err
+	}
+	defer func() { err = errors.Join(err, inspection.Close()) }()
+	outcome = inspection.Outcome
+	if outcome == scanner.FileDeferred {
+		s.logger.Debug("deferred movie", "path", file.Path, "reason", inspection.Reason, "eligible_at", inspection.EligibleAt)
+		return outcome, nil
+	}
+	if outcome == scanner.FileUnchanged {
+		return outcome, nil
+	}
+	if outcome == scanner.FileFingerprintOnly {
+		err = s.persistFingerprint(ctx, scan, file.Path, inspection)
+		return outcome, err
+	}
+	file.Size = inspection.Fingerprint.Size
+	resolved, resolveErr := s.resolveMovieFile(ctx, file)
+	err = inspection.Validate(ctx)
+	if err != nil {
+		return outcome, err
+	}
+	if resolveErr != nil {
+		return outcome, resolveErr
+	}
+	resolved.inspection = inspection
+	err = s.persistResolvedMovie(ctx, scan, resolved)
+	return outcome, err
+}
+
+func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, error) {
 	rows, err := s.queries.GetMovieScanIndex(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	return scanner.BuildScanIndex(rows, func(row database.GetMovieScanIndexRow) (string, int64) {
-		return row.FilePath, row.Size
-	}), nil
+	index := make(map[string]scanner.FileFingerprint, len(rows))
+	for _, row := range rows {
+		index[filepath.Clean(row.FilePath)] = scanner.FileFingerprint{
+			Size: row.Size, MtimeNS: row.MtimeNs, CtimeNS: row.CtimeNs,
+			Device: row.Device, Inode: row.Inode, SHA256: [32]byte(row.Sha256),
+		}
+	}
+	return index, nil
 }

@@ -12,6 +12,7 @@ import (
 // Each iteration scans 120 changed files against real SQLite. Setup is excluded;
 // database writes, resolution, and transaction cache publication are measured.
 func BenchmarkMusicScan(b *testing.B) {
+	musicDir := b.TempDir()
 	for _, distinct := range []bool{false, true} {
 		name := "RepeatedAlbum"
 		if distinct {
@@ -23,7 +24,7 @@ func BenchmarkMusicScan(b *testing.B) {
 			results := make(map[string]*ffprobe.FfprobeResult)
 			files := make([]scanner.ScanFile, 120)
 			for i := range files {
-				path := fmt.Sprintf("/music/%d.m4a", i)
+				path := fmt.Sprintf(musicDir+"/%d.m4a", i)
 				tags := ffprobe.FormatTags{Title: fmt.Sprintf("Track %d", i), Artist: "Artist", Album: "Album", Genre: "Rock"}
 				if distinct {
 					tags.Artist = fmt.Sprintf("Artist %d", i)
@@ -40,7 +41,7 @@ func BenchmarkMusicScan(b *testing.B) {
 				for i := range files {
 					files[i].Size = int64(n + 1)
 				}
-				scanned, _, failures := s.processMusicBatch(context.Background(), newMusicScanContext(nil), files)
+				scanned, _, failures := s.processMusicFixtureBatch(b, context.Background(), newMusicScanContext(nil), files)
 				if scanned != len(files) || failures != 0 {
 					b.Fatalf("scanned=%d failures=%d", scanned, failures)
 				}

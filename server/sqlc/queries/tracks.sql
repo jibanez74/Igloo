@@ -15,10 +15,9 @@ SELECT
   );
 
 -- name: ListMusicTrackScanIndex :many
-SELECT
-  file_path,
-  size
-FROM tracks;
+SELECT c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM tracks c
+JOIN track_file_fingerprints f ON f.track_id = c.id;
 
 -- name: UpsertTrack :one
 INSERT INTO tracks (

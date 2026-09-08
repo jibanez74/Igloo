@@ -444,6 +444,7 @@ func (s *cancelingMusicSpotify) SearchAndGetAlbumDetails(context.Context, string
 }
 
 func TestShutdownDuringSpotifyResolution(t *testing.T) {
+	musicDir := t.TempDir()
 	for _, phase := range []string{"artist", "album"} {
 		t.Run(phase, func(t *testing.T) {
 			s := setupMusicScanner(t)
@@ -454,7 +455,7 @@ func TestShutdownDuringSpotifyResolution(t *testing.T) {
 			s.spotify = spotify
 			s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
 			scan := newMusicScanContext(nil)
-			scanned, _, failures := s.processMusicBatch(ctx, scan, []scanner.ScanFile{{Path: "/music/cancel.m4a", Ext: "m4a", Size: 1}, {Path: "/music/later.m4a", Ext: "m4a", Size: 1}})
+			scanned, _, failures := s.processMusicFixtureBatch(t, ctx, scan, []scanner.ScanFile{{Path: musicDir + "/cancel.m4a", Ext: "m4a", Size: 1}, {Path: musicDir + "/later.m4a", Ext: "m4a", Size: 1}})
 			if scanned != 0 || failures != 0 || spotify.artistCalls != 1 {
 				t.Fatalf("scanned=%d errors=%d Spotify=%+v", scanned, failures, spotify)
 			}
@@ -503,6 +504,7 @@ func TestShutdownWaitingForPersistence(t *testing.T) {
 }
 
 func TestShutdownDuringTrackTransaction(t *testing.T) {
+	musicDir := t.TempDir()
 	// A file database survives database/sql discarding a canceled connection.
 	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
 	if err != nil {
@@ -537,9 +539,9 @@ func TestShutdownDuringTrackTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidations := 0
-	s := New(Dependencies{DB: db, Queries: queries, Logger: &capturedLogger{}, Ffprobe: &countingMusicScannerFfprobe{result: testMusicMetadata()}, InvalidateCommittedTrack: func(int64) { invalidations++ }})
+	s := New(Dependencies{Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, DB: db, Queries: queries, Logger: &capturedLogger{}, Ffprobe: &countingMusicScannerFfprobe{result: testMusicMetadata()}, InvalidateCommittedTrack: func(int64) { invalidations++ }})
 	scan := newMusicScanContext(nil)
-	scanned, _, failures := s.processMusicBatch(ctx, scan, []scanner.ScanFile{{Path: "/music/interrupt.m4a", Ext: "m4a", Size: 1}})
+	scanned, _, failures := s.processMusicFixtureBatch(t, ctx, scan, []scanner.ScanFile{{Path: musicDir + "/interrupt.m4a", Ext: "m4a", Size: 1}})
 	if scanned != 0 || failures != 0 || invalidations != 0 {
 		t.Fatalf("scanned=%d failures=%d invalidations=%d", scanned, failures, invalidations)
 	}

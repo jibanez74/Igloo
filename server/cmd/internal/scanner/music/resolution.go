@@ -17,6 +17,7 @@ import (
 )
 
 type resolvedTrack struct {
+	inspection *scanner.FileInspection
 	params     database.UpsertTrackParams
 	musicians  []resolvedMusician
 	album      *resolvedAlbum

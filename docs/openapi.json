@@ -3236,7 +3236,7 @@
           "Settings"
         ],
         "summary": "Trigger a music library scan",
-        "description": "Admin-only endpoint. The scan runs asynchronously. Music files are selected by catalog path and size. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes reconcile local artist, album, and genre relationships. No forced refresh or missing-file cleanup is performed.",
+        "description": "Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes reconcile local artist, album, and genre relationships. No forced refresh or missing-file cleanup is performed.",
         "operationId": "triggerMusicScan",
         "responses": {
           "200": {
@@ -3263,7 +3263,7 @@
           "Settings"
         ],
         "summary": "Trigger a movie library scan",
-        "description": "Admin-only endpoint. The scan runs asynchronously.",
+        "description": "Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint, preserving catalog metadata and playback caches. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. Metadata and fingerprints commit atomically per movie. No forced refresh or missing-file cleanup is performed.",
         "operationId": "triggerMovieScan",
         "responses": {
           "200": {

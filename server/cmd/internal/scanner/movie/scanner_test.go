@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -72,6 +73,7 @@ func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 
 	ctx := &movieScannerTestContext{db: db, queries: queries}
 	ctx.scanner = New(Dependencies{
+		Now:         func() time.Time { return time.Now().Add(2 * time.Minute) },
 		DB:          db,
 		Queries:     queries,
 		Logger:      &capturedLogger{},

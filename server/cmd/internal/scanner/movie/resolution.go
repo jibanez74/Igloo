@@ -18,11 +18,12 @@ import (
 )
 
 type movieScanContext struct {
-	// movieIndex maps cleaned file path -> file size for every movie already in
+	deferred int
+	// movieIndex maps cleaned file path -> successful fingerprint for every movie already in
 	// the DB. It is read to skip unchanged files and is only written after a
 	// successful commit, never inside a transaction, so it is shared (not copied)
 	// across per-movie transactions.
-	movieIndex map[string]int64
+	movieIndex map[string]scanner.FileFingerprint
 	// genreIDs memoizes genre tag -> id within a scan. It is written inside the
 	// per-movie transaction (getOrCreateMovieGenreID), so the clone overlay
 	// isolates it until commit to avoid caching ids from a rolled-back
@@ -36,9 +37,9 @@ type movieScanContext struct {
 	artistIDs scanner.ScanCache[int64, int64]
 }
 
-func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
+func newMovieScanContext(movieIndex map[string]scanner.FileFingerprint) *movieScanContext {
 	if movieIndex == nil {
-		movieIndex = make(map[string]int64)
+		movieIndex = make(map[string]scanner.FileFingerprint)
 	}
 
 	// Take ownership of movieIndex: loadMovieScanIndex already cleaned its keys
@@ -63,19 +64,16 @@ func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
 	scan.artistIDs.MergeFrom(other.artistIDs)
 }
 
-func (scan *movieScanContext) movieUnchanged(path string, size int64) bool {
-	return scanner.ScanIndexUnchanged(scan.movieIndex, path, size)
-}
-
 // ---------------------------------------------------------------------------
 // Movie resolution (file name -> ffprobe + TMDB metadata)
 // ---------------------------------------------------------------------------
 
 type resolvedMovie struct {
-	params    database.UpsertMovieParams
-	tmdbMovie *tmdb.TmdbMovie
-	streams   []ffprobe.Stream
-	chapters  []ffprobe.Chapter
+	inspection *scanner.FileInspection
+	params     database.UpsertMovieParams
+	tmdbMovie  *tmdb.TmdbMovie
+	streams    []ffprobe.Stream
+	chapters   []ffprobe.Chapter
 }
 
 func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (*resolvedMovie, error) {

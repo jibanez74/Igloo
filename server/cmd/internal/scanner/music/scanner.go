@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"sync"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -15,6 +16,8 @@ import (
 // Dependencies are the application services used by Scanner. DB, Queries,
 // Logger and Ffprobe are required. Spotify and shutdown tracking are optional.
 type Dependencies struct {
+	// Now controls quiet-period eligibility and defaults to time.Now.
+	Now                      func() time.Time
 	DB                       *sql.DB
 	Queries                  *database.Queries
 	Logger                   logger.LoggerInterface
@@ -29,6 +32,7 @@ type Dependencies struct {
 
 // Scanner scans and persists the configured music library.
 type Scanner struct {
+	now                      func() time.Time
 	db                       *sql.DB
 	queries                  *database.Queries
 	logger                   logger.LoggerInterface
@@ -59,6 +63,9 @@ type StartResult struct {
 
 // New constructs a scanner and defaults optional lifecycle and cache callbacks.
 func New(deps Dependencies) *Scanner {
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
 	if deps.ScanContext == nil {
 		deps.ScanContext = context.Background()
 	}
@@ -75,7 +82,8 @@ func New(deps Dependencies) *Scanner {
 		deps.InvalidateCommittedTrack = func(int64) {}
 	}
 	return &Scanner{
-		db: deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
+		now: deps.Now,
+		db:  deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		spotify: deps.Spotify, scanContext: deps.ScanContext, wait: deps.Wait,
 		scannerDBMu: deps.ScannerDBMu, currentMusicDirectory: deps.CurrentMusicDirectory,
 		invalidateCommittedTrack: deps.InvalidateCommittedTrack,

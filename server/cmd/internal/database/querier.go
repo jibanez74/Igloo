@@ -64,8 +64,10 @@ type Querier interface {
 	DeleteMovieExtraVideos(ctx context.Context, movieID int64) error
 	// Remove all genre links for a movie
 	DeleteMovieGenres(ctx context.Context, movieID int64) error
+	DeleteMovieKeyframeIndexes(ctx context.Context, movieID int64) error
 	// Remove all production company links for a movie
 	DeleteMovieProductionCompanies(ctx context.Context, movieID int64) error
+	DeleteMovieRemuxSafetyVerdicts(ctx context.Context, movieID int64) error
 	// Delete all subtitles for a movie
 	DeleteMovieSubtitles(ctx context.Context, movieID int64) error
 	// Delete all video streams for a movie
@@ -375,6 +377,7 @@ type Querier interface {
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (ExtraVideo, error)
 	UpsertKeyframeIndex(ctx context.Context, arg UpsertKeyframeIndexParams) error
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error)
+	UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovieFileFingerprintParams) (int64, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
@@ -383,6 +386,7 @@ type Querier interface {
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (ProductionCompany, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
+	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error
 	UserExists(ctx context.Context, id int64) (bool, error)
