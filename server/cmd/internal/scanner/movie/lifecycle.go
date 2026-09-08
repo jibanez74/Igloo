@@ -113,8 +113,13 @@ func (s *Scanner) runMovieScan(directory string) {
 		return
 	}
 
-	s.logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s; %d deferred",
-		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.deferred))
+	pending, err := s.queries.CountMovieTmdbRetries(ctx)
+	if err != nil {
+		s.logger.Error("failed to count movie enrichment retries", "error", err)
+		return
+	}
+	s.logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s; %d deferred; %d enriched, %d pending TMDB",
+		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.deferred, scan.enriched, pending))
 }
 
 func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
@@ -150,8 +155,8 @@ func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file 
 	file.Path = filepath.Clean(file.Path)
 	var previous *scanner.FileFingerprint
 	baseline, exists := scan.movieIndex[file.Path]
-	if exists {
-		previous = &baseline
+	if exists && baseline.HasFingerprint {
+		previous = &baseline.FileFingerprint
 	}
 	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now)
 	if err != nil {
@@ -163,16 +168,21 @@ func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file 
 		s.logger.Debug("deferred movie", "path", file.Path, "reason", inspection.Reason, "eligible_at", inspection.EligibleAt)
 		return outcome, nil
 	}
-	if outcome == scanner.FileUnchanged {
-		return outcome, nil
-	}
-	if outcome == scanner.FileFingerprintOnly {
-		err = s.persistFingerprint(ctx, scan, file.Path, inspection)
+	metadataOnly := outcome == scanner.FileUnchanged || outcome == scanner.FileFingerprintOnly
+	retry := !baseline.TmdbID.Valid || baseline.PendingRetry
+	attempt := !scan.attempted[file.Path] && (!metadataOnly || retry)
+	if metadataOnly && !attempt {
+		if outcome == scanner.FileFingerprintOnly {
+			err = s.persistFingerprint(ctx, scan, file.Path, inspection)
+		}
 		return outcome, err
 	}
+	if attempt {
+		scan.attempted[file.Path] = true
+	}
 	file.Size = inspection.Fingerprint.Size
-	resolved, resolveErr := s.resolveMovieFile(ctx, file)
-	err = inspection.Validate(ctx)
+	resolved, resolveErr := s.resolveMovie(ctx, file, attempt, metadataOnly)
+	err = validateMovieInspection(ctx, file.Path, inspection)
 	if err != nil {
 		return outcome, err
 	}
@@ -184,21 +194,21 @@ func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file 
 	return outcome, err
 }
 
-func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
+func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]movieScanEntry, []scanner.CatalogFile, error) {
 	rows, err := s.queries.GetMovieScanIndex(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	index := make(map[string]scanner.FileFingerprint, len(rows))
+	index := make(map[string]movieScanEntry, len(rows))
 	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
 		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
-		if !row.MtimeNs.Valid {
-			continue
-		}
-		index[filepath.Clean(row.FilePath)] = scanner.FileFingerprint{
-			Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
-			Device: row.Device.String, Inode: row.Inode.String, SHA256: [32]byte(row.Sha256),
+		var digest [32]byte
+		copy(digest[:], row.Sha256)
+		index[filepath.Clean(row.FilePath)] = movieScanEntry{
+			FileFingerprint: scanner.FileFingerprint{Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
+				Device: row.Device.String, Inode: row.Inode.String, SHA256: digest},
+			ID: row.ID, FilePath: row.FilePath, TmdbID: row.TmdbID, PendingRetry: row.PendingRetry, HasFingerprint: row.MtimeNs.Valid,
 		}
 	}
 	return index, files, nil

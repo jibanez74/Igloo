@@ -138,7 +138,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if countScannerRows(t, s.db, "SELECT count(*) FROM movie_file_fingerprints") != 0 {
 		t.Fatal("fingerprint foreign key did not cascade")
 	}
-	err = storeMovieFingerprint(ctx, s.queries, path, baseline)
+	err = storeMovieFingerprint(ctx, s.queries, path, baseline.FileFingerprint)
 	missing := errors.Is(err, sql.ErrNoRows)
 	if !missing {
 		t.Fatalf("missing catalog accepted a fingerprint: %v", err)

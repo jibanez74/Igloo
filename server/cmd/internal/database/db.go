@@ -39,8 +39,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.adminUpdateUserStmt, err = db.PrepareContext(ctx, adminUpdateUser); err != nil {
 		return nil, fmt.Errorf("error preparing query AdminUpdateUser: %w", err)
 	}
+	if q.clearMovieTmdbRetryStmt, err = db.PrepareContext(ctx, clearMovieTmdbRetry); err != nil {
+		return nil, fmt.Errorf("error preparing query ClearMovieTmdbRetry: %w", err)
+	}
 	if q.countAdminsStmt, err = db.PrepareContext(ctx, countAdmins); err != nil {
 		return nil, fmt.Errorf("error preparing query CountAdmins: %w", err)
+	}
+	if q.countMovieTmdbRetriesStmt, err = db.PrepareContext(ctx, countMovieTmdbRetries); err != nil {
+		return nil, fmt.Errorf("error preparing query CountMovieTmdbRetries: %w", err)
 	}
 	if q.countMoviesForGenreStmt, err = db.PrepareContext(ctx, countMoviesForGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CountMoviesForGenre: %w", err)
@@ -294,6 +300,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMovieByIDStmt, err = db.PrepareContext(ctx, getMovieByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieByID: %w", err)
 	}
+	if q.getMovieByPathStmt, err = db.PrepareContext(ctx, getMovieByPath); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMovieByPath: %w", err)
+	}
 	if q.getMovieExtraVideosStmt, err = db.PrepareContext(ctx, getMovieExtraVideos); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieExtraVideos: %w", err)
 	}
@@ -468,6 +477,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getWatchRoomsForUserStmt, err = db.PrepareContext(ctx, getWatchRoomsForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomsForUser: %w", err)
 	}
+	if q.hasMovieTmdbRetryStmt, err = db.PrepareContext(ctx, hasMovieTmdbRetry); err != nil {
+		return nil, fmt.Errorf("error preparing query HasMovieTmdbRetry: %w", err)
+	}
 	if q.insertAudioStreamStmt, err = db.PrepareContext(ctx, insertAudioStream); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertAudioStream: %w", err)
 	}
@@ -503,6 +515,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.markAllNotificationsReadForUserStmt, err = db.PrepareContext(ctx, markAllNotificationsReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkAllNotificationsReadForUser: %w", err)
+	}
+	if q.markMovieTmdbRetryStmt, err = db.PrepareContext(ctx, markMovieTmdbRetry); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkMovieTmdbRetry: %w", err)
 	}
 	if q.markMovieUnwatchedStmt, err = db.PrepareContext(ctx, markMovieUnwatched); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkMovieUnwatched: %w", err)
@@ -654,6 +669,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateMoviePlaylistStmt, err = db.PrepareContext(ctx, updateMoviePlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMoviePlaylist: %w", err)
 	}
+	if q.updateMovieTmdbMetadataStmt, err = db.PrepareContext(ctx, updateMovieTmdbMetadata); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateMovieTmdbMetadata: %w", err)
+	}
 	if q.updateMusicAlbumEnrichmentStmt, err = db.PrepareContext(ctx, updateMusicAlbumEnrichment); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMusicAlbumEnrichment: %w", err)
 	}
@@ -780,9 +798,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing adminUpdateUserStmt: %w", cerr)
 		}
 	}
+	if q.clearMovieTmdbRetryStmt != nil {
+		if cerr := q.clearMovieTmdbRetryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing clearMovieTmdbRetryStmt: %w", cerr)
+		}
+	}
 	if q.countAdminsStmt != nil {
 		if cerr := q.countAdminsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countAdminsStmt: %w", cerr)
+		}
+	}
+	if q.countMovieTmdbRetriesStmt != nil {
+		if cerr := q.countMovieTmdbRetriesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countMovieTmdbRetriesStmt: %w", cerr)
 		}
 	}
 	if q.countMoviesForGenreStmt != nil {
@@ -1205,6 +1233,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMovieByIDStmt: %w", cerr)
 		}
 	}
+	if q.getMovieByPathStmt != nil {
+		if cerr := q.getMovieByPathStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMovieByPathStmt: %w", cerr)
+		}
+	}
 	if q.getMovieExtraVideosStmt != nil {
 		if cerr := q.getMovieExtraVideosStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMovieExtraVideosStmt: %w", cerr)
@@ -1495,6 +1528,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getWatchRoomsForUserStmt: %w", cerr)
 		}
 	}
+	if q.hasMovieTmdbRetryStmt != nil {
+		if cerr := q.hasMovieTmdbRetryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing hasMovieTmdbRetryStmt: %w", cerr)
+		}
+	}
 	if q.insertAudioStreamStmt != nil {
 		if cerr := q.insertAudioStreamStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing insertAudioStreamStmt: %w", cerr)
@@ -1553,6 +1591,11 @@ func (q *Queries) Close() error {
 	if q.markAllNotificationsReadForUserStmt != nil {
 		if cerr := q.markAllNotificationsReadForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markAllNotificationsReadForUserStmt: %w", cerr)
+		}
+	}
+	if q.markMovieTmdbRetryStmt != nil {
+		if cerr := q.markMovieTmdbRetryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markMovieTmdbRetryStmt: %w", cerr)
 		}
 	}
 	if q.markMovieUnwatchedStmt != nil {
@@ -1805,6 +1848,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateMoviePlaylistStmt: %w", cerr)
 		}
 	}
+	if q.updateMovieTmdbMetadataStmt != nil {
+		if cerr := q.updateMovieTmdbMetadataStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateMovieTmdbMetadataStmt: %w", cerr)
+		}
+	}
 	if q.updateMusicAlbumEnrichmentStmt != nil {
 		if cerr := q.updateMusicAlbumEnrichmentStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateMusicAlbumEnrichmentStmt: %w", cerr)
@@ -2009,7 +2057,9 @@ type Queries struct {
 	addTrackToPlaylistStmt                      *sql.Stmt
 	addWatchRoomMemberStmt                      *sql.Stmt
 	adminUpdateUserStmt                         *sql.Stmt
+	clearMovieTmdbRetryStmt                     *sql.Stmt
 	countAdminsStmt                             *sql.Stmt
+	countMovieTmdbRetriesStmt                   *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
@@ -2094,6 +2144,7 @@ type Queries struct {
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
 	getLikedTracksForUserStmt                   *sql.Stmt
 	getMovieByIDStmt                            *sql.Stmt
+	getMovieByPathStmt                          *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
 	getMovieForDirectStreamStmt                 *sql.Stmt
 	getMovieGenresWithCountsStmt                *sql.Stmt
@@ -2152,6 +2203,7 @@ type Queries struct {
 	getWatchRoomMembersStmt                     *sql.Stmt
 	getWatchRoomMembersByRoomIDsStmt            *sql.Stmt
 	getWatchRoomsForUserStmt                    *sql.Stmt
+	hasMovieTmdbRetryStmt                       *sql.Stmt
 	insertAudioStreamStmt                       *sql.Stmt
 	insertChapterStmt                           *sql.Stmt
 	insertSubtitleStmt                          *sql.Stmt
@@ -2164,6 +2216,7 @@ type Queries struct {
 	listNotificationsForUserStmt                *sql.Stmt
 	listWatchRoomIDsByMovieIDStmt               *sql.Stmt
 	markAllNotificationsReadForUserStmt         *sql.Stmt
+	markMovieTmdbRetryStmt                      *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
 	markMovieWatchedStmt                        *sql.Stmt
 	markMovieWatchedFromProgressStmt            *sql.Stmt
@@ -2214,6 +2267,7 @@ type Queries struct {
 	updateLibrarySettingsStmt                   *sql.Stmt
 	updateMovieStmt                             *sql.Stmt
 	updateMoviePlaylistStmt                     *sql.Stmt
+	updateMovieTmdbMetadataStmt                 *sql.Stmt
 	updateMusicAlbumEnrichmentStmt              *sql.Stmt
 	updateMusicArtistEnrichmentStmt             *sql.Stmt
 	updateMusicTrackPrimaryArtistStmt           *sql.Stmt
@@ -2257,7 +2311,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addTrackToPlaylistStmt:                      q.addTrackToPlaylistStmt,
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
+		clearMovieTmdbRetryStmt:                     q.clearMovieTmdbRetryStmt,
 		countAdminsStmt:                             q.countAdminsStmt,
+		countMovieTmdbRetriesStmt:                   q.countMovieTmdbRetriesStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
@@ -2342,6 +2398,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
 		getLikedTracksForUserStmt:                   q.getLikedTracksForUserStmt,
 		getMovieByIDStmt:                            q.getMovieByIDStmt,
+		getMovieByPathStmt:                          q.getMovieByPathStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
 		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
 		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,
@@ -2400,6 +2457,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getWatchRoomMembersStmt:                     q.getWatchRoomMembersStmt,
 		getWatchRoomMembersByRoomIDsStmt:            q.getWatchRoomMembersByRoomIDsStmt,
 		getWatchRoomsForUserStmt:                    q.getWatchRoomsForUserStmt,
+		hasMovieTmdbRetryStmt:                       q.hasMovieTmdbRetryStmt,
 		insertAudioStreamStmt:                       q.insertAudioStreamStmt,
 		insertChapterStmt:                           q.insertChapterStmt,
 		insertSubtitleStmt:                          q.insertSubtitleStmt,
@@ -2412,6 +2470,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listNotificationsForUserStmt:                q.listNotificationsForUserStmt,
 		listWatchRoomIDsByMovieIDStmt:               q.listWatchRoomIDsByMovieIDStmt,
 		markAllNotificationsReadForUserStmt:         q.markAllNotificationsReadForUserStmt,
+		markMovieTmdbRetryStmt:                      q.markMovieTmdbRetryStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
 		markMovieWatchedFromProgressStmt:            q.markMovieWatchedFromProgressStmt,
@@ -2462,6 +2521,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateLibrarySettingsStmt:                   q.updateLibrarySettingsStmt,
 		updateMovieStmt:                             q.updateMovieStmt,
 		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,
+		updateMovieTmdbMetadataStmt:                 q.updateMovieTmdbMetadataStmt,
 		updateMusicAlbumEnrichmentStmt:              q.updateMusicAlbumEnrichmentStmt,
 		updateMusicArtistEnrichmentStmt:             q.updateMusicArtistEnrichmentStmt,
 		updateMusicTrackPrimaryArtistStmt:           q.updateMusicTrackPrimaryArtistStmt,

@@ -445,8 +445,8 @@ func TestSearchMoviesByTitleAndYear_NoResultsReturnsError(t *testing.T) {
 	defer server.Close()
 
 	_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "No Results")
-	if err == nil {
-		t.Fatal("expected empty results to return error")
+	if !errors.Is(err, ErrNoMoviesFound) {
+		t.Fatalf("expected ErrNoMoviesFound, got %v", err)
 	}
 }
 

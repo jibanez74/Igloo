@@ -1281,6 +1281,11 @@ CREATE TABLE IF NOT EXISTS track_file_fingerprints (
   sha256 BLOB NOT NULL CHECK (typeof(sha256) = 'blob' AND length(sha256) = 32)
 );
 
+-- Pending descriptive enrichment; technical media data remains usable.
+CREATE TABLE IF NOT EXISTS movie_tmdb_retries (
+  movie_id INTEGER PRIMARY KEY NOT NULL REFERENCES movies(id) ON DELETE CASCADE
+);
+
 -- Successful scanner baselines; size remains on the catalog row.
 CREATE TABLE IF NOT EXISTS movie_file_fingerprints (
   movie_id INTEGER PRIMARY KEY NOT NULL REFERENCES movies(id) ON DELETE CASCADE,

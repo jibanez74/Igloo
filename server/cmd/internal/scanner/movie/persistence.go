@@ -2,6 +2,8 @@ package movie
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -33,25 +35,42 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		return err
 	}
 
-	// Content changes invalidate persisted playback work in the same transaction.
-	err = qtx.DeleteMovieRemuxSafetyVerdicts(ctx, movieID)
-	if err != nil {
-		return err
+	if movieID == 0 {
+		return nil
 	}
-	err = qtx.DeleteMovieKeyframeIndexes(ctx, movieID)
-	if err != nil {
-		return err
+	if !resolved.metadataOnly {
+		// Content changes invalidate persisted playback work in the same transaction.
+		err = qtx.DeleteMovieRemuxSafetyVerdicts(ctx, movieID)
+		if err != nil {
+			return err
+		}
+		err = qtx.DeleteMovieKeyframeIndexes(ctx, movieID)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = storeMovieFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
 	if err != nil {
 		return err
 	}
-	err = resolved.inspection.Validate(ctx)
+	err = validateMovieInspection(ctx, resolved.params.FilePath, resolved.inspection)
 	if err != nil {
 		return err
 	}
 
+	committed, err := qtx.GetMovieByID(ctx, movieID)
+	if err != nil {
+		return err
+	}
+	pending, err := qtx.HasMovieTmdbRetry(ctx, movieID)
+	if err != nil {
+		return err
+	}
+	err = ctx.Err()
+	if err != nil {
+		return err
+	}
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("failed to commit movie: %w", err)
@@ -60,12 +79,20 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 	// Both caches describe the committed row, so they are dropped here rather
 	// than inside the transaction: evicting earlier lets a concurrent reader
 	// republish the pre-rescan file path after the new one commits.
-	s.invalidateCommittedMovie(movieID)
+	if !resolved.metadataOnly {
+		s.invalidateCommittedMovie(movieID)
+	}
 
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
 	// failed is never recorded as scanned/unchanged.
-	scan.movieIndex[filepath.Clean(resolved.params.FilePath)] = resolved.inspection.Fingerprint
+	scan.movieIndex[filepath.Clean(resolved.params.FilePath)] = movieScanEntry{
+		FileFingerprint: resolved.inspection.Fingerprint, ID: committed.ID, FilePath: committed.FilePath,
+		TmdbID: committed.TmdbID, PendingRetry: pending, HasFingerprint: true,
+	}
+	if resolved.attempted && resolved.tmdbMovie != nil && committed.TmdbID == helpers.NullInt64(int64(resolved.tmdbMovie.TmdbID)) {
+		scan.enriched++
+	}
 
 	scan.mergeFrom(txScan)
 
@@ -75,16 +102,34 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 // persistResolvedMovieTx returns the upserted movie ID so the caller can drop
 // the caches keyed on it once the transaction commits.
 func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Queries, scan *movieScanContext, resolved *resolvedMovie) (int64, error) {
-	movie, err := qtx.UpsertMovie(ctx, resolved.params)
-	if err != nil {
-		return 0, fmt.Errorf("upsert movie failed: %w", err)
+	current, err := qtx.GetMovieByPath(ctx, resolved.params.FilePath)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
 	}
-
-	if resolved.tmdbMovie != nil {
-		err = applyTmdbMetadata(ctx, qtx, scan, movie.ID, resolved.tmdbMovie)
+	// A deleted or replaced catalog row must never be recreated by in-flight work.
+	if current.ID != resolved.observed.ID || current.FilePath != resolved.observed.FilePath {
+		return 0, nil
+	}
+	sameIdentity := current.TmdbID == resolved.observed.TmdbID
+	movie := current
+	if !resolved.metadataOnly {
+		movie, err = qtx.UpsertMovie(ctx, resolved.params)
+		if err != nil {
+			return 0, fmt.Errorf("upsert movie failed: %w", err)
+		}
+	}
+	if resolved.attempted && sameIdentity {
+		if resolved.tmdbMovie != nil {
+			err = applyTmdbMetadata(ctx, qtx, scan, movie.ID, resolved.tmdbMovie)
+		} else {
+			err = qtx.MarkMovieTmdbRetry(ctx, movie.ID)
+		}
 		if err != nil {
 			return 0, err
 		}
+	}
+	if resolved.metadataOnly {
+		return movie.ID, nil
 	}
 
 	videoStreamCount, err := s.processMovieStreams(ctx, qtx, movie.ID, resolved.streams)
@@ -107,7 +152,7 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 // TMDB metadata entities
 // ---------------------------------------------------------------------------
 
-// ApplyTmdbMetadata replaces every relationship a movie owns by virtue of its
+// ApplyTmdbMetadata updates descriptions, clears retries, and replaces relationships owned by a
 // TMDB match -- production companies, cast, crew, genres and extra videos --
 // inside qtx's transaction. It is the single definition of "what TMDB owns on
 // a movie", shared by the library scan and the manual identify flow, so the
@@ -125,7 +170,20 @@ func applyTmdbMetadata(
 	movieID int64,
 	tmdbMovie *tmdb.TmdbMovie,
 ) error {
-	err := qtx.DeleteMovieCast(ctx, movieID)
+	err := qtx.UpdateMovieTmdbMetadata(ctx, database.UpdateMovieTmdbMetadataParams{
+		ID: movieID, Title: tmdbMovie.Title, TmdbID: helpers.NullInt64(int64(tmdbMovie.TmdbID)),
+		ImdbID: helpers.NullString(tmdbMovie.ImdbID), PosterPath: helpers.NullString(tmdbMovie.PosterPath),
+		BackdropPath: helpers.NullString(tmdbMovie.BackdropPath), Adult: tmdbMovie.Adult,
+		Language: helpers.NullString(tmdbMovie.OriginalLang), Year: helpers.NullInt64(int64(extractYearFromReleaseDate(tmdbMovie.ReleaseDate))),
+		ReleaseDate: helpers.NullString(tmdbMovie.ReleaseDate), Overview: helpers.NullString(tmdbMovie.Overview),
+		TagLine: helpers.NullString(tmdbMovie.Tagline), Certification: helpers.NullString(tmdbMovie.Certification()),
+		CriticRating: helpers.NullFloat64(tmdbMovie.VoteAverage), Revenue: helpers.NullFloat64(float64(tmdbMovie.Revenue)),
+		Budget: helpers.NullFloat64(float64(tmdbMovie.Budget)),
+	})
+	if err != nil {
+		return fmt.Errorf("update TMDB metadata failed: %w", err)
+	}
+	err = qtx.DeleteMovieCast(ctx, movieID)
 	if err != nil {
 		return fmt.Errorf("delete existing cast failed: %w", err)
 	}
@@ -160,7 +218,7 @@ func applyTmdbMetadata(
 		return fmt.Errorf("process extra videos failed: %w", err)
 	}
 
-	return nil
+	return qtx.ClearMovieTmdbRetry(ctx, movieID)
 }
 
 func processProductionCompanies(

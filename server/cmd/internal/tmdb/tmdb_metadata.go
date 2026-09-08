@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var ErrNoMoviesFound = errors.New("no movies found with the given query")
+
 // TmdbVideoResult is a single video (trailer, featurette, etc.) from TMDB videos.results.
 type TmdbVideoResult struct {
 	ID       string `json:"id"`
@@ -188,7 +190,7 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 	}
 
 	if len(results) == 0 {
-		return nil, errors.New("no movies found with the given query")
+		return nil, ErrNoMoviesFound
 	}
 
 	return results, nil

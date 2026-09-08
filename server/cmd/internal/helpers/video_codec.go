@@ -3,10 +3,9 @@ package helpers
 import "strings"
 
 var coverArtVideoCodecs = map[string]bool{
-	"mjpeg": true,
-	"png":   true,
-	"gif":   true,
-	"bmp":   true,
+	"png": true,
+	"gif": true,
+	"bmp": true,
 }
 
 // IsCoverArtVideoCodec reports still-image video streams used as embedded cover art.

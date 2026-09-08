@@ -65,7 +65,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 }
 
-func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
+func TestMovieScannerUpsertPreservesDescriptiveMetadata(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -104,11 +104,11 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		t.Fatalf("scanner upsert: %v", err)
 	}
 
-	if updated.Title != "Moneyball Remastered" {
-		t.Fatalf("expected scanner title to overwrite manual title, got %q", updated.Title)
+	if updated.Title != "Moneyball" {
+		t.Fatalf("expected technical upsert to preserve title, got %q", updated.Title)
 	}
-	if !updated.Overview.Valid || updated.Overview.String != "Scanner overview" {
-		t.Fatalf("expected scanner overview to overwrite manual overview, got %+v", updated.Overview)
+	if !updated.Overview.Valid || updated.Overview.String != "Original overview" {
+		t.Fatalf("expected technical upsert to preserve overview, got %+v", updated.Overview)
 	}
 	if updated.Size != 200 {
 		t.Fatalf("expected scanner-owned size to update to 200, got %d", updated.Size)
@@ -191,8 +191,8 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
-	if len(tmdbStub.searchCalls) != 1 {
-		t.Fatalf("expected 1 TMDB search, got %d", len(tmdbStub.searchCalls))
+	if len(tmdbStub.searchCalls) != 2 {
+		t.Fatalf("expected 2 ambiguous-year TMDB searches, got %d", len(tmdbStub.searchCalls))
 	}
 	if tmdbStub.searchCalls[0].title != "the matrix" {
 		t.Fatalf("TMDB search title = %q, want the matrix", tmdbStub.searchCalls[0].title)
@@ -406,6 +406,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	tmdbStub.detailMovies[1000] = secondDetails
+	scan = newMovieScanContext(scan.movieIndex)
 	err := os.WriteFile(path, []byte("edited"), 0644)
 	if err != nil {
 		t.Fatal(err)

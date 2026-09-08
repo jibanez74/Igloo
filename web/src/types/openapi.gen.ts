@@ -1128,7 +1128,7 @@ export interface paths {
         put?: never;
         /**
          * Search TMDB candidates for a local movie
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Candidates use the same title-dominant ranking as automatic scans, with bounded release-year and popularity/vote signals and deterministic title/ID tie-breaking. Low confidence does not exclude candidates.
          */
         post: operations["tmdbSearchMovies"];
         delete?: never;
@@ -1147,7 +1147,7 @@ export interface paths {
         get?: never;
         /**
          * Replace local movie metadata from a TMDB movie
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Successful Identify atomically replaces TMDB descriptive metadata and relationships and clears pending enrichment retries. Audience rating and file-derived duration/runtime are preserved. Automatic scans retain the selected TMDB identity; stale in-flight enrichment cannot overwrite a changed identity. Failed Identify leaves metadata and retry state unchanged.
          */
         put: operations["identifyMovie"];
         post?: never;
@@ -1519,7 +1519,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a movie library scan
-         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint, preserving catalog metadata and playback caches. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. Metadata and fingerprints commit atomically per movie. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
+         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the technical fingerprint, preserving playback caches. Pending descriptive enrichment may also be retried. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. Technical metadata and fingerprints commit atomically per movie. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. No results and unavailable TMDB remain eligible. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
          */
         post: operations["triggerMovieScan"];
         delete?: never;
