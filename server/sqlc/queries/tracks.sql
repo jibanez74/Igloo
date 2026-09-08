@@ -15,10 +15,9 @@ SELECT
   );
 
 -- name: ListMusicTrackScanIndex :many
-SELECT
-  file_path,
-  size
-FROM tracks;
+SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM tracks c
+LEFT JOIN track_file_fingerprints f ON f.track_id = c.id;
 
 -- name: UpsertTrack :one
 INSERT INTO tracks (
@@ -173,3 +172,6 @@ WHERE t.id IN (
   LIMIT sqlc.arg(row_limit)
 )
 ORDER BY RANDOM();
+
+-- name: DeleteMissingTrack :execrows
+DELETE FROM tracks WHERE id = ? AND file_path = ?;

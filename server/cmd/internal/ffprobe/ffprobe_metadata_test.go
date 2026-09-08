@@ -150,7 +150,7 @@ func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
 	args := readArgumentLog(t, argsLog)
 	requireArgumentValue(t, args, "-print_format", "json")
 	requireArgumentValue(t, args, "-show_entries",
-		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language")
+		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags")
 	if args[len(args)-1] != "/tmp/song.mp3" {
 		t.Fatalf("last argument = %q, want the probed file path", args[len(args)-1])
 	}
@@ -311,5 +311,40 @@ func TestStreamRotationFromSideDataList(t *testing.T) {
 				t.Errorf("Rotation() = (%d, %v), want (%d, %v)", deg, hasMatrix, tc.wantDeg, tc.wantMatrix)
 			}
 		})
+	}
+}
+
+func TestTagAliasSelectionIsDeterministic(t *testing.T) {
+	cases := []struct {
+		input string
+		want  FormatTags
+	}{
+		{`"sort_artist":"canonical","SORT_ARTIST":"case","sortartist":"equivalent","artistsort":"alias","track":"1","TRACK":"2","tracknumber":"3"`, FormatTags{SortArtist: "canonical", Track: "1"}},
+		{`"sort_artist":" ","SORT_ARTIST":"case","sortartist":"equivalent","artistsort":"alias","track":42,"TRACK":"2","tracknumber":"3"`, FormatTags{SortArtist: "case", Track: "2"}},
+		{`"sort-artist":"dash","sort artist":"space","sortartist":"compact","artistsort":"alias","track":null,"tracknumber":"3"`, FormatTags{SortArtist: "space", Track: "3"}},
+		{`"TITLE":"upper","Title":"mixed","LANGUAGE":"eng","lang":"spa","album_artist":"canonical","albumartist":"compact"`, FormatTags{Title: "upper", Language: "eng", AlbumArtist: "canonical"}},
+		{`"language":false,"LANGUAGE":" ","lang":"zxx"`, FormatTags{Language: "zxx"}},
+	}
+	for _, tc := range cases {
+		// Reverse JSON field order as well as exercising randomized map iteration.
+		fields := strings.Split(tc.input, ",")
+		for reverse := 0; reverse < 2; reverse++ {
+			for i := 0; i < 200; i++ {
+				input := []byte("{" + strings.Join(fields, ",") + "}")
+				var tags FormatTags
+				err := json.Unmarshal(input, &tags)
+				if err != nil || tags != tc.want {
+					t.Fatalf("%s: got %+v, want %+v: %v", input, tags, tc.want, err)
+				}
+				var stream StreamTags
+				err = json.Unmarshal(input, &stream)
+				if err != nil || stream.Title != tc.want.Title || stream.Language != tc.want.Language {
+					t.Fatalf("stream %s: %+v: %v", input, stream, err)
+				}
+			}
+			for i, j := 0, len(fields)-1; i < j; i, j = i+1, j-1 {
+				fields[i], fields[j] = fields[j], fields[i]
+			}
+		}
 	}
 }

@@ -19,7 +19,9 @@ type Querier interface {
 	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (int64, error)
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
+	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
+	CountMovieTmdbRetries(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
@@ -50,6 +52,8 @@ type Querier interface {
 	DeleteMergedMusicAlbum(ctx context.Context, id int64) error
 	DeleteMergedMusicArtist(ctx context.Context, id int64) error
 	DeleteMergedMusicMatch(ctx context.Context, arg DeleteMergedMusicMatchParams) error
+	DeleteMissingMovie(ctx context.Context, arg DeleteMissingMovieParams) (int64, error)
+	DeleteMissingTrack(ctx context.Context, arg DeleteMissingTrackParams) (int64, error)
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie
@@ -64,8 +68,10 @@ type Querier interface {
 	DeleteMovieExtraVideos(ctx context.Context, movieID int64) error
 	// Remove all genre links for a movie
 	DeleteMovieGenres(ctx context.Context, movieID int64) error
+	DeleteMovieKeyframeIndexes(ctx context.Context, movieID int64) error
 	// Remove all production company links for a movie
 	DeleteMovieProductionCompanies(ctx context.Context, movieID int64) error
+	DeleteMovieRemuxSafetyVerdicts(ctx context.Context, movieID int64) error
 	// Delete all subtitles for a movie
 	DeleteMovieSubtitles(ctx context.Context, movieID int64) error
 	// Delete all video streams for a movie
@@ -143,6 +149,7 @@ type Querier interface {
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
+	GetMovieByPath(ctx context.Context, filePath string) (Movie, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
@@ -274,6 +281,7 @@ type Querier interface {
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]WatchRoom, error)
+	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) (AudioStream, error)
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
@@ -288,7 +296,9 @@ type Querier interface {
 	// enforced by the handlers; user_id here only selects the viewer's read state
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
+	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
+	MarkMovieTmdbRetry(ctx context.Context, movieID int64) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
 	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
@@ -349,6 +359,7 @@ type Querier interface {
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
+	UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTmdbMetadataParams) error
 	UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error
 	UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error
 	UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error
@@ -374,7 +385,9 @@ type Querier interface {
 	// Call with a non-null external_id so conflicts are detected; then link via CreateMovieExtraVideo.
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (ExtraVideo, error)
 	UpsertKeyframeIndex(ctx context.Context, arg UpsertKeyframeIndexParams) error
+	// Existing movies retain descriptions; confirmed TMDB details are applied separately.
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error)
+	UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovieFileFingerprintParams) (int64, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
@@ -383,6 +396,7 @@ type Querier interface {
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (ProductionCompany, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
+	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error
 	UserExists(ctx context.Context, id int64) (bool, error)

@@ -18,7 +18,7 @@ import (
 func scanTaggedTrack(t *testing.T, s *Scanner, scan *musicScanContext, path string, size int64, tags ffprobe.FormatTags) {
 	t.Helper()
 	s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadataWithTags(tags)}
-	n, _, failures := s.processMusicBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a", Size: size}})
+	n, _, failures := s.processMusicFixtureBatch(t, context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a", Size: size}})
 	if n != 1 || failures != 0 {
 		t.Fatalf("scan %s: scanned=%d failures=%d logs=%+v", path, n, failures, s.logger.(*capturedLogger).warnEntries)
 	}
@@ -70,6 +70,7 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 }
 
 func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
+	fixtureDir := t.TempDir()
 	for _, reverse := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reverse_%v", reverse), func(t *testing.T) {
 			s := setupMusicScanner(t)
@@ -89,7 +90,7 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 					j = len(tags) - i - 1
 				}
 				// Exercise both same-scan caches and persisted Unicode identities.
-				scanTaggedTrack(t, s, scan, fmt.Sprintf("/%d.m4a", j), 1, tags[j])
+				scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/%d.m4a", j), 1, tags[j])
 			}
 			for _, table := range []string{"musicians", "albums", "genres"} {
 				count2 := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
@@ -109,7 +110,7 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 			tags[2].SortArtist = ""
 			tags[2].SortAlbum = ""
 			tags[2].Date = ""
-			scanTaggedTrack(t, s, newMusicScanContext(nil), "/2.m4a", 2, tags[2])
+			scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/2.m4a", 2, tags[2])
 			err = s.db.QueryRow("SELECT m.sort_name,a.sort_title,a.release_date FROM musicians m CROSS JOIN albums a").Scan(&sortName, &sortTitle, &date)
 			if err != nil {
 				t.Fatal(err)
@@ -121,7 +122,7 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 				tags[i].SortArtist = ""
 				tags[i].SortAlbum = ""
 				tags[i].Date = "invalid"
-				scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf("/%d.m4a", i), 2, tags[i])
+				scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf(fixtureDir+"/%d.m4a", i), 2, tags[i])
 			}
 			count3 := countScannerRows(t, s.db, "SELECT count(*) FROM albums WHERE sort_title=title AND release_date IS NULL AND year IS NULL")
 			count4 := countScannerRows(t, s.db, "SELECT count(*) FROM musicians WHERE sort_name=name")
@@ -143,13 +144,14 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 }
 
 func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}, Genres: []string{"Rock"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "2000", ReleaseDatePrecision: "year"}, Genres: []string{"Rock"}}}
 	scan := newMusicScanContext(nil)
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "Album", Genre: "Rock", Date: "2022"}
-	scanTaggedTrack(t, s, scan, "/one", 1, tags)
-	scanTaggedTrack(t, s, scan, "/two", 1, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 1, tags)
 	count6 := countScannerRows(t, s.db, "SELECT count(*) FROM musician_genres")
 	if count6 != 2 {
 		t.Fatal("missing provenance overlap")
@@ -162,7 +164,7 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	tags.Album = ""
 	tags.Genre = ""
 	tags.Date = ""
-	scanTaggedTrack(t, s, scan, "/one", 2, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 2, tags)
 	count7 := countScannerRows(t, s.db, "SELECT count(*) FROM musician_albums")
 	if count7 != 1 {
 		t.Fatal("removed multiply supported link")
@@ -170,7 +172,7 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	// Remove the last local date and genre while retaining album membership.
 	tags.Artist = "Artist"
 	tags.Album = "Album"
-	scanTaggedTrack(t, s, scan, "/two", 2, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 2, tags)
 	count8 := countScannerRows(t, s.db, "SELECT count(*) FROM albums WHERE release_date='2000-01-01' AND year=2000")
 	if count8 != 1 {
 		t.Fatal("missing Spotify date fallback")
@@ -182,7 +184,7 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	}
 	tags.Genre = "Rock"
 	tags.SortArtist = "Sort"
-	scanTaggedTrack(t, s, scan, "/two", 3, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 3, tags)
 	count11 := countScannerRows(t, s.db, "SELECT count(*) FROM musician_genres WHERE source='local'")
 	if count11 != 1 {
 		t.Fatal("local genre not restored within scan")
@@ -207,9 +209,10 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 }
 
 func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
-	scanTaggedTrack(t, s, newMusicScanContext(nil), "/one", 1, ffprobe.FormatTags{Title: "Track", Artist: "One & Two", Album: "Album", Genre: "Rock", SortArtist: "First & Second"})
+	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/one", 1, ffprobe.FormatTags{Title: "Track", Artist: "One & Two", Album: "Album", Genre: "Rock", SortArtist: "First & Second"})
 	probe := s.ffprobe.(*countingMusicScannerFfprobe)
 	s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: musicSpotifyReasonNoResults}}, albumErr: errors.New("temporary")}
 	err := s.retrySpotify(context.Background(), newMusicScanContext(nil))
@@ -235,11 +238,12 @@ func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
 }
 
 func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	ctx := context.Background()
 	for i := 1; i <= 2; i++ {
-		scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf("/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i), SortArtist: fmt.Sprintf("Sort %d", i), Genre: "Rock"})
+		scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf(fixtureDir+"/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i), SortArtist: fmt.Sprintf("Sort %d", i), Genre: "Rock"})
 	}
 	_, err := s.db.Exec("INSERT INTO users(id,email,password,name) VALUES(1,'test@example.com','hash','Test')")
 	if err != nil {
@@ -316,7 +320,7 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	if count26 != 2 || count25 != 2 {
 		t.Fatal("aliases not retained")
 	}
-	scanTaggedTrack(t, s, scan, "/3", 1, ffprobe.FormatTags{Title: "Later", Artist: "Artist 2", Album: "Album 2"})
+	scanTaggedTrack(t, s, scan, fixtureDir+"/3", 1, ffprobe.FormatTags{Title: "Later", Artist: "Artist 2", Album: "Album 2"})
 	count27 := countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE musician_id=1 AND album_id=1")
 	if count27 != 3 {
 		t.Fatal("stale cached IDs after merge")
@@ -342,12 +346,13 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 }
 
 func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	ctx := context.Background()
 	scan := newMusicScanContext(nil)
 	for i := 0; i < 105; i++ {
-		scanTaggedTrack(t, s, scan, fmt.Sprintf("/page/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i)})
+		scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/page/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i)})
 	}
 	// Orphans are deliberately retained, but are not retry candidates.
 	_, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: "Orphan", SortName: "Orphan"})
@@ -395,19 +400,20 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 }
 
 func TestMusicAlbumMoveReconcilesBothSides(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	scan := newMusicScanContext(nil)
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "First", Genre: "Rock", Date: "2020", SortAlbum: "Sort"}
-	scanTaggedTrack(t, s, scan, "/one", 1, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
 	tags.Date = "2019"
 	tags.SortAlbum = ""
-	scanTaggedTrack(t, s, scan, "/two", 1, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 1, tags)
 	tags.Album = "Second"
 	tags.Artist = "Other"
 	tags.Date = "2021"
 	tags.Genre = "Jazz"
-	scanTaggedTrack(t, s, scan, "/one", 2, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 2, tags)
 	first := countScannerRows(t, s.db, "SELECT count(*) FROM albums WHERE title='First' AND release_date='2019-01-01' AND sort_title='First'")
 	second := countScannerRows(t, s.db, "SELECT count(*) FROM albums WHERE title='Second' AND release_date='2021-01-01'")
 	links := countScannerRows(t, s.db, "SELECT count(*) FROM musician_albums")
@@ -418,7 +424,7 @@ func TestMusicAlbumMoveReconcilesBothSides(t *testing.T) {
 	tags.Artist = ""
 	tags.Album = ""
 	tags.Genre = ""
-	scanTaggedTrack(t, s, scan, "/two", 2, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 2, tags)
 	links = countScannerRows(t, s.db, "SELECT count(*) FROM musician_albums")
 	localGenres = countScannerRows(t, s.db, "SELECT count(*) FROM album_genres WHERE source='local'")
 	if links != 1 || localGenres != 1 {
@@ -427,12 +433,13 @@ func TestMusicAlbumMoveReconcilesBothSides(t *testing.T) {
 }
 
 func TestSpotifyAlbumMergeRollback(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	ctx := context.Background()
 	scan := newMusicScanContext(nil)
 	for i := 1; i <= 2; i++ {
-		scanTaggedTrack(t, s, scan, fmt.Sprintf("/%d", i), 1, ffprobe.FormatTags{Title: "Track", Album: fmt.Sprintf("Album %d", i), Date: fmt.Sprintf("200%d", i)})
+		scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/%d", i), 1, ffprobe.FormatTags{Title: "Track", Album: fmt.Sprintf("Album %d", i), Date: fmt.Sprintf("200%d", i)})
 	}
 	s.spotify = &musicScannerSpotifyStub{album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album"}}}
 	scan = newMusicScanContext(nil)
@@ -478,11 +485,12 @@ func TestSpotifyAlbumMergeRollback(t *testing.T) {
 }
 
 func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
+	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
 	defer s.db.Close()
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "Album", SortArtist: "Sort Artist", SortAlbum: "Sort Album", Date: "2020"}
 	scan := newMusicScanContext(nil)
-	scanTaggedTrack(t, s, scan, "/one", 1, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
 	_, err := s.db.Exec(`
  CREATE TABLE derived_writes(entity TEXT);
  CREATE TRIGGER count_artist_sort AFTER UPDATE OF sort_name ON musicians BEGIN INSERT INTO derived_writes VALUES('artist'); END;
@@ -493,7 +501,7 @@ func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanTaggedTrack(t, s, scan, "/one", 2, tags)
+	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 2, tags)
 	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "1999", ReleaseDatePrecision: "year"}}}
 	err = s.retrySpotify(context.Background(), newMusicScanContext(nil))
 	if err != nil {

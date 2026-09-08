@@ -7,7 +7,8 @@ import (
 // Database caches use transaction overlays; lookup outcomes and splitting
 // decisions live for the scan and do not depend on transaction success.
 type musicScanContext struct {
-	trackIndex          map[string]int64
+	deferred            int
+	trackIndex          map[string]scanner.FileFingerprint
 	merged              bool
 	invalidatedTracks   map[int64]bool
 	artistAttempts      map[string]*resolvedMusician
@@ -23,9 +24,9 @@ type musicScanContext struct {
 	compoundSplits      map[string]bool
 }
 
-func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
+func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicScanContext {
 	if trackIndex == nil {
-		trackIndex = make(map[string]int64)
+		trackIndex = make(map[string]scanner.FileFingerprint)
 	}
 
 	// Take ownership of trackIndex: loadMusicScanIndex already cleaned its keys
@@ -74,8 +75,4 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 	}
 	scan.musicianIDs.MergeFrom(other.musicianIDs)
 	scan.albumIDs.MergeFrom(other.albumIDs)
-}
-
-func (scan *musicScanContext) trackUnchanged(path string, size int64) bool {
-	return scanner.ScanIndexUnchanged(scan.trackIndex, path, size)
 }

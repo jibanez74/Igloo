@@ -11,6 +11,26 @@ import (
 	"strings"
 )
 
+const clearMovieTmdbRetry = `-- name: ClearMovieTmdbRetry :exec
+DELETE FROM movie_tmdb_retries WHERE movie_id = ?
+`
+
+func (q *Queries) ClearMovieTmdbRetry(ctx context.Context, movieID int64) error {
+	_, err := q.exec(ctx, q.clearMovieTmdbRetryStmt, clearMovieTmdbRetry, movieID)
+	return err
+}
+
+const countMovieTmdbRetries = `-- name: CountMovieTmdbRetries :one
+SELECT count(*) FROM movies m WHERE tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = m.id)
+`
+
+func (q *Queries) CountMovieTmdbRetries(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMovieTmdbRetriesStmt, countMovieTmdbRetries)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMoviesForGenre = `-- name: CountMoviesForGenre :one
 SELECT
   COUNT(*)
@@ -86,6 +106,23 @@ type CreateMovieProductionCompanyParams struct {
 func (q *Queries) CreateMovieProductionCompany(ctx context.Context, arg CreateMovieProductionCompanyParams) error {
 	_, err := q.exec(ctx, q.createMovieProductionCompanyStmt, createMovieProductionCompany, arg.MovieID, arg.ProductionCompanyID)
 	return err
+}
+
+const deleteMissingMovie = `-- name: DeleteMissingMovie :execrows
+DELETE FROM movies WHERE id = ? AND file_path = ?
+`
+
+type DeleteMissingMovieParams struct {
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+func (q *Queries) DeleteMissingMovie(ctx context.Context, arg DeleteMissingMovieParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteMissingMovieStmt, deleteMissingMovie, arg.ID, arg.FilePath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteMovie = `-- name: DeleteMovie :exec
@@ -532,6 +569,44 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 	return i, err
 }
 
+const getMovieByPath = `-- name: GetMovieByPath :one
+SELECT id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at FROM movies WHERE file_path = ?
+`
+
+func (q *Queries) GetMovieByPath(ctx context.Context, filePath string) (Movie, error) {
+	row := q.queryRow(ctx, q.getMovieByPathStmt, getMovieByPath, filePath)
+	var i Movie
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.FilePath,
+		&i.FileName,
+		&i.Size,
+		&i.Container,
+		&i.MimeType,
+		&i.Adult,
+		&i.TmdbID,
+		&i.ImdbID,
+		&i.PosterPath,
+		&i.BackdropPath,
+		&i.Language,
+		&i.Year,
+		&i.ReleaseDate,
+		&i.Overview,
+		&i.TagLine,
+		&i.Certification,
+		&i.CriticRating,
+		&i.AudienceRating,
+		&i.Revenue,
+		&i.Budget,
+		&i.RunTime,
+		&i.Duration,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getMovieExtraVideos = `-- name: GetMovieExtraVideos :many
 SELECT
   ev.id,
@@ -662,16 +737,22 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 }
 
 const getMovieScanIndex = `-- name: GetMovieScanIndex :many
-SELECT
-  file_path,
-  size
-FROM movies
-ORDER BY id
+SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM movies c
+LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
 `
 
 type GetMovieScanIndexRow struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
+	ID           int64          `json:"id"`
+	FilePath     string         `json:"file_path"`
+	TmdbID       sql.NullInt64  `json:"tmdb_id"`
+	PendingRetry bool           `json:"pending_retry"`
+	Size         int64          `json:"size"`
+	MtimeNs      sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs      sql.NullInt64  `json:"ctime_ns"`
+	Device       sql.NullString `json:"device"`
+	Inode        sql.NullString `json:"inode"`
+	Sha256       []byte         `json:"sha256"`
 }
 
 func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error) {
@@ -683,7 +764,18 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 	items := []GetMovieScanIndexRow{}
 	for rows.Next() {
 		var i GetMovieScanIndexRow
-		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.FilePath,
+			&i.TmdbID,
+			&i.PendingRetry,
+			&i.Size,
+			&i.MtimeNs,
+			&i.CtimeNs,
+			&i.Device,
+			&i.Inode,
+			&i.Sha256,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1200,6 +1292,17 @@ func (q *Queries) GetVideoStreamsByMovieID(ctx context.Context, movieID int64) (
 	return items, nil
 }
 
+const hasMovieTmdbRetry = `-- name: HasMovieTmdbRetry :one
+SELECT EXISTS (SELECT 1 FROM movie_tmdb_retries WHERE movie_id = ?)
+`
+
+func (q *Queries) HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error) {
+	row := q.queryRow(ctx, q.hasMovieTmdbRetryStmt, hasMovieTmdbRetry, movieID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertAudioStream = `-- name: InsertAudioStream :one
 INSERT INTO audio_streams (
   movie_id,
@@ -1470,6 +1573,15 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 	return i, err
 }
 
+const markMovieTmdbRetry = `-- name: MarkMovieTmdbRetry :exec
+INSERT INTO movie_tmdb_retries (movie_id) VALUES (?) ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) MarkMovieTmdbRetry(ctx context.Context, movieID int64) error {
+	_, err := q.exec(ctx, q.markMovieTmdbRetryStmt, markMovieTmdbRetry, movieID)
+	return err
+}
+
 const movieExists = `-- name: MovieExists :one
 SELECT
   EXISTS (
@@ -1587,6 +1699,55 @@ func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateMovieTmdbMetadata = `-- name: UpdateMovieTmdbMetadata :exec
+UPDATE movies SET
+ title = ?, tmdb_id = ?, imdb_id = ?, poster_path = ?, backdrop_path = ?,
+ adult = ?, language = ?, year = ?, release_date = ?, overview = ?, tag_line = ?,
+ certification = ?, critic_rating = ?, revenue = ?, budget = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type UpdateMovieTmdbMetadataParams struct {
+	Title         string          `json:"title"`
+	TmdbID        sql.NullInt64   `json:"tmdb_id"`
+	ImdbID        sql.NullString  `json:"imdb_id"`
+	PosterPath    sql.NullString  `json:"poster_path"`
+	BackdropPath  sql.NullString  `json:"backdrop_path"`
+	Adult         bool            `json:"adult"`
+	Language      sql.NullString  `json:"language"`
+	Year          sql.NullInt64   `json:"year"`
+	ReleaseDate   sql.NullString  `json:"release_date"`
+	Overview      sql.NullString  `json:"overview"`
+	TagLine       sql.NullString  `json:"tag_line"`
+	Certification sql.NullString  `json:"certification"`
+	CriticRating  sql.NullFloat64 `json:"critic_rating"`
+	Revenue       sql.NullFloat64 `json:"revenue"`
+	Budget        sql.NullFloat64 `json:"budget"`
+	ID            int64           `json:"id"`
+}
+
+func (q *Queries) UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTmdbMetadataParams) error {
+	_, err := q.exec(ctx, q.updateMovieTmdbMetadataStmt, updateMovieTmdbMetadata,
+		arg.Title,
+		arg.TmdbID,
+		arg.ImdbID,
+		arg.PosterPath,
+		arg.BackdropPath,
+		arg.Adult,
+		arg.Language,
+		arg.Year,
+		arg.ReleaseDate,
+		arg.Overview,
+		arg.TagLine,
+		arg.Certification,
+		arg.CriticRating,
+		arg.Revenue,
+		arg.Budget,
+		arg.ID,
+	)
+	return err
 }
 
 const upsertArtist = `-- name: UpsertArtist :one
@@ -1797,30 +1958,11 @@ VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
-  title = excluded.title,
   file_name = excluded.file_name,
   size = excluded.size,
   container = excluded.container,
   mime_type = excluded.mime_type,
-  adult = excluded.adult,
-  tmdb_id = excluded.tmdb_id,
-  imdb_id = excluded.imdb_id,
-  poster_path = excluded.poster_path,
-  backdrop_path = excluded.backdrop_path,
-  language = excluded.language,
-  year = excluded.year,
-  release_date = excluded.release_date,
-  overview = excluded.overview,
-  tag_line = excluded.tag_line,
-  certification = excluded.certification,
-  -- audience_rating is deliberately not updated: the scanner never supplies it
-  -- (only the manual edit path does), so refreshing it here would wipe manual
-  -- edits on every rescan. Guarded by
-  -- TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata.
-  critic_rating = excluded.critic_rating,
-  revenue = excluded.revenue,
-  budget = excluded.budget,
-  run_time = excluded.run_time,
+  run_time = COALESCE(excluded.run_time, movies.run_time),
   duration = COALESCE(excluded.duration, movies.duration),
   updated_at = CURRENT_TIMESTAMP
 RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
@@ -1852,6 +1994,7 @@ type UpsertMovieParams struct {
 	Duration       sql.NullFloat64 `json:"duration"`
 }
 
+// Existing movies retain descriptions; confirmed TMDB details are applied separately.
 func (q *Queries) UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error) {
 	row := q.queryRow(ctx, q.upsertMovieStmt, upsertMovie,
 		arg.Title,

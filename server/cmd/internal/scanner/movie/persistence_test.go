@@ -32,13 +32,22 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 
 	resolved := &resolvedMovie{params: database.UpsertMovieParams{
 		Title:     "Committed Movie",
-		FilePath:  "/movies/committed.mkv",
+		FilePath:  filepath.Join(t.TempDir(), "committed.mkv"),
 		FileName:  "committed.mkv",
 		Size:      1,
 		Container: "mkv",
 		MimeType:  helpers.VideoMimeTypes["mkv"],
 	}}
-	err := testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err := os.WriteFile(resolved.params.FilePath, []byte("m"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved.inspection, err = scanner.InspectFile(context.Background(), resolved.params.FilePath, nil, testScanner.scanner.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resolved.inspection.Close()
+	err = testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err == nil {
 		t.Fatal("persist without a video stream unexpectedly succeeded")
 	}
@@ -56,7 +65,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 }
 
-func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
+func TestMovieScannerUpsertPreservesDescriptiveMetadata(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -95,11 +104,11 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		t.Fatalf("scanner upsert: %v", err)
 	}
 
-	if updated.Title != "Moneyball Remastered" {
-		t.Fatalf("expected scanner title to overwrite manual title, got %q", updated.Title)
+	if updated.Title != "Moneyball" {
+		t.Fatalf("expected technical upsert to preserve title, got %q", updated.Title)
 	}
-	if !updated.Overview.Valid || updated.Overview.String != "Scanner overview" {
-		t.Fatalf("expected scanner overview to overwrite manual overview, got %+v", updated.Overview)
+	if !updated.Overview.Valid || updated.Overview.String != "Original overview" {
+		t.Fatalf("expected technical upsert to preserve overview, got %+v", updated.Overview)
 	}
 	if updated.Size != 200 {
 		t.Fatalf("expected scanner-owned size to update to 200, got %d", updated.Size)
@@ -182,8 +191,8 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
-	if len(tmdbStub.searchCalls) != 1 {
-		t.Fatalf("expected 1 TMDB search, got %d", len(tmdbStub.searchCalls))
+	if len(tmdbStub.searchCalls) != 2 {
+		t.Fatalf("expected 2 ambiguous-year TMDB searches, got %d", len(tmdbStub.searchCalls))
 	}
 	if tmdbStub.searchCalls[0].title != "the matrix" {
 		t.Fatalf("TMDB search title = %q, want the matrix", tmdbStub.searchCalls[0].title)
@@ -397,6 +406,11 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	tmdbStub.detailMovies[1000] = secondDetails
+	scan = newMovieScanContext(scan.movieIndex)
+	err := os.WriteFile(path, []byte("edited"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
 	scanned, skipped, errCount = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 6},
 	})
@@ -416,7 +430,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 		RunTime       sql.NullInt64
 		Duration      sql.NullFloat64
 	}{}
-	err := testScanner.db.QueryRowContext(ctx, `
+	err = testScanner.db.QueryRowContext(ctx, `
 		SELECT id, title, tmdb_id, size, year, release_date, certification, language, run_time, duration
 		FROM movies
 		WHERE file_path = ?

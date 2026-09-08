@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"sync"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -21,31 +22,36 @@ import (
 // shutdown tracking, cross-scanner write serialization, or cache invalidation
 // may leave them zero.
 type Dependencies struct {
-	DB                       *sql.DB
-	Queries                  *database.Queries
-	Logger                   logger.LoggerInterface
-	Ffprobe                  ffprobe.FfprobeInterface
-	Tmdb                     tmdb.TmdbInterface
-	ScanContext              context.Context
-	Wait                     *sync.WaitGroup
-	ScannerDBMu              *sync.Mutex
-	CurrentMoviesDirectory   func() sql.NullString
-	InvalidateCommittedMovie func(movieID int64)
+	// Now controls quiet-period eligibility and defaults to time.Now.
+	Now                         func() time.Time
+	DB                          *sql.DB
+	Queries                     *database.Queries
+	Logger                      logger.LoggerInterface
+	Ffprobe                     ffprobe.FfprobeInterface
+	Tmdb                        tmdb.TmdbInterface
+	ScanContext                 context.Context
+	Wait                        *sync.WaitGroup
+	ScannerDBMu                 *sync.Mutex
+	CurrentMoviesDirectory      func() sql.NullString
+	InvalidateCommittedMovie    func(movieID int64)
+	InvalidateDeletedWatchRooms func(roomIDs []int64)
 }
 
 // Scanner scans and persists the configured movie library.
 type Scanner struct {
-	db                       *sql.DB
-	queries                  *database.Queries
-	logger                   logger.LoggerInterface
-	ffprobe                  ffprobe.FfprobeInterface
-	tmdb                     tmdb.TmdbInterface
-	scanContext              context.Context
-	wait                     *sync.WaitGroup
-	scannerDBMu              *sync.Mutex
-	currentMoviesDirectory   func() sql.NullString
-	invalidateCommittedMovie func(int64)
-	guard                    scanner.ScanGuard
+	now                         func() time.Time
+	db                          *sql.DB
+	queries                     *database.Queries
+	logger                      logger.LoggerInterface
+	ffprobe                     ffprobe.FfprobeInterface
+	tmdb                        tmdb.TmdbInterface
+	scanContext                 context.Context
+	wait                        *sync.WaitGroup
+	scannerDBMu                 *sync.Mutex
+	currentMoviesDirectory      func() sql.NullString
+	invalidateCommittedMovie    func(int64)
+	invalidateDeletedWatchRooms func([]int64)
+	guard                       scanner.ScanGuard
 }
 
 // StartStatus describes whether a scan goroutine was launched.
@@ -71,6 +77,9 @@ type StartResult struct {
 // as-is: startup keeps the same failure behavior as the previous
 // application-owned implementation.
 func New(deps Dependencies) *Scanner {
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
 	if deps.ScanContext == nil {
 		deps.ScanContext = context.Background()
 	}
@@ -87,10 +96,16 @@ func New(deps Dependencies) *Scanner {
 		deps.InvalidateCommittedMovie = func(int64) {}
 	}
 
+	if deps.InvalidateDeletedWatchRooms == nil {
+		deps.InvalidateDeletedWatchRooms = func([]int64) {}
+	}
+
 	return &Scanner{
-		db: deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
+		now: deps.Now,
+		db:  deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		tmdb: deps.Tmdb, scanContext: deps.ScanContext, wait: deps.Wait,
 		scannerDBMu: deps.ScannerDBMu, currentMoviesDirectory: deps.CurrentMoviesDirectory,
-		invalidateCommittedMovie: deps.InvalidateCommittedMovie,
+		invalidateCommittedMovie:    deps.InvalidateCommittedMovie,
+		invalidateDeletedWatchRooms: deps.InvalidateDeletedWatchRooms,
 	}
 }

@@ -13,6 +13,9 @@ import (
 )
 
 func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
+	if resolved.inspection == nil {
+		return 0, fmt.Errorf("missing file inspection")
+	}
 	txScan := scan.clone()
 
 	s.scannerDBMu.Lock()
@@ -26,6 +29,15 @@ func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanConte
 
 	qtx := s.queries.WithTx(tx)
 	trackID, err := s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+	if err != nil {
+		return 0, err
+	}
+
+	err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
+	if err != nil {
+		return 0, err
+	}
+	err = resolved.inspection.Validate(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -45,7 +57,8 @@ func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanConte
 	// trackIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a track whose transaction
 	// failed is never recorded as scanned/unchanged.
-	scan.trackIndex[filepath.Clean(resolved.params.FilePath)] = resolved.params.Size
+	scan.trackIndex[filepath.Clean(resolved.params.FilePath)] = resolved.inspection.Fingerprint
+
 	scan.mergeFrom(txScan)
 
 	return trackID, nil

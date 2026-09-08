@@ -110,3 +110,8 @@ SELECT
   COUNT(*)
 FROM users
 WHERE id IN (sqlc.slice(ids));
+
+-- name: ListWatchRoomIDsByMovieID :many
+SELECT id FROM watch_rooms
+WHERE movie_id = ?
+ORDER BY id;

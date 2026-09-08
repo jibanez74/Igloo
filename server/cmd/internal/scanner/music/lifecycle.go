@@ -2,10 +2,11 @@ package music
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 )
@@ -40,7 +41,7 @@ func (s *Scanner) runMusicScan(directory string) {
 	tracksSkipped := 0
 	startTime := time.Now()
 	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
-	scanIndex, err := s.loadMusicScanIndex(ctx)
+	scanIndex, files, err := s.loadMusicScanIndex(ctx)
 	if err != nil {
 		contextErr := ctx.Err()
 		if contextErr != nil {
@@ -51,6 +52,11 @@ func (s *Scanner) runMusicScan(directory string) {
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
+	reconciliation, err := scanner.NewReconciliation(directory, files)
+	if err != nil {
+		s.logger.Error("cannot reconcile music library", "error", err)
+		return
+	}
 	flushBatch := func() {
 		if len(batch) == 0 {
 			return
@@ -72,12 +78,7 @@ func (s *Scanner) runMusicScan(directory string) {
 			errorCount++
 		},
 		func(file scanner.ScanFile) error {
-			unchanged := scan.trackUnchanged(file.Path, file.Size)
-			if unchanged {
-				tracksSkipped++
-				return nil
-			}
-
+			reconciliation.MarkSeen(file.Path)
 			batch = append(batch, file)
 
 			if len(batch) >= scanner.BatchSize {
@@ -105,6 +106,18 @@ func (s *Scanner) runMusicScan(directory string) {
 		return
 	}
 
+	deleted, err := s.cleanupMissingMusic(ctx, scan, reconciliation)
+	s.logger.Info("music missing-file cleanup", "deleted", deleted)
+	if err != nil {
+		contextErr = ctx.Err()
+		if contextErr != nil {
+			s.logger.Info("music library scan interrupted")
+			return
+		}
+		s.logger.Error("music missing-file cleanup failed", "error", err)
+		return
+	}
+
 	err = s.retrySpotify(ctx, scan)
 	if err != nil {
 		contextErr = ctx.Err()
@@ -115,58 +128,93 @@ func (s *Scanner) runMusicScan(directory string) {
 		}
 		return
 	}
-	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s; Spotify: %d matched, %d failed, %d unmatched",
-		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.enrichmentCounts[musicSpotifyStatusMatched], scan.enrichmentCounts[musicSpotifyStatusFailed], scan.enrichmentCounts[musicSpotifyStatusUnmatched]))
+	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s; %d deferred; Spotify: %d matched, %d failed, %d unmatched",
+		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.deferred, scan.enrichmentCounts[musicSpotifyStatusMatched], scan.enrichmentCounts[musicSpotifyStatusFailed], scan.enrichmentCounts[musicSpotifyStatusUnmatched]))
 }
 
 func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
+		outcome, err := s.processFile(ctx, scan, file)
 		contextErr := ctx.Err()
 		if contextErr != nil {
 			return scanned, skipped, errCount
 		}
-
-		unchanged := scan.trackUnchanged(file.Path, file.Size)
-		if unchanged {
-			skipped++
-			continue
-		}
-
-		resolved, err := s.resolveTrackFile(ctx, scan, file)
-		if err != nil {
-			contextErr = ctx.Err()
-			if contextErr != nil {
-				return scanned, skipped, errCount
-			}
-			s.logger.Warn("failed to resolve music track", "path", file.Path, "error", err)
+		var deferred *scanner.FileDeferral
+		isDeferred := errors.As(err, &deferred)
+		if isDeferred {
+			scan.deferred++
+			s.logger.Debug("deferred track", "path", file.Path, "reason", deferred.Reason, "eligible_at", deferred.EligibleAt)
+		} else if err != nil {
+			s.logger.Warn("failed to process track", "path", file.Path, "error", err)
 			errCount++
-			continue
-		}
-
-		_, err = s.persistResolvedTrack(ctx, scan, resolved)
-		if err != nil {
-			contextErr = ctx.Err()
-			if contextErr != nil {
-				return scanned, skipped, errCount
+		} else {
+			switch outcome {
+			case scanner.FileDeferred:
+				scan.deferred++
+			case scanner.FileUnchanged, scanner.FileFingerprintOnly:
+				skipped++
+			case scanner.FileNeedsProcessing:
+				scanned++
 			}
-			s.logger.Warn("failed to persist music track", "path", file.Path, "error", err)
-			errCount++
-			continue
 		}
-
-		scanned++
 	}
-
 	return scanned, skipped, errCount
 }
 
-func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]int64, error) {
+func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (outcome scanner.FileOutcome, err error) {
+	file.Path = filepath.Clean(file.Path)
+	var previous *scanner.FileFingerprint
+	baseline, exists := scan.trackIndex[file.Path]
+	if exists {
+		previous = &baseline
+	}
+	inspection, err := scanner.InspectFile(ctx, file.Path, previous, s.now)
+	if err != nil {
+		return outcome, err
+	}
+	defer func() { err = errors.Join(err, inspection.Close()) }()
+	outcome = inspection.Outcome
+	if outcome == scanner.FileDeferred {
+		s.logger.Debug("deferred track", "path", file.Path, "reason", inspection.Reason, "eligible_at", inspection.EligibleAt)
+		return outcome, nil
+	}
+	if outcome == scanner.FileUnchanged {
+		return outcome, nil
+	}
+	if outcome == scanner.FileFingerprintOnly {
+		err = s.persistFingerprint(ctx, scan, file.Path, inspection)
+		return outcome, err
+	}
+	file.Size = inspection.Fingerprint.Size
+	resolved, resolveErr := s.resolveTrackFile(ctx, scan, file)
+	err = inspection.Validate(ctx)
+	if err != nil {
+		return outcome, err
+	}
+	if resolveErr != nil {
+		return outcome, resolveErr
+	}
+	resolved.inspection = inspection
+	_, err = s.persistResolvedTrack(ctx, scan, resolved)
+	return outcome, err
+}
+
+func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.FileFingerprint, []scanner.CatalogFile, error) {
 	rows, err := s.queries.ListMusicTrackScanIndex(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	return scanner.BuildScanIndex(rows, func(row database.ListMusicTrackScanIndexRow) (string, int64) {
-		return row.FilePath, row.Size
-	}), nil
+	index := make(map[string]scanner.FileFingerprint, len(rows))
+	files := make([]scanner.CatalogFile, 0, len(rows))
+	for _, row := range rows {
+		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
+		if !row.MtimeNs.Valid {
+			continue
+		}
+		index[filepath.Clean(row.FilePath)] = scanner.FileFingerprint{
+			Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
+			Device: row.Device.String, Inode: row.Inode.String, SHA256: [32]byte(row.Sha256),
+		}
+	}
+	return index, files, nil
 }

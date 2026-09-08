@@ -34,57 +34,6 @@ func TestNormalizedScanCacheKey(t *testing.T) {
 	}
 }
 
-func TestScanIndexUnchanged(t *testing.T) {
-	index := map[string]int64{
-		filepath.Clean("/movies/a.mkv"): 100,
-	}
-
-	tests := []struct {
-		name string
-		path string
-		size int64
-		want bool
-	}{
-		{"present and same size", "/movies/a.mkv", 100, true},
-		{"present, unclean path still matches", "/movies/./a.mkv", 100, true},
-		{"present but different size", "/movies/a.mkv", 200, false},
-		{"absent", "/movies/b.mkv", 100, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ScanIndexUnchanged(index, tt.path, tt.size); got != tt.want {
-				t.Errorf("ScanIndexUnchanged(%q, %d) = %v, want %v", tt.path, tt.size, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestBuildScanIndex(t *testing.T) {
-	type row struct {
-		path string
-		size int64
-	}
-	rows := []row{
-		{"/music/./a.mp3", 1},
-		{"/music/b.mp3", 2},
-	}
-
-	index := BuildScanIndex(rows, func(r row) (string, int64) {
-		return r.path, r.size
-	})
-
-	if len(index) != 2 {
-		t.Fatalf("index len = %d, want 2", len(index))
-	}
-	// Keys are cleaned.
-	if got, ok := index[filepath.Clean("/music/a.mp3")]; !ok || got != 1 {
-		t.Errorf("cleaned key /music/a.mp3 = (%d, %v), want (1, true)", got, ok)
-	}
-	if got := index["/music/b.mp3"]; got != 2 {
-		t.Errorf("index[/music/b.mp3] = %d, want 2", got)
-	}
-}
-
 func TestScanGuard(t *testing.T) {
 	var g ScanGuard
 

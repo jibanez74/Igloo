@@ -45,11 +45,9 @@ FROM movies
 WHERE id IN (sqlc.slice(ids));
 
 -- name: GetMovieScanIndex :many
-SELECT
-  file_path,
-  size
-FROM movies
-ORDER BY id;
+SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM movies c
+LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id;
 
 -- name: GetLatestMovies :many
 SELECT
@@ -63,6 +61,7 @@ ORDER BY created_at DESC
 LIMIT 12;
 
 -- name: UpsertMovie :one
+-- Existing movies retain descriptions; confirmed TMDB details are applied separately.
 INSERT INTO movies (
   title,
   file_path,
@@ -92,30 +91,11 @@ VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
-  title = excluded.title,
   file_name = excluded.file_name,
   size = excluded.size,
   container = excluded.container,
   mime_type = excluded.mime_type,
-  adult = excluded.adult,
-  tmdb_id = excluded.tmdb_id,
-  imdb_id = excluded.imdb_id,
-  poster_path = excluded.poster_path,
-  backdrop_path = excluded.backdrop_path,
-  language = excluded.language,
-  year = excluded.year,
-  release_date = excluded.release_date,
-  overview = excluded.overview,
-  tag_line = excluded.tag_line,
-  certification = excluded.certification,
-  -- audience_rating is deliberately not updated: the scanner never supplies it
-  -- (only the manual edit path does), so refreshing it here would wipe manual
-  -- edits on every rescan. Guarded by
-  -- TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata.
-  critic_rating = excluded.critic_rating,
-  revenue = excluded.revenue,
-  budget = excluded.budget,
-  run_time = excluded.run_time,
+  run_time = COALESCE(excluded.run_time, movies.run_time),
   duration = COALESCE(excluded.duration, movies.duration),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
@@ -583,3 +563,28 @@ ORDER BY
   m.id DESC
 LIMIT ?
 OFFSET ?;
+
+-- name: DeleteMissingMovie :execrows
+DELETE FROM movies WHERE id = ? AND file_path = ?;
+
+-- name: GetMovieByPath :one
+SELECT * FROM movies WHERE file_path = ?;
+
+-- name: MarkMovieTmdbRetry :exec
+INSERT INTO movie_tmdb_retries (movie_id) VALUES (?) ON CONFLICT DO NOTHING;
+
+-- name: ClearMovieTmdbRetry :exec
+DELETE FROM movie_tmdb_retries WHERE movie_id = ?;
+
+-- name: CountMovieTmdbRetries :one
+SELECT count(*) FROM movies m WHERE tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = m.id);
+
+-- name: UpdateMovieTmdbMetadata :exec
+UPDATE movies SET
+ title = ?, tmdb_id = ?, imdb_id = ?, poster_path = ?, backdrop_path = ?,
+ adult = ?, language = ?, year = ?, release_date = ?, overview = ?, tag_line = ?,
+ certification = ?, critic_rating = ?, revenue = ?, budget = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: HasMovieTmdbRetry :one
+SELECT EXISTS (SELECT 1 FROM movie_tmdb_retries WHERE movie_id = ?);

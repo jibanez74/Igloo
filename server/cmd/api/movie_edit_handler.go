@@ -44,6 +44,9 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.ScannerDBMu.Lock()
+	defer app.ScannerDBMu.Unlock()
+
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
 		app.Logger.Error("failed to begin transaction", "error", err)
@@ -62,14 +65,6 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		}
 		app.Logger.Error("failed to get movie", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
-		return
-	}
-
-	params := buildUpdateParamsFromTmdb(movie.ID, tmdbMovie)
-
-	if _, err = qtx.UpdateMovie(ctx, params); err != nil {
-		app.Logger.Error("failed to update movie", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to update movie"))
 		return
 	}
 
@@ -260,42 +255,4 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		Error:   false,
 		Message: "movie deleted successfully",
 	})
-}
-
-func buildUpdateParamsFromTmdb(movieID int64, m *tmdb.TmdbMovie) database.UpdateMovieParams {
-	params := database.UpdateMovieParams{
-		ID:            movieID,
-		Title:         m.Title,
-		TmdbID:        helpers.NullInt64(int64(m.TmdbID)),
-		ImdbID:        helpers.NullString(m.ImdbID),
-		PosterPath:    helpers.NullString(m.PosterPath),
-		BackdropPath:  helpers.NullString(m.BackdropPath),
-		Adult:         m.Adult,
-		Language:      helpers.NullString(m.OriginalLang),
-		Overview:      helpers.NullString(m.Overview),
-		TagLine:       helpers.NullString(m.Tagline),
-		Certification: helpers.NullString(m.Certification()),
-		CriticRating:  helpers.NullFloat64(m.VoteAverage),
-		Revenue:       helpers.NullFloat64(float64(m.Revenue)),
-		Budget:        helpers.NullFloat64(float64(m.Budget)),
-		RunTime:       helpers.NullInt64(int64(m.Runtime)),
-	}
-
-	if m.ReleaseDate != "" {
-		params.ReleaseDate = helpers.NullString(m.ReleaseDate)
-		if year := movieReleaseYear(m.ReleaseDate); year > 0 {
-			params.Year = helpers.NullInt64(int64(year))
-		}
-	}
-
-	return params
-}
-
-func movieReleaseYear(releaseDate string) int {
-	parsed, err := helpers.ParseDate(releaseDate)
-	if err != nil {
-		return 0
-	}
-
-	return parsed.Year()
 }

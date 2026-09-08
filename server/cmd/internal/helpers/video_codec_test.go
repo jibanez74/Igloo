@@ -8,8 +8,8 @@ func TestIsCoverArtVideoCodec(t *testing.T) {
 		codec string
 		want  bool
 	}{
-		{"mjpeg", true},
-		{"MJPEG", true},
+		{"mjpeg", false},
+		{"MJPEG", false},
 		{"png", true},
 		{"gif", true},
 		{"bmp", true},

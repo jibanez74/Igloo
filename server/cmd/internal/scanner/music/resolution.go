@@ -17,6 +17,7 @@ import (
 )
 
 type resolvedTrack struct {
+	inspection *scanner.FileInspection
 	params     database.UpsertTrackParams
 	musicians  []resolvedMusician
 	album      *resolvedAlbum
@@ -142,8 +143,14 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 			params.ChannelLayout = strconv.Itoa(stream.Channels)
 		}
 
-		if stream.Tags.Language != "" {
-			params.Language = sql.NullString{String: stream.Tags.Language, Valid: true}
+		language := strings.TrimSpace(stream.Tags.Language)
+		unknown := language == "" || strings.EqualFold(language, "und")
+		if unknown {
+			language = strings.TrimSpace(tags.Language)
+		}
+		unknown = strings.EqualFold(language, "und")
+		if !unknown {
+			params.Language = helpers.NullString(language)
 		}
 
 		break
@@ -200,17 +207,17 @@ func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanCont
 			return nil, fmt.Errorf("musician failed: %w", err)
 		}
 
-		if len(credits.parts) < 2 || !credits.hasDelimiter || !musician.splitCompoundOnNoMatch {
+		if len(credits.parts) < 2 || !musician.splitCompoundOnNoMatch {
 			return []resolvedMusician{*musician}, nil
 		}
 	}
 
-	musicians := make([]resolvedMusician, 0, len(credits.parts))
-	sortCredits := parseCompoundArtistCredits(sortArtist)
-	for i, part := range credits.parts {
+	musicians := make([]resolvedMusician, 0, len(credits.occurrences))
+	sortCredits := parseArtistSortCredits(sortArtist, len(credits.occurrences))
+	for i, part := range credits.occurrences {
 		explicitSort := ""
-		if len(sortCredits.parts) == len(credits.parts) {
-			explicitSort = sortCredits.parts[i]
+		if len(sortCredits) == len(credits.occurrences) {
+			explicitSort = sortCredits[i]
 		}
 		musician, err := s.resolveMusician(ctx, scan, part, explicitSort)
 		if err != nil {
