@@ -9,6 +9,7 @@ function envInt(name: string, fallback: number) {
 }
 
 const hasExternalBaseURL = Boolean(process.env.E2E_BASE_URL);
+const isProduction = process.env.E2E_PRODUCTION === "1";
 const webPort = envInt("E2E_WEB_PORT", 3000);
 const defaultBaseURL = `http://127.0.0.1:${webPort}`;
 // Must match the port the mock server binds (e2e/mock-api-server.ts) and the
@@ -42,7 +43,7 @@ export default defineConfig({
         },
         {
           command:
-            `bun run dev --host 127.0.0.1 --port ${webPort} --strictPort --open=false`,
+            `bun run ${isProduction ? "preview" : "dev"} --host 127.0.0.1 --port ${webPort} --strictPort --open=false`,
           env: { E2E_MOCK_API_PORT: String(mockApiPort) },
           url: defaultBaseURL,
           reuseExistingServer: false,
