@@ -3284,6 +3284,33 @@
         }
       }
     },
+    "/api/settings/scan/shows": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Trigger a TV show library scan",
+        "description": "Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Requires Show/Season N/file or Show/Specials/file. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; identical bytes with changed filesystem metadata update only fingerprints. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan. Failed requests preserve existing metadata and retry state; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes unreferenced episodes, seasons, and shows, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. TV browsing, playback, and manual identification are not provided.",
+        "operationId": "triggerShowScan",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/music/stats": {
       "get": {
         "tags": [

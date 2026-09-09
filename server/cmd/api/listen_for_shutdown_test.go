@@ -434,3 +434,16 @@ func isExpectedShutdownProcessExit(err error) bool {
 
 	return strings.Contains(strings.ToLower(err.Error()), "killed")
 }
+
+func (*shutdownTestTmdb) SearchShowsByTitleAndYear(context.Context, string, ...int) ([]tmdbapi.TVShow, error) {
+	return nil, tmdbapi.ErrNoShowsFound
+}
+func (*shutdownTestTmdb) GetShowDetails(context.Context, int) (*tmdbapi.TVShow, error) {
+	return nil, tmdbapi.ErrNoShowsFound
+}
+func (*shutdownTestTmdb) GetSeasonDetails(context.Context, int, int) (*tmdbapi.TVSeason, error) {
+	return nil, tmdbapi.ErrNoShowsFound
+}
+func (*shutdownTestTmdb) GetEpisodeCredits(context.Context, int, int, int) (*tmdbapi.TVEpisodeCredits, error) {
+	return nil, tmdbapi.ErrNoShowsFound
+}

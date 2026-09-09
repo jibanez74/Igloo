@@ -1007,3 +1007,16 @@ func TestIdentifyMovieRollsBackRetryCleanupFailure(t *testing.T) {
 		t.Fatalf("partial relationships: %+v %v", genres, err)
 	}
 }
+
+func (*stubTmdbClient) SearchShowsByTitleAndYear(context.Context, string, ...int) ([]tmdb.TVShow, error) {
+	return nil, tmdb.ErrNoShowsFound
+}
+func (*stubTmdbClient) GetShowDetails(context.Context, int) (*tmdb.TVShow, error) {
+	return nil, tmdb.ErrNoShowsFound
+}
+func (*stubTmdbClient) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
+	return nil, tmdb.ErrNoShowsFound
+}
+func (*stubTmdbClient) GetEpisodeCredits(context.Context, int, int, int) (*tmdb.TVEpisodeCredits, error) {
+	return nil, tmdb.ErrNoShowsFound
+}

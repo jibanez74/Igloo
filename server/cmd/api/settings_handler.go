@@ -8,6 +8,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
+	"igloo/cmd/internal/scanner/show"
 	"net/http"
 	"net/url"
 	"os"
@@ -398,6 +399,27 @@ func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request)
 	res := helpers.JSONResponse{
 		Error:   false,
 		Message: "Movie library scan started",
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func (app *Application) TriggerShowScan(w http.ResponseWriter, r *http.Request) {
+	result := app.ShowScanner.Start()
+	switch result.Status {
+	case show.StartNotConfigured:
+		helpers.ErrorJSON(w, errors.New("shows directory is not configured"))
+		return
+	case show.StartAlreadyRunning:
+		helpers.ErrorJSON(w, errors.New("show library scan is already in progress"), http.StatusConflict)
+		return
+	}
+
+	app.Logger.Info("show library scan triggered via API", "path", result.Directory)
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Show library scan started",
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)

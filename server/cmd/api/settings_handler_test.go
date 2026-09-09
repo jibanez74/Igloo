@@ -15,6 +15,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
+	"igloo/cmd/internal/scanner/show"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -104,6 +105,12 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 		CurrentMusicDirectory: func() sql.NullString { return app.CurrentSettings().MusicDir },
 	})
 
+	app.ShowScanner = show.New(show.Dependencies{
+		DB: app.DB, Queries: app.Queries, Logger: app.Logger, Wait: app.Wait,
+		ScannerDBMu:           &app.ScannerDBMu,
+		CurrentShowsDirectory: func() sql.NullString { return app.CurrentSettings().ShowsDir },
+	})
+
 	assertRequest := func(operationID string, req *http.Request, serve func(http.ResponseWriter, *http.Request), wantStatus int) {
 		t.Helper()
 		addOpenAPITestCookie(req)
@@ -138,6 +145,7 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 
 	assertRequest("triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), app.TriggerMusicScan, http.StatusOK)
 	assertRequest("triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), app.TriggerMovieScan, http.StatusOK)
+	assertRequest("triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), app.TriggerShowScan, http.StatusOK)
 	app.Wait.Wait()
 }
 

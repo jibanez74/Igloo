@@ -1528,6 +1528,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/scan/shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a TV show library scan
+         * @description Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Requires Show/Season N/file or Show/Specials/file. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; identical bytes with changed filesystem metadata update only fingerprints. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan. Failed requests preserve existing metadata and retry state; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes unreferenced episodes, seasons, and shows, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. TV browsing, playback, and manual identification are not provided.
+         */
+        post: operations["triggerShowScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/music/stats": {
         parameters: {
             query?: never;
@@ -6493,6 +6513,22 @@ export interface operations {
         };
     };
     triggerMovieScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MessageSuccess"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    triggerShowScan: {
         parameters: {
             query?: never;
             header?: never;

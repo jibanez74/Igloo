@@ -1295,3 +1295,295 @@ CREATE TABLE IF NOT EXISTS movie_file_fingerprints (
   inode TEXT NOT NULL,
   sha256 BLOB NOT NULL CHECK (typeof(sha256) = 'blob' AND length(sha256) = 32)
 );
+
+-- TV catalog: directories own shows; physical files own technical metadata.
+CREATE TABLE IF NOT EXISTS shows (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ directory_path TEXT NOT NULL UNIQUE,
+ local_name TEXT NOT NULL,
+ premiere_year INTEGER,
+ name TEXT NOT NULL,
+ tmdb_id INTEGER,
+ imdb_id TEXT,
+ original_name TEXT,
+ overview TEXT,
+ tagline TEXT,
+ language TEXT,
+ origin_countries TEXT,
+ first_air_date TEXT,
+ last_air_date TEXT,
+ status TEXT,
+ type TEXT,
+ adult BOOLEAN NOT NULL DEFAULT false,
+ poster_path TEXT,
+ backdrop_path TEXT,
+ homepage TEXT,
+ vote_average REAL,
+ vote_count INTEGER,
+ popularity REAL,
+ certification TEXT,
+ tmdb_season_count INTEGER,
+ tmdb_episode_count INTEGER,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS show_tmdb_retries (show_id INTEGER PRIMARY KEY NOT NULL REFERENCES shows(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS show_seasons (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ season_number INTEGER NOT NULL CHECK (season_number >= 0),
+ name TEXT NOT NULL,
+ tmdb_id INTEGER,
+ overview TEXT,
+ air_date TEXT,
+ poster_path TEXT,
+ vote_average REAL,
+ tmdb_episode_count INTEGER,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE (show_id, season_number)
+);
+CREATE TABLE IF NOT EXISTS show_season_tmdb_retries (season_id INTEGER PRIMARY KEY NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS show_episodes (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
+ episode_number INTEGER NOT NULL CHECK (episode_number > 0),
+ name TEXT NOT NULL,
+ tmdb_id INTEGER,
+ overview TEXT,
+ air_date TEXT,
+ still_path TEXT,
+ production_code TEXT,
+ tmdb_runtime INTEGER,
+ vote_average REAL,
+ vote_count INTEGER,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE (season_id, episode_number),
+ UNIQUE (id, season_id)
+);
+CREATE TABLE IF NOT EXISTS show_episode_tmdb_retries (episode_id INTEGER PRIMARY KEY NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS show_files (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
+ file_path TEXT NOT NULL UNIQUE,
+ file_name TEXT NOT NULL,
+ size INTEGER NOT NULL,
+ container TEXT NOT NULL CHECK (container IN ('mkv', 'mp4', 'avi', 'mov', 'm4v', 'webm')),
+ mime_type TEXT NOT NULL,
+ duration REAL,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE (id, season_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_files_season ON show_files(season_id);
+CREATE TABLE IF NOT EXISTS show_episode_files (
+ episode_id INTEGER NOT NULL,
+ file_id INTEGER NOT NULL,
+ season_id INTEGER NOT NULL,
+ episode_order INTEGER NOT NULL CHECK (episode_order >= 0),
+ PRIMARY KEY (episode_id, file_id),
+ UNIQUE (file_id, episode_order),
+ FOREIGN KEY (episode_id, season_id) REFERENCES show_episodes(id, season_id) ON DELETE CASCADE,
+ FOREIGN KEY (file_id, season_id) REFERENCES show_files(id, season_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_show_episode_files_file_season ON show_episode_files(file_id, season_id);
+CREATE INDEX IF NOT EXISTS idx_show_episode_files_episode_season ON show_episode_files(episode_id, season_id);
+CREATE TABLE IF NOT EXISTS show_file_fingerprints (
+ file_id INTEGER PRIMARY KEY NOT NULL REFERENCES show_files(id) ON DELETE CASCADE,
+ mtime_ns INTEGER NOT NULL,
+ ctime_ns INTEGER NOT NULL,
+ device TEXT NOT NULL,
+ inode TEXT NOT NULL,
+ sha256 BLOB NOT NULL CHECK (typeof(sha256) = 'blob' AND length(sha256) = 32)
+);
+CREATE TABLE
+  IF NOT EXISTS show_video_streams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    codec TEXT NOT NULL,
+    codec_profile TEXT,
+    codec_level INTEGER,
+    bit_rate INTEGER NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    coded_width INTEGER,
+    coded_height INTEGER,
+    aspect_ratio TEXT,
+    frame_rate REAL NOT NULL,
+    avg_frame_rate TEXT,
+    bit_depth INTEGER,
+    pixel_format TEXT,
+    color_range TEXT,
+    color_space TEXT,
+    color_primaries TEXT,
+    color_transfer TEXT,
+    field_order TEXT,
+    -- Display-matrix rotation in degrees; NULL when the stream has no
+    -- display matrix (an explicit 0-degree matrix persists as 0).
+    rotation INTEGER,
+    language TEXT,
+    title TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_show_video_streams_file_stream ON show_video_streams(file_id, stream_index);
+CREATE TABLE
+  IF NOT EXISTS show_audio_streams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    codec TEXT NOT NULL,
+    codec_profile TEXT,
+    bit_rate INTEGER NOT NULL,
+    sample_rate INTEGER,
+    channels INTEGER NOT NULL,
+    channel_layout TEXT,
+    language TEXT,
+    title TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_show_audio_streams_file_stream ON show_audio_streams(file_id, stream_index);
+CREATE TABLE
+  IF NOT EXISTS show_subtitles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL,
+    stream_index INTEGER NOT NULL,
+    codec TEXT NOT NULL,
+    language TEXT,
+    title TEXT,
+    is_forced BOOLEAN NOT NULL DEFAULT false,
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_show_subtitles_file_stream ON show_subtitles(file_id, stream_index);
+CREATE TABLE
+  IF NOT EXISTS show_chapters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    start_time INTEGER NOT NULL,
+    thumb TEXT,
+    file_id INTEGER NOT NULL,
+    FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+CREATE INDEX IF NOT EXISTS idx_show_chapters_file ON show_chapters(file_id, start_time);
+CREATE TABLE IF NOT EXISTS networks (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ tmdb_id INTEGER NOT NULL UNIQUE,
+ name TEXT NOT NULL,
+ logo TEXT,
+ country TEXT
+);
+CREATE TABLE IF NOT EXISTS show_cast (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ character TEXT NOT NULL,
+ cast_order INTEGER NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (show_id, artist_id, character, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_cast_artist_id ON show_cast(artist_id);
+CREATE TABLE IF NOT EXISTS show_crew (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ department TEXT NOT NULL,
+ job TEXT NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (show_id, artist_id, department, job, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_crew_artist_id ON show_crew(artist_id);
+CREATE TABLE IF NOT EXISTS show_genres (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ genre_id INTEGER NOT NULL REFERENCES genres(id),
+ PRIMARY KEY (show_id, genre_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_genres_genre_id ON show_genres(genre_id);
+CREATE TABLE IF NOT EXISTS show_production_companies (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ production_company_id INTEGER NOT NULL REFERENCES production_companies(id),
+ PRIMARY KEY (show_id, production_company_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_production_companies_production_company_id ON show_production_companies(production_company_id);
+CREATE TABLE IF NOT EXISTS show_networks (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ network_id INTEGER NOT NULL REFERENCES networks(id),
+ PRIMARY KEY (show_id, network_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_networks_network_id ON show_networks(network_id);
+CREATE TABLE IF NOT EXISTS show_creators (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ PRIMARY KEY (show_id, artist_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_creators_artist_id ON show_creators(artist_id);
+CREATE TABLE IF NOT EXISTS show_extra_videos (
+ show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ extra_video_id INTEGER NOT NULL REFERENCES extra_videos(id),
+ PRIMARY KEY (show_id, extra_video_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_extra_videos_extra_video_id ON show_extra_videos(extra_video_id);
+CREATE TABLE IF NOT EXISTS show_season_cast (
+ season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ character TEXT NOT NULL,
+ cast_order INTEGER NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (season_id, artist_id, character, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_season_cast_artist_id ON show_season_cast(artist_id);
+CREATE TABLE IF NOT EXISTS show_season_crew (
+ season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ department TEXT NOT NULL,
+ job TEXT NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (season_id, artist_id, department, job, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_season_crew_artist_id ON show_season_crew(artist_id);
+CREATE TABLE IF NOT EXISTS show_season_extra_videos (
+ season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
+ extra_video_id INTEGER NOT NULL REFERENCES extra_videos(id),
+ PRIMARY KEY (season_id, extra_video_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_season_extra_videos_extra_video_id ON show_season_extra_videos(extra_video_id);
+CREATE TABLE IF NOT EXISTS show_episode_cast (
+ episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ character TEXT NOT NULL,
+ cast_order INTEGER NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (episode_id, artist_id, character, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_episode_cast_artist_id ON show_episode_cast(artist_id);
+CREATE TABLE IF NOT EXISTS show_episode_crew (
+ episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ department TEXT NOT NULL,
+ job TEXT NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (episode_id, artist_id, department, job, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_episode_crew_artist_id ON show_episode_crew(artist_id);
+CREATE TABLE IF NOT EXISTS show_episode_guest_cast (
+ episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
+ artist_id INTEGER NOT NULL REFERENCES artist(id),
+ character TEXT NOT NULL,
+ cast_order INTEGER NOT NULL,
+ credit_id TEXT NOT NULL,
+ episode_count INTEGER NOT NULL,
+ PRIMARY KEY (episode_id, artist_id, character, credit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_show_episode_guest_cast_artist_id ON show_episode_guest_cast(artist_id);

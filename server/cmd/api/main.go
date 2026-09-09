@@ -11,6 +11,7 @@ import (
 
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
+	"igloo/cmd/internal/scanner/show"
 )
 
 func main() {
@@ -86,6 +87,7 @@ func startMovieScanAtStartup(app *Application) {
 }
 
 func startLibraryScansAtStartup(app *Application) {
+	startShowScanAtStartup(app)
 	startMovieScanAtStartup(app)
 	result := app.MusicScanner.Start()
 	switch result.Status {
@@ -93,5 +95,15 @@ func startLibraryScansAtStartup(app *Application) {
 		app.Logger.Info("skipping music library scan: music directory is not configured")
 	case music.StartAlreadyRunning:
 		app.Logger.Warn("music library scan is already in progress")
+	}
+}
+
+func startShowScanAtStartup(app *Application) {
+	result := app.ShowScanner.Start()
+	switch result.Status {
+	case show.StartNotConfigured:
+		app.Logger.Info("skipping show library scan: shows directory is not configured")
+	case show.StartAlreadyRunning:
+		app.Logger.Warn("show library scan is already in progress")
 	}
 }

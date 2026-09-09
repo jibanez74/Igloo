@@ -20,6 +20,7 @@ What works today:
 
 - Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, cast/crew details, technical stream details, and admin metadata editing.
 - Movie playback through direct streaming, remuxed HLS, transcoded HLS, WebVTT subtitle extraction, audio/subtitle track selection, watch progress, likes, and movie playlists.
+- TV library ingestion with file-owned technical metadata, combined episodes and duplicate copies, optional TMDB show/season/episode enrichment, and safe missing-file cleanup.
 - Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, multi-artist track relationships, music playlists with collaborators, liked tracks, playback, and listening statistics.
 - Library-wide search across movies, albums, musicians, and tracks.
 - Watch rooms for shared movie playback, including direct stream and HLS room playback with WebSocket synchronization.
@@ -29,7 +30,7 @@ What works today:
 
 Current limitations:
 
-- TV shows and photos have web UI placeholders. TV library paths can be configured, but scanning and playback are not implemented yet.
+- TV shows and photos have web UI placeholders. TV scanning is implemented; TV browsing and playback remain deferred.
 - APIs may still change before v1.
 - Metadata providers are optional; without TMDB or Spotify, Igloo relies on local file metadata.
 - Full backend tests require a SQLite build with FTS5 enabled.
@@ -389,3 +390,11 @@ GitHub Actions runs backend tests plus frontend linting and build checks. Produc
 ## AI Coding Agent Notes
 
 This repository may be used with AI coding agents such as Codex. Project-specific instructions should live in a root-level `AGENTS.md` file. Keep those instructions aligned with the Go server, React/Vite web client, Bun package management, sqlc database workflow, OpenAPI maintenance, and accessibility requirements.
+
+### TV library scanning
+
+Set `SHOWS_DIR` on first launch or save the TV path in library Settings. Startup scans TV alongside movies and music. Admin clients can start another scan with `POST /api/settings/scan/shows`; saving Settings alone does not launch one. Responses are `200` started, `409` already running, or `500` unconfigured, with normal authentication and admin authorization.
+
+Use `Show Name (optional year)/Season N/filename.mkv`, or `Show Name/Specials/filename.mkv` for season zero. Filename numbering accepts `S01E02`, `S01E02-E04`, `S01E02E03`, and `1x02`, case-insensitively. The filename season must match its directory. Hidden backups, hidden files, nested extras, NFO files, and subtitle sidecars are excluded. Show folders remain separate identities even if TMDB matches the same show.
+
+Files must be quiet for 60 seconds. TMDB is optional: local imports remain in the catalog, and later scans retry pending enrichment without probing unchanged files. Combined files link separate episodes to one physical file and retain its complete duration without guessed episode boundaries. See [media scanning](docs/ffmpeg.md#tv-show-scanning) and the [implementation plan](docs/tv-show-scanner-plan.md).

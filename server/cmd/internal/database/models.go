@@ -195,6 +195,14 @@ type Musician struct {
 	UpdatedAt         string          `json:"updated_at"`
 }
 
+type Network struct {
+	ID      int64          `json:"id"`
+	TmdbID  int64          `json:"tmdb_id"`
+	Name    string         `json:"name"`
+	Logo    sql.NullString `json:"logo"`
+	Country sql.NullString `json:"country"`
+}
+
 type Notification struct {
 	ID              int64  `json:"id"`
 	CreatedByUserID int64  `json:"created_by_user_id"`
@@ -267,6 +275,149 @@ type Setting struct {
 	TranscodeDir               string          `json:"transcode_dir"`
 	CreatedAt                  string          `json:"created_at"`
 	UpdatedAt                  string          `json:"updated_at"`
+}
+
+type Show struct {
+	ID               int64           `json:"id"`
+	DirectoryPath    string          `json:"directory_path"`
+	LocalName        string          `json:"local_name"`
+	PremiereYear     sql.NullInt64   `json:"premiere_year"`
+	Name             string          `json:"name"`
+	TmdbID           sql.NullInt64   `json:"tmdb_id"`
+	ImdbID           sql.NullString  `json:"imdb_id"`
+	OriginalName     sql.NullString  `json:"original_name"`
+	Overview         sql.NullString  `json:"overview"`
+	Tagline          sql.NullString  `json:"tagline"`
+	Language         sql.NullString  `json:"language"`
+	OriginCountries  sql.NullString  `json:"origin_countries"`
+	FirstAirDate     sql.NullString  `json:"first_air_date"`
+	LastAirDate      sql.NullString  `json:"last_air_date"`
+	Status           sql.NullString  `json:"status"`
+	Type             sql.NullString  `json:"type"`
+	Adult            bool            `json:"adult"`
+	PosterPath       sql.NullString  `json:"poster_path"`
+	BackdropPath     sql.NullString  `json:"backdrop_path"`
+	Homepage         sql.NullString  `json:"homepage"`
+	VoteAverage      sql.NullFloat64 `json:"vote_average"`
+	VoteCount        sql.NullInt64   `json:"vote_count"`
+	Popularity       sql.NullFloat64 `json:"popularity"`
+	Certification    sql.NullString  `json:"certification"`
+	TmdbSeasonCount  sql.NullInt64   `json:"tmdb_season_count"`
+	TmdbEpisodeCount sql.NullInt64   `json:"tmdb_episode_count"`
+	CreatedAt        string          `json:"created_at"`
+	UpdatedAt        string          `json:"updated_at"`
+}
+
+type ShowAudioStream struct {
+	ID            int64          `json:"id"`
+	FileID        int64          `json:"file_id"`
+	StreamIndex   int64          `json:"stream_index"`
+	Codec         string         `json:"codec"`
+	CodecProfile  sql.NullString `json:"codec_profile"`
+	BitRate       int64          `json:"bit_rate"`
+	SampleRate    sql.NullInt64  `json:"sample_rate"`
+	Channels      int64          `json:"channels"`
+	ChannelLayout sql.NullString `json:"channel_layout"`
+	Language      sql.NullString `json:"language"`
+	Title         sql.NullString `json:"title"`
+	IsDefault     bool           `json:"is_default"`
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
+}
+
+type ShowChapter struct {
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	StartTime int64          `json:"start_time"`
+	Thumb     sql.NullString `json:"thumb"`
+	FileID    int64          `json:"file_id"`
+}
+
+type ShowEpisode struct {
+	ID             int64           `json:"id"`
+	SeasonID       int64           `json:"season_id"`
+	EpisodeNumber  int64           `json:"episode_number"`
+	Name           string          `json:"name"`
+	TmdbID         sql.NullInt64   `json:"tmdb_id"`
+	Overview       sql.NullString  `json:"overview"`
+	AirDate        sql.NullString  `json:"air_date"`
+	StillPath      sql.NullString  `json:"still_path"`
+	ProductionCode sql.NullString  `json:"production_code"`
+	TmdbRuntime    sql.NullInt64   `json:"tmdb_runtime"`
+	VoteAverage    sql.NullFloat64 `json:"vote_average"`
+	VoteCount      sql.NullInt64   `json:"vote_count"`
+	CreatedAt      string          `json:"created_at"`
+	UpdatedAt      string          `json:"updated_at"`
+}
+
+type ShowFile struct {
+	ID        int64           `json:"id"`
+	SeasonID  int64           `json:"season_id"`
+	FilePath  string          `json:"file_path"`
+	FileName  string          `json:"file_name"`
+	Size      int64           `json:"size"`
+	Container string          `json:"container"`
+	MimeType  string          `json:"mime_type"`
+	Duration  sql.NullFloat64 `json:"duration"`
+	CreatedAt string          `json:"created_at"`
+	UpdatedAt string          `json:"updated_at"`
+}
+
+type ShowSeason struct {
+	ID               int64           `json:"id"`
+	ShowID           int64           `json:"show_id"`
+	SeasonNumber     int64           `json:"season_number"`
+	Name             string          `json:"name"`
+	TmdbID           sql.NullInt64   `json:"tmdb_id"`
+	Overview         sql.NullString  `json:"overview"`
+	AirDate          sql.NullString  `json:"air_date"`
+	PosterPath       sql.NullString  `json:"poster_path"`
+	VoteAverage      sql.NullFloat64 `json:"vote_average"`
+	TmdbEpisodeCount sql.NullInt64   `json:"tmdb_episode_count"`
+	CreatedAt        string          `json:"created_at"`
+	UpdatedAt        string          `json:"updated_at"`
+}
+
+type ShowSubtitle struct {
+	ID          int64          `json:"id"`
+	FileID      int64          `json:"file_id"`
+	StreamIndex int64          `json:"stream_index"`
+	Codec       string         `json:"codec"`
+	Language    sql.NullString `json:"language"`
+	Title       sql.NullString `json:"title"`
+	IsForced    bool           `json:"is_forced"`
+	IsDefault   bool           `json:"is_default"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at"`
+}
+
+type ShowVideoStream struct {
+	ID             int64          `json:"id"`
+	FileID         int64          `json:"file_id"`
+	StreamIndex    int64          `json:"stream_index"`
+	Codec          string         `json:"codec"`
+	CodecProfile   sql.NullString `json:"codec_profile"`
+	CodecLevel     sql.NullInt64  `json:"codec_level"`
+	BitRate        int64          `json:"bit_rate"`
+	Width          int64          `json:"width"`
+	Height         int64          `json:"height"`
+	CodedWidth     sql.NullInt64  `json:"coded_width"`
+	CodedHeight    sql.NullInt64  `json:"coded_height"`
+	AspectRatio    sql.NullString `json:"aspect_ratio"`
+	FrameRate      float64        `json:"frame_rate"`
+	AvgFrameRate   sql.NullString `json:"avg_frame_rate"`
+	BitDepth       sql.NullInt64  `json:"bit_depth"`
+	PixelFormat    sql.NullString `json:"pixel_format"`
+	ColorRange     sql.NullString `json:"color_range"`
+	ColorSpace     sql.NullString `json:"color_space"`
+	ColorPrimaries sql.NullString `json:"color_primaries"`
+	ColorTransfer  sql.NullString `json:"color_transfer"`
+	FieldOrder     sql.NullString `json:"field_order"`
+	Rotation       sql.NullInt64  `json:"rotation"`
+	Language       sql.NullString `json:"language"`
+	Title          sql.NullString `json:"title"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
 }
 
 type Subtitle struct {
