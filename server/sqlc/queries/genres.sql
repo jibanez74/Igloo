@@ -10,26 +10,6 @@ SET
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
--- name: UpsertMusicianGenre :exec
--- Creates a relationship between a musician and a genre (idempotent)
-INSERT INTO musician_genres (
-  musician_id,
-  genre_id
-)
-VALUES
-  (?, ?)
-ON CONFLICT (musician_id, genre_id, source) DO NOTHING;
-
--- name: UpsertAlbumGenre :exec
--- Creates a relationship between an album and a genre (idempotent)
-INSERT INTO album_genres (
-  album_id,
-  genre_id
-)
-VALUES
-  (?, ?)
-ON CONFLICT (album_id, genre_id, source) DO NOTHING;
-
 -- name: GetGenresByMusicianID :many
 -- Returns all genres associated with a musician
 SELECT DISTINCT

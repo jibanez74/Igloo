@@ -21,17 +21,6 @@ SELECT
 FROM albums
 WHERE spotify_id IN (sqlc.slice(spotify_ids));
 
--- name: GetAlbumByTitleAndMusician :one
--- The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
--- target exactly, so a NULL-musician lookup finds a row written with '' and
--- vice versa.
-SELECT
-  *
-FROM albums
-WHERE title = ?
-  AND COALESCE(musician, '') = COALESCE(sqlc.arg(musician), '')
-LIMIT 1;
-
 -- name: GetLatestAlbums :many
 SELECT
   id,

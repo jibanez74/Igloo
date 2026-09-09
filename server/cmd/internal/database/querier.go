@@ -37,7 +37,6 @@ type Querier interface {
 	CreateMoviePlaylist(ctx context.Context, arg CreateMoviePlaylistParams) (Playlist, error)
 	// Link movie to production company via junction table
 	CreateMovieProductionCompany(ctx context.Context, arg CreateMovieProductionCompanyParams) error
-	CreateMusicianAlbum(ctx context.Context, arg CreateMusicianAlbumParams) error
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) (Playlist, error)
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
@@ -97,10 +96,6 @@ type Querier interface {
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
-	// The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
-	// target exactly, so a NULL-musician lookup finds a row written with '' and
-	// vice versa.
-	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
 	// Returns all genres associated with an album
 	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
 	// Returns albums sorted alphabetically by title with pagination.
@@ -176,7 +171,6 @@ type Querier interface {
 	GetMusicLibraryCounts(ctx context.Context) (GetMusicLibraryCountsRow, error)
 	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (MusicSpotifyMatch, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
-	GetMusicianByName(ctx context.Context, name string) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
 	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
@@ -376,8 +370,6 @@ type Querier interface {
 	// Matches idx_albums_title_musician, which treats a missing musician as '' so an
 	// untagged album cannot be inserted twice.
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
-	// Creates a relationship between an album and a genre (idempotent)
-	UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error
 	UpsertArtist(ctx context.Context, arg UpsertArtistParams) (Artist, error)
 	UpsertCast(ctx context.Context, arg UpsertCastParams) (Cast, error)
 	UpsertCrew(ctx context.Context, arg UpsertCrewParams) (Crew, error)
@@ -391,8 +383,6 @@ type Querier interface {
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
-	// Creates a relationship between a musician and a genre (idempotent)
-	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (ProductionCompany, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
