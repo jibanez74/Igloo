@@ -136,7 +136,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
       }
     },
     "/api/auth/user": {
@@ -207,7 +208,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
       }
     },
     "/api/quick-connect/initiate": {
@@ -540,7 +542,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
       }
     },
     "/api/user/pin": {
@@ -2569,7 +2572,7 @@
           "Admin Users"
         ],
         "summary": "Create a user",
-        "description": "Admin-only endpoint.",
+        "description": "Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.",
         "operationId": "adminCreateUser",
         "requestBody": {
           "$ref": "#/components/requestBodies/AdminCreateUserRequest"
@@ -2676,7 +2679,7 @@
           "Admin Users"
         ],
         "summary": "Reset a user's password",
-        "description": "Admin-only endpoint.",
+        "description": "Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.",
         "operationId": "adminResetUserPassword",
         "parameters": [
           {
@@ -6445,7 +6448,8 @@
           },
           "password": {
             "type": "string",
-            "format": "password"
+            "format": "password",
+            "description": "Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
           }
         },
         "additionalProperties": false
@@ -6487,13 +6491,15 @@
         "properties": {
           "current_password": {
             "type": "string",
-            "format": "password"
+            "format": "password",
+            "description": "Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
           },
           "new_password": {
             "type": "string",
             "format": "password",
             "minLength": 9,
-            "maxLength": 128
+            "maxLength": 72,
+            "description": "At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400."
           }
         },
         "additionalProperties": false
@@ -6703,7 +6709,8 @@
             "type": "string",
             "format": "password",
             "minLength": 9,
-            "maxLength": 128
+            "maxLength": 72,
+            "description": "At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400."
           },
           "is_admin": {
             "type": "boolean"
@@ -6744,7 +6751,8 @@
             "type": "string",
             "format": "password",
             "minLength": 9,
-            "maxLength": 128
+            "maxLength": 72,
+            "description": "At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400."
           }
         },
         "additionalProperties": false
@@ -10997,7 +11005,8 @@
           },
           "password": {
             "type": "string",
-            "format": "password"
+            "format": "password",
+            "description": "Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401."
           },
           "device_name": {
             "type": "string",

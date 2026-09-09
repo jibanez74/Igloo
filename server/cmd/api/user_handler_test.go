@@ -26,12 +26,12 @@ func TestValidatePasswordCountsRunes(t *testing.T) {
 			value: strings.Repeat("界", 9),
 		},
 		{
-			name:  "one hundred twenty eight multibyte characters is accepted",
-			value: strings.Repeat("界", 128),
+			name:  "seventy two multibyte bytes is accepted",
+			value: strings.Repeat("界", 24),
 		},
 		{
-			name:    "one hundred twenty nine multibyte characters is too long",
-			value:   strings.Repeat("界", 129),
+			name:    "seventy five multibyte bytes is too long",
+			value:   strings.Repeat("界", 25),
 			wantErr: true,
 		},
 	}

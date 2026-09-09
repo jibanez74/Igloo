@@ -30,7 +30,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log in with email and password */
+        /**
+         * Log in with email and password
+         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         */
         post: operations["authenticateUser"];
         delete?: never;
         options?: never;
@@ -84,7 +87,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log in with email and password from a TV or mobile client and receive a device token */
+        /**
+         * Log in with email and password from a TV or mobile client and receive a device token
+         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         */
         post: operations["authenticateDevice"];
         delete?: never;
         options?: never;
@@ -255,7 +261,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update the current user's password */
+        /**
+         * Update the current user's password
+         * @description New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         */
         put: operations["updateUserPassword"];
         post?: never;
         delete?: never;
@@ -1213,7 +1222,7 @@ export interface paths {
         put?: never;
         /**
          * Create a user
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
          */
         post: operations["adminCreateUser"];
         delete?: never;
@@ -1256,7 +1265,7 @@ export interface paths {
         get?: never;
         /**
          * Reset a user's password
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
          */
         put: operations["adminResetUserPassword"];
         post?: never;
@@ -2083,7 +2092,10 @@ export interface components {
         LoginRequest: {
             /** Format: email */
             email: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+             */
             password: string;
         };
         UpdateUserNameRequest: {
@@ -2094,9 +2106,15 @@ export interface components {
             email: string;
         };
         UpdateUserPasswordRequest: {
-            /** Format: password */
+            /**
+             * Format: password
+             * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+             */
             current_password: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400.
+             */
             new_password: string;
         };
         UpdateUserAvatarRequest: {
@@ -2145,7 +2163,10 @@ export interface components {
             name: string;
             /** Format: email */
             email: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400.
+             */
             password: string;
             is_admin: boolean;
         };
@@ -2156,7 +2177,10 @@ export interface components {
             is_admin: boolean;
         };
         AdminResetUserPasswordRequest: {
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400.
+             */
             password: string;
         };
         AdminUserEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -3383,7 +3407,10 @@ export interface components {
         DeviceLoginRequest: {
             /** Format: email */
             email: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+             */
             password: string;
             device_name: string;
             platform?: string;

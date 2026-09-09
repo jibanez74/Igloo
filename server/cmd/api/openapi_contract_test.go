@@ -53,6 +53,18 @@ func addOpenAPITestCookie(request *http.Request) {
 // newOpenAPIJSONRequest so the consumed body can be replayed.
 func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {
 	t.Helper()
+	assertOpenAPIHTTPExchange(t, operationID, request, response, true)
+}
+
+// Rejection and lenient-query tests deliberately send requests outside the
+// request schema. They still validate the actual response against the contract.
+func assertOpenAPIResponse(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {
+	t.Helper()
+	assertOpenAPIHTTPExchange(t, operationID, request, response, false)
+}
+
+func assertOpenAPIHTTPExchange(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder, validateRequest bool) {
+	t.Helper()
 
 	_, router := loadOpenAPIContract(t)
 
@@ -81,9 +93,11 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 		Route:      route,
 		Options:    openAPIValidationOptions,
 	}
-	err = openapi3filter.ValidateRequest(context.Background(), requestInput)
-	if err != nil {
-		t.Fatalf("OpenAPI request validation: %v", err)
+	if validateRequest {
+		err = openapi3filter.ValidateRequest(context.Background(), requestInput)
+		if err != nil {
+			t.Fatalf("OpenAPI request validation: %v", err)
+		}
 	}
 
 	result := response.Result()

@@ -44,8 +44,9 @@ func validatePassword(password, label string) error {
 	if passwordLength < 9 {
 		return fmt.Errorf("%s must be at least 9 characters", label)
 	}
-	if passwordLength > 128 {
-		return fmt.Errorf("%s must be 128 characters or less", label)
+	passwordBytes := len(password)
+	if passwordBytes > helpers.USER_PASSWORD_MAX_BYTES {
+		return fmt.Errorf("%s must be at most %d UTF-8 bytes", label, helpers.USER_PASSWORD_MAX_BYTES)
 	}
 	return nil
 }
