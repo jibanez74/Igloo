@@ -78,6 +78,20 @@ func TestParsing(t *testing.T) {
 		{"Show/Season 1/S01E02-E04.mp4", []int{2, 3, 4}, 1},
 		{"Show/Season 1/S01E02E03.avi", []int{2, 3}, 1},
 		{"Show/season 01/1x02.webm", []int{2}, 1},
+		{"Breaking Bad/Season 2/Breaking Bad - S02E09 - 4 Days Out.mkv", []int{9}, 2},
+		{"Show/Season 1/Show.S01E02.[1920x1080].mkv", []int{2}, 1},
+		{"Show/Season 1/S01E02  -   4 Days Out.mkv", []int{2}, 1},
+		{"Show/Season 1/S01E02\t-\t4 Days Out.mkv", []int{2}, 1},
+		{"Show/Season 1/1x02 - 4 Days Out.mkv", []int{2}, 1},
+		{"Show/Season 1/S01E02-E04 - 4 Days Out.mkv", []int{2, 3, 4}, 1},
+		{"Show/Season 1/S01E02E03 - 1984.mkv", []int{2, 3}, 1},
+		{"Show/Season 1/S01E02 - 1984.mkv", []int{2}, 1},
+		{"Show/Season 1/1920x1080 S01E02.mkv", []int{2}, 1},
+		{"Show/Season 1/[1920x1080] S01E02.mkv", []int{2}, 1},
+		{"Show/Season 1/S01E02 1920x1080.mkv", []int{2}, 1},
+		{"Show/Season 1/1920X1080 1x02 [1280x720].mkv", []int{2}, 1},
+		{"Show/Season 1/[640x480][1920x1080]S01E02-E04[3840X2160].mkv", []int{2, 3, 4}, 1},
+		{"Show/Season 1/[720x1280] S01E02 [480x640].mkv", []int{2}, 1},
 		{"Show/Specials/S00E01.mkv", []int{1}, 0},
 		{"Show/Season 0/S00E01-E03.mkv", []int{1, 2, 3}, 0},
 	} {
@@ -89,6 +103,36 @@ func TestParsing(t *testing.T) {
 		})
 	}
 	for _, path := range []string{
+		"Show/Season 1/1920x1080.mkv",
+		"Show/Season 1/[1920X1080].mkv",
+		"Show/Season 1/[640x480] [1920x1080].mkv",
+		"Show/Season 1/S01E01 1x03 [1920x1080].mkv",
+		"Show/Season 1/[1920x1080] S01E01 S01E02.mkv",
+		"Show/Season 1/S01E01 - 4 Days Out 1x03.mkv",
+		"Show/Season 1/S01E01-03 [1920x1080].mkv",
+		"Show/Season 1/S01E01-E [1920x1080].mkv",
+		"Show/Season 1/S01E01- 03.mkv",
+		"Show/Season 1/S01E01 -03.mkv",
+		"Show/Season 1/S01E01\t-03.mkv",
+		"Show/Season 1/S01E01-\t03.mkv",
+		"Show/Season 1/[1920x1080] S02E01.mkv",
+		"Show/Season 1/[1920x1080] S01E04-E02.mkv",
+		"Show/Season 1/[1920x1080] S01E01 E03.mkv",
+		"Show/Season 1/S01E01E99999.mkv",
+		"Show/Season 1/S01E99999 - 4 Days Out.mkv",
+		"Show/Season 1/S00001E01.mkv",
+		"Show/Season 1/10001x02.mkv",
+		"Show/Season 1/1x00002.mkv",
+		"Show/Season 1/S01E01 19200x1080.mkv",
+		"Show/Season 1/S01E01 1920x10800.mkv",
+		"Show/Season 1/S01E01 a1920x1080.mkv",
+		"Show/Season 1/S01E01 1920x1080p.mkv",
+		"Show/Season 1/S01E01 99x1080.mkv",
+		"Show/Season 1/S01E01 1920x99.mkv",
+		"Show/Season 1/Season1920x1080.mkv",
+		"Show/Season 1/1920x1080p.mkv",
+		"Show/Season 1/[1920x1080] S01E01E99999.mkv",
+		"Show/Season 1/[1920x1080] aS01E01.mkv",
 		"Show/Season 1/S01E04-E02.mkv", "Show/Season 1/S02E01.mkv", "Show/Season 1/S01E01-S02E02.mkv", "Show/Season 1/S01E01 1x03.mkv", "Show/Season 1/S01E01E01.mkv", "Show/Season 1/S01E01-03.mkv", "Show/Season 1/S01E01-E.mkv", "Show/Season 1/S01E00.mkv", "Show/Season 1/S01E01E00.mkv", "Show/Season 1/S01E01 E03.mkv", "Show/Season 1/S01E01_E03.mkv", "Show/Season 1/2020-01-02.mkv", "Show/Season 1/001.mkv", "Show/Season 1/extras/S01E01.mkv", ".backup/Show/Season 1/S01E01.mkv", "Show/Season 1/.S01E01.mkv", "Show/Specials/S01E01.mkv",
 	} {
 		t.Run(path, func(t *testing.T) {
@@ -97,6 +141,45 @@ func TestParsing(t *testing.T) {
 				t.Fatal("accepted malformed path")
 			}
 		})
+	}
+}
+
+func TestNumericTitlesAndResolutionsReachProbing(t *testing.T) {
+	s, probe, root := setupScanner(t)
+	files := []struct {
+		path    string
+		season  int
+		episode int
+	}{
+		{"Breaking Bad/Season 2/Breaking Bad - S02E09 - 4 Days Out.mkv", 2, 9},
+		{"Show/Season 1/Show.S01E02.[1920x1080].mkv", 1, 2},
+	}
+	for _, file := range files {
+		writeFile(t, root, file.path, file.path)
+	}
+	conflict := writeFile(t, root, "Show/Season 1/S01E01 1x03 [1920x1080].mkv", "conflict")
+	scanOK(t, s, root)
+	if probe.calls != len(files) || countRows(t, s.DB, "show_files") != len(files) || countRows(t, s.DB, "show_episode_files") != len(files) {
+		t.Fatalf("expected two probed and linked files, got %d probes", probe.calls)
+	}
+	for _, file := range files {
+		var season, episode int
+		err := s.DB.QueryRow(`SELECT ss.season_number, se.episode_number
+			FROM show_files sf
+			JOIN show_episode_files sef ON sef.file_id = sf.id
+			JOIN show_episodes se ON se.id = sef.episode_id
+			JOIN show_seasons ss ON ss.id = se.season_id
+			WHERE sf.file_path = ?`, filepath.Join(root, file.path)).Scan(&season, &episode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if season != file.season || episode != file.episode {
+			t.Fatalf("%s linked to season %d episode %d", file.path, season, episode)
+		}
+	}
+	_, err := s.Queries.GetShowFileByPath(context.Background(), conflict)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("conflicting file should be excluded: %v", err)
 	}
 }
 

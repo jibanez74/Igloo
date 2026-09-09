@@ -12,6 +12,7 @@ var seasonDirectory = regexp.MustCompile(`(?i)^season\s+(\d{1,4})$`)
 var episodeToken = regexp.MustCompile(`(?i)s(\d{1,4})e(\d{1,4})((?:-e\d{1,4}|e\d{1,4})*)|(\d{1,4})x(\d{1,4})`)
 var conflictingEpisode = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])e\d+`)
 var episodeSuffix = regexp.MustCompile(`(?i)(-?)e(\d{1,4})`)
+var episodeTitleSeparator = regexp.MustCompile(`^\s+-\s+`)
 var explicitYear = regexp.MustCompile(`^(.*?)\s*\(\s*((?:19|20)\d{2})\s*\)\s*$`)
 var titleYear = regexp.MustCompile(`\b(?:19|20)\d{2}\b`)
 
@@ -52,6 +53,18 @@ func parseFile(root, path string) (localEpisodeFile, error) {
 	}
 	base := strings.TrimSuffix(parts[2], filepath.Ext(parts[2]))
 	matches := episodeToken.FindAllStringSubmatchIndex(base, -1)
+	episodeMatches := matches[:0]
+	for _, m := range matches {
+		// Standalone 3–4-digit dimension pairs are resolution metadata.
+		isResolution := m[8] >= 0 && m[9]-m[8] >= 3 && m[11]-m[10] >= 3
+		validPrefix := m[0] == 0 || !isASCIIAlphaNumeric(base[m[0]-1])
+		validSuffix := m[1] == len(base) || !isASCIIAlphaNumeric(base[m[1]])
+		if isResolution && validPrefix && validSuffix {
+			continue
+		}
+		episodeMatches = append(episodeMatches, m)
+	}
+	matches = episodeMatches
 	if len(matches) != 1 {
 		return result, fmt.Errorf("missing or conflicting episode numbering")
 	}
@@ -70,11 +83,12 @@ func parseFile(root, path string) (localEpisodeFile, error) {
 	if invalidSuffix {
 		return result, fmt.Errorf("invalid episode token suffix")
 	}
-	trimmed := strings.TrimLeft(tail, " ._")
+	titleSeparator := episodeTitleSeparator.MatchString(tail)
+	trimmed := strings.TrimLeft(tail, " ._\t\r\n\f")
 	rangeSuffix := strings.HasPrefix(trimmed, "-")
-	if rangeSuffix {
-		after := strings.TrimLeft(trimmed[1:], " ._")
-		looksNumbered := len(after) > 0 && (after[0] >= '0' && after[0] <= '9' || (after[0] == 'E' || after[0] == 'e') && (len(after) == 1 || after[1] >= '0' && after[1] <= '9'))
+	if rangeSuffix && !titleSeparator {
+		after := strings.TrimLeft(trimmed[1:], " ._\t\r\n\f")
+		looksNumbered := len(after) > 0 && (after[0] >= '0' && after[0] <= '9' || (after[0] == 'E' || after[0] == 'e') && (len(after) == 1 || !isASCIIAlphaNumeric(after[1]) || after[1] >= '0' && after[1] <= '9'))
 		if looksNumbered {
 			return result, fmt.Errorf("malformed episode range")
 		}
