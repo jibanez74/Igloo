@@ -4,9 +4,15 @@ package show
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/ffprobe"
 )
@@ -69,12 +75,18 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 	if root == "" {
 		t.Skip("IGLOO_TV_SAMPLE_DIR is not configured")
 	}
-	s, _, _ := setupScanner(t)
-	s.Ffprobe = realProbe(t)
-	scanOK(t, s, root)
-	for _, table := range []string{"shows", "show_seasons", "show_episodes", "show_files", "show_episode_files"} {
-		t.Logf("%s: %d", table, countRows(t, s.DB, table))
+	s, probe, _ := setupScanner(t)
+	s.Now = time.Now
+	s.Logger = &sampleLogger{t: t}
+	real := realProbe(t)
+	probe.hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		t.Logf("real probe %d: %q", probe.calls, path)
+		return real.GetMetadata(ctx, path)
 	}
+	scanOK(t, s, root)
+	before := sampleCatalogSnapshot(t, s.DB)
+	firstProbes := probe.calls
+	t.Logf("first scan real probes: %d", firstProbes)
 	rows, err := s.Queries.GetShowScanIndex(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -82,9 +94,105 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 	if len(rows) == 0 {
 		t.Fatal("sample scan imported no files")
 	}
-	s.Ffprobe = &testProbe{hook: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
-		t.Error("unchanged sample scan probed")
-		return nil, nil
-	}}
+	if firstProbes < len(rows) {
+		t.Fatalf("imported %d files with only %d real probes", len(rows), firstProbes)
+	}
+	for _, row := range rows {
+		episodes, err := s.Queries.GetShowFileEpisodes(context.Background(), row.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		numbers := make([]int64, 0, len(episodes))
+		for _, episode := range episodes {
+			numbers = append(numbers, episode.EpisodeNumber)
+		}
+		t.Logf("catalog file: %q episodes: %v", row.FilePath, numbers)
+	}
 	scanOK(t, s, root)
+	t.Logf("second scan additional real probes: %d", probe.calls-firstProbes)
+	if probe.calls != firstProbes {
+		t.Errorf("unchanged sample scan made %d additional probes", probe.calls-firstProbes)
+	}
+	after := sampleCatalogSnapshot(t, s.DB)
+	for table, original := range before {
+		unchanged := reflect.DeepEqual(original, after[table])
+		if !unchanged {
+			t.Errorf("unchanged scan changed catalog table %s", table)
+		}
+	}
+}
+
+type sampleLogger struct{ t *testing.T }
+
+func (l *sampleLogger) Debug(msg string, args ...any) { l.t.Log("DEBUG", msg, args) }
+func (l *sampleLogger) Info(msg string, args ...any)  { l.t.Log("INFO", msg, args) }
+func (l *sampleLogger) Warn(msg string, args ...any)  { l.t.Log("WARN", msg, args) }
+func (l *sampleLogger) Error(msg string, args ...any) { l.t.Log("ERROR", msg, args) }
+
+// Capture every TV column, including row identities, ordered links, streams,
+// chapters, fingerprints, timestamps, and pending enrichment. Sorting encoded
+// rows avoids relying on SQLite's unspecified row order or a particular key.
+func sampleCatalogSnapshot(t *testing.T, db *sql.DB) map[string][]string {
+	t.Helper()
+	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type = 'table' AND (name = 'shows' OR name GLOB 'show_*') ORDER BY name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var table string
+		err = rows.Scan(&table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tables = append(tables, table)
+	}
+	err = rows.Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = rows.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := make(map[string][]string, len(tables))
+	for _, table := range tables {
+		rows, err := db.Query(`SELECT * FROM "` + strings.ReplaceAll(table, `"`, `""`) + `"`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		columns, err := rows.Columns()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var records []string
+		for rows.Next() {
+			values := make([]any, len(columns))
+			pointers := make([]any, len(columns))
+			for i := range values {
+				pointers[i] = &values[i]
+			}
+			err = rows.Scan(pointers...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(values)
+			if err != nil {
+				t.Fatal(err)
+			}
+			records = append(records, string(encoded))
+		}
+		err = rows.Err()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = rows.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		sort.Strings(records)
+		snapshot[table] = records
+		t.Logf("%s: %d rows", table, len(records))
+	}
+	return snapshot
 }
