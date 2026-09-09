@@ -218,6 +218,7 @@ From `web/`:
 | `bun run preview:openapi` | Build and serve temporary local API reference HTML |
 | `bun run test` | Run Vitest |
 | `bun run test:e2e` | Run all Playwright specs against an existing server |
+| `bun run test:e2e:boot` | Build production assets and check startup and reloads through Vite preview with the mock API |
 | `bun run test:e2e:login` | Run Playwright login screen checks against an existing server |
 | `bun run test:e2e:account-settings` | Run Playwright account settings checks against an existing server |
 | `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
@@ -232,6 +233,8 @@ From `web/`:
 | `bun run doctor` | Run React Doctor against the web app |
 
 Additional Playwright specs currently cover home, movie details, music index and tracks, search, trailer playback, playback settings, head metadata, motion, and browser issue checks. Run an individual spec with `bun run test:e2e -- e2e/<name>.spec.ts`.
+
+The production startup check requires Playwright Chromium (`bun x playwright install --with-deps chromium`). To test an existing build without rebuilding, run `E2E_PRODUCTION=1 bun run test:e2e e2e/boot.spec.ts` from `web/`. Leave `E2E_BASE_URL` unset to start Vite preview and the mock API; `E2E_WEB_PORT` and `E2E_MOCK_API_PORT` override their default ports of 3000 and 8080.
 
 ### Login E2E Checks
 
