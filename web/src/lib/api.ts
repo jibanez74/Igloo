@@ -694,12 +694,17 @@ export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
   });
 
 export const triggerMusicScan = () =>
-  apiRequest<{ message: string }>("/api/settings/scan/music", {
+  apiRequest("/api/settings/scan/music", {
     method: "POST",
   });
 
 export const triggerMovieScan = () =>
-  apiRequest<{ message: string }>("/api/settings/scan/movies", {
+  apiRequest("/api/settings/scan/movies", {
+    method: "POST",
+  });
+
+export const triggerShowScan = () =>
+  apiRequest("/api/settings/scan/shows", {
     method: "POST",
   });
 

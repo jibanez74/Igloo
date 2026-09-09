@@ -27,7 +27,7 @@ import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
-import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
+import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import {
   ALBUM_DETAILS_KEY,
@@ -54,7 +54,6 @@ export const Route = createFileRoute("/_auth/settings/libraries")({
 });
 
 type LibraryPathField = keyof SettingsType;
-type ImplementedScan = "movies" | "music";
 
 type LibrariesForm = {
   movies_dir: string;
@@ -64,7 +63,10 @@ type LibrariesForm = {
 
 type LibrarySectionConfig = {
   field: LibraryPathField;
-  scan: ImplementedScan | null;
+  scanLabel: string;
+  scanTitle: string;
+  triggerScan: typeof triggerShowScan;
+  invalidateQueries?: (queryClient: ReturnType<typeof useQueryClient>) => void;
   title: string;
   description: string;
   pathLabel: string;
@@ -90,7 +92,10 @@ const DEFAULT_FEEDBACK: FormFeedback = {
 const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   {
     field: "movies_dir",
-    scan: "movies",
+    scanLabel: "movies",
+    scanTitle: "Movies",
+    triggerScan: triggerMovieScan,
+    invalidateQueries: invalidateMovieLibraryQueries,
     title: "Movies Library",
     description: "Manage your movie collection",
     pathLabel: "Movies library path",
@@ -102,7 +107,9 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   },
   {
     field: "shows_dir",
-    scan: null,
+    scanLabel: "TV shows",
+    scanTitle: "TV shows",
+    triggerScan: triggerShowScan,
     title: "TV Shows Library",
     description: "Manage your TV show collection",
     pathLabel: "TV shows library path",
@@ -114,7 +121,10 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   },
   {
     field: "music_dir",
-    scan: "music",
+    scanLabel: "music",
+    scanTitle: "Music",
+    triggerScan: triggerMusicScan,
+    invalidateQueries: invalidateMusicScanQueries,
     title: "Music Library",
     description: "Manage your music collection",
     pathLabel: "Music library path",
@@ -164,10 +174,6 @@ function fieldFromLibraryError(message?: string): LibraryPathField | null {
   return null;
 }
 
-function scanLabel(scan: ImplementedScan) {
-  return scan === "movies" ? "movies" : "music";
-}
-
 function LibrariesSettings() {
   const { data, isLoading } = useQuery(settingsQueryOpts());
 
@@ -204,7 +210,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   const [feedback, setFeedback] = useState<FormFeedback>(DEFAULT_FEEDBACK);
   const [validationField, setValidationField] =
     useState<LibraryPathField | null>(null);
-  const [activeScan, setActiveScan] = useState<ImplementedScan | null>(null);
+  const [activeScan, setActiveScan] = useState<LibraryPathField | null>(null);
   const formStatusId = useId();
   const hasChanges = formHasChanges(form, syncedSettings);
 
@@ -288,10 +294,14 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     updateMutation.mutate(payloadFromForm(form));
   };
 
-  const handleScan = async (scan: ImplementedScan) => {
-    const field = scan === "movies" ? "movies_dir" : "music_dir";
+  const handleScan = async (section: LibrarySectionConfig) => {
+    const { field, scanLabel: label, scanTitle } = section;
     const savedPath = syncedSettings[field];
-    const label = scanLabel(scan);
+    if (
+      activeScan !== null ||
+      updateMutation.isPending ||
+      form[field] !== (savedPath ?? "")
+    ) return;
     if (!savedPath) {
       const message = `Save a ${label} library path before scanning.`;
       setFeedback({ message, tone: "error" });
@@ -299,38 +309,36 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       return;
     }
 
-    setActiveScan(scan);
+    setActiveScan(field);
     setFeedback({
       message: `Starting ${label} library scan...`,
       tone: "neutral",
     });
 
     try {
-      const res =
-        scan === "movies" ? await triggerMovieScan() : await triggerMusicScan();
+      const res = await section.triggerScan();
       if (res.error) {
         const message = res.message || `Failed to start ${label} scan.`;
         setFeedback({ message, tone: "error" });
         showActionFailed(`scan ${label} library`, message);
-        setActiveScan(current => (current === scan ? null : current));
         return;
       }
 
       setFeedback({
-        message: `${label === "movies" ? "Movies" : "Music"} library scan started.`,
+        message: `${scanTitle} library scan started.`,
         tone: "success",
       });
       showSuccess(
         "Scan started",
-        `${label === "movies" ? "Movies" : "Music"} library scan has been initiated`,
+        `${scanTitle} library scan has been initiated`,
       );
-      invalidateScanQueries(queryClient, scan);
-      setActiveScan(current => (current === scan ? null : current));
+      section.invalidateQueries?.(queryClient);
     } catch {
       const message = `Failed to start ${label} scan.`;
       setFeedback({ message, tone: "error" });
       showActionFailed(`scan ${label} library`, message);
-      setActiveScan(current => (current === scan ? null : current));
+    } finally {
+      setActiveScan(null);
     }
   };
 
@@ -356,25 +364,20 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 savedPath={syncedSettings[section.field]}
                 invalid={validationField === section.field}
                 disabled={updateMutation.isPending}
-                scanPending={activeScan === section.scan}
+                scanPending={activeScan === section.field}
                 scanDisabled={
                   updateMutation.isPending ||
                   activeScan !== null ||
                   form[section.field] !==
-                    formFromSettings(syncedSettings)[section.field]
+                    (syncedSettings[section.field] ?? "")
                 }
                 formStatusId={formStatusId}
                 onPathChange={value => handlePathChange(section.field, value)}
                 onClearPath={() => handleClearPath(section.field)}
-                onScan={
-                  section.scan ? () => handleScan(section.scan as ImplementedScan) : undefined
-                }
+                onScan={() => handleScan(section)}
               >
                 {section.field === "movies_dir" && (
                   <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
-                )}
-                {section.field === "shows_dir" && (
-                  <TVShowsUnavailableStatus hasLibrary={Boolean(syncedSettings.shows_dir)} />
                 )}
                 {section.field === "music_dir" && (
                   <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
@@ -414,7 +417,7 @@ type LibraryPathSectionProps = {
   children: ReactNode;
   onPathChange: (value: string) => void;
   onClearPath: () => void;
-  onScan?: () => void;
+  onScan: () => void;
 };
 
 function LibraryPathSection({
@@ -514,7 +517,7 @@ function LibraryPathSection({
 
       {children}
 
-      {config.scan && hasSavedPath && (
+      {hasSavedPath && (
         <Button
           type="button"
           variant="outline"
@@ -523,8 +526,8 @@ function LibraryPathSection({
           aria-busy={scanPending}
           aria-label={
             scanPending
-              ? `Scanning ${scanLabel(config.scan)} library, please wait`
-              : `Scan ${scanLabel(config.scan)} library`
+              ? `Scanning ${config.scanLabel} library, please wait`
+              : `Scan ${config.scanLabel} library`
           }
           className="w-full disabled:opacity-50"
         >
@@ -673,42 +676,9 @@ function StatItem({
   );
 }
 
-function TVShowsUnavailableStatus({ hasLibrary }: StatsProps) {
-  if (!hasLibrary) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-card/30 p-4 text-sm text-muted-foreground">
-        TV shows can be configured now. Scanning will be available after TV show
-        support is implemented.
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-card/30 p-6">
-      <div className="flex items-center gap-3 text-muted-foreground">
-        <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            TV shows scanning unavailable
-          </p>
-          <p className="text-sm">
-            The TV shows path is saved, but TV scanning is not implemented yet.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function invalidateScanQueries(
+function invalidateMusicScanQueries(
   queryClient: ReturnType<typeof useQueryClient>,
-  scan: ImplementedScan,
 ) {
-  if (scan === "movies") {
-    invalidateMovieLibraryQueries(queryClient);
-    return;
-  }
-
   const queryKeys = [
     MUSIC_STATS_KEY,
     LATEST_ALBUMS_KEY,
