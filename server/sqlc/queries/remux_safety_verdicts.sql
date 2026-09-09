@@ -2,13 +2,9 @@
 -- Persisted remux-safety verdict for one video stream; the caller compares
 -- the stored fingerprint and treats a mismatch as a miss.
 SELECT
-  movie_id,
-  stream_index,
   fingerprint,
   safe,
-  reason,
-  created_at,
-  updated_at
+  reason
 FROM remux_safety_verdicts
 WHERE movie_id = ?
   AND stream_index = ?;
@@ -27,5 +23,4 @@ ON CONFLICT (movie_id, stream_index) DO UPDATE
 SET
   fingerprint = excluded.fingerprint,
   safe = excluded.safe,
-  reason = excluded.reason,
-  updated_at = CURRENT_TIMESTAMP;
+  reason = excluded.reason;

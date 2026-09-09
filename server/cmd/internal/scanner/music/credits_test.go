@@ -251,7 +251,11 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 	defer s.db.Close()
 	ctx := context.Background()
 	combined := "One & Two"
-	musician, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: combined, SortName: combined})
+	musicianIdentity, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: combined, SortName: combined})
+	if err != nil {
+		t.Fatal(err)
+	}
+	musician, err := s.queries.GetMusicianByID(ctx, musicianIdentity.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

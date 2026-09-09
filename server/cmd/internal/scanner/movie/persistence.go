@@ -59,7 +59,7 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		return err
 	}
 
-	committed, err := qtx.GetMovieByID(ctx, movieID)
+	committed, err := qtx.GetMovieByPath(ctx, resolved.params.FilePath)
 	if err != nil {
 		return err
 	}
@@ -111,28 +111,28 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 		return 0, nil
 	}
 	sameIdentity := current.TmdbID == resolved.observed.TmdbID
-	movie := current
+	movieID := current.ID
 	if !resolved.metadataOnly {
-		movie, err = qtx.UpsertMovie(ctx, resolved.params)
+		movieID, err = qtx.UpsertMovie(ctx, resolved.params)
 		if err != nil {
 			return 0, fmt.Errorf("upsert movie failed: %w", err)
 		}
 	}
 	if resolved.attempted && sameIdentity {
 		if resolved.tmdbMovie != nil {
-			err = applyTmdbMetadata(ctx, qtx, scan, movie.ID, resolved.tmdbMovie)
+			err = applyTmdbMetadata(ctx, qtx, scan, movieID, resolved.tmdbMovie)
 		} else {
-			err = qtx.MarkMovieTmdbRetry(ctx, movie.ID)
+			err = qtx.MarkMovieTmdbRetry(ctx, movieID)
 		}
 		if err != nil {
 			return 0, err
 		}
 	}
 	if resolved.metadataOnly {
-		return movie.ID, nil
+		return movieID, nil
 	}
 
-	videoStreamCount, err := s.processMovieStreams(ctx, qtx, movie.ID, resolved.streams)
+	videoStreamCount, err := s.processMovieStreams(ctx, qtx, movieID, resolved.streams)
 	if err != nil {
 		return 0, fmt.Errorf("process movie streams failed: %w", err)
 	}
@@ -140,12 +140,12 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 		return 0, fmt.Errorf("no video stream found - invalid movie file")
 	}
 
-	err = processChapters(ctx, qtx, movie.ID, resolved.chapters)
+	err = processChapters(ctx, qtx, movieID, resolved.chapters)
 	if err != nil {
 		return 0, fmt.Errorf("process chapters failed: %w", err)
 	}
 
-	return movie.ID, nil
+	return movieID, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -234,10 +234,8 @@ func processProductionCompanies(
 
 	for _, company := range companies {
 		upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
-			Name:    company.Name,
-			TmdbID:  int64(company.ID),
-			Logo:    helpers.NullString(company.LogoPath),
-			Country: helpers.NullString(company.OriginCountry),
+			Name:   company.Name,
+			TmdbID: int64(company.ID),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert production company failed: %w", err)
@@ -245,7 +243,7 @@ func processProductionCompanies(
 
 		err = qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
-			ProductionCompanyID: upserted.ID,
+			ProductionCompanyID: upserted,
 		})
 		if err != nil {
 			return fmt.Errorf("create movie production company relationship failed: %w", err)
@@ -268,7 +266,7 @@ func processCast(
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
-		_, err = qtx.UpsertCast(ctx, database.UpsertCastParams{
+		err = qtx.UpsertCast(ctx, database.UpsertCastParams{
 			MovieID:   movieID,
 			ArtistID:  artistID,
 			Character: castMember.Character,
@@ -296,7 +294,7 @@ func processCrew(
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
-		_, err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
+		err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
 			MovieID:    movieID,
 			ArtistID:   artistID,
 			Job:        crewMember.Job,
@@ -317,17 +315,17 @@ func getOrCreateArtist(
 	tmdbID int,
 	name string,
 	profilePath string,
-) (*database.Artist, error) {
+) (int64, error) {
 	upserted, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
 		Name:    name,
 		TmdbID:  int64(tmdbID),
 		Profile: helpers.NullString(profilePath),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("upsert artist failed: %w", err)
+		return 0, fmt.Errorf("upsert artist failed: %w", err)
 	}
 
-	return &upserted, nil
+	return upserted, nil
 }
 
 // getOrCreateArtistID is the scan-cached form of getOrCreateArtist: the same
@@ -356,9 +354,9 @@ func getOrCreateArtistID(
 	}
 
 	if scan != nil {
-		scan.artistIDs.Set(int64(tmdbID), artist.ID)
+		scan.artistIDs.Set(int64(tmdbID), artist)
 	}
-	return artist.ID, nil
+	return artist, nil
 }
 
 func processMovieGenres(
@@ -410,9 +408,9 @@ func getOrCreateMovieGenreID(ctx context.Context, qtx *database.Queries, scan *m
 	}
 
 	if scan != nil {
-		scan.genreIDs.Set(cacheKey, dbGenre.ID)
+		scan.genreIDs.Set(cacheKey, dbGenre)
 	}
-	return dbGenre.ID, nil
+	return dbGenre, nil
 }
 
 func processExtraVideos(
@@ -442,7 +440,6 @@ func processExtraVideos(
 			Key:        v.Key,
 			Type:       mapTmdbVideoType(v.Type),
 			Site:       mapTmdbVideoSite(v.Site),
-			Official:   v.Official,
 		})
 		if err != nil {
 			return fmt.Errorf("upsert extra video failed: %w", err)
@@ -450,7 +447,7 @@ func processExtraVideos(
 
 		err = qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
 			MovieID:      movieID,
-			ExtraVideoID: extra.ID,
+			ExtraVideoID: extra,
 		})
 
 		if err != nil {

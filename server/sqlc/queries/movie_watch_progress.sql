@@ -1,12 +1,8 @@
 -- name: GetMovieWatchProgress :one
 SELECT
-  user_id,
-  movie_id,
   progress_sec,
   duration_sec,
   watched,
-  save_session_id,
-  save_sequence,
   updated_at
 FROM movie_watch_progress
 WHERE user_id = ?

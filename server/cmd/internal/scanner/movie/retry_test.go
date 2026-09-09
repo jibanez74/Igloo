@@ -63,7 +63,7 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				movie, err := s.queries.GetMovieByPath(ctx, path)
+				movie, err := readTestMovieByPath(ctx, s.queries, path)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -208,7 +208,7 @@ func TestFailedChangedMoviePreservesMetadataAndRecoversByIdentity(t *testing.T) 
 	if len(s.logger.(*capturedLogger).warnEntries) != 0 {
 		t.Fatal("low-confidence import produced a warning")
 	}
-	before, err := s.queries.GetMovieByPath(ctx, path)
+	before, err := readTestMovieByPath(ctx, s.queries, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestFailedChangedMoviePreservesMetadataAndRecoversByIdentity(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := s.queries.GetMovieByPath(ctx, path)
+	after, err := readTestMovieByPath(ctx, s.queries, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				before, err := s.queries.GetMovieByPath(ctx, path)
+				before, err := readTestMovieByPath(ctx, s.queries, path)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -411,7 +411,7 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 							t.Fatal("retry deletion did not cascade")
 						}
 						if mutation == "replace" {
-							current, e := s.queries.GetMovieByPath(context.Background(), path)
+							current, e := readTestMovieByPath(context.Background(), s.queries, path)
 							if e != nil || current.ID == before.ID || current.Title != "Replacement" {
 								t.Fatalf("replacement overwritten: %+v %v", current, e)
 							}
@@ -421,4 +421,12 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 			})
 		}
 	}
+}
+
+func readTestMovieByPath(ctx context.Context, q *database.Queries, path string) (database.Movie, error) {
+	row, err := q.GetMovieByPath(ctx, path)
+	if err != nil {
+		return database.Movie{}, err
+	}
+	return q.GetMovieByID(ctx, row.ID)
 }

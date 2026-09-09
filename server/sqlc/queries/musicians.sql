@@ -1,6 +1,5 @@
 -- name: GetMusicianBySpotifyID :one
-SELECT
-  *
+SELECT id, spotify_id, thumb
 FROM musicians
 WHERE spotify_id = ?
 LIMIT 1;
@@ -11,7 +10,7 @@ SET
   thumb = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, spotify_id, thumb;
 
 -- name: UpsertMusician :one
 INSERT INTO musicians (
@@ -34,7 +33,7 @@ SET
   spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
   thumb = COALESCE(excluded.thumb, musicians.thumb),
   updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+RETURNING id, spotify_id, thumb;
 
 -- name: GetMusiciansByAlbumID :many
 SELECT
@@ -54,7 +53,6 @@ SELECT
   m.id,
   m.name,
   m.thumb,
-  m.sort_name,
   (
     SELECT COUNT(*)
     FROM musician_albums AS ma
@@ -126,13 +124,9 @@ ORDER BY
 SELECT
   t.id,
   t.title,
-  t.sort_title,
   t.duration,
   t.codec,
   t.bit_rate,
-  t.file_path,
-  t.track_index,
-  t.disc,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover

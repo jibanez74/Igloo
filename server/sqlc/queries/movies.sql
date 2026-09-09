@@ -98,24 +98,19 @@ SET
   run_time = COALESCE(excluded.run_time, movies.run_time),
   duration = COALESCE(excluded.duration, movies.duration),
   updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+RETURNING id;
 
 -- name: UpsertProductionCompany :one
 INSERT INTO production_companies (
   name,
-  tmdb_id,
-  logo,
-  country
+  tmdb_id
 )
 VALUES
-  (?, ?, ?, ?)
+  (?, ?)
 ON CONFLICT (tmdb_id) DO UPDATE
 SET
-  name = excluded.name,
-  logo = COALESCE(excluded.logo, production_companies.logo),
-  country = COALESCE(excluded.country, production_companies.country),
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+  name = excluded.name
+RETURNING id;
 
 -- name: UpsertArtist :one
 INSERT INTO artist (
@@ -128,11 +123,10 @@ VALUES
 ON CONFLICT (tmdb_id) DO UPDATE
 SET
   name = excluded.name,
-  profile = COALESCE(excluded.profile, artist.profile),
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+  profile = COALESCE(excluded.profile, artist.profile)
+RETURNING id;
 
--- name: UpsertCast :one
+-- name: UpsertCast :exec
 INSERT INTO cast (
   movie_id,
   artist_id,
@@ -143,11 +137,9 @@ VALUES
   (?, ?, ?, ?)
 ON CONFLICT (movie_id, artist_id, cast_order) DO UPDATE
 SET
-  character = excluded.character,
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+  character = excluded.character;
 
--- name: UpsertCrew :one
+-- name: UpsertCrew :exec
 INSERT INTO crew (
   movie_id,
   artist_id,
@@ -156,10 +148,7 @@ INSERT INTO crew (
 )
 VALUES
   (?, ?, ?, ?)
-ON CONFLICT (movie_id, artist_id, job, department) DO UPDATE
-SET
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+ON CONFLICT (movie_id, artist_id, job, department) DO NOTHING;
 
 -- name: CreateMovieProductionCompany :exec
 -- Link movie to production company via junction table
@@ -181,7 +170,7 @@ WHERE movie_id = ?;
 DELETE FROM video_streams
 WHERE movie_id = ?;
 
--- name: InsertVideoStream :one
+-- name: InsertVideoStream :exec
 INSERT INTO video_streams (
   movie_id,
   stream_index,
@@ -208,15 +197,14 @@ INSERT INTO video_streams (
   title
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteMovieAudioStreams :exec
 -- Delete all audio streams for a movie
 DELETE FROM audio_streams
 WHERE movie_id = ?;
 
--- name: InsertAudioStream :one
+-- name: InsertAudioStream :exec
 INSERT INTO audio_streams (
   movie_id,
   stream_index,
@@ -231,15 +219,14 @@ INSERT INTO audio_streams (
   is_default
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteMovieSubtitles :exec
 -- Delete all subtitles for a movie
 DELETE FROM subtitles
 WHERE movie_id = ?;
 
--- name: InsertSubtitle :one
+-- name: InsertSubtitle :exec
 INSERT INTO subtitles (
   movie_id,
   stream_index,
@@ -250,15 +237,14 @@ INSERT INTO subtitles (
   is_default
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteMovieChapters :exec
 -- Delete all chapters for a movie
 DELETE FROM chapters
 WHERE movie_id = ?;
 
--- name: InsertChapter :one
+-- name: InsertChapter :exec
 INSERT INTO chapters (
   movie_id,
   title,
@@ -266,8 +252,7 @@ INSERT INTO chapters (
   thumb
 )
 VALUES
-  (?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?);
 
 -- name: CreateMovieGenre :exec
 -- Link movie to genre via junction table
@@ -292,20 +277,17 @@ INSERT INTO extra_videos (
   external_id,
   key,
   type,
-  site,
-  official
+  site
 )
 VALUES
-  (?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?)
 ON CONFLICT (external_id) DO UPDATE
 SET
   title = excluded.title,
   key = excluded.key,
   type = excluded.type,
-  site = excluded.site,
-  official = excluded.official,
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+  site = excluded.site
+RETURNING id;
 
 -- name: CreateMovieExtraVideo :exec
 -- Link a movie to an extra video (trailer/special feature). Idempotent.
@@ -326,8 +308,6 @@ WHERE movie_id = ?;
 -- Cast for a movie with artist name and profile (for details view).
 SELECT
   c.id,
-  c.movie_id,
-  c.artist_id,
   c.character,
   c.cast_order,
   a.name AS artist_name,
@@ -339,15 +319,12 @@ WHERE c.movie_id = ?
 ORDER BY c.cast_order;
 
 -- name: GetCrewByMovieID :many
--- Crew for a movie with artist name and profile (for details view).
+-- Crew for a movie with artist name (for details view).
 SELECT
   c.id,
-  c.movie_id,
-  c.artist_id,
   c.job,
   c.department,
-  a.name AS artist_name,
-  a.profile AS artist_profile
+  a.name AS artist_name
 FROM crew AS c
 INNER JOIN artist AS a
   ON a.id = c.artist_id
@@ -371,10 +348,7 @@ ORDER BY g.tag;
 -- Production companies linked to a movie (for details view).
 SELECT
   pc.id,
-  pc.name,
-  pc.tmdb_id,
-  pc.logo,
-  pc.country
+  pc.name
 FROM production_companies AS pc
 INNER JOIN movie_production_companies AS mpc
   ON mpc.production_company_id = pc.id
@@ -386,13 +360,9 @@ ORDER BY pc.name;
 SELECT
   ev.id,
   ev.title,
-  ev.external_id,
   ev.key,
   ev.type,
-  ev.site,
-  ev.official,
-  ev.created_at,
-  ev.updated_at
+  ev.site
 FROM extra_videos AS ev
 INNER JOIN movie_extra_videos AS mev
   ON mev.extra_video_id = ev.id
@@ -401,7 +371,7 @@ ORDER BY
   ev.type,
   ev.title;
 
--- name: UpdateMovie :one
+-- name: UpdateMovie :execrows
 -- Dedicated UPDATE for movie metadata (used by Edit feature).
 -- Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 UPDATE movies
@@ -424,8 +394,7 @@ SET
   budget = ?,
   run_time = ?,
   updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-RETURNING *;
+WHERE id = ?;
 
 -- name: DeleteMovieCast :exec
 -- Remove all cast entries for a movie (used before re-identifying with TMDB).
@@ -568,7 +537,7 @@ OFFSET ?;
 DELETE FROM movies WHERE id = ? AND file_path = ?;
 
 -- name: GetMovieByPath :one
-SELECT * FROM movies WHERE file_path = ?;
+SELECT id, file_path, tmdb_id FROM movies WHERE file_path = ?;
 
 -- name: MarkMovieTmdbRetry :exec
 INSERT INTO movie_tmdb_retries (movie_id) VALUES (?) ON CONFLICT DO NOTHING;
@@ -588,3 +557,28 @@ WHERE id = ?;
 
 -- name: HasMovieTmdbRetry :one
 SELECT EXISTS (SELECT 1 FROM movie_tmdb_retries WHERE movie_id = ?);
+
+-- name: GetMovieDetails :one
+SELECT
+  id,
+  title,
+  adult,
+  tmdb_id,
+  imdb_id,
+  poster_path,
+  backdrop_path,
+  language,
+  year,
+  release_date,
+  overview,
+  tag_line,
+  certification,
+  critic_rating,
+  audience_rating,
+  revenue,
+  budget,
+  run_time,
+  duration
+FROM movies
+WHERE id = ?
+LIMIT 1;

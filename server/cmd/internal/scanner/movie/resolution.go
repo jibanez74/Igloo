@@ -85,7 +85,7 @@ func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
 // ---------------------------------------------------------------------------
 
 type resolvedMovie struct {
-	observed     database.Movie
+	observed     database.GetMovieByPathRow
 	attempted    bool
 	metadataOnly bool
 	inspection   *scanner.FileInspection

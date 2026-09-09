@@ -27,7 +27,7 @@ func (q *Queries) DeleteMovieRemuxSafetyVerdicts(ctx context.Context, movieID in
 	return err
 }
 
-const upsertMovieFileFingerprint = `-- name: UpsertMovieFileFingerprint :one
+const upsertMovieFileFingerprint = `-- name: UpsertMovieFileFingerprint :execrows
 INSERT INTO movie_file_fingerprints (movie_id, mtime_ns, ctime_ns, device, inode, sha256)
 SELECT id, ?1, ?2, ?3, ?4, ?5
 FROM movies
@@ -38,7 +38,6 @@ ON CONFLICT (movie_id) DO UPDATE SET
  device = excluded.device,
  inode = excluded.inode,
  sha256 = excluded.sha256
-RETURNING movie_id
 `
 
 type UpsertMovieFileFingerprintParams struct {
@@ -51,7 +50,7 @@ type UpsertMovieFileFingerprintParams struct {
 }
 
 func (q *Queries) UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovieFileFingerprintParams) (int64, error) {
-	row := q.queryRow(ctx, q.upsertMovieFileFingerprintStmt, upsertMovieFileFingerprint,
+	result, err := q.exec(ctx, q.upsertMovieFileFingerprintStmt, upsertMovieFileFingerprint,
 		arg.MtimeNs,
 		arg.CtimeNs,
 		arg.Device,
@@ -59,12 +58,13 @@ func (q *Queries) UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovi
 		arg.Sha256,
 		arg.FilePath,
 	)
-	var movie_id int64
-	err := row.Scan(&movie_id)
-	return movie_id, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const upsertTrackFileFingerprint = `-- name: UpsertTrackFileFingerprint :one
+const upsertTrackFileFingerprint = `-- name: UpsertTrackFileFingerprint :execrows
 INSERT INTO track_file_fingerprints (track_id, mtime_ns, ctime_ns, device, inode, sha256)
 SELECT id, ?1, ?2, ?3, ?4, ?5
 FROM tracks
@@ -75,7 +75,6 @@ ON CONFLICT (track_id) DO UPDATE SET
  device = excluded.device,
  inode = excluded.inode,
  sha256 = excluded.sha256
-RETURNING track_id
 `
 
 type UpsertTrackFileFingerprintParams struct {
@@ -88,7 +87,7 @@ type UpsertTrackFileFingerprintParams struct {
 }
 
 func (q *Queries) UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error) {
-	row := q.queryRow(ctx, q.upsertTrackFileFingerprintStmt, upsertTrackFileFingerprint,
+	result, err := q.exec(ctx, q.upsertTrackFileFingerprintStmt, upsertTrackFileFingerprint,
 		arg.MtimeNs,
 		arg.CtimeNs,
 		arg.Device,
@@ -96,7 +95,8 @@ func (q *Queries) UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrac
 		arg.Sha256,
 		arg.FilePath,
 	)
-	var track_id int64
-	err := row.Scan(&track_id)
-	return track_id, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

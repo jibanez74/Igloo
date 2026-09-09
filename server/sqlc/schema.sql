@@ -36,9 +36,7 @@ CREATE TABLE IF NOT EXISTS settings (
   music_dir TEXT,
   server_upload_mbps REAL,
   static_dir TEXT NOT NULL DEFAULT 'static',
-  transcode_dir TEXT NOT NULL DEFAULT 'transcode',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  transcode_dir TEXT NOT NULL DEFAULT 'transcode'
 );
 
 -- The constant expression limits application settings to a single row.
@@ -74,28 +72,20 @@ CREATE INDEX IF NOT EXISTS idx_devices_last_used_at ON devices (last_used_at);
 CREATE TABLE IF NOT EXISTS production_companies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  tmdb_id INTEGER NOT NULL UNIQUE,
-  logo TEXT,
-  country TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  tmdb_id INTEGER NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS artist (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   tmdb_id INTEGER NOT NULL UNIQUE,
-  profile TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  profile TEXT
 );
 
 CREATE TABLE IF NOT EXISTS genres (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tag TEXT NOT NULL,
   genre_type TEXT NOT NULL CHECK (genre_type IN ('movie', 'show', 'music')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (tag, genre_type)
 );
 
@@ -105,10 +95,7 @@ CREATE TABLE IF NOT EXISTS extra_videos (
   external_id TEXT UNIQUE,
   key TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('trailer', 'special_feature', 'other')),
-  site TEXT NOT NULL CHECK (site IN ('youtube', 'vimeo', 'other')),
-  official BOOLEAN NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  site TEXT NOT NULL CHECK (site IN ('youtube', 'vimeo', 'other'))
 );
 
 -- Music catalog and scanner metadata
@@ -216,8 +203,6 @@ CREATE INDEX IF NOT EXISTS music_track_dates ON tracks (album_id, release_date);
 CREATE TABLE IF NOT EXISTS track_musicians (
   track_id INTEGER NOT NULL,
   musician_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (track_id, musician_id),
   FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -231,8 +216,6 @@ CREATE TABLE IF NOT EXISTS musician_genres (
   musician_id INTEGER NOT NULL,
   genre_id INTEGER NOT NULL,
   source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'spotify')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (musician_id, genre_id, source),
   FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -241,8 +224,6 @@ CREATE TABLE IF NOT EXISTS musician_genres (
 CREATE TABLE IF NOT EXISTS musician_albums (
   musician_id INTEGER NOT NULL,
   album_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (musician_id, album_id),
   FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -253,8 +234,6 @@ CREATE INDEX IF NOT EXISTS idx_musician_albums_album ON musician_albums (album_i
 CREATE TABLE IF NOT EXISTS track_genres (
   track_id INTEGER NOT NULL,
   genre_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (track_id, genre_id),
   FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -264,8 +243,6 @@ CREATE TABLE IF NOT EXISTS album_genres (
   album_id INTEGER NOT NULL,
   genre_id INTEGER NOT NULL,
   source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'spotify')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (album_id, genre_id, source),
   FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -327,17 +304,8 @@ CREATE TABLE IF NOT EXISTS music_album_metadata (
 CREATE TABLE IF NOT EXISTS music_spotify_matches (
   entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician')),
   entity_id INTEGER NOT NULL,
-  spotify_id TEXT,
   status TEXT NOT NULL CHECK (status IN ('matched', 'failed', 'unmatched')),
   reason TEXT,
-  score INTEGER,
-  threshold_value INTEGER,
-  candidate_name TEXT,
-  candidate_artist TEXT,
-  search_query TEXT,
-  strategy TEXT,
-  error TEXT,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (entity_type, entity_id)
 );
 
@@ -418,8 +386,6 @@ CREATE TABLE IF NOT EXISTS video_streams (
   rotation INTEGER,
   language TEXT,
   title TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -438,8 +404,6 @@ CREATE TABLE IF NOT EXISTS audio_streams (
   language TEXT,
   title TEXT,
   is_default BOOLEAN NOT NULL DEFAULT false,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -454,8 +418,6 @@ CREATE TABLE IF NOT EXISTS subtitles (
   title TEXT,
   is_forced BOOLEAN NOT NULL DEFAULT false,
   is_default BOOLEAN NOT NULL DEFAULT false,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -469,8 +431,6 @@ CREATE TABLE IF NOT EXISTS remux_safety_verdicts (
   fingerprint TEXT NOT NULL,
   safe BOOLEAN NOT NULL,
   reason TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (movie_id, stream_index),
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -483,8 +443,6 @@ CREATE TABLE IF NOT EXISTS keyframe_indexes (
   fingerprint TEXT NOT NULL,
   duration_sec REAL NOT NULL,
   keyframes TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (movie_id, stream_index),
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -506,8 +464,6 @@ CREATE TABLE IF NOT EXISTS cast (
   artist_id INTEGER NOT NULL,
   character TEXT NOT NULL,
   cast_order INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (artist_id) REFERENCES artist (id) ON DELETE CASCADE ON UPDATE CASCADE,
   UNIQUE (movie_id, artist_id, cast_order)
@@ -521,8 +477,6 @@ CREATE TABLE IF NOT EXISTS crew (
   artist_id INTEGER NOT NULL,
   job TEXT NOT NULL,
   department TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (artist_id) REFERENCES artist (id) ON DELETE CASCADE ON UPDATE CASCADE,
   UNIQUE (movie_id, artist_id, job, department)
@@ -533,7 +487,6 @@ CREATE INDEX IF NOT EXISTS idx_crew_movie_department_job ON crew (movie_id, depa
 CREATE TABLE IF NOT EXISTS movie_production_companies (
   movie_id INTEGER NOT NULL,
   production_company_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (movie_id, production_company_id),
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (production_company_id) REFERENCES production_companies (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -542,7 +495,6 @@ CREATE TABLE IF NOT EXISTS movie_production_companies (
 CREATE TABLE IF NOT EXISTS movie_genres (
   movie_id INTEGER NOT NULL,
   genre_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (movie_id, genre_id),
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -554,7 +506,6 @@ CREATE INDEX IF NOT EXISTS idx_movie_genres_genre ON movie_genres (genre_id);
 CREATE TABLE IF NOT EXISTS movie_extra_videos (
   movie_id INTEGER NOT NULL,
   extra_video_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (movie_id, extra_video_id),
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (extra_video_id) REFERENCES extra_videos (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -614,7 +565,6 @@ CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_user_created ON user_liked_trac
 CREATE TABLE IF NOT EXISTS user_liked_movies (
   user_id INTEGER NOT NULL,
   movie_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, movie_id),
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -643,8 +593,6 @@ CREATE TABLE IF NOT EXISTS user_track_stats (
   play_count INTEGER NOT NULL DEFAULT 0,
   total_time_played INTEGER NOT NULL DEFAULT 0,
   last_played_at TEXT,
-  first_played_at TEXT,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, track_id),
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -746,7 +694,6 @@ CREATE TABLE IF NOT EXISTS watch_rooms (
   subtitle_stream_index INTEGER,
   subtitle_language TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -760,7 +707,6 @@ CREATE TABLE IF NOT EXISTS watch_room_members (
   room_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (room_id, user_id),
   FOREIGN KEY (room_id) REFERENCES watch_rooms (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -778,7 +724,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   message TEXT NOT NULL,
   is_admin BOOLEAN NOT NULL DEFAULT false,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -789,7 +734,6 @@ CREATE INDEX IF NOT EXISTS idx_notifications_admin_created_at ON notifications (
 CREATE TABLE IF NOT EXISTS notification_reads (
   notification_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
-  read_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (notification_id, user_id),
   FOREIGN KEY (notification_id) REFERENCES notifications (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE

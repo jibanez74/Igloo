@@ -29,7 +29,6 @@ function rawTrack(id: number): TrackListItemType {
     duration: 100,
     codec: "flac",
     bit_rate: 900000,
-    file_path: `/music/${id}.flac`,
     album_id: { Int64: id, Valid: true },
     album_title: { String: "", Valid: false },
     album_cover: { String: "", Valid: false },

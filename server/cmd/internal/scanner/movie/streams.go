@@ -87,7 +87,7 @@ func insertVideoStream(ctx context.Context, qtx *database.Queries, movieID int64
 		rotation = sql.NullInt64{Int64: rotationDeg, Valid: true}
 	}
 
-	_, err := qtx.InsertVideoStream(ctx, database.InsertVideoStreamParams{
+	err := qtx.InsertVideoStream(ctx, database.InsertVideoStreamParams{
 		MovieID:        movieID,
 		StreamIndex:    int64(stream.Index),
 		Codec:          stream.CodecName,
@@ -127,7 +127,7 @@ func insertAudioStream(ctx context.Context, qtx *database.Queries, movieID int64
 		}
 	}
 
-	_, err := qtx.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+	err := qtx.InsertAudioStream(ctx, database.InsertAudioStreamParams{
 		MovieID:       movieID,
 		StreamIndex:   int64(stream.Index),
 		Codec:         stream.CodecName,
@@ -147,7 +147,7 @@ func insertAudioStream(ctx context.Context, qtx *database.Queries, movieID int64
 }
 
 func insertSubtitleStream(ctx context.Context, qtx *database.Queries, movieID int64, stream ffprobe.Stream) error {
-	_, err := qtx.InsertSubtitle(ctx, database.InsertSubtitleParams{
+	err := qtx.InsertSubtitle(ctx, database.InsertSubtitleParams{
 		MovieID:     movieID,
 		StreamIndex: int64(stream.Index),
 		Codec:       stream.CodecName,

@@ -1,12 +1,11 @@
--- name: CreateNotification :one
+-- name: CreateNotification :exec
 INSERT INTO notifications (
   created_by_user_id,
   title,
   message,
   is_admin
 )
-VALUES (?, ?, ?, ?)
-RETURNING *;
+VALUES (?, ?, ?, ?);
 
 -- name: ListNotificationsForUser :many
 -- The shared admin request queue, newest first. Visibility is admin-only and
@@ -14,12 +13,10 @@ RETURNING *;
 -- from notification_reads.
 SELECT
   n.id,
-  n.created_by_user_id,
   n.title,
   n.message,
   n.is_admin,
   n.created_at,
-  n.updated_at,
   creator.name AS created_by_name,
   CAST((nr.notification_id IS NOT NULL) AS BOOLEAN) AS is_read
 FROM notifications AS n
@@ -73,7 +70,6 @@ WHERE id = sqlc.arg(notification_id)
 -- short-circuits to 0 without touching notifications at all. No rows means the
 -- session outlived its user, which the handler treats as a stale session.
 SELECT
-  u.is_admin,
   CASE
     WHEN u.is_admin THEN (
       SELECT COUNT(*)

@@ -114,12 +114,6 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	genreTags := make([]string, len(genres))
-
-	for i, g := range genres {
-		genreTags[i] = g.Tag
-	}
-
 	var totalDuration int64
 
 	for _, track := range tracks {
@@ -132,7 +126,7 @@ func (app *Application) GetMusicianDetails(w http.ResponseWriter, r *http.Reques
 			"musician":       musician,
 			"albums":         albums,
 			"tracks":         tracks,
-			"genres":         genreTags,
+			"genres":         genres,
 			"total_duration": totalDuration,
 		},
 	}

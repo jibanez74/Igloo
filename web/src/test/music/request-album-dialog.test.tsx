@@ -11,8 +11,8 @@ import RequestAlbumDialog from "@/components/music/RequestAlbumDialog";
 import { AUTH_USER_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,
-  AuthUser,
   CreateNotificationResponseType,
+  AuthUser,
   SpotifyAlbumSearchResultType,
 } from "@/types";
 import { createTestQueryClient } from "../helpers/render";
@@ -110,18 +110,8 @@ function spotifyAlbumResult(
   };
 }
 
-function notificationResponse(): ApiResponseType<CreateNotificationResponseType> {
-  return success({
-    notification: {
-      id: 1,
-      created_by_user_id: 9,
-      title: "album_request",
-      message: "Requester: Music Fan <music-fan@example.com>",
-      is_admin: true,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    },
-  });
+function notificationResponse(): CreateNotificationResponseType {
+  return { error: false };
 }
 
 function renderDialog() {

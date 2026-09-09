@@ -12,8 +12,8 @@ import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import { AUTH_USER_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,
-  AuthUser,
   CreateNotificationResponseType,
+  AuthUser,
   TmdbSearchResultType,
 } from "@/types";
 import { createTestQueryClient } from "../helpers/render";
@@ -125,18 +125,8 @@ function tmdbResult(
   };
 }
 
-function notificationResponse(): ApiResponseType<CreateNotificationResponseType> {
-  return success({
-    notification: {
-      id: 1,
-      created_by_user_id: 7,
-      title: "movie_request",
-      message: "Requester: Movie Fan <movie-fan@example.com>",
-      is_admin: true,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    },
-  });
+function notificationResponse(): CreateNotificationResponseType {
+  return { error: false };
 }
 
 function renderDialog() {

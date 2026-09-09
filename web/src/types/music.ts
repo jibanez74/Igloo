@@ -1,6 +1,8 @@
 // MUSIC LIBRARY TYPES
 // Types for albums, tracks, artists, and related music data
 
+import type { components } from "./openapi.gen";
+
 import type {
   NullableFloat64,
   NullableInt64,
@@ -36,34 +38,8 @@ export type AlbumType = {
   updated_at: string;
 };
 
-// Full track details including audio file metadata
-export type TrackType = {
-  id: number;
-  title: string;
-  sort_title: string;
-  file_path: string;
-  file_name: string;
-  container: string;
-  mime_type: string;
-  codec: string;
-  size: number;
-  track_index: number;
-  duration: number;
-  disc: number;
-  channels: string;
-  channel_layout: string;
-  bit_rate: number;
-  profile: string;
-  release_date: NullableString;
-  year: NullableInt64;
-  composer: NullableString;
-  copyright: NullableString;
-  language: NullableString;
-  album_id: NullableInt64;
-  musician_id: NullableInt64;
-  created_at: string;
-  updated_at: string;
-};
+// Album tracks also supply the global audio player queue.
+export type TrackType = components["schemas"]["AlbumTrack"];
 
 // Artist/musician information
 export type ArtistType = {
@@ -76,7 +52,6 @@ export type ArtistType = {
 // Association between a track and a genre
 export type TrackGenreType = {
   track_id: number;
-  genre_id: number;
   tag: string;
 };
 
@@ -97,7 +72,6 @@ export type TrackListItemType = {
   duration: number;
   codec: string;
   bit_rate: number;
-  file_path: string;
   album_id: NullableInt64;
   album_title: NullableString;
   album_cover: NullableString;
@@ -182,14 +156,7 @@ export type SpotifyTrackSearchResultType = {
 };
 
 // Simplified musician type for list views and cards
-export type SimpleMusicianType = {
-  id: number;
-  name: string;
-  sort_name: string;
-  thumb: NullableString;
-  album_count: number;
-  track_count: number;
-};
+export type SimpleMusicianType = components["schemas"]["SimpleMusician"];
 
 // Paginated response for musician listings
 export type MusiciansListResponseType = {
@@ -243,13 +210,9 @@ export type MusicianAlbumType = {
 export type MusicianTrackType = {
   id: number;
   title: string;
-  sort_title: string;
   duration: number;
   codec: string;
   bit_rate: number;
-  file_path: string;
-  track_index: number;
-  disc: number;
   album_id: NullableInt64;
   album_title: NullableString;
   album_cover: NullableString;
@@ -296,7 +259,6 @@ export type PlaylistTrackType = {
   id: number;
   title: string;
   duration: number;
-  file_path: string;
   codec: string;
   bit_rate: number;
   album_id: NullableInt64;

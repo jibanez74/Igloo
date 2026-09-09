@@ -17,7 +17,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func seedStreamTestTrack(t *testing.T, app *Application, albumID sql.NullInt64, content []byte) database.Track {
+type streamTestTrack struct {
+	database.GetTrackRow
+	FilePath string
+}
+
+func seedStreamTestTrack(t *testing.T, app *Application, albumID sql.NullInt64, content []byte) streamTestTrack {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -27,7 +32,7 @@ func seedStreamTestTrack(t *testing.T, app *Application, albumID sql.NullInt64, 
 		t.Fatalf("write track file: %v", err)
 	}
 
-	track, err := app.Queries.UpsertTrack(context.Background(), database.UpsertTrackParams{
+	trackID, err := app.Queries.UpsertTrack(context.Background(), database.UpsertTrackParams{
 		Title:     "Stream Test",
 		SortTitle: "stream test",
 		FilePath:  path,
@@ -41,7 +46,11 @@ func seedStreamTestTrack(t *testing.T, app *Application, albumID sql.NullInt64, 
 	if err != nil {
 		t.Fatalf("insert track: %v", err)
 	}
-	return track
+	track, err := app.Queries.GetTrack(context.Background(), trackID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return streamTestTrack{GetTrackRow: track, FilePath: path}
 }
 
 // StreamTrack shares serveMediaFile with the movie handlers, so this covers the
@@ -219,12 +228,16 @@ func TestDeleteAlbumEvictsTrackStreamFileCache(t *testing.T) {
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 
-	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	albumIdentity, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Stream Test Album",
 		SortTitle: "stream test album",
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
+	}
+	album, err := app.Queries.GetAlbumByID(context.Background(), albumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	track := seedStreamTestTrack(t, app, sql.NullInt64{Int64: album.ID, Valid: true}, []byte("payload"))

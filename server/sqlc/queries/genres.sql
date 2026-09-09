@@ -7,13 +7,12 @@ VALUES
   (?, ?)
 ON CONFLICT (tag, genre_type) DO UPDATE
 SET
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+  tag = excluded.tag
+RETURNING id;
 
 -- name: GetGenresByMusicianID :many
 -- Returns all genres associated with a musician
 SELECT DISTINCT
-  g.id,
   g.tag
 FROM genres AS g
 INNER JOIN musician_genres AS mg
@@ -24,7 +23,6 @@ ORDER BY g.tag ASC;
 -- name: GetAlbumGenres :many
 -- Returns all genres associated with an album
 SELECT DISTINCT
-  g.id,
   g.tag
 FROM genres AS g
 INNER JOIN album_genres AS ag

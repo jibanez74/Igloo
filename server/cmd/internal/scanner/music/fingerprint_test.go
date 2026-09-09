@@ -334,3 +334,13 @@ func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 		t.Fatal("canceled scan persisted item")
 	}
 }
+
+func TestStoreFingerprintRejectsMissingCatalogRow(t *testing.T) {
+	s := setupMusicScanner(t)
+	defer s.db.Close()
+	err := storeTrackFingerprint(context.Background(), s.queries, "/missing/media", scanner.FileFingerprint{})
+	missing := errors.Is(err, sql.ErrNoRows)
+	if !missing {
+		t.Fatalf("missing catalog fingerprint error = %v, want sql.ErrNoRows", err)
+	}
+}

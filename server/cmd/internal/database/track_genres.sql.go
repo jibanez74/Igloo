@@ -62,7 +62,6 @@ func (q *Queries) DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGe
 const getGenresByAlbumID = `-- name: GetGenresByAlbumID :many
 SELECT
   tg.track_id,
-  g.id AS genre_id,
   g.tag
 FROM track_genres AS tg
 INNER JOIN genres AS g
@@ -77,7 +76,6 @@ ORDER BY
 
 type GetGenresByAlbumIDRow struct {
 	TrackID int64  `json:"track_id"`
-	GenreID int64  `json:"genre_id"`
 	Tag     string `json:"tag"`
 }
 
@@ -90,7 +88,7 @@ func (q *Queries) GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64)
 	items := []GetGenresByAlbumIDRow{}
 	for rows.Next() {
 		var i GetGenresByAlbumIDRow
-		if err := rows.Scan(&i.TrackID, &i.GenreID, &i.Tag); err != nil {
+		if err := rows.Scan(&i.TrackID, &i.Tag); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

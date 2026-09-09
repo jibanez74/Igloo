@@ -7607,14 +7607,8 @@
         "required": [
           "id",
           "title",
-          "file_path",
-          "file_name",
-          "size",
-          "container",
-          "mime_type",
           "adult",
-          "created_at",
-          "updated_at"
+          "duration"
         ],
         "properties": {
           "id": {
@@ -7622,22 +7616,6 @@
             "format": "int64"
           },
           "title": {
-            "type": "string"
-          },
-          "file_path": {
-            "type": "string"
-          },
-          "file_name": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "container": {
-            "type": "string"
-          },
-          "mime_type": {
             "type": "string"
           },
           "adult": {
@@ -7690,12 +7668,6 @@
           },
           "duration": {
             "$ref": "#/components/schemas/SqlNullFloat64"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
           }
         },
         "additionalProperties": false
@@ -7769,25 +7741,25 @@
       },
       "VideoStream": {
         "type": "object",
-        "required": ["id", "movie_id", "stream_index", "codec", "codec_profile", "codec_level", "bit_rate", "width", "height", "coded_width", "coded_height", "aspect_ratio", "frame_rate", "avg_frame_rate", "bit_depth", "pixel_format", "color_range", "color_space", "color_primaries", "color_transfer", "field_order", "rotation", "language", "title", "created_at", "updated_at"],
+        "required": ["id", "movie_id", "stream_index", "codec", "codec_profile", "codec_level", "bit_rate", "width", "height", "coded_width", "coded_height", "aspect_ratio", "frame_rate", "avg_frame_rate", "bit_depth", "pixel_format", "color_range", "color_space", "color_primaries", "color_transfer", "field_order", "rotation", "language", "title"],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "codec_profile": { "$ref": "#/components/schemas/SqlNullString" }, "codec_level": { "$ref": "#/components/schemas/SqlNullInt64" }, "bit_rate": { "type": "integer", "format": "int64" }, "width": { "type": "integer", "format": "int64" }, "height": { "type": "integer", "format": "int64" }, "coded_width": { "$ref": "#/components/schemas/SqlNullInt64" }, "coded_height": { "$ref": "#/components/schemas/SqlNullInt64" }, "aspect_ratio": { "$ref": "#/components/schemas/SqlNullString" }, "frame_rate": { "type": "number" }, "avg_frame_rate": { "$ref": "#/components/schemas/SqlNullString" }, "bit_depth": { "$ref": "#/components/schemas/SqlNullInt64" }, "pixel_format": { "$ref": "#/components/schemas/SqlNullString" }, "color_range": { "$ref": "#/components/schemas/SqlNullString" }, "color_space": { "$ref": "#/components/schemas/SqlNullString" }, "color_primaries": { "$ref": "#/components/schemas/SqlNullString" }, "color_transfer": { "$ref": "#/components/schemas/SqlNullString" }, "field_order": { "$ref": "#/components/schemas/SqlNullString" }, "rotation": { "$ref": "#/components/schemas/SqlNullInt64" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "codec_profile": { "$ref": "#/components/schemas/SqlNullString" }, "codec_level": { "$ref": "#/components/schemas/SqlNullInt64" }, "bit_rate": { "type": "integer", "format": "int64" }, "width": { "type": "integer", "format": "int64" }, "height": { "type": "integer", "format": "int64" }, "coded_width": { "$ref": "#/components/schemas/SqlNullInt64" }, "coded_height": { "$ref": "#/components/schemas/SqlNullInt64" }, "aspect_ratio": { "$ref": "#/components/schemas/SqlNullString" }, "frame_rate": { "type": "number" }, "avg_frame_rate": { "$ref": "#/components/schemas/SqlNullString" }, "bit_depth": { "$ref": "#/components/schemas/SqlNullInt64" }, "pixel_format": { "$ref": "#/components/schemas/SqlNullString" }, "color_range": { "$ref": "#/components/schemas/SqlNullString" }, "color_space": { "$ref": "#/components/schemas/SqlNullString" }, "color_primaries": { "$ref": "#/components/schemas/SqlNullString" }, "color_transfer": { "$ref": "#/components/schemas/SqlNullString" }, "field_order": { "$ref": "#/components/schemas/SqlNullString" }, "rotation": { "$ref": "#/components/schemas/SqlNullInt64" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }
         },
         "additionalProperties": false
       },
       "AudioStream": {
         "type": "object",
-        "required": ["id", "movie_id", "stream_index", "codec", "codec_profile", "bit_rate", "sample_rate", "channels", "channel_layout", "language", "title", "is_default", "created_at", "updated_at"],
+        "required": ["id", "movie_id", "stream_index", "codec", "codec_profile", "bit_rate", "sample_rate", "channels", "channel_layout", "language", "title", "is_default"],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "codec_profile": { "$ref": "#/components/schemas/SqlNullString" }, "bit_rate": { "type": "integer", "format": "int64" }, "sample_rate": { "$ref": "#/components/schemas/SqlNullInt64" }, "channels": { "type": "integer", "format": "int64" }, "channel_layout": { "$ref": "#/components/schemas/SqlNullString" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "is_default": { "type": "boolean" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "codec_profile": { "$ref": "#/components/schemas/SqlNullString" }, "bit_rate": { "type": "integer", "format": "int64" }, "sample_rate": { "$ref": "#/components/schemas/SqlNullInt64" }, "channels": { "type": "integer", "format": "int64" }, "channel_layout": { "$ref": "#/components/schemas/SqlNullString" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "is_default": { "type": "boolean" }
         },
         "additionalProperties": false
       },
       "Subtitle": {
         "type": "object",
-        "required": ["id", "movie_id", "stream_index", "codec", "language", "title", "is_forced", "is_default", "created_at", "updated_at"],
+        "required": ["id", "movie_id", "stream_index", "codec", "language", "title", "is_forced", "is_default"],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "is_forced": { "type": "boolean" }, "is_default": { "type": "boolean" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "is_forced": { "type": "boolean" }, "is_default": { "type": "boolean" }
         },
         "additionalProperties": false
       },
@@ -8361,79 +8333,21 @@
         },
         "additionalProperties": false
       },
-      "Notification": {
+      "CreateNotificationEnvelope": {
         "type": "object",
         "required": [
-          "id",
-          "created_by_user_id",
-          "title",
-          "message",
-          "is_admin",
-          "created_at",
-          "updated_at"
+          "error"
         ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "created_by_user_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "title": {
-            "type": "string",
-            "enum": [
-              "movie_request",
-              "album_request",
-              "track_request",
-              "other"
-            ]
+          "error": {
+            "type": "boolean",
+            "const": false
           },
           "message": {
             "type": "string"
-          },
-          "is_admin": {
-            "type": "boolean"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
           }
         },
         "additionalProperties": false
-      },
-      "CreateNotificationData": {
-        "type": "object",
-        "required": [
-          "notification"
-        ],
-        "properties": {
-          "notification": {
-            "$ref": "#/components/schemas/Notification"
-          }
-        },
-        "additionalProperties": false
-      },
-      "CreateNotificationEnvelope": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/JsonSuccess"
-          },
-          {
-            "type": "object",
-            "required": [
-              "data"
-            ],
-            "properties": {
-              "data": {
-                "$ref": "#/components/schemas/CreateNotificationData"
-              }
-            }
-          }
-        ]
       },
       "NotificationListItem": {
         "type": "object",
@@ -9478,9 +9392,9 @@
       },
       "Track": {
         "type": "object",
-        "required": ["id", "title", "sort_title", "file_path", "file_name", "container", "mime_type", "codec", "size", "track_index", "duration", "disc", "channels", "channel_layout", "bit_rate", "profile", "release_date", "year", "composer", "copyright", "language", "album_id", "musician_id", "created_at", "updated_at"],
+        "required": ["id", "title", "sort_title", "file_name", "container", "mime_type", "codec", "size", "track_index", "duration", "disc", "channels", "channel_layout", "bit_rate", "profile", "release_date", "year", "composer", "copyright", "language", "album_id", "musician_id", "created_at", "updated_at"],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "sort_title": { "type": "string" }, "file_path": { "type": "string" }, "file_name": { "type": "string" }, "container": { "type": "string" }, "mime_type": { "type": "string" }, "codec": { "type": "string" }, "size": { "type": "integer", "format": "int64" }, "track_index": { "type": "integer", "format": "int64" }, "duration": { "type": "integer", "format": "int64" }, "disc": { "type": "integer", "format": "int64" }, "channels": { "type": "string" }, "channel_layout": { "type": "string" }, "bit_rate": { "type": "integer", "format": "int64" }, "profile": { "type": "string" }, "release_date": { "$ref": "#/components/schemas/SqlNullString" }, "year": { "$ref": "#/components/schemas/SqlNullInt64" }, "composer": { "$ref": "#/components/schemas/SqlNullString" }, "copyright": { "$ref": "#/components/schemas/SqlNullString" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "album_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "musician_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "sort_title": { "type": "string" }, "file_name": { "type": "string" }, "container": { "type": "string" }, "mime_type": { "type": "string" }, "codec": { "type": "string" }, "size": { "type": "integer", "format": "int64" }, "track_index": { "type": "integer", "format": "int64" }, "duration": { "type": "integer", "format": "int64" }, "disc": { "type": "integer", "format": "int64" }, "channels": { "type": "string" }, "channel_layout": { "type": "string" }, "bit_rate": { "type": "integer", "format": "int64" }, "profile": { "type": "string" }, "release_date": { "$ref": "#/components/schemas/SqlNullString" }, "year": { "$ref": "#/components/schemas/SqlNullInt64" }, "composer": { "$ref": "#/components/schemas/SqlNullString" }, "copyright": { "$ref": "#/components/schemas/SqlNullString" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "album_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "musician_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
         },
         "additionalProperties": false
       },
@@ -9491,8 +9405,7 @@
           "title",
           "duration",
           "codec",
-          "bit_rate",
-          "file_path"
+          "bit_rate"
         ],
         "properties": {
           "id": {
@@ -9511,9 +9424,6 @@
           "bit_rate": {
             "type": "integer",
             "format": "int64"
-          },
-          "file_path": {
-            "type": "string"
           }
         },
         "additionalProperties": false
@@ -9523,7 +9433,6 @@
         "required": [
           "id",
           "name",
-          "sort_name",
           "thumb",
           "album_count",
           "track_count"
@@ -9534,9 +9443,6 @@
             "format": "int64"
           },
           "name": {
-            "type": "string"
-          },
-          "sort_name": {
             "type": "string"
           },
           "thumb": {
@@ -9684,7 +9590,7 @@
                   "tracks": {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/Track"
+                      "$ref": "#/components/schemas/AlbumTrack"
                     }
                   },
                   "artists": {
@@ -10081,9 +9987,9 @@
       },
       "PlaylistTrack": {
         "type": "object",
-        "required": ["playlist_track_id", "position", "added_at", "added_by", "id", "title", "duration", "file_path", "codec", "bit_rate", "album_id", "musician_id", "album_title", "album_cover", "musician_name"],
+        "required": ["playlist_track_id", "position", "added_at", "added_by", "id", "title", "duration", "codec", "bit_rate", "album_id", "musician_id", "album_title", "album_cover", "musician_name"],
         "properties": {
-          "playlist_track_id": { "type": "integer", "format": "int64" }, "position": { "type": "integer", "format": "int64" }, "added_at": { "type": "string" }, "added_by": { "$ref": "#/components/schemas/SqlNullInt64" }, "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "duration": { "type": "integer", "format": "int64" }, "file_path": { "type": "string" }, "codec": { "type": "string" }, "bit_rate": { "type": "integer", "format": "int64" }, "album_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "musician_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "album_title": { "$ref": "#/components/schemas/SqlNullString" }, "album_cover": { "$ref": "#/components/schemas/SqlNullString" }, "musician_name": { "$ref": "#/components/schemas/SqlNullString" }
+          "playlist_track_id": { "type": "integer", "format": "int64" }, "position": { "type": "integer", "format": "int64" }, "added_at": { "type": "string" }, "added_by": { "$ref": "#/components/schemas/SqlNullInt64" }, "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "duration": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "bit_rate": { "type": "integer", "format": "int64" }, "album_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "musician_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "album_title": { "$ref": "#/components/schemas/SqlNullString" }, "album_cover": { "$ref": "#/components/schemas/SqlNullString" }, "musician_name": { "$ref": "#/components/schemas/SqlNullString" }
         },
         "additionalProperties": false
       },
@@ -11180,6 +11086,64 @@
           "name": {
             "type": "string",
             "maxLength": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "AlbumTrack": {
+        "type": "object",
+        "description": "Track fields consumed by album details and the audio player. Technical metadata remains available from the track details endpoint.",
+        "required": [
+          "id",
+          "title",
+          "codec",
+          "track_index",
+          "duration",
+          "disc",
+          "channel_layout",
+          "bit_rate",
+          "album_id",
+          "musician_id",
+          "mime_type"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "track_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "disc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "channel_layout": {
+            "type": "string"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "musician_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "mime_type": {
+            "type": "string"
           }
         },
         "additionalProperties": false

@@ -293,7 +293,7 @@ func TestRunMovieScanDeletesMissingMovieWithoutFingerprint(t *testing.T) {
 	ctx := context.Background()
 	moviesDir := t.TempDir()
 	missingPath := filepath.Join(moviesDir, "Missing.Movie.1999.mkv")
-	movie, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	movieID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Missing Movie",
 		FilePath:  missingPath,
 		FileName:  filepath.Base(missingPath),
@@ -304,6 +304,10 @@ func TestRunMovieScanDeletesMissingMovieWithoutFingerprint(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("insert missing movie: %v", err)
+	}
+	movie, err := testScanner.queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}

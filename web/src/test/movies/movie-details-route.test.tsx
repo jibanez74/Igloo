@@ -80,11 +80,6 @@ function movieDetailsResponse(
     movie: {
       id,
       title,
-      file_path: `/movies/${title.toLowerCase().replaceAll(" ", "-")}.mkv`,
-      file_name: `${title.toLowerCase().replaceAll(" ", "-")}.mkv`,
-      size: 1024,
-      container: "mkv",
-      mime_type: "video/x-matroska",
       adult: false,
       tmdb_id: nullableInt64(1000 + id),
       imdb_id: nullableString(`tt${1000 + id}`),
@@ -102,14 +97,10 @@ function movieDetailsResponse(
       budget: nullableFloat64(500000),
       run_time: nullableInt64(116),
       duration: nullableFloat64(6960),
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
     },
     cast: [
       {
         id: id * 10,
-        movie_id: id,
-        artist_id: id * 10,
         character: "Lead",
         cast_order: 0,
         artist_name: `${title} Lead`,
@@ -119,12 +110,9 @@ function movieDetailsResponse(
     crew: [
       {
         id: id * 20,
-        movie_id: id,
-        artist_id: id * 20,
         job: "Director",
         department: "Directing",
         artist_name: `${title} Director`,
-        artist_profile: nullableString(""),
       },
     ],
     genres: [
@@ -137,9 +125,6 @@ function movieDetailsResponse(
       {
         id,
         name: `${title} Pictures`,
-        tmdb_id: id,
-        logo: nullableString(""),
-        country: nullableString("US"),
       },
     ],
     extra_videos: [],
@@ -150,7 +135,6 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
   return {
     movie: {
       file_name: `movie-${id}.mkv`,
-      file_path: `/movies/movie-${id}.mkv`,
       size: 1024,
       container: "mkv",
       mime_type: "video/x-matroska",
@@ -159,8 +143,8 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
     },
     video_streams: [
       {
-        id,
         movie_id: id,
+        id,
         stream_index: 0,
         codec: "h264",
         codec_profile: nullableString("High"),
@@ -187,8 +171,8 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
     ],
     audio_streams: [
       {
-        id,
         movie_id: id,
+        id,
         stream_index: 1,
         codec: "aac",
         codec_profile: nullableString("LC"),

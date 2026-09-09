@@ -51,29 +51,15 @@ function albumTrack(
   return {
     id,
     title,
-    sort_title: title,
-    file_path: `/music/${albumId}/${title.toLowerCase().replaceAll(" ", "-")}.flac`,
-    file_name: `${title.toLowerCase().replaceAll(" ", "-")}.flac`,
-    container: "flac",
-    mime_type: "audio/flac",
     codec: "flac",
-    size: 1024,
+    mime_type: "audio/flac",
     track_index: trackIndex,
     duration: 180_000,
     disc: 1,
-    channels: "2",
     channel_layout: "stereo",
     bit_rate: 900000,
-    profile: "",
-    release_date: nullableString("2026-01-01"),
-    year: nullableInt64(2026),
-    composer: nullableString(""),
-    copyright: nullableString(""),
-    language: nullableString("en"),
     album_id: nullableInt64(albumId),
     musician_id: nullableInt64(albumId + 100),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
   };
 }
 
@@ -110,7 +96,6 @@ function albumDetailsResponse(
     track_genres: [
       {
         track_id: id * 10,
-        genre_id: id,
         tag: "Alternative",
       },
     ],

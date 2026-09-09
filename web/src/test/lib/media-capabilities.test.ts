@@ -88,7 +88,6 @@ function tech(
   return {
     movie: {
       file_name: "movie.mkv",
-      file_path: "/movies/movie.mkv",
       size: 1,
       container: "mkv",
       mime_type: "video/x-matroska",

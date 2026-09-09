@@ -28,7 +28,7 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
 		}
 		assertOpenAPIExchange(t, operationID, req, response)
-		for _, key := range []string{"identity_key", "title_key", "artist_key", "artist_tag", "artist_sort", "album_sort", "spotify_date", "source"} {
+		for _, key := range []string{"file_path", "identity_key", "title_key", "artist_key", "artist_tag", "artist_sort", "album_sort", "spotify_date", "source"} {
 			exposed := strings.Contains(response.Body.String(), fmt.Sprintf("%q:", key))
 			if exposed {
 				t.Fatalf("%s exposed internal field %s", operationID, key)

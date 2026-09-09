@@ -18,7 +18,7 @@ import {
   MOTION_PLAYER_CHROME_ENTER_CLASS,
 } from "@/lib/constants";
 import type { TrackType } from "@/types";
-import { nullableInt64, nullableString } from "../helpers/fixtures";
+import { nullableInt64 } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
 import { stubMediaElement } from "../helpers/dom";
 
@@ -55,29 +55,15 @@ function track(overrides: Partial<TrackType> = {}): TrackType {
   return {
     id: 42,
     title: "Alabaster",
-    sort_title: "Alabaster",
-    file_path: "/music/alabaster.flac",
-    file_name: "alabaster.flac",
-    container: "flac",
-    mime_type: "audio/flac",
     codec: "flac",
-    size: 1024,
+    mime_type: "audio/flac",
     track_index: 1,
     duration: 180,
     disc: 1,
-    channels: "2",
     channel_layout: "stereo",
     bit_rate: 900000,
-    profile: "",
-    release_date: nullableString("2026-01-01"),
-    year: nullableInt64(2026),
-    composer: nullableString(),
-    copyright: nullableString(),
-    language: nullableString("en"),
     album_id: nullableInt64(7),
     musician_id: nullableInt64(8),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };
 }
@@ -555,8 +541,6 @@ describe("AudioPlayer Media Session", () => {
       return track({
         id: 43,
         title: "Basalt",
-        file_path: "/music/basalt.flac",
-        file_name: "basalt.flac",
       });
     }
 

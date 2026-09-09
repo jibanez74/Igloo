@@ -2347,12 +2347,6 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
-            file_path: string;
-            file_name: string;
-            /** Format: int64 */
-            size: number;
-            container: string;
-            mime_type: string;
             adult: boolean;
             tmdb_id?: components["schemas"]["SqlNullInt64"];
             imdb_id?: components["schemas"]["SqlNullString"];
@@ -2369,9 +2363,7 @@ export interface components {
             revenue?: components["schemas"]["SqlNullFloat64"];
             budget?: components["schemas"]["SqlNullFloat64"];
             run_time?: components["schemas"]["SqlNullInt64"];
-            duration?: components["schemas"]["SqlNullFloat64"];
-            created_at: string;
-            updated_at: string;
+            duration: components["schemas"]["SqlNullFloat64"];
         };
         MovieDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -2424,8 +2416,6 @@ export interface components {
             rotation: components["schemas"]["SqlNullInt64"];
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
-            created_at: string;
-            updated_at: string;
         };
         AudioStream: {
             /** Format: int64 */
@@ -2445,8 +2435,6 @@ export interface components {
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
             is_default: boolean;
-            created_at: string;
-            updated_at: string;
         };
         Subtitle: {
             /** Format: int64 */
@@ -2460,8 +2448,6 @@ export interface components {
             title: components["schemas"]["SqlNullString"];
             is_forced: boolean;
             is_default: boolean;
-            created_at: string;
-            updated_at: string;
         };
         Chapter: {
             /** Format: int64 */
@@ -2663,23 +2649,10 @@ export interface components {
             /** @default false */
             isAdmin: boolean;
         };
-        Notification: {
-            /** Format: int64 */
-            id: number;
-            /** Format: int64 */
-            created_by_user_id: number;
-            /** @enum {string} */
-            title: "movie_request" | "album_request" | "track_request" | "other";
-            message: string;
-            is_admin: boolean;
-            created_at: string;
-            updated_at: string;
-        };
-        CreateNotificationData: {
-            notification: components["schemas"]["Notification"];
-        };
-        CreateNotificationEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["CreateNotificationData"];
+        CreateNotificationEnvelope: {
+            /** @constant */
+            error: false;
+            message?: string;
         };
         NotificationListItem: {
             /** Format: int64 */
@@ -2944,7 +2917,6 @@ export interface components {
             id: number;
             title: string;
             sort_title: string;
-            file_path: string;
             file_name: string;
             container: string;
             mime_type: string;
@@ -2980,13 +2952,11 @@ export interface components {
             codec: string;
             /** Format: int64 */
             bit_rate: number;
-            file_path: string;
         };
         SimpleMusician: {
             /** Format: int64 */
             id: number;
             name: string;
-            sort_name: string;
             thumb: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             album_count: number;
@@ -3022,7 +2992,7 @@ export interface components {
         AlbumDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 album: components["schemas"]["Album"];
-                tracks: components["schemas"]["Track"][];
+                tracks: components["schemas"]["AlbumTrack"][];
                 artists: {
                     [key: string]: unknown;
                 }[];
@@ -3156,7 +3126,6 @@ export interface components {
             title: string;
             /** Format: int64 */
             duration: number;
-            file_path: string;
             codec: string;
             /** Format: int64 */
             bit_rate: number;
@@ -3435,6 +3404,25 @@ export interface components {
         };
         RenameDeviceRequest: {
             name: string;
+        };
+        /** @description Track fields consumed by album details and the audio player. Technical metadata remains available from the track details endpoint. */
+        AlbumTrack: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            codec: string;
+            /** Format: int64 */
+            track_index: number;
+            /** Format: int64 */
+            duration: number;
+            /** Format: int64 */
+            disc: number;
+            channel_layout: string;
+            /** Format: int64 */
+            bit_rate: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            musician_id: components["schemas"]["SqlNullInt64"];
+            mime_type: string;
         };
     };
     responses: {

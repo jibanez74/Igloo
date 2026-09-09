@@ -257,7 +257,6 @@ const tracks = [
     duration: 214_000,
     codec: "flac",
     bit_rate: 890000,
-    file_path: "/srv/media/music/beacon-line.flac",
     album_id: nullableInt(201),
     album_title: nullableString("Warm Static"),
     album_cover: nullableString("/api/static/albums/warm-static.svg"),
@@ -270,7 +269,6 @@ const tracks = [
     duration: 188_000,
     codec: "flac",
     bit_rate: 820000,
-    file_path: "/srv/media/music/soft-cutoff.flac",
     album_id: nullableInt(201),
     album_title: nullableString("Warm Static"),
     album_cover: nullableString("/api/static/albums/warm-static.svg"),
@@ -283,7 +281,6 @@ const tracks = [
     duration: 236_000,
     codec: "aac",
     bit_rate: 256000,
-    file_path: "/srv/media/music/late-platform.m4a",
     album_id: nullableInt(202),
     album_title: nullableString("Night Index"),
     album_cover: nullableString("/api/static/albums/night-index.svg"),
@@ -528,11 +525,6 @@ function movieDetails(id: number) {
     movie: {
       id: baseMovie.id,
       title: baseMovie.title,
-      file_path: `/srv/media/movies/${baseMovie.title}.mp4`,
-      file_name: `${baseMovie.title}.mp4`,
-      size: 4_200_000_000,
-      container: "mp4",
-      mime_type: "video/mp4",
       adult: false,
       tmdb_id: nullableInt(900000 + baseMovie.id),
       imdb_id: nullableString(`tt${900000 + baseMovie.id}`),
@@ -552,14 +544,10 @@ function movieDetails(id: number) {
       budget: nullableFloat(750_000),
       run_time: nullableInt(122),
       duration: nullableFloat(7320),
-      created_at: startedAt,
-      updated_at: startedAt,
     },
     cast: [
       {
         id: 1,
-        movie_id: baseMovie.id,
-        artist_id: 11,
         character: "Mara Voss",
         cast_order: 0,
         artist_name: "Alex Vega",
@@ -567,8 +555,6 @@ function movieDetails(id: number) {
       },
       {
         id: 2,
-        movie_id: baseMovie.id,
-        artist_id: 12,
         character: "Eli Storm",
         cast_order: 1,
         artist_name: "Sam Rivera",
@@ -578,21 +564,15 @@ function movieDetails(id: number) {
     crew: [
       {
         id: 1,
-        movie_id: baseMovie.id,
-        artist_id: 21,
         job: "Director",
         department: "Directing",
         artist_name: "Nora Finch",
-        artist_profile: nullableString("/nora-finch.jpg"),
       },
       {
         id: 2,
-        movie_id: baseMovie.id,
-        artist_id: 22,
         job: "Writer",
         department: "Writing",
         artist_name: "Ira Chen",
-        artist_profile: nullableString("/ira-chen.jpg"),
       },
     ],
     genres: [
@@ -603,22 +583,15 @@ function movieDetails(id: number) {
       {
         id: 1,
         name: "Igloo Pictures",
-        tmdb_id: 7001,
-        logo: nullableString("/igloo-pictures.svg"),
-        country: nullableString("US"),
       },
     ],
     extra_videos: [
       {
         id: 1,
         title: "Official Trailer",
-        external_id: nullableString("dQw4w9WgXcQ"),
         key: "dQw4w9WgXcQ",
         type: "Trailer",
         site: "YouTube",
-        official: true,
-        created_at: startedAt,
-        updated_at: startedAt,
       },
     ],
   };
@@ -628,11 +601,10 @@ function movieTechnicalDetails(id: number) {
   const details = movieDetails(id);
   return {
     movie: {
-      file_name: details.movie.file_name,
-      file_path: details.movie.file_path,
-      size: details.movie.size,
-      container: details.movie.container,
-      mime_type: details.movie.mime_type,
+      file_name: `${details.movie.title}.mp4`,
+      size: 4_200_000_000,
+      container: "mp4",
+      mime_type: "video/mp4",
       run_time: details.movie.run_time,
       duration: details.movie.duration,
     },

@@ -1314,7 +1314,11 @@ func createTestUser(t *testing.T, app *Application, name, email string, isAdmin 
 		t.Fatalf("create user %q: %v", email, err)
 	}
 
-	return user
+	stored, err := app.Queries.GetUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stored
 }
 
 // authSessionCookies runs one request through the session manager so the
@@ -1735,9 +1739,13 @@ func TestInitDefaultUser_UsesConfiguredCredentials(t *testing.T) {
 		t.Fatalf("InitDefaultUser failed: %v", err)
 	}
 
-	admin, err := app.Queries.GetAdminUser(context.Background())
+	adminID, err := app.Queries.GetAdminUser(context.Background())
 	if err != nil {
 		t.Fatalf("GetAdminUser failed: %v", err)
+	}
+	admin, err := app.Queries.GetUser(context.Background(), adminID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if admin.Name != app.Config.DefaultAdminName || admin.Email != app.Config.DefaultAdminEmail {
 		t.Fatalf("admin credentials = (%q, %q), want (%q, %q)", admin.Name, admin.Email, app.Config.DefaultAdminName, app.Config.DefaultAdminEmail)

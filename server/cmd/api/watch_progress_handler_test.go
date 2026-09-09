@@ -34,7 +34,7 @@ func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int
 
 	// MP4 on purpose: watch-room tests create direct-mode rooms with this
 	// movie, and direct playback is refused for non-MP4 containers.
-	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	movieID, err = app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Test Movie",
 		FilePath:  "/movies/test.mp4",
 		FileName:  "test.mp4",
@@ -44,6 +44,10 @@ func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int
 	})
 	if err != nil {
 		t.Fatalf("failed to create test movie: %v", err)
+	}
+	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	return user.ID, movie.ID
@@ -338,7 +342,7 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 		t.Fatalf("failed to create user2: %v", err)
 	}
 
-	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Shared Movie",
 		FilePath:  "/movies/shared.mkv",
 		FileName:  "shared.mkv",
@@ -348,6 +352,10 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("failed to create movie: %v", err)
+	}
+	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
@@ -422,7 +430,7 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 	}
 
 	createMovie := func(title, fileName string) int64 {
-		movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
 			Title:     title,
 			FilePath:  "/movies/" + fileName,
 			FileName:  fileName,
@@ -432,6 +440,10 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("failed to create movie %q: %v", title, err)
+		}
+		movie, err := app.Queries.GetMovieByID(ctx, movieID)
+		if err != nil {
+			t.Fatal(err)
 		}
 		return movie.ID
 	}
@@ -727,9 +739,21 @@ func TestWatchProgress_SaveOrdering(t *testing.T) {
 		t.Fatalf("stale save: %v", err)
 	}
 
-	row, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID: userID, MovieID: movieID,
-	})
+	readStoredWatchProgress := func() (struct {
+		database.GetMovieWatchProgressRow
+		SaveSessionID string
+		SaveSequence  int64
+	}, error) {
+		var stored struct {
+			database.GetMovieWatchProgressRow
+			SaveSessionID string
+			SaveSequence  int64
+		}
+		err := app.DB.QueryRowContext(ctx, "SELECT progress_sec, duration_sec, watched, updated_at, save_session_id, save_sequence FROM movie_watch_progress WHERE user_id = ? AND movie_id = ?", userID, movieID).Scan(&stored.ProgressSec, &stored.DurationSec, &stored.Watched, &stored.UpdatedAt, &stored.SaveSessionID, &stored.SaveSequence)
+		return stored, err
+	}
+
+	row, err := readStoredWatchProgress()
 	if err != nil {
 		t.Fatalf("get after stale save: %v", err)
 	}
@@ -748,9 +772,7 @@ func TestWatchProgress_SaveOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("equal-sequence save: %v", err)
 	}
-	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID: userID, MovieID: movieID,
-	})
+	row, err = readStoredWatchProgress()
 	if err != nil {
 		t.Fatalf("get after equal-sequence save: %v", err)
 	}
@@ -779,9 +801,7 @@ func TestWatchProgress_SaveOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stale save after completion: %v", err)
 	}
-	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID: userID, MovieID: movieID,
-	})
+	row, err = readStoredWatchProgress()
 	if err != nil {
 		t.Fatalf("get after stale completion overwrite: %v", err)
 	}
@@ -800,9 +820,7 @@ func TestWatchProgress_SaveOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("higher-sequence rewind: %v", err)
 	}
-	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID: userID, MovieID: movieID,
-	})
+	row, err = readStoredWatchProgress()
 	if err != nil {
 		t.Fatalf("get after rewind: %v", err)
 	}
@@ -821,9 +839,7 @@ func TestWatchProgress_SaveOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("different-session save: %v", err)
 	}
-	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID: userID, MovieID: movieID,
-	})
+	row, err = readStoredWatchProgress()
 	if err != nil {
 		t.Fatalf("get after different-session save: %v", err)
 	}

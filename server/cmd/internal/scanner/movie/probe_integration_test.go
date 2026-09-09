@@ -75,7 +75,7 @@ func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			movie, err := s.queries.GetMovieByPath(context.Background(), path)
+			movie, err := readTestMovieByPath(context.Background(), s.queries, path)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -29,7 +29,7 @@ func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, userID in
 	return unread_count, err
 }
 
-const createNotification = `-- name: CreateNotification :one
+const createNotification = `-- name: CreateNotification :exec
 INSERT INTO notifications (
   created_by_user_id,
   title,
@@ -37,7 +37,6 @@ INSERT INTO notifications (
   is_admin
 )
 VALUES (?, ?, ?, ?)
-RETURNING id, created_by_user_id, title, message, is_admin, created_at, updated_at
 `
 
 type CreateNotificationParams struct {
@@ -47,24 +46,14 @@ type CreateNotificationParams struct {
 	IsAdmin         bool   `json:"is_admin"`
 }
 
-func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
-	row := q.queryRow(ctx, q.createNotificationStmt, createNotification,
+func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) error {
+	_, err := q.exec(ctx, q.createNotificationStmt, createNotification,
 		arg.CreatedByUserID,
 		arg.Title,
 		arg.Message,
 		arg.IsAdmin,
 	)
-	var i Notification
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedByUserID,
-		&i.Title,
-		&i.Message,
-		&i.IsAdmin,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	return err
 }
 
 const deleteNotificationForUser = `-- name: DeleteNotificationForUser :execrows
@@ -83,7 +72,6 @@ func (q *Queries) DeleteNotificationForUser(ctx context.Context, notificationID 
 
 const getNotificationBadgeForUser = `-- name: GetNotificationBadgeForUser :one
 SELECT
-  u.is_admin,
   CASE
     WHEN u.is_admin THEN (
       SELECT COUNT(*)
@@ -102,33 +90,26 @@ FROM users AS u
 WHERE u.id = ?1
 `
 
-type GetNotificationBadgeForUserRow struct {
-	IsAdmin     bool  `json:"is_admin"`
-	UnreadCount int64 `json:"unread_count"`
-}
-
 // The bell badge in one round trip. The client polls this endpoint, and the
 // database runs on a single shared connection (InitDB), so the admin check and
 // the count are folded into one statement instead of GetUserIsAdmin followed by
 // CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
 // short-circuits to 0 without touching notifications at all. No rows means the
 // session outlived its user, which the handler treats as a stale session.
-func (q *Queries) GetNotificationBadgeForUser(ctx context.Context, userID int64) (GetNotificationBadgeForUserRow, error) {
+func (q *Queries) GetNotificationBadgeForUser(ctx context.Context, userID int64) (int64, error) {
 	row := q.queryRow(ctx, q.getNotificationBadgeForUserStmt, getNotificationBadgeForUser, userID)
-	var i GetNotificationBadgeForUserRow
-	err := row.Scan(&i.IsAdmin, &i.UnreadCount)
-	return i, err
+	var unread_count int64
+	err := row.Scan(&unread_count)
+	return unread_count, err
 }
 
 const listNotificationsForUser = `-- name: ListNotificationsForUser :many
 SELECT
   n.id,
-  n.created_by_user_id,
   n.title,
   n.message,
   n.is_admin,
   n.created_at,
-  n.updated_at,
   creator.name AS created_by_name,
   CAST((nr.notification_id IS NOT NULL) AS BOOLEAN) AS is_read
 FROM notifications AS n
@@ -148,15 +129,13 @@ type ListNotificationsForUserParams struct {
 }
 
 type ListNotificationsForUserRow struct {
-	ID              int64  `json:"id"`
-	CreatedByUserID int64  `json:"created_by_user_id"`
-	Title           string `json:"title"`
-	Message         string `json:"message"`
-	IsAdmin         bool   `json:"is_admin"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
-	CreatedByName   string `json:"created_by_name"`
-	IsRead          bool   `json:"is_read"`
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	Message       string `json:"message"`
+	IsAdmin       bool   `json:"is_admin"`
+	CreatedAt     string `json:"created_at"`
+	CreatedByName string `json:"created_by_name"`
+	IsRead        bool   `json:"is_read"`
 }
 
 // The shared admin request queue, newest first. Visibility is admin-only and
@@ -173,12 +152,10 @@ func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotifica
 		var i ListNotificationsForUserRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.CreatedByUserID,
 			&i.Title,
 			&i.Message,
 			&i.IsAdmin,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.CreatedByName,
 			&i.IsRead,
 		); err != nil {

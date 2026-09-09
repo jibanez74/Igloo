@@ -6,8 +6,7 @@ WHERE id = ?
 LIMIT 1;
 
 -- name: GetAlbumBySpotifyID :one
-SELECT
-  *
+SELECT id, spotify_id, cover
 FROM albums
 WHERE spotify_id = ?
 LIMIT 1;
@@ -57,7 +56,7 @@ SET
   cover = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, spotify_id, cover;
 
 -- name: UpsertAlbum :one
 INSERT INTO albums (
@@ -85,7 +84,7 @@ SET
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
   cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+RETURNING id, spotify_id, cover;
 
 -- name: DeleteAlbum :exec
 DELETE FROM albums

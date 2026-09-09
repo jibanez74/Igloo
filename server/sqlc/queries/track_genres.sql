@@ -22,7 +22,6 @@ WHERE track_id = ?;
 -- name: GetGenresByAlbumID :many
 SELECT
   tg.track_id,
-  g.id AS genre_id,
   g.tag
 FROM track_genres AS tg
 INNER JOIN genres AS g

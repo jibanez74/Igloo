@@ -22,35 +22,20 @@ export function toggleMediaPlayback(media: HTMLMediaElement | null) {
   }
 }
 
-// Convert minimal track data to a full TrackType for the audio player
-// Fills in default values for fields not needed for playback
+// List endpoints omit album-only display fields.
 export function convertToAudioTrack(track: PlayableTrackData) {
   return {
     id: track.id,
     title: track.title,
-    sort_title: track.title,
-    file_path: track.file_path,
-    file_name: "",
-    container: "",
-    mime_type: "",
     codec: track.codec,
-    size: 0,
+    mime_type: "",
     track_index: 0,
     duration: track.duration,
     disc: 1,
-    channels: "",
     channel_layout: "",
     bit_rate: track.bit_rate,
-    profile: "",
-    release_date: { String: "", Valid: false },
-    year: { Int64: 0, Valid: false },
-    composer: { String: "", Valid: false },
-    copyright: { String: "", Valid: false },
-    language: { String: "", Valid: false },
     album_id: track.album_id,
     musician_id: track.musician_id,
-    created_at: "",
-    updated_at: "",
   };
 }
 

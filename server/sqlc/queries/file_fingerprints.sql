@@ -1,4 +1,4 @@
--- name: UpsertTrackFileFingerprint :one
+-- name: UpsertTrackFileFingerprint :execrows
 INSERT INTO track_file_fingerprints (track_id, mtime_ns, ctime_ns, device, inode, sha256)
 SELECT id, sqlc.arg(mtime_ns), sqlc.arg(ctime_ns), sqlc.arg(device), sqlc.arg(inode), sqlc.arg(sha256)
 FROM tracks
@@ -8,10 +8,9 @@ ON CONFLICT (track_id) DO UPDATE SET
  ctime_ns = excluded.ctime_ns,
  device = excluded.device,
  inode = excluded.inode,
- sha256 = excluded.sha256
-RETURNING track_id;
+ sha256 = excluded.sha256;
 
--- name: UpsertMovieFileFingerprint :one
+-- name: UpsertMovieFileFingerprint :execrows
 INSERT INTO movie_file_fingerprints (movie_id, mtime_ns, ctime_ns, device, inode, sha256)
 SELECT id, sqlc.arg(mtime_ns), sqlc.arg(ctime_ns), sqlc.arg(device), sqlc.arg(inode), sqlc.arg(sha256)
 FROM movies
@@ -21,8 +20,7 @@ ON CONFLICT (movie_id) DO UPDATE SET
  ctime_ns = excluded.ctime_ns,
  device = excluded.device,
  inode = excluded.inode,
- sha256 = excluded.sha256
-RETURNING movie_id;
+ sha256 = excluded.sha256;
 
 -- name: DeleteMovieRemuxSafetyVerdicts :exec
 DELETE FROM remux_safety_verdicts WHERE movie_id = ?;

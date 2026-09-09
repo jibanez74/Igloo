@@ -27,7 +27,6 @@ const REMOVE_LABEL = "Remove Alabaster from liked";
 const rawTrack: PlayableTrackData = {
   id: TRACK_ID,
   title: "Alabaster",
-  file_path: `/music/${TRACK_ID}.flac`,
   duration: 100,
   codec: "flac",
   bit_rate: 900000,
