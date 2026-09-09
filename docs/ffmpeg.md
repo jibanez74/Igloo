@@ -12,15 +12,15 @@ Direct file streaming is separate from this flow. When the client can play a sou
 
 ## Binary Strategy
 
-Release builds use embedded FFmpeg and ffprobe binaries. Platform-specific files under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` use `//go:embed` to include the binary payload at compile time. At startup, Igloo extracts each binary into an operating-system temp directory such as `igloo-ffmpeg-*` or `igloo-ffprobe-*`, marks it executable, and keeps a singleton wrapper pointing at the extracted path.
+Release builds use embedded FFmpeg and ffprobe binaries. Platform-specific files under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` use `//go:embed` to include the zstd-compressed binary payload at compile time. At startup, `mediabin` extracts each executable under `os.UserCacheDir()/igloo/bin/<binary>-<payload-hash>/` and reuses it across restarts. Reuse checks the binary digest against its `.sha256` marker; missing or mismatched entries are rewritten. Successful cache extraction prunes older cache directories for the same binary. If cache extraction fails, Igloo falls back to a randomized operating-system temp directory such as `igloo-ffmpeg-*` or `igloo-ffprobe-*`. Each singleton wrapper points at the resulting executable path.
 
 Igloo uses Jellyfin FFmpeg builds for release payloads, never generic upstream builds — the Linux x64 payloads in this repository report `7.1.4-Jellyfin`. Follow the current stable `jellyfin-ffmpeg` line; do not move to a prerelease line or an upstream build without a specific reason.
 
 When refreshing payloads, update both `ffmpeg_<platform>` and `ffprobe_<platform>` from the same Jellyfin release. Linux x64 uses `ffmpeg_linux_amd64` / `ffprobe_linux_amd64`; macOS ARM64 expects `ffmpeg_darwin_arm64` / `ffprobe_darwin_arm64`. `make build` checks that the current platform's payloads exist before compiling.
 
-Development and CI use the `externalbin` build tag instead, which skips extraction and resolves `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` first, then `ffmpeg` / `ffprobe` on `PATH`. The split keeps release packages self-contained while keeping large payload files out of development checkouts; either way the wrappers present the same internal interface, and hardware acceleration always depends on the host runtime regardless of build mode.
+Development and CI use the `externalbin` build tag instead, which skips extraction and uses `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` when nonempty, otherwise resolves `ffmpeg` / `ffprobe` on `PATH`. An invalid override fails validation rather than falling back to `PATH`; embedded release builds ignore these overrides. Make development/test prerequisites still require both commands on `PATH`, even when overrides are set. The split keeps release packages self-contained while keeping large payload files out of development checkouts; either way the wrappers present the same internal interface, and hardware acceleration always depends on the host runtime regardless of build mode.
 
-Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. Each wrapper verifies the resolved binary with `-version` before accepting it, so a corrupt, wrong-architecture, or non-executable binary fails during startup instead of during the first scan or transcode. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `externalbin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
+Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. Each wrapper verifies the resolved binary with `-version` before accepting it, so a corrupt, wrong-architecture, or non-executable binary fails during startup instead of during the first scan or transcode. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove fallback temp directories in embedded mode and reset the singleton state; cached executables remain for reuse. In `externalbin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
 
 ## Metadata Scanning
 
@@ -339,7 +339,7 @@ The hardware acceleration setting is stored as one of:
 - `nvidia`
 - `intel`
 
-The default value is `cpu`. Set `HARDWARE_ACCELERATION_DEVICE` in `.env` when testing host hardware acceleration.
+The default value is `cpu`. `HARDWARE_ACCELERATION_DEVICE` in `.env` seeds the value only when the database has no Settings row. For an existing instance, change the hardware acceleration device in Settings when testing host hardware acceleration.
 
 The FFmpeg encoder mapping is:
 
@@ -532,7 +532,7 @@ For binary deployments:
 - `HLS_MAX_SESSIONS_PER_USER` is read at startup and limits cached plus in-flight personal HLS sessions per user; remux and transcode sessions are both counted. The default is 3. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 
-Build tags, `make` targets, and the environment variables above are documented in `CLAUDE.md`, `README.md`, and `.env.example`; the only FFmpeg-specific note is that every `externalbin` build — `make dev` and all backend tests — needs each binary on `PATH` or supplied through its `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` override.
+Build tags, `make` targets, and the environment variables above are documented in `CLAUDE.md`, `README.md`, and `.env.example`. At runtime, `externalbin` wrappers accept `IGLOO_FFMPEG_PATH` / `IGLOO_FFPROBE_PATH` overrides or resolve the commands on `PATH`. Make development/test prerequisites independently require `ffmpeg` and `ffprobe` on `PATH`; overrides do not bypass those checks.
 
 For failures:
 
