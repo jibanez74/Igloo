@@ -1533,11 +1533,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get movie scan progress
+         * @description Admin-only current/latest in-memory report. No persistent history. Local and enrichment counts are separate. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         */
+        get: operations["getMovieScanStatus"];
         put?: never;
         /**
          * Trigger a movie library scan
-         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the technical fingerprint, preserving playback caches. Pending descriptive enrichment may also be retried. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. Technical metadata and fingerprints commit atomically per movie. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. No results and unavailable TMDB remain eligible. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
+         * @description Admin-only endpoint. The scan runs asynchronously. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. No results and unavailable TMDB remain eligible. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
          */
         post: operations["triggerMovieScan"];
         delete?: never;
@@ -3494,6 +3498,48 @@ export interface components {
             /** @description Optional for all events. play, pause, and seek use the current room position when omitted, null, or negative; a nonnegative value sets the position in seconds. seek preserves paused state. join and ping ignore this field. */
             position_sec?: number | null;
         };
+        MovieScanIssue: {
+            filename: string;
+            phase: string;
+            reason: string;
+        };
+        MovieScanStatusData: {
+            /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
+            run_id: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
+            /** @enum {string} */
+            phase: "idle" | "discovery" | "local" | "retry-wait" | "cleanup" | "enrichment";
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** @description Active filenames only; no directory paths. */
+            active_files: string[];
+            total: number;
+            /** @description Unique files with a local outcome, including deferred and failed files. Retries do not increment this count. */
+            processed: number;
+            imported: number;
+            updated: number;
+            unchanged: number;
+            failed: number;
+            deferred: number;
+            deleted: number;
+            enrichment_total: number;
+            enrichment_processed: number;
+            enriched: number;
+            enrichment_failed: number;
+            enrichment_unmatched: number;
+            /** @description Outstanding catalog enrichment; updated as results commit and reconciled at termination. */
+            pending_enrichment: number;
+            issue_count: number;
+            issues: components["schemas"]["MovieScanIssue"][];
+        };
+        MovieScanStatusResponse: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["MovieScanStatusData"];
+        };
     };
     responses: {
         /** @description Successful JSON response. */
@@ -4513,6 +4559,15 @@ export interface components {
                 [name: string]: unknown;
             };
             content?: never;
+        };
+        /** @description Current or latest movie scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
+        MovieScanStatusResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MovieScanStatusResponse"];
+            };
         };
     };
     parameters: {
@@ -6961,6 +7016,20 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    getMovieScanStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MovieScanStatusResponse"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     triggerMovieScan: {

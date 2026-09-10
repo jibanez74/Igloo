@@ -286,7 +286,7 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 	}
 }
 
-func TestResolveMovieFileLogsTmdbSearchFailure(t *testing.T) {
+func TestResolveMovieFileReturnsTmdbSearchFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -301,11 +301,8 @@ func TestResolveMovieFileLogsTmdbSearchFailure(t *testing.T) {
 		Ext:  "mkv",
 		Size: 321,
 	})
-	if err != nil {
-		t.Fatalf("resolve movie with failing tmdb search: %v", err)
-	}
-	if resolved.tmdbMovie != nil {
-		t.Fatal("expected no tmdb movie when the search fails")
+	if err == nil || resolved != nil {
+		t.Fatalf("provider failure was treated as a no-match: %v", err)
 	}
 
 	if !warnEntryMentions(logged, "TMDB movie search failed", path) {
@@ -363,7 +360,7 @@ func warnEntryMentions(logged *capturedLogger, msg, needle string) bool {
 	return false
 }
 
-func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
+func TestResolveMovieFileReturnsTmdbDetailFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -383,17 +380,8 @@ func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
 		Ext:  "mkv",
 		Size: 123,
 	})
-	if err != nil {
-		t.Fatalf("resolve movie with failing tmdb detail: %v", err)
-	}
-	if resolved.tmdbMovie != nil {
-		t.Fatal("expected scanner to fall back when TMDB detail fetch fails")
-	}
-	if resolved.params.Title != "Detail Fails" {
-		t.Fatalf("title = %q, want filename title Detail Fails", resolved.params.Title)
-	}
-	if !resolved.params.Year.Valid || resolved.params.Year.Int64 != 2022 {
-		t.Fatalf("year = %+v, want filename year 2022", resolved.params.Year)
+	if !errors.Is(err, sql.ErrNoRows) || resolved != nil {
+		t.Fatalf("detail failure was treated as a no-match: %v", err)
 	}
 	if len(tmdbStub.detailCalls) != 1 || tmdbStub.detailCalls[0] != 42 {
 		t.Fatalf("detail calls = %#v, want [42]", tmdbStub.detailCalls)
@@ -591,5 +579,18 @@ func TestAmbiguousSearchPartialFailuresAndCancellation(t *testing.T) {
 }
 
 func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (*resolvedMovie, error) {
-	return s.resolveMovie(ctx, file, true, false)
+	resolved, err := s.resolveLocalMovie(ctx, file)
+	if err != nil {
+		return nil, err
+	}
+	titleYear := movieTitleYear(file.Path)
+	searchTitle := NormalizeTitleForSearch(titleYear.Title)
+	if searchTitle == "" {
+		searchTitle = titleYear.Title
+	}
+	resolved.tmdbMovie, err = s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year, resolved.observed.TmdbID)
+	if err != nil {
+		return nil, err
+	}
+	return resolved, nil
 }

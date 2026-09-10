@@ -45,7 +45,7 @@ FROM movies
 WHERE id IN (sqlc.slice(ids));
 
 -- name: GetMovieScanIndex :many
-SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
 FROM movies c
 LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id;
 

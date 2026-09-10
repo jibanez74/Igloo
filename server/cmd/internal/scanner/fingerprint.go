@@ -52,7 +52,7 @@ type FileDeferral struct {
 
 func (d *FileDeferral) Error() string { return string(d.Reason) }
 
-// FileInspection owns a descriptor only for files that were hashed. Call Close
+// FileInspection owns a descriptor for new or changed files. Call Close
 // after processing, and Validate after resolution and immediately before commit.
 // It has no scan index, directory walker, scheduler, or scan-lifetime state.
 type FileInspection struct {
@@ -83,6 +83,16 @@ func sameFileMetadata(a, b FileFingerprint) bool {
 // A future event handler can use the separate hashing operation internally even
 // when metadata matches; notifications themselves are never successful baselines.
 func InspectFile(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time) (*FileInspection, error) {
+	return inspectFile(ctx, path, previous, now, true)
+}
+
+// InspectFileMetadata inspects and pins a file without reading its content.
+// Changed filesystem metadata always requires processing, even for identical bytes.
+func InspectFileMetadata(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time) (*FileInspection, error) {
+	return inspectFile(ctx, path, previous, now, false)
+}
+
+func inspectFile(ctx context.Context, path string, previous *FileFingerprint, now func() time.Time, hashContent bool) (*FileInspection, error) {
 	err := ctx.Err()
 	if err != nil {
 		return nil, err
@@ -114,7 +124,10 @@ func InspectFile(ctx context.Context, path string, previous *FileFingerprint, no
 		r.Outcome, r.Fingerprint = FileUnchanged, *previous
 		return r, nil
 	}
-	err = r.hash(ctx)
+	err = r.open(ctx)
+	if err == nil && hashContent {
+		err = r.hash(ctx)
+	}
 	if err != nil {
 		closeErr := r.Close()
 		var deferred *FileDeferral
@@ -126,7 +139,7 @@ func InspectFile(ctx context.Context, path string, previous *FileFingerprint, no
 		return nil, errors.Join(err, closeErr)
 	}
 	r.Outcome = FileNeedsProcessing
-	if previous != nil && previous.Size == observed.Size && previous.SHA256 == r.Fingerprint.SHA256 {
+	if hashContent && previous != nil && previous.Size == observed.Size && previous.SHA256 == r.Fingerprint.SHA256 {
 		r.Outcome = FileFingerprintOnly
 	}
 	return r, nil
@@ -134,7 +147,7 @@ func InspectFile(ctx context.Context, path string, previous *FileFingerprint, no
 
 var hashBuffers = sync.Pool{New: func() any { b := make([]byte, 256*1024); return &b }}
 
-func (r *FileInspection) hash(ctx context.Context) error {
+func (r *FileInspection) open(ctx context.Context) error {
 	entry, err := os.Lstat(r.path)
 	if err != nil {
 		return inspectionPathError(err)
@@ -149,10 +162,10 @@ func (r *FileInspection) hash(ctx context.Context) error {
 	if err != nil {
 		return inspectionPathError(err)
 	}
-	err = r.Validate(ctx)
-	if err != nil {
-		return err
-	}
+	return r.Validate(ctx)
+}
+
+func (r *FileInspection) hash(ctx context.Context) error {
 	// Bound the read to the observed size so an active append cannot keep
 	// hashing alive indefinitely. Validation below rejects a changed size.
 	sum, err := hashFile(ctx, io.LimitReader(r.file, r.Fingerprint.Size))

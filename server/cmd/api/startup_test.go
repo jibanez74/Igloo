@@ -160,3 +160,7 @@ func TestStartMusicScanAtStartupHandlesNonStartedResults(t *testing.T) {
 		})
 	}
 }
+
+func (movieStartFunc) Status() movie.Status {
+	return movie.Status{State: "idle", Phase: "idle", ActiveFiles: []string{}, Issues: []movie.Issue{}}
+}

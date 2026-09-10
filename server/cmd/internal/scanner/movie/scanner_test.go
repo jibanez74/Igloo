@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"igloo/cmd/internal/scanner"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -52,8 +54,12 @@ func (l *capturedLogger) Error(msg string, args ...any) { l.log(&l.errorEntries,
 
 func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 	t.Helper()
+	return setupMovieScannerDatabase(t, ":memory:?_foreign_keys=on")
+}
 
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+func setupMovieScannerDatabase(t *testing.T, source string) *movieScannerTestContext {
+	t.Helper()
+	db, err := sql.Open("sqlite3", source)
 	if err != nil {
 		t.Fatalf("open in-memory database: %v", err)
 	}
@@ -98,6 +104,7 @@ func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
 }
 
 type stubMovieScannerFfprobe struct {
+	mu sync.Mutex
 	noKeyframeProbe
 	result  *ffprobe.FfprobeResult
 	results []*ffprobe.FfprobeResult
@@ -105,6 +112,8 @@ type stubMovieScannerFfprobe struct {
 }
 
 func (s *stubMovieScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	callIndex := s.calls
 	s.calls++
 	if callIndex < len(s.results) && s.results[callIndex] != nil {
@@ -132,6 +141,7 @@ func (noKeyframeProbe) KeyframeAtOrBefore(
 }
 
 type stubMovieScannerTmdb struct {
+	mu            sync.Mutex
 	searchErr     error
 	detailErr     error
 	theatersErr   error
@@ -148,6 +158,8 @@ type stubMovieScannerTmdbSearchCall struct {
 }
 
 func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMovie) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.detailCalls = append(s.detailCalls, movie.TmdbID)
 	if s.detailErr != nil {
 		return s.detailErr
@@ -164,6 +176,8 @@ func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, movie *tmdb.T
 }
 
 func (s *stubMovieScannerTmdb) SearchMoviesByTitleAndYear(_ context.Context, title string, year ...int) ([]tmdb.TmdbMovie, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	yearCopy := append([]int(nil), year...)
 	s.searchCalls = append(s.searchCalls, stubMovieScannerTmdbSearchCall{title: title, year: yearCopy})
 	if s.searchErr != nil {
@@ -258,4 +272,64 @@ func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
 		t.Fatalf("unmarshal tmdb fixture: %v", err)
 	}
 	return movie
+}
+
+// These focused persistence fixtures execute both phases for one file. Full
+// pipeline tests below exercise scheduling, accounting, and phase separation.
+func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file scanner.ScanFile) (scanner.FileOutcome, error) {
+	file.Path = filepath.Clean(file.Path)
+	result := s.prepareFile(ctx, probeJob{file: file, baseline: scan.movieIndex[file.Path]})
+	if result.inspection != nil {
+		defer result.inspection.Close()
+	}
+	if result.err != nil {
+		return scanner.FileNeedsProcessing, result.err
+	}
+	outcome := result.inspection.Outcome
+	if outcome == scanner.FileDeferred {
+		return outcome, nil
+	}
+	if result.resolved != nil {
+		err := s.persistResolvedMovie(ctx, scan, result.resolved)
+		if err != nil {
+			return outcome, err
+		}
+	}
+	baseline := scan.movieIndex[file.Path]
+	if s.tmdb == nil || scan.attempted[file.Path] || (baseline.TmdbID.Valid && !baseline.PendingRetry) {
+		return outcome, nil
+	}
+	scan.attempted[file.Path] = true
+	enriched := s.prepareEnrichment(ctx, enrichmentJob{file: file, baseline: baseline})
+	if enriched.inspection != nil {
+		defer enriched.inspection.Close()
+	}
+	if enriched.err != nil {
+		if ctx.Err() != nil {
+			return outcome, ctx.Err()
+		}
+		return outcome, nil
+	}
+	return outcome, s.persistResolvedMovie(ctx, scan, enriched.resolved)
+}
+
+func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, failures int) {
+	for _, file := range files {
+		outcome, err := s.processFile(ctx, scan, file)
+		if ctx.Err() != nil {
+			return
+		}
+		var deferred *scanner.FileDeferral
+		isDeferred := errors.As(err, &deferred)
+		if isDeferred || (err == nil && outcome == scanner.FileDeferred) {
+			scan.deferred++
+		} else if err != nil {
+			failures++
+		} else if outcome == scanner.FileUnchanged {
+			skipped++
+		} else {
+			scanned++
+		}
+	}
+	return
 }

@@ -14,3 +14,5 @@ export type PlaybackProfileType = Schema["PlaybackProfile"];
 export type PlaybackSettingsType = Schema["PlaybackSettings"];
 export type UpdatePlaybackSettingsRequest = Schema["UpdatePlaybackSettingsRequest"];
 export type PlaybackSettingsResponseType = Schema["PlaybackSettingsData"];
+
+export type MovieScanStatus = Schema["MovieScanStatusData"];

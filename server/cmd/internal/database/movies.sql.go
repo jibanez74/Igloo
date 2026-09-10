@@ -774,7 +774,7 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 }
 
 const getMovieScanIndex = `-- name: GetMovieScanIndex :many
-SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
 FROM movies c
 LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
 `
@@ -789,7 +789,6 @@ type GetMovieScanIndexRow struct {
 	CtimeNs      sql.NullInt64  `json:"ctime_ns"`
 	Device       sql.NullString `json:"device"`
 	Inode        sql.NullString `json:"inode"`
-	Sha256       []byte         `json:"sha256"`
 }
 
 func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error) {
@@ -811,7 +810,6 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 			&i.CtimeNs,
 			&i.Device,
 			&i.Inode,
-			&i.Sha256,
 		); err != nil {
 			return nil, err
 		}

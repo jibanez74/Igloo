@@ -584,3 +584,47 @@ func TestRetryDelayHonorsRetryAfterAndCaps(t *testing.T) {
 		t.Fatalf("zero-value base delay = %s, want %s", got, tmdbHTTPRetryBaseDelay)
 	}
 }
+
+func TestProviderStatusClassificationThroughHTTP(t *testing.T) {
+	for _, code := range []int{401, 403, 404, 429, 503} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code) }))
+			defer server.Close()
+			_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "movie")
+			authentication, transient := ProviderFailure(err)
+			if authentication != (code == 401 || code == 403) || transient != (code == 429 || code == 503) {
+				t.Fatalf("code=%d auth=%v transient=%v err=%v", code, authentication, transient, err)
+			}
+		})
+	}
+}
+
+func TestCancelBlockedMovieRequest(t *testing.T) {
+	entered := make(chan struct{})
+	stopped := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-r.Context().Done()
+		close(stopped)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { _, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(ctx, "movie"); result <- err }()
+	<-entered
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("blocked request cancellation: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("request did not cancel")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request remained active")
+	}
+}

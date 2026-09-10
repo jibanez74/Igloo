@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
@@ -90,5 +91,53 @@ func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
 				t.Fatalf("invalid technical metadata: %+v %+v", movie, streams)
 			}
 		})
+	}
+}
+
+func TestMovieScanCancelsRunningSubprocess(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	defer fixture.db.Close()
+	s := fixture.scanner
+	root := createMovieLibrary(t, 1)
+	control := t.TempDir()
+	marker := filepath.Join(control, "started")
+	binary := filepath.Join(control, "ffprobe")
+	script := "#!/bin/sh\nif [ \"$1\" = -version ]; then echo test-probe; exit 0; fi\ntouch '" + marker + "'\nexec sleep 60\n"
+	err := os.WriteFile(binary, []byte(script), 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("IGLOO_FFPROBE_PATH", binary)
+	probe, err := ffprobe.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ffprobe.Cleanup()
+	s.ffprobe = probe
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.scanContext = ctx
+	done := make(chan struct{})
+	go func() { s.runMovieScan(root); close(done) }()
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.After(5 * time.Second)
+	for {
+		_, err := os.Stat(marker)
+		if err == nil {
+			break
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline:
+			cancel()
+			awaitScanSignal(t, done)
+			t.Fatal("probe subprocess never started")
+		}
+	}
+	cancel()
+	awaitScanSignal(t, done)
+	if s.Status().State != "canceled" || s.Status().Imported != 0 {
+		t.Fatalf("subprocess cancellation: %+v", s.Status())
 	}
 }

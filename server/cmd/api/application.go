@@ -81,8 +81,11 @@ type Application struct {
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
-	MovieScanner                  interface{ Start() movie.StartResult }
-	MusicScanner                  interface{ Start() music.StartResult }
+	MovieScanner                  interface {
+		Start() movie.StartResult
+		Status() movie.Status
+	}
+	MusicScanner interface{ Start() music.StartResult }
 }
 
 //go:embed all:webdist

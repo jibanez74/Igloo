@@ -518,8 +518,7 @@ CREATE TABLE IF NOT EXISTS movie_file_fingerprints (
   mtime_ns INTEGER NOT NULL,
   ctime_ns INTEGER NOT NULL,
   device TEXT NOT NULL,
-  inode TEXT NOT NULL,
-  sha256 BLOB NOT NULL CHECK (typeof(sha256) = 'blob' AND length(sha256) = 32)
+  inode TEXT NOT NULL
 );
 
 -- Pending descriptive enrichment does not invalidate usable technical media data.

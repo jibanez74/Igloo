@@ -42,7 +42,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolved.inspection, err = scanner.InspectFile(context.Background(), resolved.params.FilePath, nil, testScanner.scanner.now)
+	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), resolved.params.FilePath, nil, testScanner.scanner.now)
 	if err != nil {
 		t.Fatal(err)
 	}

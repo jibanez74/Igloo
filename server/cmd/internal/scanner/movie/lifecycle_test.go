@@ -140,7 +140,7 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 		t.Fatalf("resolve movie with bare dependencies: %v", err)
 	}
 
-	resolved.inspection, err = scanner.InspectFile(context.Background(), path, nil, testScanner.scanner.now)
+	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), path, nil, testScanner.scanner.now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	}
 }
 
-func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
+func TestRunMovieScanAccountsForVideoFilesAndLogsCompletion(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -394,7 +394,7 @@ func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
 	}
 
 	foundCompletion := false
-	wantCompletion := "movies scanner completed: " + strconv.Itoa(scanner.BatchSize+1) + " scanned, 0 skipped, 0 errors"
+	wantCompletion := "movie scan finished"
 	for _, entry := range logger.infoEntries {
 		if strings.Contains(entry.msg, "movies scanner batch processed") {
 			t.Fatalf("unexpected per-batch log entry: %q", entry.msg)

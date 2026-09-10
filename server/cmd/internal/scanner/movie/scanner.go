@@ -40,6 +40,7 @@ type Dependencies struct {
 // Scanner scans and persists the configured movie library.
 type Scanner struct {
 	now                         func() time.Time
+	waitForRetry                func(context.Context, time.Duration) error
 	db                          *sql.DB
 	queries                     *database.Queries
 	logger                      logger.LoggerInterface
@@ -52,6 +53,8 @@ type Scanner struct {
 	invalidateCommittedMovie    func(int64)
 	invalidateDeletedWatchRooms func([]int64)
 	guard                       scanner.ScanGuard
+	statusMu                    sync.RWMutex
+	status                      Status
 }
 
 // StartStatus describes whether a scan goroutine was launched.
@@ -101,8 +104,8 @@ func New(deps Dependencies) *Scanner {
 	}
 
 	return &Scanner{
-		now: deps.Now,
-		db:  deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
+		now: deps.Now, waitForRetry: waitForMovieRetry,
+		db: deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		tmdb: deps.Tmdb, scanContext: deps.ScanContext, wait: deps.Wait,
 		scannerDBMu: deps.ScannerDBMu, currentMoviesDirectory: deps.CurrentMoviesDirectory,
 		invalidateCommittedMovie:    deps.InvalidateCommittedMovie,

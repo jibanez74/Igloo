@@ -29,8 +29,8 @@ func retryMovieFixture(t *testing.T) tmdb.TmdbMovie {
 
 func TestMovieEnrichmentRecovery(t *testing.T) {
 	for _, failure := range []string{"offline", "empty", "search", "details", "timeout"} {
-		for _, fingerprintOnly := range []bool{false, true} {
-			t.Run(failure+map[bool]string{false: "/unchanged", true: "/fingerprint"}[fingerprintOnly], func(t *testing.T) {
+		for _, metadataChanged := range []bool{false, true} {
+			t.Run(failure+map[bool]string{false: "/unchanged", true: "/metadata-change"}[metadataChanged], func(t *testing.T) {
 				fixture := setupMovieScanner(t)
 				defer fixture.db.Close()
 				s := fixture.scanner
@@ -82,7 +82,7 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 					t.Fatal("failed enrichment retried twice in one scan")
 				}
 				// Rows imported before retry bookkeeping also recover by missing identity.
-				if failure == "offline" && !fingerprintOnly {
+				if failure == "offline" && !metadataChanged {
 					err = s.queries.ClearMovieTmdbRetry(ctx, movie.ID)
 					if err != nil {
 						t.Fatal(err)
@@ -106,7 +106,7 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 				client.searchErr = nil
 				client.detailErr = nil
 				s.tmdb = client
-				if fingerprintOnly {
+				if metadataChanged {
 					err = os.Chmod(path, 0640)
 					if err != nil {
 						t.Fatal(err)
@@ -118,8 +118,8 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := scanner.FileUnchanged
-				if fingerprintOnly {
-					want = scanner.FileFingerprintOnly
+				if metadataChanged {
+					want = scanner.FileNeedsProcessing
 				}
 				if outcome != want {
 					t.Fatalf("outcome=%v want=%v", outcome, want)
@@ -139,13 +139,19 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if !reflect.DeepEqual(chapters, afterChapters) {
+				if !metadataChanged && !reflect.DeepEqual(chapters, afterChapters) {
 					t.Fatal("metadata retry rebuilt chapters")
 				}
-				if !reflect.DeepEqual(streams, afterStreams) || probe.calls != 1 || invalidations != 0 {
+				if metadataChanged {
+					if probe.calls != 2 || invalidations != 1 {
+						t.Fatal("changed metadata must re-probe and invalidate")
+					}
+				} else if !reflect.DeepEqual(streams, afterStreams) || probe.calls != 1 || invalidations != 0 {
 					t.Fatal("metadata retry rebuilt technical state")
 				}
-				assertMoviePlaybackWork(t, s)
+				if !metadataChanged {
+					assertMoviePlaybackWork(t, s)
+				}
 				if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 0 || scan.enriched != 1 {
 					t.Fatal("success did not clear retry/count enrichment")
 				}
@@ -289,7 +295,7 @@ func (h *hookedMovieTmdb) GetTmdbMovieByID(ctx context.Context, movie *tmdb.Tmdb
 
 func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 	for _, technical := range []bool{false, true} {
-		for _, mutation := range []string{"identify", "delete", "replace", "path", "rollback", "cancel", "file"} {
+		for _, mutation := range []string{"identify", "identify-same", "delete", "replace", "path", "rollback", "cancel", "file"} {
 			t.Run(map[bool]string{false: "metadata", true: "technical"}[technical]+"/"+mutation, func(t *testing.T) {
 				fixture := setupMovieScanner(t)
 				defer fixture.db.Close()
@@ -306,6 +312,12 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 				_, err = s.processFile(ctx, nextMovieScan(t, s), file)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if mutation == "identify-same" {
+					_, err = s.db.Exec("UPDATE movies SET tmdb_id=99")
+					if err != nil {
+						t.Fatal(err)
+					}
 				}
 				before, err := readTestMovieByPath(ctx, s.queries, path)
 				if err != nil {
@@ -325,11 +337,23 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 				details := retryMovieFixture(t)
 				client := &hookedMovieTmdb{stubMovieScannerTmdb: stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42, Title: "Local"}}, detailMovies: map[int]tmdb.TmdbMovie{42: details}}}
 				client.hook = func() {
+					if technical {
+						baseline = scan.movieIndex[path]
+						before, err = s.queries.GetMovieByID(ctx, before.ID)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if invalidations != 1 {
+							t.Fatal("technical movie was not committed before enrichment")
+						}
+						invalidations = 0
+						seedMoviePlaybackWork(t, s, before.ID)
+					}
 					// Taking this lock also verifies external requests run outside it.
 					s.scannerDBMu.Lock()
 					defer s.scannerDBMu.Unlock()
 					switch mutation {
-					case "identify":
+					case "identify", "identify-same":
 						tx, e := s.db.BeginTx(ctx, nil)
 						if e != nil {
 							t.Fatal(e)
@@ -368,7 +392,7 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 				if (err != nil) != wantError {
 					t.Fatalf("persistence error=%v wantError=%v", err, wantError)
 				}
-				if mutation == "identify" {
+				if mutation == "identify" || mutation == "identify-same" {
 					current, e := s.queries.GetMovieByID(context.Background(), before.ID)
 					if e != nil {
 						t.Fatal(e)
@@ -376,7 +400,7 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 					if current.TmdbID.Int64 != 99 || current.Title != "Manual identity" {
 						t.Fatalf("stale enrichment applied: %+v", current)
 					}
-					if technical && (current.Size != 7 || invalidations != 1) {
+					if technical && (current.Size != 7 || invalidations != 0) {
 						t.Fatal("valid technical update was lost")
 					}
 					if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 0 {

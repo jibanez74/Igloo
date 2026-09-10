@@ -239,6 +239,7 @@ func (app *Application) registerSettingsRoutes(r chi.Router) {
 		r.With(app.RequireAdmin).Put("/playback", app.UpdatePlaybackSettings)
 		r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
 		r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)
+		r.With(app.RequireAdmin).Get("/scan/movies", app.GetMovieScanStatus)
 	})
 }
 

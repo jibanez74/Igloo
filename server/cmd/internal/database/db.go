@@ -303,6 +303,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMovieExtraVideosStmt, err = db.PrepareContext(ctx, getMovieExtraVideos); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieExtraVideos: %w", err)
 	}
+	if q.getMovieFileFingerprintStmt, err = db.PrepareContext(ctx, getMovieFileFingerprint); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMovieFileFingerprint: %w", err)
+	}
 	if q.getMovieForDirectStreamStmt, err = db.PrepareContext(ctx, getMovieForDirectStream); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieForDirectStream: %w", err)
 	}
@@ -1229,6 +1232,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMovieExtraVideosStmt: %w", cerr)
 		}
 	}
+	if q.getMovieFileFingerprintStmt != nil {
+		if cerr := q.getMovieFileFingerprintStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMovieFileFingerprintStmt: %w", cerr)
+		}
+	}
 	if q.getMovieForDirectStreamStmt != nil {
 		if cerr := q.getMovieForDirectStreamStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMovieForDirectStreamStmt: %w", cerr)
@@ -2121,6 +2129,7 @@ type Queries struct {
 	getMovieByPathStmt                          *sql.Stmt
 	getMovieDetailsStmt                         *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
+	getMovieFileFingerprintStmt                 *sql.Stmt
 	getMovieForDirectStreamStmt                 *sql.Stmt
 	getMovieGenresWithCountsStmt                *sql.Stmt
 	getMoviePlaylistsWithCollaboratorAccessStmt *sql.Stmt
@@ -2372,6 +2381,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMovieByPathStmt:                          q.getMovieByPathStmt,
 		getMovieDetailsStmt:                         q.getMovieDetailsStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
+		getMovieFileFingerprintStmt:                 q.getMovieFileFingerprintStmt,
 		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
 		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,
 		getMoviePlaylistsWithCollaboratorAccessStmt: q.getMoviePlaylistsWithCollaboratorAccessStmt,

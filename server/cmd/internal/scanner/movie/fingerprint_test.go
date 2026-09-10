@@ -82,18 +82,18 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanned, skipped, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 0 || skipped != 1 || failures != 0 || stub.calls != 1 || invalidations != 1 {
+	if scanned != 1 || skipped != 0 || failures != 0 || stub.calls != 2 || invalidations != 2 {
 		t.Fatalf("identical bytes: %d/%d/%d probes=%d invalidations=%d", scanned, skipped, failures, stub.calls, invalidations)
 	}
 	after, err := s.queries.GetMovieByID(ctx, id)
-	if err != nil || !reflect.DeepEqual(before, after) {
-		t.Fatalf("fingerprint-only update changed catalog: %+v %+v %v", before, after, err)
+	if err != nil || before.ID != after.ID || before.Title != after.Title || after.UpdatedAt == before.UpdatedAt {
+		t.Fatalf("metadata change did not retain identity and refresh technical state: %+v %+v %v", before, after, err)
 	}
 	if scan.movieIndex[path] == baseline {
 		t.Fatal("fingerprint did not advance")
 	}
-	if countScannerRows(t, s.db, "SELECT count(*) FROM keyframe_indexes") != 1 || countScannerRows(t, s.db, "SELECT count(*) FROM remux_safety_verdicts") != 1 {
-		t.Fatal("identical bytes cleared playback work")
+	if countScannerRows(t, s.db, "SELECT count(*) FROM keyframe_indexes") != 0 || countScannerRows(t, s.db, "SELECT count(*) FROM remux_safety_verdicts") != 0 {
+		t.Fatal("changed filesystem metadata retained playback work")
 	}
 	err = os.WriteFile(path, []byte("edited"[:5]), 0600)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanned, _, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 1 || failures != 0 || stub.calls != 2 || invalidations != 2 {
+	if scanned != 1 || failures != 0 || stub.calls != 3 || invalidations != 3 {
 		t.Fatalf("same size edit: %d/%d probes=%d invalidations=%d", scanned, failures, stub.calls, invalidations)
 	}
 	var currentID int64
@@ -128,7 +128,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	}
 	scan = newMovieScanContext(reloaded)
 	scanned, _, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 1 || failures != 0 || stub.calls != 3 {
+	if scanned != 1 || failures != 0 || stub.calls != 4 {
 		t.Fatalf("missing baseline: %d/%d probes=%d", scanned, failures, stub.calls)
 	}
 	_, err = s.db.Exec("DELETE FROM movies WHERE id = ?", id)
@@ -147,7 +147,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 
 func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 	for _, identical := range []bool{false, true} {
-		t.Run(map[bool]string{false: "content", true: "fingerprint only"}[identical], func(t *testing.T) {
+		t.Run(map[bool]string{false: "content", true: "metadata change"}[identical], func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
 			defer fixture.db.Close()

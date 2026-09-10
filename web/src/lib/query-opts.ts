@@ -14,6 +14,7 @@ import {
   getLikedTracks,
   getLikedTrackIds,
   getMovieDetails,
+  getMovieScanStatus,
   getMovieInTheaterDetails,
   getMoviePlaylistDetails,
   getMoviePlaylistMovies,
@@ -80,6 +81,7 @@ import {
   MOVIE_LIKE_STATUS_KEY,
   MOVIES_PER_PAGE,
   MOVIES_STATS_KEY,
+  MOVIE_SCAN_STATUS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
@@ -693,3 +695,15 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
     gcTime: GC_DEFAULT,
   });
 }
+
+export const movieScanStatusQueryOpts = () => queryOptions({
+  queryKey: [MOVIE_SCAN_STATUS_KEY],
+  queryFn: async () => {
+    const response = await getMovieScanStatus();
+    if (response.error) {
+      throw new Error(response.message || "Movie scan status is unavailable.");
+    }
+    return response.data;
+  },
+  retry: false,
+});

@@ -148,6 +148,7 @@ type Querier interface {
 	GetMovieDetails(ctx context.Context, id int64) (GetMovieDetailsRow, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]GetMovieExtraVideosRow, error)
+	GetMovieFileFingerprint(ctx context.Context, movieID int64) (GetMovieFileFingerprintRow, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)

@@ -137,6 +137,7 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	assertRequest("updateLibrarySettings", libraryReq, app.UpdateLibrarySettings, http.StatusOK)
 
 	assertRequest("triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), app.TriggerMusicScan, http.StatusOK)
+	assertRequest("getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), app.GetMovieScanStatus, http.StatusOK)
 	assertRequest("triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), app.TriggerMovieScan, http.StatusOK)
 	app.Wait.Wait()
 }
@@ -463,5 +464,36 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func (movieStartResultStub) Status() movie.Status {
+	return movie.Status{State: "idle", Phase: "idle", ActiveFiles: []string{}, Issues: []movie.Issue{}}
+}
+
+func TestMovieScanStatusAuthorization(t *testing.T) {
+	for _, role := range []string{"anonymous", "user", "admin"} {
+		t.Run(role, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+			app.InitSession()
+			app.InitRouter()
+			request := httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil)
+			expected := http.StatusUnauthorized
+			if role != "anonymous" {
+				user := createTestUser(t, app, "Viewer", role+"@example.com", role == "admin")
+				token := createTestDevice(t, app, user.ID, "Browser", "web")
+				request.Header.Set("Authorization", "Bearer "+token)
+				expected = http.StatusForbidden
+				if role == "admin" {
+					expected = http.StatusOK
+				}
+			}
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+			if response.Code != expected {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, expected, response.Body.String())
+			}
+		})
 	}
 }

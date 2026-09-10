@@ -72,10 +72,21 @@ for (const {
       "/api/movies/101/hls/720p_3mbps/playlist.m3u8",
   },
 ]) {
-  test(`${label} playback waits for preferences before requesting media`, async ({
+  test(`${label} playback waits for the server catalog when device speed needs it`, async ({
     page,
   }) => {
     await loginWithCredentials(page, readE2EEnv());
+
+    // Device language/profile preferences are synchronous. A configured speed
+    // with no stored profile is the path that needs the asynchronous catalog.
+    await page.addInitScript(() => {
+      localStorage.setItem("igloo-playback-prefs:1", JSON.stringify({
+        preferredProfile: null,
+        downloadMbps: 5,
+        preferredAudioLanguage: null,
+        preferredSubtitleLanguage: null,
+      }));
+    });
 
     let releasePlaybackSettings!: () => void;
     const playbackSettingsGate = new Promise<void>(resolve => {

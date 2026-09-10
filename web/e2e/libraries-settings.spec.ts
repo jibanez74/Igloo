@@ -1,3 +1,4 @@
+import { movieScanStatus } from "../src/test/helpers/movie-scan";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -244,6 +245,10 @@ test.describe("Libraries settings", () => {
     let movieScanRequests = 0;
     await page.route("**/api/settings/scan/**", async route => {
       const url = new URL(route.request().url());
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: { error: false, data: movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 }) } });
+        return;
+      }
       if (url.pathname === "/api/settings/scan/movies") {
         movieScanRequests += 1;
       }
@@ -377,7 +382,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/movies";
+          return url.pathname === "/api/settings/scan/movies" && response.request().method() === "POST";
         }),
         moviesScanButton.click(),
       ]);
@@ -392,7 +397,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/movies";
+          return url.pathname === "/api/settings/scan/movies" && response.request().method() === "POST";
         }),
         moviesScanButton.click(),
       ]);

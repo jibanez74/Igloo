@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -15,6 +16,13 @@ import (
 )
 
 func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanContext, resolved *resolvedMovie) error {
+	started := time.Now()
+	defer func() {
+		elapsed := time.Since(started)
+		if elapsed >= 5*time.Second {
+			s.logger.Info("slow movie persistence", "path", resolved.params.FilePath, "metadata_only", resolved.metadataOnly, "elapsed", elapsed)
+		}
+	}()
 	if resolved.inspection == nil {
 		return fmt.Errorf("missing file inspection")
 	}
@@ -39,7 +47,7 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		return nil
 	}
 	if !resolved.metadataOnly {
-		// Content changes invalidate persisted playback work in the same transaction.
+		// Technical changes invalidate persisted playback work in the same transaction.
 		err = qtx.DeleteMovieRemuxSafetyVerdicts(ctx, movieID)
 		if err != nil {
 			return err
@@ -48,15 +56,11 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		if err != nil {
 			return err
 		}
-	}
 
-	err = storeMovieFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
-	if err != nil {
-		return err
-	}
-	err = validateMovieInspection(ctx, resolved.params.FilePath, resolved.inspection)
-	if err != nil {
-		return err
+		err = storeMovieFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
+		if err != nil {
+			return err
+		}
 	}
 
 	committed, err := qtx.GetMovieByPath(ctx, resolved.params.FilePath)
@@ -71,10 +75,16 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 	if err != nil {
 		return err
 	}
+	err = resolved.inspection.Validate(ctx)
+	if err != nil {
+		return err
+	}
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("failed to commit movie: %w", err)
 	}
+
+	resolved.applied = true
 
 	// Both caches describe the committed row, so they are dropped here rather
 	// than inside the transaction: evicting earlier lets a concurrent reader
@@ -90,7 +100,7 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		FileFingerprint: resolved.inspection.Fingerprint, ID: committed.ID, FilePath: committed.FilePath,
 		TmdbID: committed.TmdbID, PendingRetry: pending, HasFingerprint: true,
 	}
-	if resolved.attempted && resolved.tmdbMovie != nil && committed.TmdbID == helpers.NullInt64(int64(resolved.tmdbMovie.TmdbID)) {
+	if resolved.metadataOnly && resolved.tmdbMovie != nil && committed.TmdbID == helpers.NullInt64(int64(resolved.tmdbMovie.TmdbID)) {
 		scan.enriched++
 	}
 
@@ -108,9 +118,32 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 	}
 	// A deleted or replaced catalog row must never be recreated by in-flight work.
 	if current.ID != resolved.observed.ID || current.FilePath != resolved.observed.FilePath {
+		if !resolved.metadataOnly {
+			return 0, &scanner.FileDeferral{Reason: scanner.FileChanged}
+		}
 		return 0, nil
 	}
 	sameIdentity := current.TmdbID == resolved.observed.TmdbID
+	if resolved.metadataOnly {
+		if !sameIdentity {
+			return 0, nil
+		}
+		baseline, err := qtx.GetMovieFileFingerprint(ctx, current.ID)
+		if err != nil {
+			return 0, err
+		}
+		stored := scanner.FileFingerprint{Size: baseline.Size, MtimeNS: baseline.MtimeNs, CtimeNS: baseline.CtimeNs, Device: baseline.Device, Inode: baseline.Inode}
+		if stored != resolved.baseline {
+			return 0, nil
+		}
+		pending, err := qtx.HasMovieTmdbRetry(ctx, current.ID)
+		if err != nil {
+			return 0, err
+		}
+		if resolved.pending && !pending {
+			return 0, nil
+		}
+	}
 	movieID := current.ID
 	if !resolved.metadataOnly {
 		movieID, err = qtx.UpsertMovie(ctx, resolved.params)
@@ -118,7 +151,13 @@ func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Quer
 			return 0, fmt.Errorf("upsert movie failed: %w", err)
 		}
 	}
-	if resolved.attempted && sameIdentity {
+	if !resolved.metadataOnly && sameIdentity {
+		err = qtx.MarkMovieTmdbRetry(ctx, movieID)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if resolved.metadataOnly && sameIdentity {
 		if resolved.tmdbMovie != nil {
 			err = applyTmdbMetadata(ctx, qtx, scan, movieID, resolved.tmdbMovie)
 		} else {

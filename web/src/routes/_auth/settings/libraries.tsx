@@ -1,3 +1,4 @@
+import MovieScanProgress from "@/components/settings/MovieScanProgress";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useId, useState } from "react";
@@ -25,7 +26,7 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
-import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
+import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
@@ -36,6 +37,7 @@ import {
   LIKED_TRACK_IDS_KEY,
   LIKED_TRACKS_KEY,
   MUSIC_STATS_KEY,
+  MOVIE_SCAN_STATUS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   PLAYLIST_DETAILS_KEY,
@@ -197,6 +199,9 @@ type LibrariesSettingsFormProps = {
 
 function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   const queryClient = useQueryClient();
+  // The authenticated layout keeps running scans observed across navigation.
+  const movieScan = useQuery({ ...movieScanStatusQueryOpts(), enabled: false });
+  const movieScanRunning = movieScan.data?.state === "running";
   const [syncedSettings, setSyncedSettings] = useState(settings);
   const [form, setForm] = useState<LibrariesForm>(() =>
     formFromSettings(settings),
@@ -325,6 +330,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         `${label === "movies" ? "Movies" : "Music"} library scan has been initiated`,
       );
       invalidateScanQueries(queryClient, scan);
+      if (scan === "movies") {
+        await queryClient.invalidateQueries({ queryKey: [MOVIE_SCAN_STATUS_KEY] });
+      }
       setActiveScan(current => (current === scan ? null : current));
     } catch {
       const message = `Failed to start ${label} scan.`;
@@ -356,9 +364,10 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 savedPath={syncedSettings[section.field]}
                 invalid={validationField === section.field}
                 disabled={updateMutation.isPending}
-                scanPending={activeScan === section.scan}
+                scanPending={activeScan === section.scan || (section.scan === "movies" && movieScanRunning)}
                 scanDisabled={
                   updateMutation.isPending ||
+                  (section.scan === "movies" && (movieScanRunning || movieScan.isPending || movieScan.isError)) ||
                   activeScan !== null ||
                   form[section.field] !==
                     formFromSettings(syncedSettings)[section.field]
@@ -371,7 +380,10 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 }
               >
                 {section.field === "movies_dir" && (
-                  <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
+                  <>
+                    <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
+                    <MovieScanProgress status={movieScan.data} unavailable={movieScan.isError} />
+                  </>
                 )}
                 {section.field === "shows_dir" && (
                   <TVShowsUnavailableStatus hasLibrary={Boolean(syncedSettings.shows_dir)} />
@@ -711,6 +723,7 @@ function invalidateScanQueries(
 
   const queryKeys = [
     MUSIC_STATS_KEY,
+  MOVIE_SCAN_STATUS_KEY,
     LATEST_ALBUMS_KEY,
     ALBUMS_PAGINATED_KEY,
     ALBUM_DETAILS_KEY,
