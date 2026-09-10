@@ -29,7 +29,7 @@ type Reconciliation struct {
 	stat       func(string) (os.FileInfo, error)
 }
 
-func NewReconciliation(directory string, files []CatalogFile) (*Reconciliation, error) {
+func NewReconciliation(ctx context.Context, directory string, files []CatalogFile) (*Reconciliation, error) {
 	root, err := filepath.Abs(directory)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func NewReconciliation(directory string, files []CatalogFile) (*Reconciliation, 
 		return nil, err
 	}
 	r := &Reconciliation{root: root, identity: identity, seen: make(map[string]bool), stat: os.Stat}
-	err = r.ValidateRoot(context.Background())
+	err = r.ValidateRoot(ctx)
 	if err != nil {
 		return nil, err
 	}

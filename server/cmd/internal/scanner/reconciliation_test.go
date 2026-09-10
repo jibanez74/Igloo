@@ -19,7 +19,7 @@ func TestReconciliationBoundariesAndSeenPaths(t *testing.T) {
 		{4, filepath.Join(root, "..", "outside.mkv")},
 		{5, root},
 	}
-	r, err := NewReconciliation(root+"/.", files)
+	r, err := NewReconciliation(context.Background(), root+"/.", files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestReconciliationConfirmsOnlyNonexistence(t *testing.T) {
 			root := t.TempDir()
 			path := filepath.Join(root, "file.mkv")
 			file := CatalogFile{ID: 1, Path: path}
-			r, err := NewReconciliation(root, []CatalogFile{file})
+			r, err := NewReconciliation(context.Background(), root, []CatalogFile{file})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,7 +85,7 @@ func TestReconciliationConfirmsOnlyNonexistence(t *testing.T) {
 
 func TestReconciliationRejectsUnavailableRoot(t *testing.T) {
 	root := t.TempDir()
-	_, err := NewReconciliation(filepath.Join(root, "missing"), nil)
+	_, err := NewReconciliation(context.Background(), filepath.Join(root, "missing"), nil)
 	if err == nil {
 		t.Fatal("accepted absent root")
 	}
@@ -94,7 +94,7 @@ func TestReconciliationRejectsUnavailableRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = NewReconciliation(path, nil)
+	_, err = NewReconciliation(context.Background(), path, nil)
 	if err == nil {
 		t.Fatal("accepted file root")
 	}
@@ -110,7 +110,7 @@ func TestReconciliationRevalidatesRootAndAbsence(t *testing.T) {
 				t.Fatal(err)
 			}
 			file := CatalogFile{ID: 1, Path: filepath.Join(root, "missing.mkv")}
-			r, err := NewReconciliation(root, []CatalogFile{file})
+			r, err := NewReconciliation(context.Background(), root, []CatalogFile{file})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -185,7 +185,7 @@ func TestReconciliationUsesCleanedAbsolutePaths(t *testing.T) {
 	}
 	for _, stored := range []string{relative, root + "/absent/../file.mkv"} {
 		file := CatalogFile{ID: 1, Path: stored}
-		r, err := NewReconciliation(root, []CatalogFile{file})
+		r, err := NewReconciliation(context.Background(), root, []CatalogFile{file})
 		if err != nil {
 			t.Fatal(err)
 		}

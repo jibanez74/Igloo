@@ -22,6 +22,10 @@ func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext) erro
 			break
 		}
 		for _, candidate := range candidates {
+			contextErr := ctx.Err()
+			if contextErr != nil {
+				return contextErr
+			}
 			after = candidate.ID
 			resolved, err := s.resolveMusician(ctx, scan, candidate.Name, "")
 			if err != nil {
@@ -55,6 +59,10 @@ func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext) erro
 			return s.reconcilePendingCompoundCredits(ctx, scan)
 		}
 		for _, candidate := range candidates {
+			contextErr := ctx.Err()
+			if contextErr != nil {
+				return contextErr
+			}
 			after = candidate.ID
 			resolved, err := s.resolveAlbum(ctx, scan, candidate.Title, candidate.Title, candidate.Musician.String)
 			if err != nil {
@@ -101,6 +109,10 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 			return nil
 		}
 		for _, row := range rows {
+			contextErr := ctx.Err()
+			if contextErr != nil {
+				return contextErr
+			}
 			after = row.TrackID
 			parsed := parseCompoundArtistCredits(row.ArtistTag)
 			if len(parsed.parts) < 2 {
@@ -167,6 +179,10 @@ func (s *Scanner) reconcilePendingCompoundCredits(ctx context.Context, scan *mus
 			return ctx.Err()
 		}
 		for _, candidate := range candidates {
+			contextErr := ctx.Err()
+			if contextErr != nil {
+				return contextErr
+			}
 			after = candidate
 			err = s.reconcileCompoundCredits(ctx, scan, candidate)
 			if err != nil {

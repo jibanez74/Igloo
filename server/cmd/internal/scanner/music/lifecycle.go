@@ -52,7 +52,7 @@ func (s *Scanner) runMusicScan(directory string) {
 		return
 	}
 	scan := newMusicScanContext(scanIndex)
-	reconciliation, err := scanner.NewReconciliation(directory, files)
+	reconciliation, err := scanner.NewReconciliation(ctx, directory, files)
 	if err != nil {
 		s.logger.Error("cannot reconcile music library", "error", err)
 		return
@@ -107,7 +107,6 @@ func (s *Scanner) runMusicScan(directory string) {
 	}
 
 	deleted, err := s.cleanupMissingMusic(ctx, scan, reconciliation)
-	s.logger.Info("music missing-file cleanup", "deleted", deleted)
 	if err != nil {
 		contextErr = ctx.Err()
 		if contextErr != nil {
@@ -117,6 +116,7 @@ func (s *Scanner) runMusicScan(directory string) {
 		s.logger.Error("music missing-file cleanup failed", "error", err)
 		return
 	}
+	s.logger.Info("music missing-file cleanup", "deleted", deleted)
 
 	err = s.retrySpotify(ctx, scan)
 	if err != nil {

@@ -72,6 +72,22 @@ type scanReport struct {
 	issues map[string]Issue
 	active map[string]bool
 	scan   *movieScanContext
+	// issueVersion changes whenever issues is mutated; publish rebuilds the
+	// sorted, truncated Issues slice only when it differs from publishedIssues.
+	// Most publishes report file progress and leave issues untouched, so this
+	// keeps publish off an O(issues log issues) sort on every call.
+	issueVersion    uint64
+	publishedIssues uint64
+}
+
+func (r *scanReport) dropIssue(path string, phase ScanPhase) {
+	key := string(phase) + ":" + path
+	_, ok := r.issues[key]
+	if !ok {
+		return
+	}
+	delete(r.issues, key)
+	r.issueVersion++
 }
 
 func (r *scanReport) syncCounts() {
@@ -83,7 +99,14 @@ func (r *scanReport) syncCounts() {
 }
 
 func (r *scanReport) issue(path string, phase ScanPhase, reason string) {
-	r.issues[string(phase)+":"+path] = Issue{Filename: filepath.Base(path), Phase: phase, Reason: reason}
+	key := string(phase) + ":" + path
+	entry := Issue{Filename: filepath.Base(path), Phase: phase, Reason: reason}
+	existing, ok := r.issues[key]
+	if ok && existing == entry {
+		return
+	}
+	r.issues[key] = entry
+	r.issueVersion++
 }
 
 func (s *Scanner) Status() Status {
@@ -127,14 +150,17 @@ func (s *Scanner) publish(report *scanReport) {
 	}
 	sort.Strings(report.status.ActiveFiles)
 	report.status.IssueCount = len(report.issues)
-	keys := make([]string, 0, len(report.issues))
-	for key := range report.issues {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	report.status.Issues = make([]Issue, 0, min(100, len(keys)))
-	for _, key := range keys[:min(100, len(keys))] {
-		report.status.Issues = append(report.status.Issues, report.issues[key])
+	if report.issueVersion != report.publishedIssues {
+		keys := make([]string, 0, len(report.issues))
+		for key := range report.issues {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		report.status.Issues = make([]Issue, 0, min(100, len(keys)))
+		for _, key := range keys[:min(100, len(keys))] {
+			report.status.Issues = append(report.status.Issues, report.issues[key])
+		}
+		report.publishedIssues = report.issueVersion
 	}
 	s.statusMu.Lock()
 	s.status = report.status

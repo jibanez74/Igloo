@@ -93,6 +93,8 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		duration, parseErr := helpers.ParseDurationMs(info.Format.Duration)
 		if parseErr == nil {
 			params.Duration = duration
+		} else {
+			s.logTagParse(file.Path, "duration", info.Format.Duration, parseErr)
 		}
 	}
 
@@ -100,6 +102,8 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		index, parseErr := helpers.ParseSlashNumber(tags.Track)
 		if parseErr == nil {
 			params.TrackIndex = index
+		} else {
+			s.logTagParse(file.Path, "track", tags.Track, parseErr)
 		}
 	}
 
@@ -111,6 +115,8 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		disc, parseErr := helpers.ParseSlashNumber(tags.Disc)
 		if parseErr == nil {
 			params.Disc = disc
+		} else {
+			s.logTagParse(file.Path, "disc", tags.Disc, parseErr)
 		}
 	}
 
@@ -122,6 +128,8 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 		if parseErr == nil {
 			params.ReleaseDate = sql.NullString{String: date.Format("2006-01-02"), Valid: true}
 			params.Year = sql.NullInt64{Int64: int64(date.Year()), Valid: true}
+		} else {
+			s.logTagParse(file.Path, "date", tags.Date, parseErr)
 		}
 	}
 
@@ -485,4 +493,11 @@ func (s *Scanner) findExistingAlbum(ctx context.Context, title, albumArtist stri
 		return database.GetAlbumBySpotifyIDRow{}, false, nil
 	}
 	return database.GetAlbumBySpotifyIDRow{}, false, err
+}
+
+// logTagParse records a tag the scanner could not read. The field is left at
+// its zero value rather than failing the track, so without this the bad tag
+// would disappear silently.
+func (s *Scanner) logTagParse(path, field, value string, err error) {
+	s.logger.Debug("unreadable audio tag", "path", path, "field", field, "value", value, "error", err)
 }

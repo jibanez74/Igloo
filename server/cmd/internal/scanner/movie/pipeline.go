@@ -3,7 +3,6 @@ package movie
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -21,6 +20,10 @@ const (
 	progressLogInterval = 10 * time.Second
 	deferredRetryWindow = 120 * time.Second
 	maxDeferredRetries  = 2
+	// discoveryPublishInterval batches the Total updates published while
+	// walking the library. Publishing per file made a large library rebuild
+	// the whole status thousands of times before any work started.
+	discoveryPublishInterval = 100
 )
 
 type fileState uint8
@@ -155,7 +158,7 @@ func (s *Scanner) runMovieScan(directory string) {
 	}
 	scan := newMovieScanContext(index)
 	report.scan = scan
-	reconciliation, err := scanner.NewReconciliation(directory, catalog)
+	reconciliation, err := scanner.NewReconciliation(ctx, directory, catalog)
 	if err != nil {
 		fail(err, "The library directory is unavailable.")
 		return
@@ -168,16 +171,18 @@ func (s *Scanner) runMovieScan(directory string) {
 			filename := ""
 			isPathError := errors.As(err, &pathError)
 			if isPathError {
-				filename = filepath.Base(pathError.Path)
+				filename = pathError.Path
 			}
-			report.issues[fmt.Sprintf("%s:%d", PhaseDiscovery, len(report.issues))] = Issue{Filename: filename, Phase: PhaseDiscovery, Reason: "A library entry could not be inspected. Existing records are preserved."}
+			report.issue(filename, PhaseDiscovery, "A library entry could not be inspected. Existing records are preserved.")
 		},
 		func(file scanner.ScanFile) error {
 			file.Path = filepath.Clean(file.Path)
 			reconciliation.MarkSeen(file.Path)
 			files = append(files, localFile{file: file})
 			report.status.Total = len(files)
-			s.publish(report)
+			if len(files)%discoveryPublishInterval == 0 {
+				s.publish(report)
+			}
 			return nil
 		})
 	if err != nil {
@@ -252,7 +257,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 	if file.state == fileDeferred {
 		report.status.Deferred--
 	}
-	delete(report.issues, string(PhaseLocal)+":"+file.file.Path)
+	report.dropIssue(file.file.Path, PhaseLocal)
 	var deferred *scanner.FileDeferral
 	isDeferred := errors.As(result.err, &deferred)
 	switch {

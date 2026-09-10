@@ -2,6 +2,7 @@ package movie
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -73,11 +74,13 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 		}
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].file.Path < candidates[j].file.Path })
-	report.status.EnrichmentTotal = len(candidates)
-	s.publish(report)
+	// Publish the total only once there is a provider to work through it;
+	// otherwise the run ends showing a progress bar stuck at 0/N.
 	if s.tmdb == nil {
 		return
 	}
+	report.status.EnrichmentTotal = len(candidates)
+	s.publish(report)
 	consecutive := 0
 	stopped := false
 	scanner.RunWorkers(ctx, scanWorkers, candidates, func() bool { return !stopped }, s.prepareEnrichment,
@@ -106,18 +109,30 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 				}
 				canceledDuringPersist := result.err != nil && ctx.Err() != nil
 				if !canceledDuringPersist {
-					switch {
-					case result.err != nil:
-						report.status.EnrichmentFailed++
-						report.issue(result.job.file.Path, PhaseEnrichment, "Descriptions could not be updated. Local movie data remains available; enrichment will retry later.")
-						s.logger.Warn("movie enrichment failed", "path", result.job.file.Path, "error", result.err)
-					case outcome == enrichmentUnmatched:
-						report.status.EnrichmentUnmatched++
-						report.issue(result.job.file.Path, PhaseEnrichment, "TMDB returned no matching movie. You can use Identify or retry on a later scan.")
-					}
+					s.recordEnrichment(report, result, outcome)
 				}
 			}
 			s.closeInspection(result.inspection, result.job.file.Path)
 			s.publish(report)
 		})
+}
+
+// recordEnrichment classifies one finished enrichment, mirroring recordLocal.
+// A deferral means the file changed or is still inside the quiet period: the
+// movie stays pending and retries on a later scan, so it is not a failure and
+// raises no issue for the user.
+func (s *Scanner) recordEnrichment(report *scanReport, result enrichmentResult, outcome enrichmentOutcome) {
+	var deferred *scanner.FileDeferral
+	isDeferred := errors.As(result.err, &deferred)
+	switch {
+	case isDeferred:
+		s.logger.Debug("deferred movie enrichment", "path", result.job.file.Path, "reason", deferred.Reason)
+	case result.err != nil:
+		report.status.EnrichmentFailed++
+		report.issue(result.job.file.Path, PhaseEnrichment, "Descriptions could not be updated. Local movie data remains available; enrichment will retry later.")
+		s.logger.Warn("movie enrichment failed", "path", result.job.file.Path, "error", result.err)
+	case outcome == enrichmentUnmatched:
+		report.status.EnrichmentUnmatched++
+		report.issue(result.job.file.Path, PhaseEnrichment, "TMDB returned no matching movie. You can use Identify or retry on a later scan.")
+	}
 }

@@ -218,7 +218,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			reconciliation, err := scanner.NewReconciliation(root, files)
+			reconciliation, err := scanner.NewReconciliation(context.Background(), root, files)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -475,7 +475,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reconciliation, err := scanner.NewReconciliation(root, files)
+	reconciliation, err := scanner.NewReconciliation(context.Background(), root, files)
 	if err != nil {
 		t.Fatal(err)
 	}

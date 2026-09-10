@@ -136,6 +136,8 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 }
 
 // Without a TMDB client every movie stays pending, which is not an issue.
+// EnrichmentTotal stays 0 so the UI shows no enrichment progress at all rather
+// than a bar frozen at 0/N.
 func TestScanWithoutTmdbCompletesCleanly(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	defer fixture.db.Close()
@@ -148,7 +150,67 @@ func TestScanWithoutTmdbCompletesCleanly(t *testing.T) {
 	}
 	s.scan(root)
 	status := s.Status()
-	if status.State != StateCompleted || status.Imported != 1 || status.PendingEnrichment != 1 || status.EnrichmentTotal != 1 {
+	if status.State != StateCompleted || status.Imported != 1 || status.PendingEnrichment != 1 || status.EnrichmentTotal != 0 {
 		t.Fatalf("scan without TMDB: %+v", status)
+	}
+}
+
+// A file that changed or is still settling is deferred, not failed: enrichment
+// stays pending and retries on a later scan, so the user sees no issue for it.
+func TestEnrichmentDeferralIsNotAFailure(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	defer fixture.db.Close()
+	s := fixture.scanner
+	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
+	result := enrichmentResult{
+		job: enrichmentJob{file: scanner.ScanFile{Path: "/library/Local (2001).mkv"}},
+		err: &scanner.FileDeferral{Reason: scanner.FileChanged},
+	}
+
+	s.recordEnrichment(report, result, enrichmentSkipped)
+
+	if report.status.EnrichmentFailed != 0 || report.status.EnrichmentUnmatched != 0 || len(report.issues) != 0 {
+		t.Fatalf("deferral recorded as a failure: %+v issues=%v", report.status, report.issues)
+	}
+}
+
+// Every issue is keyed by phase and path, so two failing entries stay two
+// issues instead of the second overwriting the first.
+func TestDiscoveryIssuesDoNotCollide(t *testing.T) {
+	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
+
+	report.issue("/library/a.mkv", PhaseDiscovery, "unreadable")
+	report.issue("/library/b.mkv", PhaseDiscovery, "unreadable")
+	report.issue("/library/a.mkv", PhaseLocal, "unreadable")
+
+	if len(report.issues) != 3 {
+		t.Fatalf("issues collided: %v", report.issues)
+	}
+}
+
+// publish rebuilds the sorted issue list only when the issue set changed, so
+// per-file progress publishes stay off an O(n log n) sort.
+func TestPublishSkipsUnchangedIssues(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	defer fixture.db.Close()
+	s := fixture.scanner
+	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
+
+	report.issue("/library/a.mkv", PhaseLocal, "unreadable")
+	s.publish(report)
+	first := report.publishedIssues
+	report.status.Total++
+	s.publish(report)
+	if report.publishedIssues != first {
+		t.Fatalf("unchanged issues rebuilt the published list")
+	}
+	if s.Status().IssueCount != 1 || len(s.Status().Issues) != 1 {
+		t.Fatalf("issue lost across publishes: %+v", s.Status())
+	}
+
+	report.dropIssue("/library/a.mkv", PhaseLocal)
+	s.publish(report)
+	if report.publishedIssues == first || s.Status().IssueCount != 0 || len(s.Status().Issues) != 0 {
+		t.Fatalf("dropped issue not republished: %+v", s.Status())
 	}
 }
