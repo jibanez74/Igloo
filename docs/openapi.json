@@ -3,7 +3,7 @@
   "info": {
     "title": "Igloo API",
     "version": "0.1.0",
-    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management and Quick Connect approval endpoints, which require a cookie session. See each operation's security block for route-specific requirements."
+    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, and PIN retrieval endpoints, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware can return JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation."
   },
   "servers": [
     {
@@ -715,7 +715,7 @@
           "Static"
         ],
         "summary": "Serve a static asset",
-        "description": "Serves uploaded avatars and scanner-downloaded artwork from the configured static directory.",
+        "description": "Serves uploaded avatars and scanner-downloaded artwork from the configured static directory. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.",
         "operationId": "serveStaticFiles",
         "parameters": [
           {
@@ -723,13 +723,78 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
           "200": {
-            "description": "Static file content.",
+            "description": "Static file content with its extension-derived MIME type.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "Cache-Control": {
+                "description": "Static asset cache policy.",
+                "schema": {
+                  "type": "string",
+                  "const": "public, max-age=31536000"
+                }
+              },
+              "X-Content-Type-Options": {
+                "description": "Disable MIME sniffing.",
+                "schema": {
+                  "type": "string",
+                  "const": "nosniff"
+                }
+              }
+            },
             "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
               "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "*/*": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -738,7 +803,77 @@
             }
           },
           "206": {
-            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+            "description": "One range retains the file MIME type and has Content-Range; multiple ranges use multipart/byteranges with per-part MIME type and Content-Range.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "Cache-Control": {
+                "description": "Static asset cache policy.",
+                "schema": {
+                  "type": "string",
+                  "const": "public, max-age=31536000"
+                }
+              },
+              "X-Content-Type-Options": {
+                "description": "Disable MIME sniffing.",
+                "schema": {
+                  "type": "string",
+                  "const": "nosniff"
+                }
+              },
+              "Content-Range": {
+                "description": "Present only for a single range.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "multipart/byteranges": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "304": {
             "$ref": "#/components/responses/NotModified"
@@ -747,16 +882,45 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden static path."
+            "description": "Forbidden static path.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Static file not found."
+            "description": "Static file not found.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "416": {
             "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
-            "description": "Failed to serve static file."
+            "description": "Failed to serve static file. Static-file failures are plain text; authentication/session middleware failures use the JSON error envelope.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           }
         }
       }
@@ -1049,6 +1213,9 @@
           },
           "502": {
             "$ref": "#/components/responses/BadGateway"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -1168,6 +1335,9 @@
           },
           "502": {
             "$ref": "#/components/responses/BadGateway"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -2179,7 +2349,7 @@
           "Movies"
         ],
         "summary": "Get an HLS initialization file or media segment for a movie",
-        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.",
+        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.",
         "operationId": "hlsSegment",
         "parameters": [
           {
@@ -2214,6 +2384,18 @@
           },
           {
             "$ref": "#/components/parameters/HLSReloadQuery"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
@@ -2243,6 +2425,9 @@
           },
           "503": {
             "$ref": "#/components/responses/HLSServiceUnavailable"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           }
         }
       }
@@ -2260,6 +2445,21 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
@@ -2286,15 +2486,19 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           }
-        }
+        },
+        "description": "Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain."
       },
       "head": {
         "tags": [
           "Movies"
         ],
         "summary": "Headers for a direct movie stream",
-        "description": "Identical to GET but returns headers only, with no response body.",
+        "description": "Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.",
         "operationId": "streamMovieHead",
         "parameters": [
           {
@@ -2302,32 +2506,158 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/BinaryMediaResponse"
+            "description": "Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           },
           "206": {
-            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+            "description": "Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Range": {
+                "description": "Present only for a single range.",
+                "schema": {
+                  "type": "string",
+                  "example": "bytes 0-3/16"
+                }
+              }
+            }
           },
           "304": {
-            "$ref": "#/components/responses/NotModified"
+            "description": "Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Direct-stream strong validator.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Static-file modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Bad request. No response body is sent for HEAD."
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid session. No response body is sent for HEAD."
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "description": "Resource not found. No response body is sent for HEAD."
           },
           "416": {
-            "$ref": "#/components/responses/RangeNotSatisfiable"
+            "description": "Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes */size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD.",
+            "headers": {
+              "Content-Range": {
+                "description": "Asset size for a well-formed unsatisfiable range, for example bytes */15; omitted for malformed range syntax.",
+                "schema": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "description": "Unexpected server error. No response body is sent for HEAD."
+          },
+          "412": {
+            "description": "The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Present for direct streams only.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -2749,7 +3079,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "subtitle_track is null to disable subtitles, or a zero-based ordinal below the current subtitle count (ordered by stream_index); non-null selection is rejected when no subtitles exist. Direct mode requires video/mp4, a primary H.264/AVC video stream, and browser-safe scanned video metadata: no bit depth above 8, no interlacing, no 10-bit/4:2:2/4:4:4 profile, and a known nonempty pixel format must be yuv420p, yuvj420p, nv12, or nv21. Missing optional video metadata is tolerated. Embedded cover-art streams are skipped when selecting primary video if a real video stream exists. Direct audio_track must be 0; with multiple audio streams, either none may be marked default or exactly the first must be the sole default. The server does not check direct-play audio codec support at room creation. Invalid selections or direct-play eligibility return 400."
       }
     },
     "/api/watch-rooms/{id}": {
@@ -2868,17 +3199,60 @@
             "description": "WebSocket upgrade accepted. Server events follow WatchRoomServerEvent."
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Bad request. Authorization/handler errors are JSON; WebSocket upgrade errors are plain text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Authenticated user is not allowed to perform this action. Authorization/handler errors are JSON; WebSocket upgrade errors are plain text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "description": "Unexpected server error. Authorization/handler errors are JSON; WebSocket upgrade errors are plain text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
+        },
+        "description": "Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request scheme and host, the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, and presence changes broadcast member_joined/member_left. Room deletion sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. WebSocket ping/pong control frames also keep the connection alive.",
+        "x-websocket-client-event": {
+          "$ref": "#/components/schemas/WatchRoomClientEvent"
+        },
+        "x-websocket-server-event": {
+          "$ref": "#/components/schemas/WatchRoomServerEvent"
         }
       }
     },
@@ -2888,7 +3262,7 @@
           "Watch Rooms"
         ],
         "summary": "Direct-stream a watch-room movie",
-        "description": "Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds.",
+        "description": "Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.",
         "operationId": "streamWatchRoomMovie",
         "parameters": [
           {
@@ -2896,6 +3270,21 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
@@ -2921,13 +3310,23 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "description": "Request conflicts with existing data. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "416": {
             "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           }
         }
       },
@@ -2936,7 +3335,7 @@
           "Watch Rooms"
         ],
         "summary": "Headers for a direct watch-room movie stream",
-        "description": "Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds.",
+        "description": "Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.",
         "operationId": "streamWatchRoomMovieHead",
         "parameters": [
           {
@@ -2944,38 +3343,164 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/BinaryMediaResponse"
+            "description": "Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           },
           "206": {
-            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+            "description": "Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Range": {
+                "description": "Present only for a single range.",
+                "schema": {
+                  "type": "string",
+                  "example": "bytes 0-3/16"
+                }
+              }
+            }
           },
           "304": {
-            "$ref": "#/components/responses/NotModified"
+            "description": "Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Direct-stream strong validator.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Static-file modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Bad request. No response body is sent for HEAD."
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid session. No response body is sent for HEAD."
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Authenticated user is not allowed to perform this action. No response body is sent for HEAD."
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "description": "Resource not found. No response body is sent for HEAD."
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "description": "Request conflicts with existing data. No response body is sent for HEAD. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null."
           },
           "416": {
-            "$ref": "#/components/responses/RangeNotSatisfiable"
+            "description": "Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes */size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD.",
+            "headers": {
+              "Content-Range": {
+                "description": "Asset size for a well-formed unsatisfiable range, for example bytes */15; omitted for malformed range syntax.",
+                "schema": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "description": "Unexpected server error. No response body is sent for HEAD."
+          },
+          "412": {
+            "description": "The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Present for direct streams only.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -2986,7 +3511,7 @@
           "Watch Rooms"
         ],
         "summary": "Get the HLS playlist for a watch room",
-        "description": "Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.",
+        "description": "Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.",
         "operationId": "watchRoomHLSManifest",
         "parameters": [
           {
@@ -3010,7 +3535,14 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "description": "Request conflicts with existing data. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "422": {
             "$ref": "#/components/responses/UnprocessableEntity"
@@ -3030,7 +3562,7 @@
           "Watch Rooms"
         ],
         "summary": "Get a watch-room HLS initialization file or media segment",
-        "description": "Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.",
+        "description": "Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.",
         "operationId": "watchRoomHLSSegment",
         "parameters": [
           {
@@ -3047,6 +3579,18 @@
           },
           {
             "$ref": "#/components/parameters/AudioTrackQuery"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
@@ -3079,6 +3623,9 @@
           },
           "503": {
             "$ref": "#/components/responses/HLSServiceUnavailable"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           }
         }
       }
@@ -3580,6 +4127,21 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
@@ -3606,15 +4168,19 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           }
-        }
+        },
+        "description": "Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain."
       },
       "head": {
         "tags": [
           "Music"
         ],
         "summary": "Headers for a direct audio track stream",
-        "description": "Identical to GET but returns headers only, with no response body.",
+        "description": "Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.",
         "operationId": "streamTrackHead",
         "parameters": [
           {
@@ -3622,32 +4188,158 @@
           },
           {
             "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
           }
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/BinaryMediaResponse"
+            "description": "Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
           },
           "206": {
-            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+            "description": "Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Range": {
+                "description": "Present only for a single range.",
+                "schema": {
+                  "type": "string",
+                  "example": "bytes 0-3/16"
+                }
+              }
+            }
           },
           "304": {
-            "$ref": "#/components/responses/NotModified"
+            "description": "Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Direct-stream strong validator.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Static-file modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Bad request. No response body is sent for HEAD."
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid session. No response body is sent for HEAD."
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "description": "Resource not found. No response body is sent for HEAD."
           },
           "416": {
-            "$ref": "#/components/responses/RangeNotSatisfiable"
+            "description": "Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes */size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD.",
+            "headers": {
+              "Content-Range": {
+                "description": "Asset size for a well-formed unsatisfiable range, for example bytes */15; omitted for malformed range syntax.",
+                "schema": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
           },
           "500": {
-            "$ref": "#/components/responses/InternalServerError"
+            "description": "Unexpected server error. No response body is sent for HEAD."
+          },
+          "412": {
+            "description": "The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Present for direct streams only.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -4189,7 +4881,7 @@
         "operationId": "getUserTopTracks",
         "parameters": [
           {
-            "$ref": "#/components/parameters/StatsLimitQuery"
+            "$ref": "#/components/parameters/TopTracksLimitQuery"
           },
           {
             "$ref": "#/components/parameters/OffsetQuery"
@@ -4205,7 +4897,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Limit defaults to 20 and is capped at 100; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values."
       }
     },
     "/api/music/user-stats/top-musicians": {
@@ -4217,7 +4910,7 @@
         "operationId": "getUserTopMusicians",
         "parameters": [
           {
-            "$ref": "#/components/parameters/StatsLimitQuery"
+            "$ref": "#/components/parameters/TopMusiciansLimitQuery"
           },
           {
             "$ref": "#/components/parameters/OffsetQuery"
@@ -4233,7 +4926,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values."
       }
     },
     "/api/music/user-stats/top-genres": {
@@ -4245,7 +4939,7 @@
         "operationId": "getUserTopGenres",
         "parameters": [
           {
-            "$ref": "#/components/parameters/StatsLimitQuery"
+            "$ref": "#/components/parameters/TopGenresLimitQuery"
           }
         ],
         "responses": {
@@ -4258,7 +4952,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Limit defaults to 10 and is capped at 20; invalid limits use the default. This endpoint does not accept offset pagination."
       }
     },
     "/api/music/user-stats/top-albums": {
@@ -4270,7 +4965,7 @@
         "operationId": "getUserTopAlbums",
         "parameters": [
           {
-            "$ref": "#/components/parameters/StatsLimitQuery"
+            "$ref": "#/components/parameters/TopAlbumsLimitQuery"
           },
           {
             "$ref": "#/components/parameters/OffsetQuery"
@@ -4286,7 +4981,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values."
       }
     },
     "/api/music/user-stats/recently-played": {
@@ -4298,7 +4994,7 @@
         "operationId": "getUserRecentlyPlayed",
         "parameters": [
           {
-            "$ref": "#/components/parameters/StatsLimitQuery"
+            "$ref": "#/components/parameters/RecentlyPlayedLimitQuery"
           },
           {
             "$ref": "#/components/parameters/OffsetQuery"
@@ -4314,7 +5010,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Limit defaults to 20 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values."
       }
     },
     "/api/movies/{id}/hls/session/stop": {
@@ -4577,15 +5274,6 @@
           }
         }
       },
-      "StatsLimitQuery": {
-        "name": "limit",
-        "in": "query",
-        "required": false,
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
       "OffsetQuery": {
         "name": "offset",
         "in": "query",
@@ -4637,7 +5325,7 @@
         "name": "Range",
         "in": "header",
         "required": false,
-        "description": "HTTP byte range for seeking.",
+        "description": "Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body.",
         "schema": {
           "type": "string",
           "example": "bytes=0-1048575"
@@ -4647,7 +5335,7 @@
         "name": "If-Modified-Since",
         "in": "header",
         "required": false,
-        "description": "Return 304 when the ready HLS asset has not changed since this HTTP date.",
+        "description": "HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored.",
         "schema": {
           "type": "string",
           "format": "http-date"
@@ -4698,6 +5386,92 @@
         "schema": {
           "type": "number",
           "minimum": 0
+        }
+      },
+      "IfMatchHeader": {
+        "name": "If-Match",
+        "in": "header",
+        "required": false,
+        "description": "Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IfNoneMatchHeader": {
+        "name": "If-None-Match",
+        "in": "header",
+        "required": false,
+        "description": "A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IfUnmodifiedSinceHeader": {
+        "name": "If-Unmodified-Since",
+        "in": "header",
+        "required": false,
+        "description": "HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IfRangeHeader": {
+        "name": "If-Range",
+        "in": "header",
+        "required": false,
+        "description": "With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "TopTracksLimitQuery": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Default 20; capped at 100. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value.",
+        "schema": {
+          "type": "integer",
+          "default": 20
+        }
+      },
+      "TopMusiciansLimitQuery": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value.",
+        "schema": {
+          "type": "integer",
+          "default": 10
+        }
+      },
+      "TopGenresLimitQuery": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Default 10; capped at 20. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value.",
+        "schema": {
+          "type": "integer",
+          "default": 10
+        }
+      },
+      "TopAlbumsLimitQuery": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value.",
+        "schema": {
+          "type": "integer",
+          "default": 10
+        }
+      },
+      "RecentlyPlayedLimitQuery": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Default 20; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value.",
+        "schema": {
+          "type": "integer",
+          "default": 20
         }
       }
     },
@@ -5586,6 +6360,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          "Content-Length": {
+            "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
         "content": {
@@ -5626,6 +6407,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          "Content-Length": {
+            "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
         "content": {
@@ -5644,7 +6432,7 @@
         }
       },
       "HLSNotModifiedResponse": {
-        "description": "The ready HLS asset has not changed since If-Modified-Since; no body is returned.",
+        "description": "The ready HLS asset is unchanged according to If-Modified-Since, or If-None-Match is *. No body or ETag is returned.",
         "headers": {
           "Cache-Control": {
             "schema": {
@@ -5686,8 +6474,87 @@
         }
       },
       "BinaryMediaResponse": {
-        "description": "Complete media file response.",
+        "description": "Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type.",
+        "headers": {
+          "Accept-Ranges": {
+            "description": "Byte-range support.",
+            "schema": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "required": true
+          },
+          "Last-Modified": {
+            "description": "File modification time as an HTTP date.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          "Content-Length": {
+            "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "ETag": {
+            "description": "Strong validator derived from file size and nanosecond modification time.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        },
         "content": {
+          "video/mp4": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/x-matroska": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/webm": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/x-msvideo": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/quicktime": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio/mpeg": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio/flac": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio/mp4": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
           "application/octet-stream": {
             "schema": {
               "type": "string",
@@ -5697,16 +6564,101 @@
         }
       },
       "PartialBinaryMediaResponse": {
-        "description": "Partial media file response for a byte range.",
+        "description": "Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range.",
         "headers": {
-          "Content-Range": {
+          "Accept-Ranges": {
+            "description": "Byte-range support.",
+            "schema": {
+              "type": "string",
+              "const": "bytes"
+            },
+            "required": true
+          },
+          "Last-Modified": {
+            "description": "File modification time as an HTTP date.",
             "schema": {
               "type": "string"
+            },
+            "required": true
+          },
+          "Content-Length": {
+            "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "ETag": {
+            "description": "Strong validator derived from file size and nanosecond modification time.",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          "Content-Range": {
+            "description": "Present only for a single range.",
+            "schema": {
+              "type": "string",
+              "example": "bytes 0-3/16"
             }
           }
         },
         "content": {
+          "video/mp4": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/x-matroska": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/webm": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/x-msvideo": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "video/quicktime": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio/mpeg": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio/flac": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio/mp4": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
           "application/octet-stream": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "multipart/byteranges": {
             "schema": {
               "type": "string",
               "format": "binary"
@@ -5715,10 +6667,46 @@
         }
       },
       "NotModified": {
-        "description": "Cached representation is still valid."
+        "description": "Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag.",
+        "headers": {
+          "ETag": {
+            "description": "Direct-stream strong validator.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Last-Modified": {
+            "description": "Static-file modification time as an HTTP date.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
       },
       "RangeNotSatisfiable": {
-        "description": "Requested byte range cannot be satisfied."
+        "description": "Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes */size is present for a well-formed non-overlapping range and omitted for malformed syntax.",
+        "headers": {
+          "Content-Range": {
+            "description": "Asset size for a well-formed unsatisfiable range, for example bytes */15; omitted for malformed range syntax.",
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string",
+              "examples": [
+                "invalid range\n",
+                "invalid range: failed to overlap\n"
+              ]
+            }
+          }
+        }
       },
       "WebVTTResponse": {
         "description": "Extracted WebVTT subtitle payload.",
@@ -6274,6 +7262,23 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/DevicesListEnvelope"
+            }
+          }
+        }
+      },
+      "PreconditionFailed": {
+        "description": "The If-Match or If-Unmodified-Since precondition failed. Empty response body.",
+        "headers": {
+          "ETag": {
+            "description": "Present for direct streams only.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Last-Modified": {
+            "description": "File modification time as an HTTP date.",
+            "schema": {
+              "type": "string"
             }
           }
         }
@@ -7749,33 +8754,245 @@
       },
       "VideoStream": {
         "type": "object",
-        "required": ["id", "movie_id", "stream_index", "codec", "codec_profile", "codec_level", "bit_rate", "width", "height", "coded_width", "coded_height", "aspect_ratio", "frame_rate", "avg_frame_rate", "bit_depth", "pixel_format", "color_range", "color_space", "color_primaries", "color_transfer", "field_order", "rotation", "language", "title"],
+        "required": [
+          "id",
+          "movie_id",
+          "stream_index",
+          "codec",
+          "codec_profile",
+          "codec_level",
+          "bit_rate",
+          "width",
+          "height",
+          "coded_width",
+          "coded_height",
+          "aspect_ratio",
+          "frame_rate",
+          "avg_frame_rate",
+          "bit_depth",
+          "pixel_format",
+          "color_range",
+          "color_space",
+          "color_primaries",
+          "color_transfer",
+          "field_order",
+          "rotation",
+          "language",
+          "title"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "codec_profile": { "$ref": "#/components/schemas/SqlNullString" }, "codec_level": { "$ref": "#/components/schemas/SqlNullInt64" }, "bit_rate": { "type": "integer", "format": "int64" }, "width": { "type": "integer", "format": "int64" }, "height": { "type": "integer", "format": "int64" }, "coded_width": { "$ref": "#/components/schemas/SqlNullInt64" }, "coded_height": { "$ref": "#/components/schemas/SqlNullInt64" }, "aspect_ratio": { "$ref": "#/components/schemas/SqlNullString" }, "frame_rate": { "type": "number" }, "avg_frame_rate": { "$ref": "#/components/schemas/SqlNullString" }, "bit_depth": { "$ref": "#/components/schemas/SqlNullInt64" }, "pixel_format": { "$ref": "#/components/schemas/SqlNullString" }, "color_range": { "$ref": "#/components/schemas/SqlNullString" }, "color_space": { "$ref": "#/components/schemas/SqlNullString" }, "color_primaries": { "$ref": "#/components/schemas/SqlNullString" }, "color_transfer": { "$ref": "#/components/schemas/SqlNullString" }, "field_order": { "$ref": "#/components/schemas/SqlNullString" }, "rotation": { "$ref": "#/components/schemas/SqlNullInt64" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "movie_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "codec_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "codec_level": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "coded_width": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "coded_height": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "aspect_ratio": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "frame_rate": {
+            "type": "number"
+          },
+          "avg_frame_rate": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "bit_depth": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "pixel_format": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_range": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_space": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_primaries": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_transfer": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "field_order": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
         },
         "additionalProperties": false
       },
       "AudioStream": {
         "type": "object",
-        "required": ["id", "movie_id", "stream_index", "codec", "codec_profile", "bit_rate", "sample_rate", "channels", "channel_layout", "language", "title", "is_default"],
+        "required": [
+          "id",
+          "movie_id",
+          "stream_index",
+          "codec",
+          "codec_profile",
+          "bit_rate",
+          "sample_rate",
+          "channels",
+          "channel_layout",
+          "language",
+          "title",
+          "is_default"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "codec_profile": { "$ref": "#/components/schemas/SqlNullString" }, "bit_rate": { "type": "integer", "format": "int64" }, "sample_rate": { "$ref": "#/components/schemas/SqlNullInt64" }, "channels": { "type": "integer", "format": "int64" }, "channel_layout": { "$ref": "#/components/schemas/SqlNullString" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "is_default": { "type": "boolean" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "movie_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "codec_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sample_rate": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "channels": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "channel_layout": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_default": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "Subtitle": {
         "type": "object",
-        "required": ["id", "movie_id", "stream_index", "codec", "language", "title", "is_forced", "is_default"],
+        "required": [
+          "id",
+          "movie_id",
+          "stream_index",
+          "codec",
+          "language",
+          "title",
+          "is_forced",
+          "is_default"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "movie_id": { "type": "integer", "format": "int64" }, "stream_index": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "title": { "$ref": "#/components/schemas/SqlNullString" }, "is_forced": { "type": "boolean" }, "is_default": { "type": "boolean" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "movie_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_forced": {
+            "type": "boolean"
+          },
+          "is_default": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "Chapter": {
         "type": "object",
-        "required": ["id", "title", "start_time", "thumb", "movie_id"],
+        "required": [
+          "id",
+          "title",
+          "start_time",
+          "thumb",
+          "movie_id"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "start_time": { "type": "integer", "format": "int64" }, "thumb": { "$ref": "#/components/schemas/SqlNullString" }, "movie_id": { "$ref": "#/components/schemas/SqlNullInt64" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thumb": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "movie_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          }
         },
         "additionalProperties": false
       },
@@ -8156,7 +9373,8 @@
             "items": {
               "type": "integer",
               "format": "int64"
-            }
+            },
+            "minItems": 1
           }
         },
         "additionalProperties": false
@@ -8303,14 +9521,329 @@
       },
       "TmdbMovie": {
         "type": "object",
-        "required": ["id", "title", "original_title", "overview", "release_date", "poster_path", "backdrop_path", "popularity", "vote_average", "vote_count", "adult", "original_language", "genre_ids", "video", "runtime", "status", "tagline", "budget", "revenue", "homepage", "imdb_id", "production_companies", "genres", "credits", "videos", "release_dates"],
+        "required": [
+          "id",
+          "title",
+          "original_title",
+          "overview",
+          "release_date",
+          "poster_path",
+          "backdrop_path",
+          "popularity",
+          "vote_average",
+          "vote_count",
+          "adult",
+          "original_language",
+          "genre_ids",
+          "video",
+          "runtime",
+          "status",
+          "tagline",
+          "budget",
+          "revenue",
+          "homepage",
+          "imdb_id",
+          "production_companies",
+          "genres",
+          "credits",
+          "videos",
+          "release_dates"
+        ],
         "properties": {
-          "id": { "type": "integer" }, "title": { "type": "string" }, "original_title": { "type": "string" }, "overview": { "type": "string" }, "release_date": { "type": "string" }, "poster_path": { "type": "string" }, "backdrop_path": { "type": "string" }, "popularity": { "type": "number" }, "vote_average": { "type": "number" }, "vote_count": { "type": "integer" }, "adult": { "type": "boolean" }, "original_language": { "type": "string" }, "genre_ids": { "type": ["array", "null"], "items": { "type": "integer" } }, "video": { "type": "boolean" }, "runtime": { "type": "integer" }, "status": { "type": "string" }, "tagline": { "type": "string" }, "budget": { "type": "integer", "format": "int64" }, "revenue": { "type": "integer", "format": "int64" }, "homepage": { "type": "string" }, "imdb_id": { "type": "string" },
-          "production_companies": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "logo_path", "name", "origin_country"], "properties": { "id": { "type": "integer" }, "logo_path": { "type": "string" }, "name": { "type": "string" }, "origin_country": { "type": "string" } }, "additionalProperties": false } },
-          "genres": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" } }, "additionalProperties": false } },
-          "credits": { "type": "object", "required": ["cast", "crew"], "properties": { "cast": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "name", "character", "profile_path", "order"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "character": { "type": "string" }, "profile_path": { "type": "string" }, "order": { "type": "integer" } }, "additionalProperties": false } }, "crew": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "name", "job", "department", "profile_path"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "job": { "type": "string" }, "department": { "type": "string" }, "profile_path": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false },
-          "videos": { "type": "object", "required": ["results"], "properties": { "results": { "type": ["array", "null"], "items": { "type": "object", "required": ["id", "key", "name", "site", "type", "official"], "properties": { "id": { "type": "string" }, "key": { "type": "string" }, "name": { "type": "string" }, "site": { "type": "string" }, "type": { "type": "string" }, "official": { "type": "boolean" } }, "additionalProperties": false } } }, "additionalProperties": false },
-          "release_dates": { "type": "object", "required": ["results"], "properties": { "results": { "type": ["array", "null"], "items": { "type": "object", "required": ["iso_3166_1", "release_dates"], "properties": { "iso_3166_1": { "type": "string" }, "release_dates": { "type": ["array", "null"], "items": { "type": "object", "required": ["certification"], "properties": { "certification": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false } } }, "additionalProperties": false }
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "original_title": {
+            "type": "string"
+          },
+          "overview": {
+            "type": "string"
+          },
+          "release_date": {
+            "type": "string"
+          },
+          "poster_path": {
+            "type": "string"
+          },
+          "backdrop_path": {
+            "type": "string"
+          },
+          "popularity": {
+            "type": "number"
+          },
+          "vote_average": {
+            "type": "number"
+          },
+          "vote_count": {
+            "type": "integer"
+          },
+          "adult": {
+            "type": "boolean"
+          },
+          "original_language": {
+            "type": "string"
+          },
+          "genre_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          },
+          "video": {
+            "type": "boolean"
+          },
+          "runtime": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tagline": {
+            "type": "string"
+          },
+          "budget": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revenue": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "homepage": {
+            "type": "string"
+          },
+          "imdb_id": {
+            "type": "string"
+          },
+          "production_companies": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "logo_path",
+                "name",
+                "origin_country"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "logo_path": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "origin_country": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "genres": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "credits": {
+            "type": "object",
+            "required": [
+              "cast",
+              "crew"
+            ],
+            "properties": {
+              "cast": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "character",
+                    "profile_path",
+                    "order"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "character": {
+                      "type": "string"
+                    },
+                    "profile_path": {
+                      "type": "string"
+                    },
+                    "order": {
+                      "type": "integer"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "crew": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "job",
+                    "department",
+                    "profile_path"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "job": {
+                      "type": "string"
+                    },
+                    "department": {
+                      "type": "string"
+                    },
+                    "profile_path": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "videos": {
+            "type": "object",
+            "required": [
+              "results"
+            ],
+            "properties": {
+              "results": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "key",
+                    "name",
+                    "site",
+                    "type",
+                    "official"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "site": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "official": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "release_dates": {
+            "type": "object",
+            "required": [
+              "results"
+            ],
+            "properties": {
+              "results": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "iso_3166_1",
+                    "release_dates"
+                  ],
+                  "properties": {
+                    "iso_3166_1": {
+                      "type": "string"
+                    },
+                    "release_dates": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "certification"
+                        ],
+                        "properties": {
+                          "certification": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
         },
         "additionalProperties": false
       },
@@ -9137,7 +10670,8 @@
               "null"
             ],
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Null disables subtitles. Otherwise a zero-based ordinal into subtitle rows ordered by stream_index, strictly less than the current subtitle count. Non-null values are invalid for a movie without subtitles."
           },
           "invited_user_ids": {
             "type": "array",
@@ -9392,17 +10926,168 @@
       "Album": {
         "type": "object",
         "description": "Album sort title uses the most common explicit local sort tag, with binary lexical ties and display-title fallback. Release date uses the most common valid local track date, choosing the earliest tied date, then Spotify as fallback; year follows that date.",
-        "required": ["id", "title", "sort_title", "spotify_id", "spotify_popularity", "musician", "release_date", "year", "total_tracks", "cover", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "title",
+          "sort_title",
+          "spotify_id",
+          "spotify_popularity",
+          "musician",
+          "release_date",
+          "year",
+          "total_tracks",
+          "cover",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "sort_title": { "type": "string" }, "spotify_id": { "$ref": "#/components/schemas/SqlNullString" }, "spotify_popularity": { "$ref": "#/components/schemas/SqlNullFloat64" }, "musician": { "$ref": "#/components/schemas/SqlNullString" }, "release_date": { "$ref": "#/components/schemas/SqlNullString" }, "year": { "$ref": "#/components/schemas/SqlNullInt64" }, "total_tracks": { "$ref": "#/components/schemas/SqlNullInt64" }, "cover": { "$ref": "#/components/schemas/SqlNullString" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sort_title": {
+            "type": "string"
+          },
+          "spotify_id": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "spotify_popularity": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "musician": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "release_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "total_tracks": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
       "Track": {
         "type": "object",
-        "required": ["id", "title", "sort_title", "file_name", "container", "mime_type", "codec", "size", "track_index", "duration", "disc", "channels", "channel_layout", "bit_rate", "profile", "release_date", "year", "composer", "copyright", "language", "album_id", "musician_id", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "title",
+          "sort_title",
+          "file_name",
+          "container",
+          "mime_type",
+          "codec",
+          "size",
+          "track_index",
+          "duration",
+          "disc",
+          "channels",
+          "channel_layout",
+          "bit_rate",
+          "profile",
+          "release_date",
+          "year",
+          "composer",
+          "copyright",
+          "language",
+          "album_id",
+          "musician_id",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "sort_title": { "type": "string" }, "file_name": { "type": "string" }, "container": { "type": "string" }, "mime_type": { "type": "string" }, "codec": { "type": "string" }, "size": { "type": "integer", "format": "int64" }, "track_index": { "type": "integer", "format": "int64" }, "duration": { "type": "integer", "format": "int64" }, "disc": { "type": "integer", "format": "int64" }, "channels": { "type": "string" }, "channel_layout": { "type": "string" }, "bit_rate": { "type": "integer", "format": "int64" }, "profile": { "type": "string" }, "release_date": { "$ref": "#/components/schemas/SqlNullString" }, "year": { "$ref": "#/components/schemas/SqlNullInt64" }, "composer": { "$ref": "#/components/schemas/SqlNullString" }, "copyright": { "$ref": "#/components/schemas/SqlNullString" }, "language": { "$ref": "#/components/schemas/SqlNullString" }, "album_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "musician_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sort_title": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "container": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "track_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "disc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "channels": {
+            "type": "string"
+          },
+          "channel_layout": {
+            "type": "string"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "release_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "composer": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "copyright": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "musician_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
@@ -9979,25 +11664,180 @@
       },
       "Playlist": {
         "type": "object",
-        "required": ["id", "user_id", "name", "description", "cover_image", "is_public", "movie_id", "content_type", "created_at", "updated_at"],
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "description",
+          "cover_image",
+          "is_public",
+          "movie_id",
+          "content_type",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "user_id": { "type": "integer", "format": "int64" }, "name": { "type": "string" }, "description": { "$ref": "#/components/schemas/SqlNullString" }, "cover_image": { "$ref": "#/components/schemas/SqlNullString" }, "is_public": { "type": "boolean" }, "movie_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "content_type": { "type": "string" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "cover_image": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "movie_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
       "PlaylistSummary": {
         "type": "object",
-        "required": ["id", "user_id", "name", "description", "cover_image", "is_public", "created_at", "updated_at", "track_count", "total_duration", "is_owner", "can_edit"],
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "description",
+          "cover_image",
+          "is_public",
+          "created_at",
+          "updated_at",
+          "track_count",
+          "total_duration",
+          "is_owner",
+          "can_edit"
+        ],
         "properties": {
-          "id": { "type": "integer", "format": "int64" }, "user_id": { "type": "integer", "format": "int64" }, "name": { "type": "string" }, "description": { "$ref": "#/components/schemas/SqlNullString" }, "cover_image": { "$ref": "#/components/schemas/SqlNullString" }, "is_public": { "type": "boolean" }, "created_at": { "type": "string" }, "updated_at": { "type": "string" }, "track_count": { "type": "integer", "format": "int64" }, "total_duration": { "type": "integer", "format": "int64" }, "is_owner": { "type": "boolean" }, "can_edit": { "type": "boolean" }
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "cover_image": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "track_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "can_edit": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "PlaylistTrack": {
         "type": "object",
-        "required": ["playlist_track_id", "position", "added_at", "added_by", "id", "title", "duration", "codec", "bit_rate", "album_id", "musician_id", "album_title", "album_cover", "musician_name"],
+        "required": [
+          "playlist_track_id",
+          "position",
+          "added_at",
+          "added_by",
+          "id",
+          "title",
+          "duration",
+          "codec",
+          "bit_rate",
+          "album_id",
+          "musician_id",
+          "album_title",
+          "album_cover",
+          "musician_name"
+        ],
         "properties": {
-          "playlist_track_id": { "type": "integer", "format": "int64" }, "position": { "type": "integer", "format": "int64" }, "added_at": { "type": "string" }, "added_by": { "$ref": "#/components/schemas/SqlNullInt64" }, "id": { "type": "integer", "format": "int64" }, "title": { "type": "string" }, "duration": { "type": "integer", "format": "int64" }, "codec": { "type": "string" }, "bit_rate": { "type": "integer", "format": "int64" }, "album_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "musician_id": { "$ref": "#/components/schemas/SqlNullInt64" }, "album_title": { "$ref": "#/components/schemas/SqlNullString" }, "album_cover": { "$ref": "#/components/schemas/SqlNullString" }, "musician_name": { "$ref": "#/components/schemas/SqlNullString" }
+          "playlist_track_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "added_at": {
+            "type": "string"
+          },
+          "added_by": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "musician_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "album_title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "album_cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "musician_name": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
         },
         "additionalProperties": false
       },
@@ -10135,7 +11975,8 @@
             "items": {
               "type": "integer",
               "format": "int64"
-            }
+            },
+            "minItems": 1
           }
         },
         "additionalProperties": false
@@ -10777,7 +12618,8 @@
         "properties": {
           "device_name": {
             "type": "string",
-            "maxLength": 100
+            "minLength": 1,
+            "description": "Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace."
           },
           "platform": {
             "type": "string",
@@ -11010,7 +12852,8 @@
           },
           "device_name": {
             "type": "string",
-            "maxLength": 100
+            "minLength": 1,
+            "description": "Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace."
           },
           "platform": {
             "type": "string"
@@ -11094,7 +12937,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "maxLength": 100
+            "minLength": 1,
+            "description": "Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace."
           }
         },
         "additionalProperties": false
@@ -11156,6 +13000,32 @@
           }
         },
         "additionalProperties": false
+      },
+      "WatchRoomClientEvent": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "description": "Client JSON message after a successful WebSocket upgrade. Unknown fields are ignored.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "join",
+              "ping",
+              "play",
+              "pause",
+              "seek"
+            ]
+          },
+          "position_sec": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Optional for all events. play, pause, and seek use the current room position when omitted, null, or negative; a nonnegative value sets the position in seconds. seek preserves paused state. join and ping ignore this field."
+          }
+        }
       }
     }
   }
