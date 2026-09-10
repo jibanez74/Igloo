@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -137,5 +138,39 @@ func TestSendfileSurvivesSessionMiddleware(t *testing.T) {
 
 	if !<-capable {
 		t.Error("handler received a writer without io.ReaderFrom; sendfile is defeated")
+	}
+}
+
+func TestSessionCommitControlsSendfile(t *testing.T) {
+	for _, failCommit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("commit failure=%t", failCommit), func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			defer app.DB.Close()
+			if failCommit {
+				_, err := app.DB.Exec(`CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'private storage failure'); END`)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			recorder := httptest.NewRecorder()
+			target := &countingReaderFrom{ResponseWriter: recorder}
+			var copyErr error
+			handler := app.LoadAndSaveSession(restoreSendfile(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				app.SessionManager.Put(r.Context(), cookieUserID, int64(1))
+				w.Header().Set("Content-Length", "7")
+				_, copyErr = w.(io.ReaderFrom).ReadFrom(bytes.NewReader([]byte("payload")))
+			})))
+			handler.ServeHTTP(target, httptest.NewRequest(http.MethodGet, "/probe", nil))
+			if failCommit {
+				if copyErr == nil || target.calls != 0 || target.body.Len() != 0 {
+					t.Fatalf("failed session streamed payload: calls=%d, error=%v", target.calls, copyErr)
+				}
+				if recorder.Code != http.StatusInternalServerError || recorder.Header().Get("Content-Length") != "" {
+					t.Fatalf("invalid session error headers: status=%d headers=%v", recorder.Code, recorder.Header())
+				}
+			} else if copyErr != nil || target.calls != 1 || target.body.String() != "payload" {
+				t.Fatalf("successful session lost sendfile: calls=%d, body=%q, error=%v", target.calls, target.body.String(), copyErr)
+			}
+		})
 	}
 }

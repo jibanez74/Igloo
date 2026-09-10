@@ -362,6 +362,15 @@ func (app *Application) InitSession() {
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
 	sessionManager.Cookie.Secure = app.Config.SessionCookieSecure
+	sessionManager.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
+		app.Logger.Error("session middleware failed", "error", err)
+		w.Header().Del("Content-Length")
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		writer, ok := w.(*sessionErrorResponseWriter)
+		if ok {
+			writer.failed = true
+		}
+	}
 
 	app.SessionManager = sessionManager
 

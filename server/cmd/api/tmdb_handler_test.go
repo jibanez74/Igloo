@@ -269,19 +269,31 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	}
 }
 
-func TestSearchTmdbMovies_HTTPUnavailable(t *testing.T) {
-	app := setupTestApp(t)
+func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
-
-	router := chi.NewRouter()
-	router.Post("/api/tmdb/movies/search", app.SearchTmdbMovies)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/tmdb/movies/search", strings.NewReader(`{"title":"Arrival"}`))
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503, body = %s", w.Code, w.Body.String())
+	admin := createTestUser(t, app, "Admin", "unavailable@example.com", true)
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, admin.ID)
+	for _, tc := range []struct{ method, path, operation string }{
+		{http.MethodPost, "/api/tmdb/movies/search", "searchTmdbMovies"},
+		{http.MethodPost, "/api/movies/1/tmdb-search", "tmdbSearchMovies"},
+		{http.MethodGet, "/api/tmdb/movies/in-theaters", "getMoviesInTheaters"},
+		{http.MethodGet, "/api/tmdb/movies/603", "getMovieByTmdbID"},
+	} {
+		t.Run(tc.operation, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			if tc.method == http.MethodPost {
+				request = newOpenAPIJSONRequest(tc.method, tc.path, `{"title":"Arrival"}`)
+			}
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+			if response.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want 503: %s", response.Code, response.Body.String())
+			}
+			assertOpenAPIExchange(t, tc.operation, request, response)
+		})
 	}
 }
 

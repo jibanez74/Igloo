@@ -35,8 +35,18 @@ Conventions:
   inline object. `JsonSuccess.data` is an open object, so an inline payload leaks an index
   signature into `Envelope["data"]` in generated TypeScript and produces anonymous inline
   types in other generated clients. Frontend types should alias the `*Data` schema directly.
-- Session-protected routes use `cookieAuth`; public routes set `security: []`.
-- Admin-only routes still use `cookieAuth`, include `403`, and state the admin requirement in the description.
+- Protected routes inherit the alternative `cookieAuth` and `bearerAuth` security
+  requirements: either a session cookie or an `Authorization: Bearer igd_...`
+  device token authenticates the request. Public routes set `security: []`.
+- Device management, quick-connect lookup and approval, and `GET /api/user/pin`
+  require a session cookie and override security with `cookieAuth` only.
+  Authenticated device tokens are rejected on these routes, even with a cookie.
+- Admin-only routes accept either authentication method, include `403`, and
+  state the admin requirement in the description.
+- Include middleware-generated errors in each operation, including authentication
+  database failures (`500`), as well as errors returned by the handler. Session
+  load and commit failures use a sanitized JSON envelope; failed commits must
+  suppress the handler's pending success response.
 - Streaming routes document `206` when range requests are supported.
 - HLS playlists, HLS segments, WebVTT subtitles, static assets, and WebSocket upgrades are documented even though they do not use the JSON envelope on success.
 - The server test suite validates live request/response exchanges with the
@@ -44,6 +54,9 @@ Conventions:
   `assertOpenAPIExchange` from a successful focused handler test. An unfiltered
   API package test run fails at package completion if any such operation was not
   observed; filtered `go test -run ...` commands skip that package-wide check.
+- The shared exchange validator rejects undocumented response statuses, including
+  HEAD and `304` responses that the underlying validator skips. Keep explicit
+  media header and bodyless-response assertions alongside schema validation.
 - HLS contract changes also require live `assertOpenAPIExchange` coverage for
   both personal and watch-room manifests and assets. Cover the non-JSON success
   variants the contract distinguishes: complete, single-range, multipart-range,

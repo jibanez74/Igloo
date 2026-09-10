@@ -1496,7 +1496,7 @@ export interface paths {
         get: operations["getPlaybackSettings"];
         /**
          * Update server playback settings
-         * @description Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage.
+         * @description Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage. Unknown fields and a null body return 400.
          */
         put: operations["updatePlaybackSettings"];
         post?: never;
@@ -1927,7 +1927,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record a track play event */
+        /**
+         * Record a track play event
+         * @description Records a play event and updates listening totals atomically. track_id must be positive and duration_played must be nonnegative; invalid values return 400 without recording a play.
+         */
         post: operations["recordPlayEvent"];
         delete?: never;
         options?: never;
@@ -4345,7 +4348,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Missing or invalid session. */
+        /** @description Missing or invalid credentials, or credentials not permitted for this operation. */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -5426,6 +5429,7 @@ export interface operations {
             200: components["responses"]["TmdbTheaterMoviesResponse"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getMovieByTmdbID: {
@@ -5443,6 +5447,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     proxyYouTubeThumbnail: {
@@ -6301,6 +6306,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     identifyMovie: {
@@ -7704,6 +7710,7 @@ export interface operations {
             200: components["responses"]["JsonSuccess"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
         };
     };
 }

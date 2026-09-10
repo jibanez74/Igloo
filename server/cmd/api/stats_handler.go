@@ -29,8 +29,12 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.TrackID == 0 {
+	if req.TrackID <= 0 {
 		helpers.ErrorJSON(w, errors.New("track_id is required"), http.StatusBadRequest)
+		return
+	}
+	if req.DurationPlayed < 0 {
+		helpers.ErrorJSON(w, errors.New("duration_played must be nonnegative"), http.StatusBadRequest)
 		return
 	}
 

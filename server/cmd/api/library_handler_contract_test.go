@@ -174,3 +174,47 @@ func TestListeningStatisticsPaginationConformsToOpenAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordPlayEventDurationBoundaries(t *testing.T) {
+	app := setupSessionTestApp(t)
+	defer app.DB.Close()
+	user := createTestUser(t, app, "Listener", "duration@example.com", false)
+	musicianID := createSearchMusician(t, app, "Artist")
+	albumID := createSearchAlbum(t, app, "Album", "Artist")
+	trackID := createSearchTrack(t, app, "Track", "/music/duration.flac", albumID, musicianID)
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, user.ID)
+	for _, tc := range []struct {
+		name              string
+		trackID, duration int64
+		status            int
+	}{
+		{"negative duration", trackID, -1, http.StatusBadRequest},
+		{"negative track", -1, 0, http.StatusBadRequest},
+		{"zero duration", trackID, 0, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"track_id":%d,"duration_played":%d,"completed":false}`, tc.trackID, tc.duration)
+			request := newOpenAPIJSONRequest(http.MethodPost, "/api/music/user-stats/play", body)
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+			if response.Code != tc.status {
+				t.Fatalf("status=%d, want %d: %s", response.Code, tc.status, response.Body.String())
+			}
+			if tc.status == http.StatusOK {
+				assertOpenAPIExchange(t, "recordPlayEvent", request, response)
+			} else {
+				assertOpenAPIResponse(t, "recordPlayEvent", request, response)
+				var count int
+				err := app.DB.QueryRow("SELECT count(*) FROM user_play_history").Scan(&count)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if count != 0 {
+					t.Fatal("rejected play event was stored")
+				}
+			}
+		})
+	}
+}

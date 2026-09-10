@@ -3,7 +3,7 @@
   "info": {
     "title": "Igloo API",
     "version": "0.1.0",
-    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, and PIN retrieval endpoints, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware can return JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation."
+    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on most routes that accept cookieAuth, except device-management, Quick Connect lookup/approval, and PIN retrieval endpoints, which require a cookie session. See each operation's security block for route-specific requirements. Authentication and session middleware failures return sanitized JSON error envelopes even on media, static-file, subtitle, image-proxy, HLS, and WebSocket routes. HEAD responses never include a body, including errors; their Content-Type describes the corresponding GET representation."
   },
   "servers": [
     {
@@ -1265,6 +1265,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }
@@ -1293,6 +1296,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }
@@ -2733,6 +2739,9 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }
@@ -3756,7 +3765,7 @@
           "Settings"
         ],
         "summary": "Update server playback settings",
-        "description": "Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage.",
+        "description": "Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage. Unknown fields and a null body return 400.",
         "operationId": "updatePlaybackSettings",
         "requestBody": {
           "$ref": "#/components/requestBodies/UpdatePlaybackSettingsRequest"
@@ -4849,7 +4858,8 @@
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
-        }
+        },
+        "description": "Records a play event and updates listening totals atomically. track_id must be positive and duration_played must be nonnegative; invalid values return 400 without recording a play."
       }
     },
     "/api/music/user-stats/overview": {
@@ -5038,6 +5048,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -7087,7 +7100,7 @@
         }
       },
       "Unauthorized": {
-        "description": "Missing or invalid session.",
+        "description": "Missing or invalid credentials, or credentials not permitted for this operation.",
         "content": {
           "application/json": {
             "schema": {
