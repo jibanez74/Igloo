@@ -52,12 +52,15 @@ func (s *Scanner) prepareFile(ctx context.Context, job probeJob) probeResult {
 	}
 	job.file.Size = result.inspection.Fingerprint.Size
 	result.resolved, result.err = s.resolveLocalMovie(ctx, job.file)
+	validationErr := result.inspection.Validate(ctx)
+	if validationErr != nil {
+		result.err = validationErr
+	}
 	if result.err == nil && result.resolved.observed.ID != job.baseline.ID {
 		result.err = &scanner.FileDeferral{Reason: scanner.FileChanged}
 	}
 	if result.err == nil {
 		result.resolved.inspection = result.inspection
-		result.err = result.inspection.Validate(ctx)
 	}
 	return result
 }

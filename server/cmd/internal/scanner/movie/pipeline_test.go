@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -280,6 +281,136 @@ func TestDeferredRetryEligibilityAndAccounting(t *testing.T) {
 				t.Fatalf("eligible retry failed: waits=%d calls=%d status=%+v", waits, calls, status)
 			}
 		})
+	}
+}
+
+func TestFailedMovieProbeValidation(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		mutation   string
+		failures   int
+		wantCalls  int
+		wantWaits  int
+		wantFailed int
+		wantDefer  int
+	}{
+		{name: "truncate then recover", mutation: "truncate", failures: 1, wantCalls: 2, wantWaits: 1},
+		{name: "replace then recover", mutation: "replace", failures: 1, wantCalls: 2, wantWaits: 1},
+		{name: "truncate through retry limit", mutation: "truncate", failures: 3, wantCalls: 3, wantWaits: 2, wantDefer: 1},
+		{name: "replace through retry limit", mutation: "replace", failures: 3, wantCalls: 3, wantWaits: 2, wantDefer: 1},
+		{name: "stable probe failure", failures: 1, wantCalls: 1, wantFailed: 1},
+	} {
+		for _, existing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/existing=%v", test.name, existing), func(t *testing.T) {
+				fixture := setupMovieScanner(t)
+				defer fixture.db.Close()
+				s := fixture.scanner
+				root := t.TempDir()
+				path := filepath.Join(root, "movie.mkv")
+				err := os.WriteFile(path, []byte("original media"), 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertPreserved := func() {
+					t.Helper()
+					if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 0 {
+						t.Error("failed probe imported a movie")
+					}
+				}
+				if existing {
+					s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+					s.runMovieScan(root)
+					_, err = s.db.Exec("UPDATE movies SET title='retained', updated_at='2000-01-01 00:00:00'")
+					if err != nil {
+						t.Fatal(err)
+					}
+					before, err := readTestMovieByPath(context.Background(), s.queries, path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					baseline, _, err := s.loadMovieScanIndex(context.Background())
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertPreserved = func() {
+						t.Helper()
+						after, err := readTestMovieByPath(context.Background(), s.queries, path)
+						if err != nil || !reflect.DeepEqual(before, after) {
+							t.Errorf("failed probe changed catalog: before=%+v after=%+v err=%v", before, after, err)
+						}
+						stored, _, err := s.loadMovieScanIndex(context.Background())
+						if err != nil || !reflect.DeepEqual(baseline, stored) {
+							t.Errorf("failed probe changed fingerprint: %v", err)
+						}
+					}
+					// Force a technical update without changing the saved baseline.
+					err = os.WriteFile(path, []byte("changed media"), 0600)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				// Start past initial eligibility so every deferral comes from a failed probe.
+				now := time.Now().Add(2 * time.Minute)
+				s.now = func() time.Time { return now }
+				calls, waits, invalidations := 0, 0, 0
+				s.invalidateCommittedMovie = func(int64) { invalidations++ }
+				s.waitForRetry = func(ctx context.Context, delay time.Duration) error {
+					status := s.Status()
+					if delay != scanner.FileQuietPeriod || status.Deferred != 1 || status.Failed != 0 || status.Processed != 1 || status.IssueCount != 1 {
+						t.Errorf("failed probe was not deferred until eligible: delay=%v status=%+v", delay, status)
+					}
+					assertPreserved()
+					if invalidations != 0 {
+						t.Error("failed probe invalidated playback caches")
+					}
+					waits++
+					now = now.Add(delay)
+					return ctx.Err()
+				}
+				s.ffprobe = &fingerprintProbe{callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+					calls++
+					if calls > test.failures {
+						return movieScannerMetadataFixture("240"), nil
+					}
+					var err error
+					switch test.mutation {
+					case "truncate":
+						err = os.Truncate(path, int64(4-calls))
+					case "replace":
+						err = os.WriteFile(path+".new", []byte("replacement media"), 0600)
+						if err == nil {
+							err = os.Rename(path+".new", path)
+						}
+					}
+					if err != nil {
+						t.Errorf("mutate file during probe: %v", err)
+					}
+					return nil, errors.New("ordinary probe failure")
+				}}
+				s.runMovieScan(root)
+				status := s.Status()
+				if calls != test.wantCalls || waits != test.wantWaits || status.Total != 1 || status.Processed != 1 || status.Failed != test.wantFailed || status.Deferred != test.wantDefer {
+					t.Fatalf("probe retry accounting: calls=%d waits=%d status=%+v", calls, waits, status)
+				}
+				if test.wantFailed+test.wantDefer > 0 {
+					assertPreserved()
+					if invalidations != 0 || status.Imported != 0 || status.Updated != 0 || status.IssueCount != 1 || status.State != "completed-with-issues" {
+						t.Fatalf("failed probe outcome: invalidations=%d status=%+v", invalidations, status)
+					}
+					return
+				}
+				wantImported, wantUpdated := 1, 0
+				if existing {
+					wantImported, wantUpdated = 0, 1
+				}
+				if status.Imported != wantImported || status.Updated != wantUpdated || status.IssueCount != 0 || len(status.Issues) != 0 || invalidations != 1 {
+					t.Fatalf("recovery outcome: invalidations=%d status=%+v", invalidations, status)
+				}
+				if countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE duration=240") != 1 || countScannerRows(t, s.db, "SELECT count(*) FROM movie_file_fingerprints") != 1 {
+					t.Fatal("stable retry did not commit movie and fingerprint")
+				}
+			})
+		}
 	}
 }
 
