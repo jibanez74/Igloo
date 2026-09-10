@@ -145,7 +145,7 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resolved.inspection.Close()
-	err = bare.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err = bare.persistLocalMovie(context.Background(), newMovieScanContext(nil), resolved.localMovie)
 	if err != nil {
 		t.Fatalf("persist movie with bare dependencies: %v", err)
 	}
@@ -170,12 +170,12 @@ func TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 
 	scan := newMovieScanContext(nil)
-	first, _, failures := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv", Size: 5}})
+	first, _, failures, _ := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv", Size: 5}})
 	if first != 1 || failures != 0 {
 		t.Fatal("initial import failed")
 	}
 	ffprobeStub.calls = 0
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 
@@ -215,7 +215,7 @@ func TestProcessMoviesBatchRollsBackInvalidMovieFile(t *testing.T) {
 	}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
 
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 
@@ -238,7 +238,7 @@ func TestProcessMoviesBatchRollbackLeavesScanCachesUnpolluted(t *testing.T) {
 		t.Fatalf("write movie: %v", err)
 	}
 
-	// No video stream, so persistResolvedMovieTx fails after the genre and
+	// No video stream, so persistLocalMovie fails after the genre and
 	// artist caches were already written inside the transaction.
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{
 		result: &ffprobe.FfprobeResult{
@@ -262,7 +262,7 @@ func TestProcessMoviesBatchRollbackLeavesScanCachesUnpolluted(t *testing.T) {
 	}
 
 	scan := newMovieScanContext(nil)
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 
@@ -311,7 +311,7 @@ func TestRunMovieScanDeletesMissingMovieWithoutFingerprint(t *testing.T) {
 	}
 
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
-	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
+	testScanner.scanner.scan(testScanner.moviesDir.String)
 
 	_, err = testScanner.queries.GetMovieByID(ctx, movie.ID)
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -343,7 +343,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
 
-	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
+	testScanner.scanner.scan(testScanner.moviesDir.String)
 
 	if ffprobeStub.calls != len(files) {
 		t.Fatalf("ffprobe calls = %d, want %d", ffprobeStub.calls, len(files))
@@ -387,7 +387,7 @@ func TestRunMovieScanAccountsForVideoFilesAndLogsCompletion(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
 
-	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
+	testScanner.scanner.scan(testScanner.moviesDir.String)
 
 	if ffprobeStub.calls != scanner.BatchSize+1 {
 		t.Fatalf("ffprobe calls = %d, want %d video files only", ffprobeStub.calls, scanner.BatchSize+1)

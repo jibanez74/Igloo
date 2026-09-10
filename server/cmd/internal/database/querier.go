@@ -21,7 +21,6 @@ type Querier interface {
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error)
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
-	CountMovieTmdbRetries(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
@@ -325,6 +324,7 @@ type Querier interface {
 	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
 	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
 	ReconcileMusicArtistSort(ctx context.Context, id int64) error
+	RecordMovieTmdbMiss(ctx context.Context, arg RecordMovieTmdbMissParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================

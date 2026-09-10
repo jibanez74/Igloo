@@ -578,8 +578,15 @@ func TestAmbiguousSearchPartialFailuresAndCancellation(t *testing.T) {
 	}
 }
 
-func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (*resolvedMovie, error) {
-	resolved, err := s.resolveLocalMovie(ctx, file)
+// resolvedMovieFile joins the local probe and the TMDB lookup for one file so
+// resolution tests can assert on both without running the persistence phases.
+type resolvedMovieFile struct {
+	*localMovie
+	tmdbMovie *tmdb.TmdbMovie
+}
+
+func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (*resolvedMovieFile, error) {
+	local, err := s.resolveLocalMovie(ctx, file, movieScanEntry{})
 	if err != nil {
 		return nil, err
 	}
@@ -588,9 +595,9 @@ func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (
 	if searchTitle == "" {
 		searchTitle = titleYear.Title
 	}
-	resolved.tmdbMovie, err = s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year, resolved.observed.TmdbID)
+	details, err := s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year, sql.NullInt64{})
 	if err != nil {
 		return nil, err
 	}
-	return resolved, nil
+	return &resolvedMovieFile{localMovie: local, tmdbMovie: details}, nil
 }

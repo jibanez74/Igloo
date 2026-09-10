@@ -56,7 +56,7 @@ func TestMovieLibraryBenchmark(t *testing.T) {
 		runtime.ReadMemStats(&before)
 		start := time.Now()
 		t.Logf("%s initial I/O: %s", run, processMeasurement("/proc/self/io"))
-		s.runMovieScan(root)
+		s.scan(root)
 		runtime.ReadMemStats(&after)
 		status := s.Status()
 		t.Logf("%s: elapsed=%s total=%d processed=%d imported=%d unchanged=%d failed=%d deferred=%d heap=%d allocated=%d", run, time.Since(start), status.Total, status.Processed, status.Imported, status.Unchanged, status.Failed, status.Deferred, after.HeapAlloc, after.TotalAlloc-before.TotalAlloc)

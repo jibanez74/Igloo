@@ -20,12 +20,14 @@ func (s *Scanner) Start() StartResult {
 		return result
 	}
 
+	// The run is published before the goroutine starts so a status poll right
+	// after the request already sees it.
 	s.beginReport()
 
-	// Add/Done are paired here so runMovieScan stays callable on its own.
 	s.wait.Add(1)
 	go func() {
 		defer s.wait.Done()
+		defer s.guard.Finish()
 		s.runMovieScan(directory.String)
 	}()
 	result.Status = StartStarted
@@ -42,9 +44,9 @@ func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]movieScanE
 	for _, row := range rows {
 		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
 		index[filepath.Clean(row.FilePath)] = movieScanEntry{
-			FileFingerprint: scanner.FileFingerprint{Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
-				Device: row.Device.String, Inode: row.Inode.String},
-			ID: row.ID, FilePath: row.FilePath, TmdbID: row.TmdbID, PendingRetry: row.PendingRetry, HasFingerprint: row.MtimeNs.Valid,
+			FileFingerprint: scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode),
+			ID:              row.ID, FilePath: row.FilePath, TmdbID: row.TmdbID, PendingRetry: row.PendingRetry,
+			RetryAttempts: row.RetryAttempts.Int64, LastAttemptAt: row.LastAttemptAt, HasFingerprint: row.MtimeNs.Valid,
 		}
 	}
 	return index, files, nil

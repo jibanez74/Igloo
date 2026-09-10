@@ -79,7 +79,7 @@ func TestMoviePipeline418Files(t *testing.T) {
 				return movieScannerMetadataFixture("120"), nil
 			}}
 			done := make(chan struct{})
-			go func() { s.runMovieScan(root); close(done) }()
+			go func() { s.scan(root); close(done) }()
 			awaitScanSignal(t, entered)
 			awaitScanSignal(t, entered)
 			status := s.Status()
@@ -115,7 +115,7 @@ func TestMoviePipeline418Files(t *testing.T) {
 			if len(status.Issues) != 1 || status.Issues[0].Filename != "movie-017.mkv" || strings.Contains(status.Issues[0].Reason, root) {
 				t.Fatalf("unsafe issues: %+v", status.Issues)
 			}
-			s.runMovieScan(root)
+			s.scan(root)
 			status = s.Status()
 			if status.Unchanged != 417 || status.Failed != 1 || calls.Load() != 419 {
 				t.Fatalf("unchanged rescan reprobed movies: %+v calls=%d", status, calls.Load())
@@ -156,7 +156,7 @@ func TestLocalMoviesAvailableBeforeBlockedEnrichmentAndCancellation(t *testing.T
 		return nil, ctx.Err()
 	}}
 	done := make(chan struct{})
-	go func() { s.runMovieScan(root); close(done) }()
+	go func() { s.scan(root); close(done) }()
 	awaitScanSignal(t, entered)
 	awaitScanSignal(t, entered)
 	if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 5 || countScannerRows(t, s.db, "SELECT count(*) FROM video_streams") != 5 {
@@ -184,7 +184,7 @@ func TestEnrichmentOutagesNoMatchesAndRecovery(t *testing.T) {
 			s.ffprobe = probe
 			var calls atomic.Int32
 			s.tmdb = &controlledTmdb{search: func(context.Context) ([]tmdb.TmdbMovie, error) { calls.Add(1); return nil, providerErr }}
-			s.runMovieScan(root)
+			s.scan(root)
 			status := s.Status()
 			noMatch := errors.Is(providerErr, tmdb.ErrNoMoviesFound)
 			authentication, _ := tmdb.ProviderFailure(providerErr)
@@ -206,12 +206,12 @@ func TestEnrichmentOutagesNoMatchesAndRecovery(t *testing.T) {
 			}
 			details := retryMovieFixture(t)
 			s.tmdb = &stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42, Title: "Movie"}}, detailMovies: map[int]tmdb.TmdbMovie{42: details}}
-			s.runMovieScan(root)
+			s.scan(root)
 			status = s.Status()
 			if status.Enriched != 20 || status.Unchanged != 20 || status.State != "completed" || probe.calls != 20 || status.PendingEnrichment != 0 {
 				t.Fatalf("metadata-only recovery: %+v probes=%d", status, probe.calls)
 			}
-			s.runMovieScan(root)
+			s.scan(root)
 			if s.Status().EnrichmentTotal != 0 || probe.calls != 20 {
 				t.Fatal("unchanged identified movies triggered unnecessary work")
 			}
@@ -226,7 +226,7 @@ func TestMovieStatusIssueLimitAndFatalDiscovery(t *testing.T) {
 	s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return nil, errors.New("secret raw error")
 	}}
-	s.runMovieScan(createMovieLibrary(t, 110))
+	s.scan(createMovieLibrary(t, 110))
 	status := s.Status()
 	if status.IssueCount != 110 || len(status.Issues) != 100 || status.Failed != 110 {
 		t.Fatalf("issue cap: %+v", status)
@@ -235,7 +235,7 @@ func TestMovieStatusIssueLimitAndFatalDiscovery(t *testing.T) {
 	if s.Status().Issues[0].Reason == "mutated" {
 		t.Fatal("status shares mutable issues")
 	}
-	s.runMovieScan(filepath.Join(t.TempDir(), "missing"))
+	s.scan(filepath.Join(t.TempDir(), "missing"))
 	status = s.Status()
 	if status.State != "failed" || status.Total != 0 || status.RunID == "" || status.FinishedAt == nil {
 		t.Fatalf("fatal discovery: %+v", status)
@@ -268,7 +268,7 @@ func TestDeferredRetryEligibilityAndAccounting(t *testing.T) {
 				}
 				return movieScannerMetadataFixture("120"), nil
 			}}
-			s.runMovieScan(root)
+			s.scan(root)
 			status := s.Status()
 			if status.Total != 1 || status.Processed != 1 || status.Failed != 0 {
 				t.Fatalf("retry counted a file twice: %+v", status)
@@ -319,7 +319,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 				}
 				if existing {
 					s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
-					s.runMovieScan(root)
+					s.scan(root)
 					_, err = s.db.Exec("UPDATE movies SET title='retained', updated_at='2000-01-01 00:00:00'")
 					if err != nil {
 						t.Fatal(err)
@@ -387,7 +387,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 					}
 					return nil, errors.New("ordinary probe failure")
 				}}
-				s.runMovieScan(root)
+				s.scan(root)
 				status := s.Status()
 				if calls != test.wantCalls || waits != test.wantWaits || status.Total != 1 || status.Processed != 1 || status.Failed != test.wantFailed || status.Deferred != test.wantDefer {
 					t.Fatalf("probe retry accounting: calls=%d waits=%d status=%+v", calls, waits, status)
@@ -429,7 +429,7 @@ func TestCancellationDuringDeferredWait(t *testing.T) {
 		return waitForMovieRetry(ctx, delay)
 	}
 	done := make(chan struct{})
-	go func() { s.runMovieScan(root); close(done) }()
+	go func() { s.scan(root); close(done) }()
 	awaitScanSignal(t, entered)
 	if s.Status().Phase != "retry-wait" {
 		t.Error("missing retry phase")
@@ -451,7 +451,7 @@ func TestCancellationImmediatelyAfterCommitRetainsAccounting(t *testing.T) {
 	s.scanContext = ctx
 	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 	s.invalidateCommittedMovie = func(int64) { cancel() }
-	s.runMovieScan(root)
+	s.scan(root)
 	status := s.Status()
 	if status.State != "canceled" || status.Imported != 1 || status.Processed != 1 || status.PendingEnrichment != 1 {
 		t.Fatalf("lost committed accounting: %+v", status)
@@ -485,7 +485,7 @@ func TestCancellationDuringTechnicalTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.runMovieScan(root)
+	s.scan(root)
 	if s.Status().State != "canceled" || s.Status().Imported != 0 {
 		t.Fatalf("transaction cancellation: %+v", s.Status())
 	}
@@ -500,7 +500,7 @@ func TestEnrichmentRechecksPersistedBaseline(t *testing.T) {
 	s := fixture.scanner
 	root := createMovieLibrary(t, 1)
 	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
-	s.runMovieScan(root)
+	s.scan(root)
 	client := &hookedMovieTmdb{stubMovieScannerTmdb: stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42}}, detailMovies: map[int]tmdb.TmdbMovie{42: retryMovieFixture(t)}}}
 	client.hook = func() {
 		_, err := s.db.Exec("UPDATE movie_file_fingerprints SET inode='replacement'")
@@ -509,7 +509,7 @@ func TestEnrichmentRechecksPersistedBaseline(t *testing.T) {
 		}
 	}
 	s.tmdb = client
-	s.runMovieScan(root)
+	s.scan(root)
 	if s.Status().Enriched != 0 || s.Status().PendingEnrichment != 1 {
 		t.Fatalf("stale baseline accepted: %+v", s.Status())
 	}
@@ -533,7 +533,7 @@ func TestRetryWindowStopsDispatchingDeferredFiles(t *testing.T) {
 		clock.Add(int64(121 * time.Second))
 		return movieScannerMetadataFixture("120"), nil
 	}}
-	s.runMovieScan(root)
+	s.scan(root)
 	status := s.Status()
 	if calls.Load() > 2 || status.Imported < 1 || status.Processed != 10 || status.Imported+status.Deferred != 10 {
 		t.Fatalf("dispatched work after retry window: calls=%d status=%+v", calls.Load(), status)
@@ -564,7 +564,7 @@ func TestMovieReplacementAndSymlinkRetarget(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			s.runMovieScan(root)
+			s.scan(root)
 			original, err := readTestMovieByPath(context.Background(), s.queries, path)
 			if err != nil {
 				t.Fatal(err)
@@ -595,7 +595,7 @@ func TestMovieReplacementAndSymlinkRetarget(t *testing.T) {
 			}
 			invalidations := 0
 			s.invalidateCommittedMovie = func(int64) { invalidations++ }
-			s.runMovieScan(root)
+			s.scan(root)
 			current, err := readTestMovieByPath(context.Background(), s.queries, path)
 			if err != nil {
 				t.Fatal(err)

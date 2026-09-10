@@ -22,19 +22,52 @@ import (
 	"igloo/cmd/internal/tmdb"
 )
 
+// TMDB no-match backoff: after a second definitive miss, each further miss
+// doubles the wait before the movie is searched again, so an unidentifiable
+// file does not cost a lookup on every scan. Provider failures are not misses.
+const (
+	tmdbMissBackoff    = 24 * time.Hour
+	tmdbMissBackoffMax = 7 * 24 * time.Hour
+	tmdbLookupTimeout  = 30 * time.Second
+)
+
 type movieScanEntry struct {
 	scanner.FileFingerprint
 	ID             int64
 	FilePath       string
 	TmdbID         sql.NullInt64
 	PendingRetry   bool
+	RetryAttempts  int64
+	LastAttemptAt  sql.NullInt64
 	HasFingerprint bool
 }
 
+// pendingEnrichment reports whether the movie still lacks a confirmed TMDB
+// match or was re-queued by a technical change.
+func (e movieScanEntry) pendingEnrichment() bool {
+	return e.PendingRetry || !e.TmdbID.Valid
+}
+
+// enrichmentEligible grants the first miss a retry on the next scan; from the
+// second miss on, the wait doubles from tmdbMissBackoff up to tmdbMissBackoffMax.
+func (e movieScanEntry) enrichmentEligible(now time.Time) bool {
+	if !e.pendingEnrichment() {
+		return false
+	}
+	if e.RetryAttempts <= 1 || !e.LastAttemptAt.Valid {
+		return true
+	}
+	shift := min(e.RetryAttempts-2, 8)
+	backoff := min(tmdbMissBackoff<<shift, tmdbMissBackoffMax)
+	eligibleAt := time.Unix(e.LastAttemptAt.Int64, 0).Add(backoff)
+	return !now.Before(eligibleAt)
+}
+
 type movieScanContext struct {
-	enriched  int
-	deferred  int
-	attempted map[string]bool
+	// enriched and pending are derived from movieIndex and published by the
+	// scan report; they change only through setEntry and deleteEntry.
+	enriched int
+	pending  int
 	// movieIndex holds catalog identities, retry state, and successful fingerprints
 	// by cleaned file path. It is only written after a
 	// successful commit, never inside a transaction, so it is shared (not copied)
@@ -60,12 +93,33 @@ func newMovieScanContext(movieIndex map[string]movieScanEntry) *movieScanContext
 
 	// Take ownership of movieIndex: loadMovieScanIndex already cleaned its keys
 	// and the caller discards its reference, so no defensive copy is needed.
-	return &movieScanContext{
+	scan := &movieScanContext{
 		movieIndex: movieIndex,
-		attempted:  make(map[string]bool),
 		genreIDs:   scanner.NewScanCache[string, int64](),
 		artistIDs:  scanner.NewScanCache[int64, int64](),
 	}
+	for _, entry := range movieIndex {
+		if entry.pendingEnrichment() {
+			scan.pending++
+		}
+	}
+	return scan
+}
+
+func (scan *movieScanContext) setEntry(path string, entry movieScanEntry) {
+	scan.deleteEntry(path)
+	if entry.pendingEnrichment() {
+		scan.pending++
+	}
+	scan.movieIndex[path] = entry
+}
+
+func (scan *movieScanContext) deleteEntry(path string) {
+	previous, exists := scan.movieIndex[path]
+	if exists && previous.pendingEnrichment() {
+		scan.pending--
+	}
+	delete(scan.movieIndex, path)
 }
 
 func (scan *movieScanContext) clone() *movieScanContext {
@@ -85,25 +139,26 @@ func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
 // Filename interpretation, local probing, and TMDB matching
 // ---------------------------------------------------------------------------
 
-type resolvedMovie struct {
-	observed     database.GetMovieByPathRow
-	metadataOnly bool
-	applied      bool
-	inspection   *scanner.FileInspection
-	baseline     scanner.FileFingerprint
-	pending      bool
-	params       database.UpsertMovieParams
-	tmdbMovie    *tmdb.TmdbMovie
-	streams      []ffprobe.Stream
-	chapters     []ffprobe.Chapter
+// localMovie is a probed file waiting to be committed. baseline is the catalog
+// identity the scan index held when the probe started; persistence rejects
+// the result if the row moved on since.
+type localMovie struct {
+	baseline   movieScanEntry
+	inspection *scanner.FileInspection
+	params     database.UpsertMovieParams
+	streams    []ffprobe.Stream
+	chapters   []ffprobe.Chapter
 }
 
-func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile) (*resolvedMovie, error) {
-	observed, err := s.queries.GetMovieByPath(ctx, file.Path)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
+// enrichedMovie is a completed TMDB lookup for a committed movie. A nil
+// tmdbMovie is a definitive no-match.
+type enrichedMovie struct {
+	baseline   movieScanEntry
+	inspection *scanner.FileInspection
+	tmdbMovie  *tmdb.TmdbMovie
+}
 
+func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile, baseline movieScanEntry) (*localMovie, error) {
 	titleYear := movieTitleYear(file.Path)
 	info, err := s.ffprobe.GetMetadata(ctx, file.Path)
 	if err != nil {
@@ -138,8 +193,8 @@ func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile) 
 		}
 	}
 
-	return &resolvedMovie{
-		observed: observed,
+	return &localMovie{
+		baseline: baseline,
 		params:   params,
 		streams:  info.Streams,
 		chapters: info.Chapters,
@@ -165,7 +220,7 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 	if s.tmdb == nil {
 		return nil, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, tmdbLookupTimeout)
 	defer cancel()
 	movie := &tmdb.TmdbMovie{TmdbID: int(identity.Int64)}
 	if !identity.Valid {

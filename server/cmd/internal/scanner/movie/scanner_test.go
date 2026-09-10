@@ -274,6 +274,18 @@ func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
 	return movie
 }
 
+// scan runs one complete library scan synchronously, publishing the run the
+// way Start does before handing off to the scan goroutine.
+func (s *Scanner) scan(directory string) {
+	s.beginReport()
+	s.runMovieScan(directory)
+}
+
+// enrichmentAttempted mirrors the pipeline's one-lookup-per-scan guarantee,
+// which enrichMovies gets structurally by running once, for fixtures that push
+// the same file through processFile several times on one scan context.
+var enrichmentAttempted = map[*movieScanContext]map[string]bool{}
+
 // These focused persistence fixtures execute both phases for one file. Full
 // pipeline tests below exercise scheduling, accounting, and phase separation.
 func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file scanner.ScanFile) (scanner.FileOutcome, error) {
@@ -290,16 +302,19 @@ func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file 
 		return outcome, nil
 	}
 	if result.resolved != nil {
-		err := s.persistResolvedMovie(ctx, scan, result.resolved)
+		err := s.persistLocalMovie(ctx, scan, result.resolved)
 		if err != nil {
 			return outcome, err
 		}
 	}
 	baseline := scan.movieIndex[file.Path]
-	if s.tmdb == nil || scan.attempted[file.Path] || (baseline.TmdbID.Valid && !baseline.PendingRetry) {
+	if s.tmdb == nil || !baseline.enrichmentEligible(s.now()) || enrichmentAttempted[scan][file.Path] {
 		return outcome, nil
 	}
-	scan.attempted[file.Path] = true
+	if enrichmentAttempted[scan] == nil {
+		enrichmentAttempted[scan] = map[string]bool{}
+	}
+	enrichmentAttempted[scan][file.Path] = true
 	enriched := s.prepareEnrichment(ctx, enrichmentJob{file: file, baseline: baseline})
 	if enriched.inspection != nil {
 		defer enriched.inspection.Close()
@@ -310,19 +325,20 @@ func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file 
 		}
 		return outcome, nil
 	}
-	return outcome, s.persistResolvedMovie(ctx, scan, enriched.resolved)
+	_, err := s.persistEnrichment(ctx, scan, enriched.resolved)
+	return outcome, err
 }
 
-func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, failures int) {
+func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, failures, deferred int) {
 	for _, file := range files {
 		outcome, err := s.processFile(ctx, scan, file)
 		if ctx.Err() != nil {
 			return
 		}
-		var deferred *scanner.FileDeferral
-		isDeferred := errors.As(err, &deferred)
+		var deferral *scanner.FileDeferral
+		isDeferred := errors.As(err, &deferral)
 		if isDeferred || (err == nil && outcome == scanner.FileDeferred) {
-			scan.deferred++
+			deferred++
 		} else if err != nil {
 			failures++
 		} else if outcome == scanner.FileUnchanged {

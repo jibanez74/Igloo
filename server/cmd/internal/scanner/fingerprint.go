@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +65,12 @@ type FileInspection struct {
 	path         string
 	resolvedPath string
 	entry        FileFingerprint
+}
+
+// StoredFingerprint rebuilds the persisted baseline from the nullable scan
+// index columns shared by the movie and music catalogs.
+func StoredFingerprint(size int64, mtimeNS, ctimeNS sql.NullInt64, device, inode sql.NullString) FileFingerprint {
+	return FileFingerprint{Size: size, MtimeNS: mtimeNS.Int64, CtimeNS: ctimeNS.Int64, Device: device.String, Inode: inode.String}
 }
 
 func (r *FileInspection) Close() error {

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"igloo/cmd/internal/database"
 )
 
 // CatalogFile retains the original database identity even when paths need cleaning.
@@ -130,4 +132,70 @@ func (r *Reconciliation) ConfirmMissing(ctx context.Context, file CatalogFile) (
 	}
 	err = r.ValidateRoot(ctx)
 	return missing && err == nil, err
+}
+
+// errDeletionSkipped aborts a DeleteConfirmed transaction without reporting an
+// error: the row was already gone, or the file reappeared before commit.
+var errDeletionSkipped = errors.New("deletion skipped")
+
+// DeleteUnseen deletes every catalog file the walk did not see, through del,
+// and returns how many deletions committed. The first error stops the loop.
+func (r *Reconciliation) DeleteUnseen(ctx context.Context, del func(CatalogFile) (bool, error)) (int, error) {
+	err := r.ValidateRoot(ctx)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, file := range r.Unseen() {
+		committed, err := del(file)
+		if err != nil {
+			return deleted, err
+		}
+		if committed {
+			deleted++
+		}
+	}
+	return deleted, ctx.Err()
+}
+
+// DeleteConfirmed confirms the file is missing, runs del inside a transaction,
+// confirms again immediately before commit, and reports whether the deletion
+// committed. del returns false when the catalog row no longer matches;
+// committed runs under the scanner mutex once the deletion is durable.
+func (r *Reconciliation) DeleteConfirmed(
+	ctx context.Context,
+	tx TxRunner,
+	file CatalogFile,
+	del func(*database.Queries) (bool, error),
+	committed func(),
+) (bool, error) {
+	missing, err := r.ConfirmMissing(ctx, file)
+	if err != nil || !missing {
+		return false, err
+	}
+	err = tx.Run(ctx, func(qtx *database.Queries) error {
+		deleted, err := del(qtx)
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			return errDeletionSkipped
+		}
+		missing, err := r.ConfirmMissing(ctx, file)
+		if err != nil {
+			return err
+		}
+		if !missing {
+			return errDeletionSkipped
+		}
+		return nil
+	}, committed)
+	skipped := errors.Is(err, errDeletionSkipped)
+	if skipped {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

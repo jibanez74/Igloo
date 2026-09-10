@@ -118,7 +118,7 @@ func TestMovieScanCancelsRunningSubprocess(t *testing.T) {
 	defer cancel()
 	s.scanContext = ctx
 	done := make(chan struct{})
-	go func() { s.runMovieScan(root); close(done) }()
+	go func() { s.scan(root); close(done) }()
 	ticker := time.NewTicker(time.Millisecond)
 	defer ticker.Stop()
 	deadline := time.After(5 * time.Second)

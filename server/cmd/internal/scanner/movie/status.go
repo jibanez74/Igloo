@@ -7,11 +7,35 @@ import (
 	"time"
 )
 
+// ScanState and ScanPhase are the values published by Status; they mirror the
+// enums in docs/openapi.json.
+type ScanState string
+
+const (
+	StateIdle                ScanState = "idle"
+	StateRunning             ScanState = "running"
+	StateCompleted           ScanState = "completed"
+	StateCompletedWithIssues ScanState = "completed-with-issues"
+	StateCanceled            ScanState = "canceled"
+	StateFailed              ScanState = "failed"
+)
+
+type ScanPhase string
+
+const (
+	PhaseIdle       ScanPhase = "idle"
+	PhaseDiscovery  ScanPhase = "discovery"
+	PhaseLocal      ScanPhase = "local"
+	PhaseRetryWait  ScanPhase = "retry-wait"
+	PhaseCleanup    ScanPhase = "cleanup"
+	PhaseEnrichment ScanPhase = "enrichment"
+)
+
 // Status is the current or latest run. It contains no directory paths or raw errors.
 type Status struct {
 	RunID               string     `json:"run_id"`
-	State               string     `json:"state"`
-	Phase               string     `json:"phase"`
+	State               ScanState  `json:"state"`
+	Phase               ScanPhase  `json:"phase"`
 	StartedAt           *time.Time `json:"started_at"`
 	UpdatedAt           *time.Time `json:"updated_at"`
 	FinishedAt          *time.Time `json:"finished_at"`
@@ -35,15 +59,31 @@ type Status struct {
 }
 
 type Issue struct {
-	Filename string `json:"filename"`
-	Phase    string `json:"phase"`
-	Reason   string `json:"reason"`
+	Filename string    `json:"filename"`
+	Phase    ScanPhase `json:"phase"`
+	Reason   string    `json:"reason"`
 }
 
+// scanReport is owned by the scan goroutine. The enrichment counters are not
+// kept here: they derive from the scan context, which changes only on commit,
+// and syncCounts copies them before every publish.
 type scanReport struct {
 	status Status
 	issues map[string]Issue
 	active map[string]bool
+	scan   *movieScanContext
+}
+
+func (r *scanReport) syncCounts() {
+	if r.scan == nil {
+		return
+	}
+	r.status.Enriched = r.scan.enriched
+	r.status.PendingEnrichment = r.scan.pending
+}
+
+func (r *scanReport) issue(path string, phase ScanPhase, reason string) {
+	r.issues[string(phase)+":"+path] = Issue{Filename: filepath.Base(path), Phase: phase, Reason: reason}
 }
 
 func (s *Scanner) Status() Status {
@@ -65,7 +105,7 @@ func (s *Scanner) Status() Status {
 	result.ActiveFiles = append([]string{}, result.ActiveFiles...)
 	result.Issues = append([]Issue{}, result.Issues...)
 	if result.State == "" {
-		result.State, result.Phase = "idle", "idle"
+		result.State, result.Phase = StateIdle, PhaseIdle
 	}
 	return result
 }
@@ -73,12 +113,13 @@ func (s *Scanner) Status() Status {
 func (s *Scanner) beginReport() {
 	now := time.Now().UTC()
 	s.statusMu.Lock()
-	s.status = Status{RunID: rand.Text(), State: "running", Phase: "discovery", StartedAt: &now, UpdatedAt: &now}
+	s.status = Status{RunID: rand.Text(), State: StateRunning, Phase: PhaseDiscovery, StartedAt: &now, UpdatedAt: &now}
 	s.statusMu.Unlock()
 }
 
 func (s *Scanner) publish(report *scanReport) {
 	now := time.Now().UTC()
+	report.syncCounts()
 	report.status.UpdatedAt = &now
 	report.status.ActiveFiles = make([]string, 0, len(report.active))
 	for path := range report.active {
@@ -100,14 +141,10 @@ func (s *Scanner) publish(report *scanReport) {
 	s.statusMu.Unlock()
 }
 
-func (s *Scanner) phase(report *scanReport, phase string) {
+func (s *Scanner) phase(report *scanReport, phase ScanPhase) {
 	if report.status.Phase != phase {
 		s.logger.Info("movie scan phase", "run", report.status.RunID, "phase", phase)
 	}
 	report.status.Phase = phase
 	s.publish(report)
-}
-
-func (r *scanReport) issue(path, phase, reason string) {
-	r.issues[phase+":"+path] = Issue{Filename: filepath.Base(path), Phase: phase, Reason: reason}
 }

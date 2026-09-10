@@ -49,6 +49,7 @@ type Scanner struct {
 	scanContext                 context.Context
 	wait                        *sync.WaitGroup
 	scannerDBMu                 *sync.Mutex
+	tx                          scanner.TxRunner
 	currentMoviesDirectory      func() sql.NullString
 	invalidateCommittedMovie    func(int64)
 	invalidateDeletedWatchRooms func([]int64)
@@ -107,7 +108,8 @@ func New(deps Dependencies) *Scanner {
 		now: deps.Now, waitForRetry: waitForMovieRetry,
 		db: deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		tmdb: deps.Tmdb, scanContext: deps.ScanContext, wait: deps.Wait,
-		scannerDBMu: deps.ScannerDBMu, currentMoviesDirectory: deps.CurrentMoviesDirectory,
+		scannerDBMu: deps.ScannerDBMu, tx: scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
+		currentMoviesDirectory:      deps.CurrentMoviesDirectory,
 		invalidateCommittedMovie:    deps.InvalidateCommittedMovie,
 		invalidateDeletedWatchRooms: deps.InvalidateDeletedWatchRooms,
 	}

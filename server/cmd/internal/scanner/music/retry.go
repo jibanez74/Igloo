@@ -75,24 +75,16 @@ func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext) erro
 }
 
 func (s *Scanner) persistEnrichment(ctx context.Context, scan *musicScanContext, persist func(*database.Queries, *musicScanContext) error) error {
-	s.scannerDBMu.Lock()
-	defer s.scannerDBMu.Unlock()
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	txScan := scan.clone()
-	err = persist(s.queries.WithTx(tx), txScan)
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		return persist(qtx, txScan)
+	}, func() {
+		for id := range txScan.invalidatedTracks {
+			s.invalidateCommittedTrack(id)
+		}
+	})
 	if err != nil {
 		return err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-	for id := range txScan.invalidatedTracks {
-		s.invalidateCommittedTrack(id)
 	}
 	scan.mergeFrom(txScan)
 	return nil

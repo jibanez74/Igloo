@@ -45,9 +45,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countAdminsStmt, err = db.PrepareContext(ctx, countAdmins); err != nil {
 		return nil, fmt.Errorf("error preparing query CountAdmins: %w", err)
 	}
-	if q.countMovieTmdbRetriesStmt, err = db.PrepareContext(ctx, countMovieTmdbRetries); err != nil {
-		return nil, fmt.Errorf("error preparing query CountMovieTmdbRetries: %w", err)
-	}
 	if q.countMoviesForGenreStmt, err = db.PrepareContext(ctx, countMoviesForGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CountMoviesForGenre: %w", err)
 	}
@@ -597,6 +594,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.reconcileMusicArtistSortStmt, err = db.PrepareContext(ctx, reconcileMusicArtistSort); err != nil {
 		return nil, fmt.Errorf("error preparing query ReconcileMusicArtistSort: %w", err)
 	}
+	if q.recordMovieTmdbMissStmt, err = db.PrepareContext(ctx, recordMovieTmdbMiss); err != nil {
+		return nil, fmt.Errorf("error preparing query RecordMovieTmdbMiss: %w", err)
+	}
 	if q.recordPlayEventStmt, err = db.PrepareContext(ctx, recordPlayEvent); err != nil {
 		return nil, fmt.Errorf("error preparing query RecordPlayEvent: %w", err)
 	}
@@ -800,11 +800,6 @@ func (q *Queries) Close() error {
 	if q.countAdminsStmt != nil {
 		if cerr := q.countAdminsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countAdminsStmt: %w", cerr)
-		}
-	}
-	if q.countMovieTmdbRetriesStmt != nil {
-		if cerr := q.countMovieTmdbRetriesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing countMovieTmdbRetriesStmt: %w", cerr)
 		}
 	}
 	if q.countMoviesForGenreStmt != nil {
@@ -1722,6 +1717,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing reconcileMusicArtistSortStmt: %w", cerr)
 		}
 	}
+	if q.recordMovieTmdbMissStmt != nil {
+		if cerr := q.recordMovieTmdbMissStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing recordMovieTmdbMissStmt: %w", cerr)
+		}
+	}
 	if q.recordPlayEventStmt != nil {
 		if cerr := q.recordPlayEventStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing recordPlayEventStmt: %w", cerr)
@@ -2043,7 +2043,6 @@ type Queries struct {
 	adminUpdateUserStmt                         *sql.Stmt
 	clearMovieTmdbRetryStmt                     *sql.Stmt
 	countAdminsStmt                             *sql.Stmt
-	countMovieTmdbRetriesStmt                   *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
@@ -2227,6 +2226,7 @@ type Queries struct {
 	reconcileMusicAlbumSortStmt                 *sql.Stmt
 	reconcileMusicAlbumYearStmt                 *sql.Stmt
 	reconcileMusicArtistSortStmt                *sql.Stmt
+	recordMovieTmdbMissStmt                     *sql.Stmt
 	recordPlayEventStmt                         *sql.Stmt
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
@@ -2295,7 +2295,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
 		clearMovieTmdbRetryStmt:                     q.clearMovieTmdbRetryStmt,
 		countAdminsStmt:                             q.countAdminsStmt,
-		countMovieTmdbRetriesStmt:                   q.countMovieTmdbRetriesStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
@@ -2479,6 +2478,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		reconcileMusicAlbumSortStmt:                 q.reconcileMusicAlbumSortStmt,
 		reconcileMusicAlbumYearStmt:                 q.reconcileMusicAlbumYearStmt,
 		reconcileMusicArtistSortStmt:                q.reconcileMusicArtistSortStmt,
+		recordMovieTmdbMissStmt:                     q.recordMovieTmdbMissStmt,
 		recordPlayEventStmt:                         q.recordPlayEventStmt,
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,

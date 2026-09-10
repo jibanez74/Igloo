@@ -211,10 +211,9 @@ func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.Fi
 		if !row.MtimeNs.Valid {
 			continue
 		}
-		index[filepath.Clean(row.FilePath)] = scanner.FileFingerprint{
-			Size: row.Size, MtimeNS: row.MtimeNs.Int64, CtimeNS: row.CtimeNs.Int64,
-			Device: row.Device.String, Inode: row.Inode.String, SHA256: [32]byte(row.Sha256),
-		}
+		fingerprint := scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode)
+		fingerprint.SHA256 = [32]byte(row.Sha256)
+		index[filepath.Clean(row.FilePath)] = fingerprint
 	}
 	return index, files, nil
 }

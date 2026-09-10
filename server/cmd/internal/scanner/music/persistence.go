@@ -17,41 +17,28 @@ func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanConte
 		return 0, fmt.Errorf("missing file inspection")
 	}
 	txScan := scan.clone()
-
-	s.scannerDBMu.Lock()
-	defer s.scannerDBMu.Unlock()
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to start music track transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	qtx := s.queries.WithTx(tx)
-	trackID, err := s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+	var trackID int64
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		var err error
+		trackID, err = s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+		if err != nil {
+			return err
+		}
+		err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
+		if err != nil {
+			return err
+		}
+		return resolved.inspection.Validate(ctx)
+	}, func() {
+		// A rescan can move the file or change its type, so the cached lookup is
+		// dropped after the new row is committed.
+		s.invalidateCommittedTrack(trackID)
+		for id := range txScan.invalidatedTracks {
+			s.invalidateCommittedTrack(id)
+		}
+	})
 	if err != nil {
 		return 0, err
-	}
-
-	err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
-	if err != nil {
-		return 0, err
-	}
-	err = resolved.inspection.Validate(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return 0, fmt.Errorf("failed to commit music track transaction: %w", err)
-	}
-
-	// A rescan can move the file or change its type, so the cached lookup is
-	// dropped here, after the new row is committed.
-	s.invalidateCommittedTrack(trackID)
-	for id := range txScan.invalidatedTracks {
-		s.invalidateCommittedTrack(id)
 	}
 
 	// trackIndex is shared (never written inside the transaction) and is only

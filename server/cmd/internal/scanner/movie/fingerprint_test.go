@@ -33,12 +33,12 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	scan := newMovieScanContext(nil)
 	file := scanner.ScanFile{Path: path, Ext: "mkv", Size: 999} // Walking size is deliberately stale.
 	s.now = time.Now
-	scanned, skipped, failures := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 0 || skipped != 0 || failures != 0 || scan.deferred != 1 || stub.calls != 0 {
-		t.Fatalf("recent file: %d/%d/%d deferred=%d probes=%d", scanned, skipped, failures, scan.deferred, stub.calls)
+	scanned, skipped, failures, deferred := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+	if scanned != 0 || skipped != 0 || failures != 0 || deferred != 1 || stub.calls != 0 {
+		t.Fatalf("recent file: %d/%d/%d deferred=%d probes=%d", scanned, skipped, failures, deferred, stub.calls)
 	}
 	s.now = func() time.Time { return time.Now().Add(time.Hour) }
-	scanned, _, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, _, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || failures != 0 || invalidations != 1 {
 		t.Fatalf("initial import: %d/%d invalidations=%d", scanned, failures, invalidations)
 	}
@@ -65,7 +65,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatalf("reload: %+v %v", reloaded, err)
 	}
 	scan = newMovieScanContext(reloaded)
-	scanned, skipped, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, skipped, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 0 || skipped != 1 || failures != 0 || stub.calls != 1 {
 		t.Fatalf("unchanged reload: %d/%d/%d probes=%d", scanned, skipped, failures, stub.calls)
 	}
@@ -81,7 +81,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned, skipped, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, skipped, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || failures != 0 || stub.calls != 2 || invalidations != 2 {
 		t.Fatalf("identical bytes: %d/%d/%d probes=%d invalidations=%d", scanned, skipped, failures, stub.calls, invalidations)
 	}
@@ -104,7 +104,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned, _, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, _, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || failures != 0 || stub.calls != 3 || invalidations != 3 {
 		t.Fatalf("same size edit: %d/%d probes=%d invalidations=%d", scanned, failures, stub.calls, invalidations)
 	}
@@ -127,7 +127,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan = newMovieScanContext(reloaded)
-	scanned, _, failures = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, _, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || failures != 0 || stub.calls != 4 {
 		t.Fatalf("missing baseline: %d/%d probes=%d", scanned, failures, stub.calls)
 	}
@@ -309,9 +309,9 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			scanned, skipped, failures := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-			if scanned != 0 || skipped != 0 || failures != 0 || scan.deferred != 1 || invalidations != 0 {
-				t.Fatalf("unstable: %d/%d/%d deferred=%d invalidations=%d", scanned, skipped, failures, scan.deferred, invalidations)
+			scanned, skipped, failures, deferred := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
+			if scanned != 0 || skipped != 0 || failures != 0 || deferred != 1 || invalidations != 0 {
+				t.Fatalf("unstable: %d/%d/%d deferred=%d invalidations=%d", scanned, skipped, failures, deferred, invalidations)
 			}
 			stored, _, err := s.loadMovieScanIndex(ctx)
 			if err != nil || stored[path] != baseline || scan.movieIndex[path] != baseline {
@@ -339,7 +339,7 @@ func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 		return movieScannerMetadataFixture("120"), nil
 	}}
 	fixture.moviesDir.String, fixture.moviesDir.Valid = dir, true
-	s.runMovieScan(s.currentMoviesDirectory().String)
+	s.scan(s.currentMoviesDirectory().String)
 	log := s.logger.(*capturedLogger)
 	for _, entry := range log.infoEntries {
 		if strings.Contains(entry.msg, "scanner completed") {

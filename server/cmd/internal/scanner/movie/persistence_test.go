@@ -30,7 +30,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 		callbackObservedCommittedRow = err == nil && movie.ID == movieID
 	}
 
-	resolved := &resolvedMovie{params: database.UpsertMovieParams{
+	resolved := &localMovie{params: database.UpsertMovieParams{
 		Title:     "Committed Movie",
 		FilePath:  filepath.Join(t.TempDir(), "committed.mkv"),
 		FileName:  "committed.mkv",
@@ -47,7 +47,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resolved.inspection.Close()
-	err = testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err = testScanner.scanner.persistLocalMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err == nil {
 		t.Fatal("persist without a video stream unexpectedly succeeded")
 	}
@@ -56,7 +56,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 
 	resolved.streams = movieScannerMetadataFixture("120").Streams
-	err = testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err = testScanner.scanner.persistLocalMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err != nil {
 		t.Fatalf("persist resolved movie: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	testScanner.scanner.tmdb = tmdbStub
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
 
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -402,7 +402,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	scan := newMovieScanContext(nil)
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -415,7 +415,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned, skipped, errCount = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 6},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -739,7 +739,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 	}
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
 
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: matrixPath, Ext: "mkv", Size: 5},
 		{Path: wickPath, Ext: "mkv", Size: 6},
 	})

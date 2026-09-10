@@ -50,7 +50,7 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 			probe := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 			s.ffprobe = probe
 			scan := newMovieScanContext(nil)
-			imported, _, failures := s.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+			imported, _, failures, _ := s.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
@@ -79,8 +79,8 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 					t.Error("invalidation preceded commit")
 				}
 			}
-			s.runMovieScan(directory)
-			s.runMovieScan(directory)
+			s.scan(directory)
+			s.scan(directory)
 			wantRows, wantInvalidations := 0, 1
 			if scenario == "outside directory" || scenario == "unavailable root" {
 				wantRows, wantInvalidations = 1, 0
@@ -113,7 +113,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			}
 			s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 			scan := newMovieScanContext(nil)
-			imported, _, failures := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+			imported, _, failures, _ := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
@@ -151,7 +151,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					imported, _, failures = s.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+					imported, _, failures, _ = s.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 					if imported != 1 || failures != 0 {
 						t.Fatal("replacement import failed")
 					}
@@ -269,7 +269,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				imported, _, failures := s.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+				imported, _, failures, _ := s.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 				if imported != 1 || failures != 0 {
 					t.Fatalf("import=%d errors=%d", imported, failures)
 				}
@@ -319,7 +319,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			}}
 			invalidations := 0
 			s.invalidateCommittedMovie = func(int64) { invalidations++ }
-			s.runMovieScan(root)
+			s.scan(root)
 			wantRows, wantInvalidations := 2, 1
 			if scenario == "canceled" || scenario == "root replaced" {
 				wantRows, wantInvalidations = 3, 0
@@ -350,7 +350,7 @@ func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		imported, _, failures := s.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+		imported, _, failures, _ := s.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 		if imported != 1 || failures != 0 {
 			t.Fatal("import failed")
 		}
@@ -391,7 +391,7 @@ func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
-	imported, _, failures := s.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+	imported, _, failures, _ := s.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 	if imported != 1 || failures != 0 {
 		t.Fatal("import failed")
 	}
@@ -414,7 +414,7 @@ func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.runMovieScan(root)
+	s.scan(root)
 	for _, table := range []string{"movies", "movie_file_fingerprints", "video_streams", "audio_streams", "subtitles", "chapters", "movie_genres", "movie_watch_progress", "user_liked_movies", "playlist_movies", "watch_rooms", "keyframe_indexes", "remux_safety_verdicts"} {
 		count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
 		if count != 0 {

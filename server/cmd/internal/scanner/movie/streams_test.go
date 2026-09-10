@@ -53,7 +53,7 @@ func TestProcessMovieStreamsPersistsDispositions(t *testing.T) {
 		},
 	)
 
-	_, err = testScanner.scanner.processMovieStreams(ctx, testScanner.queries, movie.ID, fixture.Streams)
+	_, err = processMovieStreams(ctx, testScanner.queries, movie.ID, fixture.Streams)
 	if err != nil {
 		t.Fatalf("process movie streams: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestProcessMovieStreamsPersistsFieldOrderAndRotation(t *testing.T) {
 			fixture.Streams[0].FieldOrder = tt.fieldOrder
 			fixture.Streams[0].SideDataList = tt.sideData
 
-			_, err = testScanner.scanner.processMovieStreams(ctx, testScanner.queries, movie.ID, fixture.Streams)
+			_, err = processMovieStreams(ctx, testScanner.queries, movie.ID, fixture.Streams)
 			if err != nil {
 				t.Fatalf("process movie streams: %v", err)
 			}

@@ -522,8 +522,12 @@ CREATE TABLE IF NOT EXISTS movie_file_fingerprints (
 );
 
 -- Pending descriptive enrichment does not invalidate usable technical media data.
+-- attempts counts definitive TMDB misses; last_attempt_at (unix seconds) drives
+-- the scanner's no-match backoff. A technical rescan resets both.
 CREATE TABLE IF NOT EXISTS movie_tmdb_retries (
-  movie_id INTEGER PRIMARY KEY NOT NULL REFERENCES movies (id) ON DELETE CASCADE
+  movie_id INTEGER PRIMARY KEY NOT NULL REFERENCES movies (id) ON DELETE CASCADE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at INTEGER
 );
 
 -- User activity

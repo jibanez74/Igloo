@@ -41,6 +41,7 @@ type Scanner struct {
 	scanContext              context.Context
 	wait                     *sync.WaitGroup
 	scannerDBMu              *sync.Mutex
+	tx                       scanner.TxRunner
 	currentMusicDirectory    func() sql.NullString
 	invalidateCommittedTrack func(int64)
 	guard                    scanner.ScanGuard
@@ -85,7 +86,8 @@ func New(deps Dependencies) *Scanner {
 		now: deps.Now,
 		db:  deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
 		spotify: deps.Spotify, scanContext: deps.ScanContext, wait: deps.Wait,
-		scannerDBMu: deps.ScannerDBMu, currentMusicDirectory: deps.CurrentMusicDirectory,
+		scannerDBMu: deps.ScannerDBMu, tx: scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
+		currentMusicDirectory:    deps.CurrentMusicDirectory,
 		invalidateCommittedTrack: deps.InvalidateCommittedTrack,
 	}
 }
