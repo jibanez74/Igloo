@@ -287,8 +287,8 @@ export const deleteUserAccount = () =>
 // Notifications
 // ============================================================================
 
-export const createNotification = (body: CreateNotificationRequest) =>
-  apiRequest<CreateNotificationResponseType>("/api/notifications", {
+export const createNotification = (body: CreateNotificationRequest): Promise<CreateNotificationResponseType | ApiFailureType> =>
+  apiRequest("/api/notifications", {
     method: "POST",
     body,
   });

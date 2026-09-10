@@ -78,7 +78,7 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 	app := setupMusicScanner(t)
 	defer app.db.Close()
 
-	seededMusician, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+	seededMusicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:      "Existing Artist",
 		SortName:  "Existing Artist",
 		SpotifyID: sql.NullString{String: "artist123", Valid: true},
@@ -87,8 +87,12 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
+	seededMusician, err := app.queries.GetMusicianByID(context.Background(), seededMusicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	seededAlbum, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	seededAlbumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Existing Album",
 		SortTitle: "Existing Album",
 		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
@@ -97,6 +101,10 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
+	}
+	seededAlbum, err := app.queries.GetAlbumByID(context.Background(), seededAlbumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
@@ -211,7 +219,7 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 	app := setupMusicScanner(t)
 	defer app.db.Close()
 
-	seededMusician, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+	seededMusicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:      "Existing Artist",
 		SortName:  "Existing Artist",
 		SpotifyID: sql.NullString{String: "artist123", Valid: true},
@@ -220,8 +228,12 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
+	seededMusician, err := app.queries.GetMusicianByID(context.Background(), seededMusicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	seededAlbum, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	seededAlbumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Existing Album",
 		SortTitle: "Existing Album",
 		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
@@ -230,6 +242,10 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
+	}
+	seededAlbum, err := app.queries.GetAlbumByID(context.Background(), seededAlbumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
@@ -327,21 +343,29 @@ func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
 	app := setupMusicScanner(t)
 	defer app.db.Close()
 
-	musician, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:     "Test Artist",
 		SortName: "Test Artist",
 	})
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
+	musician, err := app.queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	album, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Test Album",
 		SortTitle: "Test Album",
 		Musician:  sql.NullString{String: "Test Artist", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
+	}
+	album, err := app.queries.GetAlbumByID(context.Background(), albumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	err = app.queries.SaveMusicArtistIdentity(context.Background(), database.SaveMusicArtistIdentityParams{IdentityKey: scanner.NormalizedScanCacheKey(musician.Name), MusicianID: musician.ID})
@@ -402,15 +426,19 @@ func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 	app := setupMusicScanner(t)
 	defer app.db.Close()
 
-	musician, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:     "Test Artist",
 		SortName: "Test Artist",
 	})
 	if err != nil {
 		t.Fatalf("seed musician: %v", err)
 	}
+	musician, err := app.queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	album, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     "Test Album",
 		SortTitle: "Test Album",
 		Musician:  sql.NullString{String: "Test Artist", Valid: true},
@@ -418,12 +446,15 @@ func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed album: %v", err)
 	}
+	album, err := app.queries.GetAlbumByID(context.Background(), albumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = app.queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
 		EntityType: musicSpotifyEntityMusician,
 		EntityID:   musician.ID,
 		Status:     musicSpotifyStatusFailed,
-		Error:      sql.NullString{String: "temporary artist error", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed musician spotify match: %v", err)
@@ -433,7 +464,6 @@ func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 		EntityType: musicSpotifyEntityAlbum,
 		EntityID:   album.ID,
 		Status:     musicSpotifyStatusFailed,
-		Error:      sql.NullString{String: "temporary album error", Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("seed album spotify match: %v", err)
@@ -566,7 +596,7 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 	var musicianStatus string
 	var musicianSpotifyID sql.NullString
 	err := app.db.QueryRow(`
-		SELECT msm.status, msm.spotify_id
+		SELECT msm.status, m.spotify_id
 		FROM music_spotify_matches AS msm
 		INNER JOIN musicians AS m ON m.id = msm.entity_id
 		WHERE msm.entity_type = ? AND m.name = ?
@@ -581,7 +611,7 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 	var albumStatus string
 	var albumSpotifyID sql.NullString
 	err = app.db.QueryRow(`
-		SELECT msm.status, msm.spotify_id
+		SELECT msm.status, a.spotify_id
 		FROM music_spotify_matches AS msm
 		INNER JOIN albums AS a ON a.id = msm.entity_id
 		WHERE msm.entity_type = ? AND a.title = ?
@@ -740,7 +770,7 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 	}
 }
 
-func TestProcessMusicBatchPersistsSpotifyUnmatchedDetails(t *testing.T) {
+func TestProcessMusicBatchPersistsSpotifyUnmatchedReasons(t *testing.T) {
 	app := setupMusicScanner(t)
 	defer app.db.Close()
 
@@ -783,53 +813,31 @@ func TestProcessMusicBatchPersistsSpotifyUnmatchedDetails(t *testing.T) {
 
 	var status string
 	var reason sql.NullString
-	var score sql.NullInt64
-	var threshold sql.NullInt64
-	var candidateName sql.NullString
-	var searchQuery sql.NullString
-	var strategy sql.NullString
-	var errorText sql.NullString
 	err := app.db.QueryRow(`
-		SELECT msm.status, msm.reason, msm.score, msm.threshold_value, msm.candidate_name, msm.search_query, msm.strategy, msm.error
+		SELECT msm.status, msm.reason
 		FROM music_spotify_matches AS msm
 		INNER JOIN musicians AS m ON m.id = msm.entity_id
 		WHERE msm.entity_type = ? AND m.name = ?
-	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &reason, &score, &threshold, &candidateName, &searchQuery, &strategy, &errorText)
+	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &reason)
 	if err != nil {
 		t.Fatalf("get musician unmatched row: %v", err)
 	}
 	if status != musicSpotifyStatusUnmatched || !reason.Valid || reason.String != "score_below_threshold" {
 		t.Fatalf("musician status/reason = %s/%#v, want unmatched/score_below_threshold", status, reason)
 	}
-	if !score.Valid || score.Int64 != 52 || !threshold.Valid || threshold.Int64 != 78 {
-		t.Fatalf("musician score/threshold = %#v/%#v, want 52/78", score, threshold)
-	}
-	if !candidateName.Valid || candidateName.String != "Best Guess" {
-		t.Fatalf("candidate name = %#v, want Best Guess", candidateName)
-	}
-	if !searchQuery.Valid || searchQuery.String != "test artist" || !strategy.Valid || strategy.String != "normalized" {
-		t.Fatalf("search/strategy = %#v/%#v, want test artist/normalized", searchQuery, strategy)
-	}
-	if errorText.Valid {
-		t.Fatalf("error text = %#v, want null for unmatched row", errorText)
-	}
 
 	var albumReason sql.NullString
-	var candidateArtist sql.NullString
 	err = app.db.QueryRow(`
-		SELECT msm.reason, msm.candidate_artist
+		SELECT msm.reason
 		FROM music_spotify_matches AS msm
 		INNER JOIN albums AS a ON a.id = msm.entity_id
 		WHERE msm.entity_type = ? AND a.title = ?
-	`, musicSpotifyEntityAlbum, "Test Album").Scan(&albumReason, &candidateArtist)
+	`, musicSpotifyEntityAlbum, "Test Album").Scan(&albumReason)
 	if err != nil {
 		t.Fatalf("get album unmatched row: %v", err)
 	}
 	if !albumReason.Valid || albumReason.String != "no_results" {
 		t.Fatalf("album reason = %#v, want no_results", albumReason)
-	}
-	if !candidateArtist.Valid || candidateArtist.String != "Wrong Artist" {
-		t.Fatalf("album candidate artist = %#v, want Wrong Artist", candidateArtist)
 	}
 }
 
@@ -854,30 +862,30 @@ func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
 	}
 
 	var status string
-	var errorText sql.NullString
+	var reason sql.NullString
 	err := app.db.QueryRow(`
-		SELECT msm.status, msm.error
+		SELECT msm.status, msm.reason
 		FROM music_spotify_matches AS msm
 		INNER JOIN musicians AS m ON m.id = msm.entity_id
 		WHERE msm.entity_type = ? AND m.name = ?
-	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &errorText)
+	`, musicSpotifyEntityMusician, "Test Artist").Scan(&status, &reason)
 	if err != nil {
 		t.Fatalf("get musician failed row: %v", err)
 	}
-	if status != musicSpotifyStatusFailed || !errorText.Valid || errorText.String != "artist temporary failure" {
-		t.Fatalf("musician failed row = %s/%#v, want failed/artist temporary failure", status, errorText)
+	if status != musicSpotifyStatusFailed || reason.Valid {
+		t.Fatalf("musician failed row = %s/%#v, want failed/null", status, reason)
 	}
 
 	err = app.db.QueryRow(`
-		SELECT msm.status, msm.error
+		SELECT msm.status, msm.reason
 		FROM music_spotify_matches AS msm
 		INNER JOIN albums AS a ON a.id = msm.entity_id
 		WHERE msm.entity_type = ? AND a.title = ?
-	`, musicSpotifyEntityAlbum, "Test Album").Scan(&status, &errorText)
+	`, musicSpotifyEntityAlbum, "Test Album").Scan(&status, &reason)
 	if err != nil {
 		t.Fatalf("get album failed row: %v", err)
 	}
-	if status != musicSpotifyStatusFailed || !errorText.Valid || errorText.String != "album temporary failure" {
-		t.Fatalf("album failed row = %s/%#v, want failed/album temporary failure", status, errorText)
+	if status != musicSpotifyStatusFailed || reason.Valid {
+		t.Fatalf("album failed row = %s/%#v, want failed/null", status, reason)
 	}
 }

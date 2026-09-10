@@ -48,7 +48,6 @@ function PlayerHarness() {
     const testTrack = convertToAudioTrack({
       id: 1,
       title: "Test Track",
-      file_path: "/music/test.flac",
       duration: 100,
       codec: "flac",
       bit_rate: 1,

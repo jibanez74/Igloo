@@ -1,8 +1,9 @@
 import type React from "react";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { jsonResponse, requestURL } from "../helpers/api";
+import { passwordCases } from "../helpers/password-cases";
 import { renderRoute } from "../helpers/render-route";
 
 const showValidationErrorMock = vi.fn();
@@ -150,6 +151,50 @@ function mutationRequests(requests: CapturedRequest[], method: string) {
 }
 
 describe("Users settings", () => {
+  for (const form of ["create", "reset"] as const) {
+    it.each(passwordCases)(`validates $name in the ${form} password form`, async ({ password, error }) => {
+      const user = userEvent.setup();
+      const { requests } = await renderUsersRoute();
+      const creating = form === "create";
+      await user.click(screen.getByRole("button", {
+        name: creating ? "Add User" : "Reset password for Dana Scully",
+      }));
+      if (creating) {
+        fireEvent.change(screen.getByLabelText("User name"), { target: { value: "New User" } });
+        fireEvent.change(screen.getByLabelText("User email"), { target: { value: "new@example.com" } });
+      } else {
+        fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: password } });
+      }
+      const input = screen.getByLabelText(creating ? "User password" : "New password");
+      expect(input).not.toHaveAttribute("maxlength");
+      expect(input).toHaveAccessibleDescription("Must be at least 9 characters and at most 72 UTF-8 bytes");
+      fireEvent.change(input, { target: { value: password } });
+      const button = screen.getByRole("button", { name: creating ? "Create User" : "Reset Password" });
+      const method = creating ? "POST" : "PUT";
+
+      if (error) {
+        if (creating) {
+          await user.click(button);
+        } else {
+          expect(button).toBeDisabled();
+          // Submission must also validate when invoked without clicking the disabled button.
+          fireEvent.submit(input.closest("form")!);
+        }
+        expect(screen.getByRole("alert")).toHaveTextContent(`Password ${error}`);
+        expect(input).toHaveAttribute("aria-invalid", "true");
+        expect(input).toHaveAccessibleDescription(expect.stringContaining(`Password ${error}`));
+        expect(input).toHaveFocus();
+        expect(input).toHaveValue(password);
+        expect(mutationRequests(requests, method)).toHaveLength(0);
+      } else {
+        expect(button).toBeEnabled();
+        await user.click(button);
+        await waitFor(() => expect(mutationRequests(requests, method)).toHaveLength(1));
+        expect(mutationRequests(requests, method)[0].body).toMatchObject({ password });
+      }
+    });
+  }
+
   it("blocks short create passwords before calling the API", async () => {
     const user = userEvent.setup();
     const { requests } = await renderUsersRoute();

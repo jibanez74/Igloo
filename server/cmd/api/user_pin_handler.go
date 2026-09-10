@@ -119,7 +119,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 		Error:   false,
 		Message: message,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	})
 }

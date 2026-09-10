@@ -18,7 +18,7 @@ func TestProcessMovieStreamsPersistsDispositions(t *testing.T) {
 	defer testScanner.db.Close()
 	ctx := context.Background()
 
-	movie, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	movieID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Disposition Movie",
 		FilePath:  "/movies/Disposition.Movie.2024.mp4",
 		FileName:  "Disposition.Movie.2024.mp4",
@@ -28,6 +28,10 @@ func TestProcessMovieStreamsPersistsDispositions(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("insert movie: %v", err)
+	}
+	movie, err := testScanner.queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	fixture := movieScannerMetadataFixture("120")
@@ -123,7 +127,7 @@ func TestProcessMovieStreamsPersistsFieldOrderAndRotation(t *testing.T) {
 			defer testScanner.db.Close()
 			ctx := context.Background()
 
-			movie, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
+			movieID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
 				Title:     "Field Order Movie",
 				FilePath:  "/movies/Field.Order.Movie.2024.mp4",
 				FileName:  "Field.Order.Movie.2024.mp4",
@@ -133,6 +137,10 @@ func TestProcessMovieStreamsPersistsFieldOrderAndRotation(t *testing.T) {
 			})
 			if err != nil {
 				t.Fatalf("insert movie: %v", err)
+			}
+			movie, err := testScanner.queries.GetMovieByID(ctx, movieID)
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			fixture := movieScannerMetadataFixture("120")

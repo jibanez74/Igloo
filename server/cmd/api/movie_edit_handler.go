@@ -187,7 +187,11 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		params.Language = helpers.NullString(*payload.Language)
 	}
 
-	if _, err = qtx.UpdateMovie(ctx, params); err != nil {
+	rows, err := qtx.UpdateMovie(ctx, params)
+	if err == nil && rows == 0 {
+		err = sql.ErrNoRows
+	}
+	if err != nil {
 		app.Logger.Error("failed to update movie metadata", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to update movie"))
 		return

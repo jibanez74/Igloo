@@ -34,7 +34,7 @@ type resolvedMusician struct {
 	hasExistingID bool
 	// Persistence refreshes this identity inside the transaction because an
 	// earlier credit may have merged its owner.
-	existing               *database.Musician
+	existing               *database.GetMusicianBySpotifyIDRow
 	spotifyArtist          *spotifylib.FullArtist
 	spotifyMatch           *resolvedSpotifyMatch
 	splitCompoundOnNoMatch bool
@@ -47,7 +47,7 @@ type resolvedAlbum struct {
 	existingID    int64
 	hasExistingID bool
 	// Persistence refreshes this identity inside the transaction.
-	existing     *database.Album
+	existing     *database.GetAlbumBySpotifyIDRow
 	spotifyAlbum *spotifylib.FullAlbum
 	spotifyMatch *resolvedSpotifyMatch
 }
@@ -337,8 +337,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 	if artist != nil {
 		resolved.spotifyArtist = artist
 		match := resolvedSpotifyMatch{
-			status:    musicSpotifyStatusMatched,
-			spotifyID: sql.NullString{String: artist.ID.String(), Valid: true},
+			status: musicSpotifyStatusMatched,
 		}
 		resolved.spotifyMatch = &match
 	}
@@ -453,8 +452,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 	if albumDetails != nil {
 		resolved.spotifyAlbum = albumDetails
 		match := resolvedSpotifyMatch{
-			status:    musicSpotifyStatusMatched,
-			spotifyID: sql.NullString{String: albumDetails.ID.String(), Valid: true},
+			status: musicSpotifyStatusMatched,
 		}
 		resolved.spotifyMatch = &match
 	}
@@ -462,29 +460,29 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 	return resolved, nil
 }
 
-func (s *Scanner) findExistingMusician(ctx context.Context, name string) (database.Musician, bool, error) {
+func (s *Scanner) findExistingMusician(ctx context.Context, name string) (database.GetMusicianBySpotifyIDRow, bool, error) {
 	musician, err := s.queries.FindMusicArtistIdentity(ctx, scanner.NormalizedScanCacheKey(name))
 	if err == nil {
-		return musician, true, nil
+		return database.GetMusicianBySpotifyIDRow(musician), true, nil
 	}
 	notFound := errors.Is(err, sql.ErrNoRows)
 	if notFound {
-		return database.Musician{}, false, nil
+		return database.GetMusicianBySpotifyIDRow{}, false, nil
 	}
-	return database.Musician{}, false, err
+	return database.GetMusicianBySpotifyIDRow{}, false, err
 }
 
-func (s *Scanner) findExistingAlbum(ctx context.Context, title, albumArtist string) (database.Album, bool, error) {
+func (s *Scanner) findExistingAlbum(ctx context.Context, title, albumArtist string) (database.GetAlbumBySpotifyIDRow, bool, error) {
 	album, err := s.queries.FindMusicAlbumIdentity(ctx, database.FindMusicAlbumIdentityParams{
 		TitleKey:  scanner.NormalizedScanCacheKey(title),
 		ArtistKey: scanner.NormalizedScanCacheKey(albumArtist),
 	})
 	if err == nil {
-		return album, true, nil
+		return database.GetAlbumBySpotifyIDRow(album), true, nil
 	}
 	notFound := errors.Is(err, sql.ErrNoRows)
 	if notFound {
-		return database.Album{}, false, nil
+		return database.GetAlbumBySpotifyIDRow{}, false, nil
 	}
-	return database.Album{}, false, err
+	return database.GetAlbumBySpotifyIDRow{}, false, err
 }

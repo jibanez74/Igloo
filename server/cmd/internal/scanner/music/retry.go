@@ -175,8 +175,8 @@ func (s *Scanner) reconcilePendingCompoundCredits(ctx context.Context, scan *mus
 			return ctx.Err()
 		}
 		for _, candidate := range candidates {
-			after = candidate.ID
-			err = s.reconcileCompoundCredits(ctx, scan, candidate.ID)
+			after = candidate
+			err = s.reconcileCompoundCredits(ctx, scan, candidate)
 			if err != nil {
 				return err
 			}

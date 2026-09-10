@@ -153,7 +153,6 @@ function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
   return success({
     movie: {
       file_name: "arrival.mp4",
-      file_path: "/media/arrival.mp4",
       size: 1000,
       container: "mp4",
       mime_type: "video/mp4",

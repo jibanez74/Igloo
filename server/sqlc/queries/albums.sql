@@ -6,8 +6,7 @@ WHERE id = ?
 LIMIT 1;
 
 -- name: GetAlbumBySpotifyID :one
-SELECT
-  *
+SELECT id, spotify_id, cover
 FROM albums
 WHERE spotify_id = ?
 LIMIT 1;
@@ -20,17 +19,6 @@ SELECT
   spotify_id
 FROM albums
 WHERE spotify_id IN (sqlc.slice(spotify_ids));
-
--- name: GetAlbumByTitleAndMusician :one
--- The COALESCE must match idx_albums_title_musician and UpsertAlbum's conflict
--- target exactly, so a NULL-musician lookup finds a row written with '' and
--- vice versa.
-SELECT
-  *
-FROM albums
-WHERE title = ?
-  AND COALESCE(musician, '') = COALESCE(sqlc.arg(musician), '')
-LIMIT 1;
 
 -- name: GetLatestAlbums :many
 SELECT
@@ -68,7 +56,7 @@ SET
   cover = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, spotify_id, cover;
 
 -- name: UpsertAlbum :one
 INSERT INTO albums (
@@ -96,7 +84,7 @@ SET
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
   cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+RETURNING id, spotify_id, cover;
 
 -- name: DeleteAlbum :exec
 DELETE FROM albums

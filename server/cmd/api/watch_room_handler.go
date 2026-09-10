@@ -612,7 +612,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	room, err := app.Queries.GetWatchRoomByID(r.Context(), roomID)
+	ownerUserID, err := app.Queries.GetWatchRoomByID(r.Context(), roomID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("room not found"), http.StatusNotFound)
@@ -624,7 +624,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// The room row already carries the owner; no second query needed.
-	if room.OwnerUserID != userID {
+	if ownerUserID != userID {
 		helpers.ErrorJSON(w, errors.New("only the room owner can delete this room"), http.StatusForbidden)
 		return
 	}

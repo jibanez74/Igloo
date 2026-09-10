@@ -14,7 +14,6 @@ export type AlbumInfoType = {
 export type PlayableTrackData = {
   id: number;
   title: string;
-  file_path: string;
   duration: number;
   codec: string;
   bit_rate: number;

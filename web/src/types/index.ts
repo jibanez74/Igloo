@@ -112,7 +112,6 @@ export type {
 // Notification types
 export type {
   NotificationTitle,
-  NotificationType,
   CreateNotificationRequest,
   CreateNotificationResponseType,
   NotificationListItemType,

@@ -7,10 +7,10 @@ INSERT INTO devices (
   token_hash
 )
 VALUES (?, ?, ?, ?, ?)
-RETURNING *;
+RETURNING id, name, platform, app_version, created_at, last_used_at;
 
 -- name: GetDeviceByTokenHash :one
-SELECT *
+SELECT id, user_id, last_used_at
 FROM devices
 WHERE token_hash = ?
 LIMIT 1;
@@ -18,7 +18,6 @@ LIMIT 1;
 -- name: GetDevicesByUser :many
 SELECT
   id,
-  user_id,
   name,
   platform,
   app_version,

@@ -126,11 +126,6 @@ function movie(overrides: Partial<LibraryMovieDetailsMovieType> = {}) {
   return {
     id: 22,
     title: "Arrival",
-    file_path: "/movies/arrival.mkv",
-    file_name: "arrival.mkv",
-    size: 1024,
-    container: "mkv",
-    mime_type: "video/x-matroska",
     adult: false,
     tmdb_id: { Int64: 329865, Valid: true },
     imdb_id: { String: "tt2543164", Valid: true },
@@ -148,8 +143,6 @@ function movie(overrides: Partial<LibraryMovieDetailsMovieType> = {}) {
     budget: { Float64: 0, Valid: false },
     run_time: { Int64: 116, Valid: true },
     duration: { Float64: 6960, Valid: true },
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   } satisfies LibraryMovieDetailsMovieType;
 }

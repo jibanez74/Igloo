@@ -490,7 +490,7 @@ func TestDirectPlayAudioSelectionUnambiguous(t *testing.T) {
 func insertWatchRoomTestAudioStream(t *testing.T, app *Application, movieID int64, streamIndex int64, isDefault bool) {
 	t.Helper()
 
-	_, err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
+	err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
 		MovieID:     movieID,
 		StreamIndex: streamIndex,
 		Codec:       "aac",
@@ -505,7 +505,7 @@ func insertWatchRoomTestAudioStream(t *testing.T, app *Application, movieID int6
 func insertWatchRoomTestVideoStream(t *testing.T, app *Application, movieID int64, codecProfile string) {
 	t.Helper()
 
-	_, err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+	err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
 		MovieID:      movieID,
 		StreamIndex:  0,
 		Codec:        "h264",
@@ -523,7 +523,7 @@ func TestCreateWatchRoom_HTTP_DirectForNonMP4Rejected(t *testing.T) {
 	defer app.DB.Close()
 
 	ownerID, _ := createTestUserAndMovie(t, app)
-	mkvMovie, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
+	mkvMovieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
 		Title:     "Matroska Movie",
 		FilePath:  "/movies/matroska.mkv",
 		FileName:  "matroska.mkv",
@@ -533,6 +533,10 @@ func TestCreateWatchRoom_HTTP_DirectForNonMP4Rejected(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("insert mkv movie: %v", err)
+	}
+	mkvMovie, err := app.Queries.GetMovieByID(context.Background(), mkvMovieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
@@ -576,7 +580,7 @@ func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 
-	_, err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+	err := app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
 		MovieID:     movieID,
 		StreamIndex: 0,
 		Codec:       "mjpeg",
@@ -587,7 +591,7 @@ func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
 		t.Fatalf("insert cover art stream: %v", err)
 	}
 
-	_, err = app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
+	err = app.Queries.InsertVideoStream(context.Background(), database.InsertVideoStreamParams{
 		MovieID:      movieID,
 		StreamIndex:  1,
 		Codec:        "h264",
@@ -1522,7 +1526,7 @@ func insertWatchRoomAudioStreams(t *testing.T, app *Application, movieID int64, 
 	languages := []string{"eng", "spa", "fra"}
 
 	for i := 0; i < count; i++ {
-		_, err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+		err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
 			MovieID:     movieID,
 			StreamIndex: int64(i + 1),
 			Codec:       "aac",
@@ -1628,9 +1632,13 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
-	room, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
+	storedOwnerID, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
 	if err != nil {
 		t.Fatalf("get room: %v", err)
+	}
+	room, err := app.Queries.GetWatchRoomForMember(context.Background(), database.GetWatchRoomForMemberParams{ID: roomID, UserID: storedOwnerID})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if room.AudioTrack != 1 {
 		t.Fatalf("expected stored audio_track 1, got %d", room.AudioTrack)
@@ -1640,7 +1648,7 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 func insertWatchRoomTestSubtitle(t *testing.T, app *Application, movieID int64, streamIndex int64, language string) {
 	t.Helper()
 
-	_, err := app.Queries.InsertSubtitle(context.Background(), database.InsertSubtitleParams{
+	err := app.Queries.InsertSubtitle(context.Background(), database.InsertSubtitleParams{
 		MovieID:     movieID,
 		StreamIndex: streamIndex,
 		Codec:       "subrip",
@@ -1690,7 +1698,7 @@ func TestCreateWatchRoom_PersistsStreamPins(t *testing.T) {
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	_, err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
+	err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
 		MovieID:     movieID,
 		StreamIndex: 1,
 		Codec:       "aac",
@@ -1718,9 +1726,13 @@ func TestCreateWatchRoom_PersistsStreamPins(t *testing.T) {
 	}
 	roomID := int64(resp.Data.(map[string]any)["room_id"].(float64))
 
-	room, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
+	storedOwnerID, err := app.Queries.GetWatchRoomByID(context.Background(), roomID)
 	if err != nil {
 		t.Fatalf("load room: %v", err)
+	}
+	room, err := app.Queries.GetWatchRoomForMember(context.Background(), database.GetWatchRoomForMemberParams{ID: roomID, UserID: storedOwnerID})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if !room.AudioStreamIndex.Valid || room.AudioStreamIndex.Int64 != 1 {
 		t.Errorf("audio_stream_index = %+v, want 1", room.AudioStreamIndex)
@@ -1742,7 +1754,7 @@ func TestVerifyWatchRoomStreamPins(t *testing.T) {
 
 	_, movieID := createTestUserAndMovie(t, app)
 	ctx := context.Background()
-	_, err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+	err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
 		MovieID:     movieID,
 		StreamIndex: 1,
 		Codec:       "aac",

@@ -98,41 +98,11 @@ export type CrewMemberType = NonNullable<
 export type TheaterMovieType = components["schemas"]["TheaterMovie"];
 
 // Library movie details (from GET /api/movies/details/{id}) - full movie object (nullable fields use Go nullable wrappers)
-export type LibraryMovieDetailsMovieType = {
-  id: number;
-  title: string;
-  file_path: string;
-  file_name: string;
-  size: number;
-  container: string;
-  mime_type: string;
-  adult: boolean;
-  tmdb_id: NullableInt64;
-  imdb_id: NullableString;
-  poster_path: NullableString;
-  backdrop_path: NullableString;
-  language: NullableString;
-  year: NullableInt64;
-  release_date: NullableString;
-  overview: NullableString;
-  tag_line: NullableString;
-  certification: NullableString;
-  critic_rating: NullableFloat64;
-  audience_rating: NullableFloat64;
-  revenue: NullableFloat64;
-  budget: NullableFloat64;
-  run_time: NullableInt64;
-  /** Exact container duration in seconds (ffprobe); HLS/session use. */
-  duration: NullableFloat64;
-  created_at: string;
-  updated_at: string;
-};
+export type LibraryMovieDetailsMovieType = components["schemas"]["Movie"];
 
 // Library cast row (GET /api/movies/details/:id cast array)
 export type LibraryMovieCastType = {
   id: number;
-  movie_id: number;
-  artist_id: number;
   character: string;
   cast_order: number;
   artist_name: string;
@@ -142,12 +112,9 @@ export type LibraryMovieCastType = {
 // Library crew row (GET /api/movies/details/:id crew array)
 export type LibraryMovieCrewType = {
   id: number;
-  movie_id: number;
-  artist_id: number;
   job: string;
   department: string;
   artist_name: string;
-  artist_profile: NullableString;
 };
 
 // Library genre row (GET /api/movies/details/:id genres array)
@@ -160,22 +127,15 @@ export type LibraryMovieGenreType = {
 export type LibraryMovieProductionCompanyType = {
   id: number;
   name: string;
-  tmdb_id: number;
-  logo: NullableString;
-  country: NullableString;
 };
 
 // Library extra video (GET /api/movies/details/:id extra_videos array)
 export type LibraryMovieExtraVideoType = {
   id: number;
   title: string;
-  external_id: NullableString;
   key: string;
   type: string;
   site: string;
-  official: boolean;
-  created_at: string;
-  updated_at: string;
 };
 
 // Full response from GET /api/movies/details/:id
@@ -192,7 +152,6 @@ export type LibraryMovieDetailsResponse = {
 export type MovieTechnicalDetailsResponse = {
   movie: {
     file_name: string;
-    file_path: string;
     size: number;
     container: string;
     mime_type: string;

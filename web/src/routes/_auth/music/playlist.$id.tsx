@@ -63,7 +63,6 @@ function playlistTrackToPlayableData(
   return {
     id: track.id,
     title: track.title,
-    file_path: track.file_path,
     duration: track.duration,
     codec: track.codec,
     bit_rate: track.bit_rate,

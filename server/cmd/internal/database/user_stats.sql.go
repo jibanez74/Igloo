@@ -53,7 +53,6 @@ SELECT
   t.id,
   t.title,
   t.duration,
-  t.file_path,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,
@@ -84,7 +83,6 @@ type GetUserRecentlyPlayedRow struct {
 	ID             int64          `json:"id"`
 	Title          string         `json:"title"`
 	Duration       int64          `json:"duration"`
-	FilePath       string         `json:"file_path"`
 	AlbumID        sql.NullInt64  `json:"album_id"`
 	AlbumTitle     sql.NullString `json:"album_title"`
 	AlbumCover     sql.NullString `json:"album_cover"`
@@ -108,7 +106,6 @@ func (q *Queries) GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecently
 			&i.ID,
 			&i.Title,
 			&i.Duration,
-			&i.FilePath,
 			&i.AlbumID,
 			&i.AlbumTitle,
 			&i.AlbumCover,
@@ -353,7 +350,6 @@ SELECT
   t.id,
   t.title,
   t.duration,
-  t.file_path,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,
@@ -385,7 +381,6 @@ type GetUserTopTracksRow struct {
 	ID              int64          `json:"id"`
 	Title           string         `json:"title"`
 	Duration        int64          `json:"duration"`
-	FilePath        string         `json:"file_path"`
 	AlbumID         sql.NullInt64  `json:"album_id"`
 	AlbumTitle      sql.NullString `json:"album_title"`
 	AlbumCover      sql.NullString `json:"album_cover"`
@@ -413,7 +408,6 @@ func (q *Queries) GetUserTopTracks(ctx context.Context, arg GetUserTopTracksPara
 			&i.ID,
 			&i.Title,
 			&i.Duration,
-			&i.FilePath,
 			&i.AlbumID,
 			&i.AlbumTitle,
 			&i.AlbumCover,
@@ -472,17 +466,15 @@ INSERT INTO user_track_stats (
   track_id,
   play_count,
   total_time_played,
-  last_played_at,
-  first_played_at
+  last_played_at
 )
 VALUES
-  (?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  (?, ?, 1, ?, CURRENT_TIMESTAMP)
 ON CONFLICT (user_id, track_id) DO UPDATE
 SET
   play_count = user_track_stats.play_count + 1,
   total_time_played = user_track_stats.total_time_played + excluded.total_time_played,
-  last_played_at = CURRENT_TIMESTAMP,
-  updated_at = CURRENT_TIMESTAMP
+  last_played_at = CURRENT_TIMESTAMP
 `
 
 type UpsertUserTrackStatsParams struct {

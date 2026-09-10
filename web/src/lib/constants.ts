@@ -88,7 +88,7 @@ export const SEARCH_TRACKS_KEY = "search-tracks";
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_EMAIL_MAX_LENGTH = 255;
 export const USER_PASSWORD_MIN_LENGTH = 9;
-export const USER_PASSWORD_MAX_LENGTH = 128;
+export const USER_PASSWORD_MAX_BYTES = 72;
 /** Profile PIN is exactly 4 ASCII digits (server/cmd/api/user_pin_handler.go). */
 export const USER_PIN_LENGTH = 4;
 export const PLAYLIST_NAME_MAX_LENGTH = 255;

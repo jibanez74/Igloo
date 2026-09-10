@@ -110,11 +110,11 @@ func TestMusicImageHelpersTimestamp(t *testing.T) {
 				image := sql.NullString{String: "old.jpg", Valid: true}
 				var returned sql.NullString
 				if entity.table == "musicians" {
-					row, updateErr := s.updateMusicianThumbIfChanged(context.Background(), s.queries, database.Musician{ID: 1, Thumb: image}, input)
+					row, updateErr := s.updateMusicianThumbIfChanged(context.Background(), s.queries, database.GetMusicianBySpotifyIDRow{ID: 1, Thumb: image}, input)
 					err = updateErr
 					returned = row.Thumb
 				} else {
-					row, updateErr := s.updateAlbumCoverIfChanged(context.Background(), s.queries, database.Album{ID: 1, Cover: image}, input)
+					row, updateErr := s.updateAlbumCoverIfChanged(context.Background(), s.queries, database.GetAlbumBySpotifyIDRow{ID: 1, Cover: image}, input)
 					err = updateErr
 					returned = row.Cover
 				}

@@ -11,13 +11,9 @@ import (
 
 const getRemuxSafetyVerdict = `-- name: GetRemuxSafetyVerdict :one
 SELECT
-  movie_id,
-  stream_index,
   fingerprint,
   safe,
-  reason,
-  created_at,
-  updated_at
+  reason
 FROM remux_safety_verdicts
 WHERE movie_id = ?
   AND stream_index = ?
@@ -28,20 +24,18 @@ type GetRemuxSafetyVerdictParams struct {
 	StreamIndex int64 `json:"stream_index"`
 }
 
+type GetRemuxSafetyVerdictRow struct {
+	Fingerprint string `json:"fingerprint"`
+	Safe        bool   `json:"safe"`
+	Reason      string `json:"reason"`
+}
+
 // Persisted remux-safety verdict for one video stream; the caller compares
 // the stored fingerprint and treats a mismatch as a miss.
-func (q *Queries) GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (RemuxSafetyVerdict, error) {
+func (q *Queries) GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (GetRemuxSafetyVerdictRow, error) {
 	row := q.queryRow(ctx, q.getRemuxSafetyVerdictStmt, getRemuxSafetyVerdict, arg.MovieID, arg.StreamIndex)
-	var i RemuxSafetyVerdict
-	err := row.Scan(
-		&i.MovieID,
-		&i.StreamIndex,
-		&i.Fingerprint,
-		&i.Safe,
-		&i.Reason,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
+	var i GetRemuxSafetyVerdictRow
+	err := row.Scan(&i.Fingerprint, &i.Safe, &i.Reason)
 	return i, err
 }
 
@@ -59,8 +53,7 @@ ON CONFLICT (movie_id, stream_index) DO UPDATE
 SET
   fingerprint = excluded.fingerprint,
   safe = excluded.safe,
-  reason = excluded.reason,
-  updated_at = CURRENT_TIMESTAMP
+  reason = excluded.reason
 `
 
 type UpsertRemuxSafetyVerdictParams struct {

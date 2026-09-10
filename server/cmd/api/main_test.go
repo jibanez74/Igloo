@@ -583,10 +583,12 @@ func TestInitTables_Indexes(t *testing.T) {
 		})
 	}
 
-	// Indexes deliberately removed because they serve no query and no reachable
-	// cascade. Re-adding one costs write time on every library scan, so fail loudly
-	// rather than let it drift back in.
+	// These indexes are redundant or serve no query or reachable cascade.
+	// Re-adding them would add unnecessary writes to library scans.
 	removedIndexes := []string{
+		"idx_crew_department",
+		"idx_playlist_user",
+		"idx_playlist_content_type",
 		"idx_cast_artist",
 		"idx_crew_artist",
 		"idx_movie_production_companies_company",
@@ -641,7 +643,6 @@ var parentTablesNeverDeleted = map[string]string{
 	"production_companies": "only upserted by the movie scanner",
 	"extra_videos":         "only upserted by the movie scanner",
 	"genres":               "only upserted via GetOrCreateGenre",
-	"musicians":            "only upserted by the music scanner",
 }
 
 // TestSchema_ForeignKeysAreIndexed asserts that every foreign key's child columns
@@ -987,10 +988,84 @@ func TestInitTables_Idempotent(t *testing.T) {
 		t.Fatalf("First InitTables call failed: %v", err)
 	}
 
+	_, err = db.Exec(`
+		INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult)
+		VALUES (1, 'Moonrise', '/movies/moonrise.mkv', 'moonrise.mkv', 1, 'mkv', 'video/x-matroska', false);
+		INSERT INTO musicians (id, name, sort_name) VALUES (1, 'Aurora', 'aurora');
+		INSERT INTO albums (id, title, sort_title, musician) VALUES (1, 'Daylight', 'daylight', 'Aurora');
+		INSERT INTO tracks (
+			id, title, sort_title, file_path, file_name, container, mime_type, codec,
+			size, track_index, duration, disc, channels, channel_layout, bit_rate, profile,
+			album_id, musician_id
+		) VALUES (
+			1, 'Sunrise', 'sunrise', '/music/sunrise.flac', 'sunrise.flac', 'flac', 'audio/flac', 'flac',
+			1, 1, 180, 1, '2', 'stereo', 1000, '', 1, 1
+		);
+		INSERT INTO genres (id, tag, genre_type) VALUES (1, 'Pop', 'music');
+		INSERT INTO track_musicians (track_id, musician_id) VALUES (1, 1);
+		INSERT INTO track_genres (track_id, genre_id) VALUES (1, 1);
+		INSERT INTO album_genres (album_id, genre_id, source) VALUES (1, 1, 'spotify');
+		INSERT INTO musician_genres (musician_id, genre_id, source) VALUES (1, 1, 'spotify');
+		INSERT INTO music_artist_identity (identity_key, musician_id) VALUES ('aurora', 1);
+		INSERT INTO music_album_identity (title_key, artist_key, album_id) VALUES ('daylight', 'aurora', 1);
+		INSERT INTO music_credit_metadata (track_id, musician_id, sort_name) VALUES (1, 1, 'aurora');
+		INSERT INTO music_spotify_matches (entity_type, entity_id, status) VALUES ('album', 1, 'unmatched');
+	`)
+	if err != nil {
+		t.Fatalf("populate catalog: %v", err)
+	}
+
+	checks := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{"movie", `SELECT id || ':' || title || ':' || file_path FROM movies`, "1:Moonrise:/movies/moonrise.mkv"},
+		{"musician", `SELECT id || ':' || name || ':' || sort_name FROM musicians`, "1:Aurora:aurora"},
+		{"album", `SELECT id || ':' || title || ':' || musician FROM albums`, "1:Daylight:Aurora"},
+		{"track", `SELECT id || ':' || title || ':' || file_path || ':' || album_id || ':' || musician_id FROM tracks`, "1:Sunrise:/music/sunrise.flac:1:1"},
+		{"genre", `SELECT id || ':' || tag || ':' || genre_type FROM genres`, "1:Pop:music"},
+		{"track credit", `SELECT track_id || ':' || musician_id FROM track_musicians`, "1:1"},
+		{"track genre", `SELECT track_id || ':' || genre_id FROM track_genres`, "1:1"},
+		{"derived musician album", `SELECT musician_id || ':' || album_id FROM musician_albums`, "1:1"},
+		{"musician genre provenance", `SELECT group_concat(source) FROM (SELECT source FROM musician_genres WHERE musician_id = 1 AND genre_id = 1 ORDER BY source)`, "local,spotify"},
+		{"album genre provenance", `SELECT group_concat(source) FROM (SELECT source FROM album_genres WHERE album_id = 1 AND genre_id = 1 ORDER BY source)`, "local,spotify"},
+		{"artist alias", `SELECT identity_key || ':' || musician_id FROM music_artist_identity`, "aurora:1"},
+		{"album alias", `SELECT title_key || ':' || artist_key || ':' || album_id FROM music_album_identity`, "daylight:aurora:1"},
+		{"sort contribution", `SELECT track_id || ':' || musician_id || ':' || sort_name FROM music_credit_metadata`, "1:1:aurora"},
+		{"match cache", `SELECT entity_type || ':' || entity_id || ':' || status FROM music_spotify_matches`, "album:1:unmatched"},
+		{"movie search", `SELECT group_concat(rowid) FROM movies_fts WHERE movies_fts MATCH 'moonrise'`, "1"},
+		{"album search", `SELECT group_concat(rowid) FROM albums_fts WHERE albums_fts MATCH 'daylight aurora'`, "1"},
+		{"musician search", `SELECT group_concat(rowid) FROM musicians_fts WHERE musicians_fts MATCH 'aurora'`, "1"},
+		{"track search", `SELECT group_concat(rowid) FROM tracks_search_fts WHERE tracks_search_fts MATCH 'sunrise daylight aurora'`, "1"},
+		{"vocabulary generations", `SELECT group_concat(vocab_table || ':' || generation) FROM (SELECT * FROM search_vocab_generations ORDER BY vocab_table)`, "albums_fts_vocab:1,movies_fts_vocab:1,musicians_fts_vocab:1,tracks_search_fts_vocab:1"},
+		{"foreign key integrity", `SELECT COUNT(*) FROM pragma_foreign_key_check`, "0"},
+	}
+
+	assertPopulatedState := func(t *testing.T) {
+		t.Helper()
+		for _, check := range checks {
+			t.Run(check.name, func(t *testing.T) {
+				var got string
+				err := db.QueryRow(check.query).Scan(&got)
+				if err != nil {
+					t.Fatalf("read populated state: %v", err)
+				}
+				if got != check.want {
+					t.Errorf("got %q, want %q", got, check.want)
+				}
+			})
+		}
+	}
+
+	t.Run("before reinitialization", assertPopulatedState)
+
 	err = app.InitTables()
 	if err != nil {
 		t.Fatalf("Second InitTables call failed (not idempotent): %v", err)
 	}
+
+	t.Run("after reinitialization", assertPopulatedState)
 }
 
 func TestInitTables_WatchRoomTrackConstraints(t *testing.T) {
@@ -1239,7 +1314,11 @@ func createTestUser(t *testing.T, app *Application, name, email string, isAdmin 
 		t.Fatalf("create user %q: %v", email, err)
 	}
 
-	return user
+	stored, err := app.Queries.GetUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stored
 }
 
 // authSessionCookies runs one request through the session manager so the
@@ -1660,9 +1739,13 @@ func TestInitDefaultUser_UsesConfiguredCredentials(t *testing.T) {
 		t.Fatalf("InitDefaultUser failed: %v", err)
 	}
 
-	admin, err := app.Queries.GetAdminUser(context.Background())
+	adminID, err := app.Queries.GetAdminUser(context.Background())
 	if err != nil {
 		t.Fatalf("GetAdminUser failed: %v", err)
+	}
+	admin, err := app.Queries.GetUser(context.Background(), adminID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if admin.Name != app.Config.DefaultAdminName || admin.Email != app.Config.DefaultAdminEmail {
 		t.Fatalf("admin credentials = (%q, %q), want (%q, %q)", admin.Name, admin.Email, app.Config.DefaultAdminName, app.Config.DefaultAdminEmail)

@@ -80,11 +80,6 @@ function buildMovie(
   return {
     id: 17,
     title: "The Matrix",
-    file_path: "/media/movies/the-matrix.mkv",
-    file_name: "the-matrix.mkv",
-    size: 1024,
-    container: "mkv",
-    mime_type: "video/x-matroska",
     adult: false,
     tmdb_id: nullableInt(603),
     imdb_id: nullableString("tt0133093"),
@@ -102,8 +97,6 @@ function buildMovie(
     budget: { Float64: 63000000, Valid: true },
     run_time: { Int64: 136, Valid: true },
     duration: { Float64: 8160, Valid: true },
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };
 }

@@ -93,7 +93,6 @@ SELECT
   t.id,
   t.title,
   t.duration,
-  t.file_path,
   t.codec,
   t.bit_rate,
   t.album_id,
@@ -128,7 +127,6 @@ type GetPlaylistTracksInfiniteRow struct {
 	ID              int64          `json:"id"`
 	Title           string         `json:"title"`
 	Duration        int64          `json:"duration"`
-	FilePath        string         `json:"file_path"`
 	Codec           string         `json:"codec"`
 	BitRate         int64          `json:"bit_rate"`
 	AlbumID         sql.NullInt64  `json:"album_id"`
@@ -155,7 +153,6 @@ func (q *Queries) GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylist
 			&i.ID,
 			&i.Title,
 			&i.Duration,
-			&i.FilePath,
 			&i.Codec,
 			&i.BitRate,
 			&i.AlbumID,

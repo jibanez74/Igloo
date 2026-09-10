@@ -38,32 +38,23 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	}
 	assertOpenAPIExchange(t, "createNotification", req, w)
 
-	var resp struct {
-		Error bool `json:"error"`
-		Data  struct {
-			Notification struct {
-				ID              int64  `json:"id"`
-				CreatedByUserID int64  `json:"created_by_user_id"`
-				Title           string `json:"title"`
-				Message         string `json:"message"`
-				IsAdmin         bool   `json:"is_admin"`
-			} `json:"notification"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var resp helpers.JSONResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	if err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	if resp.Error {
-		t.Fatalf("expected success response, got %s", w.Body.String())
+	if resp.Error || resp.Data != nil {
+		t.Fatalf("expected success without data, got %s", w.Body.String())
 	}
-	if resp.Data.Notification.Title != notificationTitleMovieRequest {
-		t.Fatalf("title = %q, want %q", resp.Data.Notification.Title, notificationTitleMovieRequest)
+	var creatorID int64
+	var title, message string
+	var isAdmin bool
+	err = app.DB.QueryRow("SELECT created_by_user_id, title, message, is_admin FROM notifications").Scan(&creatorID, &title, &message, &isAdmin)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !resp.Data.Notification.IsAdmin {
-		t.Fatal("expected notification to target admins")
-	}
-	if resp.Data.Notification.CreatedByUserID != user.ID {
-		t.Fatalf("created_by_user_id = %d, want %d", resp.Data.Notification.CreatedByUserID, user.ID)
+	if creatorID != user.ID || title != notificationTitleMovieRequest || message != "Requester: requester@example.com" || !isAdmin {
+		t.Fatalf("stored notification = %d/%q/%q/%t", creatorID, title, message, isAdmin)
 	}
 }
 
@@ -178,9 +169,9 @@ type notificationListResponse struct {
 	} `json:"data"`
 }
 
-func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int64, message string) database.Notification {
+func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int64, message string) database.ListNotificationsForUserRow {
 	t.Helper()
-	n, err := app.Queries.CreateNotification(context.Background(), database.CreateNotificationParams{
+	err := app.Queries.CreateNotification(context.Background(), database.CreateNotificationParams{
 		CreatedByUserID: requesterID,
 		Title:           notificationTitleMovieRequest,
 		Message:         message,
@@ -189,7 +180,17 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 	if err != nil {
 		t.Fatalf("failed to seed notification: %v", err)
 	}
-	return n
+	rows, err := app.Queries.ListNotificationsForUser(context.Background(), database.ListNotificationsForUserParams{UserID: requesterID, RowLimit: notificationListLimit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.Message == message {
+			return row
+		}
+	}
+	t.Fatal("seeded notification not found")
+	return database.ListNotificationsForUserRow{}
 }
 
 func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {

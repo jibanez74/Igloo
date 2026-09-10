@@ -203,12 +203,12 @@ func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Reque
 // issueDeviceToken creates the devices row for a freshly authenticated
 // device. The plaintext token exists only in the caller's response; on
 // failure an error response has already been written and ok is false.
-func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request, userID int64, deviceName, platform, appVersion string) (string, database.Device, bool) {
+func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request, userID int64, deviceName, platform, appVersion string) (string, database.CreateDeviceRow, bool) {
 	token, tokenHash, err := generateDeviceToken()
 	if err != nil {
 		app.Logger.Error("failed to generate device token", "error", err)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return "", database.Device{}, false
+		return "", database.CreateDeviceRow{}, false
 	}
 
 	device, err := app.Queries.CreateDevice(r.Context(), database.CreateDeviceParams{
@@ -221,7 +221,7 @@ func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		app.Logger.Error("failed to create device", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return "", database.Device{}, false
+		return "", database.CreateDeviceRow{}, false
 	}
 
 	app.Logger.Info("device token issued", "user_id", userID, "device_id", device.ID)

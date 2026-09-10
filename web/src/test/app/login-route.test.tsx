@@ -186,6 +186,23 @@ async function signIn() {
 }
 
 describe("login route redirects", () => {
+  it("submits an oversized password intact and displays the credential error", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = await renderLoginRouteTree("/login", {
+      loginResponse: { body: { error: true, message: "Invalid credentials" }, status: 401 },
+    });
+    await screen.findByRole("button", { name: "Sign in" });
+    const input = screen.getByLabelText("Password", { exact: true });
+    const password = "a".repeat(129);
+    expect(input).not.toHaveAttribute("maxlength");
+    await user.type(screen.getByLabelText("Email"), "admin@example.com");
+    await user.type(input, password);
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(toastMocks.showError).toHaveBeenCalledWith("Login failed", "Invalid credentials"));
+    const request = fetchMock.mock.calls.find(([url]) => requestURL(url) === "/api/auth/login");
+    expect(JSON.parse(request![1]!.body as string)).toEqual({ email: "admin@example.com", password });
+  });
+
   it("redirects unauthenticated Home before loading in-theaters data", async () => {
     const { fetchMock, router } = await renderLoginRoute("/");
 

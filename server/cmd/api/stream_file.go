@@ -57,7 +57,7 @@ func (app *Application) movieStreamFile(ctx context.Context, movieID int64) (str
 // trackStreamFile is the music twin of movieStreamFile.
 func (app *Application) trackStreamFile(ctx context.Context, trackID int64) (streamFile, error) {
 	return app.StreamFileCache.resolve(trackStreamFileKey(trackID), func() (streamFile, error) {
-		track, err := app.Queries.GetTrack(ctx, trackID)
+		track, err := app.Queries.GetTrackForDirectStream(ctx, trackID)
 		if err != nil {
 			return streamFile{}, err
 		}

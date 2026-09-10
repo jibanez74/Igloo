@@ -54,15 +54,15 @@ func (s *Scanner) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Que
 		return genreID, nil
 	}
 
-	genre, err := qtx.FindMusicGenreIdentity(ctx, cacheKey)
+	genreID, err := qtx.FindMusicGenreIdentity(ctx, cacheKey)
 	if err == nil {
-		scan.genreIDs.Set(cacheKey, genre.ID)
-		return genre.ID, nil
+		scan.genreIDs.Set(cacheKey, genreID)
+		return genreID, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
-	genre, err = qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
+	genreID, err = qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
 		Tag:       tag,
 		GenreType: "music",
 	})
@@ -70,10 +70,10 @@ func (s *Scanner) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Que
 		return 0, err
 	}
 
-	err = qtx.SaveMusicGenreIdentity(ctx, database.SaveMusicGenreIdentityParams{IdentityKey: cacheKey, GenreID: genre.ID})
+	err = qtx.SaveMusicGenreIdentity(ctx, database.SaveMusicGenreIdentityParams{IdentityKey: cacheKey, GenreID: genreID})
 	if err != nil {
 		return 0, err
 	}
-	scan.genreIDs.Set(cacheKey, genre.ID)
-	return genre.ID, nil
+	scan.genreIDs.Set(cacheKey, genreID)
+	return genreID, nil
 }

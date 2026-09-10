@@ -32,7 +32,6 @@ function rawTrack({
   return {
     id,
     title,
-    file_path: `/music/${id}.flac`,
     duration: 100,
     codec: "flac",
     bit_rate: 900000,
