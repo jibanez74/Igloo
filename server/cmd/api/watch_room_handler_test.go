@@ -540,11 +540,12 @@ func TestCreateWatchRoom_HTTP_DirectForNonMP4Rejected(t *testing.T) {
 	}
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, mkvMovie.ID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, mkvMovie.ID)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for a direct room on a non-MP4 movie, got %d: %s", w.Code, w.Body.String())
@@ -559,11 +560,12 @@ func TestCreateWatchRoom_HTTP_DirectWithNonBrowserSafeH264Rejected(t *testing.T)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High 10")
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for a direct room on a High 10 movie, got %d: %s", w.Code, w.Body.String())
@@ -625,11 +627,12 @@ func TestCreateWatchRoom_HTTP_DirectWithNoVideoStreamsRejected(t *testing.T) {
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for a direct room on a movie with no video streams, got %d: %s", w.Code, w.Body.String())
@@ -645,11 +648,12 @@ func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
 	insertWatchRoomTestAudioStream(t, app, movieID, 2, true)
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
+	assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for direct mode with a non-first default audio stream, got %d: %s", w.Code, w.Body.String())
@@ -1564,11 +1568,12 @@ func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
 			insertWatchRoomAudioStreams(t, app, movieID, tt.audioCount)
 			handler := mountWatchRoomRouter(t, app, ownerID)
 
-			body := fmt.Sprintf(`{"movie_id":%d,"mode":%q,"audio_track":%d,"invited_user_ids":[]}`, movieID, tt.mode, tt.audioTrack)
-			req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+			body := fmt.Sprintf(`{"movie_id":%d,"mode":%q,"audio_track":%d,"subtitle_track":null,"invited_user_ids":[]}`, movieID, tt.mode, tt.audioTrack)
+			req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
+			assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("expected %d, got %d: %s", tt.wantStatus, w.Code, w.Body.String())
@@ -1668,25 +1673,26 @@ func TestCreateWatchRoom_HTTP_SubtitleTrackOutOfRangeRejected(t *testing.T) {
 	handler := mountWatchRoomRouter(t, app, ownerID)
 
 	postRoom := func(body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
+		req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
+		assertOpenAPIExchange(t, "createWatchRoom", req, w)
 		return w
 	}
 
-	noSubtitles := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0}`, movieID))
+	noSubtitles := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0,"invited_user_ids":[]}`, movieID))
 	if noSubtitles.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for a movie without subtitles, got %d: %s", noSubtitles.Code, noSubtitles.Body.String())
 	}
 
 	insertWatchRoomTestSubtitle(t, app, movieID, 2, "eng")
-	outOfRange := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":3}`, movieID))
+	outOfRange := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":3,"invited_user_ids":[]}`, movieID))
 	if outOfRange.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for out-of-range subtitle_track, got %d: %s", outOfRange.Code, outOfRange.Body.String())
 	}
 
-	valid := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0}`, movieID))
+	valid := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0,"invited_user_ids":[]}`, movieID))
 	if valid.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for in-range subtitle_track, got %d: %s", valid.Code, valid.Body.String())
 	}
@@ -1915,11 +1921,55 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	// same or the pin check keeps reading the pre-drift streams from cache.
 	app.invalidateCommittedMovie(movieID)
 
-	drifted := performWatchRoomHTTPRequest(t, app, owner.ID, http.MethodGet, manifestPath)
+	driftedRequest := httptest.NewRequest(http.MethodGet, manifestPath, nil)
+	drifted := httptest.NewRecorder()
+	handler.ServeHTTP(drifted, driftedRequest)
+	assertOpenAPIExchange(t, "watchRoomHLSManifest", driftedRequest, drifted)
 	if drifted.Code != http.StatusConflict {
 		t.Fatalf("expected 409 after drift, got %d: %s", drifted.Code, drifted.Body.String())
 	}
 	if !strings.Contains(drifted.Body.String(), "delete the room and create it again") {
 		t.Fatalf("expected actionable drift message, got %s", drifted.Body.String())
+	}
+}
+
+func TestWatchRoomMediaSubtitleDriftConformsToOpenAPI(t *testing.T) {
+	for _, mutation := range []struct{ name, sql string }{
+		{"removed subtitle", `DELETE FROM subtitles WHERE movie_id = ?`},
+		{"changed stream index", `UPDATE subtitles SET stream_index = 6 WHERE movie_id = ?`},
+		{"changed language", `UPDATE subtitles SET language = 'jpn' WHERE movie_id = ?`},
+	} {
+		for _, mode := range []string{"direct", helpers.HLS_PROFILE_720P_3MBPS} {
+			t.Run(mode+"/"+mutation.name, func(t *testing.T) {
+				app := setupSessionTestApp(t)
+				defer app.DB.Close()
+				ownerID, movieID := createTestUserAndMovie(t, app)
+				insertWatchRoomTestSubtitle(t, app, movieID, 5, "eng")
+				room := createTestRoomWithMode(t, app, ownerID, movieID, mode)
+				addMembersToRoom(t, app, room.ID, ownerID)
+				_, err := app.DB.Exec(`UPDATE watch_rooms SET subtitle_track = 0, subtitle_stream_index = 5, subtitle_language = 'eng' WHERE id = ?`, room.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = app.DB.Exec(mutation.sql, movieID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				app.invalidateCommittedMovie(movieID)
+				path := fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID)
+				operation := "streamWatchRoomMovie"
+				if mode != "direct" {
+					path = fmt.Sprintf("/api/watch-rooms/%d/hls/playlist.m3u8", room.ID)
+					operation = "watchRoomHLSManifest"
+				}
+				request := httptest.NewRequest(http.MethodGet, path, nil)
+				response := httptest.NewRecorder()
+				mountWatchRoomRouter(t, app, ownerID).ServeHTTP(response, request)
+				if response.Code != http.StatusConflict {
+					t.Fatalf("status = %d: %s", response.Code, response.Body.String())
+				}
+				assertOpenAPIExchange(t, operation, request, response)
+			})
+		}
 	}
 }
