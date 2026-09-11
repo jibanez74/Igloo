@@ -9,6 +9,9 @@ import {
   nullableInt64,
   nullableString,
 } from "./e2e-api";
+import { movieScanStatus } from "../src/test/helpers/movie-scan";
+import { musicScanStatus } from "../src/test/helpers/music-scan";
+import { showScanStatus } from "../src/test/helpers/show-scan";
 
 function apiResponse(data: unknown) {
   return {
@@ -99,6 +102,24 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
       return;
     }
 
+    // The app shell discovers in-flight scans on every route for admins.
+    const idleScan = { run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null } as const;
+
+    if (pathname === "/api/settings/scan/movies") {
+      await fulfillJSON(route, apiResponse(movieScanStatus(idleScan)));
+      return;
+    }
+
+    if (pathname === "/api/settings/scan/music") {
+      await fulfillJSON(route, apiResponse(musicScanStatus(idleScan)));
+      return;
+    }
+
+    if (pathname === "/api/settings/scan/shows") {
+      await fulfillJSON(route, apiResponse(showScanStatus(idleScan)));
+      return;
+    }
+
     if (pathname === "/api/notifications/unread-count") {
       await fulfillJSON(route, apiResponse({ unread_count: 0 }));
       return;
@@ -156,6 +177,32 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
             title: "Mercury Harbor",
             poster_path: nullableString(),
             year: nullableInt64(2024),
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (pathname === "/api/shows/latest") {
+      await fulfillJSON(route, apiResponse({
+        shows: [
+          {
+            id: 301,
+            name: "Frost Harbor",
+            poster_path: nullableString("/frost-harbor.jpg"),
+            premiere_year: nullableInt64(2026),
+          },
+          {
+            id: 302,
+            name: "Halcyon Drift",
+            poster_path: nullableString("/halcyon-drift.jpg"),
+            premiere_year: nullableInt64(2024),
+          },
+          {
+            id: 303,
+            name: "Lantern Bay",
+            poster_path: nullableString(),
+            premiere_year: nullableInt64(),
           },
         ],
       }));
@@ -302,6 +349,7 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
     "Watch Rooms",
     "Continue Watching",
     "Recently Added Movies",
+    "Recently Added Shows",
     "Recently Added Albums",
     "Now Playing in Theaters",
   ]) {
@@ -312,7 +360,7 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   }
 
   await page.keyboard.press("Tab");
-  const skipLink = page.getByRole("link", { name: "Skip to content" });
+  const skipLink = page.getByRole("link", { name: "Skip to page content" });
   await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();

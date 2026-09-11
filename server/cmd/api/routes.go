@@ -70,6 +70,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 		app.registerSpotifyRoutes(r)
 		app.registerSearchRoutes(r)
 		app.registerMovieRoutes(r)
+		app.registerShowRoutes(r)
 		r.Get("/users", app.GetUsers)
 		app.registerAdminUserRoutes(r)
 		app.registerWatchRoomRoutes(r)
@@ -185,6 +186,12 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 		r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
 		r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
 		r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)
+	})
+}
+
+func (app *Application) registerShowRoutes(r chi.Router) {
+	r.Route("/shows", func(r chi.Router) {
+		r.Get("/latest", app.GetLatestShows)
 	})
 }
 

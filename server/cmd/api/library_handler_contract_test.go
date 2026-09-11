@@ -48,6 +48,7 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 		{operationID: "getShuffleTracks", path: "/api/music/tracks/shuffle"},
 		{operationID: "getMusicStats", path: "/api/music/stats"},
 		{operationID: "getLatestMovies", path: "/api/movies/latest"},
+		{operationID: "getLatestShows", path: "/api/shows/latest"},
 		{operationID: "getMoviesLibrary", path: "/api/movies/library"},
 		{operationID: "getMoviesStats", path: "/api/movies/stats"},
 		{operationID: "getMovieGenresList", path: "/api/movies/genres"},

@@ -73,7 +73,7 @@ async function expectDecorativeAnimationsStopped(page: Page) {
 // sr-only span, since a non-interactive tab stop is keyboard noise.
 async function expectSkipLinkWorks(page: Page) {
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "Skip to page content" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
 }

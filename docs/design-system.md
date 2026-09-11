@@ -428,7 +428,7 @@ collapse, while the mobile trigger controls the sheet.
 
 ### 3.2 Media cards
 
-One anatomy, shared by `MovieCard`, `InTheatersCard`, `AlbumCard`,
+One anatomy, shared by `MovieCard`, `ShowCard`, `InTheatersCard`, `AlbumCard`,
 `MusicianCard`, `PlaylistCard`, `WatchRoomCard`:
 
 ```
@@ -450,11 +450,13 @@ One anatomy, shared by `MovieCard`, `InTheatersCard`, `AlbumCard`,
 
 Rules: 2:3 posters, square covers, circular musician thumbs; titles clamp at
 2 lines; the hover overlay must also reveal on `group-focus-within`; cards
-prefetch their detail query on `onMouseEnter`/`onFocus`
-(`queryClient.prefetchQuery`); rating chips tier via the shared
-`criticRatingClass`/`audienceRatingClass` helpers in `lib/rating.ts`
-(`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`), rendered with the `Badge`
-primitive where no list semantics are needed (§1.6).
+with no secondary play action (`ShowCard`, `InTheatersCard`, `MusicianCard`)
+omit the overlay and play control entirely rather than rendering an empty
+wash; cards prefetch their detail query on `onMouseEnter`/`onFocus`
+(`queryClient.prefetchQuery`) when a detail query exists; rating chips tier
+via the shared `criticRatingClass`/`audienceRatingClass` helpers in
+`lib/rating.ts` (`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`), rendered
+with the `Badge` primitive where no list semantics are needed (§1.6).
 
 Grids: the canonical poster grid is
 `grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`; home

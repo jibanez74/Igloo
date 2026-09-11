@@ -19,6 +19,7 @@ import type {
   JoinWatchRoomResponseType,
   ContinueWatchingMovieType,
   LatestMovieType,
+  LatestShowsDataType,
   LibraryMovieDetailsResponse,
   GeneralSettingsResponseType,
   PlaybackSettingsResponseType,
@@ -320,6 +321,9 @@ export const getLatestAlbums = () =>
 
 export const getLatestMovies = () =>
   apiRequest<{ movies: LatestMovieType[] }>("/api/movies/latest");
+
+export const getLatestShows = () =>
+  apiRequest<LatestShowsDataType>("/api/shows/latest");
 
 export const getContinueWatchingMovies = () =>
   apiRequest<{ movies: ContinueWatchingMovieType[] }>(

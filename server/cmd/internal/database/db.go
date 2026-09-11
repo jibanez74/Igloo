@@ -390,6 +390,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getLatestMoviesStmt, err = db.PrepareContext(ctx, getLatestMovies); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLatestMovies: %w", err)
 	}
+	if q.getLatestShowsStmt, err = db.PrepareContext(ctx, getLatestShows); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLatestShows: %w", err)
+	}
 	if q.getLikedMoviesForUserAscStmt, err = db.PrepareContext(ctx, getLikedMoviesForUserAsc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLikedMoviesForUserAsc: %w", err)
 	}
@@ -1587,6 +1590,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLatestMoviesStmt: %w", cerr)
 		}
 	}
+	if q.getLatestShowsStmt != nil {
+		if cerr := q.getLatestShowsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLatestShowsStmt: %w", cerr)
+		}
+	}
 	if q.getLikedMoviesForUserAscStmt != nil {
 		if cerr := q.getLikedMoviesForUserAscStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLikedMoviesForUserAscStmt: %w", cerr)
@@ -2718,6 +2726,7 @@ type Queries struct {
 	getKeyframeIndexStmt                        *sql.Stmt
 	getLatestAlbumsStmt                         *sql.Stmt
 	getLatestMoviesStmt                         *sql.Stmt
+	getLatestShowsStmt                          *sql.Stmt
 	getLikedMoviesForUserAscStmt                *sql.Stmt
 	getLikedMoviesForUserDescStmt               *sql.Stmt
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
@@ -3040,6 +3049,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getKeyframeIndexStmt:                        q.getKeyframeIndexStmt,
 		getLatestAlbumsStmt:                         q.getLatestAlbumsStmt,
 		getLatestMoviesStmt:                         q.getLatestMoviesStmt,
+		getLatestShowsStmt:                          q.getLatestShowsStmt,
 		getLikedMoviesForUserAscStmt:                q.getLikedMoviesForUserAscStmt,
 		getLikedMoviesForUserDescStmt:               q.getLikedMoviesForUserDescStmt,
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,

@@ -69,6 +69,10 @@
       "description": "Movie playlist management"
     },
     {
+      "name": "TV Shows",
+      "description": "TV show library"
+    },
+    {
       "name": "Admin Users",
       "description": "Admin-only user management"
     },
@@ -1507,6 +1511,27 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/LatestMoviesResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/latest": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "List latest TV shows",
+        "description": "Returns the most recently discovered shows, newest first.",
+        "operationId": "getLatestShows",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LatestShowsResponse"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -6124,6 +6149,16 @@
           }
         }
       },
+      "LatestShowsResponse": {
+        "description": "Latest TV shows response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LatestShowsEnvelope"
+            }
+          }
+        }
+      },
       "ContinueWatchingMoviesResponse": {
         "description": "Continue watching movies response.",
         "content": {
@@ -8550,6 +8585,64 @@
                   }
                 },
                 "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "LatestShow": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "poster_path",
+          "premiere_year"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "premiere_year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LatestShowsData": {
+        "type": "object",
+        "required": [
+          "shows"
+        ],
+        "properties": {
+          "shows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LatestShow"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "LatestShowsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LatestShowsData"
               }
             }
           }
