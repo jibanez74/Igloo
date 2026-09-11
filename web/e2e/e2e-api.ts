@@ -1,4 +1,7 @@
 import type { Route } from "@playwright/test";
+import { movieScanStatus } from "../src/test/helpers/movie-scan";
+import { musicScanStatus } from "../src/test/helpers/music-scan";
+import { showScanStatus } from "../src/test/helpers/show-scan";
 
 // Shared shapes for talking to the API from specs: the JSON envelope, the Go
 // `sql.Null*` wire types, and the two ways a spec produces a body — reading a
@@ -69,4 +72,38 @@ export function nullableFloat64(value: number | null = null): NullableFloat64 {
     Float64: value ?? 0,
     Valid: value != null,
   };
+}
+
+// The authenticated app shell polls all three scan-status endpoints on every
+// route for admins (it discovers a scan already in flight), so every spec that
+// owns a catch-all `**/api/**` mock sees them regardless of the page under test.
+// Specs call this first in their handler and return when it reports handled,
+// so the requests do not land in their unexpected-request assertions.
+const IDLE_SCAN = {
+  run_id: "",
+  state: "idle",
+  phase: "idle",
+  total: 0,
+  started_at: null,
+  updated_at: null,
+} as const;
+
+const IDLE_SCAN_STATUS_BY_PATH: Record<string, () => unknown> = {
+  "/api/settings/scan/movies": () => movieScanStatus(IDLE_SCAN),
+  "/api/settings/scan/music": () => musicScanStatus(IDLE_SCAN),
+  "/api/settings/scan/shows": () => showScanStatus(IDLE_SCAN),
+};
+
+/**
+ * Fulfills the app shell's scan-status polling with an idle report.
+ * Returns true when it handled the route, so callers can `return` immediately.
+ */
+export async function fulfillIdleScanStatus(route: Route, pathname: string) {
+  const status = IDLE_SCAN_STATUS_BY_PATH[pathname];
+  if (!status) {
+    return false;
+  }
+
+  await fulfillJSON(route, apiResponse(status()));
+  return true;
 }
