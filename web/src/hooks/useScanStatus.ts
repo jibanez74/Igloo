@@ -28,7 +28,9 @@ type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
 };
 
 // Polls a scan report every two seconds while it runs and every ten seconds
-// otherwise, pausing in hidden tabs. Committed work refreshes the library
+// otherwise, pausing in hidden tabs. Without watchIdle the first request still
+// goes out, so a scan started elsewhere is discovered on any route; polling
+// then continues only while it runs. Committed work refreshes the library
 // statistics; a new run, phase or terminal state refreshes the library lists.
 function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   config: ScanStatusConfig<T>,
@@ -38,7 +40,8 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   const queryClient = useQueryClient();
   const query = useQuery({
     ...config.queryOptions(),
-    enabled: query => enabled && visible && (watchIdle || query.state.data?.state === "running"),
+    enabled: query =>
+      enabled && visible && (watchIdle || query.state.status === "pending" || query.state.data?.state === "running"),
     refetchOnMount: "always",
     refetchInterval: query => visible
       ? query.state.data?.state === "running" ? 2_000 : 10_000

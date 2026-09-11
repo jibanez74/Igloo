@@ -258,8 +258,10 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 	sortName = strings.TrimSpace(sortName)
 	cacheKey := scanner.NormalizedScanCacheKey(name)
 	// Tally the outcome on every return path, cached ones included, so the scan
-	// summary counts artists rather than Spotify requests.
-	defer func() { scan.countEnrichment(cacheKey, resolvedMusicianMatch(resolved)) }()
+	// summary counts artists rather than Spotify requests. Once the catalog row
+	// is known the tally keys on it, so aliases of one artist count once.
+	countKey := musicSpotifyEntityMusician + ":" + cacheKey
+	defer func() { scan.countEnrichment(countKey, resolvedMusicianMatch(resolved)) }()
 	musicianID, ok := scan.musicianIDs.Get(cacheKey)
 	if ok {
 		return &resolvedMusician{
@@ -297,6 +299,7 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		return nil, err
 	}
 	if found {
+		countKey = musicSpotifyEntityMusician + ":" + strconv.FormatInt(existing.ID, 10)
 		resolved.existingID = existing.ID
 		resolved.hasExistingID = true
 		resolved.existing = &existing
@@ -377,9 +380,9 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 	albumArtist = strings.TrimSpace(albumArtist)
 	sortTitle = strings.TrimSpace(sortTitle)
 	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
-	// Tally the outcome on every return path, cached ones included, so the scan
-	// summary counts albums rather than Spotify requests.
-	defer func() { scan.countEnrichment(cacheKey, resolvedAlbumMatch(resolved)) }()
+	// Same tally as resolveMusician, keyed on the catalog row once it is known.
+	countKey := musicSpotifyEntityAlbum + ":" + cacheKey
+	defer func() { scan.countEnrichment(countKey, resolvedAlbumMatch(resolved)) }()
 	albumID, ok := scan.albumIDs.Get(cacheKey)
 	if ok {
 		return &resolvedAlbum{
@@ -418,6 +421,7 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 		return nil, err
 	}
 	if found {
+		countKey = musicSpotifyEntityAlbum + ":" + strconv.FormatInt(existing.ID, 10)
 		resolved.existingID = existing.ID
 		resolved.hasExistingID = true
 		resolved.existing = &existing

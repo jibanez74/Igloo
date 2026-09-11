@@ -114,8 +114,8 @@ func TestGetTmdbMovieByID_RateLimitExhaustsRetries(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected exhausted retries to return error")
 	}
-	if err.Error() != "rate limit exceeded for tmdb" {
-		t.Fatalf("error = %q, want rate limit exceeded for tmdb", err.Error())
+	if err.Error() != "tmdb status 429: rate limit exceeded for tmdb" {
+		t.Fatalf("error = %q, want tmdb status 429: rate limit exceeded for tmdb", err.Error())
 	}
 	if attempts.Load() != 3 {
 		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
@@ -361,8 +361,8 @@ func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-OK response to return error")
 	}
-	if err.Error() != "unable to get movie from tmdb" {
-		t.Fatalf("error = %q, want unable to get movie from tmdb", err.Error())
+	if err.Error() != "tmdb status 404: unable to get movie from tmdb" {
+		t.Fatalf("error = %q, want tmdb status 404: unable to get movie from tmdb", err.Error())
 	}
 }
 

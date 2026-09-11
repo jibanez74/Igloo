@@ -156,8 +156,8 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 	}
 }
 
-// processFile returns the file outcome and whether the cleaned path had a
-// stored fingerprint baseline, which decides imported versus updated.
+// processFile returns the file outcome and whether the cleaned path was in
+// the catalog when the scan started, which decides imported versus updated.
 func (s *Scanner) processFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (outcome scanner.FileOutcome, existed bool, err error) {
 	file.Path = filepath.Clean(file.Path)
 	var previous *scanner.FileFingerprint
@@ -205,11 +205,13 @@ func (s *Scanner) loadMusicScanIndex(ctx context.Context) (map[string]scanner.Fi
 	files := make([]scanner.CatalogFile, 0, len(rows))
 	for _, row := range rows {
 		files = append(files, scanner.CatalogFile{ID: row.ID, Path: row.FilePath})
-		if !row.MtimeNs.Valid {
-			continue
-		}
+		// A catalog row without a baseline still exists, so its file counts as
+		// updated rather than imported; the zero fingerprint never matches, which
+		// forces the reprobe that records a real one.
 		fingerprint := scanner.StoredFingerprint(row.Size, row.MtimeNs, row.CtimeNs, row.Device, row.Inode)
-		fingerprint.SHA256 = [32]byte(row.Sha256)
+		if len(row.Sha256) == len(fingerprint.SHA256) {
+			fingerprint.SHA256 = [32]byte(row.Sha256)
+		}
 		index[filepath.Clean(row.FilePath)] = fingerprint
 	}
 	return index, files, nil

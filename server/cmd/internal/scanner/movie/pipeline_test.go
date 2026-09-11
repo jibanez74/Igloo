@@ -91,6 +91,11 @@ func TestMoviePipeline418Files(t *testing.T) {
 			}
 			// Snapshots are independent of the coordinator's state.
 			status.ActiveFiles[0] = "mutated by reader"
+			if s.Status().ActiveFiles[0] == "mutated by reader" {
+				cancel()
+				awaitScanSignal(t, done)
+				t.Fatal("status shares mutable active files")
+			}
 			if canceled {
 				cancel()
 			} else {

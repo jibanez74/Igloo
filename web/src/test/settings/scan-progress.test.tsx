@@ -15,6 +15,11 @@ function ScanView() {
   return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
 }
 
+function BackgroundScanView() {
+  const query = useMovieScanStatus({ watchIdle: false });
+  return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
+}
+
 function MusicScanView() {
   const query = useMusicScanStatus();
   return <ScanProgress library="music" status={query.data} unavailable={query.isError} />;
@@ -93,6 +98,27 @@ describe("movie scan progress", () => {
     expect(fetchMock).toHaveBeenCalledTimes(completedCalls);
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
     expect(fetchMock).toHaveBeenCalledTimes(completedCalls + 1);
+    client.clear();
+  });
+
+  it("discovers a running scan without watching idle status, then stops once it finishes", async () => {
+    vi.useFakeTimers();
+    let status = movieScanStatus();
+    const fetchMock = vi.fn(() => jsonResponse({ error: false, data: status }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    render(<QueryClientProvider client={client}><BackgroundScanView /></QueryClientProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing movies");
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    status = movieScanStatus({ state: "completed", processed: 418, imported: 418 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByRole("status")).toHaveTextContent("Movie scan completed");
+    const completedCalls = fetchMock.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(completedCalls);
     client.clear();
   });
 });

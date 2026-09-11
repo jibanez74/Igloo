@@ -542,12 +542,23 @@ func TestTechnicalRescanStillQueuesUnmatchedMovie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = os.WriteFile(path, []byte("changed movie"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.processFile(ctx, nextMovieScan(t, s), file)
+	if err != nil {
+		t.Fatal(err)
+	}
 	movie, err := readTestMovieByPath(ctx, s.queries, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if movie.TmdbID.Valid {
 		t.Fatalf("unmatched movie gained a match: %+v", movie)
+	}
+	if movie.Size != 13 {
+		t.Fatalf("technical refresh did not run: size=%d", movie.Size)
 	}
 	pending, err := s.queries.HasMovieTmdbRetry(ctx, movie.ID)
 	if err != nil {

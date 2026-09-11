@@ -337,7 +337,9 @@ type StatusError struct {
 	Message    string
 }
 
-func (e *StatusError) Error() string { return e.Message }
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("tmdb status %d: %s", e.StatusCode, e.Message)
+}
 
 // ProviderFailure classifies failures for scan dispatch. Valid no-match results
 // are handled separately; transport and malformed-response errors are transient.

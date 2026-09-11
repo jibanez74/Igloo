@@ -16,6 +16,10 @@ func TestRunWorkersDeliversEveryResultOnTheCaller(t *testing.T) {
 	var mu sync.Mutex
 	seen := make(map[int]bool)
 	dispatched := 0
+	// Jobs block until the pool is saturated once, so the observed peak proves
+	// the worker bound rather than the scheduler's timing.
+	release := make(chan struct{})
+	var saturated sync.Once
 	RunWorkers(context.Background(), 3, jobs, func() bool { return true },
 		func(_ context.Context, job int) int {
 			current := inFlight.Add(1)
@@ -25,6 +29,10 @@ func TestRunWorkersDeliversEveryResultOnTheCaller(t *testing.T) {
 					break
 				}
 			}
+			if current == 3 {
+				saturated.Do(func() { close(release) })
+			}
+			<-release
 			inFlight.Add(-1)
 			return job * 2
 		},
@@ -38,7 +46,7 @@ func TestRunWorkersDeliversEveryResultOnTheCaller(t *testing.T) {
 			seen[result/2] = true
 			mu.Unlock()
 		})
-	if dispatched != len(jobs) || len(seen) != len(jobs) || peak.Load() > 3 {
+	if dispatched != len(jobs) || len(seen) != len(jobs) || peak.Load() != 3 {
 		t.Fatalf("dispatched=%d results=%d peak=%d", dispatched, len(seen), peak.Load())
 	}
 }
