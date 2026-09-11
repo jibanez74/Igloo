@@ -7,7 +7,6 @@ import (
 // Database caches use transaction overlays; lookup outcomes and splitting
 // decisions live for the scan and do not depend on transaction success.
 type musicScanContext struct {
-	deferred          int
 	trackIndex        map[string]scanner.FileFingerprint
 	merged            bool
 	invalidatedTracks map[int64]bool

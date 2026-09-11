@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"igloo/cmd/internal/helpers"
@@ -102,42 +101,17 @@ func (s *Scanner) prepareFile(ctx context.Context, job probeJob) probeResult {
 
 // runMovieScan expects beginReport to have published the run it continues.
 func (s *Scanner) runMovieScan(directory string) {
-	report := &scanReport{status: s.Status(), issues: make(map[string]Issue), active: make(map[string]bool)}
+	report := newScanReport(s.Status())
 	ctx := s.scanContext
-	done := make(chan struct{})
-	var logging sync.WaitGroup
-	logging.Add(1)
-	go func() {
-		defer logging.Done()
-		ticker := time.NewTicker(progressLogInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				status := s.Status()
-				s.logger.Info("movie scan progress", "run", status.RunID, "phase", status.Phase, "processed", status.Processed, "total", status.Total, "enriched", status.Enriched)
-			}
-		}
-	}()
+	stopProgressLog := scanner.StartProgressLog(progressLogInterval, func() {
+		status := s.Status()
+		s.logger.Info("movie scan progress", "run", status.RunID, "phase", status.Phase, "processed", status.Processed, "total", status.Total, "enriched", status.Enriched)
+	})
 	defer func() {
-		close(done)
-		logging.Wait()
-		contextErr := ctx.Err()
-		if contextErr != nil {
-			report.status.State = StateCanceled
-		}
-		if report.status.State == StateRunning {
-			report.status.State = StateCompleted
-			if len(report.issues) > 0 {
-				report.status.State = StateCompletedWithIssues
-			}
-		}
-		report.active = make(map[string]bool)
-		now := time.Now().UTC()
-		report.status.FinishedAt = &now
+		stopProgressLog()
+		report.Finish(&report.status.Progress, ctx.Err() != nil)
 		s.publish(report)
+		now := *report.status.FinishedAt
 		s.logger.Info("movie scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "enriched", report.status.Enriched, "pending", report.status.PendingEnrichment)
 	}()
 	fail := func(err error, reason string) {
@@ -147,10 +121,10 @@ func (s *Scanner) runMovieScan(directory string) {
 			return
 		}
 		s.logger.Error("movie scan interrupted", "phase", report.status.Phase, "error", err)
-		report.status.State = StateFailed
-		report.issue("", report.status.Phase, reason)
+		report.status.State = scanner.StateFailed
+		report.Issue("", report.status.Phase, reason)
 	}
-	s.logger.Info("movie scan phase", "run", report.status.RunID, "phase", PhaseDiscovery, "directory", directory)
+	s.logger.Info("movie scan phase", "run", report.status.RunID, "phase", scanner.PhaseDiscovery, "directory", directory)
 	index, catalog, err := s.loadMovieScanIndex(ctx)
 	if err != nil {
 		fail(err, "Unable to read the movie catalog.")
@@ -173,7 +147,7 @@ func (s *Scanner) runMovieScan(directory string) {
 			if isPathError {
 				filename = pathError.Path
 			}
-			report.issue(filename, PhaseDiscovery, "A library entry could not be inspected. Existing records are preserved.")
+			report.Issue(filename, scanner.PhaseDiscovery, "A library entry could not be inspected. Existing records are preserved.")
 		},
 		func(file scanner.ScanFile) error {
 			file.Path = filepath.Clean(file.Path)
@@ -189,7 +163,7 @@ func (s *Scanner) runMovieScan(directory string) {
 		fail(err, "Library discovery was interrupted; missing files were not removed.")
 		return
 	}
-	s.phase(report, PhaseLocal)
+	s.phase(report, scanner.PhaseLocal)
 	indexes := make([]int, len(files))
 	for i := range files {
 		indexes[i] = i
@@ -204,13 +178,13 @@ func (s *Scanner) runMovieScan(directory string) {
 	if contextErr != nil {
 		return
 	}
-	s.phase(report, PhaseCleanup)
+	s.phase(report, scanner.PhaseCleanup)
 	report.status.Deleted, err = s.cleanupMissingMovie(ctx, scan, reconciliation)
 	if err != nil {
 		fail(err, "Cleanup stopped because the library could not be safely checked.")
 		return
 	}
-	s.phase(report, PhaseEnrichment)
+	s.phase(report, scanner.PhaseEnrichment)
 	s.enrichMovies(ctx, scan, report, files)
 }
 
@@ -230,11 +204,11 @@ func (s *Scanner) processLocal(ctx context.Context, scan *movieScanContext, repo
 			if files[job.index].state == fileDeferred {
 				files[job.index].retries++
 			}
-			report.active[job.file.Path] = true
+			report.Activate(job.file.Path)
 			s.publish(report)
 		},
 		func(result probeResult) {
-			delete(report.active, result.job.file.Path)
+			report.Deactivate(result.job.file.Path)
 			contextErr := ctx.Err()
 			if contextErr == nil {
 				if result.err == nil && result.resolved != nil {
@@ -257,7 +231,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 	if file.state == fileDeferred {
 		report.status.Deferred--
 	}
-	report.dropIssue(file.file.Path, PhaseLocal)
+	report.DropIssue(file.file.Path, scanner.PhaseLocal)
 	var deferred *scanner.FileDeferral
 	isDeferred := errors.As(result.err, &deferred)
 	switch {
@@ -266,7 +240,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 	case result.err != nil:
 		file.state = fileFailed
 		report.status.Failed++
-		report.issue(file.file.Path, PhaseLocal, "Unable to inspect, probe, or save this movie. Any previous record was preserved.")
+		report.Issue(file.file.Path, scanner.PhaseLocal, "Unable to inspect, probe, or save this movie. Any previous record was preserved.")
 		s.logger.Warn("failed to process movie", "path", file.file.Path, "error", result.err)
 	case result.inspection.Outcome == scanner.FileDeferred:
 		file.state, file.eligible = fileDeferred, result.inspection.EligibleAt
@@ -286,7 +260,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 		if file.eligible.IsZero() {
 			file.eligible = s.now().Add(scanner.FileQuietPeriod)
 		}
-		report.issue(file.file.Path, PhaseLocal, "The file is still changing or has not been quiet for 60 seconds. It remains deferred until a later attempt.")
+		report.Issue(file.file.Path, scanner.PhaseLocal, "The file is still changing or has not been quiet for 60 seconds. It remains deferred until a later attempt.")
 		s.logger.Info("deferred movie", "path", file.file.Path, "eligible_at", file.eligible)
 	}
 }
@@ -310,7 +284,7 @@ func (s *Scanner) retryDeferred(ctx context.Context, scan *movieScanContext, rep
 		}
 		delay := earliest.Sub(s.now())
 		if delay > 0 {
-			s.phase(report, PhaseRetryWait)
+			s.phase(report, scanner.PhaseRetryWait)
 			err := s.waitForRetry(ctx, delay)
 			if err != nil {
 				return
@@ -325,7 +299,7 @@ func (s *Scanner) retryDeferred(ctx context.Context, scan *movieScanContext, rep
 				indexes = append(indexes, i)
 			}
 		}
-		s.phase(report, PhaseLocal)
+		s.phase(report, scanner.PhaseLocal)
 		s.processLocal(ctx, scan, report, files, indexes, deadline)
 	}
 }

@@ -103,7 +103,7 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 	searches := func() int { return len(client.searchCalls) }
 	s.scan(root)
 	first := s.Status()
-	if first.State != StateCompletedWithIssues || first.EnrichmentUnmatched != 1 || first.PendingEnrichment != 1 || searches() == 0 {
+	if first.State != scanner.StateCompletedWithIssues || first.EnrichmentUnmatched != 1 || first.PendingEnrichment != 1 || searches() == 0 {
 		t.Fatalf("first miss: %+v searches=%d", first, searches())
 	}
 	var attempts, lastAttempt sql.NullInt64
@@ -115,14 +115,14 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 	before := searches()
 	s.scan(root)
 	second := s.Status()
-	if second.State != StateCompletedWithIssues || second.EnrichmentUnmatched != 1 || searches() == before {
+	if second.State != scanner.StateCompletedWithIssues || second.EnrichmentUnmatched != 1 || searches() == before {
 		t.Fatalf("second scan skipped the free retry: %+v", second)
 	}
 
 	before = searches()
 	s.scan(root)
 	third := s.Status()
-	if third.State != StateCompleted || third.EnrichmentTotal != 0 || third.PendingEnrichment != 1 || third.IssueCount != 0 || searches() != before {
+	if third.State != scanner.StateCompleted || third.EnrichmentTotal != 0 || third.PendingEnrichment != 1 || third.IssueCount != 0 || searches() != before {
 		t.Fatalf("third scan did not back off: %+v searches=%d", third, searches()-before)
 	}
 
@@ -150,7 +150,7 @@ func TestScanWithoutTmdbCompletesCleanly(t *testing.T) {
 	}
 	s.scan(root)
 	status := s.Status()
-	if status.State != StateCompleted || status.Imported != 1 || status.PendingEnrichment != 1 || status.EnrichmentTotal != 0 {
+	if status.State != scanner.StateCompleted || status.Imported != 1 || status.PendingEnrichment != 1 || status.EnrichmentTotal != 0 {
 		t.Fatalf("scan without TMDB: %+v", status)
 	}
 }
@@ -161,7 +161,7 @@ func TestEnrichmentDeferralIsNotAFailure(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	defer fixture.db.Close()
 	s := fixture.scanner
-	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
+	report := newScanReport(Status{})
 	result := enrichmentResult{
 		job: enrichmentJob{file: scanner.ScanFile{Path: "/library/Local (2001).mkv"}},
 		err: &scanner.FileDeferral{Reason: scanner.FileChanged},
@@ -169,48 +169,7 @@ func TestEnrichmentDeferralIsNotAFailure(t *testing.T) {
 
 	s.recordEnrichment(report, result, enrichmentSkipped)
 
-	if report.status.EnrichmentFailed != 0 || report.status.EnrichmentUnmatched != 0 || len(report.issues) != 0 {
-		t.Fatalf("deferral recorded as a failure: %+v issues=%v", report.status, report.issues)
-	}
-}
-
-// Every issue is keyed by phase and path, so two failing entries stay two
-// issues instead of the second overwriting the first.
-func TestDiscoveryIssuesDoNotCollide(t *testing.T) {
-	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
-
-	report.issue("/library/a.mkv", PhaseDiscovery, "unreadable")
-	report.issue("/library/b.mkv", PhaseDiscovery, "unreadable")
-	report.issue("/library/a.mkv", PhaseLocal, "unreadable")
-
-	if len(report.issues) != 3 {
-		t.Fatalf("issues collided: %v", report.issues)
-	}
-}
-
-// publish rebuilds the sorted issue list only when the issue set changed, so
-// per-file progress publishes stay off an O(n log n) sort.
-func TestPublishSkipsUnchangedIssues(t *testing.T) {
-	fixture := setupMovieScanner(t)
-	defer fixture.db.Close()
-	s := fixture.scanner
-	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
-
-	report.issue("/library/a.mkv", PhaseLocal, "unreadable")
-	s.publish(report)
-	first := report.publishedIssues
-	report.status.Total++
-	s.publish(report)
-	if report.publishedIssues != first {
-		t.Fatalf("unchanged issues rebuilt the published list")
-	}
-	if s.Status().IssueCount != 1 || len(s.Status().Issues) != 1 {
-		t.Fatalf("issue lost across publishes: %+v", s.Status())
-	}
-
-	report.dropIssue("/library/a.mkv", PhaseLocal)
-	s.publish(report)
-	if report.publishedIssues == first || s.Status().IssueCount != 0 || len(s.Status().Issues) != 0 {
-		t.Fatalf("dropped issue not republished: %+v", s.Status())
+	if report.status.EnrichmentFailed != 0 || report.status.EnrichmentUnmatched != 0 || report.IssueCount() != 0 {
+		t.Fatalf("deferral recorded as a failure: %+v issues=%d", report.status, report.IssueCount())
 	}
 }

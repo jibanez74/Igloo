@@ -593,3 +593,4 @@ export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
 export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
 
 export const MOVIE_SCAN_STATUS_KEY = "movie-scan-status";
+export const MUSIC_SCAN_STATUS_KEY = "music-scan-status";

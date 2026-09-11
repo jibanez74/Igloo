@@ -90,6 +90,11 @@ WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 ORDER BY e.id LIMIT 100;
 
+-- name: CountMusicArtistRetryCandidates :one
+SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id);
+
 -- name: MoveMusicAlbumAliases :exec
 UPDATE music_album_identity SET album_id=sqlc.arg(owner) WHERE album_id=sqlc.arg(redundant);
 
@@ -108,6 +113,11 @@ SELECT e.id, e.title, e.musician FROM albums e LEFT JOIN music_spotify_matches m
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100;
+
+-- name: CountMusicAlbumRetryCandidates :one
+SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id);
 
 -- name: MoveMusicArtistCredits :exec
 INSERT OR IGNORE INTO track_musicians(track_id,musician_id)

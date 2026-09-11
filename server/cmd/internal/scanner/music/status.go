@@ -1,10 +1,13 @@
-package movie
+package music
 
 import (
 	"igloo/cmd/internal/scanner"
 )
 
 // Status is the current or latest run. The counters mirror docs/openapi.json.
+// Discovery and processing are interleaved, so Total grows during the local
+// phase. The Spotify tallies count unique artists and albums, one outcome each
+// per scan, across inline resolution and the retry phase.
 type Status struct {
 	scanner.Progress
 	Total               int `json:"total"`
@@ -20,16 +23,15 @@ type Status struct {
 	Enriched            int `json:"enriched"`
 	EnrichmentFailed    int `json:"enrichment_failed"`
 	EnrichmentUnmatched int `json:"enrichment_unmatched"`
-	PendingEnrichment   int `json:"pending_enrichment"`
 }
 
-// scanReport is owned by the scan goroutine. The enrichment counters are not
-// kept here: they derive from the scan context, which changes only on commit,
-// and syncCounts copies them before every publish.
+// scanReport is owned by the scan goroutine. The Spotify tallies are not kept
+// here: they derive from the scan context and syncCounts copies them before
+// every publish.
 type scanReport struct {
 	scanner.Report
 	status Status
-	scan   *movieScanContext
+	scan   *musicScanContext
 }
 
 func newScanReport(status Status) *scanReport {
@@ -40,8 +42,9 @@ func (r *scanReport) syncCounts() {
 	if r.scan == nil {
 		return
 	}
-	r.status.Enriched = r.scan.enriched
-	r.status.PendingEnrichment = r.scan.pending
+	r.status.Enriched = r.scan.enrichmentCounts[musicSpotifyStatusMatched]
+	r.status.EnrichmentFailed = r.scan.enrichmentCounts[musicSpotifyStatusFailed]
+	r.status.EnrichmentUnmatched = r.scan.enrichmentCounts[musicSpotifyStatusUnmatched]
 }
 
 func (s *Scanner) Status() Status {
@@ -54,7 +57,7 @@ func (s *Scanner) Status() Status {
 
 func (s *Scanner) beginReport() {
 	s.statusMu.Lock()
-	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseDiscovery)}
+	s.status = Status{Progress: scanner.BeginProgress(scanner.PhaseLocal)}
 	s.statusMu.Unlock()
 }
 
@@ -68,7 +71,7 @@ func (s *Scanner) publish(report *scanReport) {
 
 func (s *Scanner) phase(report *scanReport, phase scanner.ScanPhase) {
 	if report.status.Phase != phase {
-		s.logger.Info("movie scan phase", "run", report.status.RunID, "phase", phase)
+		s.logger.Info("music scan phase", "run", report.status.RunID, "phase", phase)
 	}
 	report.status.Phase = phase
 	s.publish(report)

@@ -406,3 +406,7 @@ func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request)
 func (app *Application) GetMovieScanStatus(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MovieScanner.Status()})
 }
+
+func (app *Application) GetMusicScanStatus(w http.ResponseWriter, r *http.Request) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MusicScanner.Status()})
+}

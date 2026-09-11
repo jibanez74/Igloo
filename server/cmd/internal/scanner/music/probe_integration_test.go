@@ -42,7 +42,7 @@ func TestMusicMetadataRealProbePersistence(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				n, skipped, failures := s.processMusicBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: ext}})
+				n, skipped, failures := s.processBatchCounts(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: ext}})
 				if n != 1 || skipped != 0 || failures != 0 {
 					t.Fatalf("%s scan: %d/%d/%d", state, n, skipped, failures)
 				}

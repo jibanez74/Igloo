@@ -41,7 +41,7 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 			if !offline {
 				s.spotify = stub
 			}
-			s.runMusicScan(dir)
+			s.scan(dir)
 			if probe.calls != 1 {
 				t.Fatalf("probes=%d", probe.calls)
 			}
@@ -54,7 +54,7 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 			stub.artist = &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}}
 			stub.album = &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
 			beforeArtist, beforeAlbum := stub.artistCalls, stub.albumCalls
-			s.runMusicScan(dir)
+			s.scan(dir)
 			if probe.calls != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
 				t.Fatalf("recovery probes=%d artist=%d album=%d", probe.calls, stub.artistCalls, stub.albumCalls)
 			}
@@ -62,7 +62,7 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 			if count1 != 2 {
 				t.Fatal("recovery did not persist matches")
 			}
-			s.runMusicScan(dir)
+			s.scan(dir)
 			if probe.calls != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
 				t.Fatal("final outcomes were retried")
 			}
@@ -216,7 +216,7 @@ func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
 	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/one", 1, ffprobe.FormatTags{Title: "Track", Artist: "One & Two", Album: "Album", Genre: "Rock", SortArtist: "First & Second"})
 	probe := s.ffprobe.(*countingMusicScannerFfprobe)
 	s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: musicSpotifyReasonNoResults}}, albumErr: errors.New("temporary")}
-	err := s.retrySpotify(context.Background(), newMusicScanContext(nil))
+	err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.retrySpotify(ctx, scan)
+	err = s.retrySpotify(ctx, scan, newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 	stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
 	s.spotify = stub
 	retryScan := newMusicScanContext(nil)
-	err = s.retrySpotify(ctx, retryScan)
+	err = s.retrySpotify(ctx, retryScan, newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 		t.Fatalf("paged attempts artist=%d album=%d probes=%d", stub.artistCalls, stub.albumCalls, probe.calls)
 	}
 	// Reusing the same scan context cannot issue another request for these entities.
-	err = s.retrySpotify(ctx, retryScan)
+	err = s.retrySpotify(ctx, retryScan, newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +390,7 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 	defer cancel()
 	s.spotify = &cancelingMusicSpotify{cancel: cancel, phase: "artist"}
 	canceledScan := newMusicScanContext(nil)
-	err = s.retrySpotify(canceled, canceledScan)
+	err = s.retrySpotify(canceled, canceledScan, newScanReport(Status{}))
 	canceledError := errors.Is(err, context.Canceled)
 	if !canceledError {
 		t.Fatalf("canceled retry=%v", err)
@@ -461,7 +461,7 @@ func TestSpotifyAlbumMergeRollback(t *testing.T) {
 	}
 	invalidations := 0
 	s.invalidateCommittedTrack = func(int64) { invalidations++ }
-	err = s.retrySpotify(ctx, scan)
+	err = s.retrySpotify(ctx, scan, newScanReport(Status{}))
 	if err == nil {
 		t.Fatal("expected album merge failure")
 	}
@@ -474,7 +474,7 @@ func TestSpotifyAlbumMergeRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.retrySpotify(ctx, scan)
+	err = s.retrySpotify(ctx, scan, newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
 	}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 2, tags)
 	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "1999", ReleaseDatePrecision: "year"}}}
-	err = s.retrySpotify(context.Background(), newMusicScanContext(nil))
+	err = s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}

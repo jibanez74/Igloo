@@ -10,6 +10,32 @@ import (
 	"database/sql"
 )
 
+const countMusicAlbumRetryCandidates = `-- name: CountMusicAlbumRetryCandidates :one
+SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
+`
+
+func (q *Queries) CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicAlbumRetryCandidatesStmt, countMusicAlbumRetryCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countMusicArtistRetryCandidates = `-- name: CountMusicArtistRetryCandidates :one
+SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+`
+
+func (q *Queries) CountMusicArtistRetryCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicArtistRetryCandidatesStmt, countMusicArtistRetryCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteMergedMusicAlbum = `-- name: DeleteMergedMusicAlbum :exec
 DELETE FROM albums WHERE id=?
 `

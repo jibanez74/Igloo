@@ -48,6 +48,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countMoviesForGenreStmt, err = db.PrepareContext(ctx, countMoviesForGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CountMoviesForGenre: %w", err)
 	}
+	if q.countMusicAlbumRetryCandidatesStmt, err = db.PrepareContext(ctx, countMusicAlbumRetryCandidates); err != nil {
+		return nil, fmt.Errorf("error preparing query CountMusicAlbumRetryCandidates: %w", err)
+	}
+	if q.countMusicArtistRetryCandidatesStmt, err = db.PrepareContext(ctx, countMusicArtistRetryCandidates); err != nil {
+		return nil, fmt.Errorf("error preparing query CountMusicArtistRetryCandidates: %w", err)
+	}
 	if q.countPlaylistMoviesStmt, err = db.PrepareContext(ctx, countPlaylistMovies); err != nil {
 		return nil, fmt.Errorf("error preparing query CountPlaylistMovies: %w", err)
 	}
@@ -805,6 +811,16 @@ func (q *Queries) Close() error {
 	if q.countMoviesForGenreStmt != nil {
 		if cerr := q.countMoviesForGenreStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countMoviesForGenreStmt: %w", cerr)
+		}
+	}
+	if q.countMusicAlbumRetryCandidatesStmt != nil {
+		if cerr := q.countMusicAlbumRetryCandidatesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countMusicAlbumRetryCandidatesStmt: %w", cerr)
+		}
+	}
+	if q.countMusicArtistRetryCandidatesStmt != nil {
+		if cerr := q.countMusicArtistRetryCandidatesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countMusicArtistRetryCandidatesStmt: %w", cerr)
 		}
 	}
 	if q.countPlaylistMoviesStmt != nil {
@@ -2044,6 +2060,8 @@ type Queries struct {
 	clearMovieTmdbRetryStmt                     *sql.Stmt
 	countAdminsStmt                             *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
+	countMusicAlbumRetryCandidatesStmt          *sql.Stmt
+	countMusicArtistRetryCandidatesStmt         *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
 	countUnreadNotificationsForUserStmt         *sql.Stmt
@@ -2296,6 +2314,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		clearMovieTmdbRetryStmt:                     q.clearMovieTmdbRetryStmt,
 		countAdminsStmt:                             q.countAdminsStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
+		countMusicAlbumRetryCandidatesStmt:          q.countMusicAlbumRetryCandidatesStmt,
+		countMusicArtistRetryCandidatesStmt:         q.countMusicArtistRetryCandidatesStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
 		countUnreadNotificationsForUserStmt:         q.countUnreadNotificationsForUserStmt,

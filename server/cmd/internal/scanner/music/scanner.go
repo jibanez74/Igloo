@@ -45,6 +45,8 @@ type Scanner struct {
 	currentMusicDirectory    func() sql.NullString
 	invalidateCommittedTrack func(int64)
 	guard                    scanner.ScanGuard
+	statusMu                 sync.RWMutex
+	status                   Status
 }
 
 // StartStatus describes whether a scan goroutine was launched.

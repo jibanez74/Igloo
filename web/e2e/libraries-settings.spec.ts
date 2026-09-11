@@ -1,4 +1,5 @@
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
+import { musicScanStatus } from "../src/test/helpers/music-scan";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -246,7 +247,10 @@ test.describe("Libraries settings", () => {
     await page.route("**/api/settings/scan/**", async route => {
       const url = new URL(route.request().url());
       if (route.request().method() === "GET") {
-        await route.fulfill({ json: { error: false, data: movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 }) } });
+        const idle = url.pathname === "/api/settings/scan/music"
+          ? musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
+          : movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
+        await route.fulfill({ json: { error: false, data: idle } });
         return;
       }
       if (url.pathname === "/api/settings/scan/movies") {
@@ -363,6 +367,12 @@ test.describe("Libraries settings", () => {
       ).toHaveCount(0);
       await expect(
         page.getByText("TV shows scanning unavailable"),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No movie scan has run yet." }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No music scan has run yet." }),
       ).toBeVisible();
 
       await page.getByRole("button", { name: "Clear music library path" }).click();

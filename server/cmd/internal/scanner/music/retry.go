@@ -8,10 +8,20 @@ import (
 )
 
 // Retry only persisted catalog metadata. Pages are closed before any requests or writes.
-func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext) error {
+func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext, report *scanReport) error {
 	if s.spotify == nil {
 		return nil
 	}
+	artists, err := s.queries.CountMusicArtistRetryCandidates(ctx)
+	if err != nil {
+		return err
+	}
+	albums, err := s.queries.CountMusicAlbumRetryCandidates(ctx)
+	if err != nil {
+		return err
+	}
+	report.status.EnrichmentTotal = int(artists + albums)
+	s.publish(report)
 	var after int64
 	for {
 		candidates, err := s.queries.MusicArtistRetryCandidates(ctx, after)
@@ -47,6 +57,8 @@ func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext) erro
 					return err
 				}
 			}
+			report.status.EnrichmentProcessed++
+			s.publish(report)
 		}
 	}
 	after = 0
@@ -78,6 +90,8 @@ func (s *Scanner) retrySpotify(ctx context.Context, scan *musicScanContext) erro
 			if err != nil {
 				return err
 			}
+			report.status.EnrichmentProcessed++
+			s.publish(report)
 		}
 	}
 }

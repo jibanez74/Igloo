@@ -86,7 +86,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 			s.spotify = spotify
 			logs := &capturedLogger{}
 			s.logger = logs
-			s.runMusicScan(root)
+			s.scan(root)
 
 			if !deletionAttempted || invalidations != 0 {
 				t.Fatalf("deletion attempted=%v invalidations=%d", deletionAttempted, invalidations)
@@ -104,7 +104,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 				assertMusicInterrupted(t, s)
 				return
 			}
-			if len(logs.errorEntries) != 1 || logs.errorEntries[0].msg != "music missing-file cleanup failed" {
+			if len(logs.errorEntries) != 1 || logs.errorEntries[0].msg != "music scan failed" {
 				t.Fatalf("cleanup error logs=%+v", logs.errorEntries)
 			}
 			for _, entry := range logs.infoEntries {
@@ -149,7 +149,7 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 			probe := &countingMusicScannerFfprobe{result: testMusicMetadata()}
 			s.ffprobe = probe
 			scan := newMusicScanContext(nil)
-			imported, _, failures := s.processMusicBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a"}})
+			imported, _, failures := s.processBatchCounts(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
@@ -178,8 +178,8 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 					t.Error("invalidation preceded commit")
 				}
 			}
-			s.runMusicScan(directory)
-			s.runMusicScan(directory)
+			s.scan(directory)
+			s.scan(directory)
 			wantRows, wantInvalidations := 0, 1
 			if scenario == "outside directory" || scenario == "unavailable root" {
 				wantRows, wantInvalidations = 1, 0
@@ -210,7 +210,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 			}
 			s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
 			scan := newMusicScanContext(nil)
-			imported, _, failures := s.processMusicBatch(ctx, scan, []scanner.ScanFile{{Path: path, Ext: "m4a"}})
+			imported, _, failures := s.processBatchCounts(ctx, scan, []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
@@ -239,7 +239,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					imported, _, failures = s.processMusicBatch(ctx, newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
+					imported, _, failures = s.processBatchCounts(ctx, newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 					if imported != 1 || failures != 0 {
 						t.Fatal("replacement import failed")
 					}
@@ -336,7 +336,7 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				imported, _, failures := s.processMusicBatch(ctx, newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
+				imported, _, failures := s.processBatchCounts(ctx, newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 				if imported != 1 || failures != 0 {
 					t.Fatalf("import=%d errors=%d", imported, failures)
 				}
@@ -386,7 +386,7 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			}}
 			invalidations := 0
 			s.invalidateCommittedTrack = func(int64) { invalidations++ }
-			s.runMusicScan(root)
+			s.scan(root)
 			wantRows, wantInvalidations := 2, 1
 			if scenario == "canceled" || scenario == "root replaced" {
 				wantRows, wantInvalidations = 3, 0
@@ -414,7 +414,7 @@ func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		imported, _, failures := s.processMusicBatch(context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
+		imported, _, failures := s.processBatchCounts(context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 		if imported != 1 || failures != 0 {
 			t.Fatal("import failed")
 		}
@@ -519,7 +519,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	// No surviving references should be sent to Spotify after cleanup.
 	spotify := &musicScannerSpotifyStub{}
 	s.spotify = spotify
-	s.runMusicScan(root)
+	s.scan(root)
 	if spotify.artistCalls != 0 || spotify.albumCalls != 0 {
 		t.Fatal("deleted tracks caused Spotify retries")
 	}

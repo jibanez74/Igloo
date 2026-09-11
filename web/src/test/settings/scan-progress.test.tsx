@@ -2,16 +2,22 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import MovieScanProgress from "@/components/settings/MovieScanProgress";
-import { useMovieScanStatus } from "@/hooks/useMovieScanStatus";
-import { MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY } from "@/lib/constants";
+import ScanProgress from "@/components/settings/ScanProgress";
+import { useMovieScanStatus, useMusicScanStatus } from "@/hooks/useScanStatus";
+import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
 import { createTestQueryClient } from "../helpers/render";
 import { movieScanStatus } from "../helpers/movie-scan";
-import { jsonResponse } from "../helpers/api";
+import { musicScanStatus } from "../helpers/music-scan";
+import { jsonResponse, requestURL } from "../helpers/api";
 
 function ScanView() {
   const query = useMovieScanStatus();
-  return <MovieScanProgress status={query.data} unavailable={query.isError} />;
+  return <ScanProgress library="movies" status={query.data} unavailable={query.isError} />;
+}
+
+function MusicScanView() {
+  const query = useMusicScanStatus();
+  return <ScanProgress library="music" status={query.data} unavailable={query.isError} />;
 }
 
 afterEach(() => {
@@ -30,7 +36,7 @@ describe("movie scan progress", () => {
         { filename: "broken.mkv", phase: "local", reason: "Unable to probe this movie." },
       ],
     });
-    render(<MovieScanProgress status={status} unavailable={false} />);
+    render(<ScanProgress library="movies" status={status} unavailable={false} />);
     expect(screen.getByRole("status")).toHaveTextContent("Movie scan completed with issues");
     expect(screen.getByText(/418 of 418 files processed/)).toBeInTheDocument();
     expect(screen.getByText(/Files must be quiet for 60 seconds/)).toBeInTheDocument();
@@ -87,6 +93,52 @@ describe("movie scan progress", () => {
     expect(fetchMock).toHaveBeenCalledTimes(completedCalls);
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
     expect(fetchMock).toHaveBeenCalledTimes(completedCalls + 1);
+    client.clear();
+  });
+});
+
+describe("music scan progress", () => {
+  it("announces music phases, Spotify tallies and the next-scan deferral", async () => {
+    const user = userEvent.setup();
+    const status = musicScanStatus({
+      state: "completed-with-issues", phase: "enrichment", processed: 2267, imported: 2260, failed: 1, deferred: 6, deleted: 3,
+      enrichment_total: 4, enrichment_processed: 4, enriched: 120, enrichment_failed: 2, enrichment_unmatched: 9,
+      issue_count: 7, issues: [{ filename: "copying.flac", phase: "local", reason: "The file is still changing." }],
+    });
+    render(<ScanProgress library="music" status={status} unavailable={true} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Music scan completed with issues");
+    expect(screen.getByRole("alert")).toHaveTextContent("Music scan status is unavailable");
+    expect(screen.getByText(/2267 of 2267 files processed/)).toBeInTheDocument();
+    expect(screen.getByText(/3 missing tracks removed/)).toBeInTheDocument();
+    expect(screen.getByText("Spotify: 4 of 4 retried · 120 matched · 2 failed · 9 unmatched")).toBeInTheDocument();
+    expect(screen.getByText(/retried on the next scan/)).toBeInTheDocument();
+    expect(screen.queryByText(/two minutes/)).not.toBeInTheDocument();
+    await user.click(screen.getByText("7 outstanding issues"));
+    expect(screen.getByText(/copying.flac: The file is still changing/)).toBeVisible();
+    expect(screen.getByText("Showing the first 1 issues.")).toBeInTheDocument();
+  });
+
+  it("polls the music report and refreshes music statistics and lists", async () => {
+    vi.useFakeTimers();
+    let status = musicScanStatus();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan/music"
+      ? { error: false, data: status }
+      : { error: true, message: `unexpected request ${requestURL(input)}` }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    render(<QueryClientProvider client={client}><MusicScanView /></QueryClientProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole("status")).toHaveTextContent("Discovering and importing tracks");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
+    status = musicScanStatus({ processed: 54, imported: 54, active_files: ["01 Intro.m4a"] });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByText(/54 of 2267 files processed/)).toBeInTheDocument();
+    expect(screen.getByText("Working on: 01 Intro.m4a")).toBeInTheDocument();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [MUSIC_STATS_KEY] });
+    status = musicScanStatus({ state: "completed", phase: "enrichment", processed: 2267, imported: 2267, enriched: 300 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByRole("status")).toHaveTextContent("Music scan completed");
     client.clear();
   });
 });

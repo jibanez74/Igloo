@@ -13,6 +13,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
 
@@ -137,6 +138,7 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	assertRequest("updateLibrarySettings", libraryReq, app.UpdateLibrarySettings, http.StatusOK)
 
 	assertRequest("triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), app.TriggerMusicScan, http.StatusOK)
+	assertRequest("getMusicScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/music", nil), app.GetMusicScanStatus, http.StatusOK)
 	assertRequest("getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), app.GetMovieScanStatus, http.StatusOK)
 	assertRequest("triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), app.TriggerMovieScan, http.StatusOK)
 	app.Wait.Wait()
@@ -468,32 +470,34 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 }
 
 func (movieStartResultStub) Status() movie.Status {
-	return movie.Status{State: "idle", Phase: "idle", ActiveFiles: []string{}, Issues: []movie.Issue{}}
+	return movie.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
 }
 
-func TestMovieScanStatusAuthorization(t *testing.T) {
-	for _, role := range []string{"anonymous", "user", "admin"} {
-		t.Run(role, func(t *testing.T) {
-			app := setupTestApp(t)
-			defer app.DB.Close()
-			app.InitSession()
-			app.InitRouter()
-			request := httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil)
-			expected := http.StatusUnauthorized
-			if role != "anonymous" {
-				user := createTestUser(t, app, "Viewer", role+"@example.com", role == "admin")
-				token := createTestDevice(t, app, user.ID, "Browser", "web")
-				request.Header.Set("Authorization", "Bearer "+token)
-				expected = http.StatusForbidden
-				if role == "admin" {
-					expected = http.StatusOK
+func TestScanStatusAuthorization(t *testing.T) {
+	for _, path := range []string{"/api/settings/scan/movies", "/api/settings/scan/music"} {
+		for _, role := range []string{"anonymous", "user", "admin"} {
+			t.Run(path+"/"+role, func(t *testing.T) {
+				app := setupTestApp(t)
+				defer app.DB.Close()
+				app.InitSession()
+				app.InitRouter()
+				request := httptest.NewRequest(http.MethodGet, path, nil)
+				expected := http.StatusUnauthorized
+				if role != "anonymous" {
+					user := createTestUser(t, app, "Viewer", role+"@example.com", role == "admin")
+					token := createTestDevice(t, app, user.ID, "Browser", "web")
+					request.Header.Set("Authorization", "Bearer "+token)
+					expected = http.StatusForbidden
+					if role == "admin" {
+						expected = http.StatusOK
+					}
 				}
-			}
-			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, request)
-			if response.Code != expected {
-				t.Fatalf("status=%d want=%d body=%s", response.Code, expected, response.Body.String())
-			}
-		})
+				response := httptest.NewRecorder()
+				app.Router.ServeHTTP(response, request)
+				if response.Code != expected {
+					t.Fatalf("status=%d want=%d body=%s", response.Code, expected, response.Body.String())
+				}
+			})
+		}
 	}
 }

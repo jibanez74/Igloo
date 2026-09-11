@@ -304,10 +304,31 @@ func (s *musicScannerSpotifyStub) ClearAllCaches() {
 	s.clearCalls++
 }
 
+// scan runs one complete library scan synchronously, publishing the run the
+// way Start does.
+func (s *Scanner) scan(directory string) {
+	s.beginReport()
+	s.runMusicScan(directory)
+}
+
 func runMusicScanForTest(t *testing.T, app *Scanner) {
 	t.Helper()
 
-	app.runMusicScan(app.currentMusicDirectory().String)
+	app.scan(app.currentMusicDirectory().String)
+}
+
+// processBatchReport runs one batch against a fresh report.
+func (s *Scanner) processBatchReport(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) *scanReport {
+	report := newScanReport(Status{})
+	s.processMusicBatch(ctx, scan, report, files)
+	return report
+}
+
+// processBatchCounts returns the scanned (imported or updated), skipped and
+// failed counts one batch recorded.
+func (s *Scanner) processBatchCounts(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, failures int) {
+	report := s.processBatchReport(ctx, scan, files)
+	return report.status.Imported + report.status.Updated, report.status.Unchanged, report.status.Failed
 }
 
 func writeMusicScannerTestFile(t *testing.T, path, contents string) int64 {
@@ -358,5 +379,5 @@ func prepareMusicFixtures(t testing.TB, files []scanner.ScanFile) {
 func (s *Scanner) processMusicFixtureBatch(t testing.TB, ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (int, int, int) {
 	t.Helper()
 	prepareMusicFixtures(t, files)
-	return s.processMusicBatch(ctx, scan, files)
+	return s.processBatchCounts(ctx, scan, files)
 }

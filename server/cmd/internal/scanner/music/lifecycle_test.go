@@ -41,7 +41,7 @@ func TestRunMusicScanDoesNotClearSpotifyRuntimeCache(t *testing.T) {
 		return sql.NullString{String: musicDir, Valid: true}
 	}
 
-	app.runMusicScan(app.currentMusicDirectory().String)
+	app.scan(app.currentMusicDirectory().String)
 
 	if spotifyStub.clearCalls != 0 {
 		t.Fatalf("spotify cache clear calls = %d, want 0", spotifyStub.clearCalls)

@@ -22,6 +22,8 @@ type Querier interface {
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
+	CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error)
+	CountMusicArtistRetryCandidates(ctx context.Context) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)

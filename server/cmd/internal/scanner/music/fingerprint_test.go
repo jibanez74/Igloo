@@ -32,12 +32,12 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	scan := newMusicScanContext(nil)
 	file := scanner.ScanFile{Path: path, Ext: "m4a", Size: 999} // Walking size is deliberately stale.
 	s.now = time.Now
-	scanned, skipped, failures := s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 0 || skipped != 0 || failures != 0 || scan.deferred != 1 || stub.calls != 0 {
-		t.Fatalf("recent file: %d/%d/%d deferred=%d probes=%d", scanned, skipped, failures, scan.deferred, stub.calls)
+	recent := s.processBatchReport(ctx, scan, []scanner.ScanFile{file}).status
+	if recent.Imported != 0 || recent.Unchanged != 0 || recent.Failed != 0 || recent.Deferred != 1 || stub.calls != 0 {
+		t.Fatalf("recent file: %+v probes=%d", recent, stub.calls)
 	}
 	s.now = func() time.Time { return time.Now().Add(time.Hour) }
-	scanned, _, failures = s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, _, failures := s.processBatchCounts(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || failures != 0 || invalidations != 1 {
 		t.Fatalf("initial import: %d/%d invalidations=%d", scanned, failures, invalidations)
 	}
@@ -64,7 +64,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatalf("reload: %+v %v", reloaded, err)
 	}
 	scan = newMusicScanContext(reloaded)
-	scanned, skipped, failures = s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, skipped, failures := s.processBatchCounts(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 0 || skipped != 1 || failures != 0 || stub.calls != 1 {
 		t.Fatalf("unchanged reload: %d/%d/%d probes=%d", scanned, skipped, failures, stub.calls)
 	}
@@ -73,7 +73,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned, skipped, failures = s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, skipped, failures = s.processBatchCounts(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 0 || skipped != 1 || failures != 0 || stub.calls != 1 || invalidations != 1 {
 		t.Fatalf("identical bytes: %d/%d/%d probes=%d invalidations=%d", scanned, skipped, failures, stub.calls, invalidations)
 	}
@@ -94,7 +94,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanned, _, failures = s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, _, failures = s.processBatchCounts(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || failures != 0 || stub.calls != 2 || invalidations != 2 {
 		t.Fatalf("same size edit: %d/%d probes=%d invalidations=%d", scanned, failures, stub.calls, invalidations)
 	}
@@ -115,7 +115,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	scan = newMusicScanContext(reloaded)
-	scanned, _, failures = s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
+	scanned, _, failures = s.processBatchCounts(ctx, scan, []scanner.ScanFile{file})
 	if scanned != 1 || failures != 0 || stub.calls != 3 {
 		t.Fatalf("missing baseline: %d/%d probes=%d", scanned, failures, stub.calls)
 	}
@@ -150,7 +150,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			s.invalidateCommittedTrack = func(int64) { invalidations++ }
 			scan := newMusicScanContext(nil)
 			file := scanner.ScanFile{Path: path, Ext: "m4a"}
-			outcome, err := s.processFile(ctx, scan, file)
+			outcome, _, err := s.processFile(ctx, scan, file)
 			if err != nil || outcome != scanner.FileNeedsProcessing {
 				t.Fatalf("initial: %v %v", outcome, err)
 			}
@@ -171,7 +171,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if !identical {
 				probeFailure := errors.New("probe failed")
 				s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, probeFailure }}
-				_, err = s.processFile(ctx, scan, file)
+				_, _, err = s.processFile(ctx, scan, file)
 				failedProbe := errors.Is(err, probeFailure)
 				if !failedProbe {
 					t.Fatalf("probe error: %v", err)
@@ -186,7 +186,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = s.processFile(ctx, scan, file)
+			_, _, err = s.processFile(ctx, scan, file)
 			if err == nil {
 				t.Fatal("expected persistence failure")
 			}
@@ -203,14 +203,14 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = s.processFile(ctx, scan, file)
+			_, _, err = s.processFile(ctx, scan, file)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if scan.trackIndex[path] == baseline {
 				t.Fatal("retry did not advance baseline")
 			}
-			outcome, err = s.processFile(ctx, scan, file)
+			outcome, _, err = s.processFile(ctx, scan, file)
 			if err != nil || outcome != scanner.FileUnchanged {
 				t.Fatalf("repeat after commit: %v %v", outcome, err)
 			}
@@ -246,7 +246,7 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 			s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
 			scan := newMusicScanContext(nil)
 			file := scanner.ScanFile{Path: path, Ext: "m4a"}
-			_, err = s.processFile(ctx, scan, file)
+			_, _, err = s.processFile(ctx, scan, file)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -295,9 +295,9 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			scanned, skipped, failures := s.processMusicBatch(ctx, scan, []scanner.ScanFile{file})
-			if scanned != 0 || skipped != 0 || failures != 0 || scan.deferred != 1 || invalidations != 0 {
-				t.Fatalf("unstable: %d/%d/%d deferred=%d invalidations=%d", scanned, skipped, failures, scan.deferred, invalidations)
+			unstable := s.processBatchReport(ctx, scan, []scanner.ScanFile{file}).status
+			if unstable.Imported != 0 || unstable.Unchanged != 0 || unstable.Failed != 0 || unstable.Deferred != 1 || invalidations != 0 {
+				t.Fatalf("unstable: %+v invalidations=%d", unstable, invalidations)
 			}
 			stored, _, err := s.loadMusicScanIndex(ctx)
 			if err != nil || stored[path] != baseline || scan.trackIndex[path] != baseline {
@@ -323,7 +323,7 @@ func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 		cancel()
 		return testMusicMetadata(), nil
 	}}
-	s.runMusicScan(dir)
+	s.scan(dir)
 	log := s.logger.(*capturedLogger)
 	for _, entry := range log.infoEntries {
 		if strings.Contains(entry.msg, "scanner completed") {

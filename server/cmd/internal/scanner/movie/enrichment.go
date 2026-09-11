@@ -85,11 +85,11 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 	stopped := false
 	scanner.RunWorkers(ctx, scanWorkers, candidates, func() bool { return !stopped }, s.prepareEnrichment,
 		func(job enrichmentJob) {
-			report.active[job.file.Path] = true
+			report.Activate(job.file.Path)
 			s.publish(report)
 		},
 		func(result enrichmentResult) {
-			delete(report.active, result.job.file.Path)
+			report.Deactivate(result.job.file.Path)
 			contextErr := ctx.Err()
 			if contextErr == nil {
 				report.status.EnrichmentProcessed++
@@ -101,7 +101,7 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 				}
 				if authentication || consecutive >= maxConsecutiveProviderFailures {
 					stopped = true
-					report.issue("", PhaseEnrichment, "TMDB enrichment stopped after provider failures. Pending movies will retry on a later scan.")
+					report.Issue("", scanner.PhaseEnrichment, "TMDB enrichment stopped after provider failures. Pending movies will retry on a later scan.")
 				}
 				outcome := enrichmentSkipped
 				if result.err == nil {
@@ -129,10 +129,10 @@ func (s *Scanner) recordEnrichment(report *scanReport, result enrichmentResult, 
 		s.logger.Debug("deferred movie enrichment", "path", result.job.file.Path, "reason", deferred.Reason)
 	case result.err != nil:
 		report.status.EnrichmentFailed++
-		report.issue(result.job.file.Path, PhaseEnrichment, "Descriptions could not be updated. Local movie data remains available; enrichment will retry later.")
+		report.Issue(result.job.file.Path, scanner.PhaseEnrichment, "Descriptions could not be updated. Local movie data remains available; enrichment will retry later.")
 		s.logger.Warn("movie enrichment failed", "path", result.job.file.Path, "error", result.err)
 	case outcome == enrichmentUnmatched:
 		report.status.EnrichmentUnmatched++
-		report.issue(result.job.file.Path, PhaseEnrichment, "TMDB returned no matching movie. You can use Identify or retry on a later scan.")
+		report.Issue(result.job.file.Path, scanner.PhaseEnrichment, "TMDB returned no matching movie. You can use Identify or retry on a later scan.")
 	}
 }

@@ -16,3 +16,4 @@ export type UpdatePlaybackSettingsRequest = Schema["UpdatePlaybackSettingsReques
 export type PlaybackSettingsResponseType = Schema["PlaybackSettingsData"];
 
 export type MovieScanStatus = Schema["MovieScanStatusData"];
+export type MusicScanStatus = Schema["MusicScanStatusData"];

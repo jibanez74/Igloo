@@ -3795,7 +3795,7 @@
           "Settings"
         ],
         "summary": "Trigger a music library scan",
-        "description": "Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.",
+        "description": "Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and Spotify counts.",
         "operationId": "triggerMusicScan",
         "responses": {
           "200": {
@@ -3812,6 +3812,25 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get music scan progress",
+        "description": "Admin-only current/latest in-memory report. No persistent history. Discovery and processing are interleaved, so total grows while the local phase runs. Spotify tallies count unique artists and albums, one outcome each. Interrupted scans retain committed work and report canceled or failed, never successful completion.",
+        "operationId": "getMusicScanStatus",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MusicScanStatusResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -7321,6 +7340,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/MovieScanStatusResponse"
+            }
+          }
+        }
+      },
+      "MusicScanStatusResponse": {
+        "description": "Current or latest music scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MusicScanStatusResponse"
             }
           }
         }
@@ -13069,7 +13098,7 @@
           }
         }
       },
-      "MovieScanIssue": {
+      "ScanIssue": {
         "type": "object",
         "required": [
           "filename",
@@ -13236,7 +13265,7 @@
             "type": "array",
             "maxItems": 100,
             "items": {
-              "$ref": "#/components/schemas/MovieScanIssue"
+              "$ref": "#/components/schemas/ScanIssue"
             }
           }
         }
@@ -13254,6 +13283,181 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/MovieScanStatusData"
+              }
+            }
+          }
+        ]
+      },
+      "MusicScanStatusData": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "state",
+          "phase",
+          "started_at",
+          "updated_at",
+          "finished_at",
+          "active_files",
+          "total",
+          "processed",
+          "imported",
+          "updated",
+          "unchanged",
+          "failed",
+          "deferred",
+          "deleted",
+          "enrichment_total",
+          "enrichment_processed",
+          "enriched",
+          "enrichment_failed",
+          "enrichment_unmatched",
+          "issue_count",
+          "issues"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "description": "Opaque run identity; empty while idle. Latest report is retained in memory only."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "completed",
+              "completed-with-issues",
+              "canceled",
+              "failed"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "local",
+              "cleanup",
+              "enrichment"
+            ],
+            "description": "Discovery and processing are interleaved in the local phase; there is no separate discovery or retry-wait phase."
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "active_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Active filenames only; no directory paths."
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Files discovered so far. It grows during the local phase because discovery and processing are interleaved."
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Files with a local outcome, including deferred and failed files. Music scans do not retry deferred files within a run."
+          },
+          "imported": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Processed files whose cleaned path had no stored fingerprint baseline at scan start."
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Processed files whose cleaned path had a stored fingerprint baseline at scan start."
+          },
+          "unchanged": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Files skipped by matching filesystem metadata or identical bytes with only the fingerprint refreshed."
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deferred": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Files inside the 60-second quiet period or still changing; they are retried on the next scan and each leaves an outstanding issue."
+          },
+          "deleted": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Confirmed missing catalog files removed during cleanup."
+          },
+          "enrichment_total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Artists and albums queued for the Spotify retry phase, counted when the phase starts. Zero when Spotify is not configured."
+          },
+          "enrichment_processed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Spotify retry candidates handled so far in this run."
+          },
+          "enriched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unique artists and albums matched on Spotify during this run, one outcome each, across inline resolution and the retry phase."
+          },
+          "enrichment_failed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unique artists and albums whose Spotify lookup failed during this run."
+          },
+          "enrichment_unmatched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unique artists and albums with a definitive Spotify no-match during this run."
+          },
+          "issue_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ScanIssue"
+            }
+          }
+        }
+      },
+      "MusicScanStatusResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MusicScanStatusData"
               }
             }
           }

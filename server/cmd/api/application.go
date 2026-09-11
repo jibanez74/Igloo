@@ -85,7 +85,10 @@ type Application struct {
 		Start() movie.StartResult
 		Status() movie.Status
 	}
-	MusicScanner interface{ Start() music.StartResult }
+	MusicScanner interface {
+		Start() music.StartResult
+		Status() music.Status
+	}
 }
 
 //go:embed all:webdist

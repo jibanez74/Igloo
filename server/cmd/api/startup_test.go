@@ -2,10 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"strings"
 	"sync"
 	"testing"
 
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
 )
@@ -13,6 +13,10 @@ import (
 type musicStartFunc func() music.StartResult
 
 func (f musicStartFunc) Start() music.StartResult { return f() }
+
+func (musicStartFunc) Status() music.Status {
+	return music.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
+}
 
 type movieStartFunc func() movie.StartResult
 
@@ -31,7 +35,7 @@ func (l *startupLogger) add(event string) {
 
 func (l *startupLogger) Debug(string, ...any) {}
 func (l *startupLogger) Info(msg string, _ ...any) {
-	if strings.HasPrefix(msg, "scanning music directory:") {
+	if msg == "music scan phase" {
 		l.add("music")
 	} else if msg == "skipping movie library scan: movies directory is not configured" || msg == "skipping music library scan: music directory is not configured" {
 		l.add(msg)
@@ -162,5 +166,5 @@ func TestStartMusicScanAtStartupHandlesNonStartedResults(t *testing.T) {
 }
 
 func (movieStartFunc) Status() movie.Status {
-	return movie.Status{State: "idle", Phase: "idle", ActiveFiles: []string{}, Issues: []movie.Issue{}}
+	return movie.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
 }
