@@ -100,7 +100,12 @@ func (r *scanReport) syncCounts() {
 
 func (r *scanReport) issue(path string, phase ScanPhase, reason string) {
 	key := string(phase) + ":" + path
-	entry := Issue{Filename: filepath.Base(path), Phase: phase, Reason: reason}
+	// A scan-wide issue carries no path; filepath.Base would report it as ".".
+	filename := ""
+	if path != "" {
+		filename = filepath.Base(path)
+	}
+	entry := Issue{Filename: filename, Phase: phase, Reason: reason}
 	existing, ok := r.issues[key]
 	if ok && existing == entry {
 		return

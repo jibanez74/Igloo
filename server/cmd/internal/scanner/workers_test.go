@@ -43,21 +43,22 @@ func TestRunWorkersDeliversEveryResultOnTheCaller(t *testing.T) {
 	}
 }
 
-func TestRunWorkersStopsDispatchWhenPausedOrCanceled(t *testing.T) {
+func TestRunWorkersDropsRemainingJobsWhenStoppedOrCanceled(t *testing.T) {
 	jobs := []int{1, 2, 3, 4, 5}
-	paused := false
+	stopped := false
 	dispatched, results := 0, 0
-	RunWorkers(context.Background(), 2, jobs, func() bool { return !paused },
+	RunWorkers(context.Background(), 2, jobs, func() bool { return !stopped },
 		func(_ context.Context, job int) int { return job },
 		func(int) { dispatched++ },
 		func(int) {
 			results++
-			paused = true
+			stopped = true
 		})
-	// Once the first result pauses dispatch only in-flight jobs finish, and
-	// every dispatched job still reports back.
+	// The gate is a stop, not a pause: once the first result closes it the
+	// remaining jobs are dropped, only in-flight ones finish, and every
+	// dispatched job still reports back.
 	if dispatched >= len(jobs) || results != dispatched {
-		t.Fatalf("paused dispatch: dispatched=%d results=%d", dispatched, results)
+		t.Fatalf("stopped dispatch: dispatched=%d results=%d", dispatched, results)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

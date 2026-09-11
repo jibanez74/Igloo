@@ -138,14 +138,32 @@ SELECT track_id FROM track_musicians WHERE musician_id=?;
 SELECT id FROM tracks WHERE album_id=?;
 
 -- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
+-- COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+-- popularity/follower count to NULL, and an obscure artist legitimately reports
+-- both, so an unguarded SET would erase values a previous match stored.
+UPDATE musicians SET
+ summary = COALESCE(sqlc.narg(summary), summary),
+ spotify_popularity = COALESCE(sqlc.narg(spotify_popularity), spotify_popularity),
+ spotify_followers = COALESCE(sqlc.narg(spotify_followers), spotify_followers),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
 
 -- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
+-- Same NULL-coercion guard as UpdateMusicArtistEnrichment.
+UPDATE albums SET
+ spotify_popularity = COALESCE(sqlc.narg(spotify_popularity), spotify_popularity),
+ total_tracks = COALESCE(sqlc.narg(total_tracks), total_tracks),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
 
 -- name: MusicCompoundReconciliationCandidates :many
-SELECT e.id FROM musicians e JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>sqlc.arg(after_id) AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold')
+-- Driven from musicians so the keyset cursor rides the primary key, like
+-- MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+-- a temp b-tree sort of every remaining candidate on each 100-row page.
+SELECT e.id FROM musicians e
+WHERE e.id>sqlc.arg(after_id)
+AND EXISTS (SELECT 1 FROM music_spotify_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
 AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
 JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
 WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))

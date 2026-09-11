@@ -53,10 +53,12 @@ func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext,
 		if err != nil {
 			return fmt.Errorf("upsert movie failed: %w", err)
 		}
-		// A manual Identify since the index was loaded keeps its match; otherwise
-		// the technical change re-queues enrichment with a fresh backoff.
-		sameIdentity := current.TmdbID == movie.baseline.TmdbID
-		if sameIdentity {
+		// A confirmed TMDB match survives a technical change. Re-queueing it would
+		// re-run applyTmdbMetadata, which overwrites every descriptive field --
+		// including anything set through the Edit dialog -- and a new mtime says
+		// nothing about which movie the file is. Only an unmatched movie is queued.
+		unmatched := !current.TmdbID.Valid
+		if unmatched {
 			err = qtx.MarkMovieTmdbRetry(ctx, movieID)
 			if err != nil {
 				return err
@@ -73,7 +75,10 @@ func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext,
 		if err != nil {
 			return fmt.Errorf("process chapters failed: %w", err)
 		}
-		// Technical changes invalidate persisted playback work in the same transaction.
+		// Technical changes invalidate persisted playback work in the same
+		// transaction. Keeping the rows on a metadata-only change would not help:
+		// their readers key on movieStreamFingerprintBase, which includes
+		// movies.updated_at, so an UpsertMovie here already invalidates them.
 		err = qtx.DeleteMovieRemuxSafetyVerdicts(ctx, movieID)
 		if err != nil {
 			return err

@@ -128,7 +128,8 @@ func (s *Scanner) runMusicScan(directory string) {
 		}
 		return
 	}
-	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s; %d deferred; Spotify: %d matched, %d failed, %d unmatched",
+	// The Spotify tallies count artists and albums, one outcome each per scan.
+	s.logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s; %d deferred; Spotify entities: %d matched, %d failed, %d unmatched",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime)), scan.deferred, scan.enrichmentCounts[musicSpotifyStatusMatched], scan.enrichmentCounts[musicSpotifyStatusFailed], scan.enrichmentCounts[musicSpotifyStatusUnmatched]))
 }
 

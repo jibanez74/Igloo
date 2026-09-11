@@ -52,6 +52,22 @@ type resolvedAlbum struct {
 	spotifyMatch *resolvedSpotifyMatch
 }
 
+// resolvedMusicianMatch and resolvedAlbumMatch read the provider outcome off a
+// resolution that may be nil, which is how every error path returns.
+func resolvedMusicianMatch(resolved *resolvedMusician) *resolvedSpotifyMatch {
+	if resolved == nil {
+		return nil
+	}
+	return resolved.spotifyMatch
+}
+
+func resolvedAlbumMatch(resolved *resolvedAlbum) *resolvedSpotifyMatch {
+	if resolved == nil {
+		return nil
+	}
+	return resolved.spotifyMatch
+}
+
 func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, file scanner.ScanFile) (*resolvedTrack, error) {
 	info, err := s.ffprobe.GetAudioMetadata(ctx, file.Path)
 	if err != nil {
@@ -237,10 +253,13 @@ func (s *Scanner) resolveTrackMusicians(ctx context.Context, scan *musicScanCont
 	return musicians, nil
 }
 
-func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
+func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (resolved *resolvedMusician, err error) {
 	name = strings.TrimSpace(name)
 	sortName = strings.TrimSpace(sortName)
 	cacheKey := scanner.NormalizedScanCacheKey(name)
+	// Tally the outcome on every return path, cached ones included, so the scan
+	// summary counts artists rather than Spotify requests.
+	defer func() { scan.countEnrichment(cacheKey, resolvedMusicianMatch(resolved)) }()
 	musicianID, ok := scan.musicianIDs.Get(cacheKey)
 	if ok {
 		return &resolvedMusician{
@@ -252,7 +271,26 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		}, nil
 	}
 
-	resolved := &resolvedMusician{name: strings.TrimSpace(name), sortName: strings.TrimSpace(sortName)}
+	resolved = &resolvedMusician{name: name, sortName: sortName}
+
+	// An outcome already decided for this name in this scan short-circuits ahead
+	// of the catalog lookups below: persistMusician re-reads the identity inside
+	// its own transaction, so the existing* fields are advisory and repeating
+	// the two reads per track buys nothing.
+	cachedMiss, ok := scan.spotifyArtistMisses[cacheKey]
+	if ok {
+		resolved.spotifyMatch = &cachedMiss
+		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
+		scan.compoundSplits[cacheKey] = resolved.splitCompoundOnNoMatch
+		return resolved, nil
+	}
+	attempted, attemptedBefore := scan.artistAttempts[cacheKey]
+	if attemptedBefore {
+		resolved.spotifyArtist = attempted.spotifyArtist
+		resolved.spotifyMatch = attempted.spotifyMatch
+		resolved.splitCompoundOnNoMatch = attempted.splitCompoundOnNoMatch
+		return resolved, nil
+	}
 
 	existing, found, err := s.findExistingMusician(ctx, name)
 	if err != nil {
@@ -281,25 +319,14 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 				return nil, matchErr
 			}
 		}
-	}
 
-	if found {
-		attempted, ok := scan.artistAttemptsByID[existing.ID]
-		if ok {
-			resolved.spotifyArtist = attempted.spotifyArtist
-			resolved.spotifyMatch = attempted.spotifyMatch
-			resolved.splitCompoundOnNoMatch = attempted.splitCompoundOnNoMatch
+		byID, seen := scan.artistAttemptsByID[existing.ID]
+		if seen {
+			resolved.spotifyArtist = byID.spotifyArtist
+			resolved.spotifyMatch = byID.spotifyMatch
+			resolved.splitCompoundOnNoMatch = byID.splitCompoundOnNoMatch
 			return resolved, nil
 		}
-	}
-
-	spotifyKey := scanner.NormalizedScanCacheKey(name)
-	cachedMiss, ok := scan.spotifyArtistMisses[spotifyKey]
-	if ok {
-		resolved.spotifyMatch = &cachedMiss
-		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
-		scan.compoundSplits[cacheKey] = resolved.splitCompoundOnNoMatch
-		return resolved, nil
 	}
 
 	if s.spotify == nil {
@@ -309,35 +336,27 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 		return resolved, nil
 	}
 
-	attempted, attemptedBefore := scan.artistAttempts[spotifyKey]
-	if attemptedBefore {
-		resolved.spotifyArtist = attempted.spotifyArtist
-		resolved.spotifyMatch = attempted.spotifyMatch
-		resolved.splitCompoundOnNoMatch = attempted.splitCompoundOnNoMatch
-		return resolved, nil
-	}
+	// resolved is the named return, so an error path leaves it nil; never cache
+	// that, or the next credit with this name dereferences it.
 	defer func() {
 		contextErr := ctx.Err()
-		if contextErr == nil {
-			scan.artistAttempts[spotifyKey] = resolved
+		if contextErr == nil && resolved != nil {
+			scan.artistAttempts[cacheKey] = resolved
 			if found {
 				scan.artistAttemptsByID[existing.ID] = resolved
 			}
-			if resolved.spotifyMatch != nil {
-				scan.enrichmentCounts[resolved.spotifyMatch.status]++
-			}
 		}
 	}()
-	artist, err := s.spotify.SearchArtistByName(ctx, name)
+	artist, searchErr := s.spotify.SearchArtistByName(ctx, name)
 	contextErr := ctx.Err()
 	if contextErr != nil {
 		return nil, contextErr
 	}
-	if err != nil {
-		match := resolvedSpotifyMatchFromError(err)
-		scan.spotifyArtistMisses[spotifyKey] = match
+	if searchErr != nil {
+		match := resolvedSpotifyMatchFromError(searchErr)
+		scan.spotifyArtistMisses[cacheKey] = match
 		resolved.spotifyMatch = &match
-		resolved.splitCompoundOnNoMatch = shouldSplitCompoundArtistCredits(err)
+		resolved.splitCompoundOnNoMatch = shouldSplitCompoundArtistCredits(searchErr)
 		scan.compoundSplits[cacheKey] = resolved.splitCompoundOnNoMatch
 		return resolved, nil
 	}
@@ -353,11 +372,14 @@ func (s *Scanner) resolveMusician(ctx context.Context, scan *musicScanContext, n
 	return resolved, nil
 }
 
-func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
+func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (resolved *resolvedAlbum, err error) {
 	title = strings.TrimSpace(title)
 	albumArtist = strings.TrimSpace(albumArtist)
 	sortTitle = strings.TrimSpace(sortTitle)
 	cacheKey := scanner.NormalizedScanCacheKey(title, albumArtist)
+	// Tally the outcome on every return path, cached ones included, so the scan
+	// summary counts albums rather than Spotify requests.
+	defer func() { scan.countEnrichment(cacheKey, resolvedAlbumMatch(resolved)) }()
 	albumID, ok := scan.albumIDs.Get(cacheKey)
 	if ok {
 		return &resolvedAlbum{
@@ -369,10 +391,26 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 		}, nil
 	}
 
-	resolved := &resolvedAlbum{
+	resolved = &resolvedAlbum{
 		title:       title,
 		sortTitle:   sortTitle,
 		albumArtist: albumArtist,
+	}
+
+	// Same short-circuit as resolveMusician: persistAlbum re-reads the identity
+	// inside its transaction, so an outcome already decided for this
+	// (title, artist) in this scan skips both catalog reads.
+	cachedMiss, ok := scan.spotifyAlbumMisses[cacheKey]
+	if ok {
+		resolved.spotifyMatch = &cachedMiss
+		return resolved, nil
+	}
+	attempted, attemptedBefore := scan.albumAttempts[cacheKey]
+	if attemptedBefore {
+		resolved.spotifyAlbum = attempted.spotifyAlbum
+		resolved.spotifyMatch = attempted.spotifyMatch
+
+		return resolved, nil
 	}
 
 	existing, found, err := s.findExistingAlbum(ctx, title, albumArtist)
@@ -400,23 +438,14 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 				return nil, matchErr
 			}
 		}
-	}
 
-	if found {
-		attempted, ok := scan.albumAttemptsByID[existing.ID]
-		if ok {
-			resolved.spotifyAlbum = attempted.spotifyAlbum
-			resolved.spotifyMatch = attempted.spotifyMatch
+		byID, seen := scan.albumAttemptsByID[existing.ID]
+		if seen {
+			resolved.spotifyAlbum = byID.spotifyAlbum
+			resolved.spotifyMatch = byID.spotifyMatch
 
 			return resolved, nil
 		}
-	}
-
-	spotifyKey := scanner.NormalizedScanCacheKey(title, albumArtist)
-	cachedMiss, ok := scan.spotifyAlbumMisses[spotifyKey]
-	if ok {
-		resolved.spotifyMatch = &cachedMiss
-		return resolved, nil
 	}
 
 	if s.spotify == nil {
@@ -426,33 +455,24 @@ func (s *Scanner) resolveAlbum(ctx context.Context, scan *musicScanContext, titl
 		return resolved, nil
 	}
 
-	attempted, attemptedBefore := scan.albumAttempts[spotifyKey]
-	if attemptedBefore {
-		resolved.spotifyAlbum = attempted.spotifyAlbum
-		resolved.spotifyMatch = attempted.spotifyMatch
-
-		return resolved, nil
-	}
+	// Same nil guard as resolveMusician.
 	defer func() {
 		contextErr := ctx.Err()
-		if contextErr == nil {
-			scan.albumAttempts[spotifyKey] = resolved
+		if contextErr == nil && resolved != nil {
+			scan.albumAttempts[cacheKey] = resolved
 			if found {
 				scan.albumAttemptsByID[existing.ID] = resolved
 			}
-			if resolved.spotifyMatch != nil {
-				scan.enrichmentCounts[resolved.spotifyMatch.status]++
-			}
 		}
 	}()
-	albumDetails, err := s.spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
+	albumDetails, searchErr := s.spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
 	contextErr := ctx.Err()
 	if contextErr != nil {
 		return nil, contextErr
 	}
-	if err != nil {
-		match := resolvedSpotifyMatchFromError(err)
-		scan.spotifyAlbumMisses[spotifyKey] = match
+	if searchErr != nil {
+		match := resolvedSpotifyMatchFromError(searchErr)
+		scan.spotifyAlbumMisses[cacheKey] = match
 		resolved.spotifyMatch = &match
 		return resolved, nil
 	}

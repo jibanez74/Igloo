@@ -150,7 +150,7 @@ func (s *Scanner) reconcileCompoundCredits(ctx context.Context, scan *musicScanC
 						return syncErr
 					}
 				}
-				for _, id := range append(ids, musicianID) {
+				for _, id := range uniqueIDs(ids, []int64{musicianID}) {
 					syncErr = qtx.ReconcileMusicArtistSort(ctx, id)
 					if syncErr != nil {
 						return syncErr

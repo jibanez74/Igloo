@@ -878,6 +878,12 @@ type identifyDuringScanTmdb struct {
 	release chan struct{}
 }
 
+// The scanner reaches the blocking detail lookup through a search, because a
+// movie that already carries a confirmed match is never re-enriched by a scan.
+func (c *identifyDuringScanTmdb) SearchMoviesByTitleAndYear(_ context.Context, title string, _ ...int) ([]tmdb.TmdbMovie, error) {
+	return []tmdb.TmdbMovie{{TmdbID: 42, Title: title}}, nil
+}
+
 func (c *identifyDuringScanTmdb) GetTmdbMovieByID(ctx context.Context, movie *tmdb.TmdbMovie) error {
 	if movie.TmdbID == 42 {
 		close(c.entered)
@@ -906,7 +912,8 @@ func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			localID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Original", FilePath: path, FileName: "movie.mkv", Container: "mkv", MimeType: "video/x-matroska", TmdbID: helpers.NullInt64(42), AudienceRating: helpers.NullFloat64(9)})
+			// Seeded without a match so the scan below actually enriches it.
+			localID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Original", FilePath: path, FileName: "movie.mkv", Container: "mkv", MimeType: "video/x-matroska", AudienceRating: helpers.NullFloat64(9)})
 			if err != nil {
 				t.Fatal(err)
 			}

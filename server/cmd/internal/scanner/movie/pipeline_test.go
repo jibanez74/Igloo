@@ -606,3 +606,24 @@ func TestMovieReplacementAndSymlinkRetarget(t *testing.T) {
 		})
 	}
 }
+
+// A scan-wide issue carries no path. filepath.Base("") is ".", which reached the
+// scan status API as a filename.
+func TestScanReportIssueWithoutPathHasNoFilename(t *testing.T) {
+	report := &scanReport{issues: make(map[string]Issue), active: make(map[string]bool)}
+	report.issue("", PhaseEnrichment, "TMDB enrichment stopped after provider failures.")
+	report.issue("/movies/Example.mkv", PhaseLocal, "Unable to inspect this movie.")
+
+	for key, issue := range report.issues {
+		switch issue.Phase {
+		case PhaseEnrichment:
+			if issue.Filename != "" {
+				t.Fatalf("scan-wide issue %q filename = %q, want empty", key, issue.Filename)
+			}
+		case PhaseLocal:
+			if issue.Filename != "Example.mkv" {
+				t.Fatalf("file issue %q filename = %q, want the base name", key, issue.Filename)
+			}
+		}
+	}
+}

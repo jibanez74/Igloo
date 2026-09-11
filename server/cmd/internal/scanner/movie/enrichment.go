@@ -73,12 +73,12 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 			candidates = append(candidates, enrichmentJob{file: file.file, baseline: entry})
 		}
 	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].file.Path < candidates[j].file.Path })
 	// Publish the total only once there is a provider to work through it;
 	// otherwise the run ends showing a progress bar stuck at 0/N.
 	if s.tmdb == nil {
 		return
 	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].file.Path < candidates[j].file.Path })
 	report.status.EnrichmentTotal = len(candidates)
 	s.publish(report)
 	consecutive := 0

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -253,17 +254,28 @@ func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
 }
 
 type musicScannerSpotifyStub struct {
-	artist      *spotifylib.FullArtist
-	artistErr   error
-	artistCalls int
-	album       *spotifylib.FullAlbum
-	albumErr    error
-	albumCalls  int
-	clearCalls  int
+	artist *spotifylib.FullArtist
+	// artistsByName, when set, answers per name (lowercased); a name it does
+	// not carry fails the lookup, so one stub can model a compound credit where
+	// only some members match.
+	artistsByName map[string]*spotifylib.FullArtist
+	artistErr     error
+	artistCalls   int
+	album         *spotifylib.FullAlbum
+	albumErr      error
+	albumCalls    int
+	clearCalls    int
 }
 
-func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, _ string) (*spotifylib.FullArtist, error) {
+func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifylib.FullArtist, error) {
 	s.artistCalls++
+	if s.artistsByName != nil {
+		artist, ok := s.artistsByName[strings.ToLower(strings.TrimSpace(name))]
+		if !ok {
+			return nil, errors.New("no spotify match")
+		}
+		return artist, nil
+	}
 	if s.artistErr != nil {
 		return nil, s.artistErr
 	}

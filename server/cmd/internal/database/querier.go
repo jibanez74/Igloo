@@ -317,6 +317,9 @@ type Querier interface {
 	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error)
 	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
 	MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error)
+	// Driven from musicians so the keyset cursor rides the primary key, like
+	// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+	// a temp b-tree sort of every remaining candidate on each 100-row page.
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
 	MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error)
 	MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error)
@@ -357,7 +360,11 @@ type Querier interface {
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (int64, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
 	UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTmdbMetadataParams) error
+	// Same NULL-coercion guard as UpdateMusicArtistEnrichment.
 	UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error
+	// COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+	// popularity/follower count to NULL, and an obscure artist legitimately reports
+	// both, so an unguarded SET would erase values a previous match stored.
 	UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error
 	UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error
 	UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (UpdateMusicianSpotifyThumbRow, error)

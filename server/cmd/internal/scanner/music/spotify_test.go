@@ -889,3 +889,74 @@ func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
 		t.Fatalf("album failed row = %s/%#v, want failed/null", status, reason)
 	}
 }
+
+// Spotify reports 0 popularity and 0 followers for obscure artists, and the
+// scanner maps a zero to NULL. Without a COALESCE guard the enrichment UPDATE
+// erased values a previous, richer match had stored.
+func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing.T) {
+	app := setupMusicScanner(t)
+	defer app.db.Close()
+	ctx := context.Background()
+
+	musician, err := app.queries.UpsertMusician(ctx, database.UpsertMusicianParams{
+		Name:              "Test Artist",
+		SortName:          "Test Artist",
+		SpotifyID:         sql.NullString{String: "artist123", Valid: true},
+		Summary:           sql.NullString{String: "A stored summary", Valid: true},
+		SpotifyPopularity: sql.NullFloat64{Float64: 61, Valid: true},
+		SpotifyFollowers:  sql.NullInt64{Int64: 4200, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seed musician: %v", err)
+	}
+	album, err := app.queries.UpsertAlbum(ctx, database.UpsertAlbumParams{
+		Title:             "Test Album",
+		SortTitle:         "Test Album",
+		Musician:          sql.NullString{String: "Test Artist", Valid: true},
+		SpotifyID:         sql.NullString{String: "album123", Valid: true},
+		SpotifyPopularity: sql.NullFloat64{Float64: 55, Valid: true},
+		TotalTracks:       sql.NullInt64{Int64: 12, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seed album: %v", err)
+	}
+
+	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.spotify = &musicScannerSpotifyStub{
+		artist: &spotifylib.FullArtist{
+			SimpleArtist: spotifylib.SimpleArtist{ID: spotifylib.ID("artist123"), Name: "Test Artist"},
+		},
+		album: &spotifylib.FullAlbum{
+			SimpleAlbum: spotifylib.SimpleAlbum{ID: spotifylib.ID("album123"), Name: "Test Album"},
+		},
+	}
+
+	file := scanner.ScanFile{Path: filepath.Join(t.TempDir(), "Test Track.m4a"), Ext: "m4a", Size: 5}
+	scanned, skipped, errCount := app.processMusicBatchForTest(t, ctx, []scanner.ScanFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	var summary sql.NullString
+	var popularity sql.NullFloat64
+	var followers sql.NullInt64
+	err = app.db.QueryRow("SELECT summary, spotify_popularity, spotify_followers FROM musicians WHERE id = ?", musician.ID).
+		Scan(&summary, &popularity, &followers)
+	if err != nil {
+		t.Fatalf("get musician enrichment: %v", err)
+	}
+	if popularity.Float64 != 61 || followers.Int64 != 4200 || !summary.Valid {
+		t.Fatalf("musician enrichment = %#v %#v %#v, want the stored values preserved", summary, popularity, followers)
+	}
+
+	var albumPopularity sql.NullFloat64
+	var totalTracks sql.NullInt64
+	err = app.db.QueryRow("SELECT spotify_popularity, total_tracks FROM albums WHERE id = ?", album.ID).
+		Scan(&albumPopularity, &totalTracks)
+	if err != nil {
+		t.Fatalf("get album enrichment: %v", err)
+	}
+	if albumPopularity.Float64 != 55 || totalTracks.Int64 != 12 {
+		t.Fatalf("album enrichment = %#v %#v, want the stored values preserved", albumPopularity, totalTracks)
+	}
+}

@@ -551,6 +551,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			expected.artistAttempts = scan.artistAttempts
 			expected.albumAttempts = scan.albumAttempts
 			expected.enrichmentCounts = scan.enrichmentCounts
+			expected.enrichmentCounted = scan.enrichmentCounted
 			expected.artistAttemptsByID = scan.artistAttemptsByID
 			expected.albumAttemptsByID = scan.albumAttemptsByID
 			if !reflect.DeepEqual(scan, expected) {
@@ -594,5 +595,33 @@ func TestTrackGenreRestoredWithinScan(t *testing.T) {
 		if err != nil || got != genre {
 			t.Fatalf("genre=%q err=%v, want %q", got, err, genre)
 		}
+	}
+}
+
+func TestUniqueIDsPreservesOrderAndDropsRepeats(t *testing.T) {
+	got := uniqueIDs([]int64{3, 1, 3}, []int64{1, 2})
+	want := []int64{3, 1, 2}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("uniqueIDs = %v, want %v", got, want)
+	}
+
+	// A rescan of an unchanged track sees the same artists in the old and the
+	// new credit set; reconciling each one twice is the case this exists for.
+	artists := []int64{7, 8}
+	got = uniqueIDs(artists, []int64{7, 8})
+	if !reflect.DeepEqual(got, []int64{7, 8}) {
+		t.Fatalf("unchanged rescan = %v, want 7,8 once each", got)
+	}
+	if !reflect.DeepEqual(artists, []int64{7, 8}) {
+		t.Fatalf("uniqueIDs mutated its input: %v", artists)
+	}
+
+	if got := uniqueIDs(nil); len(got) != 0 {
+		t.Fatalf("uniqueIDs(nil) = %v, want empty", got)
+	}
+
+	present := validIDs(sql.NullInt64{}, sql.NullInt64{Int64: 5, Valid: true})
+	if !reflect.DeepEqual(present, []int64{5}) {
+		t.Fatalf("validIDs = %v, want only the valid id", present)
 	}
 }

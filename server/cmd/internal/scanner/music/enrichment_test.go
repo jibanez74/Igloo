@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -511,5 +512,57 @@ func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
 	count := countScannerRows(t, s.db, "SELECT count(*) FROM derived_writes")
 	if count != 0 {
 		t.Fatalf("unchanged derived metadata caused %d writes", count)
+	}
+}
+
+// Persisting one compound credit can merge its local artist into the existing
+// row that already owns the Spotify identity, deleting the local row while
+// later credits are still being written. persistMusicians re-reads the aliases
+// whenever a merge happened, so every credit lands on the surviving owner.
+func TestCompoundCreditMergeRepointsEarlierCredits(t *testing.T) {
+	s := setupMusicScanner(t)
+	defer s.db.Close()
+	ctx := context.Background()
+
+	// One local artist row aliased by both credited names, and a separate row
+	// that already owns the Spotify identity the second credit resolves to.
+	local, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: "Artist One", SortName: "Artist One"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{
+		Name: "Canonical Two", SortName: "Canonical Two", SpotifyID: sql.NullString{String: "s2", Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.queries.SaveMusicArtistIdentity(ctx, database.SaveMusicArtistIdentityParams{IdentityKey: "artist one", MusicianID: local.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.spotify = &musicScannerSpotifyStub{
+		artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "s2", Name: "Canonical Two"}},
+	}
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "one"), 1,
+		ffprobe.FormatTags{Title: "One", Artist: "Artist One, Artist Two"})
+
+	if countScannerRows(t, s.db, "SELECT count(*) FROM musicians WHERE id = ?", local.ID) != 0 {
+		t.Fatal("the redundant artist was not merged away")
+	}
+	credited := countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians WHERE musician_id = ?", owner.ID)
+	if credited != 1 {
+		t.Fatalf("track credits pointing at the surviving owner = %d, want 1", credited)
+	}
+	if countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians") != 1 {
+		t.Fatal("track kept a credit for the merged-away artist")
+	}
+	var primary sql.NullInt64
+	err = s.db.QueryRow("SELECT musician_id FROM tracks").Scan(&primary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !primary.Valid || primary.Int64 != owner.ID {
+		t.Fatalf("primary artist = %#v, want the surviving owner %d", primary, owner.ID)
 	}
 }

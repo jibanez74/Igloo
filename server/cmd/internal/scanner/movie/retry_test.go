@@ -187,7 +187,7 @@ func assertMoviePlaybackWork(t *testing.T, s *Scanner) {
 	}
 }
 
-func TestFailedChangedMoviePreservesMetadataAndRecoversByIdentity(t *testing.T) {
+func TestChangedMoviePreservesConfirmedMatchAndMetadata(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	defer fixture.db.Close()
 	s := fixture.scanner
@@ -261,9 +261,21 @@ func TestFailedChangedMoviePreservesMetadataAndRecoversByIdentity(t *testing.T) 
 			t.Fatalf("lost %s", table)
 		}
 	}
-	if len(client.searchCalls) != 1 || len(client.detailCalls) != 2 || client.detailCalls[1] != 42 {
-		t.Fatal("identified movie was rematched")
+	// The changed file never reached TMDB: a confirmed match is not re-searched,
+	// so the provider being down could not have cost anything here.
+	if len(client.searchCalls) != 1 || len(client.detailCalls) != 1 {
+		t.Fatalf("confirmed match was re-searched: searches=%d details=%v", len(client.searchCalls), client.detailCalls)
 	}
+	pending, err := s.queries.HasMovieTmdbRetry(ctx, after.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending {
+		t.Fatal("technical change re-queued enrichment for a confirmed match")
+	}
+
+	// A healthy provider does not change that, and an unchanged file leaves the
+	// persisted playback work alone.
 	seedMoviePlaybackWork(t, s, after.ID)
 	client.detailErr = nil
 	details.Title = "Refreshed"
@@ -272,12 +284,15 @@ func TestFailedChangedMoviePreservesMetadataAndRecoversByIdentity(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	recovered, err := s.queries.GetMovieByID(ctx, after.ID)
+	rescanned, err := s.queries.GetMovieByID(ctx, after.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if recovered.Title != "Refreshed" || recovered.AudienceRating != after.AudienceRating || recovered.RunTime != after.RunTime || recovered.Duration != after.Duration || probe.calls != 2 {
-		t.Fatalf("bad recovery: %+v", recovered)
+	if rescanned.Title != "Enriched" || rescanned.AudienceRating != after.AudienceRating || rescanned.RunTime != after.RunTime || rescanned.Duration != after.Duration || probe.calls != 2 {
+		t.Fatalf("confirmed match was refreshed by a rescan: %+v", rescanned)
+	}
+	if len(client.detailCalls) != 1 {
+		t.Fatalf("detail calls = %v, want the confirmed match left alone", client.detailCalls)
 	}
 	assertMoviePlaybackWork(t, s)
 }
@@ -453,4 +468,90 @@ func readTestMovieByPath(ctx context.Context, q *database.Queries, path string) 
 		return database.Movie{}, err
 	}
 	return q.GetMovieByID(ctx, row.ID)
+}
+
+// A movie the user edited through the Edit dialog keeps those values when the
+// file changes. Enrichment owns the same columns and overwrites all of them, so
+// re-queueing a confirmed match on a technical change reverted every edit.
+func TestTechnicalRescanPreservesUserEdits(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	defer fixture.db.Close()
+	s := fixture.scanner
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "Unrelated Filename.mkv")
+	err := os.WriteFile(path, []byte("movie"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := scanner.ScanFile{Path: path, Ext: "mkv"}
+	details := retryMovieFixture(t)
+	client := &stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42, Title: "Enriched"}}, detailMovies: map[int]tmdb.TmdbMovie{42: details}}
+	s.tmdb = client
+	probe := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("7200")}
+	s.ffprobe = probe
+	_, err = s.processFile(ctx, nextMovieScan(t, s), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Stand in for the Edit dialog, which writes these columns through UpdateMovie.
+	_, err = s.db.Exec("UPDATE movies SET title='My Title', overview='My overview', tag_line='My tagline'")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.WriteFile(path, []byte("changed movie"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.processFile(ctx, nextMovieScan(t, s), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited, err := readTestMovieByPath(ctx, s.queries, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if edited.Title != "My Title" || edited.Overview.String != "My overview" || edited.TagLine.String != "My tagline" {
+		t.Fatalf("rescan reverted user edits: %+v", edited)
+	}
+	if edited.Size != 13 {
+		t.Fatalf("technical refresh did not run: size=%d", edited.Size)
+	}
+}
+
+// The same change must not strand an unmatched movie: it still gets queued and
+// searched on the technical change that re-imported it.
+func TestTechnicalRescanStillQueuesUnmatchedMovie(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	defer fixture.db.Close()
+	s := fixture.scanner
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "Unmatched Filename.mkv")
+	err := os.WriteFile(path, []byte("movie"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := scanner.ScanFile{Path: path, Ext: "mkv"}
+	client := &stubMovieScannerTmdb{searchErr: tmdb.ErrNoMoviesFound}
+	s.tmdb = client
+	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("7200")}
+	_, err = s.processFile(ctx, nextMovieScan(t, s), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	movie, err := readTestMovieByPath(ctx, s.queries, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if movie.TmdbID.Valid {
+		t.Fatalf("unmatched movie gained a match: %+v", movie)
+	}
+	pending, err := s.queries.HasMovieTmdbRetry(ctx, movie.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pending {
+		t.Fatal("unmatched movie was not queued for enrichment")
+	}
 }

@@ -7,13 +7,16 @@ import (
 // Database caches use transaction overlays; lookup outcomes and splitting
 // decisions live for the scan and do not depend on transaction success.
 type musicScanContext struct {
-	deferred            int
-	trackIndex          map[string]scanner.FileFingerprint
-	merged              bool
-	invalidatedTracks   map[int64]bool
-	artistAttempts      map[string]*resolvedMusician
-	albumAttempts       map[string]*resolvedAlbum
-	enrichmentCounts    map[string]int
+	deferred          int
+	trackIndex        map[string]scanner.FileFingerprint
+	merged            bool
+	invalidatedTracks map[int64]bool
+	artistAttempts    map[string]*resolvedMusician
+	albumAttempts     map[string]*resolvedAlbum
+	enrichmentCounts  map[string]int
+	// enrichmentCounted keys the entities already tallied into enrichmentCounts,
+	// so a name resolved for a hundred tracks contributes one outcome.
+	enrichmentCounted   map[string]bool
 	artistAttemptsByID  map[int64]*resolvedMusician
 	albumAttemptsByID   map[int64]*resolvedAlbum
 	musicianIDs         scanner.ScanCache[string, int64]
@@ -39,6 +42,7 @@ func newMusicScanContext(trackIndex map[string]scanner.FileFingerprint) *musicSc
 		artistAttempts:      make(map[string]*resolvedMusician),
 		albumAttempts:       make(map[string]*resolvedAlbum),
 		enrichmentCounts:    make(map[string]int),
+		enrichmentCounted:   make(map[string]bool),
 		compoundSplits:      make(map[string]bool),
 		musicianIDs:         scanner.NewScanCache[string, int64](),
 		albumIDs:            scanner.NewScanCache[string, int64](),
@@ -57,6 +61,7 @@ func (scan *musicScanContext) clone() *musicScanContext {
 		artistAttempts:      scan.artistAttempts,
 		albumAttempts:       scan.albumAttempts,
 		enrichmentCounts:    scan.enrichmentCounts,
+		enrichmentCounted:   scan.enrichmentCounted,
 		trackIndex:          scan.trackIndex, // shared; never written inside the transaction
 		musicianIDs:         scan.musicianIDs.Overlay(),
 		albumIDs:            scan.albumIDs.Overlay(),
@@ -75,4 +80,16 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 	}
 	scan.musicianIDs.MergeFrom(other.musicianIDs)
 	scan.albumIDs.MergeFrom(other.albumIDs)
+}
+
+// countEnrichment tallies one provider outcome per unique entity per scan.
+// Every resolution path funnels through it, including the cached ones, because
+// counting only where the network call happens reported requests rather than
+// artists and albums.
+func (scan *musicScanContext) countEnrichment(key string, match *resolvedSpotifyMatch) {
+	if match == nil || scan.enrichmentCounted[key] {
+		return
+	}
+	scan.enrichmentCounted[key] = true
+	scan.enrichmentCounts[match.status]++
 }

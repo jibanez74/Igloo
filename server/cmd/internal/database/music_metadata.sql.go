@@ -415,14 +415,19 @@ func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistT
 }
 
 const musicCompoundReconciliationCandidates = `-- name: MusicCompoundReconciliationCandidates :many
-SELECT e.id FROM musicians e JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>?1 AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold')
+SELECT e.id FROM musicians e
+WHERE e.id>?1
+AND EXISTS (SELECT 1 FROM music_spotify_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
 AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
 JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
 WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))
 ORDER BY e.id LIMIT 100
 `
 
+// Driven from musicians so the keyset cursor rides the primary key, like
+// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+// a temp b-tree sort of every remaining candidate on each 100-row page.
 func (q *Queries) MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error) {
 	rows, err := q.query(ctx, q.musicCompoundReconciliationCandidatesStmt, musicCompoundReconciliationCandidates, afterID)
 	if err != nil {
@@ -685,7 +690,11 @@ func (q *Queries) SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtis
 }
 
 const updateMusicAlbumEnrichment = `-- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
+UPDATE albums SET
+ spotify_popularity = COALESCE(?1, spotify_popularity),
+ total_tracks = COALESCE(?2, total_tracks),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3
 `
 
 type UpdateMusicAlbumEnrichmentParams struct {
@@ -694,13 +703,19 @@ type UpdateMusicAlbumEnrichmentParams struct {
 	ID                int64           `json:"id"`
 }
 
+// Same NULL-coercion guard as UpdateMusicArtistEnrichment.
 func (q *Queries) UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error {
 	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.SpotifyPopularity, arg.TotalTracks, arg.ID)
 	return err
 }
 
 const updateMusicArtistEnrichment = `-- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
+UPDATE musicians SET
+ summary = COALESCE(?1, summary),
+ spotify_popularity = COALESCE(?2, spotify_popularity),
+ spotify_followers = COALESCE(?3, spotify_followers),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = ?4
 `
 
 type UpdateMusicArtistEnrichmentParams struct {
@@ -710,6 +725,9 @@ type UpdateMusicArtistEnrichmentParams struct {
 	ID                int64           `json:"id"`
 }
 
+// COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+// popularity/follower count to NULL, and an obscure artist legitimately reports
+// both, so an unguarded SET would erase values a previous match stored.
 func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error {
 	_, err := q.exec(ctx, q.updateMusicArtistEnrichmentStmt, updateMusicArtistEnrichment,
 		arg.Summary,

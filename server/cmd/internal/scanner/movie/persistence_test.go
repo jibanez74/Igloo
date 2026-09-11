@@ -341,7 +341,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	}
 }
 
-func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *testing.T) {
+func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -454,48 +454,37 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	if err != nil {
 		t.Fatalf("get movie by path: %v", err)
 	}
-	if movie.Title != "Replace Me Restored" || movie.Size != 6 {
-		t.Fatalf("movie after rescan = title %q size %d, want restored/6", movie.Title, movie.Size)
+	// A confirmed TMDB match is not re-searched by a technical change: the file
+	// moved, not the identity, and re-running enrichment would overwrite every
+	// descriptive field including anything set through the Edit dialog.
+	if movie.Title != "Replace Me" || movie.Size != 6 {
+		t.Fatalf("movie after rescan = title %q size %d, want the first match kept and size 6", movie.Title, movie.Size)
+	}
+	if len(tmdbStub.detailCalls) != 1 {
+		t.Fatalf("detail calls = %v, want the rescan to skip TMDB", tmdbStub.detailCalls)
+	}
+	pending, err := testScanner.queries.HasMovieTmdbRetry(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("has retry: %v", err)
+	}
+	if pending {
+		t.Fatal("rescan re-queued enrichment for a movie that already has a match")
 	}
 
 	genres, err := testScanner.queries.GetGenresByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get genres: %v", err)
 	}
-	if got := movieGenreTags(genres); got != "Drama" {
-		t.Fatalf("genres after rescan = %q, want Drama", got)
+	if got := movieGenreTags(genres); got != "Action" {
+		t.Fatalf("genres after rescan = %q, want the matched Action", got)
 	}
 
 	cast, err := testScanner.queries.GetCastByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get cast: %v", err)
 	}
-	if len(cast) != 1 || cast[0].ArtistName != "Second Actor" || cast[0].Character != "New Role" {
-		t.Fatalf("cast after rescan = %+v, want only second actor", cast)
-	}
-
-	crew, err := testScanner.queries.GetCrewByMovieID(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get crew: %v", err)
-	}
-	if len(crew) != 1 || crew[0].ArtistName != "Second Director" {
-		t.Fatalf("crew after rescan = %+v, want only second director", crew)
-	}
-
-	companies, err := testScanner.queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get production companies: %v", err)
-	}
-	if len(companies) != 1 || companies[0].Name != "New Studio" {
-		t.Fatalf("production companies after rescan = %+v, want New Studio", companies)
-	}
-
-	extras, err := testScanner.queries.GetMovieExtraVideos(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get extra videos: %v", err)
-	}
-	if len(extras) != 1 || extras[0].Title != "New Trailer" || extras[0].Type != "special_feature" || extras[0].Site != "vimeo" {
-		t.Fatalf("extra videos after rescan = %+v, want mapped new featurette", extras)
+	if len(cast) != 1 || cast[0].ArtistName != "First Actor" {
+		t.Fatalf("cast after rescan = %+v, want the matched first actor", cast)
 	}
 
 	videoStreams, err := testScanner.queries.GetVideoStreamsByMovieID(ctx, movie.ID)
@@ -520,6 +509,53 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 	if len(chapters) != 1 || chapters[0].Title != "Only New Chapter" || chapters[0].StartTime != 30 {
 		t.Fatalf("chapters after rescan = %+v, want one new chapter", chapters)
+	}
+
+	// Refreshing TMDB-owned relationships is the Identify path's job, and that
+	// is the only path that still replaces them.
+	err = ApplyTmdbMetadata(ctx, testScanner.queries, movie.ID, &secondDetails)
+	if err != nil {
+		t.Fatalf("apply tmdb metadata: %v", err)
+	}
+
+	genres, err = testScanner.queries.GetGenresByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get genres: %v", err)
+	}
+	if got := movieGenreTags(genres); got != "Drama" {
+		t.Fatalf("genres after identify = %q, want Drama", got)
+	}
+
+	cast, err = testScanner.queries.GetCastByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get cast: %v", err)
+	}
+	if len(cast) != 1 || cast[0].ArtistName != "Second Actor" || cast[0].Character != "New Role" {
+		t.Fatalf("cast after identify = %+v, want only second actor", cast)
+	}
+
+	crew, err := testScanner.queries.GetCrewByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get crew: %v", err)
+	}
+	if len(crew) != 1 || crew[0].ArtistName != "Second Director" {
+		t.Fatalf("crew after identify = %+v, want only second director", crew)
+	}
+
+	companies, err := testScanner.queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get production companies: %v", err)
+	}
+	if len(companies) != 1 || companies[0].Name != "New Studio" {
+		t.Fatalf("production companies after identify = %+v, want New Studio", companies)
+	}
+
+	extras, err := testScanner.queries.GetMovieExtraVideos(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get extra videos: %v", err)
+	}
+	if len(extras) != 1 || extras[0].Title != "New Trailer" || extras[0].Type != "special_feature" || extras[0].Site != "vimeo" {
+		t.Fatalf("extra videos after identify = %+v, want mapped new featurette", extras)
 	}
 }
 
