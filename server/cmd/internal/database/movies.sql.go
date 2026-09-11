@@ -20,17 +20,6 @@ func (q *Queries) ClearMovieTmdbRetry(ctx context.Context, movieID int64) error 
 	return err
 }
 
-const countMovieTmdbRetries = `-- name: CountMovieTmdbRetries :one
-SELECT count(*) FROM movies m WHERE tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = m.id)
-`
-
-func (q *Queries) CountMovieTmdbRetries(ctx context.Context) (int64, error) {
-	row := q.queryRow(ctx, q.countMovieTmdbRetriesStmt, countMovieTmdbRetries)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countMoviesForGenre = `-- name: CountMoviesForGenre :one
 SELECT
   COUNT(*)
@@ -774,22 +763,24 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 }
 
 const getMovieScanIndex = `-- name: GetMovieScanIndex :many
-SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+SELECT c.id, c.file_path, c.tmdb_id, r.movie_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
 FROM movies c
 LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
+LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id
 `
 
 type GetMovieScanIndexRow struct {
-	ID           int64          `json:"id"`
-	FilePath     string         `json:"file_path"`
-	TmdbID       sql.NullInt64  `json:"tmdb_id"`
-	PendingRetry bool           `json:"pending_retry"`
-	Size         int64          `json:"size"`
-	MtimeNs      sql.NullInt64  `json:"mtime_ns"`
-	CtimeNs      sql.NullInt64  `json:"ctime_ns"`
-	Device       sql.NullString `json:"device"`
-	Inode        sql.NullString `json:"inode"`
-	Sha256       []byte         `json:"sha256"`
+	ID            int64          `json:"id"`
+	FilePath      string         `json:"file_path"`
+	TmdbID        sql.NullInt64  `json:"tmdb_id"`
+	PendingRetry  bool           `json:"pending_retry"`
+	RetryAttempts sql.NullInt64  `json:"retry_attempts"`
+	LastAttemptAt sql.NullInt64  `json:"last_attempt_at"`
+	Size          int64          `json:"size"`
+	MtimeNs       sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs       sql.NullInt64  `json:"ctime_ns"`
+	Device        sql.NullString `json:"device"`
+	Inode         sql.NullString `json:"inode"`
 }
 
 func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error) {
@@ -806,12 +797,13 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 			&i.FilePath,
 			&i.TmdbID,
 			&i.PendingRetry,
+			&i.RetryAttempts,
+			&i.LastAttemptAt,
 			&i.Size,
 			&i.MtimeNs,
 			&i.CtimeNs,
 			&i.Device,
 			&i.Inode,
-			&i.Sha256,
 		); err != nil {
 			return nil, err
 		}
@@ -1524,7 +1516,8 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 }
 
 const markMovieTmdbRetry = `-- name: MarkMovieTmdbRetry :exec
-INSERT INTO movie_tmdb_retries (movie_id) VALUES (?) ON CONFLICT DO NOTHING
+INSERT INTO movie_tmdb_retries (movie_id) VALUES (?)
+ON CONFLICT (movie_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL
 `
 
 func (q *Queries) MarkMovieTmdbRetry(ctx context.Context, movieID int64) error {
@@ -1548,6 +1541,21 @@ func (q *Queries) MovieExists(ctx context.Context, id int64) (bool, error) {
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const recordMovieTmdbMiss = `-- name: RecordMovieTmdbMiss :exec
+INSERT INTO movie_tmdb_retries (movie_id, attempts, last_attempt_at) VALUES (?, 1, ?)
+ON CONFLICT (movie_id) DO UPDATE SET attempts = movie_tmdb_retries.attempts + 1, last_attempt_at = excluded.last_attempt_at
+`
+
+type RecordMovieTmdbMissParams struct {
+	MovieID       int64         `json:"movie_id"`
+	LastAttemptAt sql.NullInt64 `json:"last_attempt_at"`
+}
+
+func (q *Queries) RecordMovieTmdbMiss(ctx context.Context, arg RecordMovieTmdbMissParams) error {
+	_, err := q.exec(ctx, q.recordMovieTmdbMissStmt, recordMovieTmdbMiss, arg.MovieID, arg.LastAttemptAt)
+	return err
 }
 
 const updateMovie = `-- name: UpdateMovie :execrows

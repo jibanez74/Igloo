@@ -14,13 +14,14 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func TestProcessMusicBatchInsertsTrackAndSkipsExistingPathSize(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	ffprobeStub := &countingMusicScannerFfprobe{result: testMusicMetadata()}
 	app.ffprobe = ffprobeStub
@@ -37,7 +38,7 @@ func TestProcessMusicBatchInsertsTrackAndSkipsExistingPathSize(t *testing.T) {
 	}
 
 	var trackCount int
-	err := app.db.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ? AND size = ?", file.Path, file.Size).Scan(&trackCount)
+	err := app.tx.DB.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ? AND size = ?", file.Path, file.Size).Scan(&trackCount)
 	if err != nil {
 		t.Fatalf("count tracks: %v", err)
 	}
@@ -69,7 +70,7 @@ func TestProcessMusicBatchInsertsTrackAndSkipsExistingPathSize(t *testing.T) {
 
 func TestProcessMusicBatchSkipsBadTrackAndCommitsGoodTrack(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	dir := t.TempDir()
 	badPath := filepath.Join(dir, "Bad Track.m4a")
@@ -99,7 +100,7 @@ func TestProcessMusicBatchSkipsBadTrackAndCommitsGoodTrack(t *testing.T) {
 	}
 
 	var goodCount int
-	err := app.db.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ?", goodPath).Scan(&goodCount)
+	err := app.tx.DB.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ?", goodPath).Scan(&goodCount)
 	if err != nil {
 		t.Fatalf("count good track: %v", err)
 	}
@@ -108,7 +109,7 @@ func TestProcessMusicBatchSkipsBadTrackAndCommitsGoodTrack(t *testing.T) {
 	}
 
 	var badCount int
-	err = app.db.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ?", badPath).Scan(&badCount)
+	err = app.tx.DB.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ?", badPath).Scan(&badCount)
 	if err != nil {
 		t.Fatalf("count bad track: %v", err)
 	}
@@ -122,7 +123,7 @@ func TestProcessMusicBatchSkipsBadTrackAndCommitsGoodTrack(t *testing.T) {
 
 func TestProcessMusicBatchUsesScanLocalEntityCaches(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	spotifyStub := &musicScannerSpotifyStub{
 		artistErr: errors.New("artist unavailable"),
@@ -159,7 +160,7 @@ func TestProcessMusicBatchUsesScanLocalEntityCaches(t *testing.T) {
 
 func TestProcessMusicBatchPersistsGenresAndRelationships(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	dir := t.TempDir()
 	firstPath := filepath.Join(dir, "First.m4a")
@@ -193,19 +194,19 @@ func TestProcessMusicBatchPersistsGenresAndRelationships(t *testing.T) {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM tracks"); got != 2 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks"); got != 2 {
 		t.Fatalf("track count = %d, want 2", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Track Artist"); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Track Artist"); got != 1 {
 		t.Fatalf("musician count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM albums WHERE title = ? AND musician = ?", "Shared Album", "Album Artist"); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM albums WHERE title = ? AND musician = ?", "Shared Album", "Album Artist"); got != 1 {
 		t.Fatalf("album count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM genres WHERE tag = ? AND genre_type = ?", "Synth Pop", "music"); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE tag = ? AND genre_type = ?", "Synth Pop", "music"); got != 1 {
 		t.Fatalf("genre count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM musician_albums AS ma
 		INNER JOIN musicians AS m ON m.id = ma.musician_id
@@ -214,20 +215,20 @@ func TestProcessMusicBatchPersistsGenresAndRelationships(t *testing.T) {
 	`, "Track Artist", "Shared Album"); got != 1 {
 		t.Fatalf("musician_albums count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM track_genres"); got != 2 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM track_genres"); got != 2 {
 		t.Fatalf("track_genres count = %d, want 2", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musician_genres"); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musician_genres"); got != 1 {
 		t.Fatalf("musician_genres count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM album_genres"); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM album_genres"); got != 1 {
 		t.Fatalf("album_genres count = %d, want 1", got)
 	}
 }
 
 func TestProcessMusicBatchUpdatesChangedTrackAndReplacesGenre(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Changing Genre.m4a")
 	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -261,7 +262,7 @@ func TestProcessMusicBatchUpdatesChangedTrackAndReplacesGenre(t *testing.T) {
 
 	var title string
 	var size int64
-	err := app.db.QueryRow("SELECT title, size FROM tracks WHERE file_path = ?", trackPath).Scan(&title, &size)
+	err := app.tx.DB.QueryRow("SELECT title, size FROM tracks WHERE file_path = ?", trackPath).Scan(&title, &size)
 	if err != nil {
 		t.Fatalf("get updated track: %v", err)
 	}
@@ -269,7 +270,7 @@ func TestProcessMusicBatchUpdatesChangedTrackAndReplacesGenre(t *testing.T) {
 		t.Fatalf("updated track title/size = %q/%d, want Updated Title/8", title, size)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_genres AS tg
 		INNER JOIN tracks AS t ON t.id = tg.track_id
@@ -278,7 +279,7 @@ func TestProcessMusicBatchUpdatesChangedTrackAndReplacesGenre(t *testing.T) {
 	`, trackPath, "Jazz"); got != 1 {
 		t.Fatalf("Jazz track genre count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_genres AS tg
 		INNER JOIN tracks AS t ON t.id = tg.track_id
@@ -291,7 +292,7 @@ func TestProcessMusicBatchUpdatesChangedTrackAndReplacesGenre(t *testing.T) {
 
 func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Removed Tags.m4a")
 	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -310,7 +311,7 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -318,7 +319,7 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 	`, trackPath); got != 1 {
 		t.Fatalf("initial track_musicians count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_genres AS tg
 		INNER JOIN tracks AS t ON t.id = tg.track_id
@@ -339,7 +340,7 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 
 	var musicianID sql.NullInt64
 	var albumID sql.NullInt64
-	err := app.db.QueryRow("SELECT musician_id, album_id FROM tracks WHERE file_path = ?", trackPath).Scan(&musicianID, &albumID)
+	err := app.tx.DB.QueryRow("SELECT musician_id, album_id FROM tracks WHERE file_path = ?", trackPath).Scan(&musicianID, &albumID)
 	if err != nil {
 		t.Fatalf("get rescanned track relationships: %v", err)
 	}
@@ -350,7 +351,7 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 		t.Fatalf("track album_id = %#v, want null after album tag removal", albumID)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -358,7 +359,7 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 	`, trackPath); got != 0 {
 		t.Fatalf("track_musicians count after tag removal = %d, want 0", got)
 	}
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_genres AS tg
 		INNER JOIN tracks AS t ON t.id = tg.track_id
@@ -370,13 +371,13 @@ func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing
 
 func TestProcessMusicBatchDoesNotMergeFailedPersistIntoScanContext(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	dir := t.TempDir()
 	badPath := filepath.Join(dir, "Bad Cache Track.m4a")
 	goodPath := filepath.Join(dir, "Good Cache Track.m4a")
 	escapedBadPath := strings.ReplaceAll(badPath, "'", "''")
-	_, err := app.db.Exec(fmt.Sprintf(`CREATE TRIGGER fail_bad_cache_track BEFORE INSERT ON tracks
+	_, err := app.tx.DB.Exec(fmt.Sprintf(`CREATE TRIGGER fail_bad_cache_track BEFORE INSERT ON tracks
 		WHEN new.file_path = '%s'
 		BEGIN
 			SELECT RAISE(ABORT, 'forced track failure');
@@ -418,10 +419,10 @@ func TestProcessMusicBatchDoesNotMergeFailedPersistIntoScanContext(t *testing.T)
 	if got := scan.trackIndex[filepath.Clean(goodPath)].Size; got != 6 {
 		t.Fatalf("good track scan index size = %d, want 6", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM tracks WHERE file_path = ?", badPath); got != 0 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks WHERE file_path = ?", badPath); got != 0 {
 		t.Fatalf("bad track count = %d, want 0", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM tracks WHERE file_path = ?", goodPath); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks WHERE file_path = ?", goodPath); got != 1 {
 		t.Fatalf("good track count = %d, want 1", got)
 	}
 }
@@ -429,7 +430,7 @@ func TestProcessMusicBatchDoesNotMergeFailedPersistIntoScanContext(t *testing.T)
 func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *testing.T) {
 	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	ctx := context.Background()
 	scan := newMusicScanContext(nil)
 	resolved := &resolvedTrack{
@@ -447,7 +448,7 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 	s.invalidateCommittedTrack = func(trackID int64) {
 		invalidatedIDs = append(invalidatedIDs, trackID)
 		var title string
-		err := s.db.QueryRow("SELECT title FROM tracks WHERE id = ?", trackID).Scan(&title)
+		err := s.tx.DB.QueryRow("SELECT title FROM tracks WHERE id = ?", trackID).Scan(&title)
 		if err != nil || title != "Track" {
 			t.Errorf("callback did not observe committed track: title=%q, err=%v", title, err)
 		}
@@ -455,17 +456,18 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 		if exists {
 			t.Error("track index updated before invalidation")
 		}
-		if scan.musicianIDs.Has(scanner.NormalizedScanCacheKey("Artist")) {
+		_, cached := scan.musicianIDs.Get(scanner.NormalizedScanCacheKey("Artist"))
+		if cached {
 			t.Error("entity caches merged before invalidation")
 		}
-		unlocked := s.scannerDBMu.TryLock()
+		unlocked := s.tx.Mu.TryLock()
 		if unlocked {
-			s.scannerDBMu.Unlock()
+			s.tx.Mu.Unlock()
 			t.Error("database mutex released before invalidation")
 		}
 	}
 
-	_, err := s.db.Exec("CREATE TRIGGER fail_track BEFORE INSERT ON tracks BEGIN SELECT RAISE(ABORT, 'failed track'); END")
+	_, err := s.tx.DB.Exec("CREATE TRIGGER fail_track BEFORE INSERT ON tracks BEGIN SELECT RAISE(ABORT, 'failed track'); END")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +475,7 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 	if err == nil || len(invalidatedIDs) != 0 {
 		t.Fatalf("failed persist: err=%v, invalidations=%v", err, invalidatedIDs)
 	}
-	_, err = s.db.Exec("DROP TRIGGER fail_track")
+	_, err = s.tx.DB.Exec("DROP TRIGGER fail_track")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +490,8 @@ func TestPersistResolvedTrackInvalidatesOnlyAfterCommitBeforeMergingCaches(t *te
 	if !exists {
 		t.Error("committed track missing from scan index")
 	}
-	if !scan.musicianIDs.Has(scanner.NormalizedScanCacheKey("Artist")) {
+	_, cached := scan.musicianIDs.Get(scanner.NormalizedScanCacheKey("Artist"))
+	if !cached {
 		t.Error("committed musician missing from scan cache")
 	}
 }
@@ -512,7 +515,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx := context.Background()
 			file := scanner.ScanFile{Path: musicDir + "/retry.m4a", Ext: "m4a", Size: 2}
 			_, err := s.queries.UpsertTrack(ctx, database.UpsertTrackParams{FilePath: file.Path, FileName: "retry.m4a", Title: "Original", Size: 1, Container: "m4a", MimeType: "audio/mp4"})
@@ -528,7 +531,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			scan := newMusicScanContext(nil)
 			invalidations := 0
 			s.invalidateCommittedTrack = func(int64) { invalidations++ }
-			_, err = s.db.Exec("CREATE TRIGGER fail_relationship BEFORE INSERT ON " + tc.table + tc.when + " BEGIN SELECT RAISE(ABORT, 'relationship failure'); END")
+			_, err = s.tx.DB.Exec("CREATE TRIGGER fail_relationship BEFORE INSERT ON " + tc.table + tc.when + " BEGIN SELECT RAISE(ABORT, 'relationship failure'); END")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -537,12 +540,12 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 				t.Fatalf("scanned=%d errors=%d invalidations=%d", scanned, failures, invalidations)
 			}
 			for _, table := range []string{"musicians", "albums", "genres", "musician_albums", "track_musicians", "track_genres", "musician_genres", "album_genres", "music_spotify_matches"} {
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 				if count != 0 {
 					t.Fatalf("rollback left %d rows in %s", count, table)
 				}
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE title = 'Original' AND size = 1")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE title = 'Original' AND size = 1")
 			if count != 1 {
 				t.Fatal("original track changed on rollback")
 			}
@@ -551,16 +554,17 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			expected.artistAttempts = scan.artistAttempts
 			expected.albumAttempts = scan.albumAttempts
 			expected.enrichmentCounts = scan.enrichmentCounts
+			expected.enrichmentCounted = scan.enrichmentCounted
 			expected.artistAttemptsByID = scan.artistAttemptsByID
 			expected.albumAttemptsByID = scan.albumAttemptsByID
 			if !reflect.DeepEqual(scan, expected) {
 				t.Fatalf("failed transaction published cache entries: %+v", scan)
 			}
-			logs := s.logger.(*capturedLogger)
-			if len(logs.warnEntries) != 1 || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), file.Path) || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), "relationship failure") {
-				t.Fatalf("failure logs: %+v", logs.warnEntries)
+			logs := s.logger.(*scannertest.Logger)
+			if len(logs.WarnEntries) != 1 || !strings.Contains(fmt.Sprint(logs.WarnEntries[0].Args), file.Path) || !strings.Contains(fmt.Sprint(logs.WarnEntries[0].Args), "relationship failure") {
+				t.Fatalf("failure logs: %+v", logs.WarnEntries)
 			}
-			_, err = s.db.Exec("DROP TRIGGER fail_relationship")
+			_, err = s.tx.DB.Exec("DROP TRIGGER fail_relationship")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -568,7 +572,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 			if scanned != 1 || failures != 0 || invalidations != 1 {
 				t.Fatalf("retry: scanned=%d errors=%d invalidations=%d", scanned, failures, invalidations)
 			}
-			count = countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE title = 'Test Track' AND size = 2")
+			count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE title = 'Test Track' AND size = 2")
 			if count != 1 {
 				t.Fatal("retry failed to update track")
 			}
@@ -579,7 +583,7 @@ func TestRelationshipFailuresRollBackAndRetry(t *testing.T) {
 func TestTrackGenreRestoredWithinScan(t *testing.T) {
 	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	scan := newMusicScanContext(nil)
 	metadata := testMusicMetadata()
 	s.ffprobe = &countingMusicScannerFfprobe{result: metadata}
@@ -590,9 +594,37 @@ func TestTrackGenreRestoredWithinScan(t *testing.T) {
 			t.Fatalf("genre %s: scanned=%d errors=%d", genre, scanned, failures)
 		}
 		var got string
-		err := s.db.QueryRow("SELECT g.tag FROM track_genres tg JOIN genres g ON g.id = tg.genre_id").Scan(&got)
+		err := s.tx.DB.QueryRow("SELECT g.tag FROM track_genres tg JOIN genres g ON g.id = tg.genre_id").Scan(&got)
 		if err != nil || got != genre {
 			t.Fatalf("genre=%q err=%v, want %q", got, err, genre)
 		}
+	}
+}
+
+func TestUniqueIDsPreservesOrderAndDropsRepeats(t *testing.T) {
+	got := uniqueIDs([]int64{3, 1, 3}, []int64{1, 2})
+	want := []int64{3, 1, 2}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("uniqueIDs = %v, want %v", got, want)
+	}
+
+	// A rescan of an unchanged track sees the same artists in the old and the
+	// new credit set; reconciling each one twice is the case this exists for.
+	artists := []int64{7, 8}
+	got = uniqueIDs(artists, []int64{7, 8})
+	if !reflect.DeepEqual(got, []int64{7, 8}) {
+		t.Fatalf("unchanged rescan = %v, want 7,8 once each", got)
+	}
+	if !reflect.DeepEqual(artists, []int64{7, 8}) {
+		t.Fatalf("uniqueIDs mutated its input: %v", artists)
+	}
+
+	if got := uniqueIDs(nil); len(got) != 0 {
+		t.Fatalf("uniqueIDs(nil) = %v, want empty", got)
+	}
+
+	present := validIDs(sql.NullInt64{}, sql.NullInt64{Int64: 5, Valid: true})
+	if !reflect.DeepEqual(present, []int64{5}) {
+		t.Fatalf("validIDs = %v, want only the valid id", present)
 	}
 }

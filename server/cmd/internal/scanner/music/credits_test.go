@@ -11,12 +11,13 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
 
 func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Compound Artists.m4a")
 	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -35,12 +36,12 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
 		t.Fatalf("split musician count = %d, want 2", got)
 	}
 
 	var primaryArtist string
-	err := app.db.QueryRow(`
+	err := app.tx.DB.QueryRow(`
 		SELECT m.name
 		FROM tracks AS t
 		INNER JOIN musicians AS m ON m.id = t.musician_id
@@ -53,7 +54,7 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 		t.Fatalf("primary artist = %q, want Artist One", primaryArtist)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -63,7 +64,7 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 		t.Fatalf("track_musicians split artist count = %d, want 2", got)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM musician_albums AS ma
 		INNER JOIN musicians AS m ON m.id = ma.musician_id
@@ -98,7 +99,7 @@ func TestSplitCompoundArtistCreditsPreservesSuffixes(t *testing.T) {
 
 func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Ampersand Artist.m4a")
 	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -115,13 +116,13 @@ func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) 
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Brooks & Dunn"); got != 1 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Brooks & Dunn"); got != 1 {
 		t.Fatalf("combined musician count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Brooks", "Dunn"); got != 0 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Brooks", "Dunn"); got != 0 {
 		t.Fatalf("split musician count = %d, want 0", got)
 	}
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -134,7 +135,7 @@ func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) 
 
 func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Spotify Split Artist.m4a")
 	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -160,15 +161,15 @@ func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T)
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Artist One & Artist Two"); got != 0 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Artist One & Artist Two"); got != 0 {
 		t.Fatalf("combined musician count = %d, want 0", got)
 	}
-	if got := countScannerRows(t, app.db, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
+	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
 		t.Fatalf("split musician count = %d, want 2", got)
 	}
 
 	var primaryArtist string
-	err := app.db.QueryRow(`
+	err := app.tx.DB.QueryRow(`
 		SELECT m.name
 		FROM tracks AS t
 		INNER JOIN musicians AS m ON m.id = t.musician_id
@@ -181,7 +182,7 @@ func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T)
 		t.Fatalf("primary artist = %q, want Artist One", primaryArtist)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -194,7 +195,7 @@ func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T)
 
 func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Changed Artist.m4a")
 	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -224,7 +225,7 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -233,7 +234,7 @@ func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
 	`, trackPath, "Solo Artist"); got != 1 {
 		t.Fatalf("solo track_musicians count = %d, want 1", got)
 	}
-	if got := countScannerRows(t, app.db, `
+	if got := scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM track_musicians AS tm
 		INNER JOIN tracks AS t ON t.id = tm.track_id
@@ -248,7 +249,7 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 	fixtureDir := t.TempDir()
 	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	ctx := context.Background()
 	combined := "One & Two"
 	musicianIdentity, err := s.queries.UpsertMusician(ctx, database.UpsertMusicianParams{Name: combined, SortName: combined})
@@ -264,7 +265,7 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = s.db.Exec("INSERT INTO music_spotify_matches(entity_type, entity_id, status, reason) VALUES ('musician', ?, 'unmatched', 'no_results')", musician.ID)
+	_, err = s.tx.DB.Exec("INSERT INTO music_spotify_matches(entity_type, entity_id, status, reason) VALUES ('musician', ?, 'unmatched', 'no_results')", musician.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +277,7 @@ func TestRepeatedCompoundCreditsFromPersistedMiss(t *testing.T) {
 		if scanned != 1 || failures != 0 {
 			t.Fatalf("track %d: scanned=%d errors=%d", i, scanned, failures)
 		}
-		count := countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id = tm.musician_id JOIN tracks t ON t.id = tm.track_id WHERE t.file_path = ? AND m.name IN ('One', 'Two')", file.Path)
+		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id = tm.musician_id JOIN tracks t ON t.id = tm.track_id WHERE t.file_path = ? AND m.name IN ('One', 'Two')", file.Path)
 		if count != 2 {
 			t.Fatalf("track %d has %d split credits", i, count)
 		}
@@ -310,7 +311,7 @@ func TestBareArtistCreditsAfterSpotifyNonMatch(t *testing.T) {
 		for _, reason := range []string{"offline", "no_results", "score_below_threshold"} {
 			t.Run(second+"/"+reason, func(t *testing.T) {
 				s := setupMusicScanner(t)
-				defer s.db.Close()
+				defer s.tx.DB.Close()
 				combined := "Jungkook, " + second
 				if reason != "offline" {
 					s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Lookup: "artist", Input: combined, Reason: reason}}}
@@ -320,12 +321,12 @@ func TestBareArtistCreditsAfterSpotifyNonMatch(t *testing.T) {
 				if reason != "offline" {
 					names = []string{"Jungkook", second}
 				}
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians")
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians")
 				if count != len(names) {
 					t.Fatalf("credit count = %d, want %d", count, len(names))
 				}
 				for _, name := range names {
-					count = countScannerRows(t, s.db, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id=tm.musician_id WHERE m.name=?", name)
+					count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians tm JOIN musicians m ON m.id=tm.musician_id WHERE m.name=?", name)
 					if count != 1 {
 						t.Fatalf("persisted credit %q count = %d", name, count)
 					}

@@ -1,3 +1,5 @@
+import { movieScanStatus } from "../src/test/helpers/movie-scan";
+import { musicScanStatus } from "../src/test/helpers/music-scan";
 import { randomUUID } from "node:crypto";
 import {
   createServer,
@@ -1046,6 +1048,24 @@ async function handleSettingsRoutes(
   user: User,
 ) {
   const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/settings/scan/movies" && method === "GET") {
+    if (!user.is_admin) {
+      sendFailure(response, 403, "Movie scan status is admin-only.");
+      return true;
+    }
+    sendSuccess(response, movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+    return true;
+  }
+
+  if (url.pathname === "/api/settings/scan/music" && method === "GET") {
+    if (!user.is_admin) {
+      sendFailure(response, 403, "Music scan status is admin-only.");
+      return true;
+    }
+    sendSuccess(response, musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+    return true;
+  }
 
   if (url.pathname === "/api/settings" && method === "GET") {
     sendSuccess(response, librarySettings);

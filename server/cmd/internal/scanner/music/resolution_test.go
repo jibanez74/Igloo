@@ -9,11 +9,12 @@ import (
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Mapped Track.flac")
 	metadata := &ffprobe.FfprobeResult{
@@ -119,7 +120,7 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 
 func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.db.Close()
+	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "No Tags.mp3")
 	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -173,7 +174,7 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 	for _, streams := range [][]ffprobe.Stream{nil, {{CodecType: "video", CodecName: "mjpeg"}}, {{CodecType: "subtitle"}}} {
 		t.Run(fmt.Sprint(streams), func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			metadata := testMusicMetadata()
 			metadata.Streams = streams
 			s.ffprobe = &countingMusicScannerFfprobe{result: metadata}
@@ -184,14 +185,14 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 				t.Fatalf("scanned=%d errors=%d Spotify=%+v", scanned, failures, spotify)
 			}
 			for _, table := range []string{"tracks", "musicians", "albums", "music_spotify_matches"} {
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 				if count != 0 {
 					t.Fatalf("%s has %d rows", table, count)
 				}
 			}
-			logs := s.logger.(*capturedLogger)
-			if len(logs.warnEntries) != 1 || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), musicDir+"/no-audio.m4a") || !strings.Contains(fmt.Sprint(logs.warnEntries[0].args), "no audio stream") {
-				t.Fatalf("failure logs: %+v", logs.warnEntries)
+			logs := s.logger.(*scannertest.Logger)
+			if len(logs.WarnEntries) != 1 || !strings.Contains(fmt.Sprint(logs.WarnEntries[0].Args), musicDir+"/no-audio.m4a") || !strings.Contains(fmt.Sprint(logs.WarnEntries[0].Args), "no audio stream") {
+				t.Fatalf("failure logs: %+v", logs.WarnEntries)
 			}
 		})
 	}
@@ -200,7 +201,7 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	metadata := testMusicMetadata()
 	metadata.Streams = []ffprobe.Stream{{CodecType: "video", CodecName: "mjpeg"}, {CodecType: "audio", CodecName: "aac", Channels: 2}, {CodecType: "audio", CodecName: "mp3", Channels: 1}}
 	s.ffprobe = &countingMusicScannerFfprobe{result: metadata}

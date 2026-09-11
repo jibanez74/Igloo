@@ -53,7 +53,10 @@ export default function AppLoadingScreen({
           <div className="px-6 py-8 text-center">
             <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
               <Snowflake
-                className={cn("size-5 text-primary", MOTION_LOADING_STATE_CLASS)}
+                className={cn(
+                  "size-5 text-primary",
+                  MOTION_LOADING_STATE_CLASS,
+                )}
                 aria-hidden="true"
               />
             </div>

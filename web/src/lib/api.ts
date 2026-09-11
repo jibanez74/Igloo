@@ -1,3 +1,4 @@
+import type { MovieScanStatus, MusicScanStatus } from "@/types/settings";
 import type {
   AlbumDetailsResponseType,
   AlbumsListResponseType,
@@ -697,6 +698,12 @@ export const triggerMusicScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/music", {
     method: "POST",
   });
+
+export const getMusicScanStatus = () =>
+  apiRequest<MusicScanStatus>("/api/settings/scan/music");
+
+export const getMovieScanStatus = () =>
+  apiRequest<MovieScanStatus>("/api/settings/scan/movies");
 
 export const triggerMovieScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/movies", {

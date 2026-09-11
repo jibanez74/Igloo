@@ -31,17 +31,15 @@ func processChapters(ctx context.Context, qtx *database.Queries, movieID int64, 
 	return nil
 }
 
+// chapterStartTimeSeconds reads ffprobe's start_time; the raw start field is
+// in the chapter's own time base and is not a usable fallback.
 func chapterStartTimeSeconds(chapter ffprobe.Chapter) int64 {
-	if chapter.StartTime != "" {
-		durationMs, err := helpers.ParseDurationMs(chapter.StartTime)
-		if err == nil {
-			return durationMs / 1000
-		}
+	if chapter.StartTime == "" {
+		return 0
 	}
-
-	if chapter.Start > 0 {
-		return int64(chapter.Start) / 1000
+	durationMs, err := helpers.ParseDurationMs(chapter.StartTime)
+	if err != nil {
+		return 0
 	}
-
-	return 0
+	return durationMs / 1000
 }

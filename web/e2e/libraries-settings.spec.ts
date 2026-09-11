@@ -1,3 +1,5 @@
+import { movieScanStatus } from "../src/test/helpers/movie-scan";
+import { musicScanStatus } from "../src/test/helpers/music-scan";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -244,6 +246,13 @@ test.describe("Libraries settings", () => {
     let movieScanRequests = 0;
     await page.route("**/api/settings/scan/**", async route => {
       const url = new URL(route.request().url());
+      if (route.request().method() === "GET") {
+        const idle = url.pathname === "/api/settings/scan/music"
+          ? musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
+          : movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
+        await route.fulfill({ json: { error: false, data: idle } });
+        return;
+      }
       if (url.pathname === "/api/settings/scan/movies") {
         movieScanRequests += 1;
       }
@@ -359,6 +368,12 @@ test.describe("Libraries settings", () => {
       await expect(
         page.getByText("TV shows scanning unavailable"),
       ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No movie scan has run yet." }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No music scan has run yet." }),
+      ).toBeVisible();
 
       await page.getByRole("button", { name: "Clear music library path" }).click();
       await expect(musicInput).toHaveValue("");
@@ -377,7 +392,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/movies";
+          return url.pathname === "/api/settings/scan/movies" && response.request().method() === "POST";
         }),
         moviesScanButton.click(),
       ]);
@@ -392,7 +407,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/movies";
+          return url.pathname === "/api/settings/scan/movies" && response.request().method() === "POST";
         }),
         moviesScanButton.click(),
       ]);

@@ -23,22 +23,13 @@ func storeTrackFingerprint(ctx context.Context, q *database.Queries, path string
 }
 
 func (s *Scanner) persistFingerprint(ctx context.Context, scan *musicScanContext, path string, inspection *scanner.FileInspection) error {
-	s.scannerDBMu.Lock()
-	defer s.scannerDBMu.Unlock()
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	err = storeTrackFingerprint(ctx, s.queries.WithTx(tx), path, inspection.Fingerprint)
-	if err != nil {
-		return err
-	}
-	err = inspection.Validate(ctx)
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		err := storeTrackFingerprint(ctx, qtx, path, inspection.Fingerprint)
+		if err != nil {
+			return err
+		}
+		return inspection.Validate(ctx)
+	}, nil)
 	if err != nil {
 		return err
 	}

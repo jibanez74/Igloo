@@ -16,6 +16,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -26,8 +27,8 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 	defer testScanner.db.Close()
 
 	notConfigured := testScanner.scanner.Start()
-	if notConfigured.Status != StartNotConfigured {
-		t.Fatalf("unconfigured Start status = %v, want %v", notConfigured.Status, StartNotConfigured)
+	if notConfigured.Status != scanner.StartNotConfigured {
+		t.Fatalf("unconfigured Start status = %v, want %v", notConfigured.Status, scanner.StartNotConfigured)
 	}
 
 	testScanner.moviesDir = sql.NullString{String: t.TempDir(), Valid: true}
@@ -37,13 +38,13 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait := &sync.WaitGroup{}
-	testScanner.scanner.wait = wait
+	testScanner.scanner.launcher.Wait = wait
 	ctx, cancel := context.WithCancel(context.Background())
 	testScanner.scanner.scanContext = ctx
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})
 	releaseProbe := sync.OnceFunc(func() { close(release) })
-	testScanner.scanner.ffprobe = &fingerprintProbe{callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+	testScanner.scanner.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
 		select {
 		case entered <- struct{}{}:
 		case <-ctx.Done():
@@ -73,7 +74,7 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 	}
 
 	started := testScanner.scanner.Start()
-	if started.Status != StartStarted || started.Directory != testScanner.moviesDir.String {
+	if started.Status != scanner.StartStarted || started.Directory != testScanner.moviesDir.String {
 		t.Fatalf("configured Start result = %+v, want started for %q", started, testScanner.moviesDir.String)
 	}
 
@@ -83,15 +84,15 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 		t.Fatal("movie scan did not reach probing")
 	}
 	alreadyRunning := testScanner.scanner.Start()
-	if alreadyRunning.Status != StartAlreadyRunning {
-		t.Fatalf("concurrent Start status = %v, want %v", alreadyRunning.Status, StartAlreadyRunning)
+	if alreadyRunning.Status != scanner.StartAlreadyRunning {
+		t.Fatalf("concurrent Start status = %v, want %v", alreadyRunning.Status, scanner.StartAlreadyRunning)
 	}
 
 	releaseProbe()
 	waitForScan()
 	restarted := testScanner.scanner.Start()
-	if restarted.Status != StartStarted {
-		t.Fatalf("Start after scan completion = %v, want %v", restarted.Status, StartStarted)
+	if restarted.Status != scanner.StartStarted {
+		t.Fatalf("Start after scan completion = %v, want %v", restarted.Status, scanner.StartStarted)
 	}
 	waitForScan()
 }
@@ -112,11 +113,11 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 	bare := New(Dependencies{
 		DB:      testScanner.db,
 		Queries: testScanner.queries,
-		Logger:  &capturedLogger{},
+		Logger:  &scannertest.Logger{},
 		Ffprobe: &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")},
 	})
 
-	if bare.scanContext == nil || bare.wait == nil || bare.scannerDBMu == nil {
+	if bare.scanContext == nil || bare.launcher.Wait == nil || bare.tx.Mu == nil {
 		t.Fatal("New left an optional dependency nil")
 	}
 	if bare.currentMoviesDirectory == nil || bare.invalidateCommittedMovie == nil {
@@ -129,8 +130,8 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 	}
 
 	result := bare.Start()
-	if result.Status != StartNotConfigured {
-		t.Fatalf("Start() status = %d, want StartNotConfigured", result.Status)
+	if result.Status != scanner.StartNotConfigured {
+		t.Fatalf("Start() status = %d, want scanner.StartNotConfigured", result.Status)
 	}
 
 	// Drive the write path directly, since Start short-circuits without a
@@ -140,17 +141,17 @@ func TestNewDefaultsOptionalDependencies(t *testing.T) {
 		t.Fatalf("resolve movie with bare dependencies: %v", err)
 	}
 
-	resolved.inspection, err = scanner.InspectFile(context.Background(), path, nil, testScanner.scanner.now)
+	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), path, nil, testScanner.scanner.now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resolved.inspection.Close()
-	err = bare.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err = bare.persistLocalMovie(context.Background(), newMovieScanContext(nil), resolved.localMovie)
 	if err != nil {
 		t.Fatalf("persist movie with bare dependencies: %v", err)
 	}
 
-	if got := countScannerRows(t, testScanner.db, "SELECT COUNT(*) FROM movies WHERE file_path = ?", path); got != 1 {
+	if got := scannertest.CountRows(t, testScanner.db, "SELECT COUNT(*) FROM movies WHERE file_path = ?", path); got != 1 {
 		t.Fatalf("expected the movie to persist, got %d rows", got)
 	}
 }
@@ -170,12 +171,12 @@ func TestProcessMoviesBatchSkipsUnchangedWithoutFfprobe(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 
 	scan := newMovieScanContext(nil)
-	first, _, failures := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv", Size: 5}})
+	first, _, failures, _ := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv", Size: 5}})
 	if first != 1 || failures != 0 {
 		t.Fatal("initial import failed")
 	}
 	ffprobeStub.calls = 0
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 
@@ -215,14 +216,14 @@ func TestProcessMoviesBatchRollsBackInvalidMovieFile(t *testing.T) {
 	}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
 
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 
 	if scanned != 0 || skipped != 0 || errCount != 1 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 0/0/1", scanned, skipped, errCount)
 	}
-	if got := countScannerRows(t, testScanner.db, "SELECT COUNT(*) FROM movies WHERE file_path = ?", path); got != 0 {
+	if got := scannertest.CountRows(t, testScanner.db, "SELECT COUNT(*) FROM movies WHERE file_path = ?", path); got != 0 {
 		t.Fatalf("expected invalid movie transaction to roll back, got %d movie rows", got)
 	}
 }
@@ -238,7 +239,7 @@ func TestProcessMoviesBatchRollbackLeavesScanCachesUnpolluted(t *testing.T) {
 		t.Fatalf("write movie: %v", err)
 	}
 
-	// No video stream, so persistResolvedMovieTx fails after the genre and
+	// No video stream, so persistLocalMovie fails after the genre and
 	// artist caches were already written inside the transaction.
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{
 		result: &ffprobe.FfprobeResult{
@@ -262,7 +263,7 @@ func TestProcessMoviesBatchRollbackLeavesScanCachesUnpolluted(t *testing.T) {
 	}
 
 	scan := newMovieScanContext(nil)
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 
@@ -311,7 +312,7 @@ func TestRunMovieScanDeletesMissingMovieWithoutFingerprint(t *testing.T) {
 	}
 
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
-	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
+	testScanner.scanner.scan(testScanner.moviesDir.String)
 
 	_, err = testScanner.queries.GetMovieByID(ctx, movie.ID)
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -343,7 +344,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	testScanner.scanner.ffprobe = ffprobeStub
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
 
-	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
+	testScanner.scanner.scan(testScanner.moviesDir.String)
 
 	if ffprobeStub.calls != len(files) {
 		t.Fatalf("ffprobe calls = %d, want %d", ffprobeStub.calls, len(files))
@@ -366,7 +367,7 @@ func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	}
 }
 
-func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
+func TestRunMovieScanAccountsForVideoFilesAndLogsCompletion(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -381,29 +382,29 @@ func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
 		t.Fatalf("write non-video file: %v", err)
 	}
 
-	logger := &capturedLogger{}
+	logger := &scannertest.Logger{}
 	testScanner.scanner.logger = logger
 	ffprobeStub := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 	testScanner.scanner.ffprobe = ffprobeStub
 	testScanner.moviesDir = sql.NullString{String: moviesDir, Valid: true}
 
-	testScanner.scanner.runMovieScan(testScanner.moviesDir.String)
+	testScanner.scanner.scan(testScanner.moviesDir.String)
 
 	if ffprobeStub.calls != scanner.BatchSize+1 {
 		t.Fatalf("ffprobe calls = %d, want %d video files only", ffprobeStub.calls, scanner.BatchSize+1)
 	}
 
 	foundCompletion := false
-	wantCompletion := "movies scanner completed: " + strconv.Itoa(scanner.BatchSize+1) + " scanned, 0 skipped, 0 errors"
-	for _, entry := range logger.infoEntries {
-		if strings.Contains(entry.msg, "movies scanner batch processed") {
-			t.Fatalf("unexpected per-batch log entry: %q", entry.msg)
+	wantCompletion := "movie scan finished"
+	for _, entry := range logger.InfoEntries {
+		if strings.Contains(entry.Msg, "movies scanner batch processed") {
+			t.Fatalf("unexpected per-batch log entry: %q", entry.Msg)
 		}
-		if strings.Contains(entry.msg, wantCompletion) {
+		if strings.Contains(entry.Msg, wantCompletion) {
 			foundCompletion = true
 		}
 	}
 	if !foundCompletion {
-		t.Fatalf("missing final completion log; info entries = %+v", logger.infoEntries)
+		t.Fatalf("missing final completion log; info entries = %+v", logger.InfoEntries)
 	}
 }

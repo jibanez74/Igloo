@@ -4,7 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AppBoot from "@/AppBoot";
 import { SPLASH_REMOVE_DELAY_MS } from "@/lib/constants";
-import RouterPending from "@/components/app/RouterPending";
+import AppLoadingScreen from "@/components/app/AppLoadingScreen";
 
 vi.mock("@/App", () => ({
   default: () => <div data-testid="app-shell" />,
@@ -74,7 +74,7 @@ describe("App boot loading", () => {
   });
 
   it("renders a single accessible loading surface for router pending", () => {
-    render(<RouterPending />);
+    render(<AppLoadingScreen />);
 
     const statuses = screen.getAllByRole("status");
 
@@ -100,7 +100,7 @@ describe("App boot loading", () => {
       <div id="test-root"></div>
     `;
 
-    render(<RouterPending />, {
+    render(<AppLoadingScreen />, {
       container: document.getElementById("test-root")!,
     });
 
@@ -126,7 +126,7 @@ describe("App boot loading", () => {
       <div id="test-root"></div>
     `;
 
-    render(<RouterPending />, {
+    render(<AppLoadingScreen />, {
       container: document.getElementById("test-root")!,
     });
 

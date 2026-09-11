@@ -10,6 +10,32 @@ import (
 	"database/sql"
 )
 
+const countMusicAlbumRetryCandidates = `-- name: CountMusicAlbumRetryCandidates :one
+SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
+`
+
+func (q *Queries) CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicAlbumRetryCandidatesStmt, countMusicAlbumRetryCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countMusicArtistRetryCandidates = `-- name: CountMusicArtistRetryCandidates :one
+SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+`
+
+func (q *Queries) CountMusicArtistRetryCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicArtistRetryCandidatesStmt, countMusicArtistRetryCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteMergedMusicAlbum = `-- name: DeleteMergedMusicAlbum :exec
 DELETE FROM albums WHERE id=?
 `
@@ -376,8 +402,8 @@ func (q *Queries) MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]
 }
 
 const musicArtistTrackMetadata = `-- name: MusicArtistTrackMetadata :many
-SELECT m.track_id, m.artist_tag, m.artist_sort FROM music_track_metadata m JOIN track_musicians tm ON tm.track_id=m.track_id
-WHERE tm.musician_id=? AND m.track_id>?2 ORDER BY m.track_id LIMIT 100
+SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+WHERE tm.musician_id=? AND tm.track_id>?2 ORDER BY tm.track_id LIMIT 100
 `
 
 type MusicArtistTrackMetadataParams struct {
@@ -391,6 +417,7 @@ type MusicArtistTrackMetadataRow struct {
 	ArtistSort string `json:"artist_sort"`
 }
 
+// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error) {
 	rows, err := q.query(ctx, q.musicArtistTrackMetadataStmt, musicArtistTrackMetadata, arg.MusicianID, arg.AfterID)
 	if err != nil {
@@ -415,14 +442,19 @@ func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistT
 }
 
 const musicCompoundReconciliationCandidates = `-- name: MusicCompoundReconciliationCandidates :many
-SELECT e.id FROM musicians e JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>?1 AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold')
+SELECT e.id FROM musicians e
+WHERE e.id>?1
+AND EXISTS (SELECT 1 FROM music_spotify_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
 AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
 JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
 WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))
 ORDER BY e.id LIMIT 100
 `
 
+// Driven from musicians so the keyset cursor rides the primary key, like
+// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+// a temp b-tree sort of every remaining candidate on each 100-row page.
 func (q *Queries) MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error) {
 	rows, err := q.query(ctx, q.musicCompoundReconciliationCandidatesStmt, musicCompoundReconciliationCandidates, afterID)
 	if err != nil {
@@ -685,7 +717,11 @@ func (q *Queries) SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtis
 }
 
 const updateMusicAlbumEnrichment = `-- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
+UPDATE albums SET
+ spotify_popularity = COALESCE(?1, spotify_popularity),
+ total_tracks = COALESCE(?2, total_tracks),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3
 `
 
 type UpdateMusicAlbumEnrichmentParams struct {
@@ -694,13 +730,19 @@ type UpdateMusicAlbumEnrichmentParams struct {
 	ID                int64           `json:"id"`
 }
 
+// Same NULL-coercion guard as UpdateMusicArtistEnrichment.
 func (q *Queries) UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error {
 	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.SpotifyPopularity, arg.TotalTracks, arg.ID)
 	return err
 }
 
 const updateMusicArtistEnrichment = `-- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
+UPDATE musicians SET
+ summary = COALESCE(?1, summary),
+ spotify_popularity = COALESCE(?2, spotify_popularity),
+ spotify_followers = COALESCE(?3, spotify_followers),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = ?4
 `
 
 type UpdateMusicArtistEnrichmentParams struct {
@@ -710,6 +752,9 @@ type UpdateMusicArtistEnrichmentParams struct {
 	ID                int64           `json:"id"`
 }
 
+// COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+// popularity/follower count to NULL, and an obscure artist legitimately reports
+// both, so an unguarded SET would erase values a previous match stored.
 func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error {
 	_, err := q.exec(ctx, q.updateMusicArtistEnrichmentStmt, updateMusicArtistEnrichment,
 		arg.Summary,
@@ -721,7 +766,7 @@ func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMus
 }
 
 const updateMusicTrackPrimaryArtist = `-- name: UpdateMusicTrackPrimaryArtist :exec
-UPDATE tracks SET musician_id=? WHERE id=?
+UPDATE tracks SET musician_id = ?1 WHERE id = ?2 AND musician_id IS NOT ?1
 `
 
 type UpdateMusicTrackPrimaryArtistParams struct {
@@ -729,6 +774,7 @@ type UpdateMusicTrackPrimaryArtistParams struct {
 	ID         int64         `json:"id"`
 }
 
+// Guarded so an unchanged primary artist does not fire the search triggers.
 func (q *Queries) UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error {
 	_, err := q.exec(ctx, q.updateMusicTrackPrimaryArtistStmt, updateMusicTrackPrimaryArtist, arg.MusicianID, arg.ID)
 	return err

@@ -45,9 +45,10 @@ FROM movies
 WHERE id IN (sqlc.slice(ids));
 
 -- name: GetMovieScanIndex :many
-SELECT c.id, c.file_path, c.tmdb_id, EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = c.id) AS pending_retry, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+SELECT c.id, c.file_path, c.tmdb_id, r.movie_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
 FROM movies c
-LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id;
+LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
+LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id;
 
 -- name: GetLatestMovies :many
 SELECT
@@ -540,13 +541,15 @@ DELETE FROM movies WHERE id = ? AND file_path = ?;
 SELECT id, file_path, tmdb_id FROM movies WHERE file_path = ?;
 
 -- name: MarkMovieTmdbRetry :exec
-INSERT INTO movie_tmdb_retries (movie_id) VALUES (?) ON CONFLICT DO NOTHING;
+INSERT INTO movie_tmdb_retries (movie_id) VALUES (?)
+ON CONFLICT (movie_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL;
+
+-- name: RecordMovieTmdbMiss :exec
+INSERT INTO movie_tmdb_retries (movie_id, attempts, last_attempt_at) VALUES (?, 1, ?)
+ON CONFLICT (movie_id) DO UPDATE SET attempts = movie_tmdb_retries.attempts + 1, last_attempt_at = excluded.last_attempt_at;
 
 -- name: ClearMovieTmdbRetry :exec
 DELETE FROM movie_tmdb_retries WHERE movie_id = ?;
-
--- name: CountMovieTmdbRetries :one
-SELECT count(*) FROM movies m WHERE tmdb_id IS NULL OR EXISTS (SELECT 1 FROM movie_tmdb_retries r WHERE r.movie_id = m.id);
 
 -- name: UpdateMovieTmdbMetadata :exec
 UPDATE movies SET

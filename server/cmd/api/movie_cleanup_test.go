@@ -13,6 +13,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 
 	"github.com/gorilla/websocket"
@@ -94,7 +95,7 @@ func TestMovieScanDeletionTearsDownWatchRooms(t *testing.T) {
 	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, personal)
 	defer releaseCleanup()
 	result := app.MovieScanner.Start()
-	if result.Status != movie.StartStarted {
+	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
 	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
@@ -178,7 +179,7 @@ func TestMovieScanDeletionTearsDownWatchRooms(t *testing.T) {
 		t.Fatalf("late session resources survived: %v %v", entries, err)
 	}
 	result = app.MovieScanner.Start()
-	if result.Status != movie.StartStarted {
+	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
 	app.Wait.Wait()
@@ -232,7 +233,7 @@ func TestMovieRescanPreservesWatchRooms(t *testing.T) {
 	readUntilEventType(t, conn, "room_snapshot")
 	var scanWait sync.WaitGroup
 	probe := &cleanupRescanProbe{}
-	scanner := movie.New(movie.Dependencies{
+	movieScanner := movie.New(movie.Dependencies{
 		DB: app.DB, Queries: app.Queries, Logger: app.Logger, Ffprobe: probe,
 		Wait: &scanWait, ScannerDBMu: &app.ScannerDBMu,
 		Now:                         func() time.Time { return time.Now().Add(2 * time.Minute) },
@@ -245,8 +246,8 @@ func TestMovieRescanPreservesWatchRooms(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		result := scanner.Start()
-		if result.Status != movie.StartStarted {
+		result := movieScanner.Start()
+		if result.Status != scanner.StartStarted {
 			t.Fatal(result)
 		}
 		scanWait.Wait()

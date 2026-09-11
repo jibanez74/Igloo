@@ -20,7 +20,7 @@ func BenchmarkMusicScan(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			s := setupMusicScanner(b)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			results := make(map[string]*ffprobe.FfprobeResult)
 			files := make([]scanner.ScanFile, 120)
 			for i := range files {

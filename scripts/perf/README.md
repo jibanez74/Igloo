@@ -60,3 +60,16 @@ frontend asset serving):
 ```bash
 cd server && go test -tags "externalbin sqlite_fts5" -bench . -benchmem -run '^$' ./cmd/internal/logger/ ./cmd/api
 ```
+
+## Disposable movie scanner benchmark
+
+Run the opt-in scanner measurement against read-only media, with a fresh temporary SQLite database and Jellyfin ffprobe:
+
+```bash
+cd server
+IGLOO_BENCH_MOVIES_DIR=/path/to/movies IGLOO_FFPROBE_PATH=/path/to/jellyfin/ffprobe \
+  CGO_ENABLED=1 go test -tags "externalbin sqlite_fts5" ./cmd/internal/scanner/movie \
+  -run '^TestMovieLibraryBenchmark$' -count=1 -timeout=2h -v
+```
+
+It records discovery, local-processing, cleanup and enrichment phase timings, a fresh import, a recovery pass and an unchanged pass, allocations, Linux process I/O (including reaped probes), RSS/high-water memory, and operations taking at least five seconds. TMDB is disabled so the measurement isolates local processing. The database always lives in the test's disposable directory; no existing catalog is opened or reset. OS page caches are left intact.

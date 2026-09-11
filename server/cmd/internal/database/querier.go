@@ -21,8 +21,9 @@ type Querier interface {
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error)
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
-	CountMovieTmdbRetries(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
+	CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error)
+	CountMusicArtistRetryCandidates(ctx context.Context) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)
@@ -148,6 +149,7 @@ type Querier interface {
 	GetMovieDetails(ctx context.Context, id int64) (GetMovieDetailsRow, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]GetMovieExtraVideosRow, error)
+	GetMovieFileFingerprint(ctx context.Context, movieID int64) (GetMovieFileFingerprintRow, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
@@ -316,7 +318,11 @@ type Querier interface {
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
 	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error)
 	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
+	// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 	MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error)
+	// Driven from musicians so the keyset cursor rides the primary key, like
+	// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+	// a temp b-tree sort of every remaining candidate on each 100-row page.
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
 	MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error)
 	MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error)
@@ -324,6 +330,7 @@ type Querier interface {
 	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
 	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
 	ReconcileMusicArtistSort(ctx context.Context, id int64) error
+	RecordMovieTmdbMiss(ctx context.Context, arg RecordMovieTmdbMissParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
@@ -356,8 +363,13 @@ type Querier interface {
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (int64, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
 	UpdateMovieTmdbMetadata(ctx context.Context, arg UpdateMovieTmdbMetadataParams) error
+	// Same NULL-coercion guard as UpdateMusicArtistEnrichment.
 	UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error
+	// COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+	// popularity/follower count to NULL, and an obscure artist legitimately reports
+	// both, so an unguarded SET would erase values a previous match stored.
 	UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error
+	// Guarded so an unchanged primary artist does not fire the search triggers.
 	UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error
 	UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (UpdateMusicianSpotifyThumbRow, error)
 	UpdatePlaybackServerSettings(ctx context.Context, arg UpdatePlaybackServerSettingsParams) (Setting, error)

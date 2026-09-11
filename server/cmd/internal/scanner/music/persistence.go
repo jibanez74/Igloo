@@ -17,41 +17,28 @@ func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanConte
 		return 0, fmt.Errorf("missing file inspection")
 	}
 	txScan := scan.clone()
-
-	s.scannerDBMu.Lock()
-	defer s.scannerDBMu.Unlock()
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to start music track transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	qtx := s.queries.WithTx(tx)
-	trackID, err := s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+	var trackID int64
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		var err error
+		trackID, err = s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+		if err != nil {
+			return err
+		}
+		err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
+		if err != nil {
+			return err
+		}
+		return resolved.inspection.Validate(ctx)
+	}, func() {
+		// A rescan can move the file or change its type, so the cached lookup is
+		// dropped after the new row is committed.
+		s.invalidateCommittedTrack(trackID)
+		for id := range txScan.invalidatedTracks {
+			s.invalidateCommittedTrack(id)
+		}
+	})
 	if err != nil {
 		return 0, err
-	}
-
-	err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
-	if err != nil {
-		return 0, err
-	}
-	err = resolved.inspection.Validate(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return 0, fmt.Errorf("failed to commit music track transaction: %w", err)
-	}
-
-	// A rescan can move the file or change its type, so the cached lookup is
-	// dropped here, after the new row is committed.
-	s.invalidateCommittedTrack(trackID)
-	for id := range txScan.invalidatedTracks {
-		s.invalidateCommittedTrack(id)
 	}
 
 	// trackIndex is shared (never written inside the transaction) and is only
@@ -145,22 +132,49 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	for _, id := range append(oldArtists, musicianIDs...) {
+	for _, id := range uniqueIDs(oldArtists, musicianIDs) {
 		err = qtx.ReconcileMusicArtistSort(ctx, id)
 		if err != nil {
 			return 0, err
 		}
 	}
-	for _, id := range []sql.NullInt64{oldAlbum, albumID} {
-		if !id.Valid {
-			continue
-		}
-		err = reconcileAlbum(ctx, qtx, id.Int64)
+	for _, id := range uniqueIDs(validIDs(oldAlbum, albumID)) {
+		err = reconcileAlbum(ctx, qtx, id)
 		if err != nil {
 			return 0, err
 		}
 	}
 	return trackID, nil
+}
+
+// uniqueIDs concatenates id groups in first-sighting order, dropping repeats.
+// A rescan of an unchanged track sees the same artist and the same album in
+// both the old and the new set, and every Reconcile* statement re-evaluates a
+// correlated vote aggregate, so reconciling twice is not free. It also avoids
+// appending into a caller's backing array.
+func uniqueIDs(groups ...[]int64) []int64 {
+	seen := make(map[int64]bool)
+	unique := make([]int64, 0)
+	for _, group := range groups {
+		for _, id := range group {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			unique = append(unique, id)
+		}
+	}
+	return unique
+}
+
+func validIDs(ids ...sql.NullInt64) []int64 {
+	present := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id.Valid {
+			present = append(present, id.Int64)
+		}
+	}
+	return present
 }
 
 func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
@@ -397,16 +411,24 @@ func reconcileAlbum(ctx context.Context, qtx *database.Queries, id int64) error 
 	return nil
 }
 
-// Re-read aliases after all writes: a later credit can merge an earlier credit's
-// artist into an existing Spotify owner in this same transaction.
 func (s *Scanner) persistMusicians(ctx context.Context, qtx *database.Queries, scan *musicScanContext, inputs []resolvedMusician) ([]int64, error) {
+	ids := make([]int64, 0, len(inputs))
 	for _, input := range inputs {
-		_, err := s.persistMusician(ctx, qtx, scan, input)
+		id, err := s.persistMusician(ctx, qtx, scan, input)
 		if err != nil {
 			return nil, fmt.Errorf("musician failed: %w", err)
 		}
+		ids = append(ids, id)
 	}
-	ids := make([]int64, 0, len(inputs))
+	// A later credit can merge an earlier credit's artist into an existing
+	// Spotify owner in this same transaction, which leaves the ids collected
+	// above pointing at deleted rows -- so re-read the aliases, but only when
+	// that actually happened. scan is the transaction-local clone, whose merged
+	// flag starts false for every track.
+	if !scan.merged {
+		return ids, nil
+	}
+	ids = ids[:0]
 	for _, input := range inputs {
 		owner, err := qtx.FindMusicArtistIdentity(ctx, scanner.NormalizedScanCacheKey(input.name))
 		if err != nil {

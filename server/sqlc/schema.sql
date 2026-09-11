@@ -208,7 +208,9 @@ CREATE TABLE IF NOT EXISTS track_musicians (
   FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_track_musicians_musician ON track_musicians (musician_id);
+-- track_id second so MusicArtistTrackMetadata pages an artist's tracks in
+-- track_id order without a temporary sort.
+CREATE INDEX IF NOT EXISTS idx_track_musicians_musician_track ON track_musicians (musician_id, track_id);
 
 -- Local and Spotify genre contributions coexist; reconciliation removes only
 -- the affected source. The same provenance rule applies to album_genres.
@@ -518,13 +520,16 @@ CREATE TABLE IF NOT EXISTS movie_file_fingerprints (
   mtime_ns INTEGER NOT NULL,
   ctime_ns INTEGER NOT NULL,
   device TEXT NOT NULL,
-  inode TEXT NOT NULL,
-  sha256 BLOB NOT NULL CHECK (typeof(sha256) = 'blob' AND length(sha256) = 32)
+  inode TEXT NOT NULL
 );
 
 -- Pending descriptive enrichment does not invalidate usable technical media data.
+-- attempts counts definitive TMDB misses; last_attempt_at (unix seconds) drives
+-- the scanner's no-match backoff. A technical rescan resets both.
 CREATE TABLE IF NOT EXISTS movie_tmdb_retries (
-  movie_id INTEGER PRIMARY KEY NOT NULL REFERENCES movies (id) ON DELETE CASCADE
+  movie_id INTEGER PRIMARY KEY NOT NULL REFERENCES movies (id) ON DELETE CASCADE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at INTEGER
 );
 
 -- User activity

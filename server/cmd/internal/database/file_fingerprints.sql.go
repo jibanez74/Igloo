@@ -27,17 +27,43 @@ func (q *Queries) DeleteMovieRemuxSafetyVerdicts(ctx context.Context, movieID in
 	return err
 }
 
+const getMovieFileFingerprint = `-- name: GetMovieFileFingerprint :one
+SELECT m.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
+FROM movie_file_fingerprints f JOIN movies m ON m.id = f.movie_id
+WHERE f.movie_id = ?
+`
+
+type GetMovieFileFingerprintRow struct {
+	Size    int64  `json:"size"`
+	MtimeNs int64  `json:"mtime_ns"`
+	CtimeNs int64  `json:"ctime_ns"`
+	Device  string `json:"device"`
+	Inode   string `json:"inode"`
+}
+
+func (q *Queries) GetMovieFileFingerprint(ctx context.Context, movieID int64) (GetMovieFileFingerprintRow, error) {
+	row := q.queryRow(ctx, q.getMovieFileFingerprintStmt, getMovieFileFingerprint, movieID)
+	var i GetMovieFileFingerprintRow
+	err := row.Scan(
+		&i.Size,
+		&i.MtimeNs,
+		&i.CtimeNs,
+		&i.Device,
+		&i.Inode,
+	)
+	return i, err
+}
+
 const upsertMovieFileFingerprint = `-- name: UpsertMovieFileFingerprint :execrows
-INSERT INTO movie_file_fingerprints (movie_id, mtime_ns, ctime_ns, device, inode, sha256)
-SELECT id, ?1, ?2, ?3, ?4, ?5
+INSERT INTO movie_file_fingerprints (movie_id, mtime_ns, ctime_ns, device, inode)
+SELECT id, ?1, ?2, ?3, ?4
 FROM movies
-WHERE file_path = ?6
+WHERE file_path = ?5
 ON CONFLICT (movie_id) DO UPDATE SET
  mtime_ns = excluded.mtime_ns,
  ctime_ns = excluded.ctime_ns,
  device = excluded.device,
- inode = excluded.inode,
- sha256 = excluded.sha256
+ inode = excluded.inode
 `
 
 type UpsertMovieFileFingerprintParams struct {
@@ -45,7 +71,6 @@ type UpsertMovieFileFingerprintParams struct {
 	CtimeNs  int64  `json:"ctime_ns"`
 	Device   string `json:"device"`
 	Inode    string `json:"inode"`
-	Sha256   []byte `json:"sha256"`
 	FilePath string `json:"file_path"`
 }
 
@@ -55,7 +80,6 @@ func (q *Queries) UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovi
 		arg.CtimeNs,
 		arg.Device,
 		arg.Inode,
-		arg.Sha256,
 		arg.FilePath,
 	)
 	if err != nil {

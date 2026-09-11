@@ -1,4 +1,6 @@
-import { redirect, Outlet, createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useMovieScanStatus, useMusicScanStatus } from "@/hooks/useScanStatus";
+import { redirect, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import AppShell from "@/components/app/AppShell";
 
@@ -19,6 +21,14 @@ export const Route = createFileRoute("/_auth")({
 });
 
 function AuthLayout() {
+  const { data } = useQuery(authUserQueryOpts());
+  const librariesVisible = useLocation({ select: location => location.pathname.replace(/\/+$/, "") === "/settings/libraries" });
+  const scanOptions = {
+    enabled: data?.error === false && data.data.user.is_admin,
+    watchIdle: librariesVisible,
+  };
+  useMovieScanStatus(scanOptions);
+  useMusicScanStatus(scanOptions);
   return (
     <AppShell>
       <Outlet />
