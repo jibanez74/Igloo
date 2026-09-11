@@ -574,8 +574,15 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 			if countRows(t, s.DB, "show_episode_tmdb_retries") != 2 {
 				t.Fatal("failure cleared episode retries")
 			}
-			if mode == "rollback" && (countRows(t, s.DB, "artist") != 0 || countRows(t, s.DB, "show_tmdb_retries") != 1) {
-				t.Fatal("metadata transaction leaked")
+			// The trigger aborts only the cast insert, and SQLite rolls a RAISE
+			// back statement-wide, so the rolled-back transaction is visible in
+			// the writes that preceded it: the artist upserted for that cast row
+			// and the show name the update already replaced.
+			if mode == "rollback" {
+				got, err := s.Queries.GetShow(context.Background(), 1)
+				if err != nil || got.Name != "Example" || countRows(t, s.DB, "artist") != 0 || countRows(t, s.DB, "show_tmdb_retries") != 1 {
+					t.Fatal("metadata transaction leaked", err)
+				}
 			}
 			if mode == "identity" {
 				got, err := s.Queries.GetShow(context.Background(), 1)
