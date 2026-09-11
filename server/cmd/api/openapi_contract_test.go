@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -53,6 +54,18 @@ func addOpenAPITestCookie(request *http.Request) {
 // newOpenAPIJSONRequest so the consumed body can be replayed.
 func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {
 	t.Helper()
+	assertOpenAPIHTTPExchange(t, operationID, request, response, true)
+}
+
+// Rejection and lenient-query tests deliberately send requests outside the
+// request schema. They still validate the actual response against the contract.
+func assertOpenAPIResponse(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {
+	t.Helper()
+	assertOpenAPIHTTPExchange(t, operationID, request, response, false)
+}
+
+func assertOpenAPIHTTPExchange(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder, validateRequest bool) {
+	t.Helper()
 
 	_, router := loadOpenAPIContract(t)
 
@@ -81,9 +94,11 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 		Route:      route,
 		Options:    openAPIValidationOptions,
 	}
-	err = openapi3filter.ValidateRequest(context.Background(), requestInput)
-	if err != nil {
-		t.Fatalf("OpenAPI request validation: %v", err)
+	if validateRequest {
+		err = openapi3filter.ValidateRequest(context.Background(), requestInput)
+		if err != nil {
+			t.Fatalf("OpenAPI request validation: %v", err)
+		}
 	}
 
 	result := response.Result()
@@ -92,13 +107,23 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 		Status:                 result.StatusCode,
 		Header:                 result.Header,
 		Body:                   io.NopCloser(bytes.NewBuffer(response.Body.Bytes())),
+		Options:                openAPIValidationOptions,
 	}
-	err = openapi3filter.ValidateResponse(context.Background(), responseInput)
+	err = validateOpenAPIResponse(responseInput)
 	if err != nil {
 		t.Fatalf("OpenAPI response validation: %v", err)
 	}
 
 	validatedOpenAPIExchanges.record(operationID, route.Operation, result.StatusCode)
+}
+
+func validateOpenAPIResponse(input *openapi3filter.ResponseValidationInput) error {
+	// kin-openapi skips HEAD, 304, and some redirects before checking statuses.
+	responses := input.RequestValidationInput.Route.Operation.Responses
+	if responses.Status(input.Status) == nil && responses.Default() == nil {
+		return &openapi3filter.ResponseError{Input: input, Reason: "status is not supported"}
+	}
+	return openapi3filter.ValidateResponse(context.Background(), input)
 }
 
 type openAPIExchangeRecorder struct {
@@ -146,7 +171,8 @@ var (
 // credential grants access is the middleware's concern and is covered by the
 // handler tests; this helper only validates the documented HTTP boundary.
 var openAPIValidationOptions = &openapi3filter.Options{
-	AuthenticationFunc: assertOpenAPICredentialPresent,
+	AuthenticationFunc:    assertOpenAPICredentialPresent,
+	IncludeResponseStatus: true,
 }
 
 func assertOpenAPICredentialPresent(_ context.Context, input *openapi3filter.AuthenticationInput) error {
@@ -229,6 +255,137 @@ func TestHealthCheckConformsToOpenAPI(t *testing.T) {
 	app.HealthCheck(response, request)
 
 	assertOpenAPIExchange(t, "healthCheck", request, response)
+}
+
+func TestHealthCheckDatabaseFailureConformsToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	err := app.DB.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	response := httptest.NewRecorder()
+	app.HealthCheck(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", response.Code)
+	}
+	assertOpenAPIExchange(t, "healthCheck", request, response)
+	var envelope helpers.JSONResponse
+	err = json.Unmarshal(response.Body.Bytes(), &envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Message != internalServerErrorMessage {
+		t.Fatalf("unsafe health error: %s", response.Body.String())
+	}
+}
+
+func TestOpenAPIResponseStatusValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		method      string
+		status      int
+		responseKey string
+		wantError   bool
+	}{
+		{"documented success", http.MethodGet, 200, "200", false},
+		{"undocumented error", http.MethodGet, 418, "200", true},
+		{"undocumented HEAD", http.MethodHead, 500, "200", true},
+		{"undocumented conditional", http.MethodGet, 304, "200", true},
+		{"undocumented redirect", http.MethodGet, 307, "200", true},
+		{"documented HEAD", http.MethodHead, 200, "200", false},
+		{"documented conditional", http.MethodGet, 304, "304", false},
+		{"status range", http.MethodGet, 201, "2XX", false},
+		{"default response", http.MethodGet, 500, "default", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			responses := openapi3.NewResponses()
+			responses.Set(tt.responseKey, &openapi3.ResponseRef{Value: &openapi3.Response{}})
+			input := &openapi3filter.ResponseValidationInput{
+				RequestValidationInput: &openapi3filter.RequestValidationInput{
+					Request: httptest.NewRequest(tt.method, "/", nil),
+					Route:   &routers.Route{Spec: &openapi3.T{OpenAPI: "3.1.0"}, Operation: &openapi3.Operation{Responses: responses}},
+				},
+				Status:  tt.status,
+				Options: openAPIValidationOptions,
+			}
+			err := validateOpenAPIResponse(input)
+			if (err != nil) != tt.wantError {
+				t.Fatalf("response validation error = %v, want error = %v", err, tt.wantError)
+			}
+			if tt.wantError {
+				var responseError *openapi3filter.ResponseError
+				if !errors.As(err, &responseError) || responseError.Reason != "status is not supported" {
+					t.Fatalf("expected unsupported-status error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestStopPersonalHLSSession_AuthenticationDatabaseFailure(t *testing.T) {
+	for _, credential := range []string{"bearer", "cookie"} {
+		t.Run(credential, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			app.InitRouter()
+			err := app.DB.Close()
+			if err != nil {
+				t.Fatalf("close authentication database: %v", err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/api/movies/5/hls/session/stop?playback_session="+testPlaybackSessionID, nil)
+			if credential == "bearer" {
+				request.Header.Set("Authorization", "Bearer igd_contract-database-failure")
+			} else {
+				addOpenAPITestCookie(request)
+			}
+			response := httptest.NewRecorder()
+
+			app.Router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want 500: %s", response.Code, response.Body.String())
+			}
+			assertOpenAPIExchange(t, "stopPersonalHlsSession", request, response)
+			var envelope helpers.JSONResponse
+			err = json.Unmarshal(response.Body.Bytes(), &envelope)
+			if err != nil {
+				t.Fatalf("decode authentication error: %v", err)
+			}
+			if !envelope.Error || envelope.Message != internalServerErrorMessage || envelope.Data != nil {
+				t.Fatalf("unexpected authentication error: %+v", envelope)
+			}
+		})
+	}
+}
+
+func TestLoginSessionCommitFailureConformsToOpenAPI(t *testing.T) {
+	app := setupSessionTestApp(t)
+	t.Cleanup(func() { _ = app.DB.Close() })
+	app.InitRouter()
+	createTestUserWithPassword(t, app, "Contract User", "contract@example.com", "correct horse")
+	_, err := app.DB.Exec(`CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'private session storage failure'); END`)
+	if err != nil {
+		t.Fatalf("install session failure trigger: %v", err)
+	}
+	request := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", `{"email":"contract@example.com","password":"correct horse"}`)
+	response := httptest.NewRecorder()
+	app.Router.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", response.Code, response.Body.String())
+	}
+	assertOpenAPIExchange(t, "authenticateUser", request, response)
+	var envelope helpers.JSONResponse
+	err = json.Unmarshal(response.Body.Bytes(), &envelope)
+	if err != nil {
+		t.Fatalf("expected a single JSON error: %v; body: %s", err, response.Body.String())
+	}
+	if !envelope.Error || envelope.Message != internalServerErrorMessage || envelope.Data != nil {
+		t.Fatalf("unexpected session error: %+v", envelope)
+	}
+	if response.Header().Get("Set-Cookie") != "" {
+		t.Fatal("failed session commit must not issue a cookie")
+	}
 }
 
 func TestMain(m *testing.M) {

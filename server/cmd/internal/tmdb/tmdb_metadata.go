@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var ErrNoMoviesFound = errors.New("no movies found with the given query")
+
 // TmdbVideoResult is a single video (trailer, featurette, etc.) from TMDB videos.results.
 type TmdbVideoResult struct {
 	ID       string `json:"id"`
@@ -188,7 +190,7 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 	}
 
 	if len(results) == 0 {
-		return nil, errors.New("no movies found with the given query")
+		return nil, ErrNoMoviesFound
 	}
 
 	return results, nil
@@ -329,11 +331,32 @@ func retryableTmdbStatus(statusCode int) bool {
 	return statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError
 }
 
+// StatusError retains the provider status without exposing request URLs or keys.
+type StatusError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("tmdb status %d: %s", e.StatusCode, e.Message)
+}
+
+// ProviderFailure classifies failures for scan dispatch. Valid no-match results
+// are handled separately; transport and malformed-response errors are transient.
+func ProviderFailure(err error) (authentication, transient bool) {
+	var status *StatusError
+	isStatus := errors.As(err, &status)
+	if isStatus {
+		return status.StatusCode == http.StatusUnauthorized || status.StatusCode == http.StatusForbidden, retryableTmdbStatus(status.StatusCode)
+	}
+	return false, err != nil && !errors.Is(err, ErrNoMoviesFound)
+}
+
 func tmdbStatusError(statusCode int, fallback string) error {
 	if statusCode == http.StatusTooManyRequests {
-		return errors.New("rate limit exceeded for tmdb")
+		return &StatusError{StatusCode: statusCode, Message: "rate limit exceeded for tmdb"}
 	}
-	return errors.New(fallback)
+	return &StatusError{StatusCode: statusCode, Message: fallback}
 }
 
 func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner"
 	"net/http"
 	"net/url"
 	"os"
@@ -360,50 +361,49 @@ func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
 	return helpers.NullString(dir), nil
 }
 
+// scanLibrary carries the wording the scan endpoints and startup logs use for
+// one library.
+type scanLibrary struct {
+	name      string // "movie"
+	directory string // "movies"
+	title     string // "Movie"
+}
+
+var (
+	movieLibrary = scanLibrary{name: "movie", directory: "movies", title: "Movie"}
+	musicLibrary = scanLibrary{name: "music", directory: "music", title: "Music"}
+)
+
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
-	settings := app.CurrentSettings()
-	if !settings.MusicDir.Valid || settings.MusicDir.String == "" {
-		helpers.ErrorJSON(w, errors.New("music directory is not configured"))
-		return
-	}
-
-	if !musicScanGuard.TryBegin() {
-		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"), http.StatusConflict)
-		return
-	}
-
-	if app.Wait != nil {
-		app.Wait.Add(1)
-	}
-	go app.runMusicScan()
-
-	app.Logger.Info("music library scan triggered via API", "path", settings.MusicDir.String)
-
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Music library scan started",
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
+	app.triggerScan(w, musicLibrary, app.MusicScanner.Start())
 }
 
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
-	result := app.MovieScanner.Start()
+	app.triggerScan(w, movieLibrary, app.MovieScanner.Start())
+}
+
+func (app *Application) triggerScan(w http.ResponseWriter, library scanLibrary, result scanner.StartResult) {
 	switch result.Status {
-	case movie.StartNotConfigured:
-		helpers.ErrorJSON(w, errors.New("movies directory is not configured"))
+	case scanner.StartNotConfigured:
+		helpers.ErrorJSON(w, fmt.Errorf("%s directory is not configured", library.directory))
 		return
-	case movie.StartAlreadyRunning:
-		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"), http.StatusConflict)
+	case scanner.StartAlreadyRunning:
+		helpers.ErrorJSON(w, fmt.Errorf("%s library scan is already in progress", library.name), http.StatusConflict)
 		return
 	}
 
-	app.Logger.Info("movie library scan triggered via API", "path", result.Directory)
+	app.Logger.Info(library.name+" library scan triggered via API", "path", result.Directory)
 
-	res := helpers.JSONResponse{
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error:   false,
-		Message: "Movie library scan started",
-	}
+		Message: library.title + " library scan started",
+	})
+}
 
-	helpers.WriteJSON(w, http.StatusOK, res)
+func (app *Application) GetMovieScanStatus(w http.ResponseWriter, r *http.Request) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MovieScanner.Status()})
+}
+
+func (app *Application) GetMusicScanStatus(w http.ResponseWriter, r *http.Request) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MusicScanner.Status()})
 }

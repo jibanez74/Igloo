@@ -11,7 +11,7 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-func (s *Scanner) processMovieStreams(
+func processMovieStreams(
 	ctx context.Context,
 	qtx *database.Queries,
 	movieID int64,
@@ -61,24 +61,6 @@ func (s *Scanner) processMovieStreams(
 }
 
 func insertVideoStream(ctx context.Context, qtx *database.Queries, movieID int64, stream ffprobe.Stream) error {
-	var codecLevel sql.NullInt64
-	if stream.Level > 0 {
-		codecLevel = sql.NullInt64{Int64: int64(stream.Level), Valid: true}
-	}
-	var bitDepth sql.NullInt64
-	if stream.BitDepth != "" {
-		parsed, err := strconv.ParseInt(stream.BitDepth, 10, 64)
-		if err == nil {
-			bitDepth = sql.NullInt64{Int64: parsed, Valid: true}
-		}
-	}
-	var codedWidth, codedHeight sql.NullInt64
-	if stream.CodedWidth > 0 {
-		codedWidth = sql.NullInt64{Int64: int64(stream.CodedWidth), Valid: true}
-	}
-	if stream.CodedHeight > 0 {
-		codedHeight = sql.NullInt64{Int64: int64(stream.CodedHeight), Valid: true}
-	}
 	// An explicit 0-degree display matrix persists as 0 while absence persists
 	// as NULL, so helpers.NullInt64 (which maps 0 to NULL) does not fit here.
 	var rotation sql.NullInt64
@@ -87,21 +69,21 @@ func insertVideoStream(ctx context.Context, qtx *database.Queries, movieID int64
 		rotation = sql.NullInt64{Int64: rotationDeg, Valid: true}
 	}
 
-	_, err := qtx.InsertVideoStream(ctx, database.InsertVideoStreamParams{
+	err := qtx.InsertVideoStream(ctx, database.InsertVideoStreamParams{
 		MovieID:        movieID,
 		StreamIndex:    int64(stream.Index),
 		Codec:          stream.CodecName,
 		CodecProfile:   helpers.NullString(stream.Profile),
-		CodecLevel:     codecLevel,
+		CodecLevel:     helpers.NullInt64(int64(stream.Level)),
 		BitRate:        helpers.ParseBitRate(stream.BitRate),
 		Width:          int64(stream.Width),
 		Height:         int64(stream.Height),
-		CodedWidth:     codedWidth,
-		CodedHeight:    codedHeight,
+		CodedWidth:     helpers.NullInt64(int64(stream.CodedWidth)),
+		CodedHeight:    helpers.NullInt64(int64(stream.CodedHeight)),
 		AspectRatio:    helpers.NullString(stream.AspectRatio),
 		FrameRate:      helpers.ParseFrameRate(stream.FrameRate),
 		AvgFrameRate:   helpers.NullString(stream.AvgFrameRate),
-		BitDepth:       bitDepth,
+		BitDepth:       parseNullInt64(stream.BitDepth),
 		PixelFormat:    helpers.NullString(stream.PixelFormat),
 		ColorRange:     helpers.NullString(stream.ColorRange),
 		ColorSpace:     helpers.NullString(stream.ColorSpace),
@@ -119,21 +101,13 @@ func insertVideoStream(ctx context.Context, qtx *database.Queries, movieID int64
 }
 
 func insertAudioStream(ctx context.Context, qtx *database.Queries, movieID int64, stream ffprobe.Stream) error {
-	var sampleRate sql.NullInt64
-	if stream.SampleRate != "" {
-		parsed, err := strconv.ParseInt(stream.SampleRate, 10, 64)
-		if err == nil {
-			sampleRate = sql.NullInt64{Int64: parsed, Valid: true}
-		}
-	}
-
-	_, err := qtx.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+	err := qtx.InsertAudioStream(ctx, database.InsertAudioStreamParams{
 		MovieID:       movieID,
 		StreamIndex:   int64(stream.Index),
 		Codec:         stream.CodecName,
 		CodecProfile:  helpers.NullString(stream.Profile),
 		BitRate:       helpers.ParseBitRate(stream.BitRate),
-		SampleRate:    sampleRate,
+		SampleRate:    parseNullInt64(stream.SampleRate),
 		Channels:      int64(stream.Channels),
 		ChannelLayout: helpers.NullString(stream.ChannelLayout),
 		Language:      helpers.NullString(stream.Tags.Language),
@@ -147,7 +121,7 @@ func insertAudioStream(ctx context.Context, qtx *database.Queries, movieID int64
 }
 
 func insertSubtitleStream(ctx context.Context, qtx *database.Queries, movieID int64, stream ffprobe.Stream) error {
-	_, err := qtx.InsertSubtitle(ctx, database.InsertSubtitleParams{
+	err := qtx.InsertSubtitle(ctx, database.InsertSubtitleParams{
 		MovieID:     movieID,
 		StreamIndex: int64(stream.Index),
 		Codec:       stream.CodecName,
@@ -160,4 +134,17 @@ func insertSubtitleStream(ctx context.Context, qtx *database.Queries, movieID in
 		return fmt.Errorf("insert subtitle failed: %w", err)
 	}
 	return nil
+}
+
+// parseNullInt64 maps ffprobe's optional numeric strings to NULL when absent
+// or unparsable.
+func parseNullInt64(value string) sql.NullInt64 {
+	if value == "" {
+		return sql.NullInt64{}
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: parsed, Valid: true}
 }

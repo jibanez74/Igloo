@@ -19,7 +19,7 @@ INSERT INTO devices (
   token_hash
 )
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, user_id, name, platform, app_version, token_hash, created_at, last_used_at
+RETURNING id, name, platform, app_version, created_at, last_used_at
 `
 
 type CreateDeviceParams struct {
@@ -30,7 +30,16 @@ type CreateDeviceParams struct {
 	TokenHash  string         `json:"token_hash"`
 }
 
-func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Device, error) {
+type CreateDeviceRow struct {
+	ID         int64          `json:"id"`
+	Name       string         `json:"name"`
+	Platform   string         `json:"platform"`
+	AppVersion sql.NullString `json:"app_version"`
+	CreatedAt  string         `json:"created_at"`
+	LastUsedAt string         `json:"last_used_at"`
+}
+
+func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (CreateDeviceRow, error) {
 	row := q.queryRow(ctx, q.createDeviceStmt, createDevice,
 		arg.UserID,
 		arg.Name,
@@ -38,14 +47,12 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Dev
 		arg.AppVersion,
 		arg.TokenHash,
 	)
-	var i Device
+	var i CreateDeviceRow
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
 		&i.Name,
 		&i.Platform,
 		&i.AppVersion,
-		&i.TokenHash,
 		&i.CreatedAt,
 		&i.LastUsedAt,
 	)
@@ -95,32 +102,28 @@ func (q *Queries) DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (
 }
 
 const getDeviceByTokenHash = `-- name: GetDeviceByTokenHash :one
-SELECT id, user_id, name, platform, app_version, token_hash, created_at, last_used_at
+SELECT id, user_id, last_used_at
 FROM devices
 WHERE token_hash = ?
 LIMIT 1
 `
 
-func (q *Queries) GetDeviceByTokenHash(ctx context.Context, tokenHash string) (Device, error) {
+type GetDeviceByTokenHashRow struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	LastUsedAt string `json:"last_used_at"`
+}
+
+func (q *Queries) GetDeviceByTokenHash(ctx context.Context, tokenHash string) (GetDeviceByTokenHashRow, error) {
 	row := q.queryRow(ctx, q.getDeviceByTokenHashStmt, getDeviceByTokenHash, tokenHash)
-	var i Device
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.Platform,
-		&i.AppVersion,
-		&i.TokenHash,
-		&i.CreatedAt,
-		&i.LastUsedAt,
-	)
+	var i GetDeviceByTokenHashRow
+	err := row.Scan(&i.ID, &i.UserID, &i.LastUsedAt)
 	return i, err
 }
 
 const getDevicesByUser = `-- name: GetDevicesByUser :many
 SELECT
   id,
-  user_id,
   name,
   platform,
   app_version,
@@ -133,7 +136,6 @@ ORDER BY last_used_at DESC, id DESC
 
 type GetDevicesByUserRow struct {
 	ID         int64          `json:"id"`
-	UserID     int64          `json:"user_id"`
 	Name       string         `json:"name"`
 	Platform   string         `json:"platform"`
 	AppVersion sql.NullString `json:"app_version"`
@@ -152,7 +154,6 @@ func (q *Queries) GetDevicesByUser(ctx context.Context, userID int64) ([]GetDevi
 		var i GetDevicesByUserRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
 			&i.Name,
 			&i.Platform,
 			&i.AppVersion,

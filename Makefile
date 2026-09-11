@@ -113,7 +113,7 @@ stop:
 clean: stop
 	@echo "Cleaning build artifacts..."
 	@rm -f $(SERVER_DIR)/$(BINARY_NAME) $(SERVER_DIR)/api
-	@rm -rf $(DIST_DIR) $(WEB_DIST) $(WEB_EMBED_DIR) $(WEB_DIR)/.tanstack $(WEB_DIR)/src/routeTree.gen.ts
+	@rm -rf $(DIST_DIR) $(WEB_DIST) $(WEB_EMBED_DIR) $(WEB_DIR)/.tanstack
 	@echo "Cleaned."
 
 help:

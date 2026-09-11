@@ -12,7 +12,9 @@ import (
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
@@ -80,7 +82,14 @@ type Application struct {
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
-	MovieScanner                  interface{ Start() movie.StartResult }
+	MovieScanner                  interface {
+		Start() scanner.StartResult
+		Status() movie.Status
+	}
+	MusicScanner interface {
+		Start() scanner.StartResult
+		Status() music.Status
+	}
 }
 
 //go:embed all:webdist
@@ -195,6 +204,23 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
+	app.MusicScanner = music.New(music.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Spotify:     app.Spotify,
+		ScanContext: app.ScanContext,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
+		CurrentMusicDirectory: func() sql.NullString {
+			return app.CurrentSettings().MusicDir
+		},
+		InvalidateCommittedTrack: func(trackID int64) {
+			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
+		},
+	})
+
 	app.MovieScanner = movie.New(movie.Dependencies{
 		DB:          app.DB,
 		Queries:     app.Queries,
@@ -207,7 +233,8 @@ func InitApp() (initializedApp *Application, err error) {
 		CurrentMoviesDirectory: func() sql.NullString {
 			return app.CurrentSettings().MoviesDir
 		},
-		InvalidateCommittedMovie: app.invalidateCommittedMovie,
+		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
+		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
 	})
 
 	app.InitRouter()
@@ -215,8 +242,24 @@ func InitApp() (initializedApp *Application, err error) {
 	return &app, nil
 }
 
+// invalidateDeletedWatchRooms runs after scanner deletion commits, before movie
+// cache eviction, so even rooms without a cached session reject late HLS fills.
+func (app *Application) invalidateDeletedWatchRooms(roomIDs []int64) {
+	for _, roomID := range roomIDs {
+		app.WatchRoomAuthCache.invalidateRoom(roomID)
+	}
+	app.RoomHLSMu.Lock()
+	for _, roomID := range roomIDs {
+		app.markRoomHLSSessionDeleted(roomID)
+	}
+	app.RoomHLSMu.Unlock()
+	for _, roomID := range roomIDs {
+		app.WatchRoomHub.deleteRoom(roomID)
+	}
+}
+
 // invalidateCommittedMovie drops everything derived from one movie's rows after
-// the scanner commits a rescan of it. It is a method rather than a closure so
+// the scanner commits a rescan or deletion. It is a method rather than a closure so
 // the test harness can wire the same list; a cache missing from here serves
 // pre-rescan data until its TTL expires.
 func (app *Application) invalidateCommittedMovie(movieID int64) {

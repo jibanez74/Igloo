@@ -476,3 +476,28 @@ func TestUpdatePlaybackSettings_ConcurrentPartialUpdatesBothLand(t *testing.T) {
 		t.Errorf("expected hardware device nvidia to survive, got %q", settings.HardwareAccelerationDevice.String)
 	}
 }
+
+func TestUpdatePlaybackSettings_RejectsUnknownFieldsAndNullBody(t *testing.T) {
+	app := setupSettingsTestApp(t)
+	defer app.DB.Close()
+	admin := createTestUser(t, app, "Admin", "contract-admin@example.com", true)
+	handler := mountPlaybackRouter(app, admin.ID)
+	seedServerPlaybackSettings(t, app, 25)
+	for _, body := range []string{`null`, `{"server_upload_mbps":42,"unexpected":true}`} {
+		request := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/playback", body)
+		addOpenAPITestCookie(request)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("body=%s status=%d, want 400", body, response.Code)
+		}
+		assertOpenAPIResponse(t, "updatePlaybackSettings", request, response)
+		settings, err := app.Queries.GetSettings(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.ServerUploadMbps.Float64 != 25 || app.CurrentSettings().ServerUploadMbps.Float64 != 25 {
+			t.Fatal("rejected request changed playback settings")
+		}
+	}
+}

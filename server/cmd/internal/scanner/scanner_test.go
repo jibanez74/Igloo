@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -29,57 +31,6 @@ func TestNormalizedScanCacheKey(t *testing.T) {
 				t.Errorf("NormalizedScanCacheKey(%q) = %q, want %q", tt.parts, got, tt.expected)
 			}
 		})
-	}
-}
-
-func TestScanIndexUnchanged(t *testing.T) {
-	index := map[string]int64{
-		filepath.Clean("/movies/a.mkv"): 100,
-	}
-
-	tests := []struct {
-		name string
-		path string
-		size int64
-		want bool
-	}{
-		{"present and same size", "/movies/a.mkv", 100, true},
-		{"present, unclean path still matches", "/movies/./a.mkv", 100, true},
-		{"present but different size", "/movies/a.mkv", 200, false},
-		{"absent", "/movies/b.mkv", 100, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ScanIndexUnchanged(index, tt.path, tt.size); got != tt.want {
-				t.Errorf("ScanIndexUnchanged(%q, %d) = %v, want %v", tt.path, tt.size, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestBuildScanIndex(t *testing.T) {
-	type row struct {
-		path string
-		size int64
-	}
-	rows := []row{
-		{"/music/./a.mp3", 1},
-		{"/music/b.mp3", 2},
-	}
-
-	index := BuildScanIndex(rows, func(r row) (string, int64) {
-		return r.path, r.size
-	})
-
-	if len(index) != 2 {
-		t.Fatalf("index len = %d, want 2", len(index))
-	}
-	// Keys are cleaned.
-	if got, ok := index[filepath.Clean("/music/a.mp3")]; !ok || got != 1 {
-		t.Errorf("cleaned key /music/a.mp3 = (%d, %v), want (1, true)", got, ok)
-	}
-	if got := index["/music/b.mp3"]; got != 2 {
-		t.Errorf("index[/music/b.mp3] = %d, want 2", got)
 	}
 }
 
@@ -138,7 +89,7 @@ func TestWalkMediaLibrary(t *testing.T) {
 	var got []ScanFile
 	var walkErrors int
 	err := WalkMediaLibraryContext(context.Background(), root, validExts,
-		func(error) { walkErrors++ },
+		func(string, error) { walkErrors++ },
 		func(f ScanFile) error {
 			got = append(got, f)
 			return nil
@@ -171,7 +122,7 @@ func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	called := false
-	err := WalkMediaLibraryContext(ctx, root, map[string]bool{"mkv": true}, func(error) {}, func(ScanFile) error {
+	err := WalkMediaLibraryContext(ctx, root, map[string]bool{"mkv": true}, func(string, error) {}, func(ScanFile) error {
 		called = true
 		return nil
 	})
@@ -186,7 +137,7 @@ func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
 func TestWalkMediaLibraryMissingRoot(t *testing.T) {
 	err := WalkMediaLibraryContext(context.Background(), filepath.Join(t.TempDir(), "does-not-exist"),
 		map[string]bool{"mkv": true},
-		func(error) {},
+		func(string, error) {},
 		func(ScanFile) error { return nil },
 	)
 	if err == nil {
@@ -202,7 +153,7 @@ func TestWalkMediaLibraryPropagatesOnFileError(t *testing.T) {
 	sentinel := errors.New("stop")
 	count := 0
 	err := WalkMediaLibraryContext(context.Background(), root, map[string]bool{"mkv": true},
-		func(error) {},
+		func(string, error) {},
 		func(ScanFile) error {
 			count++
 			return sentinel
@@ -223,5 +174,61 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func TestWalkMediaLibrarySymlinksAndSpecialFiles(t *testing.T) {
+	for _, ext := range []string{"m4a", "mkv"} {
+		t.Run(ext, func(t *testing.T) {
+			root := t.TempDir()
+			targets := t.TempDir()
+			target := filepath.Join(targets, "target")
+			err := os.WriteFile(target, []byte("target content with a different size than its link"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			regular := filepath.Join(root, "regular."+ext)
+			err = os.WriteFile(regular, []byte("regular"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(root, "linked."+ext)
+			broken := filepath.Join(root, "broken."+ext)
+			directory := filepath.Join(root, "directory."+ext)
+			fifo := filepath.Join(root, "fifo."+ext)
+			err = syscall.Mkfifo(fifo, 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for path, dest := range map[string]string{link: target, broken: filepath.Join(targets, "missing"), directory: targets, filepath.Join(root, "fifo-link."+ext): fifo} {
+				err = os.Symlink(dest, path)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A directory link must never expose descendants to the walker.
+			err = os.WriteFile(filepath.Join(targets, "hidden."+ext), []byte("hidden"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var failures []error
+			var files []ScanFile
+			err = WalkMediaLibraryContext(context.Background(), root, map[string]bool{ext: true}, func(_ string, err error) { failures = append(failures, err) }, func(file ScanFile) error { files = append(files, file); return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := []ScanFile{{Path: link, Ext: ext}, {Path: regular, Ext: ext, Size: 7}}
+			info, err := os.Stat(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected[0].Size = info.Size()
+			if !reflect.DeepEqual(files, expected) {
+				t.Fatalf("files=%+v, want %+v", files, expected)
+			}
+			if len(failures) != 1 || !strings.Contains(failures[0].Error(), broken) || !errors.Is(failures[0], os.ErrNotExist) {
+				t.Fatalf("walk errors=%v", failures)
+			}
+		})
 	}
 }

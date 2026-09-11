@@ -99,7 +99,12 @@ func TestSweepStaleDevices_RemovesOnlyStaleRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fresh device lookup err = %v, want it to survive the sweep", err)
 	}
-	if fresh.Name != "New Phone" {
+	var freshName string
+	err = app.DB.QueryRow("SELECT name FROM devices WHERE id = ?", fresh.ID).Scan(&freshName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if freshName != "New Phone" {
 		t.Fatalf("fresh device = %+v, want New Phone", fresh)
 	}
 }

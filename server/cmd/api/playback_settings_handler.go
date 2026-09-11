@@ -127,6 +127,16 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
+	if rawFields == nil {
+		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
+		return
+	}
+	for field := range rawFields {
+		if field != "server_upload_mbps" && field != "hardware_acceleration_device" {
+			helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
+			return
+		}
+	}
 
 	// The body is validated before the lock is taken; only the fields that were
 	// actually sent are decoded here, and the rest are filled in from the row

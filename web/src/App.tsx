@@ -1,7 +1,7 @@
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
-import RouterPending from "./components/app/RouterPending";
+import AppLoadingScreen from "./components/app/AppLoadingScreen";
 
 const router = createRouter({
   routeTree,
@@ -12,7 +12,7 @@ const router = createRouter({
   scrollRestoration: true,
   defaultStructuralSharing: true,
   defaultPreloadStaleTime: 0,
-  defaultPendingComponent: RouterPending,
+  defaultPendingComponent: AppLoadingScreen,
 });
 
 declare module "@tanstack/react-router" {

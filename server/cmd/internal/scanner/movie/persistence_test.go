@@ -13,6 +13,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -30,15 +31,24 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 		callbackObservedCommittedRow = err == nil && movie.ID == movieID
 	}
 
-	resolved := &resolvedMovie{params: database.UpsertMovieParams{
+	resolved := &localMovie{params: database.UpsertMovieParams{
 		Title:     "Committed Movie",
-		FilePath:  "/movies/committed.mkv",
+		FilePath:  filepath.Join(t.TempDir(), "committed.mkv"),
 		FileName:  "committed.mkv",
 		Size:      1,
 		Container: "mkv",
 		MimeType:  helpers.VideoMimeTypes["mkv"],
 	}}
-	err := testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err := os.WriteFile(resolved.params.FilePath, []byte("m"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), resolved.params.FilePath, nil, testScanner.scanner.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resolved.inspection.Close()
+	err = testScanner.scanner.persistLocalMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err == nil {
 		t.Fatal("persist without a video stream unexpectedly succeeded")
 	}
@@ -47,7 +57,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 
 	resolved.streams = movieScannerMetadataFixture("120").Streams
-	err = testScanner.scanner.persistResolvedMovie(context.Background(), newMovieScanContext(nil), resolved)
+	err = testScanner.scanner.persistLocalMovie(context.Background(), newMovieScanContext(nil), resolved)
 	if err != nil {
 		t.Fatalf("persist resolved movie: %v", err)
 	}
@@ -56,7 +66,7 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 }
 
-func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testing.T) {
+func TestMovieScannerUpsertPreservesDescriptiveMetadata(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -81,7 +91,7 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 		t.Fatalf("initial upsert: %v", err)
 	}
 
-	updated, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	updatedID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Moneyball Remastered",
 		FilePath:  path,
 		FileName:  "Moneyball.2011.mkv",
@@ -94,12 +104,16 @@ func TestMovieScannerUpsertPreservesAudienceRatingAndRefreshesMetadata(t *testin
 	if err != nil {
 		t.Fatalf("scanner upsert: %v", err)
 	}
-
-	if updated.Title != "Moneyball Remastered" {
-		t.Fatalf("expected scanner title to overwrite manual title, got %q", updated.Title)
+	updated, err := testScanner.queries.GetMovieByID(ctx, updatedID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !updated.Overview.Valid || updated.Overview.String != "Scanner overview" {
-		t.Fatalf("expected scanner overview to overwrite manual overview, got %+v", updated.Overview)
+
+	if updated.Title != "Moneyball" {
+		t.Fatalf("expected technical upsert to preserve title, got %q", updated.Title)
+	}
+	if !updated.Overview.Valid || updated.Overview.String != "Original overview" {
+		t.Fatalf("expected technical upsert to preserve overview, got %+v", updated.Overview)
 	}
 	if updated.Size != 200 {
 		t.Fatalf("expected scanner-owned size to update to 200, got %d", updated.Size)
@@ -176,14 +190,14 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	testScanner.scanner.tmdb = tmdbStub
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
 
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
-	if len(tmdbStub.searchCalls) != 1 {
-		t.Fatalf("expected 1 TMDB search, got %d", len(tmdbStub.searchCalls))
+	if len(tmdbStub.searchCalls) != 2 {
+		t.Fatalf("expected 2 ambiguous-year TMDB searches, got %d", len(tmdbStub.searchCalls))
 	}
 	if tmdbStub.searchCalls[0].title != "the matrix" {
 		t.Fatalf("TMDB search title = %q, want the matrix", tmdbStub.searchCalls[0].title)
@@ -283,7 +297,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	if err != nil {
 		t.Fatalf("get production companies: %v", err)
 	}
-	if len(companies) != 1 || companies[0].Name != "Warner Bros." || companies[0].TmdbID != 174 {
+	if len(companies) != 1 || companies[0].Name != "Warner Bros." {
 		t.Fatalf("production companies = %+v, want Warner Bros.", companies)
 	}
 
@@ -328,7 +342,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	}
 }
 
-func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *testing.T) {
+func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -389,7 +403,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	scan := newMovieScanContext(nil)
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -397,7 +411,12 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	tmdbStub.detailMovies[1000] = secondDetails
-	scanned, skipped, errCount = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
+	scan = newMovieScanContext(scan.movieIndex)
+	err := os.WriteFile(path, []byte("edited"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanned, skipped, errCount, _ = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 6},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -416,7 +435,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 		RunTime       sql.NullInt64
 		Duration      sql.NullFloat64
 	}{}
-	err := testScanner.db.QueryRowContext(ctx, `
+	err = testScanner.db.QueryRowContext(ctx, `
 		SELECT id, title, tmdb_id, size, year, release_date, certification, language, run_time, duration
 		FROM movies
 		WHERE file_path = ?
@@ -436,48 +455,37 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	if err != nil {
 		t.Fatalf("get movie by path: %v", err)
 	}
-	if movie.Title != "Replace Me Restored" || movie.Size != 6 {
-		t.Fatalf("movie after rescan = title %q size %d, want restored/6", movie.Title, movie.Size)
+	// A confirmed TMDB match is not re-searched by a technical change: the file
+	// moved, not the identity, and re-running enrichment would overwrite every
+	// descriptive field including anything set through the Edit dialog.
+	if movie.Title != "Replace Me" || movie.Size != 6 {
+		t.Fatalf("movie after rescan = title %q size %d, want the first match kept and size 6", movie.Title, movie.Size)
+	}
+	if len(tmdbStub.detailCalls) != 1 {
+		t.Fatalf("detail calls = %v, want the rescan to skip TMDB", tmdbStub.detailCalls)
+	}
+	pending, err := testScanner.queries.HasMovieTmdbRetry(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("has retry: %v", err)
+	}
+	if pending {
+		t.Fatal("rescan re-queued enrichment for a movie that already has a match")
 	}
 
 	genres, err := testScanner.queries.GetGenresByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get genres: %v", err)
 	}
-	if got := movieGenreTags(genres); got != "Drama" {
-		t.Fatalf("genres after rescan = %q, want Drama", got)
+	if got := movieGenreTags(genres); got != "Action" {
+		t.Fatalf("genres after rescan = %q, want the matched Action", got)
 	}
 
 	cast, err := testScanner.queries.GetCastByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get cast: %v", err)
 	}
-	if len(cast) != 1 || cast[0].ArtistName != "Second Actor" || cast[0].Character != "New Role" {
-		t.Fatalf("cast after rescan = %+v, want only second actor", cast)
-	}
-
-	crew, err := testScanner.queries.GetCrewByMovieID(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get crew: %v", err)
-	}
-	if len(crew) != 1 || crew[0].ArtistName != "Second Director" {
-		t.Fatalf("crew after rescan = %+v, want only second director", crew)
-	}
-
-	companies, err := testScanner.queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get production companies: %v", err)
-	}
-	if len(companies) != 1 || companies[0].Name != "New Studio" {
-		t.Fatalf("production companies after rescan = %+v, want New Studio", companies)
-	}
-
-	extras, err := testScanner.queries.GetMovieExtraVideos(ctx, movie.ID)
-	if err != nil {
-		t.Fatalf("get extra videos: %v", err)
-	}
-	if len(extras) != 1 || extras[0].Title != "New Trailer" || extras[0].Type != "special_feature" || extras[0].Site != "vimeo" {
-		t.Fatalf("extra videos after rescan = %+v, want mapped new featurette", extras)
+	if len(cast) != 1 || cast[0].ArtistName != "First Actor" {
+		t.Fatalf("cast after rescan = %+v, want the matched first actor", cast)
 	}
 
 	videoStreams, err := testScanner.queries.GetVideoStreamsByMovieID(ctx, movie.ID)
@@ -503,6 +511,53 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	if len(chapters) != 1 || chapters[0].Title != "Only New Chapter" || chapters[0].StartTime != 30 {
 		t.Fatalf("chapters after rescan = %+v, want one new chapter", chapters)
 	}
+
+	// Refreshing TMDB-owned relationships is the Identify path's job, and that
+	// is the only path that still replaces them.
+	err = ApplyTmdbMetadata(ctx, testScanner.queries, movie.ID, &secondDetails)
+	if err != nil {
+		t.Fatalf("apply tmdb metadata: %v", err)
+	}
+
+	genres, err = testScanner.queries.GetGenresByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get genres: %v", err)
+	}
+	if got := movieGenreTags(genres); got != "Drama" {
+		t.Fatalf("genres after identify = %q, want Drama", got)
+	}
+
+	cast, err = testScanner.queries.GetCastByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get cast: %v", err)
+	}
+	if len(cast) != 1 || cast[0].ArtistName != "Second Actor" || cast[0].Character != "New Role" {
+		t.Fatalf("cast after identify = %+v, want only second actor", cast)
+	}
+
+	crew, err := testScanner.queries.GetCrewByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get crew: %v", err)
+	}
+	if len(crew) != 1 || crew[0].ArtistName != "Second Director" {
+		t.Fatalf("crew after identify = %+v, want only second director", crew)
+	}
+
+	companies, err := testScanner.queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get production companies: %v", err)
+	}
+	if len(companies) != 1 || companies[0].Name != "New Studio" {
+		t.Fatalf("production companies after identify = %+v, want New Studio", companies)
+	}
+
+	extras, err := testScanner.queries.GetMovieExtraVideos(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get extra videos: %v", err)
+	}
+	if len(extras) != 1 || extras[0].Title != "New Trailer" || extras[0].Type != "special_feature" || extras[0].Site != "vimeo" {
+		t.Fatalf("extra videos after identify = %+v, want mapped new featurette", extras)
+	}
 }
 
 func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
@@ -510,7 +565,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 	defer testScanner.db.Close()
 
 	ctx := context.Background()
-	movie, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	movieID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "Entity Cache",
 		FilePath:  "/movies/Entity.Cache.2024.mkv",
 		FileName:  "Entity.Cache.2024.mkv",
@@ -521,6 +576,10 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("upsert movie: %v", err)
+	}
+	movie, err := testScanner.queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	firstCompanies := []tmdb.ProductionCompany{
@@ -559,7 +618,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 		t.Fatalf("production companies count = %d, want 1", len(companies))
 	}
 	company := companies[0]
-	if company.Name != "New Studio" || !company.Logo.Valid || company.Logo.String != "/new-logo.png" || !company.Country.Valid || company.Country.String != "GB" {
+	if company.Name != "New Studio" {
 		t.Fatalf("production company = %+v, want refreshed mutable metadata", company)
 	}
 
@@ -571,7 +630,7 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 		t.Fatalf("extra videos count = %d, want 1", len(extras))
 	}
 	extra := extras[0]
-	if extra.Title != "New Featurette" || extra.Key != "new-key" || extra.Type != "special_feature" || extra.Site != "vimeo" || !extra.Official {
+	if extra.Title != "New Featurette" || extra.Key != "new-key" || extra.Type != "special_feature" || extra.Site != "vimeo" {
 		t.Fatalf("extra video = %+v, want refreshed mutable metadata", extra)
 	}
 }
@@ -595,47 +654,46 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Test Artist"
 		profilePath := "/test/profile.jpg"
 
-		artist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, name, profilePath)
+		artist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
 
-		if artist == nil {
-			t.Fatal("Expected non-nil artist")
+		if artist == 0 {
+			t.Fatal("Expected nonzero artist ID")
 		}
 
-		if artist.Name != name {
-			t.Errorf("Expected artist name %q, got %q", name, artist.Name)
+		var storedName string
+		var storedTmdbID int64
+		err = testScanner.db.QueryRow("SELECT name, tmdb_id FROM artist WHERE id = ?", artist).Scan(&storedName, &storedTmdbID)
+		if err != nil {
+			t.Fatal(err)
 		}
-
-		if artist.TmdbID != int64(tmdbID) {
-			t.Errorf("Expected TMDB ID %d, got %d", tmdbID, artist.TmdbID)
+		if storedName != name || storedTmdbID != int64(tmdbID) {
+			t.Fatalf("stored artist = %q/%d, want %q/%d", storedName, storedTmdbID, name, tmdbID)
 		}
 	})
 
 	t.Run("upsert refreshes mutable metadata", func(t *testing.T) {
 		tmdbID := 22222
 
-		firstArtist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, "Old Artist", "")
+		firstArtist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, "Old Artist", "")
 		if err != nil {
 			t.Fatalf("first getOrCreateArtist failed: %v", err)
 		}
-		if firstArtist == nil {
+		if firstArtist == 0 {
 			t.Fatal("first getOrCreateArtist returned nil artist")
 		}
 
-		secondArtist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, "New Artist", "/new/profile.jpg")
+		secondArtist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, "New Artist", "/new/profile.jpg")
 		if err != nil {
 			t.Fatalf("second getOrCreateArtist failed: %v", err)
 		}
-		if secondArtist == nil {
+		if secondArtist == 0 {
 			t.Fatal("second getOrCreateArtist returned nil artist")
 		}
-		if secondArtist.ID != firstArtist.ID {
-			t.Fatalf("artist ID = %d, want cached ID %d", secondArtist.ID, firstArtist.ID)
-		}
-		if secondArtist.Name != "New Artist" || !secondArtist.Profile.Valid || secondArtist.Profile.String != "/new/profile.jpg" {
-			t.Fatalf("artist = %+v, want refreshed name/profile", secondArtist)
+		if secondArtist != firstArtist {
+			t.Fatalf("artist ID = %d, want cached ID %d", secondArtist, firstArtist)
 		}
 
 		var name string
@@ -654,12 +712,17 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "No Profile Artist"
 		profilePath := ""
 
-		artist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, name, profilePath)
+		artist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
 
-		if artist.Profile.Valid {
+		var profile sql.NullString
+		err = testScanner.db.QueryRow("SELECT profile FROM artist WHERE id = ?", artist).Scan(&profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if profile.Valid {
 			t.Error("Expected profile to be invalid for empty path")
 		}
 	})
@@ -713,7 +776,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 	}
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
 
-	scanned, skipped, errCount := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: matrixPath, Ext: "mkv", Size: 5},
 		{Path: wickPath, Ext: "mkv", Size: 6},
 	})
@@ -721,7 +784,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, testScanner.db, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
+	if got := scannertest.CountRows(t, testScanner.db, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
 		t.Fatalf("artist rows for shared actor = %d, want 1", got)
 	}
 
@@ -735,7 +798,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 	}
 
 	// Both movies' cast rows must reference the single shared artist row.
-	if got := countScannerRows(t, testScanner.db, `
+	if got := scannertest.CountRows(t, testScanner.db, `
 		SELECT COUNT(*)
 		FROM cast AS c
 		INNER JOIN artist AS a ON a.id = c.artist_id

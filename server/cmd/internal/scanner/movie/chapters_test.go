@@ -14,8 +14,7 @@ func TestChapterStartTimeSeconds(t *testing.T) {
 		chapter ffprobe.Chapter
 		want    int64
 	}{
-		{"prefers start_time seconds over raw ffprobe ticks", ffprobe.Chapter{StartTime: "573.114208", Start: 573114208}, 573},
-		{"falls back to raw start when start_time missing", ffprobe.Chapter{Start: 12000}, 12},
+		{"prefers start_time seconds over raw ffprobe ticks", ffprobe.Chapter{StartTime: "573.114208"}, 573},
 		{"returns zero when chapter starts at zero", ffprobe.Chapter{StartTime: "0.000000"}, 0},
 	}
 

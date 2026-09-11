@@ -1,391 +1,309 @@
 # Igloo
 
-Igloo is a self-hosted media center for personal movie and music libraries. It is built for people who want to own their media, run their own server, and use a polished playback experience without depending on a managed cloud platform.
+Igloo is a self-hosted media center for personal movie and music libraries, with a Go server and a React web client. It is designed for home servers and small personal infrastructure, usually on a private network or Tailscale tailnet.
 
-Accessibility is one of Igloo's core design values, especially strong screen reader support, but Igloo is not meant to be a media platform only for blind users. The goal is a media center that feels good for everyone: fast, attractive, reliable, comfortable to navigate, and usable whether someone is browsing visually, using a keyboard, navigating with a remote, or relying on assistive technology.
+Accessibility is a core design goal: keyboard navigation, visible focus, screen reader labels, skip links, and reduced-motion behavior are part of the web client's design rules. See the [design system](docs/design-system.md) for the concrete UI requirements.
 
-Igloo is intended to run on user-managed hardware, usually inside a private network or Tailscale tailnet. It is pre-v1 software, so API, database, configuration, and client behavior may change before a stable v1 release.
+Igloo is **pre-production**. APIs, database schema, configuration, and client behavior may change before v1, without backward compatibility or database migrations.
 
-## What This Repository Contains
+## Contents
 
-- `server/`: Go backend, chi API, SQLite startup schema, media scanning, playback endpoints, HLS support, database access, and FFmpeg/ffprobe integration.
-- `web/`: React web client for browser-based library management, administration, and playback.
-- `docs/`: OpenAPI artifacts, OpenAPI maintenance notes, and FFmpeg operational notes.
+- [Overview and current status](#overview-and-current-status)
+- [Supported platforms and limitations](#supported-platforms-and-limitations)
+- [Getting started](#getting-started)
+- [Configuration and playback](#configuration-and-playback)
+- [Building and running a binary](#building-and-running-a-binary)
+- [Development reference](#development-reference)
+  - [Repository structure](#repository-structure)
+  - [Commands](#commands)
+  - [Database and sqlc](#database-and-sqlc)
+  - [API documentation](#api-documentation)
+  - [Testing and CI](#testing-and-ci)
+  - [Browser tests](#browser-tests)
 
-Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
+## Overview and current status
 
-## Current Status
+- **Movies:** library scanning, local metadata and optional TMDB enrichment, posters and backdrops, trailers where available, cast and crew, technical stream details, and admin metadata editing. Playback includes direct streaming, HLS remuxing and transcoding, supported text subtitles, audio/subtitle selection, watch progress, likes, and playlists. HLS remains a work in progress.
+- **Music:** library scanning, albums, tracks, musicians, cover art, optional Spotify enrichment, multi-artist credits, collaborative playlists, liked tracks, playback, and listening statistics.
+- **Shared playback:** watch rooms synchronize movie playback over WebSockets, with direct-stream and HLS playback paths.
+- **Accounts and administration:** session-based sign-in, admin user management, account settings and avatars, profile PINs, Quick Connect device pairing, device listing/renaming/revocation, server and library settings, and per-user playback preferences.
 
-What works today:
+Library search covers movies, albums, musicians, and tracks. The Go server serves the web client in production; Vite serves it during development.
 
-- Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, cast/crew details, technical stream details, and admin metadata editing.
-- Movie playback through direct streaming, remuxed HLS, transcoded HLS, WebVTT subtitle extraction, audio/subtitle track selection, watch progress, likes, and movie playlists.
-- Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, multi-artist track relationships, music playlists with collaborators, liked tracks, playback, and listening statistics.
-- Library-wide search across movies, albums, musicians, and tracks.
-- Watch rooms for shared movie playback, including direct stream and HLS room playback with WebSocket synchronization.
-- Session-based accounts, admin user management, user account settings, avatar upload, library path settings, general server settings, and per-user playback preferences.
-- A React web client served by the Go server in production and by Vite during development.
-- OpenAPI documentation in `docs/openapi.json`, with a route coverage test to keep the spec aligned with the Go router.
+## Supported platforms and limitations
+
+The supported server platforms are **Linux x64 (AMD64)** and **macOS ARM64 (Apple Silicon)**. Windows, Docker deployment, and other Linux architectures are not supported. Production builds are native to the host platform.
 
 Current limitations:
 
-- TV shows and photos have web UI placeholders. TV library paths can be configured, but scanning and playback are not implemented yet.
-- APIs may still change before v1.
-- Metadata providers are optional; without TMDB or Spotify, Igloo relies on local file metadata.
-- Full backend tests require a SQLite build with FTS5 enabled.
+- HLS transcoding and decoding are works in progress. Playback depends on source media, browser capabilities, FFmpeg support, and host hardware; see [media behavior and operational notes](docs/ffmpeg.md).
+- TV shows and photos have UI placeholders. TV library paths can be stored, but TV scanning and playback are not implemented.
+- Automatic filesystem watching is not implemented, even though an `ENABLE_WATCHER` setting exists. Use startup or manual library scans.
+- Jellyfin and Immich fields are stored settings, not working integrations.
+- TMDB and Spotify enrichment are optional. Without them, scanning uses local file metadata and movie filename defaults.
+- Native TV clients, including the planned Android TV / Google TV app, are outside this repository.
 
-## Quick Start
+## Getting started
 
-Use a packaged binary for your platform:
+Start from source; there are currently no published GitHub releases to download.
+
+### Prerequisites
+
+Install these tools on a supported platform and make them available on your `PATH`:
+
+- Git and Make.
+- Go `1.26.2`, matching [server/go.mod](server/go.mod).
+- A C compiler for CGO and SQLite. The Make targets enable CGO and apply the `sqlite_fts5` build tag required by search and backend tests.
+- `sqlc` for generating database access code.
+- Bun for web dependencies and scripts.
+- `ffmpeg` and `ffprobe` for development and backend tests. Embedded media payloads and `zstd` are only needed for [production binary builds](#building-and-running-a-binary).
+
+### Set up the checkout
 
 ```bash
-tar -xzf igloo-server-linux-amd64.tar.gz
-cd igloo-server-linux-amd64
-```
-
-On Apple Silicon, use the `igloo-server-darwin-arm64.tar.gz` package instead.
-
-Before first start, copy `.env.example` to `.env` in the directory where you will start the binary:
-
-```bash
+git clone https://github.com/jibanez74/Igloo.git
+cd Igloo
 cp .env.example .env
+cd web
+bun install --frozen-lockfile
+cd ..
 ```
 
-Adjust these values before running Igloo:
+Edit the root `.env` before starting the backend:
 
-- Set `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, and `DEFAULT_ADMIN_PASSWORD`.
-- Set `SESSION_COOKIE_SECURE=false` when testing over plain HTTP, such as `http://localhost:8080`.
-- Keep `SESSION_COOKIE_SECURE=true` when running behind HTTPS, including Tailscale Serve or a reverse proxy.
-- Optionally set `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` to seed library paths on first launch. You can also configure movie, TV show, and music paths later from Settings.
-- Each configured media directory must already exist. Igloo will not create empty media library directories.
+- Choose `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, and a nonempty `DEFAULT_ADMIN_PASSWORD`. These create the initial administrator; use that email and password to sign in.
+- Keep `PORT=8080` for the development workflow below and `SESSION_COOKIE_SECURE=false` for local plain HTTP. Use `true` when serving over HTTPS.
+- Optionally set `MOVIES_DIR` and `MUSIC_DIR` to existing directories on the server. Leave unused library paths blank. You can configure paths from Settings after signing in.
 
-Start Igloo from the directory that contains `.env`:
+The [configuration reference](#configuration-and-playback) explains optional metadata credentials, storage paths, and which environment values apply only on first launch.
 
-```bash
-./igloo-server
-```
+### Start and open Igloo
 
-Igloo listens on `PORT`, defaulting to `8080`.
-
-## Configuration
-
-Igloo reads environment variables from the process environment and from one optional `.env` file in the current working directory. Existing process environment variables win over values loaded from `.env`. The `.env` file is runtime configuration only: it is not embedded into the binary during `make build`.
-
-The current working directory matters. When you run `./igloo-server`, Igloo looks for `./.env` relative to the directory you started the process from, not automatically next to the executable. For packaged releases, start the binary from the extracted package directory that contains `.env`, or provide configuration through the shell or a service manager.
-
-Use [`.env.example`](.env.example) as the canonical runtime reference. The most important variables are:
-
-| Variable | Purpose |
-| --- | --- |
-| `PORT` | HTTP listener port, default `8080` |
-| `DB_PATH` | SQLite database file, default `db/igloo.db`; always read at startup |
-| `STATIC_DIR` | First-run default for downloaded artwork and uploaded static files, default `static` |
-| `LOGS_DIR` | First-run default for file logs, default `logs` |
-| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace, default `transcode` |
-| `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
-| `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user; `DEFAULT_ADMIN_PASSWORD` is required |
-| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
-| `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
-| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
-| `JELLYFIN_API_KEY` | First-run default for optional Jellyfin integration settings; not required for current core features |
-| `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
-| `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR`; defaults to `false` unless `DEBUG=true` |
-| `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
-| `HLS_MAX_CPU_TRANSCODES` | Optional startup override for concurrent CPU transcodes; when unset, Igloo uses `max(1, NumCPU/4)` |
-| `DEBUG` | Optional startup flag for debug logging |
-
-The comments in [`.env.example`](.env.example) describe which values are first-run seeds and which stay startup-driven.
-
-Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, metadata, feature, hardware acceleration, and media library settings from Settings after first launch. `DB_PATH`, `PORT`, `SESSION_COOKIE_SECURE`, `LOG_TO_STDOUT`, `HLS_MAX_CPU_TRANSCODES`, and `DEBUG` stay startup-driven.
-
-## Hardware Acceleration
-
-CPU transcoding is the portable default. `HARDWARE_ACCELERATION_DEVICE=apple` enables Apple VideoToolbox on macOS builds. `intel` and `nvidia` are Linux hardware targets and require the corresponding host drivers and device access.
-
-At startup, Igloo probes FFmpeg capabilities and falls back to CPU when the selected hardware path is unavailable. For implementation details, hardware acceleration behavior, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
-
-## Development Setup
-
-Prerequisites:
-
-- Go `1.26.2`, matching `server/go.mod`
-- CGO enabled, with a working C compiler
-- SQLite support with FTS5 enabled; use the documented Make and Go test commands so the `sqlite_fts5` build tag is applied
-- `sqlc` on your `PATH`
-- Bun for the web client
-- `ffmpeg` and `ffprobe` on your `PATH` for `make dev` and backend tests
-- Local embedded ffmpeg/ffprobe payload files only when building release binaries
-
-Create or update the root `.env` from the tracked example:
-
-```bash
-cp .env.example .env
-```
-
-Adjust these values before first run:
-
-- Set `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, and `DEFAULT_ADMIN_PASSWORD`.
-- Set `SESSION_COOKIE_SECURE=false` for local plain HTTP development, such as `http://localhost:8080`.
-- Optionally set `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` if you want first-run library paths seeded from `.env`.
-
-Set `DEBUG=true` if you want verbose backend logs during development.
-
-Start the web client:
+In one terminal, from the repository root:
 
 ```bash
 cd web
-bun install
 bun run dev
 ```
 
-Vite runs on `http://localhost:3000` and proxies `/api` requests to the Go server.
-
-Start the backend in another terminal:
+In a second terminal, from the repository root:
 
 ```bash
 make dev
 ```
 
-`make dev` runs sqlc generation, creates a placeholder web asset directory for tests/development, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
+Vite runs at `http://localhost:3000` and proxies `/api` to the backend on port `8080`. `make dev` generates sqlc code, prepares a placeholder web asset directory, builds the development API binary, and runs it from the repository root with `VITE_DEV_SERVER=http://localhost:3000`.
 
-Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so the recommended local workflow is to keep one root `.env` and edit app-owned values from Settings after first launch. Default runtime directories resolve consistently with production `make start`.
+Open **http://localhost:3000** and sign in with the administrator credentials from `.env`. In **Settings → Libraries**, enter the movie and music paths, save them, then use **Scan movies library** or **Scan music library**. Paths refer to the server's filesystem and must exist and be readable by the server process. Configured libraries are also scanned at backend startup. Wait for scanning to finish before browsing or playing imported media; run another scan after adding or changing files.
 
-## Building Binaries
+## Configuration and playback
 
-Release builds embed the web client plus platform-specific ffmpeg and ffprobe payloads. The payload files are intentionally ignored by git because they are large.
+Igloo loads one optional `.env` from its **current working directory**. Process environment variables take precedence. The file is runtime configuration and is never embedded into a build. Make targets do not create, copy, rewrite, or delete `.env`; both `make dev` and `make start` use the repository root as the runtime working directory.
 
-Required payload paths:
+[.env.example](.env.example) is a starting template, not an exhaustive list. Configuration has three lifetimes:
 
-| Platform | ffmpeg | ffprobe |
+- **Startup:** read when the process starts.
+- **First-run Settings seed:** saved only when the database has no Settings row. On later starts the database wins; edit these values in Settings.
+- **Admin bootstrap:** used when the database has no administrator. Changing these values does not reset an existing account.
+
+| Variable | Lifetime | Purpose and default |
 | --- | --- | --- |
-| Linux AMD64 | `server/cmd/internal/ffmpeg/ffmpeg_linux_amd64` | `server/cmd/internal/ffprobe/ffprobe_linux_amd64` |
+| `PORT` | Startup | HTTP listener port; `8080` |
+| `DB_PATH` | Startup | SQLite file; `db/igloo.db` |
+| `SESSION_COOKIE_SECURE` | Startup | `false` for plain HTTP; set `true` behind HTTPS, including Tailscale Serve or a reverse proxy |
+| `LOG_TO_STDOUT` | Startup | Send logs to stdout instead of file logs; defaults to `DEBUG` when unset (`false` normally). The example explicitly sets `false` |
+| `DEBUG` | Startup | Debug logging; `false` |
+| `HLS_MAX_CPU_TRANSCODES` | Startup | Positive limit on concurrent HLS sessions encoding video or audio, including hardware transcodes; defaults to `max(1, NumCPU/4)` |
+| `HLS_MAX_SESSIONS_PER_USER` | Startup | Positive personal HLS session limit per user, including pending creations; default `3`. Covers remux and transcode sessions; watch rooms are separate |
+| `IGLOO_FFMPEG_PATH`, `IGLOO_FFPROBE_PATH` | Startup, `externalbin` builds only | Override media executable resolution; otherwise use `ffmpeg` and `ffprobe` on `PATH`. Make's development/test prerequisites still check `PATH` |
+| `VITE_DEV_SERVER` | Startup | Forward non-API browser requests to Vite; set by `make dev`, cleared by `make start` |
+| `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Admin bootstrap | Initial administrator; password required. Set all three explicitly in `.env` |
+| `STATIC_DIR` | Settings seed | Downloaded artwork and uploaded static files; `static` |
+| `LOGS_DIR` | Startup | File logs; `logs` |
+| `TRANSCODE_DIR` | Settings seed | Temporary HLS workspace; `transcode` |
+| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Settings seed | Existing library directories; empty by default. TV paths are placeholders |
+| `TMDB_API_KEY` | Settings seed | Optional movie metadata enrichment; empty by default |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Settings seed | Optional music metadata enrichment; empty by default |
+| `JELLYFIN_API_KEY` | Settings seed | Stored Jellyfin setting; no working integration |
+| `DOWNLOAD_IMAGES` | Settings seed | Image downloading setting; `false` |
+| `ENABLE_WATCHER` | Settings seed | Stored watcher setting; `false`. Automatic watching is unimplemented |
+| `HARDWARE_ACCELERATION_DEVICE` | Settings seed | `cpu` (default), `apple`, `nvidia`, or `intel` |
+
+Relative runtime paths resolve from the working directory. Igloo creates its application storage directories as needed, but does not create media library directories. The process needs permission to write its database, static files, logs, and transcode workspace. Allow space for temporary HLS output under the configured transcode directory.
+
+### Playback and hardware acceleration
+
+Direct playback serves the original file without FFmpeg when eligible. Other playback paths use FFmpeg to remux, convert audio, or transcode video into HLS. Supported text subtitles can be converted to WebVTT; bitmap subtitles such as PGS and DVD subtitles cannot be converted this way. Alternate audio tracks can require HLS even when the video itself is directly playable.
+
+CPU transcoding is the default. `apple` uses VideoToolbox on macOS; `intel` and `nvidia` target Linux hosts with the corresponding drivers and device access. Igloo probes FFmpeg capabilities at startup and falls back to CPU when the selected hardware path is unavailable. Hardware support still depends on the host and FFmpeg build.
+
+The authoritative [FFmpeg documentation](docs/ffmpeg.md) covers scanning, direct-play eligibility and fallback, HLS sessions and limits, hardware decoding/encoding, HDR tone mapping, audio selection, subtitles, and troubleshooting.
+
+## Building and running a binary
+
+Production builds embed the web client and platform-specific FFmpeg/ffprobe payloads. In addition to the source setup prerequisites, install `zstd` and supply **Jellyfin FFmpeg** payloads for the current supported platform. Use FFmpeg and ffprobe from the same stable Jellyfin release, following the [binary strategy](docs/ffmpeg.md#binary-strategy); do not substitute generic upstream release payloads. These large files are intentionally ignored by Git.
+
+| Platform | FFmpeg payload | ffprobe payload |
+| --- | --- | --- |
+| Linux x64 | `server/cmd/internal/ffmpeg/ffmpeg_linux_amd64` | `server/cmd/internal/ffprobe/ffprobe_linux_amd64` |
 | macOS ARM64 | `server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64` | `server/cmd/internal/ffprobe/ffprobe_darwin_arm64` |
 
-Build the complete binary for the current supported platform:
+From the repository root:
 
 ```bash
 make build
 ```
 
-`make build` runs sqlc generation, builds the web client with Bun, copies the web bundle into `server/cmd/api/webdist`, and writes the production binary to `server/dist/igloo-server`. Builds are native-only: Linux AMD64 builds must run on Linux AMD64, and macOS ARM64 builds must run on macOS ARM64. Build-time output includes embedded web assets and media tool payloads, but not `.env` values.
+This compresses the media payloads into `.zst` files, generates sqlc code, builds the web client, copies `web/dist` into `server/cmd/api/webdist`, and writes `server/dist/igloo-server`. Build Linux x64 on Linux x64 and macOS ARM64 on macOS ARM64. The binary embeds web assets and compressed media tools; it extracts or reuses cached media tools and validates them at startup, with temporary-directory extraction as a fallback (see the [binary strategy](docs/ffmpeg.md#binary-strategy)). Host hardware drivers are still required for acceleration.
 
-Run the built application in the background:
+Run the binary in the foreground from the repository root to load the root `.env`:
+
+```bash
+./server/dist/igloo-server
+```
+
+Open `http://localhost:8080` with the default port. If you move the executable, start it from the directory containing your runtime `.env`, or provide configuration through the shell or a service manager. Igloo does not automatically look for `.env` next to the executable.
+
+Alternatively, build and run in the background from the repository root:
 
 ```bash
 make start
 ```
 
-`make start` rebuilds the app, runs `server/dist/igloo-server` from the repo root, and writes its PID and log file under `server/dist/`. It sets only `VITE_DEV_SERVER=` so the embedded web app is served. Because the process starts from the repo root, the root `.env` is loaded. Startup-only configuration comes from the shell environment and `.env`; Settings-owned values come from the database after first launch. Stop that process with:
+`make start` rebuilds the application, clears `VITE_DEV_SERVER` to serve embedded assets, and writes `server/dist/igloo-server.pid` and `server/dist/igloo-server.log`. Stop that process with:
 
 ```bash
 make stop
 ```
 
-## Useful Commands
+## Development reference
 
-From the repository root:
+### Repository structure
+
+| Path | Contents |
+| --- | --- |
+| [server/](server/) | Go backend, chi router, SQLite, scanning, playback, and media tools |
+| [web/](web/) | React/Vite browser client and frontend tests |
+| [docs/](docs/) | Design system, media documentation, and API contract/maintenance notes |
+
+Follow the existing [repository instructions](AGENTS.md), [backend instructions](server/AGENTS.md), and [web instructions](web/AGENTS.md). The [design system](docs/design-system.md), [media documentation](docs/ffmpeg.md), and [OpenAPI contract](docs/openapi.json) are authoritative.
+
+### Commands
+
+Run these from the **repository root**:
 
 | Command | Description |
 | --- | --- |
-| `make dev` | Generate sqlc code and run the API for local development using host ffmpeg/ffprobe |
-| `make build` | Build the full native binary with embedded web assets and media tools |
-| `make start` | Build and run the full application in the background |
-| `make stop` | Stop the application started by `make start` |
-| `make clean` | Remove build artifacts while preserving `.env`, database, media, and runtime data |
-| `make check` | Run OpenAPI checks, backend tests, web lint, web unit tests, and web build/type-check |
-| `make test` | Run backend and web unit tests |
-| `make test-server` | Run backend tests with the required build tags and placeholder web assets |
-| `make test-web` | Run Vitest |
-| `make lint-web` | Run ESLint |
-| `make build-web` | Build and type-check the web client |
-| `make test-openapi` | Lint the OpenAPI contract and run the route coverage test |
-| `make lint-openapi` | Lint `docs/openapi.json` with Redocly |
-| `make generate-openapi` | Generate committed frontend TypeScript schemas from OpenAPI |
-| `make check-openapi` | Verify generated frontend schemas have no drift |
-| `make preview-openapi` | Build and serve a local OpenAPI reference at `127.0.0.1:8081` |
+| `make dev` | Generate sqlc code and run the development API using host media tools |
+| `make dev-profile` | Development API with admin-only pprof endpoints at `/api/debug/pprof` |
+| `make build` | Build a native binary with embedded web assets and media tools |
+| `make start` / `make stop` | Build/start or stop the background application |
+| `make clean` | Stop the background app and remove build artifacts; preserve `.env`, database, media, and runtime data |
+| `make generate` | Regenerate database access code with sqlc |
+| `make check` | OpenAPI lint/coverage and generated-type checks, backend lint/tests, web lint/tests, and web build/type-check |
+| `make test` | Backend and web unit tests |
+| `make lint-server` | Go vet and whole-program dead-code reachability check |
+| `make test-server` | Backend tests with CGO, `externalbin sqlite_fts5`, and placeholder web assets |
+| `make test-tmdb-integration` | Live TMDB tests; requires `TMDB_API_KEY` in the process environment |
+| `make test-web` / `make lint-web` / `make build-web` | Vitest, ESLint, or web build/type-check |
+| `make test-openapi` | OpenAPI lint and registered-route coverage test |
+| `make lint-openapi` | Redocly lint for `docs/openapi.json` |
+| `make generate-openapi` / `make check-openapi` | Generate frontend schemas or check committed output for drift |
+| `make preview-openapi` | Build and serve API reference HTML at `127.0.0.1:8081` |
 
-From `web/`:
+Run these from **web/**:
 
 | Command | Description |
 | --- | --- |
-| `bun run dev` | Start Vite on port `3000` |
-| `bun run build` | Build the production bundle and run TypeScript checking |
-| `bun run build:analyze` | Build with bundle visualizer output under `web/dist/` and run TypeScript checking |
-| `bun run lint` | Run ESLint |
-| `bun run generate:openapi` | Generate `src/types/openapi.gen.ts` from the authoritative OpenAPI contract |
-| `bun run check:openapi` | Regenerate schemas and fail when the committed output differs |
-| `bun run lint:openapi` | Lint the authoritative OpenAPI contract |
-| `bun run preview:openapi` | Build and serve temporary local API reference HTML |
-| `bun run test` | Run Vitest |
-| `bun run test:e2e` | Run all Playwright specs against an existing server |
-| `bun run test:e2e:login` | Run Playwright login screen checks against an existing server |
-| `bun run test:e2e:account-settings` | Run Playwright account settings checks against an existing server |
-| `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
-| `bun run test:e2e:libraries-settings` | Run Playwright library settings checks against an existing server |
-| `bun run test:e2e:user-settings` | Run Playwright admin user settings checks against an existing server |
-| `bun run test:e2e:movies` | Run Playwright movie page checks against an existing server |
-| `bun run test:e2e:movies:index` | Run the mocked Playwright movie index checks against a local Vite frontend |
-| `bun run test:e2e:movie-extra-videos` | Run the mocked Playwright movie extra videos checks (section + YouTube player) against a local Vite frontend |
-| `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
-| `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
-| `bun run preview` | Preview the production build |
-| `bun run doctor` | Run React Doctor against the web app |
+| `bun run dev` | Vite development server on port `3000` |
+| `bun run typecheck` / `bun run build` | TypeScript checking, or checking plus production build |
+| `bun run build:analyze` | Build with bundle visualization in `web/dist/bundle-analysis.html` |
+| `bun run lint` / `bun run test` / `bun run test:coverage` | ESLint, Vitest, or Vitest with coverage |
+| `bun run generate:openapi` / `bun run check:openapi` | Generate/check `src/types/openapi.gen.ts` |
+| `bun run lint:openapi` / `bun run preview:openapi` | Lint the API contract or serve a temporary API reference |
+| `bun run test:e2e` | Playwright specs; default configuration starts the frontend and mock API |
+| `bun run test:e2e:boot` | Build production assets and test startup/reloads through Vite preview and the mock API |
+| `bun run preview` | Preview an existing production build |
+| `bun run doctor` | React Doctor analysis |
 
-Additional Playwright specs currently cover home, movie details, music index and tracks, search, trailer playback, playback settings, head metadata, motion, and browser issue checks. Run an individual spec with `bun run test:e2e -- e2e/<name>.spec.ts`.
+### Database and sqlc
 
-### Login E2E Checks
+SQLite runs in WAL mode. [server/sqlc/schema.sql](server/sqlc/schema.sql) is the schema source of truth and embedded startup schema; queries live in [server/sqlc/queries/](server/sqlc/queries/). Generated access code lives in `server/cmd/internal/database/`.
 
-The Playwright login suite targets an already-running Igloo instance. It verifies the login form, invalid credentials, UI sign-in redirects, safe redirect handling, responsive layout, accessibility, and browser console cleanliness.
+Modify the current schema directly during pre-production; do not add migrations or manually edit generated code. After changing schema or queries, run `make generate` from the repository root. It runs `sqlc generate` in `server/sqlc`.
+
+### API documentation
+
+The manually maintained [OpenAPI contract](docs/openapi.json) covers registered `/api` routes, including JSON endpoints, static files, media streams, HLS playlists and segments, subtitles, and the watch-room WebSocket. Read it before changing API behavior or frontend API calls/types, and update it whenever the contract changes.
+
+After API changes, run `make generate-openapi` when schemas change and `make test-openapi check-openapi` to check the contract, route coverage, and generated types. See [OpenAPI maintenance](docs/openapi-maintenance.md) for the workflow.
+
+### Testing and CI
+
+Run `make check` after every backend change, as required by [backend instructions](server/AGENTS.md), and `make lint-web test-web build-web` for frontend changes. `make check` runs the combined contract, generated-type, backend lint/test, and frontend lint/test/build checks. Backend Make targets supply the required FTS5 and external-media build tags.
+
+[GitHub Actions](.github/workflows/ci.yml) runs backend vet/dead-code checks and tests, OpenAPI lint/route coverage/generated-type checks, and frontend lint, generated-type checks, unit tests, and type-check/build. It also installs Chromium and runs a **separate production-startup browser test**, which is not included in `make check`. No CI job publishes binaries.
+
+Live TMDB integration tests are outside the default suite. From the repository root:
 
 ```bash
-cd web
-E2E_BASE_URL=http://localhost:3000 \
-E2E_ADMIN_EMAIL=admin@example.com \
-E2E_ADMIN_PASSWORD=AdminPassword \
+TMDB_API_KEY=your_tmdb_v3_key make test-tmdb-integration
+```
+
+### Browser tests
+
+Install Playwright Chromium once from `web/`:
+
+```bash
+bun x playwright install --with-deps chromium
+```
+
+With `E2E_BASE_URL` **unset**, Playwright starts a mock API on `127.0.0.1:8080` and Vite on `127.0.0.1:3000`; it does not start the Go backend. These ports must be free, or set `E2E_WEB_PORT` and `E2E_MOCK_API_PORT`. Run all specs with `bun run test:e2e`, or one spec with `bun run test:e2e -- e2e/<name>.spec.ts`. Fixture-dependent live suites need the configuration below; a default run does not exercise all real-server behavior.
+
+For the production-startup check, run `bun run test:e2e:boot`. To test an already-built web bundle as CI does, use `E2E_PRODUCTION=1 bun run test:e2e e2e/boot.spec.ts`. Leave `E2E_BASE_URL` unset for these checks so Playwright starts Vite preview and the mock API.
+
+For live suites, start Igloo separately and configure the test shell once. From `web/`, replacing the credentials with your existing administrator's:
+
+```bash
+export E2E_BASE_URL=http://localhost:8080
+export E2E_ADMIN_EMAIL=admin@example.com
+export E2E_ADMIN_PASSWORD='your-admin-password'
 bun run test:e2e:login
 ```
 
-When omitted, Playwright defaults to `E2E_BASE_URL=http://127.0.0.1:3000`, `E2E_ADMIN_EMAIL=admin@example.com`, and `E2E_ADMIN_PASSWORD=AdminPassword`.
+An explicit `E2E_BASE_URL` disables both managed servers; the URL must serve the frontend and its `/api` requests. A development frontend at `http://localhost:3000` with the Go backend running also works. E2E credentials default to `admin@example.com` / `AdminPassword`; these test defaults do not configure a real Igloo account.
 
-### Movies E2E Checks
+Suite commands below run from `web/` and share that setup where a live server is needed:
 
-The live Playwright movies suite targets an already-running Igloo instance. It logs in through the real backend and verifies movie page navigation, liked movies access, and tab transition behavior.
+| Command | Scope and requirements |
+| --- | --- |
+| `bun run test:e2e:login` | Login, invalid credentials, redirects, responsive layout, accessibility, and browser errors |
+| `bun run test:e2e:account-settings` | Account/profile, password, avatar, and PIN controls; creates temporary test users |
+| `bun run test:e2e:general-settings` | Updates stored Jellyfin/Immich settings, checks persistence, and restores originals |
+| `bun run test:e2e:playback-settings` | Playback preference controls and persistence |
+| `bun run test:e2e:libraries-settings` | Library path validation, saving, and scan controls; live server must see the temporary directories created by the test runner |
+| `bun run test:e2e:user-settings` | Admin user management |
+| `bun run test:e2e:movies` | Movie navigation, liked movies, and tab transitions |
+| `bun run test:e2e:quick-connect` | Live pairing, device tokens, rename/revoke, and lifecycle checks; requires explicit `E2E_BASE_URL` |
+| `bun run test:e2e:device-lifecycle` | Mock device lifecycle UI checks; skipped when `E2E_BASE_URL` is set |
+| `bun run test:e2e:movies:index` / `bun run test:e2e:movie-extra-videos` | Mocked movie index and extra-video/YouTube player checks |
+| `bun run test:e2e:movie-player` / `bun run test:e2e:direct-fallback` | Mocked player and direct-play fallback checks |
+| `bun run test:e2e:album-details` / `bun run test:e2e:musician-details` | Mocked music detail pages |
+| `bun run test:e2e:hls` | Live HLS transcodes; two scanned movie IDs as described below |
+| `bun run test:e2e:watch-room` | Live HTTP/WebSocket synchronization with a temporary guest and room; browser media playback is stubbed |
+| `bun run test:e2e:direct-media` | Live direct-play media fixtures; see below |
 
-```bash
-cd web
-E2E_BASE_URL=http://localhost:3000 \
-E2E_ADMIN_EMAIL=admin@example.com \
-E2E_ADMIN_PASSWORD=AdminPassword \
-bun run test:e2e:movies
-```
+Mocked suites use the mock API and/or stub requests in Playwright, so they need no Go backend. Use the default managed setup. Fully intercepted page suites, such as movie index and album/musician details, can also target an existing frontend; the movie-player and direct-fallback suites depend on mock API fixtures. Additional specs cover home, movie details, music index/tracks, search, trailers, head metadata, motion, and browser issues; see [web/e2e/](web/e2e/).
 
-When omitted, Playwright defaults to `E2E_BASE_URL=http://127.0.0.1:3000`, `E2E_ADMIN_EMAIL=admin@example.com`, and `E2E_ADMIN_PASSWORD=AdminPassword`.
-
-### Movies Index Mocked E2E Checks
-
-The mocked Playwright movie index suite only needs the frontend running at `E2E_BASE_URL`. It stubs every `/api/**` movie-index request in Playwright, so a backend server is not required.
-
-```bash
-cd web
-bun run dev --host 127.0.0.1 --port 3000
-E2E_BASE_URL=http://127.0.0.1:3000 \
-bun run test:e2e:movies:index
-```
-
-### General Settings E2E Checks
-
-The Playwright general settings suite targets an already-running Igloo instance. It logs in as an admin, updates Jellyfin and Immich integration settings, verifies accessibility and optimistic UI behavior, confirms persistence, and restores the original settings.
+For HLS, supply a scanned 4K movie and a second scanned movie using a different transcode profile. With the shared live configuration still set:
 
 ```bash
-cd web
-E2E_BASE_URL=http://localhost:3000 \
-E2E_ADMIN_EMAIL=admin@example.com \
-E2E_ADMIN_PASSWORD=AdminPassword \
-bun run test:e2e:general-settings
+E2E_HLS_4K_MOVIE_ID=1 E2E_HLS_SECOND_MOVIE_ID=2 bun run test:e2e:hls
+E2E_WATCH_ROOM_MOVIE_ID=1 bun run test:e2e:watch-room
 ```
 
-When omitted, Playwright defaults to `E2E_BASE_URL=http://127.0.0.1:3000`, `E2E_ADMIN_EMAIL=admin@example.com`, and `E2E_ADMIN_PASSWORD=AdminPassword`.
+Replace example IDs with your library's IDs. HLS profile defaults are `2160p_16mbps` and `720p_3mbps`; optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_AUDIO_TRACK`, `E2E_HLS_TEST_TIMEOUT_MS`, and `E2E_HLS_RESPONSE_TIMEOUT_MS`. The watch-room suite needs a movie suitable for direct playback and accepts `E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS`.
 
-### HLS Transcoding E2E Checks
+The [direct-media suite](web/e2e/direct-play-media.spec.ts) requires `E2E_DIRECT_MKV_MOVIE_ID` (H.264/AAC MKV), `E2E_DIRECT_10BIT_MOVIE_ID` (10-bit H.264 MP4), and `E2E_DIRECT_MULTIAUDIO_MOVIE_ID` (MP4 with multiple audio streams). Optional controls use `E2E_DIRECT_MP4_MOVIE_ID` (ordinary H.264/AAC MP4) and `E2E_DIRECT_SUBTITLE_MOVIE_ID` (direct-eligible MP4 with an embedded text subtitle and at least 90 seconds duration).
 
-The Playwright HLS suite targets an already-running Igloo instance. On the first run, install Chromium with `bun x playwright install chromium`. Set the base URL, admin credentials, and two scanned movie IDs before running it. One movie must be a 4K source; the second must use a different transcode profile.
-
-```bash
-cd web
-E2E_BASE_URL=http://localhost:8080 \
-E2E_ADMIN_EMAIL=admin@sample.com \
-E2E_ADMIN_PASSWORD=AdminPassword \
-E2E_HLS_4K_MOVIE_ID=1 \
-E2E_HLS_SECOND_MOVIE_ID=2 \
-bun run test:e2e:hls
-```
-
-Optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_AUDIO_TRACK`, `E2E_HLS_TEST_TIMEOUT_MS`, and `E2E_HLS_RESPONSE_TIMEOUT_MS`.
-
-### Watch Room E2E Checks
-
-The Playwright watch-room suite also targets an already-running Igloo instance. It logs in as an admin, creates a temporary guest user and direct-play watch room, drives two browser contexts through the real HTTP and WebSocket flow, and stubs only browser media playback.
-
-```bash
-cd web
-E2E_BASE_URL=http://localhost:8080 \
-E2E_ADMIN_EMAIL=admin@sample.com \
-E2E_ADMIN_PASSWORD=AdminPassword \
-E2E_WATCH_ROOM_MOVIE_ID=1 \
-bun run test:e2e:watch-room
-```
-
-Optional override: `E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS`.
-
-## API Documentation
-
-The OpenAPI document lives at [docs/openapi.json](docs/openapi.json). It covers the registered `/api` routes, including JSON endpoints, static files, media streams, HLS playlists and segments, subtitles, and the watch-room WebSocket.
-
-When adding or changing an API route, update the OpenAPI file and run the route coverage test:
-
-```bash
-make test-openapi
-```
-
-See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenance workflow.
-
-## Database and SQL
-
-- SQLite is the database engine.
-- WAL mode is enabled at startup.
-- `DB_PATH` controls the database file path; the binary default is `db/igloo.db`.
-- `server/sqlc/schema.sql` is the schema source of truth and the embedded startup schema.
-- Query files live under `server/sqlc/queries/`.
-- Generated database code lives under `server/cmd/internal/database/`.
-
-After changing schema or query files:
-
-```bash
-make generate
-```
-
-`make generate` runs `sqlc generate` from `server/sqlc`.
-
-## Testing
-
-Backend:
-
-```bash
-make test-server
-```
-
-Frontend:
-
-```bash
-make lint-web
-make test-web
-make build-web
-```
-
-CI-equivalent local suite:
-
-```bash
-make check
-```
-
-Playwright suites are opt-in and require an already-running Igloo instance:
-
-```bash
-cd web
-bun run test:e2e
-```
-
-Live TMDB integration tests are intentionally outside the default suite:
-
-```bash
-cd server
-TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
-```
-
-## CI and Releases
-
-GitHub Actions runs backend tests plus frontend linting and build checks. Production binaries are built with `make build` from the repository root. Web assets and media tool payloads are embedded into the binary during the native build; runtime configuration comes from the process environment or a `.env` file in the working directory.
-
-## AI Coding Agent Notes
-
-This repository may be used with AI coding agents such as Codex. Project-specific instructions should live in a root-level `AGENTS.md` file. Keep those instructions aligned with the Go server, React/Vite web client, Bun package management, sqlc database workflow, OpenAPI maintenance, and accessibility requirements.
+Unset `E2E_BASE_URL` before returning to the managed mock or production-startup setup.

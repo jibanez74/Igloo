@@ -114,8 +114,8 @@ func TestGetTmdbMovieByID_RateLimitExhaustsRetries(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected exhausted retries to return error")
 	}
-	if err.Error() != "rate limit exceeded for tmdb" {
-		t.Fatalf("error = %q, want rate limit exceeded for tmdb", err.Error())
+	if err.Error() != "tmdb status 429: rate limit exceeded for tmdb" {
+		t.Fatalf("error = %q, want tmdb status 429: rate limit exceeded for tmdb", err.Error())
 	}
 	if attempts.Load() != 3 {
 		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
@@ -361,8 +361,8 @@ func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-OK response to return error")
 	}
-	if err.Error() != "unable to get movie from tmdb" {
-		t.Fatalf("error = %q, want unable to get movie from tmdb", err.Error())
+	if err.Error() != "tmdb status 404: unable to get movie from tmdb" {
+		t.Fatalf("error = %q, want tmdb status 404: unable to get movie from tmdb", err.Error())
 	}
 }
 
@@ -445,8 +445,8 @@ func TestSearchMoviesByTitleAndYear_NoResultsReturnsError(t *testing.T) {
 	defer server.Close()
 
 	_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "No Results")
-	if err == nil {
-		t.Fatal("expected empty results to return error")
+	if !errors.Is(err, ErrNoMoviesFound) {
+		t.Fatalf("expected ErrNoMoviesFound, got %v", err)
 	}
 }
 
@@ -582,5 +582,49 @@ func TestRetryDelayHonorsRetryAfterAndCaps(t *testing.T) {
 	zero := &tmdbClient{}
 	if got := zero.retryDelay(nil, 0); got != tmdbHTTPRetryBaseDelay {
 		t.Fatalf("zero-value base delay = %s, want %s", got, tmdbHTTPRetryBaseDelay)
+	}
+}
+
+func TestProviderStatusClassificationThroughHTTP(t *testing.T) {
+	for _, code := range []int{401, 403, 404, 429, 503} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code) }))
+			defer server.Close()
+			_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "movie")
+			authentication, transient := ProviderFailure(err)
+			if authentication != (code == 401 || code == 403) || transient != (code == 429 || code == 503) {
+				t.Fatalf("code=%d auth=%v transient=%v err=%v", code, authentication, transient, err)
+			}
+		})
+	}
+}
+
+func TestCancelBlockedMovieRequest(t *testing.T) {
+	entered := make(chan struct{})
+	stopped := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-r.Context().Done()
+		close(stopped)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { _, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(ctx, "movie"); result <- err }()
+	<-entered
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("blocked request cancellation: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("request did not cancel")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("upstream request remained active")
 	}
 }

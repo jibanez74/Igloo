@@ -42,7 +42,6 @@ function track(id: number, title: string) {
     duration: 180,
     codec: "flac",
     bit_rate: 900000,
-    file_path: `/music/${title}.flac`,
     album_id: nullableInt64(10),
     album_title: nullableString("Blue Record"),
     album_cover: nullableString(),

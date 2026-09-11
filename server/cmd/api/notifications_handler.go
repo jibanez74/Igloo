@@ -126,7 +126,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	notification, err := app.Queries.CreateNotification(r.Context(), database.CreateNotificationParams{
+	err = app.Queries.CreateNotification(r.Context(), database.CreateNotificationParams{
 		CreatedByUserID: userID,
 		Title:           req.Title,
 		Message:         req.Message,
@@ -141,9 +141,6 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Error: false,
-		Data: map[string]any{
-			"notification": notification,
-		},
 	})
 }
 
@@ -236,7 +233,7 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"unread_count": badge.UnreadCount,
+			"unread_count": badge,
 		},
 	})
 }

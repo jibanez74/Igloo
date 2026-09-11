@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"igloo/cmd/internal/helpers"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -103,7 +104,45 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 
 // LoadAndSaveSession wraps the scs session middleware.
 func (app *Application) LoadAndSaveSession(next http.Handler) http.Handler {
-	return app.SessionManager.LoadAndSave(next)
+	handler := app.SessionManager.LoadAndSave(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(&sessionErrorResponseWriter{ResponseWriter: w}, r)
+	})
+}
+
+// scs continues writing the handler response after a session commit failure.
+// Suppress those writes so a JSON error cannot be followed by a success body.
+type sessionErrorResponseWriter struct {
+	http.ResponseWriter
+	failed bool
+}
+
+func (w *sessionErrorResponseWriter) Write(p []byte) (int, error) {
+	if w.failed {
+		return 0, errors.New("session persistence failed")
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *sessionErrorResponseWriter) WriteHeader(status int) {
+	if !w.failed {
+		w.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (w *sessionErrorResponseWriter) ReadFrom(r io.Reader) (int64, error) {
+	if w.failed {
+		return 0, errors.New("session persistence failed")
+	}
+	readerFrom, ok := w.ResponseWriter.(io.ReaderFrom)
+	if ok {
+		return readerFrom.ReadFrom(r)
+	}
+	return io.Copy(w.ResponseWriter, r)
+}
+
+func (w *sessionErrorResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // LoadSessionReadOnly loads the session into the request context without

@@ -43,13 +43,9 @@ function musicianTrack(
   return {
     id,
     title,
-    sort_title: title,
     duration: 180,
     codec: "flac",
     bit_rate: 900000,
-    file_path: `/music/${title.toLowerCase().replaceAll(" ", "-")}.flac`,
-    track_index: id,
-    disc: 1,
     album_id: nullableInt64(albumId),
     album_title: nullableString(albumTitle),
     album_cover: nullableString(""),

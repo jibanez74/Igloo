@@ -34,7 +34,6 @@ SELECT
   t.id,
   t.title,
   t.duration,
-  t.file_path,
   t.codec,
   t.bit_rate,
   t.album_id,

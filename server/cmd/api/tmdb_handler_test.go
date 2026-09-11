@@ -5,15 +5,22 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	moviescanner "igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/tmdb"
 
 	"github.com/go-chi/chi/v5"
@@ -149,7 +156,7 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	defer app.DB.Close()
 
 	ctx := context.Background()
-	existingMovie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	existingMovieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:     "The Matrix",
 		FilePath:  "/movies/the-matrix.mkv",
 		FileName:  "the-matrix.mkv",
@@ -161,6 +168,10 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("insert existing movie: %v", err)
+	}
+	existingMovie, err := app.Queries.GetMovieByID(ctx, existingMovieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	stub := &stubTmdbClient{
@@ -258,19 +269,31 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	}
 }
 
-func TestSearchTmdbMovies_HTTPUnavailable(t *testing.T) {
-	app := setupTestApp(t)
+func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
+	app := setupSessionTestApp(t)
 	defer app.DB.Close()
-
-	router := chi.NewRouter()
-	router.Post("/api/tmdb/movies/search", app.SearchTmdbMovies)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/tmdb/movies/search", strings.NewReader(`{"title":"Arrival"}`))
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503, body = %s", w.Code, w.Body.String())
+	admin := createTestUser(t, app, "Admin", "unavailable@example.com", true)
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, admin.ID)
+	for _, tc := range []struct{ method, path, operation string }{
+		{http.MethodPost, "/api/tmdb/movies/search", "searchTmdbMovies"},
+		{http.MethodPost, "/api/movies/1/tmdb-search", "tmdbSearchMovies"},
+		{http.MethodGet, "/api/tmdb/movies/in-theaters", "getMoviesInTheaters"},
+		{http.MethodGet, "/api/tmdb/movies/603", "getMovieByTmdbID"},
+	} {
+		t.Run(tc.operation, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			if tc.method == http.MethodPost {
+				request = newOpenAPIJSONRequest(tc.method, tc.path, `{"title":"Arrival"}`)
+			}
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+			if response.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want 503: %s", response.Code, response.Body.String())
+			}
+			assertOpenAPIExchange(t, tc.operation, request, response)
+		})
 	}
 }
 
@@ -608,19 +631,30 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 	defer app.DB.Close()
 
 	ctx := context.Background()
-	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
-		Title:     "Unknown",
-		FilePath:  "/movies/unknown.mkv",
-		FileName:  "unknown.mkv",
-		Size:      1,
-		Container: "mkv",
-		MimeType:  "video/x-matroska",
-		Adult:     false,
+	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:          "Unknown",
+		RunTime:        helpers.NullInt64(120),
+		Duration:       helpers.NullFloat64(7200),
+		AudienceRating: helpers.NullFloat64(9),
+		FilePath:       "/movies/unknown.mkv",
+		FileName:       "unknown.mkv",
+		Size:           1,
+		Container:      "mkv",
+		MimeType:       "video/x-matroska",
+		Adult:          false,
 	})
 	if err != nil {
 		t.Fatalf("insert movie: %v", err)
 	}
+	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	err = app.Queries.MarkMovieTmdbRetry(ctx, movie.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tmdbDetails := tmdbMovieFromJSON(t, `{
 		"id": 603,
 		"title": "The Matrix",
@@ -657,10 +691,15 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 		t.Fatalf("get updated movie: %v", err)
 	}
 	if updated.Title != "The Matrix" || !updated.TmdbID.Valid || updated.TmdbID.Int64 != 603 ||
-		!updated.Year.Valid || updated.Year.Int64 != 1999 || !updated.RunTime.Valid || updated.RunTime.Int64 != 136 {
+		!updated.Year.Valid || updated.Year.Int64 != 1999 || !updated.RunTime.Valid || updated.RunTime.Int64 != 120 || updated.AudienceRating.Float64 != 9 || updated.Duration.Float64 != 7200 {
 		t.Fatalf("updated movie = %+v, want TMDB metadata", updated)
 	}
 
+	var retries int
+	err = app.DB.QueryRow("SELECT count(*) FROM movie_tmdb_retries").Scan(&retries)
+	if err != nil || retries != 0 {
+		t.Fatalf("retry cleanup: %d %v", retries, err)
+	}
 	genres, err := app.Queries.GetGenresByMovieID(ctx, movie.ID)
 	if err != nil {
 		t.Fatalf("get genres: %v", err)
@@ -732,7 +771,24 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	}
 }
 
-func TestBuildUpdateParamsFromTmdbMapsNullableFields(t *testing.T) {
+func TestApplyTmdbMetadataMapsNullableFields(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+	localID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Local", FilePath: "/mapping.mkv", FileName: "mapping.mkv", Container: "mkv", MimeType: "video/x-matroska"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := app.Queries.GetMovieByID(ctx, localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
 	movie := tmdbMovieFromJSON(t, `{
 		"id": 603,
 		"title": "The Matrix",
@@ -752,8 +808,15 @@ func TestBuildUpdateParamsFromTmdbMapsNullableFields(t *testing.T) {
 			"results": [{"iso_3166_1": "US", "release_dates": [{"certification": "R"}]}]
 		}
 	}`)
-	params := buildUpdateParamsFromTmdb(10, &movie)
-	if params.ID != 10 || params.Title != "The Matrix" || !params.TmdbID.Valid || params.TmdbID.Int64 != 603 ||
+	err = moviescanner.ApplyTmdbMetadata(ctx, app.Queries.WithTx(tx), local.ID, &movie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params, err := app.Queries.WithTx(tx).GetMovieByID(ctx, local.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.ID != local.ID || params.Title != "The Matrix" || !params.TmdbID.Valid || params.TmdbID.Int64 != 603 ||
 		!params.Year.Valid || params.Year.Int64 != 1999 || !params.Certification.Valid || params.Certification.String != "R" {
 		t.Fatalf("params = %+v, want mapped TMDB fields", params)
 	}
@@ -764,7 +827,7 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 	defer app.DB.Close()
 
 	ctx := context.Background()
-	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
 		Title:         "Original",
 		FilePath:      "/movies/original-preserve.mkv",
 		FileName:      "original-preserve.mkv",
@@ -779,6 +842,10 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("insert movie: %v", err)
+	}
+	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	router := chi.NewRouter()
@@ -802,5 +869,212 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 		!updated.Year.Valid || updated.Year.Int64 != 2001 ||
 		!updated.Certification.Valid || updated.Certification.String != "PG" {
 		t.Fatalf("updated movie = %+v, want omitted nullable fields preserved", updated)
+	}
+}
+
+type identifyDuringScanTmdb struct {
+	tmdb.TmdbInterface
+	entered chan struct{}
+	release chan struct{}
+}
+
+// The scanner reaches the blocking detail lookup through a search, because a
+// movie that already carries a confirmed match is never re-enriched by a scan.
+func (c *identifyDuringScanTmdb) SearchMoviesByTitleAndYear(_ context.Context, title string, _ ...int) ([]tmdb.TmdbMovie, error) {
+	return []tmdb.TmdbMovie{{TmdbID: 42, Title: title}}, nil
+}
+
+func (c *identifyDuringScanTmdb) GetTmdbMovieByID(ctx context.Context, movie *tmdb.TmdbMovie) error {
+	if movie.TmdbID == 42 {
+		close(c.entered)
+		select {
+		case <-c.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		*movie = tmdb.TmdbMovie{TmdbID: 42, Title: "Stale scan response"}
+	} else {
+		*movie = tmdb.TmdbMovie{TmdbID: 99, Title: "Manual identity", Runtime: 999}
+	}
+	return nil
+}
+
+func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
+	for _, changed := range []bool{false, true} {
+		t.Run(strconv.FormatBool(changed), func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			root := t.TempDir()
+			path := filepath.Join(root, "movie.mkv")
+			err := os.WriteFile(path, []byte("movie"), 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Seeded without a match so the scan below actually enriches it.
+			localID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Original", FilePath: path, FileName: "movie.mkv", Container: "mkv", MimeType: "video/x-matroska", AudienceRating: helpers.NullFloat64(9)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			local, err := app.Queries.GetMovieByID(ctx, localID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wait sync.WaitGroup
+			probe := &cleanupRescanProbe{}
+			deps := moviescanner.Dependencies{DB: app.DB, Queries: app.Queries, Logger: app.Logger, Ffprobe: probe, ScanContext: ctx, Wait: &wait, ScannerDBMu: &app.ScannerDBMu, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentMoviesDirectory: func() sql.NullString { return helpers.NullString(root) }}
+			initial := moviescanner.New(deps)
+			initial.Start()
+			wait.Wait()
+			if changed {
+				err = os.WriteFile(path, []byte("changed movie"), 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			client := &identifyDuringScanTmdb{entered: make(chan struct{}), release: make(chan struct{})}
+			app.Tmdb = client
+			deps.Tmdb = client
+			s := moviescanner.New(deps)
+			s.Start()
+			defer func() { cancel(); wait.Wait() }()
+			select {
+			case <-client.entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("scanner did not start identity lookup")
+			}
+			router := chi.NewRouter()
+			router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
+			recorder := httptest.NewRecorder()
+			req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(local.ID, 10)+"/identify", `{"tmdb_id":99}`)
+			done := make(chan struct{})
+			go func() { router.ServeHTTP(recorder, req); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("Identify blocked on scanner's remote request")
+			}
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("identify status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			close(client.release)
+			wait.Wait()
+			current, err := app.Queries.GetMovieByID(ctx, local.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.Title != "Manual identity" || current.TmdbID.Int64 != 99 || current.AudienceRating.Float64 != 9 || current.Duration.Float64 != 120 || current.RunTime.Int64 != 2 {
+				t.Fatalf("scan overwrote Identify: %+v", current)
+			}
+			wantCalls := 1
+			if changed {
+				wantCalls = 2
+			}
+			if probe.calls != wantCalls {
+				t.Fatalf("probes=%d want=%d", probe.calls, wantCalls)
+			}
+			if changed && current.Size != 13 {
+				t.Fatal("scan lost valid technical update")
+			}
+			var pending int
+			err = app.DB.QueryRow("SELECT count(*) FROM movie_tmdb_retries").Scan(&pending)
+			if err != nil || pending != 0 {
+				t.Fatalf("retry cleanup=%d %v", pending, err)
+			}
+		})
+	}
+}
+
+func TestMoviePickerRankingAndEmptySentinel(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	client := &stubTmdbClient{searchResults: []tmdb.TmdbMovie{
+		{TmdbID: 1, Title: "Arrival", ReleaseDate: "2015-01-01"},
+		{TmdbID: 2, Title: "Unrelated", ReleaseDate: "2016-01-01", Popularity: 1e9, VoteAverage: 10},
+	}}
+	app.Tmdb = client
+	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchPayload{Title: "Arrival", Year: 2016})
+	if err != nil || len(results) != 2 || results[0].TmdbID != 1 {
+		t.Fatalf("picker ranking=%+v %v", results, err)
+	}
+	client.searchErr = fmt.Errorf("wrapped: %w", tmdb.ErrNoMoviesFound)
+	results, err = app.searchTmdbMovies(context.Background(), tmdbSearchPayload{Title: "Arrival"})
+	if err != nil || len(results) != 0 {
+		t.Fatalf("no-result sentinel=%+v %v", results, err)
+	}
+}
+
+func TestIdentifyMovieRollsBackRetryCleanupFailure(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+	beforeID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Original", FilePath: "/rollback.mkv", FileName: "rollback.mkv", Container: "mkv", MimeType: "video/x-matroska", TmdbID: helpers.NullInt64(42), RunTime: helpers.NullInt64(120), AudienceRating: helpers.NullFloat64(9)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := app.Queries.GetMovieByID(ctx, beforeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = app.Queries.MarkMovieTmdbRetry(ctx, before.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.DB.Exec("CREATE TRIGGER reject_retry_cleanup BEFORE DELETE ON movie_tmdb_retries BEGIN SELECT RAISE(ABORT,'failure'); END")
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Tmdb = &stubTmdbClient{detailMovies: map[int]tmdb.TmdbMovie{99: {TmdbID: 99, Title: "New identity", Genres: []tmdb.Genre{{ID: 1, Name: "Drama"}}}}}
+	router := chi.NewRouter()
+	router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
+	w := httptest.NewRecorder()
+	req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(before.ID, 10)+"/identify", `{"tmdb_id":99}`)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", w.Code)
+	}
+	after, err := app.Queries.GetMovieByID(ctx, before.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("failed Identify published metadata")
+	}
+	pending, err := app.Queries.HasMovieTmdbRetry(ctx, before.ID)
+	if err != nil || !pending {
+		t.Fatalf("lost retry: %v %v", pending, err)
+	}
+	genres, err := app.Queries.GetGenresByMovieID(ctx, before.ID)
+	if err != nil || len(genres) != 0 {
+		t.Fatalf("partial relationships: %+v %v", genres, err)
+	}
+}
+
+func TestUpdateMovieMetadata_MissingUpdateRollsBack(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	movieID := createSearchMovie(t, app, "Original", "/movies/update-rollback.mkv")
+	// A row removed inside the UPDATE must retain the old RETURNING failure
+	// behavior, including rollback of the trigger's deletion.
+	_, err := app.DB.Exec(`CREATE TRIGGER remove_movie_before_update BEFORE UPDATE ON movies
+	BEGIN DELETE FROM movies WHERE id = OLD.id; END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := chi.NewRouter()
+	router.Patch("/api/movies/{id}", app.UpdateMovieMetadata)
+	request := newOpenAPIJSONRequest(http.MethodPatch, fmt.Sprintf("/api/movies/%d", movieID), `{"title":"Changed"}`)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", response.Code, response.Body.String())
+	}
+	movie, err := app.Queries.GetMovieByID(context.Background(), movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if movie.Title != "Original" {
+		t.Fatalf("failed update changed stored title to %q", movie.Title)
 	}
 }

@@ -82,3 +82,9 @@ jobs:
 
       - name: Type-check and build
         run: cd web && bun run build
+
+      - name: Install Playwright Chromium
+        run: cd web && bun x playwright install --with-deps chromium
+
+      - name: Test production startup
+        run: cd web && E2E_PRODUCTION=1 bun run test:e2e e2e/boot.spec.ts

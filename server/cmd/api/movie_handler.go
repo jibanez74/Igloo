@@ -527,7 +527,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 
 	qtx := app.Queries.WithTx(tx)
 
-	movie, err := qtx.GetMovieByID(ctx, id)
+	movie, err := qtx.GetMovieDetails(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
@@ -661,7 +661,6 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 		Data: map[string]any{
 			"movie": map[string]any{
 				"file_name": movie.FileName,
-				"file_path": movie.FilePath,
 				"size":      movie.Size,
 				"container": movie.Container,
 				// The value the client's direct-play container gate reads, so

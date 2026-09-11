@@ -31,7 +31,7 @@ LIMIT 1;
 
 -- name: GetAdminUser :one
 SELECT
-  *
+  id
 FROM users
 WHERE is_admin = true
 LIMIT 1;
@@ -53,7 +53,7 @@ INSERT INTO users (
 )
 VALUES
   (?, ?, ?, ?, ?)
-RETURNING *;
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
 -- name: UpdateUserName :one
 UPDATE users
@@ -61,7 +61,7 @@ SET
   name = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
 -- name: UpdateUserEmail :one
 UPDATE users
@@ -69,7 +69,7 @@ SET
   email = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
 -- name: UpdateUserPassword :exec
 UPDATE users
@@ -84,7 +84,7 @@ SET
   pin = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
 -- name: UpdateUserAvatar :one
 UPDATE users
@@ -92,7 +92,7 @@ SET
   avatar = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
 -- name: DeleteUser :exec
 DELETE FROM users
@@ -121,7 +121,7 @@ SET
   is_admin = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING *;
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at;
 
 -- name: CountAdmins :one
 SELECT COUNT(*)

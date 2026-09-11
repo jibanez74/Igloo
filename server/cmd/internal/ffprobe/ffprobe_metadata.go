@@ -85,7 +85,7 @@ type StreamTags struct {
 // Matroska muxers that write TITLE/LANGUAGE (or the "lang" alias) still
 // produce labelled, preference-matchable streams.
 func (t *StreamTags) UnmarshalJSON(data []byte) error {
-	values, err := normalizedTagValues(data)
+	values, err := decodeTagValues(data)
 	if err != nil {
 		return err
 	}
@@ -116,17 +116,18 @@ type FormatTags struct {
 	SortName    string `json:"sort_name"`
 	SortAlbum   string `json:"sort_album"`
 	SortArtist  string `json:"sort_artist"`
+	Language    string `json:"language"`
 }
 
 func (t *FormatTags) UnmarshalJSON(data []byte) error {
-	values, err := normalizedTagValues(data)
+	values, err := decodeTagValues(data)
 	if err != nil {
 		return err
 	}
 
 	t.Title = firstTagValue(values, "title")
 	t.Artist = firstTagValue(values, "artist")
-	t.AlbumArtist = firstTagValue(values, "albumartist")
+	t.AlbumArtist = firstTagValue(values, "album_artist")
 	t.Composer = firstTagValue(values, "composer")
 	t.Album = firstTagValue(values, "album")
 	t.Genre = firstTagValue(values, "genre")
@@ -134,14 +135,15 @@ func (t *FormatTags) UnmarshalJSON(data []byte) error {
 	t.Disc = firstTagValue(values, "disc", "discnumber")
 	t.Date = firstTagValue(values, "date", "year")
 	t.Copyright = firstTagValue(values, "copyright")
-	t.SortName = firstTagValue(values, "sortname", "titlesort")
-	t.SortAlbum = firstTagValue(values, "sortalbum", "albumsort")
-	t.SortArtist = firstTagValue(values, "sortartist", "artistsort")
+	t.SortName = firstTagValue(values, "sort_name", "titlesort")
+	t.SortAlbum = firstTagValue(values, "sort_album", "albumsort")
+	t.SortArtist = firstTagValue(values, "sort_artist", "artistsort")
+	t.Language = firstTagValue(values, "language", "lang")
 
 	return nil
 }
 
-func normalizedTagValues(data []byte) (map[string]string, error) {
+func decodeTagValues(data []byte) (map[string]string, error) {
 	var raw map[string]interface{}
 	err := json.Unmarshal(data, &raw)
 	if err != nil {
@@ -160,12 +162,7 @@ func normalizedTagValues(data []byte) (map[string]string, error) {
 			continue
 		}
 
-		normalizedKey := normalizeTagKey(key)
-		if _, exists := values[normalizedKey]; exists {
-			continue
-		}
-
-		values[normalizedKey] = text
+		values[key] = text
 	}
 
 	return values, nil
@@ -180,13 +177,30 @@ func normalizeTagKey(key string) string {
 }
 
 func firstTagValue(values map[string]string, keys ...string) string {
-	for _, key := range keys {
-		value := values[key]
-		if value != "" {
-			return value
+	for _, canonical := range keys {
+		normalizedCanonical := normalizeTagKey(canonical)
+		bestKey, bestValue, bestRank := "", "", 3
+		for key, value := range values {
+			normalizedKey := normalizeTagKey(key)
+			if normalizedKey != normalizedCanonical {
+				continue
+			}
+			rank := 2
+			caseVariant := strings.EqualFold(key, canonical)
+			if key == canonical {
+				rank = 0
+			} else if caseVariant {
+				rank = 1
+			}
+			preferred := rank < bestRank || (rank == bestRank && key < bestKey)
+			if preferred {
+				bestKey, bestValue, bestRank = key, value, rank
+			}
+		}
+		if bestValue != "" {
+			return bestValue
 		}
 	}
-
 	return ""
 }
 
@@ -196,7 +210,6 @@ type ChapterTags struct {
 
 type Chapter struct {
 	StartTime string      `json:"start_time"`
-	Start     int         `json:"start"`
 	Tags      ChapterTags `json:"tags"`
 }
 
@@ -217,7 +230,7 @@ func (f *ffprobe) GetAudioMetadata(ctx context.Context, filePath string) (*Ffpro
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
-		"-show_entries", "format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language",
+		"-show_entries", "format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags",
 		filePath,
 	)
 }

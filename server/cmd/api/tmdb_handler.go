@@ -235,7 +235,7 @@ func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearch
 		results, err = app.Tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
 	}
 	if err != nil {
-		if err.Error() == "no movies found with the given query" {
+		if errors.Is(err, tmdb.ErrNoMoviesFound) {
 			return []tmdbSearchResult{}, nil
 		}
 		return nil, errors.New("TMDB search failed")

@@ -93,7 +93,7 @@ func emptyMovieWatchProgressResponse() movieWatchProgressResponse {
 	}
 }
 
-func movieWatchProgressToResponse(row database.MovieWatchProgress) movieWatchProgressResponse {
+func movieWatchProgressToResponse(row database.GetMovieWatchProgressRow) movieWatchProgressResponse {
 	progressSec := row.ProgressSec
 	durationSec := row.DurationSec
 	updatedAt := row.UpdatedAt

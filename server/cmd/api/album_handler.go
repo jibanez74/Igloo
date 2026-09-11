@@ -143,7 +143,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	albumGenreRows, err := qtx.GetAlbumGenres(ctx, id)
+	albumGenres, err := qtx.GetAlbumGenres(ctx, id)
 	if err != nil {
 		app.Logger.Error("failed to get album-level genres", "error", err, "album_id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch album genres from server"))
@@ -154,11 +154,6 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	for _, track := range tracks {
 		totalDuration += track.Duration
-	}
-
-	albumGenres := make([]string, 0, len(albumGenreRows))
-	for _, g := range albumGenreRows {
-		albumGenres = append(albumGenres, g.Tag)
 	}
 
 	res := helpers.JSONResponse{

@@ -11,11 +11,9 @@ import (
 )
 
 const getMusicSpotifyMatch = `-- name: GetMusicSpotifyMatch :one
-SELECT
-  entity_type, entity_id, spotify_id, status, reason, score, threshold_value, candidate_name, candidate_artist, search_query, strategy, error, updated_at
+SELECT status, reason
 FROM music_spotify_matches
-WHERE entity_type = ?
-  AND entity_id = ?
+WHERE entity_type = ? AND entity_id = ?
 LIMIT 1
 `
 
@@ -24,89 +22,38 @@ type GetMusicSpotifyMatchParams struct {
 	EntityID   int64  `json:"entity_id"`
 }
 
-func (q *Queries) GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (MusicSpotifyMatch, error) {
+type GetMusicSpotifyMatchRow struct {
+	Status string         `json:"status"`
+	Reason sql.NullString `json:"reason"`
+}
+
+func (q *Queries) GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (GetMusicSpotifyMatchRow, error) {
 	row := q.queryRow(ctx, q.getMusicSpotifyMatchStmt, getMusicSpotifyMatch, arg.EntityType, arg.EntityID)
-	var i MusicSpotifyMatch
-	err := row.Scan(
-		&i.EntityType,
-		&i.EntityID,
-		&i.SpotifyID,
-		&i.Status,
-		&i.Reason,
-		&i.Score,
-		&i.ThresholdValue,
-		&i.CandidateName,
-		&i.CandidateArtist,
-		&i.SearchQuery,
-		&i.Strategy,
-		&i.Error,
-		&i.UpdatedAt,
-	)
+	var i GetMusicSpotifyMatchRow
+	err := row.Scan(&i.Status, &i.Reason)
 	return i, err
 }
 
 const upsertMusicSpotifyMatch = `-- name: UpsertMusicSpotifyMatch :exec
-INSERT INTO music_spotify_matches (
-  entity_type,
-  entity_id,
-  spotify_id,
-  status,
-  reason,
-  score,
-  threshold_value,
-  candidate_name,
-  candidate_artist,
-  search_query,
-  strategy,
-  error,
-  updated_at
-)
-VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+INSERT INTO music_spotify_matches (entity_type, entity_id, status, reason)
+VALUES (?, ?, ?, ?)
 ON CONFLICT (entity_type, entity_id) DO UPDATE
-SET
-  spotify_id = excluded.spotify_id,
-  status = excluded.status,
-  reason = excluded.reason,
-  score = excluded.score,
-  threshold_value = excluded.threshold_value,
-  candidate_name = excluded.candidate_name,
-  candidate_artist = excluded.candidate_artist,
-  search_query = excluded.search_query,
-  strategy = excluded.strategy,
-  error = excluded.error,
-  updated_at = CURRENT_TIMESTAMP
+SET status = excluded.status, reason = excluded.reason
 `
 
 type UpsertMusicSpotifyMatchParams struct {
-	EntityType      string         `json:"entity_type"`
-	EntityID        int64          `json:"entity_id"`
-	SpotifyID       sql.NullString `json:"spotify_id"`
-	Status          string         `json:"status"`
-	Reason          sql.NullString `json:"reason"`
-	Score           sql.NullInt64  `json:"score"`
-	ThresholdValue  sql.NullInt64  `json:"threshold_value"`
-	CandidateName   sql.NullString `json:"candidate_name"`
-	CandidateArtist sql.NullString `json:"candidate_artist"`
-	SearchQuery     sql.NullString `json:"search_query"`
-	Strategy        sql.NullString `json:"strategy"`
-	Error           sql.NullString `json:"error"`
+	EntityType string         `json:"entity_type"`
+	EntityID   int64          `json:"entity_id"`
+	Status     string         `json:"status"`
+	Reason     sql.NullString `json:"reason"`
 }
 
 func (q *Queries) UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error {
 	_, err := q.exec(ctx, q.upsertMusicSpotifyMatchStmt, upsertMusicSpotifyMatch,
 		arg.EntityType,
 		arg.EntityID,
-		arg.SpotifyID,
 		arg.Status,
 		arg.Reason,
-		arg.Score,
-		arg.ThresholdValue,
-		arg.CandidateName,
-		arg.CandidateArtist,
-		arg.SearchQuery,
-		arg.Strategy,
-		arg.Error,
 	)
 	return err
 }

@@ -7,33 +7,12 @@ VALUES
   (?, ?)
 ON CONFLICT (tag, genre_type) DO UPDATE
 SET
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
-
--- name: UpsertMusicianGenre :exec
--- Creates a relationship between a musician and a genre (idempotent)
-INSERT INTO musician_genres (
-  musician_id,
-  genre_id
-)
-VALUES
-  (?, ?)
-ON CONFLICT (musician_id, genre_id) DO NOTHING;
-
--- name: UpsertAlbumGenre :exec
--- Creates a relationship between an album and a genre (idempotent)
-INSERT INTO album_genres (
-  album_id,
-  genre_id
-)
-VALUES
-  (?, ?)
-ON CONFLICT (album_id, genre_id) DO NOTHING;
+  tag = excluded.tag
+RETURNING id;
 
 -- name: GetGenresByMusicianID :many
 -- Returns all genres associated with a musician
-SELECT
-  g.id,
+SELECT DISTINCT
   g.tag
 FROM genres AS g
 INNER JOIN musician_genres AS mg
@@ -43,8 +22,7 @@ ORDER BY g.tag ASC;
 
 -- name: GetAlbumGenres :many
 -- Returns all genres associated with an album
-SELECT
-  g.id,
+SELECT DISTINCT
   g.tag
 FROM genres AS g
 INNER JOIN album_genres AS ag

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
+import { passwordCases } from "../helpers/password-cases";
 import { renderRoute } from "../helpers/render-route";
 
 const showValidationErrorMock = vi.fn();
@@ -125,6 +126,34 @@ function requestsFor(
 }
 
 describe("Account settings", () => {
+  it.each(passwordCases)("validates $name when changing a password", async ({ password, error }) => {
+    const user = userEvent.setup();
+    const { requests } = await renderAccountRoute();
+    const input = screen.getByLabelText("New password");
+    expect(input).not.toHaveAttribute("maxlength");
+    expect(input).toHaveAccessibleDescription("Must be at least 9 characters and at most 72 UTF-8 bytes");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "CurrentPass123" } });
+    fireEvent.change(input, { target: { value: password } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: password } });
+    await user.click(screen.getByRole("button", { name: "Update Password" }));
+
+    if (error) {
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent(`New password ${error}`);
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      expect(input).toHaveAccessibleDescription(expect.stringContaining(`New password ${error}`));
+      expect(input).toHaveFocus();
+      expect(input).toHaveValue(password);
+      expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(0);
+    } else {
+      await waitFor(() => expect(requestsFor(requests, "PUT", "/api/user/password")).toHaveLength(1));
+      expect(requestsFor(requests, "PUT", "/api/user/password")[0].body).toEqual({
+        current_password: "CurrentPass123",
+        new_password: password,
+      });
+    }
+  });
+
   it("keeps the hidden username autocomplete helper labeled for password managers", async () => {
     await renderAccountRoute();
 

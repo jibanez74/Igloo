@@ -10,6 +10,23 @@ import (
 	"database/sql"
 )
 
+const deleteMissingTrack = `-- name: DeleteMissingTrack :execrows
+DELETE FROM tracks WHERE id = ? AND file_path = ?
+`
+
+type DeleteMissingTrackParams struct {
+	ID       int64  `json:"id"`
+	FilePath string `json:"file_path"`
+}
+
+func (q *Queries) DeleteMissingTrack(ctx context.Context, arg DeleteMissingTrackParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteMissingTrackStmt, deleteMissingTrack, arg.ID, arg.FilePath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAlbumsCount = `-- name: GetAlbumsCount :one
 SELECT
   COUNT(*)
@@ -61,7 +78,6 @@ const getRandomTracks = `-- name: GetRandomTracks :many
 SELECT
   t.id,
   t.title,
-  t.file_path,
   t.duration,
   t.codec,
   t.bit_rate,
@@ -100,7 +116,6 @@ type GetRandomTracksParams struct {
 type GetRandomTracksRow struct {
 	ID           int64          `json:"id"`
 	Title        string         `json:"title"`
-	FilePath     string         `json:"file_path"`
 	Duration     int64          `json:"duration"`
 	Codec        string         `json:"codec"`
 	BitRate      int64          `json:"bit_rate"`
@@ -132,7 +147,6 @@ func (q *Queries) GetRandomTracks(ctx context.Context, arg GetRandomTracksParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
-			&i.FilePath,
 			&i.Duration,
 			&i.Codec,
 			&i.BitRate,
@@ -157,20 +171,69 @@ func (q *Queries) GetRandomTracks(ctx context.Context, arg GetRandomTracksParams
 
 const getTrack = `-- name: GetTrack :one
 SELECT
-  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+  id,
+  title,
+  sort_title,
+  file_name,
+  container,
+  mime_type,
+  codec,
+  size,
+  track_index,
+  duration,
+  disc,
+  channels,
+  channel_layout,
+  bit_rate,
+  profile,
+  release_date,
+  year,
+  composer,
+  copyright,
+  language,
+  album_id,
+  musician_id,
+  created_at,
+  updated_at
 FROM tracks
 WHERE id = ?
 LIMIT 1
 `
 
-func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
+type GetTrackRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	SortTitle     string         `json:"sort_title"`
+	FileName      string         `json:"file_name"`
+	Container     string         `json:"container"`
+	MimeType      string         `json:"mime_type"`
+	Codec         string         `json:"codec"`
+	Size          int64          `json:"size"`
+	TrackIndex    int64          `json:"track_index"`
+	Duration      int64          `json:"duration"`
+	Disc          int64          `json:"disc"`
+	Channels      string         `json:"channels"`
+	ChannelLayout string         `json:"channel_layout"`
+	BitRate       int64          `json:"bit_rate"`
+	Profile       string         `json:"profile"`
+	ReleaseDate   sql.NullString `json:"release_date"`
+	Year          sql.NullInt64  `json:"year"`
+	Composer      sql.NullString `json:"composer"`
+	Copyright     sql.NullString `json:"copyright"`
+	Language      sql.NullString `json:"language"`
+	AlbumID       sql.NullInt64  `json:"album_id"`
+	MusicianID    sql.NullInt64  `json:"musician_id"`
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
+}
+
+func (q *Queries) GetTrack(ctx context.Context, id int64) (GetTrackRow, error) {
 	row := q.queryRow(ctx, q.getTrackStmt, getTrack, id)
-	var i Track
+	var i GetTrackRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.SortTitle,
-		&i.FilePath,
 		&i.FileName,
 		&i.Container,
 		&i.MimeType,
@@ -196,6 +259,26 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
 	return i, err
 }
 
+const getTrackForDirectStream = `-- name: GetTrackForDirectStream :one
+SELECT file_path, file_name, mime_type
+FROM tracks
+WHERE id = ?
+LIMIT 1
+`
+
+type GetTrackForDirectStreamRow struct {
+	FilePath string `json:"file_path"`
+	FileName string `json:"file_name"`
+	MimeType string `json:"mime_type"`
+}
+
+func (q *Queries) GetTrackForDirectStream(ctx context.Context, id int64) (GetTrackForDirectStreamRow, error) {
+	row := q.queryRow(ctx, q.getTrackForDirectStreamStmt, getTrackForDirectStream, id)
+	var i GetTrackForDirectStreamRow
+	err := row.Scan(&i.FilePath, &i.FileName, &i.MimeType)
+	return i, err
+}
+
 const getTracksAlphabetical = `-- name: GetTracksAlphabetical :many
 SELECT
   t.id,
@@ -203,7 +286,6 @@ SELECT
   t.duration,
   t.codec,
   t.bit_rate,
-  t.file_path,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,
@@ -235,7 +317,6 @@ type GetTracksAlphabeticalRow struct {
 	Duration     int64          `json:"duration"`
 	Codec        string         `json:"codec"`
 	BitRate      int64          `json:"bit_rate"`
-	FilePath     string         `json:"file_path"`
 	AlbumID      sql.NullInt64  `json:"album_id"`
 	AlbumTitle   sql.NullString `json:"album_title"`
 	AlbumCover   sql.NullString `json:"album_cover"`
@@ -258,7 +339,6 @@ func (q *Queries) GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphab
 			&i.Duration,
 			&i.Codec,
 			&i.BitRate,
-			&i.FilePath,
 			&i.AlbumID,
 			&i.AlbumTitle,
 			&i.AlbumCover,
@@ -280,7 +360,17 @@ func (q *Queries) GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphab
 
 const getTracksByAlbumID = `-- name: GetTracksByAlbumID :many
 SELECT
-  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+  id,
+  title,
+  codec,
+  mime_type,
+  track_index,
+  duration,
+  disc,
+  channel_layout,
+  bit_rate,
+  album_id,
+  musician_id
 FROM tracks
 WHERE album_id = ?
 ORDER BY
@@ -288,41 +378,41 @@ ORDER BY
   track_index ASC
 `
 
-func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error) {
+type GetTracksByAlbumIDRow struct {
+	ID            int64         `json:"id"`
+	Title         string        `json:"title"`
+	Codec         string        `json:"codec"`
+	MimeType      string        `json:"mime_type"`
+	TrackIndex    int64         `json:"track_index"`
+	Duration      int64         `json:"duration"`
+	Disc          int64         `json:"disc"`
+	ChannelLayout string        `json:"channel_layout"`
+	BitRate       int64         `json:"bit_rate"`
+	AlbumID       sql.NullInt64 `json:"album_id"`
+	MusicianID    sql.NullInt64 `json:"musician_id"`
+}
+
+func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetTracksByAlbumIDRow, error) {
 	rows, err := q.query(ctx, q.getTracksByAlbumIDStmt, getTracksByAlbumID, albumID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Track{}
+	items := []GetTracksByAlbumIDRow{}
 	for rows.Next() {
-		var i Track
+		var i GetTracksByAlbumIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
-			&i.SortTitle,
-			&i.FilePath,
-			&i.FileName,
-			&i.Container,
-			&i.MimeType,
 			&i.Codec,
-			&i.Size,
+			&i.MimeType,
 			&i.TrackIndex,
 			&i.Duration,
 			&i.Disc,
-			&i.Channels,
 			&i.ChannelLayout,
 			&i.BitRate,
-			&i.Profile,
-			&i.ReleaseDate,
-			&i.Year,
-			&i.Composer,
-			&i.Copyright,
-			&i.Language,
 			&i.AlbumID,
 			&i.MusicianID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -351,15 +441,20 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 }
 
 const listMusicTrackScanIndex = `-- name: ListMusicTrackScanIndex :many
-SELECT
-  file_path,
-  size
-FROM tracks
+SELECT c.id, c.file_path, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode, f.sha256
+FROM tracks c
+LEFT JOIN track_file_fingerprints f ON f.track_id = c.id
 `
 
 type ListMusicTrackScanIndexRow struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
+	ID       int64          `json:"id"`
+	FilePath string         `json:"file_path"`
+	Size     int64          `json:"size"`
+	MtimeNs  sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs  sql.NullInt64  `json:"ctime_ns"`
+	Device   sql.NullString `json:"device"`
+	Inode    sql.NullString `json:"inode"`
+	Sha256   []byte         `json:"sha256"`
 }
 
 func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error) {
@@ -371,7 +466,16 @@ func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrack
 	items := []ListMusicTrackScanIndexRow{}
 	for rows.Next() {
 		var i ListMusicTrackScanIndexRow
-		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.FilePath,
+			&i.Size,
+			&i.MtimeNs,
+			&i.CtimeNs,
+			&i.Device,
+			&i.Inode,
+			&i.Sha256,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -453,7 +557,7 @@ SET
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+RETURNING id
 `
 
 type UpsertTrackParams struct {
@@ -481,7 +585,7 @@ type UpsertTrackParams struct {
 	MusicianID    sql.NullInt64  `json:"musician_id"`
 }
 
-func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error) {
+func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error) {
 	row := q.queryRow(ctx, q.upsertTrackStmt, upsertTrack,
 		arg.Title,
 		arg.SortTitle,
@@ -506,33 +610,7 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track
 		arg.AlbumID,
 		arg.MusicianID,
 	)
-	var i Track
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.SortTitle,
-		&i.FilePath,
-		&i.FileName,
-		&i.Container,
-		&i.MimeType,
-		&i.Codec,
-		&i.Size,
-		&i.TrackIndex,
-		&i.Duration,
-		&i.Disc,
-		&i.Channels,
-		&i.ChannelLayout,
-		&i.BitRate,
-		&i.Profile,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.Composer,
-		&i.Copyright,
-		&i.Language,
-		&i.AlbumID,
-		&i.MusicianID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }

@@ -39,7 +39,7 @@ import {
   ADMIN_USERS_KEY,
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
-  USER_PASSWORD_MAX_LENGTH,
+  USER_PASSWORD_MAX_BYTES,
   USER_PASSWORD_MIN_LENGTH,
   MOTION_MICRO_COLORS_CLASS,
   SETTINGS_CARD_SURFACE_CLASS,
@@ -392,9 +392,9 @@ function AccountSettings() {
       nextErrors.newPassword = "New password is required.";
     } else if (codePointLength(newPassword) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.newPassword = `New password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (codePointLength(newPassword) > USER_PASSWORD_MAX_LENGTH) {
+    } else if (new TextEncoder().encode(newPassword).length > USER_PASSWORD_MAX_BYTES) {
       nextErrors.newPassword =
-        `New password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
+        `New password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
     }
 
     if (!confirmPassword) {
@@ -842,8 +842,7 @@ function AccountSettings() {
               )}
             />
             <p id={newPasswordDescriptionId} className="text-xs text-muted-foreground">
-              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and no more
-              than {USER_PASSWORD_MAX_LENGTH} characters
+              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and at most {USER_PASSWORD_MAX_BYTES} UTF-8 bytes
             </p>
             {errors.newPassword && (
               <p

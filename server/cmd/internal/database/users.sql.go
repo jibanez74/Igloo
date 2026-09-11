@@ -18,7 +18,7 @@ SET
   is_admin = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at
 `
 
 type AdminUpdateUserParams struct {
@@ -28,19 +28,29 @@ type AdminUpdateUserParams struct {
 	ID      int64  `json:"id"`
 }
 
-func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error) {
+type AdminUpdateUserRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error) {
 	row := q.queryRow(ctx, q.adminUpdateUserStmt, adminUpdateUser,
 		arg.Name,
 		arg.Email,
 		arg.IsAdmin,
 		arg.ID,
 	)
-	var i User
+	var i AdminUpdateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
@@ -73,7 +83,7 @@ INSERT INTO users (
 )
 VALUES
   (?, ?, ?, ?, ?)
-RETURNING id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -84,7 +94,18 @@ type CreateUserParams struct {
 	Avatar   sql.NullString `json:"avatar"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+type CreateUserRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.queryRow(ctx, q.createUserStmt, createUser,
 		arg.Name,
 		arg.Email,
@@ -92,12 +113,11 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.IsAdmin,
 		arg.Avatar,
 	)
-	var i User
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
@@ -119,27 +139,17 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 
 const getAdminUser = `-- name: GetAdminUser :one
 SELECT
-  id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+  id
 FROM users
 WHERE is_admin = true
 LIMIT 1
 `
 
-func (q *Queries) GetAdminUser(ctx context.Context) (User, error) {
+func (q *Queries) GetAdminUser(ctx context.Context) (int64, error) {
 	row := q.queryRow(ctx, q.getAdminUserStmt, getAdminUser)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Email,
-		&i.Password,
-		&i.IsAdmin,
-		&i.Avatar,
-		&i.Pin,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getAllUsers = `-- name: GetAllUsers :many
@@ -345,7 +355,7 @@ SET
   avatar = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at
 `
 
 type UpdateUserAvatarParams struct {
@@ -353,14 +363,24 @@ type UpdateUserAvatarParams struct {
 	ID     int64          `json:"id"`
 }
 
-func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (User, error) {
+type UpdateUserAvatarRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error) {
 	row := q.queryRow(ctx, q.updateUserAvatarStmt, updateUserAvatar, arg.Avatar, arg.ID)
-	var i User
+	var i UpdateUserAvatarRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
@@ -376,7 +396,7 @@ SET
   email = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at
 `
 
 type UpdateUserEmailParams struct {
@@ -384,14 +404,24 @@ type UpdateUserEmailParams struct {
 	ID    int64  `json:"id"`
 }
 
-func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error) {
+type UpdateUserEmailRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error) {
 	row := q.queryRow(ctx, q.updateUserEmailStmt, updateUserEmail, arg.Email, arg.ID)
-	var i User
+	var i UpdateUserEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
@@ -407,7 +437,7 @@ SET
   name = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at
 `
 
 type UpdateUserNameParams struct {
@@ -415,14 +445,24 @@ type UpdateUserNameParams struct {
 	ID   int64  `json:"id"`
 }
 
-func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error) {
+type UpdateUserNameRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (UpdateUserNameRow, error) {
 	row := q.queryRow(ctx, q.updateUserNameStmt, updateUserName, arg.Name, arg.ID)
-	var i User
+	var i UpdateUserNameRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
@@ -456,7 +496,7 @@ SET
   pin = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, pin, created_at, updated_at
+RETURNING id, name, email, is_admin, avatar, pin, created_at, updated_at
 `
 
 type UpdateUserPinParams struct {
@@ -464,14 +504,24 @@ type UpdateUserPinParams struct {
 	ID  int64          `json:"id"`
 }
 
-func (q *Queries) UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error) {
+type UpdateUserPinRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (UpdateUserPinRow, error) {
 	row := q.queryRow(ctx, q.updateUserPinStmt, updateUserPin, arg.Pin, arg.ID)
-	var i User
+	var i UpdateUserPinRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
 		&i.Pin,
