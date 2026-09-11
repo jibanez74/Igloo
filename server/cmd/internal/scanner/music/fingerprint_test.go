@@ -14,11 +14,12 @@ import (
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestFileFingerprintLifecycle(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "media.m4a")
 	err := os.WriteFile(path, []byte("media"), 0600)
@@ -46,12 +47,12 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatalf("size=%d", baseline.Size)
 	}
 	var id int64
-	err = s.db.QueryRow("SELECT id FROM tracks WHERE file_path = ?", path).Scan(&id)
+	err = s.tx.DB.QueryRow("SELECT id FROM tracks WHERE file_path = ?", path).Scan(&id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Persist an old timestamp to make accidental catalog writes observable.
-	_, err = s.db.Exec("UPDATE tracks SET updated_at = '2000-01-01 00:00:00' WHERE id = ?", id)
+	_, err = s.tx.DB.Exec("UPDATE tracks SET updated_at = '2000-01-01 00:00:00' WHERE id = ?", id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,14 +100,14 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatalf("same size edit: %d/%d probes=%d invalidations=%d", scanned, failures, stub.calls, invalidations)
 	}
 	var currentID int64
-	err = s.db.QueryRow("SELECT id FROM tracks WHERE file_path = ?", path).Scan(&currentID)
+	err = s.tx.DB.QueryRow("SELECT id FROM tracks WHERE file_path = ?", path).Scan(&currentID)
 	if err != nil || currentID != id {
 		t.Fatalf("catalog ID changed: %d -> %d, %v", id, currentID, err)
 	}
 
 	// A missing fingerprint always establishes a new full baseline, even when
 	// the catalog already contains the same path and size.
-	_, err = s.db.Exec("DELETE FROM track_file_fingerprints WHERE track_id = ?", id)
+	_, err = s.tx.DB.Exec("DELETE FROM track_file_fingerprints WHERE track_id = ?", id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,11 +120,11 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	if scanned != 1 || failures != 0 || stub.calls != 3 {
 		t.Fatalf("missing baseline: %d/%d probes=%d", scanned, failures, stub.calls)
 	}
-	_, err = s.db.Exec("DELETE FROM tracks WHERE id = ?", id)
+	_, err = s.tx.DB.Exec("DELETE FROM tracks WHERE id = ?", id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if countScannerRows(t, s.db, "SELECT count(*) FROM track_file_fingerprints") != 0 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_file_fingerprints") != 0 {
 		t.Fatal("fingerprint foreign key did not cascade")
 	}
 	err = storeTrackFingerprint(ctx, s.queries, path, baseline)
@@ -137,7 +138,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 	for _, identical := range []bool{false, true} {
 		t.Run(map[bool]string{false: "content", true: "fingerprint only"}[identical], func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "media.m4a")
 			err := os.WriteFile(path, []byte("media"), 0600)
@@ -155,7 +156,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 				t.Fatalf("initial: %v %v", outcome, err)
 			}
 			baseline := scan.trackIndex[path]
-			_, err = s.db.Exec("UPDATE tracks SET title='retained',updated_at='2000-01-01 00:00:00'")
+			_, err = s.tx.DB.Exec("UPDATE tracks SET title='retained',updated_at='2000-01-01 00:00:00'")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -170,7 +171,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 
 			if !identical {
 				probeFailure := errors.New("probe failed")
-				s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, probeFailure }}
+				s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, probeFailure }}
 				_, _, err = s.processFile(ctx, scan, file)
 				failedProbe := errors.Is(err, probeFailure)
 				if !failedProbe {
@@ -182,7 +183,7 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 				}
 				s.ffprobe = stub
 			}
-			_, err = s.db.Exec("CREATE TRIGGER fail_fingerprint BEFORE UPDATE ON track_file_fingerprints BEGIN SELECT RAISE(ABORT,'fingerprint failure'); END")
+			_, err = s.tx.DB.Exec("CREATE TRIGGER fail_fingerprint BEFORE UPDATE ON track_file_fingerprints BEGIN SELECT RAISE(ABORT,'fingerprint failure'); END")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -195,11 +196,11 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 				t.Fatalf("baseline changed on rollback: %v", err)
 			}
 			var name, updated string
-			err = s.db.QueryRow("SELECT title,updated_at FROM tracks").Scan(&name, &updated)
+			err = s.tx.DB.QueryRow("SELECT title,updated_at FROM tracks").Scan(&name, &updated)
 			if err != nil || name != "retained" || updated != "2000-01-01 00:00:00" {
 				t.Fatalf("catalog changed on rollback: %s %s %v", name, updated, err)
 			}
-			_, err = s.db.Exec("DROP TRIGGER fail_fingerprint")
+			_, err = s.tx.DB.Exec("DROP TRIGGER fail_fingerprint")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -218,25 +219,11 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 	}
 }
 
-type fingerprintProbe struct {
-	callback func(context.Context, string) (*ffprobe.FfprobeResult, error)
-}
-
-func (p *fingerprintProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	return p.callback(ctx, path)
-}
-func (p *fingerprintProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	return p.callback(ctx, path)
-}
-func (p *fingerprintProbe) KeyframeAtOrBefore(context.Context, string, int64, float64) (float64, error) {
-	return 0, errors.New("unused")
-}
-
 func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 	for _, stage := range []string{"resolution", "commit"} {
 		t.Run(stage, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "media.m4a")
 			err := os.WriteFile(path, []byte("media"), 0600)
@@ -268,18 +255,18 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 				}
 			}
 			if stage == "resolution" {
-				s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
-					unlocked := s.scannerDBMu.TryLock()
+				s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+					unlocked := s.tx.Mu.TryLock()
 					if !unlocked {
 						t.Error("probe held database mutex")
 					} else {
-						s.scannerDBMu.Unlock()
+						s.tx.Mu.Unlock()
 					}
 					mutate()
 					return testMusicMetadata(), nil
 				}}
 			} else {
-				conn, err := s.db.Conn(ctx)
+				conn, err := s.tx.DB.Conn(ctx)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -290,7 +277,7 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = s.db.Exec("CREATE TRIGGER mutate_before_commit AFTER UPDATE ON track_file_fingerprints BEGIN SELECT mutate_file(); END")
+				_, err = s.tx.DB.Exec("CREATE TRIGGER mutate_before_commit AFTER UPDATE ON track_file_fingerprints BEGIN SELECT mutate_file(); END")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -309,7 +296,7 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 
 func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "media.m4a")
 	err := os.WriteFile(path, []byte("media"), 0600)
@@ -319,25 +306,25 @@ func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.scanContext = ctx
-	s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		cancel()
 		return testMusicMetadata(), nil
 	}}
 	s.scan(dir)
-	log := s.logger.(*capturedLogger)
-	for _, entry := range log.infoEntries {
-		if strings.Contains(entry.msg, "scanner completed") {
-			t.Fatalf("canceled scan reported completion: %s", entry.msg)
+	log := s.logger.(*scannertest.Logger)
+	for _, entry := range log.InfoEntries {
+		if strings.Contains(entry.Msg, "scanner completed") {
+			t.Fatalf("canceled scan reported completion: %s", entry.Msg)
 		}
 	}
-	if countScannerRows(t, s.db, "SELECT count(*) FROM tracks") != 0 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks") != 0 {
 		t.Fatal("canceled scan persisted item")
 	}
 }
 
 func TestStoreFingerprintRejectsMissingCatalogRow(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	err := storeTrackFingerprint(context.Background(), s.queries, "/missing/media", scanner.FileFingerprint{})
 	missing := errors.Is(err, sql.ErrNoRows)
 	if !missing {

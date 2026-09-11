@@ -208,7 +208,9 @@ CREATE TABLE IF NOT EXISTS track_musicians (
   FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_track_musicians_musician ON track_musicians (musician_id);
+-- track_id second so MusicArtistTrackMetadata pages an artist's tracks in
+-- track_id order without a temporary sort.
+CREATE INDEX IF NOT EXISTS idx_track_musicians_musician_track ON track_musicians (musician_id, track_id);
 
 -- Local and Spotify genre contributions coexist; reconciliation removes only
 -- the affected source. The same provenance rule applies to album_genres.

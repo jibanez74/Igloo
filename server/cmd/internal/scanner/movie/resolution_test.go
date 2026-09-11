@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"testing"
 
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -290,7 +290,7 @@ func TestResolveMovieFileReturnsTmdbSearchFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
-	logged := &capturedLogger{}
+	logged := &scannertest.Logger{}
 	testScanner.scanner.logger = logged
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
@@ -305,8 +305,8 @@ func TestResolveMovieFileReturnsTmdbSearchFailure(t *testing.T) {
 		t.Fatalf("provider failure was treated as a no-match: %v", err)
 	}
 
-	if !warnEntryMentions(logged, "TMDB movie search failed", path) {
-		t.Fatalf("expected a warning naming %q, got %+v", path, logged.warnEntries)
+	if !logged.WarnMentions("TMDB movie search failed", path) {
+		t.Fatalf("expected a warning naming %q, got %+v", path, logged.WarnEntries)
 	}
 }
 
@@ -314,7 +314,7 @@ func TestResolveMovieFileDoesNotWarnWhenScanIsCanceled(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
-	logged := &capturedLogger{}
+	logged := &scannertest.Logger{}
 	testScanner.scanner.logger = logged
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: context.Canceled}
@@ -331,33 +331,9 @@ func TestResolveMovieFileDoesNotWarnWhenScanIsCanceled(t *testing.T) {
 		t.Fatalf("resolve canceled movie: %v", err)
 	}
 
-	logged.mu.Lock()
-	warnings := len(logged.warnEntries)
-	logged.mu.Unlock()
-	if warnings != 0 {
-		t.Fatalf("a canceled scan should not warn about TMDB, got %+v", logged.warnEntries)
+	if len(logged.WarnEntries) != 0 {
+		t.Fatalf("a canceled scan should not warn about TMDB, got %+v", logged.WarnEntries)
 	}
-}
-
-// warnEntryMentions reports whether a warning with the given message carries
-// needle in any of its structured values.
-func warnEntryMentions(logged *capturedLogger, msg, needle string) bool {
-	logged.mu.Lock()
-	defer logged.mu.Unlock()
-
-	for _, entry := range logged.warnEntries {
-		if entry.msg != msg {
-			continue
-		}
-		for _, arg := range entry.args {
-			value, ok := arg.(string)
-			if ok && strings.Contains(value, needle) {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func TestResolveMovieFileReturnsTmdbDetailFailure(t *testing.T) {
@@ -571,7 +547,7 @@ func TestAmbiguousSearchPartialFailuresAndCancellation(t *testing.T) {
 			if resolved.tmdbMovie == nil || resolved.tmdbMovie.TmdbID != 2 || len(client.detailCalls) != 1 {
 				t.Fatalf("partial search discarded candidate: %+v", resolved)
 			}
-			if failure != "duplicate" && !warnEntryMentions(s.logger.(*capturedLogger), "TMDB movie search failed", "Blade.Runner.2049.mkv") {
+			if failure != "duplicate" && !s.logger.(*scannertest.Logger).WarnMentions("TMDB movie search failed", "Blade.Runner.2049.mkv") {
 				t.Fatal("operational error was suppressed")
 			}
 		})

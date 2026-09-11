@@ -15,6 +15,7 @@ import (
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestMusicCleanupDeletionFailure(t *testing.T) {
@@ -39,7 +40,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 			metadata := testMusicMetadata()
 			metadata.Format.Tags.Genre = "Rock"
 			s := New(Dependencies{
-				DB: db, Queries: queries, Logger: &capturedLogger{},
+				DB: db, Queries: queries, Logger: &scannertest.Logger{},
 				Now:     func() time.Time { return time.Now().Add(2 * time.Minute) },
 				Ffprobe: &countingMusicScannerFfprobe{result: metadata},
 			})
@@ -84,7 +85,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 			s.scanContext = ctx
 			spotify := &musicScannerSpotifyStub{}
 			s.spotify = spotify
-			logs := &capturedLogger{}
+			logs := &scannertest.Logger{}
 			s.logger = logs
 			s.scan(root)
 
@@ -92,7 +93,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 				t.Fatalf("deletion attempted=%v invalidations=%d", deletionAttempted, invalidations)
 			}
 			for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "tracks_search_fts"} {
-				count := countScannerRows(t, db, "SELECT count(*) FROM "+table)
+				count := scannertest.CountRows(t, db, "SELECT count(*) FROM "+table)
 				if count != 1 {
 					t.Fatalf("rollback left %d rows in %s", count, table)
 				}
@@ -104,12 +105,12 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 				assertMusicInterrupted(t, s)
 				return
 			}
-			if len(logs.errorEntries) != 1 || logs.errorEntries[0].msg != "music scan failed" {
-				t.Fatalf("cleanup error logs=%+v", logs.errorEntries)
+			if len(logs.ErrorEntries) != 1 || logs.ErrorEntries[0].Msg != "music scan failed" {
+				t.Fatalf("cleanup error logs=%+v", logs.ErrorEntries)
 			}
-			for _, entry := range logs.infoEntries {
-				if entry.msg == "music library scan interrupted" || strings.Contains(entry.msg, "completed:") {
-					t.Errorf("failed cleanup logged %q", entry.msg)
+			for _, entry := range logs.InfoEntries {
+				if entry.Msg == "music library scan interrupted" || strings.Contains(entry.Msg, "completed:") {
+					t.Errorf("failed cleanup logged %q", entry.Msg)
 				}
 			}
 		})
@@ -120,7 +121,7 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 	for _, scenario := range []string{"deleted", "removed subdirectory", "broken symlink", "no fingerprint", "outside directory", "unavailable root"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			root := t.TempDir()
 			directory := filepath.Join(root, "library")
 			err := os.Mkdir(directory, 0700)
@@ -163,7 +164,7 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 			case "broken symlink":
 				err = os.Symlink(filepath.Join(root, "missing-target"), path)
 			case "no fingerprint":
-				_, err = s.db.Exec("DELETE FROM track_file_fingerprints")
+				_, err = s.tx.DB.Exec("DELETE FROM track_file_fingerprints")
 			case "unavailable root":
 				err = os.Remove(directory)
 			}
@@ -173,7 +174,7 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 			invalidations := 0
 			s.invalidateCommittedTrack = func(id int64) {
 				invalidations++
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE id = ?", id)
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE id = ?", id)
 				if count != 0 {
 					t.Error("invalidation preceded commit")
 				}
@@ -184,7 +185,7 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 			if scenario == "outside directory" || scenario == "unavailable root" {
 				wantRows, wantInvalidations = 1, 0
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
 			if count != wantRows || invalidations != wantInvalidations || probe.calls != 1 {
 				t.Fatalf("rows=%d invalidations=%d probes=%d", count, invalidations, probe.calls)
 			}
@@ -196,7 +197,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 	for _, scenario := range []string{"commit", "rollback", "reappeared", "root replaced", "path changed", "id changed"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx := context.Background()
 			root := filepath.Join(t.TempDir(), "library")
 			err := os.Mkdir(root, 0700)
@@ -228,12 +229,12 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 			}
 			switch scenario {
 			case "rollback":
-				_, err = s.db.Exec("CREATE TRIGGER reject_delete AFTER DELETE ON tracks BEGIN SELECT RAISE(ABORT,'delete failed'); END")
+				_, err = s.tx.DB.Exec("CREATE TRIGGER reject_delete AFTER DELETE ON tracks BEGIN SELECT RAISE(ABORT,'delete failed'); END")
 			case "path changed":
-				_, err = s.db.Exec("UPDATE tracks SET file_path = ? WHERE id = ?", path+".moved", files[0].ID)
+				_, err = s.tx.DB.Exec("UPDATE tracks SET file_path = ? WHERE id = ?", path+".moved", files[0].ID)
 			case "id changed":
 				// This fixture has cascading dependents; changing the identity requires a fresh row.
-				_, err = s.db.Exec("DELETE FROM tracks WHERE id = ?", files[0].ID)
+				_, err = s.tx.DB.Exec("DELETE FROM tracks WHERE id = ?", files[0].ID)
 				if err == nil {
 					err = os.WriteFile(path, []byte("replacement"), 0600)
 					if err != nil {
@@ -246,7 +247,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 					err = os.Remove(path)
 				}
 			case "reappeared", "root replaced":
-				conn, connErr := s.db.Conn(ctx)
+				conn, connErr := s.tx.DB.Conn(ctx)
 				if connErr != nil {
 					t.Fatal(connErr)
 				}
@@ -269,7 +270,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 				})
 				conn.Close()
 				if err == nil {
-					_, err = s.db.Exec("CREATE TRIGGER change_cleanup AFTER DELETE ON tracks BEGIN SELECT change_cleanup_file(); END")
+					_, err = s.tx.DB.Exec("CREATE TRIGGER change_cleanup AFTER DELETE ON tracks BEGIN SELECT change_cleanup_file(); END")
 				}
 			}
 			if err != nil {
@@ -278,13 +279,13 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 			invalidations := 0
 			s.invalidateCommittedTrack = func(id int64) {
 				invalidations++
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE id = ?", id)
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE id = ?", id)
 				if count != 0 {
 					t.Error("invalidation preceded commit")
 				}
-				unlocked := s.scannerDBMu.TryLock()
+				unlocked := s.tx.Mu.TryLock()
 				if unlocked {
-					s.scannerDBMu.Unlock()
+					s.tx.Mu.Unlock()
 					t.Error("deletion callback did not hold database mutex")
 				}
 			}
@@ -303,11 +304,11 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 			if indexed != (wantDeleted == 0) {
 				t.Fatalf("fingerprint index published incorrectly: %v", indexed)
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
 			if count != 1-wantDeleted {
 				t.Fatalf("rows=%d", count)
 			}
-			count = countScannerRows(t, s.db, "SELECT count(*) FROM track_file_fingerprints")
+			count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_file_fingerprints")
 			if count != 1-wantDeleted {
 				t.Fatalf("fingerprints=%d", count)
 			}
@@ -319,7 +320,7 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 	for _, scenario := range []string{"failed", "deferred", "unchanged", "canceled", "root replaced"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
@@ -330,7 +331,7 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			seenPath := filepath.Join(root, "a-seen.m4a")
 			triggerPath := filepath.Join(root, "b-trigger.m4a")
 			missingPath := filepath.Join(root, "c-missing.m4a")
-			s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return testMusicMetadata(), nil }}
+			s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return testMusicMetadata(), nil }}
 			for _, path := range []string{seenPath, triggerPath, missingPath} {
 				err = os.WriteFile(path, []byte("media"), 0600)
 				if err != nil {
@@ -363,7 +364,7 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 				}
 			}
 			s.scanContext = ctx
-			s.ffprobe = &fingerprintProbe{callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+			s.ffprobe = &scannertest.Probe{Callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
 				if path == triggerPath {
 					err := os.Remove(seenPath)
 					if err != nil {
@@ -391,11 +392,11 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			if scenario == "canceled" || scenario == "root replaced" {
 				wantRows, wantInvalidations = 3, 0
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
 			if count != wantRows || invalidations != wantInvalidations {
 				t.Fatalf("rows=%d invalidations=%d", count, invalidations)
 			}
-			count = countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE file_path = ?", seenPath)
+			count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE file_path = ?", seenPath)
 			if count != 1 {
 				t.Fatal("seen file deleted during processing was removed")
 			}
@@ -405,9 +406,9 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 
 func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	first, second := t.TempDir(), t.TempDir()
-	s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return testMusicMetadata(), nil }}
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return testMusicMetadata(), nil }}
 	for _, root := range []string{first, second} {
 		path := filepath.Join(root, "missing.m4a")
 		err := os.WriteFile(path, []byte("media"), 0600)
@@ -433,12 +434,12 @@ func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 		return sql.NullString{String: directory, Valid: true}
 	}
 	result := s.Start()
-	if result.Status != StartStarted {
+	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
-	s.wait.Wait()
-	count := countScannerRows(t, s.db, "SELECT count(*) FROM tracks WHERE file_path = ?", filepath.Join(second, "missing.m4a"))
-	total := countScannerRows(t, s.db, "SELECT count(*) FROM tracks")
+	s.launcher.Wait.Wait()
+	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE file_path = ?", filepath.Join(second, "missing.m4a"))
+	total := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
 	if calls != 1 || count != 1 || total != 1 {
 		t.Fatalf("directory reads=%d second library=%d total=%d", calls, count, total)
 	}
@@ -446,7 +447,7 @@ func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 
 func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	root := t.TempDir()
 	first, second := filepath.Join(root, "first.m4a"), filepath.Join(root, "second.m4a")
 	scan := newMusicScanContext(nil)
@@ -454,7 +455,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	scanTaggedTrack(t, s, scan, first, 1, tags)
 	tags.Title, tags.SortArtist, tags.SortAlbum, tags.Date = "Second", "B", "B", "2020"
 	scanTaggedTrack(t, s, scan, second, 1, tags)
-	_, err := s.db.Exec(`
+	_, err := s.tx.DB.Exec(`
  INSERT INTO users(id,name,email,password) VALUES(1,'Listener','listener@example.test','unused');
  INSERT INTO playlists(id,user_id,name) VALUES(1,1,'Favorites');
  INSERT INTO playlist_tracks(playlist_id,track_id,position) SELECT 1,id,id FROM tracks;
@@ -486,16 +487,16 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 		t.Fatalf("rollback: %d %d %v", deleted, invalidations, err)
 	}
 	for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "tracks_search_fts", "playlist_tracks", "user_play_history", "user_track_stats", "user_liked_tracks"} {
-		count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 2 {
 			t.Fatalf("rollback left %d rows in %s", count, table)
 		}
 	}
-	count := countScannerRows(t, s.db, "SELECT count(*) FROM musicians WHERE sort_name='A'")
+	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE sort_name='A'")
 	if count != 1 {
 		t.Fatal("artist sort update did not roll back")
 	}
-	_, err = s.db.Exec("DROP TRIGGER reject_derived_update")
+	_, err = s.tx.DB.Exec("DROP TRIGGER reject_derived_update")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +506,7 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	}
 	var artistSort, albumSort, date string
 	var year int
-	err = s.db.QueryRow("SELECT m.sort_name,a.sort_title,a.release_date,a.year FROM musicians m CROSS JOIN albums a").Scan(&artistSort, &albumSort, &date, &year)
+	err = s.tx.DB.QueryRow("SELECT m.sort_name,a.sort_title,a.release_date,a.year FROM musicians m CROSS JOIN albums a").Scan(&artistSort, &albumSort, &date, &year)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,18 +525,18 @@ func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 		t.Fatal("deleted tracks caused Spotify retries")
 	}
 	for _, table := range []string{"tracks", "track_file_fingerprints", "track_musicians", "track_genres", "music_track_metadata", "music_credit_metadata", "tracks_search_fts", "playlist_tracks", "user_play_history", "user_track_stats", "user_liked_tracks", "musician_albums", "musician_genres", "album_genres"} {
-		count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 0 {
 			t.Fatalf("cleanup left %d rows in %s", count, table)
 		}
 	}
 	for _, table := range []string{"musicians", "albums", "genres", "playlists"} {
-		count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 1 {
 			t.Fatalf("shared %s rows=%d", table, count)
 		}
 	}
-	err = s.db.QueryRow("SELECT m.sort_name,a.sort_title,a.release_date,a.year FROM musicians m CROSS JOIN albums a").Scan(&artistSort, &albumSort, &date, &year)
+	err = s.tx.DB.QueryRow("SELECT m.sort_name,a.sort_title,a.release_date,a.year FROM musicians m CROSS JOIN albums a").Scan(&artistSort, &albumSort, &date, &year)
 	if err != nil {
 		t.Fatal(err)
 	}

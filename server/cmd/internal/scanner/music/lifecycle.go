@@ -3,7 +3,6 @@ package music
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -18,28 +17,8 @@ const (
 )
 
 // Start launches a scan asynchronously when configured and no music scan is running.
-func (s *Scanner) Start() StartResult {
-	directory := s.currentMusicDirectory()
-	if !directory.Valid || directory.String == "" {
-		return StartResult{Status: StartNotConfigured}
-	}
-
-	started := s.guard.TryBegin()
-	if !started {
-		return StartResult{Directory: directory.String, Status: StartAlreadyRunning}
-	}
-
-	// The run is published before the goroutine starts so a status poll right
-	// after the request already sees it.
-	s.beginReport()
-
-	s.wait.Add(1)
-	go func() {
-		defer s.wait.Done()
-		defer s.guard.Finish()
-		s.runMusicScan(directory.String)
-	}()
-	return StartResult{Directory: directory.String, Status: StartStarted}
+func (s *Scanner) Start() scanner.StartResult {
+	return s.launcher.Launch(s.currentMusicDirectory(), s.beginReport, s.runMusicScan)
 }
 
 // runMusicScan expects beginReport to have published the run it continues.
@@ -98,15 +77,9 @@ func (s *Scanner) runMusicScan(directory string) {
 		ctx,
 		directory,
 		helpers.ValidAudioExtensions,
-		func(err error) {
-			s.logger.Warn("music discovery failed", "error", err)
-			var pathError *os.PathError
-			filename := ""
-			isPathError := errors.As(err, &pathError)
-			if isPathError {
-				filename = pathError.Path
-			}
-			report.Issue(filename, scanner.PhaseLocal, scanner.ReasonDiscoveryEntry)
+		func(path string, err error) {
+			s.logger.Warn("music discovery failed", "path", path, "error", err)
+			report.Issue(path, scanner.PhaseLocal, scanner.ReasonDiscoveryEntry)
 		},
 		func(file scanner.ScanFile) error {
 			reconciliation.MarkSeen(file.Path)

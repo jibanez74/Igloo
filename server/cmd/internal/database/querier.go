@@ -318,6 +318,7 @@ type Querier interface {
 	MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64) ([]int64, error)
 	MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error)
 	MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]int64, error)
+	// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 	MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error)
 	// Driven from musicians so the keyset cursor rides the primary key, like
 	// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
@@ -368,6 +369,7 @@ type Querier interface {
 	// popularity/follower count to NULL, and an obscure artist legitimately reports
 	// both, so an unguarded SET would erase values a previous match stored.
 	UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error
+	// Guarded so an unchanged primary artist does not fire the search triggers.
 	UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error
 	UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (UpdateMusicianSpotifyThumbRow, error)
 	UpdatePlaybackServerSettings(ctx context.Context, arg UpdatePlaybackServerSettingsParams) (Setting, error)

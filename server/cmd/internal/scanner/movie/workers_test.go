@@ -107,7 +107,7 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 		t.Fatalf("first miss: %+v searches=%d", first, searches())
 	}
 	var attempts, lastAttempt sql.NullInt64
-	err = s.db.QueryRow("SELECT attempts, last_attempt_at FROM movie_tmdb_retries").Scan(&attempts, &lastAttempt)
+	err = s.tx.DB.QueryRow("SELECT attempts, last_attempt_at FROM movie_tmdb_retries").Scan(&attempts, &lastAttempt)
 	if err != nil || attempts.Int64 != 1 || lastAttempt.Int64 != clock.Unix() {
 		t.Fatalf("miss bookkeeping: attempts=%v last=%v err=%v", attempts, lastAttempt, err)
 	}

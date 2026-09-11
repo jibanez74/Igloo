@@ -7,31 +7,8 @@ import (
 	"igloo/cmd/internal/scanner"
 )
 
-func (s *Scanner) Start() StartResult {
-	directory := s.currentMoviesDirectory()
-	result := StartResult{Directory: directory.String}
-	if !directory.Valid || directory.String == "" {
-		result.Status = StartNotConfigured
-		return result
-	}
-
-	if !s.guard.TryBegin() {
-		result.Status = StartAlreadyRunning
-		return result
-	}
-
-	// The run is published before the goroutine starts so a status poll right
-	// after the request already sees it.
-	s.beginReport()
-
-	s.wait.Add(1)
-	go func() {
-		defer s.wait.Done()
-		defer s.guard.Finish()
-		s.runMovieScan(directory.String)
-	}()
-	result.Status = StartStarted
-	return result
+func (s *Scanner) Start() scanner.StartResult {
+	return s.launcher.Launch(s.currentMoviesDirectory(), s.beginReport, s.runMovieScan)
 }
 
 func (s *Scanner) loadMovieScanIndex(ctx context.Context) (map[string]movieScanEntry, []scanner.CatalogFile, error) {

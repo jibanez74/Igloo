@@ -10,17 +10,17 @@ import (
 	"igloo/cmd/internal/scanner/music"
 )
 
-type musicStartFunc func() music.StartResult
+type musicStartFunc func() scanner.StartResult
 
-func (f musicStartFunc) Start() music.StartResult { return f() }
+func (f musicStartFunc) Start() scanner.StartResult { return f() }
 
 func (musicStartFunc) Status() music.Status {
 	return music.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
 }
 
-type movieStartFunc func() movie.StartResult
+type movieStartFunc func() scanner.StartResult
 
-func (f movieStartFunc) Start() movie.StartResult { return f() }
+func (f movieStartFunc) Start() scanner.StartResult { return f() }
 
 type startupLogger struct {
 	mu     sync.Mutex
@@ -63,9 +63,9 @@ func TestStartLibraryScansAtStartupStartsMovieBeforeMusic(t *testing.T) {
 	current := *app.CurrentSettings()
 	current.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
 	app.SetSettings(&current)
-	app.MovieScanner = movieStartFunc(func() movie.StartResult {
+	app.MovieScanner = movieStartFunc(func() scanner.StartResult {
 		logger.add("movie")
-		return movie.StartResult{Status: movie.StartStarted}
+		return scanner.StartResult{Status: scanner.StartStarted}
 	})
 
 	startLibraryScansAtStartup(app)
@@ -81,17 +81,17 @@ func TestStartLibraryScansAtStartupStartsMovieBeforeMusic(t *testing.T) {
 func TestStartMovieScanAtStartupHandlesNonStartedResults(t *testing.T) {
 	tests := []struct {
 		name      string
-		result    movie.StartResult
+		result    scanner.StartResult
 		wantEvent string
 	}{
 		{
 			name:      "not configured",
-			result:    movie.StartResult{Status: movie.StartNotConfigured},
+			result:    scanner.StartResult{Status: scanner.StartNotConfigured},
 			wantEvent: "skipping movie library scan: movies directory is not configured",
 		},
 		{
 			name:      "already running",
-			result:    movie.StartResult{Status: movie.StartAlreadyRunning},
+			result:    scanner.StartResult{Status: scanner.StartAlreadyRunning},
 			wantEvent: "movie library scan is already in progress",
 		},
 	}
@@ -104,12 +104,12 @@ func TestStartMovieScanAtStartupHandlesNonStartedResults(t *testing.T) {
 			logger := &startupLogger{}
 			app.Logger = logger
 			startCalls := 0
-			app.MovieScanner = movieStartFunc(func() movie.StartResult {
+			app.MovieScanner = movieStartFunc(func() scanner.StartResult {
 				startCalls++
 				return tc.result
 			})
 
-			startMovieScanAtStartup(app)
+			app.startScanAtStartup(movieLibrary, app.MovieScanner.Start())
 
 			if startCalls != 1 {
 				t.Fatalf("movie scanner Start calls = %d, want 1", startCalls)
@@ -124,17 +124,17 @@ func TestStartMovieScanAtStartupHandlesNonStartedResults(t *testing.T) {
 func TestStartMusicScanAtStartupHandlesNonStartedResults(t *testing.T) {
 	tests := []struct {
 		name      string
-		result    music.StartResult
+		result    scanner.StartResult
 		wantEvent string
 	}{
 		{
 			name:      "not configured",
-			result:    music.StartResult{Status: music.StartNotConfigured},
+			result:    scanner.StartResult{Status: scanner.StartNotConfigured},
 			wantEvent: "skipping music library scan: music directory is not configured",
 		},
 		{
 			name:      "already running",
-			result:    music.StartResult{Status: music.StartAlreadyRunning},
+			result:    scanner.StartResult{Status: scanner.StartAlreadyRunning},
 			wantEvent: "music library scan is already in progress",
 		},
 	}
@@ -146,9 +146,9 @@ func TestStartMusicScanAtStartupHandlesNonStartedResults(t *testing.T) {
 
 			logger := &startupLogger{}
 			app.Logger = logger
-			app.MovieScanner = movieStartFunc(func() movie.StartResult { return movie.StartResult{Status: movie.StartStarted} })
+			app.MovieScanner = movieStartFunc(func() scanner.StartResult { return scanner.StartResult{Status: scanner.StartStarted} })
 			startCalls := 0
-			app.MusicScanner = musicStartFunc(func() music.StartResult {
+			app.MusicScanner = musicStartFunc(func() scanner.StartResult {
 				startCalls++
 				return tc.result
 			})

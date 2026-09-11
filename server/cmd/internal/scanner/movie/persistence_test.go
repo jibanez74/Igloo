@@ -13,6 +13,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -653,7 +654,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Test Artist"
 		profilePath := "/test/profile.jpg"
 
-		artist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, name, profilePath)
+		artist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
@@ -676,7 +677,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 	t.Run("upsert refreshes mutable metadata", func(t *testing.T) {
 		tmdbID := 22222
 
-		firstArtist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, "Old Artist", "")
+		firstArtist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, "Old Artist", "")
 		if err != nil {
 			t.Fatalf("first getOrCreateArtist failed: %v", err)
 		}
@@ -684,7 +685,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 			t.Fatal("first getOrCreateArtist returned nil artist")
 		}
 
-		secondArtist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, "New Artist", "/new/profile.jpg")
+		secondArtist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, "New Artist", "/new/profile.jpg")
 		if err != nil {
 			t.Fatalf("second getOrCreateArtist failed: %v", err)
 		}
@@ -711,7 +712,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "No Profile Artist"
 		profilePath := ""
 
-		artist, err := getOrCreateArtist(ctx, testScanner.queries, tmdbID, name, profilePath)
+		artist, err := getOrCreateArtistID(ctx, testScanner.queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
@@ -783,7 +784,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
 	}
 
-	if got := countScannerRows(t, testScanner.db, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
+	if got := scannertest.CountRows(t, testScanner.db, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
 		t.Fatalf("artist rows for shared actor = %d, want 1", got)
 	}
 
@@ -797,7 +798,7 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 	}
 
 	// Both movies' cast rows must reference the single shared artist row.
-	if got := countScannerRows(t, testScanner.db, `
+	if got := scannertest.CountRows(t, testScanner.db, `
 		SELECT COUNT(*)
 		FROM cast AS c
 		INNER JOIN artist AS a ON a.id = c.artist_id

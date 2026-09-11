@@ -352,26 +352,7 @@ func processCrew(
 	return nil
 }
 
-func getOrCreateArtist(
-	ctx context.Context,
-	qtx *database.Queries,
-	tmdbID int,
-	name string,
-	profilePath string,
-) (int64, error) {
-	upserted, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
-		Name:    name,
-		TmdbID:  int64(tmdbID),
-		Profile: helpers.NullString(profilePath),
-	})
-	if err != nil {
-		return 0, fmt.Errorf("upsert artist failed: %w", err)
-	}
-
-	return upserted, nil
-}
-
-// getOrCreateArtistID is the scan-cached form of getOrCreateArtist: the same
+// getOrCreateArtistID upserts a TMDB person once per scan: the same
 // person credited across many movies (or several crew roles of one movie) hits
 // the database once per scan. The first sighting still runs the full upsert,
 // so name/profile refresh from TMDB once per scan instead of once per credit.
@@ -391,9 +372,13 @@ func getOrCreateArtistID(
 		}
 	}
 
-	artist, err := getOrCreateArtist(ctx, qtx, tmdbID, name, profilePath)
+	artist, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
+		Name:    name,
+		TmdbID:  int64(tmdbID),
+		Profile: helpers.NullString(profilePath),
+	})
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("upsert artist failed: %w", err)
 	}
 
 	if scan != nil {

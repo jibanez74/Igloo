@@ -135,11 +135,13 @@ SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_
 DELETE FROM music_spotify_matches WHERE entity_type=? AND entity_id=?;
 
 -- name: MusicArtistTrackMetadata :many
-SELECT m.track_id, m.artist_tag, m.artist_sort FROM music_track_metadata m JOIN track_musicians tm ON tm.track_id=m.track_id
-WHERE tm.musician_id=? AND m.track_id>sqlc.arg(after_id) ORDER BY m.track_id LIMIT 100;
+-- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
+SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+WHERE tm.musician_id=? AND tm.track_id>sqlc.arg(after_id) ORDER BY tm.track_id LIMIT 100;
 
 -- name: UpdateMusicTrackPrimaryArtist :exec
-UPDATE tracks SET musician_id=? WHERE id=?;
+-- Guarded so an unchanged primary artist does not fire the search triggers.
+UPDATE tracks SET musician_id = sqlc.arg(musician_id) WHERE id = sqlc.arg(id) AND musician_id IS NOT sqlc.arg(musician_id);
 
 -- name: MusicArtistTrackIDs :many
 SELECT track_id FROM track_musicians WHERE musician_id=?;

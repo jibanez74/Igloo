@@ -32,7 +32,7 @@ func musicStatusFixture(t *testing.T) (*Scanner, string, *failingPathMusicScanne
 
 func TestMusicScanStatusReportsLocalOutcomes(t *testing.T) {
 	s, dir, probe := musicStatusFixture(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 
 	if idle := s.Status(); idle.State != scanner.StateIdle || idle.Phase != scanner.PhaseIdle || idle.ActiveFiles == nil || idle.Issues == nil {
 		t.Fatalf("never-run status is not idle: %+v", idle)
@@ -79,7 +79,7 @@ func TestMusicScanStatusReportsLocalOutcomes(t *testing.T) {
 
 func TestMusicScanStatusDeferredFilesStayIssues(t *testing.T) {
 	s, dir, probe := musicStatusFixture(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	s.now = time.Now
 
 	s.scan(dir)
@@ -94,7 +94,7 @@ func TestMusicScanStatusDeferredFilesStayIssues(t *testing.T) {
 
 func TestMusicScanStatusFailsWhenDirectoryIsUnavailable(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
 
 	s.scan(filepath.Join(t.TempDir(), "missing"))
@@ -109,7 +109,7 @@ func TestMusicScanStatusFailsWhenDirectoryIsUnavailable(t *testing.T) {
 
 func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 	s, dir, _ := musicStatusFixture(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 
 	var observed Status
 	s.ffprobe = &callbackMusicProbe{audio: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
@@ -133,7 +133,7 @@ func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 	}}
 	writeMusicScannerTestFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
 	result := s.Start()
-	if result.Status != StartStarted {
+	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
 	if started := s.Status(); started.State != scanner.StateRunning || started.RunID == observed.RunID {
@@ -148,7 +148,7 @@ func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 
 func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	s, dir, probe := musicStatusFixture(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	probe.failingPath = ""
 	s.spotify = &musicScannerSpotifyStub{
 		artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: musicSpotifyReasonNoResults}},

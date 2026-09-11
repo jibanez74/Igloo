@@ -1,6 +1,7 @@
 import ScanProgress from "@/components/settings/ScanProgress";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { Fragment, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -48,9 +49,34 @@ export const Route = createFileRoute("/_auth/settings/libraries")({
 type LibraryPathField = keyof SettingsType;
 type ImplementedScan = "movies" | "music";
 
-const SCAN_STATUS_KEYS: Record<ImplementedScan, string> = {
-  movies: MOVIE_SCAN_STATUS_KEY,
-  music: MUSIC_SCAN_STATUS_KEY,
+type ScanLibrary = {
+  field: LibraryPathField;
+  label: string;
+  title: string;
+  statusKey: string;
+  trigger: () => Promise<ApiResponseType<{ message: string }>>;
+  invalidateLibrary: (queryClient: QueryClient) => void;
+};
+
+// Everything that differs between the two scannable libraries lives here;
+// the handlers and sections below are written once against it.
+const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
+  movies: {
+    field: "movies_dir",
+    label: "movies",
+    title: "Movies",
+    statusKey: MOVIE_SCAN_STATUS_KEY,
+    trigger: triggerMovieScan,
+    invalidateLibrary: invalidateMovieLibraryQueries,
+  },
+  music: {
+    field: "music_dir",
+    label: "music",
+    title: "Music",
+    statusKey: MUSIC_SCAN_STATUS_KEY,
+    trigger: triggerMusicScan,
+    invalidateLibrary: invalidateMusicLibraryQueries,
+  },
 };
 
 type LibrariesForm = {
@@ -159,10 +185,6 @@ function fieldFromLibraryError(message?: string): LibraryPathField | null {
   if (normalized.includes("shows")) return "shows_dir";
   if (normalized.includes("music")) return "music_dir";
   return null;
-}
-
-function scanLabel(scan: ImplementedScan) {
-  return scan === "movies" ? "movies" : "music";
 }
 
 function LibrariesSettings() {
@@ -290,9 +312,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   };
 
   const handleScan = async (scan: ImplementedScan) => {
-    const field = scan === "movies" ? "movies_dir" : "music_dir";
-    const savedPath = syncedSettings[field];
-    const label = scanLabel(scan);
+    const library = SCAN_LIBRARIES[scan];
+    const savedPath = syncedSettings[library.field];
+    const label = library.label;
     if (!savedPath) {
       const message = `Save a ${label} library path before scanning.`;
       setFeedback({ message, tone: "error" });
@@ -307,8 +329,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     });
 
     try {
-      const res =
-        scan === "movies" ? await triggerMovieScan() : await triggerMusicScan();
+      const res = await library.trigger();
       if (res.error) {
         const message = res.message || `Failed to start ${label} scan.`;
         setFeedback({ message, tone: "error" });
@@ -318,19 +339,15 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       }
 
       setFeedback({
-        message: `${label === "movies" ? "Movies" : "Music"} library scan started.`,
+        message: `${library.title} library scan started.`,
         tone: "success",
       });
       showSuccess(
         "Scan started",
-        `${label === "movies" ? "Movies" : "Music"} library scan has been initiated`,
+        `${library.title} library scan has been initiated`,
       );
-      if (scan === "movies") {
-        invalidateMovieLibraryQueries(queryClient);
-      } else {
-        invalidateMusicLibraryQueries(queryClient);
-      }
-      await queryClient.invalidateQueries({ queryKey: [SCAN_STATUS_KEYS[scan]] });
+      library.invalidateLibrary(queryClient);
+      await queryClient.invalidateQueries({ queryKey: [library.statusKey] });
       setActiveScan(current => (current === scan ? null : current));
     } catch {
       const message = `Failed to start ${label} scan.`;
@@ -383,19 +400,19 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 }
               >
                 {section.field === "movies_dir" && (
-                  <>
-                    <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
-                    <ScanProgress library="movies" status={movieScan.data} unavailable={movieScan.isError} />
-                  </>
+                  <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
                 )}
                 {section.field === "shows_dir" && (
                   <TVShowsUnavailableStatus hasLibrary={Boolean(syncedSettings.shows_dir)} />
                 )}
                 {section.field === "music_dir" && (
-                  <>
-                    <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
-                    <ScanProgress library="music" status={musicScan.data} unavailable={musicScan.isError} />
-                  </>
+                  <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
+                )}
+                {section.scan === "movies" && (
+                  <ScanProgress library="movies" status={movieScan.data} unavailable={movieScan.isError} />
+                )}
+                {section.scan === "music" && (
+                  <ScanProgress library="music" status={musicScan.data} unavailable={musicScan.isError} />
                 )}
               </LibraryPathSection>
             </Fragment>
@@ -542,8 +559,8 @@ function LibraryPathSection({
           aria-busy={scanPending}
           aria-label={
             scanPending
-              ? `Scanning ${scanLabel(config.scan)} library, please wait`
-              : `Scan ${scanLabel(config.scan)} library`
+              ? `Scanning ${SCAN_LIBRARIES[config.scan].label} library, please wait`
+              : `Scan ${SCAN_LIBRARIES[config.scan].label} library`
           }
           className="w-full disabled:opacity-50"
         >

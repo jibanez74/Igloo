@@ -14,6 +14,7 @@ import (
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestMissingMovieCleanupLifecycle(t *testing.T) {
@@ -21,7 +22,7 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			root := t.TempDir()
 			directory := filepath.Join(root, "library")
 			err := os.Mkdir(directory, 0700)
@@ -64,7 +65,7 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 			case "broken symlink":
 				err = os.Symlink(filepath.Join(root, "missing-target"), path)
 			case "no fingerprint":
-				_, err = s.db.Exec("DELETE FROM movie_file_fingerprints")
+				_, err = s.tx.DB.Exec("DELETE FROM movie_file_fingerprints")
 			case "unavailable root":
 				err = os.Remove(directory)
 			}
@@ -74,7 +75,7 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 			invalidations := 0
 			s.invalidateCommittedMovie = func(id int64) {
 				invalidations++
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE id = ?", id)
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE id = ?", id)
 				if count != 0 {
 					t.Error("invalidation preceded commit")
 				}
@@ -85,7 +86,7 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 			if scenario == "outside directory" || scenario == "unavailable root" {
 				wantRows, wantInvalidations = 1, 0
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM movies")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies")
 			if count != wantRows || invalidations != wantInvalidations || probe.calls != 1 {
 				t.Fatalf("rows=%d invalidations=%d probes=%d", count, invalidations, probe.calls)
 			}
@@ -98,7 +99,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
@@ -121,7 +122,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = s.db.Exec(`INSERT INTO users(id,name,email,password) VALUES(1,'Viewer','viewer@test','unused');
+			_, err = s.tx.DB.Exec(`INSERT INTO users(id,name,email,password) VALUES(1,'Viewer','viewer@test','unused');
  INSERT INTO watch_rooms(id,owner_user_id,movie_id,playback_mode) VALUES(11,1,?,'direct'),(12,1,?,'direct');`, files[0].ID, files[0].ID)
 			if err != nil {
 				t.Fatal(err)
@@ -136,16 +137,16 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			}
 			switch scenario {
 			case "query failure":
-				_, err = s.db.Exec("ALTER TABLE watch_rooms RENAME TO unavailable_watch_rooms")
+				_, err = s.tx.DB.Exec("ALTER TABLE watch_rooms RENAME TO unavailable_watch_rooms")
 			case "canceled":
 				cancel()
 			case "rollback":
-				_, err = s.db.Exec("CREATE TRIGGER reject_delete AFTER DELETE ON movies BEGIN SELECT RAISE(ABORT,'delete failed'); END")
+				_, err = s.tx.DB.Exec("CREATE TRIGGER reject_delete AFTER DELETE ON movies BEGIN SELECT RAISE(ABORT,'delete failed'); END")
 			case "path changed":
-				_, err = s.db.Exec("UPDATE movies SET file_path = ? WHERE id = ?", path+".moved", files[0].ID)
+				_, err = s.tx.DB.Exec("UPDATE movies SET file_path = ? WHERE id = ?", path+".moved", files[0].ID)
 			case "id changed":
 				// This fixture has cascading dependents; changing the identity requires a fresh row.
-				_, err = s.db.Exec("DELETE FROM movies WHERE id = ?", files[0].ID)
+				_, err = s.tx.DB.Exec("DELETE FROM movies WHERE id = ?", files[0].ID)
 				if err == nil {
 					err = os.WriteFile(path, []byte("replacement"), 0600)
 					if err != nil {
@@ -158,7 +159,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 					err = os.Remove(path)
 				}
 			case "reappeared", "root replaced":
-				conn, connErr := s.db.Conn(ctx)
+				conn, connErr := s.tx.DB.Conn(ctx)
 				if connErr != nil {
 					t.Fatal(connErr)
 				}
@@ -181,7 +182,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 				})
 				conn.Close()
 				if err == nil {
-					_, err = s.db.Exec("CREATE TRIGGER change_cleanup AFTER DELETE ON movies BEGIN SELECT change_cleanup_file(); END")
+					_, err = s.tx.DB.Exec("CREATE TRIGGER change_cleanup AFTER DELETE ON movies BEGIN SELECT change_cleanup_file(); END")
 				}
 			}
 			if err != nil {
@@ -193,7 +194,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 				if !slices.Equal(ids, []int64{11, 12}) {
 					t.Errorf("room IDs = %v", ids)
 				}
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM watch_rooms")
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM watch_rooms")
 				if count != 0 {
 					t.Error("room callback preceded commit")
 				}
@@ -204,13 +205,13 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 				if roomInvalidations != 1 {
 					t.Error("movie invalidation preceded room invalidation")
 				}
-				count := countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE id = ?", id)
+				count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE id = ?", id)
 				if count != 0 {
 					t.Error("invalidation preceded commit")
 				}
-				unlocked := s.scannerDBMu.TryLock()
+				unlocked := s.tx.Mu.TryLock()
 				if unlocked {
-					s.scannerDBMu.Unlock()
+					s.tx.Mu.Unlock()
 					t.Error("deletion callback did not hold database mutex")
 				}
 			}
@@ -229,11 +230,11 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 			if indexed != (wantDeleted == 0) {
 				t.Fatalf("fingerprint index published incorrectly: %v", indexed)
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM movies")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies")
 			if count != 1-wantDeleted {
 				t.Fatalf("rows=%d", count)
 			}
-			count = countScannerRows(t, s.db, "SELECT count(*) FROM movie_file_fingerprints")
+			count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_file_fingerprints")
 			if count != 1-wantDeleted {
 				t.Fatalf("fingerprints=%d", count)
 			}
@@ -250,7 +251,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			now.Store(time.Now().Add(2 * time.Minute).UnixNano())
 			s.now = func() time.Time { return time.Unix(0, now.Load()) }
 			s.waitForRetry = func(ctx context.Context, delay time.Duration) error { now.Add(int64(delay)); return ctx.Err() }
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
@@ -261,7 +262,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			seenPath := filepath.Join(root, "a-seen.mkv")
 			triggerPath := filepath.Join(root, "b-trigger.mkv")
 			missingPath := filepath.Join(root, "c-missing.mkv")
-			s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+			s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 				return movieScannerMetadataFixture("120"), nil
 			}}
 			for _, path := range []string{seenPath, triggerPath, missingPath} {
@@ -296,7 +297,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 				}
 			}
 			s.scanContext = ctx
-			s.ffprobe = &fingerprintProbe{callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+			s.ffprobe = &scannertest.Probe{Callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
 				if path == triggerPath {
 					err := os.Remove(seenPath)
 					if err != nil {
@@ -324,11 +325,11 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			if scenario == "canceled" || scenario == "root replaced" {
 				wantRows, wantInvalidations = 3, 0
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM movies")
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies")
 			if count != wantRows || invalidations != wantInvalidations {
 				t.Fatalf("rows=%d invalidations=%d", count, invalidations)
 			}
-			count = countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE file_path = ?", seenPath)
+			count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE file_path = ?", seenPath)
 			if count != 1 {
 				t.Fatal("seen file deleted during processing was removed")
 			}
@@ -339,9 +340,9 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	first, second := t.TempDir(), t.TempDir()
-	s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return movieScannerMetadataFixture("120"), nil
 	}}
 	for _, root := range []string{first, second} {
@@ -369,12 +370,12 @@ func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 		return sql.NullString{String: directory, Valid: true}
 	}
 	result := s.Start()
-	if result.Status != StartStarted {
+	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
-	s.wait.Wait()
-	count := countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE file_path = ?", filepath.Join(second, "missing.mkv"))
-	total := countScannerRows(t, s.db, "SELECT count(*) FROM movies")
+	s.launcher.Wait.Wait()
+	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE file_path = ?", filepath.Join(second, "missing.mkv"))
+	total := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies")
 	if calls != 1 || count != 1 || total != 1 {
 		t.Fatalf("directory reads=%d second library=%d total=%d", calls, count, total)
 	}
@@ -383,7 +384,7 @@ func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	root := t.TempDir()
 	path := filepath.Join(root, "UniqueMovie.mkv")
 	err := os.WriteFile(path, []byte("media"), 0600)
@@ -395,7 +396,7 @@ func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 	if imported != 1 || failures != 0 {
 		t.Fatal("import failed")
 	}
-	_, err = s.db.Exec(`
+	_, err = s.tx.DB.Exec(`
  INSERT INTO users(id,name,email,password) VALUES(1,'Viewer','viewer@example.test','unused');
  INSERT INTO playlists(id,user_id,name,content_type) VALUES(1,1,'Favorites','movie');
  INSERT INTO playlist_movies(playlist_id,movie_id,position) SELECT 1,id,1 FROM movies;
@@ -416,17 +417,17 @@ func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 	}
 	s.scan(root)
 	for _, table := range []string{"movies", "movie_file_fingerprints", "video_streams", "audio_streams", "subtitles", "chapters", "movie_genres", "movie_watch_progress", "user_liked_movies", "playlist_movies", "watch_rooms", "keyframe_indexes", "remux_safety_verdicts"} {
-		count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 0 {
 			t.Fatalf("cleanup left %d rows in %s", count, table)
 		}
 	}
-	count := countScannerRows(t, s.db, "SELECT count(*) FROM movies_fts WHERE movies_fts MATCH 'UniqueMovie'")
+	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies_fts WHERE movies_fts MATCH 'UniqueMovie'")
 	if count != 0 {
 		t.Fatal("search index retained deleted movie")
 	}
 	for _, table := range []string{"genres", "playlists"} {
-		count := countScannerRows(t, s.db, "SELECT count(*) FROM "+table)
+		count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
 		if count != 1 {
 			t.Fatalf("shared %s rows=%d", table, count)
 		}

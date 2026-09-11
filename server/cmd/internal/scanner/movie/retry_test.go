@@ -10,6 +10,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 )
 
@@ -70,7 +71,7 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 				if movie.Title != "Local" || movie.TmdbID.Valid || movie.RunTime.Int64 != 120 || movie.Duration.Float64 != 7200 {
 					t.Fatalf("offline defaults: %+v", movie)
 				}
-				if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 1 {
+				if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_tmdb_retries") != 1 {
 					t.Fatal("missing retry")
 				}
 				searchCalls, detailCalls := len(client.searchCalls), len(client.detailCalls)
@@ -88,7 +89,7 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				_, err = s.db.Exec("UPDATE movies SET audience_rating=9 WHERE id=?", movie.ID)
+				_, err = s.tx.DB.Exec("UPDATE movies SET audience_rating=9 WHERE id=?", movie.ID)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -152,7 +153,7 @@ func TestMovieEnrichmentRecovery(t *testing.T) {
 				if !metadataChanged {
 					assertMoviePlaybackWork(t, s)
 				}
-				if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 0 || scan.enriched != 1 {
+				if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_tmdb_retries") != 0 || scan.enriched != 1 {
 					t.Fatal("success did not clear retry/count enrichment")
 				}
 				calls := len(client.detailCalls)
@@ -174,7 +175,7 @@ func seedMoviePlaybackWork(t *testing.T, s *Scanner, id int64) {
 		"INSERT INTO keyframe_indexes(movie_id,stream_index,fingerprint,duration_sec,keyframes) VALUES (?,0,'old',120,'[0]')",
 		"INSERT INTO remux_safety_verdicts(movie_id,stream_index,fingerprint,safe) VALUES (?,0,'old',1)",
 	} {
-		_, err := s.db.Exec(query, id)
+		_, err := s.tx.DB.Exec(query, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -182,7 +183,7 @@ func seedMoviePlaybackWork(t *testing.T, s *Scanner, id int64) {
 }
 func assertMoviePlaybackWork(t *testing.T, s *Scanner) {
 	t.Helper()
-	if countScannerRows(t, s.db, "SELECT count(*) FROM keyframe_indexes") != 1 || countScannerRows(t, s.db, "SELECT count(*) FROM remux_safety_verdicts") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM keyframe_indexes") != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM remux_safety_verdicts") != 1 {
 		t.Fatal("metadata retry invalidated playback work")
 	}
 }
@@ -207,11 +208,11 @@ func TestChangedMoviePreservesConfirmedMatchAndMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.db.Exec("UPDATE movies SET audience_rating=9")
+	_, err = s.tx.DB.Exec("UPDATE movies SET audience_rating=9")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.logger.(*capturedLogger).warnEntries) != 0 {
+	if len(s.logger.(*scannertest.Logger).WarnEntries) != 0 {
 		t.Fatal("low-confidence import produced a warning")
 	}
 	before, err := readTestMovieByPath(ctx, s.queries, path)
@@ -219,7 +220,7 @@ func TestChangedMoviePreservesConfirmedMatchAndMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	var relationIDs string
-	err = s.db.QueryRow("SELECT group_concat(id) FROM cast").Scan(&relationIDs)
+	err = s.tx.DB.QueryRow("SELECT group_concat(id) FROM cast").Scan(&relationIDs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestChangedMoviePreservesConfirmedMatchAndMetadata(t *testing.T) {
 		t.Fatalf("metadata lost:\nbefore=%+v\nafter=%+v", before, after)
 	}
 	var afterIDs string
-	err = s.db.QueryRow("SELECT group_concat(id) FROM cast").Scan(&afterIDs)
+	err = s.tx.DB.QueryRow("SELECT group_concat(id) FROM cast").Scan(&afterIDs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +258,7 @@ func TestChangedMoviePreservesConfirmedMatchAndMetadata(t *testing.T) {
 		t.Fatal("failed refresh rebuilt relationships")
 	}
 	for _, table := range []string{"cast", "crew", "movie_genres", "movie_production_companies", "movie_extra_videos"} {
-		if countScannerRows(t, s.db, "SELECT count(*) FROM "+table) != 1 {
+		if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table) != 1 {
 			t.Fatalf("lost %s", table)
 		}
 	}
@@ -329,7 +330,7 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 					t.Fatal(err)
 				}
 				if mutation == "identify-same" {
-					_, err = s.db.Exec("UPDATE movies SET tmdb_id=99")
+					_, err = s.tx.DB.Exec("UPDATE movies SET tmdb_id=99")
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -365,11 +366,11 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 						seedMoviePlaybackWork(t, s, before.ID)
 					}
 					// Taking this lock also verifies external requests run outside it.
-					s.scannerDBMu.Lock()
-					defer s.scannerDBMu.Unlock()
+					s.tx.Mu.Lock()
+					defer s.tx.Mu.Unlock()
 					switch mutation {
 					case "identify", "identify-same":
-						tx, e := s.db.BeginTx(ctx, nil)
+						tx, e := s.tx.DB.BeginTx(ctx, nil)
 						if e != nil {
 							t.Fatal(e)
 						}
@@ -384,14 +385,14 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 							t.Fatal(e)
 						}
 					case "delete", "replace":
-						_, err = s.db.Exec("DELETE FROM movies WHERE id=?", before.ID)
+						_, err = s.tx.DB.Exec("DELETE FROM movies WHERE id=?", before.ID)
 						if err == nil && mutation == "replace" {
 							_, err = s.queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Replacement", FilePath: path, FileName: "Local.mkv", Container: "mkv", MimeType: "video/x-matroska"})
 						}
 					case "path":
-						_, err = s.db.Exec("UPDATE movies SET file_path=? WHERE id=?", path+".moved", before.ID)
+						_, err = s.tx.DB.Exec("UPDATE movies SET file_path=? WHERE id=?", path+".moved", before.ID)
 					case "rollback":
-						_, err = s.db.Exec("CREATE TRIGGER fail_retry BEFORE DELETE ON movie_tmdb_retries BEGIN SELECT RAISE(ABORT,'retry failure'); END")
+						_, err = s.tx.DB.Exec("CREATE TRIGGER fail_retry BEFORE DELETE ON movie_tmdb_retries BEGIN SELECT RAISE(ABORT,'retry failure'); END")
 					case "cancel":
 						cancel()
 					case "file":
@@ -418,7 +419,7 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 					if technical && (current.Size != 7 || invalidations != 0) {
 						t.Fatal("valid technical update was lost")
 					}
-					if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 0 {
+					if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_tmdb_retries") != 0 {
 						t.Fatal("manual identify retry was restored")
 					}
 				} else {
@@ -438,15 +439,16 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 							t.Fatal("partial metadata published")
 						}
 						assertMoviePlaybackWork(t, s)
-						if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 1 {
+						if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_tmdb_retries") != 1 {
 							t.Fatal("lost retry after rollback")
 						}
-						if scan.genreIDs.Has(scanner.NormalizedScanCacheKey("Drama", "movie")) {
+						_, cached := scan.genreIDs.Get(scanner.NormalizedScanCacheKey("Drama", "movie"))
+						if cached {
 							t.Fatal("rolled back genre cache published")
 						}
 					}
 					if mutation == "delete" || mutation == "replace" {
-						if countScannerRows(t, s.db, "SELECT count(*) FROM movie_tmdb_retries") != 0 {
+						if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_tmdb_retries") != 0 {
 							t.Fatal("retry deletion did not cascade")
 						}
 						if mutation == "replace" {
@@ -495,7 +497,7 @@ func TestTechnicalRescanPreservesUserEdits(t *testing.T) {
 	}
 
 	// Stand in for the Edit dialog, which writes these columns through UpdateMovie.
-	_, err = s.db.Exec("UPDATE movies SET title='My Title', overview='My overview', tag_line='My tagline'")
+	_, err = s.tx.DB.Exec("UPDATE movies SET title='My Title', overview='My overview', tag_line='My tagline'")
 	if err != nil {
 		t.Fatal(err)
 	}

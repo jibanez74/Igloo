@@ -11,6 +11,7 @@ import (
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
@@ -67,7 +68,7 @@ func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
 					t.Fatal("artwork-only movie imported")
 				}
 				for _, table := range []string{"movies", "movie_file_fingerprints", "movie_tmdb_retries", "video_streams"} {
-					if countScannerRows(t, s.db, "SELECT count(*) FROM "+table) != 0 {
+					if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table) != 0 {
 						t.Fatalf("artwork-only import leaked %s", table)
 					}
 				}

@@ -332,7 +332,7 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 	current.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
 	app.SetSettings(&current)
 
-	app.MusicScanner = musicStartFunc(func() music.StartResult { return music.StartResult{Status: music.StartAlreadyRunning} })
+	app.MusicScanner = musicStartFunc(func() scanner.StartResult { return scanner.StartResult{Status: scanner.StartAlreadyRunning} })
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scan/music", nil)
 	w := httptest.NewRecorder()
@@ -351,7 +351,7 @@ func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 	current.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
 	app.SetSettings(&current)
 
-	app.MovieScanner = movieStartResultStub{result: movie.StartResult{Status: movie.StartAlreadyRunning}}
+	app.MovieScanner = movieStartResultStub{result: scanner.StartResult{Status: scanner.StartAlreadyRunning}}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scan/movies", nil)
 	w := httptest.NewRecorder()
@@ -366,12 +366,12 @@ func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 func TestTriggerMovieScanMapsStartStatusesToAdminResponses(t *testing.T) {
 	tests := []struct {
 		name       string
-		result     movie.StartResult
+		result     scanner.StartResult
 		wantStatus int
 	}{
-		{"started", movie.StartResult{Directory: "/movies", Status: movie.StartStarted}, http.StatusOK},
-		{"not configured", movie.StartResult{Status: movie.StartNotConfigured}, http.StatusInternalServerError},
-		{"already running", movie.StartResult{Status: movie.StartAlreadyRunning}, http.StatusConflict},
+		{"started", scanner.StartResult{Directory: "/movies", Status: scanner.StartStarted}, http.StatusOK},
+		{"not configured", scanner.StartResult{Status: scanner.StartNotConfigured}, http.StatusInternalServerError},
+		{"already running", scanner.StartResult{Status: scanner.StartAlreadyRunning}, http.StatusConflict},
 	}
 
 	for _, tc := range tests {
@@ -394,19 +394,19 @@ func TestTriggerMovieScanMapsStartStatusesToAdminResponses(t *testing.T) {
 func TestTriggerMusicScanMapsStartStatusesToAdminResponses(t *testing.T) {
 	tests := []struct {
 		name       string
-		result     music.StartResult
+		result     scanner.StartResult
 		wantStatus int
 	}{
-		{"started", music.StartResult{Directory: "/music", Status: music.StartStarted}, http.StatusOK},
-		{"not configured", music.StartResult{Status: music.StartNotConfigured}, http.StatusInternalServerError},
-		{"already running", music.StartResult{Status: music.StartAlreadyRunning}, http.StatusConflict},
+		{"started", scanner.StartResult{Directory: "/music", Status: scanner.StartStarted}, http.StatusOK},
+		{"not configured", scanner.StartResult{Status: scanner.StartNotConfigured}, http.StatusInternalServerError},
+		{"already running", scanner.StartResult{Status: scanner.StartAlreadyRunning}, http.StatusConflict},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			app := setupSettingsTestApp(t)
 			defer app.DB.Close()
-			app.MusicScanner = musicStartFunc(func() music.StartResult { return tc.result })
+			app.MusicScanner = musicStartFunc(func() scanner.StartResult { return tc.result })
 
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil)
@@ -420,10 +420,10 @@ func TestTriggerMusicScanMapsStartStatusesToAdminResponses(t *testing.T) {
 }
 
 type movieStartResultStub struct {
-	result movie.StartResult
+	result scanner.StartResult
 }
 
-func (s movieStartResultStub) Start() movie.StartResult {
+func (s movieStartResultStub) Start() scanner.StartResult {
 	return s.result
 }
 

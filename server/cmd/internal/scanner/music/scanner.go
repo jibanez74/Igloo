@@ -33,35 +33,17 @@ type Dependencies struct {
 // Scanner scans and persists the configured music library.
 type Scanner struct {
 	now                      func() time.Time
-	db                       *sql.DB
 	queries                  *database.Queries
 	logger                   logger.LoggerInterface
 	ffprobe                  ffprobe.FfprobeInterface
 	spotify                  spotifyapi.SpotifyInterface
 	scanContext              context.Context
-	wait                     *sync.WaitGroup
-	scannerDBMu              *sync.Mutex
+	launcher                 scanner.Launcher
 	tx                       scanner.TxRunner
 	currentMusicDirectory    func() sql.NullString
 	invalidateCommittedTrack func(int64)
-	guard                    scanner.ScanGuard
 	statusMu                 sync.RWMutex
 	status                   Status
-}
-
-// StartStatus describes whether a scan goroutine was launched.
-type StartStatus int
-
-const (
-	StartStarted StartStatus = iota
-	StartNotConfigured
-	StartAlreadyRunning
-)
-
-// StartResult records the observed directory and start outcome.
-type StartResult struct {
-	Directory string
-	Status    StartStatus
 }
 
 // New constructs a scanner and defaults optional lifecycle and cache callbacks.
@@ -85,10 +67,10 @@ func New(deps Dependencies) *Scanner {
 		deps.InvalidateCommittedTrack = func(int64) {}
 	}
 	return &Scanner{
-		now: deps.Now,
-		db:  deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
-		spotify: deps.Spotify, scanContext: deps.ScanContext, wait: deps.Wait,
-		scannerDBMu: deps.ScannerDBMu, tx: scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
+		now:     deps.Now,
+		queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
+		spotify: deps.Spotify, scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
+		tx:                       scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
 		currentMusicDirectory:    deps.CurrentMusicDirectory,
 		invalidateCommittedTrack: deps.InvalidateCommittedTrack,
 	}

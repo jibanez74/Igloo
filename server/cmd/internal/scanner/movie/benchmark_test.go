@@ -5,6 +5,7 @@ package movie
 import (
 	"context"
 	"database/sql"
+	"igloo/cmd/internal/scanner/scannertest"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -68,7 +69,7 @@ func TestMovieLibraryBenchmark(t *testing.T) {
 }
 
 type measurementLogger struct {
-	capturedLogger
+	scannertest.Logger
 	mu    sync.Mutex
 	t     *testing.T
 	phase string

@@ -402,8 +402,8 @@ func (q *Queries) MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]
 }
 
 const musicArtistTrackMetadata = `-- name: MusicArtistTrackMetadata :many
-SELECT m.track_id, m.artist_tag, m.artist_sort FROM music_track_metadata m JOIN track_musicians tm ON tm.track_id=m.track_id
-WHERE tm.musician_id=? AND m.track_id>?2 ORDER BY m.track_id LIMIT 100
+SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+WHERE tm.musician_id=? AND tm.track_id>?2 ORDER BY tm.track_id LIMIT 100
 `
 
 type MusicArtistTrackMetadataParams struct {
@@ -417,6 +417,7 @@ type MusicArtistTrackMetadataRow struct {
 	ArtistSort string `json:"artist_sort"`
 }
 
+// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
 func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error) {
 	rows, err := q.query(ctx, q.musicArtistTrackMetadataStmt, musicArtistTrackMetadata, arg.MusicianID, arg.AfterID)
 	if err != nil {
@@ -765,7 +766,7 @@ func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMus
 }
 
 const updateMusicTrackPrimaryArtist = `-- name: UpdateMusicTrackPrimaryArtist :exec
-UPDATE tracks SET musician_id=? WHERE id=?
+UPDATE tracks SET musician_id = ?1 WHERE id = ?2 AND musician_id IS NOT ?1
 `
 
 type UpdateMusicTrackPrimaryArtistParams struct {
@@ -773,6 +774,7 @@ type UpdateMusicTrackPrimaryArtistParams struct {
 	ID         int64         `json:"id"`
 }
 
+// Guarded so an unchanged primary artist does not fire the search triggers.
 func (q *Queries) UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error {
 	_, err := q.exec(ctx, q.updateMusicTrackPrimaryArtistStmt, updateMusicTrackPrimaryArtist, arg.MusicianID, arg.ID)
 	return err

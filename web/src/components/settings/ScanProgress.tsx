@@ -4,9 +4,12 @@ import type { MovieScanStatus, MusicScanStatus } from "@/types/settings";
 
 type ScanState = MovieScanStatus["state"];
 
-type LibraryCopy = {
+type LibraryCopy<Phase extends string> = {
   noun: string;
   states: Record<ScanState, string>;
+  phases: Record<Phase, string>;
+  // Wording of the enrichment line: "<provider>: <processed> of <total> <attempted> · <enriched> <enrichedLabel> · …"
+  enrichment: { provider: string; attempted: string; enriched: string };
   removed: string;
   unavailable: string;
   deferred: string;
@@ -21,33 +24,33 @@ const stateLabels = (noun: string, committed: string): Record<ScanState, string>
   failed: `${noun} scan stopped after an error. ${committed}`,
 });
 
-const MOVIE_PHASE_LABELS: Record<MovieScanStatus["phase"], string> = {
-  idle: "No movie scan has run yet.",
-  discovery: "Discovering movie files",
-  local: "Inspecting and importing movies",
-  "retry-wait": "Waiting for changing files to become quiet",
-  cleanup: "Checking missing movies",
-  enrichment: "Updating movie descriptions from TMDB",
-};
-
-const MUSIC_PHASE_LABELS: Record<MusicScanStatus["phase"], string> = {
-  idle: "No music scan has run yet.",
-  local: "Discovering and importing tracks",
-  cleanup: "Checking missing tracks",
-  enrichment: "Retrying Spotify matches",
-};
-
-const MOVIE_COPY: LibraryCopy = {
+const MOVIE_COPY: LibraryCopy<MovieScanStatus["phase"]> = {
   noun: "Movie",
   states: stateLabels("Movie", "Committed movies are available."),
+  phases: {
+    idle: "No movie scan has run yet.",
+    discovery: "Discovering movie files",
+    local: "Inspecting and importing movies",
+    "retry-wait": "Waiting for changing files to become quiet",
+    cleanup: "Checking missing movies",
+    enrichment: "Updating movie descriptions from TMDB",
+  },
+  enrichment: { provider: "Descriptions", attempted: "attempted", enriched: "updated" },
   removed: "missing movies removed",
   unavailable: "Movie scan status is unavailable. Showing the last known progress; updates will retry automatically.",
   deferred: "Files must be quiet for 60 seconds. The scan retries deferred files up to twice within two minutes; unresolved files can be retried in a later scan.",
 };
 
-const MUSIC_COPY: LibraryCopy = {
+const MUSIC_COPY: LibraryCopy<MusicScanStatus["phase"]> = {
   noun: "Music",
   states: stateLabels("Music", "Committed tracks are available."),
+  phases: {
+    idle: "No music scan has run yet.",
+    local: "Discovering and importing tracks",
+    cleanup: "Checking missing tracks",
+    enrichment: "Retrying Spotify matches",
+  },
+  enrichment: { provider: "Spotify", attempted: "retried", enriched: "matched" },
   removed: "missing tracks removed",
   unavailable: "Music scan status is unavailable. Showing the last known progress; updates will retry automatically.",
   deferred: "Files must be quiet for 60 seconds. Deferred files are retried on the next scan.",
@@ -58,25 +61,26 @@ type Props = { unavailable: boolean } & (
   | { library: "music"; status?: MusicScanStatus }
 );
 
-const phaseLabel = (props: Props) => {
-  if (props.library === "movies") return MOVIE_PHASE_LABELS[props.status?.phase ?? "idle"];
-  return MUSIC_PHASE_LABELS[props.status?.phase ?? "idle"];
-};
+// The discriminated props keep each library's status typed against its own
+// phase enum; the copy tables carry everything else that differs.
+const copyFor = (props: Props) => props.library === "movies" ? MOVIE_COPY : MUSIC_COPY;
+
+const phaseLabel = (props: Props) =>
+  props.library === "movies"
+    ? MOVIE_COPY.phases[props.status?.phase ?? "idle"]
+    : MUSIC_COPY.phases[props.status?.phase ?? "idle"];
 
 const enrichmentLine = (props: Props) => {
-  if (props.library === "movies") {
-    const status = props.status;
-    if (!status) return null;
-    return `Descriptions: ${status.enrichment_processed} of ${status.enrichment_total} attempted · ${status.enriched} updated · ${status.enrichment_failed} failed · ${status.enrichment_unmatched} unmatched · ${status.pending_enrichment} pending`;
-  }
+  if (!props.status) return null;
+  const { provider, attempted, enriched } = copyFor(props).enrichment;
   const status = props.status;
-  if (!status) return null;
-  return `Spotify: ${status.enrichment_processed} of ${status.enrichment_total} retried · ${status.enriched} matched · ${status.enrichment_failed} failed · ${status.enrichment_unmatched} unmatched`;
+  const pending = props.library === "movies" ? ` · ${props.status.pending_enrichment} pending` : "";
+  return `${provider}: ${status.enrichment_processed} of ${status.enrichment_total} ${attempted} · ${status.enriched} ${enriched} · ${status.enrichment_failed} failed · ${status.enrichment_unmatched} unmatched${pending}`;
 };
 
 export default function ScanProgress(props: Props) {
   const { status, unavailable } = props;
-  const copy = props.library === "movies" ? MOVIE_COPY : MUSIC_COPY;
+  const copy = copyFor(props);
   const announcement = status?.state === "running"
     ? phaseLabel(props)
     : status ? copy.states[status.state] : `Loading ${copy.noun.toLowerCase()} scan status`;

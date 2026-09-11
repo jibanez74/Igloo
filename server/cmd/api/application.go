@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/spotify"
@@ -82,11 +83,11 @@ type Application struct {
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
 	MovieScanner                  interface {
-		Start() movie.StartResult
+		Start() scanner.StartResult
 		Status() movie.Status
 	}
 	MusicScanner interface {
-		Start() music.StartResult
+		Start() scanner.StartResult
 		Status() music.Status
 	}
 }

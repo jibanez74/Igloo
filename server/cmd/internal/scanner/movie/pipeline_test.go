@@ -16,6 +16,7 @@ import (
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 )
 
@@ -58,7 +59,7 @@ func TestMoviePipeline418Files(t *testing.T) {
 			var active, maximum, calls atomic.Int32
 			entered := make(chan struct{}, 418)
 			release := make(chan struct{})
-			s.ffprobe = &fingerprintProbe{callback: func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+			s.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
 				calls.Add(1)
 				current := active.Add(1)
 				defer active.Add(-1)
@@ -109,7 +110,7 @@ func TestMoviePipeline418Files(t *testing.T) {
 			if status.State != "completed-with-issues" || status.Processed != 418 || status.Imported != 417 || status.Failed != 1 || status.Deferred != 0 || status.PendingEnrichment != 417 {
 				t.Fatalf("incomplete accounting: %+v", status)
 			}
-			if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 417 || countScannerRows(t, s.db, "SELECT count(*) FROM video_streams") != 417 {
+			if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies") != 417 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM video_streams") != 417 {
 				t.Fatal("committed catalog incomplete")
 			}
 			if len(status.Issues) != 1 || status.Issues[0].Filename != "movie-017.mkv" || strings.Contains(status.Issues[0].Reason, root) {
@@ -159,7 +160,7 @@ func TestLocalMoviesAvailableBeforeBlockedEnrichmentAndCancellation(t *testing.T
 	go func() { s.scan(root); close(done) }()
 	awaitScanSignal(t, entered)
 	awaitScanSignal(t, entered)
-	if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 5 || countScannerRows(t, s.db, "SELECT count(*) FROM video_streams") != 5 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies") != 5 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM video_streams") != 5 {
 		t.Error("TMDB blocked local availability")
 	}
 	status := s.Status()
@@ -223,7 +224,7 @@ func TestMovieStatusIssueLimitAndFatalDiscovery(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	defer fixture.db.Close()
 	s := fixture.scanner
-	s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return nil, errors.New("secret raw error")
 	}}
 	s.scan(createMovieLibrary(t, 110))
@@ -261,7 +262,7 @@ func TestDeferredRetryEligibilityAndAccounting(t *testing.T) {
 				return ctx.Err()
 			}
 			calls := 0
-			s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+			s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 				calls++
 				if unstable {
 					return nil, &scanner.FileDeferral{Reason: scanner.FileChanged}
@@ -313,14 +314,14 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 				}
 				assertPreserved := func() {
 					t.Helper()
-					if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 0 {
+					if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies") != 0 {
 						t.Error("failed probe imported a movie")
 					}
 				}
 				if existing {
 					s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
 					s.scan(root)
-					_, err = s.db.Exec("UPDATE movies SET title='retained', updated_at='2000-01-01 00:00:00'")
+					_, err = s.tx.DB.Exec("UPDATE movies SET title='retained', updated_at='2000-01-01 00:00:00'")
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -367,7 +368,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 					now = now.Add(delay)
 					return ctx.Err()
 				}
-				s.ffprobe = &fingerprintProbe{callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+				s.ffprobe = &scannertest.Probe{Callback: func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
 					calls++
 					if calls > test.failures {
 						return movieScannerMetadataFixture("240"), nil
@@ -406,7 +407,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 				if status.Imported != wantImported || status.Updated != wantUpdated || status.IssueCount != 0 || len(status.Issues) != 0 || invalidations != 1 {
 					t.Fatalf("recovery outcome: invalidations=%d status=%+v", invalidations, status)
 				}
-				if countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE duration=240") != 1 || countScannerRows(t, s.db, "SELECT count(*) FROM movie_file_fingerprints") != 1 {
+				if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE duration=240") != 1 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_file_fingerprints") != 1 {
 					t.Fatal("stable retry did not commit movie and fingerprint")
 				}
 			})
@@ -456,7 +457,7 @@ func TestCancellationImmediatelyAfterCommitRetainsAccounting(t *testing.T) {
 	if status.State != "canceled" || status.Imported != 1 || status.Processed != 1 || status.PendingEnrichment != 1 {
 		t.Fatalf("lost committed accounting: %+v", status)
 	}
-	if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 1 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies") != 1 {
 		t.Fatal("committed movie was lost")
 	}
 }
@@ -470,7 +471,7 @@ func TestCancellationDuringTechnicalTransaction(t *testing.T) {
 	defer cancel()
 	s.scanContext = ctx
 	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
-	conn, err := s.db.Conn(ctx)
+	conn, err := s.tx.DB.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +482,7 @@ func TestCancellationDuringTechnicalTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.db.Exec("CREATE TRIGGER cancel_technical AFTER INSERT ON movie_file_fingerprints BEGIN SELECT cancel_scan(); END")
+	_, err = s.tx.DB.Exec("CREATE TRIGGER cancel_technical AFTER INSERT ON movie_file_fingerprints BEGIN SELECT cancel_scan(); END")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +490,7 @@ func TestCancellationDuringTechnicalTransaction(t *testing.T) {
 	if s.Status().State != "canceled" || s.Status().Imported != 0 {
 		t.Fatalf("transaction cancellation: %+v", s.Status())
 	}
-	if countScannerRows(t, s.db, "SELECT count(*) FROM movies") != 0 || countScannerRows(t, s.db, "SELECT count(*) FROM video_streams") != 0 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies") != 0 || scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM video_streams") != 0 {
 		t.Fatal("canceled transaction committed partial movie")
 	}
 }
@@ -503,7 +504,7 @@ func TestEnrichmentRechecksPersistedBaseline(t *testing.T) {
 	s.scan(root)
 	client := &hookedMovieTmdb{stubMovieScannerTmdb: stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42}}, detailMovies: map[int]tmdb.TmdbMovie{42: retryMovieFixture(t)}}}
 	client.hook = func() {
-		_, err := s.db.Exec("UPDATE movie_file_fingerprints SET inode='replacement'")
+		_, err := s.tx.DB.Exec("UPDATE movie_file_fingerprints SET inode='replacement'")
 		if err != nil {
 			t.Error(err)
 		}
@@ -513,7 +514,7 @@ func TestEnrichmentRechecksPersistedBaseline(t *testing.T) {
 	if s.Status().Enriched != 0 || s.Status().PendingEnrichment != 1 {
 		t.Fatalf("stale baseline accepted: %+v", s.Status())
 	}
-	if countScannerRows(t, s.db, "SELECT count(*) FROM movies WHERE tmdb_id IS NOT NULL") != 0 {
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE tmdb_id IS NOT NULL") != 0 {
 		t.Fatal("stale enrichment overwrote catalog")
 	}
 }
@@ -528,7 +529,7 @@ func TestRetryWindowStopsDispatchingDeferredFiles(t *testing.T) {
 	s.now = func() time.Time { return time.Unix(0, clock.Load()) }
 	s.waitForRetry = func(ctx context.Context, delay time.Duration) error { clock.Add(int64(delay)); return ctx.Err() }
 	var calls atomic.Int32
-	s.ffprobe = &fingerprintProbe{callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		calls.Add(1)
 		clock.Add(int64(121 * time.Second))
 		return movieScannerMetadataFixture("120"), nil

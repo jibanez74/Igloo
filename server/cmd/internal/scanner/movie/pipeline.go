@@ -3,7 +3,6 @@ package movie
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -139,15 +138,9 @@ func (s *Scanner) runMovieScan(directory string) {
 	}
 	files := make([]localFile, 0)
 	err = scanner.WalkMediaLibraryContext(ctx, directory, helpers.ValidVideoExtensions,
-		func(err error) {
-			s.logger.Warn("movie discovery failed", "error", err)
-			var pathError *os.PathError
-			filename := ""
-			isPathError := errors.As(err, &pathError)
-			if isPathError {
-				filename = pathError.Path
-			}
-			report.Issue(filename, scanner.PhaseDiscovery, "A library entry could not be inspected. Existing records are preserved.")
+		func(path string, err error) {
+			s.logger.Warn("movie discovery failed", "path", path, "error", err)
+			report.Issue(path, scanner.PhaseDiscovery, scanner.ReasonDiscoveryEntry)
 		},
 		func(file scanner.ScanFile) error {
 			file.Path = filepath.Clean(file.Path)

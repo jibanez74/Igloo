@@ -12,6 +12,7 @@ import (
 	spotifylib "github.com/zmb3/spotify/v2"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
 )
 
@@ -58,7 +59,7 @@ func TestArtistSortPersistenceAndSpotifyReconciliation(t *testing.T) {
 		for _, retry := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%d/retry=%v", i, retry), func(t *testing.T) {
 				s := setupMusicScanner(t)
-				defer s.db.Close()
+				defer s.tx.DB.Close()
 				artist := tc.artist
 				if retry {
 					// Ampersand-only credits remain combined offline.
@@ -74,13 +75,13 @@ func TestArtistSortPersistenceAndSpotifyReconciliation(t *testing.T) {
 				}
 				for name, want := range tc.want {
 					var got string
-					err := s.db.QueryRow("SELECT sort_name FROM musicians WHERE name=?", name).Scan(&got)
+					err := s.tx.DB.QueryRow("SELECT sort_name FROM musicians WHERE name=?", name).Scan(&got)
 					if err != nil || got != want {
 						t.Fatalf("%s: %q want %q: %v", name, got, want, err)
 					}
 				}
 				var raw string
-				err := s.db.QueryRow("SELECT artist_sort FROM music_track_metadata").Scan(&raw)
+				err := s.tx.DB.QueryRow("SELECT artist_sort FROM music_track_metadata").Scan(&raw)
 				if err != nil || raw != tc.sorts {
 					t.Fatalf("raw sort lost: %q: %v", raw, err)
 				}
@@ -96,7 +97,7 @@ func TestTrackLanguageImportAndChange(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.stream+"/"+tc.format, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
+			defer s.tx.DB.Close()
 			path := filepath.Join(t.TempDir(), "track.m4a")
 			scan := newMusicScanContext(nil)
 			var id int64
@@ -112,7 +113,7 @@ func TestTrackLanguageImportAndChange(t *testing.T) {
 				}
 				var got sql.NullString
 				var currentID int64
-				err := s.db.QueryRow("SELECT id,language FROM tracks WHERE file_path=?", path).Scan(&currentID, &got)
+				err := s.tx.DB.QueryRow("SELECT id,language FROM tracks WHERE file_path=?", path).Scan(&currentID, &got)
 				if err != nil || got.String != tc.want || got.Valid != (tc.want != "") {
 					t.Fatalf("language %+v want %q: %v", got, tc.want, err)
 				}
@@ -121,7 +122,7 @@ func TestTrackLanguageImportAndChange(t *testing.T) {
 				}
 				id = currentID
 				// Ensure changed-file processing replaces an existing explicit language.
-				_, err = s.db.Exec("UPDATE tracks SET language='fra' WHERE id=?", id)
+				_, err = s.tx.DB.Exec("UPDATE tracks SET language='fra' WHERE id=?", id)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -132,7 +133,7 @@ func TestTrackLanguageImportAndChange(t *testing.T) {
 
 func TestMergedArtistSortVotesOncePerTrack(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.db.Close()
+	defer s.tx.DB.Close()
 	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "shared"}}}
 	dir := t.TempDir()
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 1,
@@ -140,17 +141,17 @@ func TestMergedArtistSortVotesOncePerTrack(t *testing.T) {
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "two"), 1,
 		ffprobe.FormatTags{Title: "Two", Artist: "Artist Two", SortArtist: "Z"})
 	var sort string
-	err := s.db.QueryRow("SELECT sort_name FROM musicians").Scan(&sort)
+	err := s.tx.DB.QueryRow("SELECT sort_name FROM musicians").Scan(&sort)
 	if err != nil || sort != "A" {
 		t.Fatalf("one vote per track tie: %q: %v", sort, err)
 	}
-	count := countScannerRows(t, s.db, "SELECT count(*) FROM musicians")
+	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians")
 	if count != 1 {
 		t.Fatal("artists did not merge")
 	}
 	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 1,
 		ffprobe.FormatTags{Title: "Three", Artist: "Artist One", SortArtist: "Z"})
-	err = s.db.QueryRow("SELECT sort_name FROM musicians").Scan(&sort)
+	err = s.tx.DB.QueryRow("SELECT sort_name FROM musicians").Scan(&sort)
 	if err != nil || sort != "Z" {
 		t.Fatalf("majority: %q: %v", sort, err)
 	}

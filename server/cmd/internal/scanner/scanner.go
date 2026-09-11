@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
@@ -78,11 +79,6 @@ func (c ScanCache[K, V]) Get(k K) (V, bool) {
 	return zero, false
 }
 
-func (c ScanCache[K, V]) Has(k K) bool {
-	_, ok := c.Get(k)
-	return ok
-}
-
 func (c ScanCache[K, V]) Set(k K, v V) {
 	c.local[k] = v
 }
@@ -121,16 +117,65 @@ func (g *ScanGuard) Finish() {
 	g.mu.Unlock()
 }
 
+// StartStatus describes whether a scan goroutine was launched.
+type StartStatus int
+
+const (
+	// Callers only branch on the two failure statuses and let the success case
+	// fall through, so StartStarted is never named outside tests. It is the
+	// zero value and cannot be dropped.
+	StartStarted StartStatus = iota
+	StartNotConfigured
+	StartAlreadyRunning
+)
+
+// StartResult records the observed directory and start outcome.
+type StartResult struct {
+	Directory string
+	Status    StartStatus
+}
+
+// Launcher admits one scan goroutine at a time and tracks it in the shutdown
+// wait group. It is shared by the movie and music scanners so the start
+// lifecycle exists once.
+type Launcher struct {
+	Wait  *sync.WaitGroup
+	guard ScanGuard
+}
+
+// Launch runs run(directory) on a new goroutine when directory is configured
+// and no scan is in progress. begin runs before the goroutine starts so a
+// status poll right after the request already sees the run.
+func (l *Launcher) Launch(directory sql.NullString, begin func(), run func(directory string)) StartResult {
+	result := StartResult{Directory: directory.String}
+	if !directory.Valid || directory.String == "" {
+		result.Status = StartNotConfigured
+		return result
+	}
+	if !l.guard.TryBegin() {
+		result.Status = StartAlreadyRunning
+		return result
+	}
+	begin()
+	l.Wait.Add(1)
+	go func() {
+		defer l.Wait.Done()
+		defer l.guard.Finish()
+		run(directory.String)
+	}()
+	return result
+}
+
 // WalkMediaLibraryContext walks root until it completes or ctx is canceled,
 // invoking onFile for each regular file whose extension is in validExts.
-// Per-entry errors are wrapped with context and passed to onError (so the
-// caller can log and count them) and walking continues; an error reading the
-// root itself aborts the walk and is returned.
+// Per-entry errors are wrapped with context and passed to onError with the
+// entry's path (so the caller can log and report them) and walking continues;
+// an error reading the root itself aborts the walk and is returned.
 func WalkMediaLibraryContext(
 	ctx context.Context,
 	root string,
 	validExts map[string]bool,
-	onError func(error),
+	onError func(path string, err error),
 	onFile func(ScanFile) error,
 ) error {
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -142,7 +187,7 @@ func WalkMediaLibraryContext(
 			if path == root {
 				return err
 			}
-			onError(fmt.Errorf("error walking directory: %w", err))
+			onError(path, fmt.Errorf("error walking directory: %w", err))
 			return nil
 		}
 
@@ -163,7 +208,7 @@ func WalkMediaLibraryContext(
 			info, err = entry.Info()
 		}
 		if err != nil {
-			onError(fmt.Errorf("failed to get file info for %s: %w", path, err))
+			onError(path, fmt.Errorf("failed to get file info for %s: %w", path, err))
 			return nil
 		}
 

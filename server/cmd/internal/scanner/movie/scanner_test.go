@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -25,32 +26,6 @@ type movieScannerTestContext struct {
 	scanner   *Scanner
 	moviesDir sql.NullString
 }
-
-type capturedLogEntry struct {
-	msg  string
-	args []any
-}
-
-type capturedLogger struct {
-	mu           sync.Mutex
-	debugEntries []capturedLogEntry
-	infoEntries  []capturedLogEntry
-	warnEntries  []capturedLogEntry
-	errorEntries []capturedLogEntry
-}
-
-func (l *capturedLogger) log(entries *[]capturedLogEntry, msg string, args []any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	entry := capturedLogEntry{msg: msg, args: append([]any(nil), args...)}
-	*entries = append(*entries, entry)
-}
-
-func (l *capturedLogger) Debug(msg string, args ...any) { l.log(&l.debugEntries, msg, args) }
-func (l *capturedLogger) Info(msg string, args ...any)  { l.log(&l.infoEntries, msg, args) }
-func (l *capturedLogger) Warn(msg string, args ...any)  { l.log(&l.warnEntries, msg, args) }
-func (l *capturedLogger) Error(msg string, args ...any) { l.log(&l.errorEntries, msg, args) }
 
 func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 	t.Helper()
@@ -82,7 +57,7 @@ func setupMovieScannerDatabase(t *testing.T, source string) *movieScannerTestCon
 		Now:         func() time.Time { return time.Now().Add(2 * time.Minute) },
 		DB:          db,
 		Queries:     queries,
-		Logger:      &capturedLogger{},
+		Logger:      &scannertest.Logger{},
 		ScanContext: context.Background(),
 		ScannerDBMu: &sync.Mutex{},
 		CurrentMoviesDirectory: func() sql.NullString {
@@ -92,20 +67,9 @@ func setupMovieScannerDatabase(t *testing.T, source string) *movieScannerTestCon
 	return ctx
 }
 
-func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow(query, args...).Scan(&count)
-	if err != nil {
-		t.Fatalf("count rows: %v", err)
-	}
-	return count
-}
-
 type stubMovieScannerFfprobe struct {
 	mu sync.Mutex
-	noKeyframeProbe
+	scannertest.NoKeyframeProbe
 	result  *ffprobe.FfprobeResult
 	results []*ffprobe.FfprobeResult
 	calls   int
@@ -124,20 +88,6 @@ func (s *stubMovieScannerFfprobe) GetMetadata(_ context.Context, filePath string
 
 func (s *stubMovieScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
 	return s.GetMetadata(context.Background(), filePath)
-}
-
-// noKeyframeProbe completes ffprobe.FfprobeInterface for stubs that only
-// exercise scanning. Keyframe lookup is advisory on the playback path, so a
-// stub that never serves HLS refuses it rather than inventing an offset.
-type noKeyframeProbe struct{}
-
-func (noKeyframeProbe) KeyframeAtOrBefore(
-	_ context.Context,
-	_ string,
-	_ int64,
-	_ float64,
-) (float64, error) {
-	return 0, errors.New("keyframe probing is not stubbed")
 }
 
 type stubMovieScannerTmdb struct {
