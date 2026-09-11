@@ -144,6 +144,7 @@ export default function AppSidebar({
             <SidebarMenu>
               {navItems.map(item => {
                 const active = isActive(item.url, item.exact);
+
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton

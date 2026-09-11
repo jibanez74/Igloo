@@ -7,7 +7,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 )
 
 func processChapters(ctx context.Context, qtx *database.Queries, fileID int64, chapters []ffprobe.Chapter) error {
@@ -20,7 +20,7 @@ func processChapters(ctx context.Context, qtx *database.Queries, fileID int64, c
 		_, err := qtx.InsertShowChapter(ctx, database.InsertShowChapterParams{
 			FileID:    fileID,
 			Title:     chapter.Tags.Title,
-			StartTime: chapterStartTimeSeconds(chapter),
+			StartTime: scanner.ChapterStartTimeSeconds(chapter),
 			Thumb:     sql.NullString{},
 		})
 		if err != nil {
@@ -29,19 +29,4 @@ func processChapters(ctx context.Context, qtx *database.Queries, fileID int64, c
 	}
 
 	return nil
-}
-
-func chapterStartTimeSeconds(chapter ffprobe.Chapter) int64 {
-	if chapter.StartTime != "" {
-		durationMs, err := helpers.ParseDurationMs(chapter.StartTime)
-		if err == nil {
-			return durationMs / 1000
-		}
-	}
-
-	if chapter.Start > 0 {
-		return int64(chapter.Start) / 1000
-	}
-
-	return 0
 }

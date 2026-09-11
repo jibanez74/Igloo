@@ -17,41 +17,28 @@ func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanConte
 		return 0, fmt.Errorf("missing file inspection")
 	}
 	txScan := scan.clone()
-
-	s.scannerDBMu.Lock()
-	defer s.scannerDBMu.Unlock()
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to start music track transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	qtx := s.queries.WithTx(tx)
-	trackID, err := s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+	var trackID int64
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		var err error
+		trackID, err = s.persistResolvedTrackTx(ctx, qtx, txScan, resolved)
+		if err != nil {
+			return err
+		}
+		err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
+		if err != nil {
+			return err
+		}
+		return resolved.inspection.Validate(ctx)
+	}, func() {
+		// A rescan can move the file or change its type, so the cached lookup is
+		// dropped after the new row is committed.
+		s.invalidateCommittedTrack(trackID)
+		for id := range txScan.invalidatedTracks {
+			s.invalidateCommittedTrack(id)
+		}
+	})
 	if err != nil {
 		return 0, err
-	}
-
-	err = storeTrackFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
-	if err != nil {
-		return 0, err
-	}
-	err = resolved.inspection.Validate(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return 0, fmt.Errorf("failed to commit music track transaction: %w", err)
-	}
-
-	// A rescan can move the file or change its type, so the cached lookup is
-	// dropped here, after the new row is committed.
-	s.invalidateCommittedTrack(trackID)
-	for id := range txScan.invalidatedTracks {
-		s.invalidateCommittedTrack(id)
 	}
 
 	// trackIndex is shared (never written inside the transaction) and is only
@@ -94,18 +81,18 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		params.AlbumID = albumID
 	}
 
-	track, err := qtx.UpsertTrack(ctx, params)
+	trackID, err := qtx.UpsertTrack(ctx, params)
 	if err != nil {
 		return 0, fmt.Errorf("upsert track failed: %w", err)
 	}
 
-	err = s.syncTrackMusicians(ctx, qtx, track.ID, musicianIDs)
+	err = s.syncTrackMusicians(ctx, qtx, trackID, musicianIDs)
 	if err != nil {
 		return 0, fmt.Errorf("track-musician relationships failed: %w", err)
 	}
 
 	if resolved.genreTag == "" {
-		err = qtx.DeleteTrackGenres(ctx, track.ID)
+		err = qtx.DeleteTrackGenres(ctx, trackID)
 		if err != nil {
 			return 0, fmt.Errorf("delete track genres failed: %w", err)
 		}
@@ -116,51 +103,78 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		}
 
 		err = qtx.DeleteTrackGenresExcept(ctx, database.DeleteTrackGenresExceptParams{
-			TrackID: track.ID,
+			TrackID: trackID,
 			GenreID: genreID,
 		})
 		if err != nil {
 			return 0, fmt.Errorf("delete stale genres failed: %w", err)
 		}
 
-		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{TrackID: track.ID, GenreID: genreID})
+		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{TrackID: trackID, GenreID: genreID})
 		if err != nil {
 			return 0, fmt.Errorf("track-genre relationship failed: %w", err)
 		}
 
 	}
 
-	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{TrackID: track.ID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort})
+	err = qtx.SaveMusicTrackMetadata(ctx, database.SaveMusicTrackMetadataParams{TrackID: trackID, ArtistTag: resolved.artistTag, ArtistKey: scanner.NormalizedScanCacheKey(resolved.artistTag), ArtistSort: resolved.artistSort, AlbumSort: resolved.albumSort})
 	if err != nil {
 		return 0, err
 	}
-	err = qtx.DeleteMusicCreditMetadata(ctx, track.ID)
+	err = qtx.DeleteMusicCreditMetadata(ctx, trackID)
 	if err != nil {
 		return 0, err
 	}
 	for i, input := range resolved.musicians {
-		err = qtx.SaveMusicCreditMetadata(ctx, database.SaveMusicCreditMetadataParams{TrackID: track.ID, MusicianID: musicianIDs[i], SortName: input.sortName})
+		err = qtx.SaveMusicCreditMetadata(ctx, database.SaveMusicCreditMetadataParams{TrackID: trackID, MusicianID: musicianIDs[i], SortName: input.sortName})
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	for _, id := range append(oldArtists, musicianIDs...) {
+	for _, id := range uniqueIDs(oldArtists, musicianIDs) {
 		err = qtx.ReconcileMusicArtistSort(ctx, id)
 		if err != nil {
 			return 0, err
 		}
 	}
-	for _, id := range []sql.NullInt64{oldAlbum, albumID} {
-		if !id.Valid {
-			continue
-		}
-		err = reconcileAlbum(ctx, qtx, id.Int64)
+	for _, id := range uniqueIDs(validIDs(oldAlbum, albumID)) {
+		err = reconcileAlbum(ctx, qtx, id)
 		if err != nil {
 			return 0, err
 		}
 	}
-	return track.ID, nil
+	return trackID, nil
+}
+
+// uniqueIDs concatenates id groups in first-sighting order, dropping repeats.
+// A rescan of an unchanged track sees the same artist and the same album in
+// both the old and the new set, and every Reconcile* statement re-evaluates a
+// correlated vote aggregate, so reconciling twice is not free. It also avoids
+// appending into a caller's backing array.
+func uniqueIDs(groups ...[]int64) []int64 {
+	seen := make(map[int64]bool)
+	unique := make([]int64, 0)
+	for _, group := range groups {
+		for _, id := range group {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			unique = append(unique, id)
+		}
+	}
+	return unique
+}
+
+func validIDs(ids ...sql.NullInt64) []int64 {
+	present := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id.Valid {
+			present = append(present, id.Int64)
+		}
+	}
+	return present
 }
 
 func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
@@ -170,12 +184,13 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 	if lookupErr == nil {
 		input.existingID = existing.ID
 		input.hasExistingID = true
-		input.existing = &existing
+		identity := database.GetMusicianBySpotifyIDRow(existing)
+		input.existing = &identity
 	} else if !identityMissing {
 		return 0, lookupErr
 	}
 
-	var musician database.Musician
+	var musician database.GetMusicianBySpotifyIDRow
 	var err error
 	if input.spotifyArtist != nil {
 		spotifyID := sql.NullString{String: input.spotifyArtist.ID.String(), Valid: true}
@@ -190,14 +205,18 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 				musician = *input.existing
 				err = qtx.SetMusicArtistSpotifyID(ctx, database.SetMusicArtistSpotifyIDParams{ID: musician.ID, SpotifyID: spotifyID})
 			} else {
-				musician, err = qtx.UpsertMusician(ctx, database.UpsertMusicianParams{Name: input.name, SortName: input.name, SpotifyID: spotifyID})
+				row, writeErr := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{Name: input.name, SortName: input.name, SpotifyID: spotifyID})
+				musician = database.GetMusicianBySpotifyIDRow(row)
+				err = writeErr
 			}
 		}
 
 	} else if input.hasExistingID {
 		musician.ID = input.existingID
 	} else {
-		musician, err = qtx.UpsertMusician(ctx, database.UpsertMusicianParams{Name: input.name, SortName: input.sortName})
+		row, writeErr := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{Name: input.name, SortName: input.sortName})
+		musician = database.GetMusicianBySpotifyIDRow(row)
+		err = writeErr
 	}
 	if err != nil {
 		return 0, err
@@ -242,12 +261,13 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 	if lookupErr == nil {
 		input.existingID = existing.ID
 		input.hasExistingID = true
-		input.existing = &existing
+		identity := database.GetAlbumBySpotifyIDRow(existing)
+		input.existing = &identity
 	} else if !identityMissing {
 		return 0, lookupErr
 	}
 
-	var album database.Album
+	var album database.GetAlbumBySpotifyIDRow
 	var err error
 	if input.spotifyAlbum != nil {
 		spotifyID := sql.NullString{String: input.spotifyAlbum.ID.String(), Valid: true}
@@ -262,7 +282,9 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 				album = *input.existing
 				err = qtx.SetMusicAlbumSpotifyID(ctx, database.SetMusicAlbumSpotifyIDParams{ID: album.ID, SpotifyID: spotifyID})
 			} else {
-				album, err = qtx.UpsertAlbum(ctx, database.UpsertAlbumParams{Title: input.title, SortTitle: input.title, Musician: helpers.NullString(input.albumArtist), SpotifyID: spotifyID})
+				row, writeErr := qtx.UpsertAlbum(ctx, database.UpsertAlbumParams{Title: input.title, SortTitle: input.title, Musician: helpers.NullString(input.albumArtist), SpotifyID: spotifyID})
+				album = database.GetAlbumBySpotifyIDRow(row)
+				err = writeErr
 			}
 		}
 
@@ -273,7 +295,9 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 		if input.albumArtist != "" {
 			params.Musician = sql.NullString{String: input.albumArtist, Valid: true}
 		}
-		album, err = qtx.UpsertAlbum(ctx, params)
+		row, writeErr := qtx.UpsertAlbum(ctx, params)
+		album = database.GetAlbumBySpotifyIDRow(row)
+		err = writeErr
 	}
 	if err != nil {
 		return 0, err
@@ -321,7 +345,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 	return album.ID, nil
 }
 
-func (s *Scanner) updateMusicianThumbIfChanged(ctx context.Context, qtx *database.Queries, musician database.Musician, thumbURL string) (database.Musician, error) {
+func (s *Scanner) updateMusicianThumbIfChanged(ctx context.Context, qtx *database.Queries, musician database.GetMusicianBySpotifyIDRow, thumbURL string) (database.GetMusicianBySpotifyIDRow, error) {
 	if thumbURL == "" {
 		return musician, nil
 	}
@@ -329,13 +353,14 @@ func (s *Scanner) updateMusicianThumbIfChanged(ctx context.Context, qtx *databas
 		return musician, nil
 	}
 
-	return qtx.UpdateMusicianSpotifyThumb(ctx, database.UpdateMusicianSpotifyThumbParams{
+	row, err := qtx.UpdateMusicianSpotifyThumb(ctx, database.UpdateMusicianSpotifyThumbParams{
 		ID:    musician.ID,
 		Thumb: sql.NullString{String: thumbURL, Valid: true},
 	})
+	return database.GetMusicianBySpotifyIDRow(row), err
 }
 
-func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Queries, album database.Album, coverURL string) (database.Album, error) {
+func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Queries, album database.GetAlbumBySpotifyIDRow, coverURL string) (database.GetAlbumBySpotifyIDRow, error) {
 	if coverURL == "" {
 		return album, nil
 	}
@@ -343,10 +368,11 @@ func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Q
 		return album, nil
 	}
 
-	return qtx.UpdateAlbumSpotifyCover(ctx, database.UpdateAlbumSpotifyCoverParams{
+	row, err := qtx.UpdateAlbumSpotifyCover(ctx, database.UpdateAlbumSpotifyCoverParams{
 		ID:    album.ID,
 		Cover: sql.NullString{String: coverURL, Valid: true},
 	})
+	return database.GetAlbumBySpotifyIDRow(row), err
 }
 
 func (s *Scanner) syncTrackMusicians(ctx context.Context, qtx *database.Queries, trackID int64, musicianIDs []int64) error {
@@ -385,16 +411,24 @@ func reconcileAlbum(ctx context.Context, qtx *database.Queries, id int64) error 
 	return nil
 }
 
-// Re-read aliases after all writes: a later credit can merge an earlier credit's
-// artist into an existing Spotify owner in this same transaction.
 func (s *Scanner) persistMusicians(ctx context.Context, qtx *database.Queries, scan *musicScanContext, inputs []resolvedMusician) ([]int64, error) {
+	ids := make([]int64, 0, len(inputs))
 	for _, input := range inputs {
-		_, err := s.persistMusician(ctx, qtx, scan, input)
+		id, err := s.persistMusician(ctx, qtx, scan, input)
 		if err != nil {
 			return nil, fmt.Errorf("musician failed: %w", err)
 		}
+		ids = append(ids, id)
 	}
-	ids := make([]int64, 0, len(inputs))
+	// A later credit can merge an earlier credit's artist into an existing
+	// Spotify owner in this same transaction, which leaves the ids collected
+	// above pointing at deleted rows -- so re-read the aliases, but only when
+	// that actually happened. scan is the transaction-local clone, whose merged
+	// flag starts false for every track.
+	if !scan.merged {
+		return ids, nil
+	}
+	ids = ids[:0]
 	for _, input := range inputs {
 		owner, err := qtx.FindMusicArtistIdentity(ctx, scanner.NormalizedScanCacheKey(input.name))
 		if err != nil {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"testing"
 
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -286,11 +286,11 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 	}
 }
 
-func TestResolveMovieFileLogsTmdbSearchFailure(t *testing.T) {
+func TestResolveMovieFileReturnsTmdbSearchFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
-	logged := &capturedLogger{}
+	logged := &scannertest.Logger{}
 	testScanner.scanner.logger = logged
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
@@ -301,15 +301,12 @@ func TestResolveMovieFileLogsTmdbSearchFailure(t *testing.T) {
 		Ext:  "mkv",
 		Size: 321,
 	})
-	if err != nil {
-		t.Fatalf("resolve movie with failing tmdb search: %v", err)
-	}
-	if resolved.tmdbMovie != nil {
-		t.Fatal("expected no tmdb movie when the search fails")
+	if err == nil || resolved != nil {
+		t.Fatalf("provider failure was treated as a no-match: %v", err)
 	}
 
-	if !warnEntryMentions(logged, "TMDB movie search failed", path) {
-		t.Fatalf("expected a warning naming %q, got %+v", path, logged.warnEntries)
+	if !logged.WarnMentions("TMDB movie search failed", path) {
+		t.Fatalf("expected a warning naming %q, got %+v", path, logged.WarnEntries)
 	}
 }
 
@@ -317,7 +314,7 @@ func TestResolveMovieFileDoesNotWarnWhenScanIsCanceled(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
-	logged := &capturedLogger{}
+	logged := &scannertest.Logger{}
 	testScanner.scanner.logger = logged
 	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: context.Canceled}
@@ -334,36 +331,12 @@ func TestResolveMovieFileDoesNotWarnWhenScanIsCanceled(t *testing.T) {
 		t.Fatalf("resolve canceled movie: %v", err)
 	}
 
-	logged.mu.Lock()
-	warnings := len(logged.warnEntries)
-	logged.mu.Unlock()
-	if warnings != 0 {
-		t.Fatalf("a canceled scan should not warn about TMDB, got %+v", logged.warnEntries)
+	if len(logged.WarnEntries) != 0 {
+		t.Fatalf("a canceled scan should not warn about TMDB, got %+v", logged.WarnEntries)
 	}
 }
 
-// warnEntryMentions reports whether a warning with the given message carries
-// needle in any of its structured values.
-func warnEntryMentions(logged *capturedLogger, msg, needle string) bool {
-	logged.mu.Lock()
-	defer logged.mu.Unlock()
-
-	for _, entry := range logged.warnEntries {
-		if entry.msg != msg {
-			continue
-		}
-		for _, arg := range entry.args {
-			value, ok := arg.(string)
-			if ok && strings.Contains(value, needle) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
+func TestResolveMovieFileReturnsTmdbDetailFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
 	defer testScanner.db.Close()
 
@@ -383,17 +356,8 @@ func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
 		Ext:  "mkv",
 		Size: 123,
 	})
-	if err != nil {
-		t.Fatalf("resolve movie with failing tmdb detail: %v", err)
-	}
-	if resolved.tmdbMovie != nil {
-		t.Fatal("expected scanner to fall back when TMDB detail fetch fails")
-	}
-	if resolved.params.Title != "Detail Fails" {
-		t.Fatalf("title = %q, want filename title Detail Fails", resolved.params.Title)
-	}
-	if !resolved.params.Year.Valid || resolved.params.Year.Int64 != 2022 {
-		t.Fatalf("year = %+v, want filename year 2022", resolved.params.Year)
+	if !errors.Is(err, sql.ErrNoRows) || resolved != nil {
+		t.Fatalf("detail failure was treated as a no-match: %v", err)
 	}
 	if len(tmdbStub.detailCalls) != 1 || tmdbStub.detailCalls[0] != 42 {
 		t.Fatalf("detail calls = %#v, want [42]", tmdbStub.detailCalls)
@@ -583,13 +547,33 @@ func TestAmbiguousSearchPartialFailuresAndCancellation(t *testing.T) {
 			if resolved.tmdbMovie == nil || resolved.tmdbMovie.TmdbID != 2 || len(client.detailCalls) != 1 {
 				t.Fatalf("partial search discarded candidate: %+v", resolved)
 			}
-			if failure != "duplicate" && !warnEntryMentions(s.logger.(*capturedLogger), "TMDB movie search failed", "Blade.Runner.2049.mkv") {
+			if failure != "duplicate" && !s.logger.(*scannertest.Logger).WarnMentions("TMDB movie search failed", "Blade.Runner.2049.mkv") {
 				t.Fatal("operational error was suppressed")
 			}
 		})
 	}
 }
 
-func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (*resolvedMovie, error) {
-	return s.resolveMovie(ctx, file, true, false)
+// resolvedMovieFile joins the local probe and the TMDB lookup for one file so
+// resolution tests can assert on both without running the persistence phases.
+type resolvedMovieFile struct {
+	*localMovie
+	tmdbMovie *tmdb.TmdbMovie
+}
+
+func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (*resolvedMovieFile, error) {
+	local, err := s.resolveLocalMovie(ctx, file, movieScanEntry{})
+	if err != nil {
+		return nil, err
+	}
+	titleYear := movieTitleYear(file.Path)
+	searchTitle := NormalizeTitleForSearch(titleYear.Title)
+	if searchTitle == "" {
+		searchTitle = titleYear.Title
+	}
+	details, err := s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year, sql.NullInt64{})
+	if err != nil {
+		return nil, err
+	}
+	return &resolvedMovieFile{localMovie: local, tmdbMovie: details}, nil
 }

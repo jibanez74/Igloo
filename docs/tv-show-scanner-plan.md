@@ -22,7 +22,7 @@ Delete only confirmed missing files within the captured, identity-checked root. 
 
 ## Phase 4 — Integration (implemented) and verification
 
-Wire startup and shutdown tracking; add admin POST /api/settings/scan/shows (triggerShowScan), returning 200 started, 409 running, 500 unconfigured, and existing 401/403 authorization errors. Update OpenAPI and generated artifacts. Saving settings does not launch scans.
+Wire startup and shutdown tracking; add admin POST /api/settings/scan/shows (triggerShowScan), returning 200 started, 409 running, 500 unconfigured, and existing 401/403 authorization errors. Add admin GET /api/settings/scan/shows (getShowScanStatus) reporting the current or latest in-memory run. Update OpenAPI and generated artifacts. Saving settings does not launch scans.
 
 Validate naming, hidden backups, combined episodes, duplicate copies, offline import and later enrichment, partial failures, stable matches, fingerprints, cancellation, rollback, stale responses, concurrent writes, safe cleanup, real Jellyfin ffprobe fixtures, startup, authorization, and route coverage. Run focused and race tests, make generate, make generate-openapi, make test-openapi, and make check. Run a read-only sample-library scan with an isolated database if available; report macOS ARM64 validation availability.
 
@@ -30,9 +30,21 @@ Validate naming, hidden backups, combined episodes, duplicate copies, offline im
 
 Use standard TMDB numbering; defer alternate/DVD ordering. Keep TMDB totals separate from local counts derived from file links. Store remote artwork and trailer metadata, without downloads or thumbnails. No TV browsing, playback, watch progress, web controls, NFO ingestion, manual identification, filesystem watcher, or background metadata refresh. Refresh successful metadata on file changes and retry failures on later scans.
 
+## Reintegration — 2026-09-11
+
+This work was developed on `feature/tv-shows-scanner`, whose branch ref was deleted before it was pushed or merged. The four commits were recovered from the reflog and rebuilt on `dev`, which had meanwhile refactored the shared scanner core and removed unused SQL columns. The scanner's behavior is unchanged; its plumbing is not:
+
+- The package-local `show.StartStatus`/`StartResult` and hand-rolled `ScanGuard` were replaced by the shared `scanner.Launcher` and `scanner.StartResult`, matching movies and music.
+- Progress reporting (`scanner.Progress`/`Report`) did not exist when the scanner was written. It now publishes a run, and `GET /api/settings/scan/shows` serves it.
+- The three hand-written transactions now use the shared `scanner.TxRunner`, and cleanup uses `Reconciliation.DeleteUnseen`/`DeleteConfirmed`.
+- Tests adopted `scanner/scannertest` doubles.
+- `production_companies.logo`/`country` and `extra_videos.official` no longer exist on `dev`, so those TMDB fields are not stored. Chapter start times lost their raw-ticks fallback; the shared `scanner.ChapterStartTimeSeconds` is now the single implementation.
+
+The validation record below was produced against the pre-refactor code and has **not** been re-run. `make check`, the race suite over `./cmd/internal/scanner/... ./cmd/internal/tmdb/... ./cmd/api`, and the mocked `libraries-settings` Playwright spec all pass after reintegration; the 415 GB sample-library run and the live TMDB integration run have not been repeated.
+
 ## Implementation status
 
-The schema, typed TMDB TV client, scanner, startup/shutdown wiring, and admin endpoint are implemented. The API contract and generated types are present. This validation task changes tests, documentation, and an independent inventory utility; no demonstrated production defect has required a scanner, schema, API, or media-contract change. SQL generation is therefore not required for this task. `make check` verifies OpenAPI route coverage and generated-type currency.
+The schema, typed TMDB TV client, scanner, startup/shutdown wiring, and admin endpoints are implemented. The API contract and generated types are present. This validation task changes tests, documentation, and an independent inventory utility; no demonstrated production defect has required a scanner, schema, API, or media-contract change. SQL generation is therefore not required for this task. `make check` verifies OpenAPI route coverage and generated-type currency.
 
 Deterministic tests retain coverage for malformed and conflicting numbering, combined episodes and duplicate copies, hidden backups, quiet-period deferral, fingerprints, offline import and enrichment retries, cancellation, rollback, stable identities, stale responses, concurrent writes, cleanup, startup, and authorization. Real Jellyfin ffprobe fixtures cover technical metadata, absolute stream indices, moving MJPEG, attached artwork, and artwork-only rejection.
 
@@ -40,9 +52,9 @@ Deterministic tests retain coverage for malformed and conflicting numbering, com
 
 `TestTVMetadataIntegration` lives under the existing `integration` build tag and reuses `loadIntegrationEnv` and `make test-tmdb-integration`. Each request has a 30-second context. Fresh clients exercise title-only search, premiere-year search (2008), and unfiltered fallback from a deliberately unmatched year (1850). Breaking Bad's ID is resolved from search; show details, season 1 details, and episode 1 credits validate required structures and identities. Credits must match the episode ID returned by the season. Ratings, popularity, exact credit counts, and exact total episode/season counts are not fixed assertions. Missing credentials remain a skip, not evidence of live validation.
 
-## Validation record — 2026-09-09
+## Validation record — 2026-09-09 (pre-reintegration)
 
-- Validation ran on base commit `ad9def5c7bafe5c62f0207a15eb8d1353704e2e0` with the test, documentation, and inventory changes included in this change.
+- Validation ran on base commit `ad9def5c7bafe5c62f0207a15eb8d1353704e2e0`, before the shared-scanner-core reintegration described above, with the test, documentation, and inventory changes included in that change.
 - Host: native Linux x64 (`linux/amd64`), kernel `7.0.0-31-generic`.
 - Tools: Go `1.26.7`, GCC `13.3.0`, Bun `1.4.2`, Python `3.12.3`; OpenAPI generation reported `openapi-typescript 7.13.0`.
 - Media tools: both repository Linux x64 payloads report `7.1.4-Jellyfin`, selected with the existing `IGLOO_FFMPEG_PATH` and `IGLOO_FFPROBE_PATH` overrides. Generic FFmpeg installed by CI is not Jellyfin-specific validation evidence. No CI changes are included.

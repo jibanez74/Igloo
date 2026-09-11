@@ -4,6 +4,8 @@ import "time"
 
 const ENV_FILE = ".env"
 
+const USER_PASSWORD_MAX_BYTES = 72
+
 // Hardware acceleration device identifiers accepted by transcoding settings.
 const (
 	HARDWARE_ACCELERATION_DEVICE_CPU    = "cpu"

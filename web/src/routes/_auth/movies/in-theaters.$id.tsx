@@ -44,17 +44,13 @@ function toNullableString(value: string | null | undefined): NullableString {
 }
 
 function tmdbCrewToLibraryCrew(
-  movieId: number,
   crew: CrewMemberType[],
 ): LibraryMovieCrewType[] {
   return crew.map(c => ({
     id: c.id,
-    movie_id: movieId,
-    artist_id: c.id,
     job: c.job,
     department: c.department,
     artist_name: c.name,
-    artist_profile: toNullableString(c.profile_path),
   }));
 }
 
@@ -71,13 +67,9 @@ function tmdbYouTubeResultsToLibraryExtras(
     mapped.push({
       id,
       title: v.name,
-      external_id: toNullableString(v.id),
       key: v.key,
       type: v.type,
       site: v.site,
-      official: v.official,
-      created_at: "",
-      updated_at: "",
     });
     id += 1;
   }
@@ -91,8 +83,6 @@ function tmdbProductionCompaniesToLibrary(
   return companies.map(pc => ({
     id: pc.id,
     name: pc.name,
-    tmdb_id: pc.id,
-    logo: toNullableString(pc.logo_path ?? undefined),
     country: toNullableString(pc.origin_country ?? undefined),
   }));
 }
@@ -164,7 +154,6 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   );
 
   const crewForSection = tmdbCrewToLibraryCrew(
-    movie.id,
     movie.credits?.crew ?? [],
   );
   const castList = movie.credits?.cast ?? [];

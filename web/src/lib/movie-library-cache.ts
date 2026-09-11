@@ -29,9 +29,9 @@ const MOVIE_LIBRARY_QUERY_KEYS = [
 ] as const;
 
 export function invalidateMovieLibraryQueries(queryClient: QueryClient) {
-  MOVIE_LIBRARY_QUERY_KEYS.forEach(key => {
+  for (const key of MOVIE_LIBRARY_QUERY_KEYS) {
     void queryClient.invalidateQueries({ queryKey: [key] });
-  });
+  }
 }
 
 export async function refreshMovieLibraryCache(queryClient: QueryClient) {

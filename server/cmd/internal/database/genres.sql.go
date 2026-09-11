@@ -11,7 +11,6 @@ import (
 
 const getAlbumGenres = `-- name: GetAlbumGenres :many
 SELECT DISTINCT
-  g.id,
   g.tag
 FROM genres AS g
 INNER JOIN album_genres AS ag
@@ -20,25 +19,20 @@ WHERE ag.album_id = ?
 ORDER BY g.tag ASC
 `
 
-type GetAlbumGenresRow struct {
-	ID  int64  `json:"id"`
-	Tag string `json:"tag"`
-}
-
 // Returns all genres associated with an album
-func (q *Queries) GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error) {
+func (q *Queries) GetAlbumGenres(ctx context.Context, albumID int64) ([]string, error) {
 	rows, err := q.query(ctx, q.getAlbumGenresStmt, getAlbumGenres, albumID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetAlbumGenresRow{}
+	items := []string{}
 	for rows.Next() {
-		var i GetAlbumGenresRow
-		if err := rows.Scan(&i.ID, &i.Tag); err != nil {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, tag)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -51,7 +45,6 @@ func (q *Queries) GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbum
 
 const getGenresByMusicianID = `-- name: GetGenresByMusicianID :many
 SELECT DISTINCT
-  g.id,
   g.tag
 FROM genres AS g
 INNER JOIN musician_genres AS mg
@@ -60,25 +53,20 @@ WHERE mg.musician_id = ?
 ORDER BY g.tag ASC
 `
 
-type GetGenresByMusicianIDRow struct {
-	ID  int64  `json:"id"`
-	Tag string `json:"tag"`
-}
-
 // Returns all genres associated with a musician
-func (q *Queries) GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error) {
+func (q *Queries) GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]string, error) {
 	rows, err := q.query(ctx, q.getGenresByMusicianIDStmt, getGenresByMusicianID, musicianID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetGenresByMusicianIDRow{}
+	items := []string{}
 	for rows.Next() {
-		var i GetGenresByMusicianIDRow
-		if err := rows.Scan(&i.ID, &i.Tag); err != nil {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, tag)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -98,8 +86,8 @@ VALUES
   (?, ?)
 ON CONFLICT (tag, genre_type) DO UPDATE
 SET
-  updated_at = CURRENT_TIMESTAMP
-RETURNING id, tag, genre_type, created_at, updated_at
+  tag = excluded.tag
+RETURNING id
 `
 
 type GetOrCreateGenreParams struct {
@@ -107,57 +95,9 @@ type GetOrCreateGenreParams struct {
 	GenreType string `json:"genre_type"`
 }
 
-func (q *Queries) GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error) {
+func (q *Queries) GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (int64, error) {
 	row := q.queryRow(ctx, q.getOrCreateGenreStmt, getOrCreateGenre, arg.Tag, arg.GenreType)
-	var i Genre
-	err := row.Scan(
-		&i.ID,
-		&i.Tag,
-		&i.GenreType,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const upsertAlbumGenre = `-- name: UpsertAlbumGenre :exec
-INSERT INTO album_genres (
-  album_id,
-  genre_id
-)
-VALUES
-  (?, ?)
-ON CONFLICT (album_id, genre_id, source) DO NOTHING
-`
-
-type UpsertAlbumGenreParams struct {
-	AlbumID int64 `json:"album_id"`
-	GenreID int64 `json:"genre_id"`
-}
-
-// Creates a relationship between an album and a genre (idempotent)
-func (q *Queries) UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error {
-	_, err := q.exec(ctx, q.upsertAlbumGenreStmt, upsertAlbumGenre, arg.AlbumID, arg.GenreID)
-	return err
-}
-
-const upsertMusicianGenre = `-- name: UpsertMusicianGenre :exec
-INSERT INTO musician_genres (
-  musician_id,
-  genre_id
-)
-VALUES
-  (?, ?)
-ON CONFLICT (musician_id, genre_id, source) DO NOTHING
-`
-
-type UpsertMusicianGenreParams struct {
-	MusicianID int64 `json:"musician_id"`
-	GenreID    int64 `json:"genre_id"`
-}
-
-// Creates a relationship between a musician and a genre (idempotent)
-func (q *Queries) UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error {
-	_, err := q.exec(ctx, q.upsertMusicianGenreStmt, upsertMusicianGenre, arg.MusicianID, arg.GenreID)
-	return err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }

@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
 	"igloo/cmd/internal/scanner/show"
@@ -82,9 +83,18 @@ type Application struct {
 	DeviceExpiryCancel            context.CancelFunc
 	ScanCancel                    context.CancelFunc
 	ScanContext                   context.Context
-	MovieScanner                  interface{ Start() movie.StartResult }
-	ShowScanner                   interface{ Start() show.StartResult }
-	MusicScanner                  interface{ Start() music.StartResult }
+	MovieScanner                  interface {
+		Start() scanner.StartResult
+		Status() movie.Status
+	}
+	ShowScanner interface {
+		Start() scanner.StartResult
+		Status() show.Status
+	}
+	MusicScanner interface {
+		Start() scanner.StartResult
+		Status() music.Status
+	}
 }
 
 //go:embed all:webdist
@@ -217,9 +227,17 @@ func InitApp() (initializedApp *Application, err error) {
 	})
 
 	app.ShowScanner = show.New(show.Dependencies{
-		DB: app.DB, Queries: app.Queries, Logger: app.Logger, Ffprobe: app.Ffprobe, Tmdb: app.Tmdb,
-		ScanContext: app.ScanContext, Wait: app.Wait, ScannerDBMu: &app.ScannerDBMu,
-		CurrentShowsDirectory: func() sql.NullString { return app.CurrentSettings().ShowsDir },
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Tmdb:        app.Tmdb,
+		ScanContext: app.ScanContext,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
+		CurrentShowsDirectory: func() sql.NullString {
+			return app.CurrentSettings().ShowsDir
+		},
 	})
 
 	app.MovieScanner = movie.New(movie.Dependencies{

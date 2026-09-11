@@ -30,7 +30,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log in with email and password */
+        /**
+         * Log in with email and password
+         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         */
         post: operations["authenticateUser"];
         delete?: never;
         options?: never;
@@ -84,7 +87,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log in with email and password from a TV or mobile client and receive a device token */
+        /**
+         * Log in with email and password from a TV or mobile client and receive a device token
+         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         */
         post: operations["authenticateDevice"];
         delete?: never;
         options?: never;
@@ -255,7 +261,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update the current user's password */
+        /**
+         * Update the current user's password
+         * @description New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. Current passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         */
         put: operations["updateUserPassword"];
         post?: never;
         delete?: never;
@@ -371,7 +380,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves uploaded avatars and scanner-downloaded artwork from the configured static directory.
+         * @description Serves uploaded avatars and scanner-downloaded artwork from the configured static directory. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -1068,7 +1077,7 @@ export interface paths {
         };
         /**
          * Get an HLS initialization file or media segment for a movie
-         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
          */
         get: operations["hlsSegment"];
         put?: never;
@@ -1086,7 +1095,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Direct-stream a movie file */
+        /**
+         * Direct-stream a movie file
+         * @description Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain.
+         */
         get: operations["streamMovie"];
         put?: never;
         post?: never;
@@ -1094,7 +1106,7 @@ export interface paths {
         options?: never;
         /**
          * Headers for a direct movie stream
-         * @description Identical to GET but returns headers only, with no response body.
+         * @description Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.
          */
         head: operations["streamMovieHead"];
         patch?: never;
@@ -1213,7 +1225,7 @@ export interface paths {
         put?: never;
         /**
          * Create a user
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
          */
         post: operations["adminCreateUser"];
         delete?: never;
@@ -1256,7 +1268,7 @@ export interface paths {
         get?: never;
         /**
          * Reset a user's password
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
          */
         put: operations["adminResetUserPassword"];
         post?: never;
@@ -1276,7 +1288,10 @@ export interface paths {
         /** List watch rooms visible to the current user */
         get: operations["getWatchRooms"];
         put?: never;
-        /** Create a watch room */
+        /**
+         * Create a watch room
+         * @description subtitle_track is null to disable subtitles, or a zero-based ordinal below the current subtitle count (ordered by stream_index); non-null selection is rejected when no subtitles exist. Direct mode requires video/mp4, a primary H.264/AVC video stream, and browser-safe scanned video metadata: no bit depth above 8, no interlacing, no 10-bit/4:2:2/4:4:4 profile, and a known nonempty pixel format must be yuv420p, yuvj420p, nv12, or nv21. Missing optional video metadata is tolerated. Embedded cover-art streams are skipped when selecting primary video if a real video stream exists. Direct audio_track must be 0; with multiple audio streams, either none may be marked default or exactly the first must be the sole default. The server does not check direct-play audio codec support at room creation. Invalid selections or direct-play eligibility return 400.
+         */
         post: operations["createWatchRoom"];
         delete?: never;
         options?: never;
@@ -1332,7 +1347,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Open a watch-room WebSocket */
+        /**
+         * Open a watch-room WebSocket
+         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request scheme and host, the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, and presence changes broadcast member_joined/member_left. Room deletion sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. WebSocket ping/pong control frames also keep the connection alive.
+         */
         get: operations["watchRoomWebSocket"];
         put?: never;
         post?: never;
@@ -1351,7 +1369,7 @@ export interface paths {
         };
         /**
          * Direct-stream a watch-room movie
-         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds.
+         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.
          */
         get: operations["streamWatchRoomMovie"];
         put?: never;
@@ -1360,7 +1378,7 @@ export interface paths {
         options?: never;
         /**
          * Headers for a direct watch-room movie stream
-         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds.
+         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.
          */
         head: operations["streamWatchRoomMovieHead"];
         patch?: never;
@@ -1375,7 +1393,7 @@ export interface paths {
         };
         /**
          * Get the HLS playlist for a watch room
-         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503.
+         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.
          */
         get: operations["watchRoomHLSManifest"];
         put?: never;
@@ -1395,7 +1413,7 @@ export interface paths {
         };
         /**
          * Get a watch-room HLS initialization file or media segment
-         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503.
+         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
          */
         get: operations["watchRoomHLSSegment"];
         put?: never;
@@ -1478,7 +1496,7 @@ export interface paths {
         get: operations["getPlaybackSettings"];
         /**
          * Update server playback settings
-         * @description Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage.
+         * @description Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage. Unknown fields and a null body return 400.
          */
         put: operations["updatePlaybackSettings"];
         post?: never;
@@ -1495,11 +1513,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get music scan progress
+         * @description Admin-only current/latest in-memory report. No persistent history. Discovery and processing are interleaved, so total grows while the local phase runs. Spotify tallies count unique artists and albums, one outcome each. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         */
+        get: operations["getMusicScanStatus"];
         put?: never;
         /**
          * Trigger a music library scan
-         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
+         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and Spotify counts.
          */
         post: operations["triggerMusicScan"];
         delete?: never;
@@ -1515,11 +1537,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get movie scan progress
+         * @description Admin-only current/latest in-memory report. No persistent history. Local and enrichment counts are separate. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         */
+        get: operations["getMovieScanStatus"];
         put?: never;
         /**
          * Trigger a movie library scan
-         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the technical fingerprint, preserving playback caches. Pending descriptive enrichment may also be retried. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. Technical metadata and fingerprints commit atomically per movie. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. No results and unavailable TMDB remain eligible. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
+         * @description Admin-only endpoint. The scan runs asynchronously. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify or a technical rescan resets it. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
          */
         post: operations["triggerMovieScan"];
         delete?: never;
@@ -1535,7 +1561,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get TV show scan progress
+         * @description Admin-only current/latest in-memory report. No persistent history. Local counts are physical files; enrichment counts are entities (shows, seasons, and episodes), so the two do not add up. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         */
+        get: operations["getShowScanStatus"];
         put?: never;
         /**
          * Trigger a TV show library scan
@@ -1728,7 +1758,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Direct-stream an audio track */
+        /**
+         * Direct-stream an audio track
+         * @description Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain.
+         */
         get: operations["streamTrack"];
         put?: never;
         post?: never;
@@ -1736,7 +1769,7 @@ export interface paths {
         options?: never;
         /**
          * Headers for a direct audio track stream
-         * @description Identical to GET but returns headers only, with no response body.
+         * @description Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.
          */
         head: operations["streamTrackHead"];
         patch?: never;
@@ -1926,7 +1959,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record a track play event */
+        /**
+         * Record a track play event
+         * @description Records a play event and updates listening totals atomically. track_id must be positive and duration_played must be nonnegative; invalid values return 400 without recording a play.
+         */
         post: operations["recordPlayEvent"];
         delete?: never;
         options?: never;
@@ -1958,7 +1994,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current user's top tracks */
+        /**
+         * Get current user's top tracks
+         * @description Limit defaults to 20 and is capped at 100; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         */
         get: operations["getUserTopTracks"];
         put?: never;
         post?: never;
@@ -1975,7 +2014,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current user's top musicians */
+        /**
+         * Get current user's top musicians
+         * @description Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         */
         get: operations["getUserTopMusicians"];
         put?: never;
         post?: never;
@@ -1992,7 +2034,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current user's top genres */
+        /**
+         * Get current user's top genres
+         * @description Limit defaults to 10 and is capped at 20; invalid limits use the default. This endpoint does not accept offset pagination.
+         */
         get: operations["getUserTopGenres"];
         put?: never;
         post?: never;
@@ -2009,7 +2054,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current user's top albums */
+        /**
+         * Get current user's top albums
+         * @description Limit defaults to 10 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         */
         get: operations["getUserTopAlbums"];
         put?: never;
         post?: never;
@@ -2026,7 +2074,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current user's recently played tracks */
+        /**
+         * Get current user's recently played tracks
+         * @description Limit defaults to 20 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         */
         get: operations["getUserRecentlyPlayed"];
         put?: never;
         post?: never;
@@ -2103,7 +2154,10 @@ export interface components {
         LoginRequest: {
             /** Format: email */
             email: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+             */
             password: string;
         };
         UpdateUserNameRequest: {
@@ -2114,9 +2168,15 @@ export interface components {
             email: string;
         };
         UpdateUserPasswordRequest: {
-            /** Format: password */
+            /**
+             * Format: password
+             * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+             */
             current_password: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400.
+             */
             new_password: string;
         };
         UpdateUserAvatarRequest: {
@@ -2165,7 +2225,10 @@ export interface components {
             name: string;
             /** Format: email */
             email: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400.
+             */
             password: string;
             is_admin: boolean;
         };
@@ -2176,7 +2239,10 @@ export interface components {
             is_admin: boolean;
         };
         AdminResetUserPasswordRequest: {
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At least 9 Unicode characters and at most 72 UTF-8 bytes. The additional UTF-8 byte constraint can reject multibyte strings shorter than 72 characters. Invalid new passwords return 400.
+             */
             password: string;
         };
         AdminUserEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -2367,12 +2433,6 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
-            file_path: string;
-            file_name: string;
-            /** Format: int64 */
-            size: number;
-            container: string;
-            mime_type: string;
             adult: boolean;
             tmdb_id?: components["schemas"]["SqlNullInt64"];
             imdb_id?: components["schemas"]["SqlNullString"];
@@ -2389,9 +2449,7 @@ export interface components {
             revenue?: components["schemas"]["SqlNullFloat64"];
             budget?: components["schemas"]["SqlNullFloat64"];
             run_time?: components["schemas"]["SqlNullInt64"];
-            duration?: components["schemas"]["SqlNullFloat64"];
-            created_at: string;
-            updated_at: string;
+            duration: components["schemas"]["SqlNullFloat64"];
         };
         MovieDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -2444,8 +2502,6 @@ export interface components {
             rotation: components["schemas"]["SqlNullInt64"];
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
-            created_at: string;
-            updated_at: string;
         };
         AudioStream: {
             /** Format: int64 */
@@ -2465,8 +2521,6 @@ export interface components {
             language: components["schemas"]["SqlNullString"];
             title: components["schemas"]["SqlNullString"];
             is_default: boolean;
-            created_at: string;
-            updated_at: string;
         };
         Subtitle: {
             /** Format: int64 */
@@ -2480,8 +2534,6 @@ export interface components {
             title: components["schemas"]["SqlNullString"];
             is_forced: boolean;
             is_default: boolean;
-            created_at: string;
-            updated_at: string;
         };
         Chapter: {
             /** Format: int64 */
@@ -2683,23 +2735,10 @@ export interface components {
             /** @default false */
             isAdmin: boolean;
         };
-        Notification: {
-            /** Format: int64 */
-            id: number;
-            /** Format: int64 */
-            created_by_user_id: number;
-            /** @enum {string} */
-            title: "movie_request" | "album_request" | "track_request" | "other";
-            message: string;
-            is_admin: boolean;
-            created_at: string;
-            updated_at: string;
-        };
-        CreateNotificationData: {
-            notification: components["schemas"]["Notification"];
-        };
-        CreateNotificationEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["CreateNotificationData"];
+        CreateNotificationEnvelope: {
+            /** @constant */
+            error: false;
+            message?: string;
         };
         NotificationListItem: {
             /** Format: int64 */
@@ -2886,7 +2925,10 @@ export interface components {
              * @description Zero-based ordinal into the movie's audio streams. Must be less than the movie's audio stream count, must be 0 for a movie without audio, and must be 0 when `mode` is `direct` because direct playback always serves the container's first audio track.
              */
             audio_track: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Null disables subtitles. Otherwise a zero-based ordinal into subtitle rows ordered by stream_index, strictly less than the current subtitle count. Non-null values are invalid for a movie without subtitles.
+             */
             subtitle_track: number | null;
             invited_user_ids: number[];
         };
@@ -2964,7 +3006,6 @@ export interface components {
             id: number;
             title: string;
             sort_title: string;
-            file_path: string;
             file_name: string;
             container: string;
             mime_type: string;
@@ -3000,13 +3041,11 @@ export interface components {
             codec: string;
             /** Format: int64 */
             bit_rate: number;
-            file_path: string;
         };
         SimpleMusician: {
             /** Format: int64 */
             id: number;
             name: string;
-            sort_name: string;
             thumb: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             album_count: number;
@@ -3042,7 +3081,7 @@ export interface components {
         AlbumDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 album: components["schemas"]["Album"];
-                tracks: components["schemas"]["Track"][];
+                tracks: components["schemas"]["AlbumTrack"][];
                 artists: {
                     [key: string]: unknown;
                 }[];
@@ -3176,7 +3215,6 @@ export interface components {
             title: string;
             /** Format: int64 */
             duration: number;
-            file_path: string;
             codec: string;
             /** Format: int64 */
             bit_rate: number;
@@ -3377,6 +3415,7 @@ export interface components {
             data: components["schemas"]["PaginatedSearchData"];
         };
         QuickConnectInitiateRequest: {
+            /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             device_name: string;
             /** @description Client platform identifier, e.g. android_tv, android, ios. */
             platform?: string;
@@ -3434,8 +3473,12 @@ export interface components {
         DeviceLoginRequest: {
             /** Format: email */
             email: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+             */
             password: string;
+            /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             device_name: string;
             platform?: string;
             app_version?: string;
@@ -3454,7 +3497,167 @@ export interface components {
             data: components["schemas"]["DevicesListData"];
         };
         RenameDeviceRequest: {
+            /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             name: string;
+        };
+        /** @description Track fields consumed by album details and the audio player. Technical metadata remains available from the track details endpoint. */
+        AlbumTrack: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            codec: string;
+            /** Format: int64 */
+            track_index: number;
+            /** Format: int64 */
+            duration: number;
+            /** Format: int64 */
+            disc: number;
+            channel_layout: string;
+            /** Format: int64 */
+            bit_rate: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            musician_id: components["schemas"]["SqlNullInt64"];
+            mime_type: string;
+        };
+        /** @description Client JSON message after a successful WebSocket upgrade. Unknown fields are ignored. */
+        WatchRoomClientEvent: {
+            /** @enum {string} */
+            type: "join" | "ping" | "play" | "pause" | "seek";
+            /** @description Optional for all events. play, pause, and seek use the current room position when omitted, null, or negative; a nonnegative value sets the position in seconds. seek preserves paused state. join and ping ignore this field. */
+            position_sec?: number | null;
+        };
+        ScanIssue: {
+            filename: string;
+            phase: string;
+            reason: string;
+        };
+        MovieScanStatusData: {
+            /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
+            run_id: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
+            /** @enum {string} */
+            phase: "idle" | "discovery" | "local" | "retry-wait" | "cleanup" | "enrichment";
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** @description Active filenames only; no directory paths. */
+            active_files: string[];
+            total: number;
+            /** @description Unique files with a local outcome, including deferred and failed files. Retries do not increment this count. */
+            processed: number;
+            imported: number;
+            updated: number;
+            unchanged: number;
+            failed: number;
+            deferred: number;
+            deleted: number;
+            enrichment_total: number;
+            enrichment_processed: number;
+            enriched: number;
+            enrichment_failed: number;
+            enrichment_unmatched: number;
+            /** @description Movies still lacking a confirmed TMDB identity or re-queued by a technical change, including those backing off after repeated misses; updated as results commit. It does not by itself make the final state completed-with-issues. */
+            pending_enrichment: number;
+            issue_count: number;
+            issues: components["schemas"]["ScanIssue"][];
+        };
+        MovieScanStatusResponse: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["MovieScanStatusData"];
+        };
+        ShowScanStatusData: {
+            /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
+            run_id: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
+            /** @enum {string} */
+            phase: "idle" | "discovery" | "local" | "cleanup" | "enrichment";
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** @description Active filenames only; no directory paths. */
+            active_files: string[];
+            total: number;
+            /** @description Unique files with a local outcome, including deferred and failed files. */
+            processed: number;
+            imported: number;
+            updated: number;
+            unchanged: number;
+            failed: number;
+            deferred: number;
+            deleted: number;
+            /** @description Local episodes touched by this run. Combined files link several episodes to one file, so this is unrelated to the file counts. */
+            episodes: number;
+            /** @description Entities (shows, seasons, and episodes) whose metadata this run attempted. Entities are not files. */
+            enrichment_total: number;
+            /** @description Entities with an enrichment outcome this run. */
+            enrichment_processed: number;
+            /** @description Entities whose TMDB metadata committed this run. */
+            enriched: number;
+            /** @description Entities whose enrichment failed. Their previous metadata and retry markers are preserved. */
+            enrichment_failed: number;
+            /** @description Shows, seasons, and episodes still carrying a retry marker when the run finished. It does not by itself make the final state completed-with-issues. */
+            pending_enrichment: number;
+            issue_count: number;
+            issues: components["schemas"]["ScanIssue"][];
+        };
+        ShowScanStatusResponse: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowScanStatusData"];
+        };
+        MusicScanStatusData: {
+            /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
+            run_id: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
+            /**
+             * @description Discovery and processing are interleaved in the local phase; there is no separate discovery or retry-wait phase.
+             * @enum {string}
+             */
+            phase: "idle" | "local" | "cleanup" | "enrichment";
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** @description Active filenames only; no directory paths. */
+            active_files: string[];
+            /** @description Files discovered so far. It grows during the local phase because discovery and processing are interleaved. */
+            total: number;
+            /** @description Files with a local outcome, including deferred and failed files. Music scans do not retry deferred files within a run. */
+            processed: number;
+            /** @description Processed files whose cleaned path had no stored fingerprint baseline at scan start. */
+            imported: number;
+            /** @description Processed files whose cleaned path had a stored fingerprint baseline at scan start. */
+            updated: number;
+            /** @description Files skipped by matching filesystem metadata or identical bytes with only the fingerprint refreshed. */
+            unchanged: number;
+            failed: number;
+            /** @description Files inside the 60-second quiet period or still changing; they are retried on the next scan and each leaves an outstanding issue. */
+            deferred: number;
+            /** @description Confirmed missing catalog files removed during cleanup. */
+            deleted: number;
+            /** @description Artists and albums queued for the Spotify retry phase, counted when the phase starts. Zero when Spotify is not configured. */
+            enrichment_total: number;
+            /** @description Spotify retry candidates handled so far in this run. */
+            enrichment_processed: number;
+            /** @description Unique artists and albums matched on Spotify during this run, one outcome each, across inline resolution and the retry phase. */
+            enriched: number;
+            /** @description Unique artists and albums whose Spotify lookup failed during this run. */
+            enrichment_failed: number;
+            /** @description Unique artists and albums with a definitive Spotify no-match during this run. */
+            enrichment_unmatched: number;
+            issue_count: number;
+            issues: components["schemas"]["ScanIssue"][];
+        };
+        MusicScanStatusResponse: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["MusicScanStatusData"];
         };
     };
     responses: {
@@ -3855,6 +4058,8 @@ export interface components {
                 "Cache-Control"?: "no-store";
                 /** @description Modification time of the pinned ready HLS file. */
                 "Last-Modified": string;
+                /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                "Content-Length"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -3870,6 +4075,8 @@ export interface components {
                 "Content-Range"?: string;
                 /** @description Modification time of the pinned ready HLS file. */
                 "Last-Modified": string;
+                /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                "Content-Length"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -3877,7 +4084,7 @@ export interface components {
                 "multipart/byteranges": string;
             };
         };
-        /** @description The ready HLS asset has not changed since If-Modified-Since; no body is returned. */
+        /** @description The ready HLS asset is unchanged according to If-Modified-Since, or If-None-Match is *. No body or ETag is returned. */
         HLSNotModifiedResponse: {
             headers: {
                 "Cache-Control"?: "no-store";
@@ -3897,38 +4104,80 @@ export interface components {
                 "text/plain": string;
             };
         };
-        /** @description Complete media file response. */
+        /** @description Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. */
         BinaryMediaResponse: {
             headers: {
+                /** @description Byte-range support. */
+                "Accept-Ranges": "bytes";
+                /** @description File modification time as an HTTP date. */
+                "Last-Modified": string;
+                /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                "Content-Length"?: number;
+                /** @description Strong validator derived from file size and nanosecond modification time. */
+                ETag: string;
                 [name: string]: unknown;
             };
             content: {
+                "video/mp4": string;
+                "video/x-matroska": string;
+                "video/webm": string;
+                "video/x-msvideo": string;
+                "video/quicktime": string;
+                "audio/mpeg": string;
+                "audio/flac": string;
+                "audio/mp4": string;
                 "application/octet-stream": string;
             };
         };
-        /** @description Partial media file response for a byte range. */
+        /** @description Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. */
         PartialBinaryMediaResponse: {
             headers: {
+                /** @description Byte-range support. */
+                "Accept-Ranges": "bytes";
+                /** @description File modification time as an HTTP date. */
+                "Last-Modified": string;
+                /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                "Content-Length"?: number;
+                /** @description Strong validator derived from file size and nanosecond modification time. */
+                ETag: string;
+                /** @description Present only for a single range. */
                 "Content-Range"?: string;
                 [name: string]: unknown;
             };
             content: {
+                "video/mp4": string;
+                "video/x-matroska": string;
+                "video/webm": string;
+                "video/x-msvideo": string;
+                "video/quicktime": string;
+                "audio/mpeg": string;
+                "audio/flac": string;
+                "audio/mp4": string;
                 "application/octet-stream": string;
+                "multipart/byteranges": string;
             };
         };
-        /** @description Cached representation is still valid. */
+        /** @description Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. */
         NotModified: {
             headers: {
+                /** @description Direct-stream strong validator. */
+                ETag?: string;
+                /** @description Static-file modification time as an HTTP date. */
+                "Last-Modified"?: string;
                 [name: string]: unknown;
             };
             content?: never;
         };
-        /** @description Requested byte range cannot be satisfied. */
+        /** @description Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes *\/size is present for a well-formed non-overlapping range and omitted for malformed syntax. */
         RangeNotSatisfiable: {
             headers: {
+                /** @description Asset size for a well-formed unsatisfiable range, for example bytes *\/15; omitted for malformed range syntax. */
+                "Content-Range"?: string | null;
                 [name: string]: unknown;
             };
-            content?: never;
+            content: {
+                "text/plain": string;
+            };
         };
         /** @description Extracted WebVTT subtitle payload. */
         WebVTTResponse: {
@@ -4264,7 +4513,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Missing or invalid session. */
+        /** @description Missing or invalid credentials, or credentials not permitted for this operation. */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -4419,6 +4668,44 @@ export interface components {
                 "application/json": components["schemas"]["DevicesListEnvelope"];
             };
         };
+        /** @description The If-Match or If-Unmodified-Since precondition failed. Empty response body. */
+        PreconditionFailed: {
+            headers: {
+                /** @description Present for direct streams only. */
+                ETag?: string;
+                /** @description File modification time as an HTTP date. */
+                "Last-Modified"?: string;
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
+        /** @description Current or latest movie scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
+        MovieScanStatusResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MovieScanStatusResponse"];
+            };
+        };
+        /** @description Current or latest TV show scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
+        ShowScanStatusResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowScanStatusResponse"];
+            };
+        };
+        /** @description Current or latest music scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
+        MusicScanStatusResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MusicScanStatusResponse"];
+            };
+        };
     };
     parameters: {
         IdPath: number;
@@ -4448,7 +4735,6 @@ export interface components {
         ShuffleLimitQuery: number;
         /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
         ShuffleExcludeQuery: number[];
-        StatsLimitQuery: number;
         OffsetQuery: number;
         SearchQuery: string;
         /** @description Case-insensitive name or email substring filter. */
@@ -4457,9 +4743,9 @@ export interface components {
         AudioTrackQuery: number;
         /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
         StartQuery: number;
-        /** @description HTTP byte range for seeking. */
+        /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
         RangeHeader: string;
-        /** @description Return 304 when the ready HLS asset has not changed since this HTTP date. */
+        /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
         IfModifiedSinceHeader: string;
         /** @description UUID that scopes one personal HLS playback session. */
         PlaybackSessionQuery: string;
@@ -4471,6 +4757,24 @@ export interface components {
         HLSAudioChannelsQuery: components["schemas"]["HLSAudioChannelLimit"];
         /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
         SubtitleStartQuery: number;
+        /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+        IfMatchHeader: string;
+        /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+        IfNoneMatchHeader: string;
+        /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+        IfUnmodifiedSinceHeader: string;
+        /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+        IfRangeHeader: string;
+        /** @description Default 20; capped at 100. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+        TopTracksLimitQuery: number;
+        /** @description Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+        TopMusiciansLimitQuery: number;
+        /** @description Default 10; capped at 20. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+        TopGenresLimitQuery: number;
+        /** @description Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+        TopAlbumsLimitQuery: number;
+        /** @description Default 20; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+        RecentlyPlayedLimitQuery: number;
     };
     requestBodies: {
         LoginRequest: {
@@ -5005,8 +5309,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 /** @description Relative file path below the configured static directory. */
@@ -5016,16 +5330,51 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Static file content. */
+            /** @description Static file content with its extension-derived MIME type. */
             200: {
                 headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Static asset cache policy. */
+                    "Cache-Control"?: "public, max-age=31536000";
+                    /** @description Disable MIME sniffing. */
+                    "X-Content-Type-Options"?: "nosniff";
                     [name: string]: unknown;
                 };
                 content: {
+                    "image/*": string;
                     "application/octet-stream": string;
+                    "*/*": string;
                 };
             };
-            206: components["responses"]["PartialBinaryMediaResponse"];
+            /** @description One range retains the file MIME type and has Content-Range; multiple ranges use multipart/byteranges with per-part MIME type and Content-Range. */
+            206: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Static asset cache policy. */
+                    "Cache-Control"?: "public, max-age=31536000";
+                    /** @description Disable MIME sniffing. */
+                    "X-Content-Type-Options"?: "nosniff";
+                    /** @description Present only for a single range. */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                    "application/octet-stream": string;
+                    "multipart/byteranges": string;
+                    "*/*": string;
+                };
+            };
             304: components["responses"]["NotModified"];
             401: components["responses"]["Unauthorized"];
             /** @description Forbidden static path. */
@@ -5033,22 +5382,30 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Static file not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
+            412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["RangeNotSatisfiable"];
-            /** @description Failed to serve static file. */
+            /** @description Failed to serve static file. Static-file failures are plain text; authentication/session middleware failures use the JSON error envelope. */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
@@ -5232,6 +5589,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
             502: components["responses"]["BadGateway"];
         };
     };
@@ -5263,6 +5621,7 @@ export interface operations {
             200: components["responses"]["TmdbTheaterMoviesResponse"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getMovieByTmdbID: {
@@ -5280,6 +5639,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     proxyYouTubeThumbnail: {
@@ -5306,6 +5666,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
             502: components["responses"]["BadGateway"];
         };
     };
@@ -5910,10 +6271,18 @@ export interface operations {
                 reload?: components["parameters"]["HLSReloadQuery"];
             };
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
-                /** @description Return 304 when the ready HLS asset has not changed since this HTTP date. */
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
                 "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -5931,6 +6300,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];
             503: components["responses"]["HLSServiceUnavailable"];
@@ -5940,8 +6310,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -5956,6 +6336,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["RangeNotSatisfiable"];
             500: components["responses"]["InternalServerError"];
         };
@@ -5964,8 +6345,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -5974,14 +6365,97 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["BinaryMediaResponse"];
-            206: components["responses"]["PartialBinaryMediaResponse"];
-            304: components["responses"]["NotModified"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            416: components["responses"]["RangeNotSatisfiable"];
-            500: components["responses"]["InternalServerError"];
+            /** @description Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD. */
+            200: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD. */
+            206: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    /** @description Present only for a single range. */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD. */
+            304: {
+                headers: {
+                    /** @description Direct-stream strong validator. */
+                    ETag?: string;
+                    /** @description Static-file modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request. No response body is sent for HEAD. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resource not found. No response body is sent for HEAD. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD. */
+            412: {
+                headers: {
+                    /** @description Present for direct streams only. */
+                    ETag?: string;
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes *\/size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD. */
+            416: {
+                headers: {
+                    /** @description Asset size for a well-formed unsatisfiable range, for example bytes *\/15; omitted for malformed range syntax. */
+                    "Content-Range"?: string | null;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unexpected server error. No response body is sent for HEAD. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     subtitleWebVTT: {
@@ -6024,6 +6498,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     identifyMovie: {
@@ -6292,18 +6767,55 @@ export interface operations {
                 };
                 content?: never;
             };
-            400: components["responses"]["BadRequest"];
+            /** @description Bad request. Authorization/handler errors are JSON; WebSocket upgrade errors are plain text. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/plain": string;
+                };
+            };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            500: components["responses"]["InternalServerError"];
+            /** @description Authenticated user is not allowed to perform this action. Authorization/handler errors are JSON; WebSocket upgrade errors are plain text. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/plain": string;
+                };
+            };
+            /** @description Unexpected server error. Authorization/handler errors are JSON; WebSocket upgrade errors are plain text. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/plain": string;
+                };
+            };
         };
     };
     streamWatchRoomMovie: {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -6319,7 +6831,16 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /** @description Request conflicts with existing data. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["RangeNotSatisfiable"];
             500: components["responses"]["InternalServerError"];
         };
@@ -6328,8 +6849,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -6338,16 +6869,111 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["BinaryMediaResponse"];
-            206: components["responses"]["PartialBinaryMediaResponse"];
-            304: components["responses"]["NotModified"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            416: components["responses"]["RangeNotSatisfiable"];
-            500: components["responses"]["InternalServerError"];
+            /** @description Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD. */
+            200: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD. */
+            206: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    /** @description Present only for a single range. */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD. */
+            304: {
+                headers: {
+                    /** @description Direct-stream strong validator. */
+                    ETag?: string;
+                    /** @description Static-file modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request. No response body is sent for HEAD. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated user is not allowed to perform this action. No response body is sent for HEAD. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resource not found. No response body is sent for HEAD. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request conflicts with existing data. No response body is sent for HEAD. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD. */
+            412: {
+                headers: {
+                    /** @description Present for direct streams only. */
+                    ETag?: string;
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes *\/size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD. */
+            416: {
+                headers: {
+                    /** @description Asset size for a well-formed unsatisfiable range, for example bytes *\/15; omitted for malformed range syntax. */
+                    "Content-Range"?: string | null;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unexpected server error. No response body is sent for HEAD. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     watchRoomHLSManifest: {
@@ -6366,7 +6992,15 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /** @description Request conflicts with existing data. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalServerError"];
             503: components["responses"]["HLSServiceUnavailable"];
@@ -6379,10 +7013,18 @@ export interface operations {
                 audio_track?: components["parameters"]["AudioTrackQuery"];
             };
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
-                /** @description Return 304 when the ready HLS asset has not changed since this HTTP date. */
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
                 "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -6400,6 +7042,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];
             503: components["responses"]["HLSServiceUnavailable"];
@@ -6496,6 +7139,20 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    getMusicScanStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MusicScanStatusResponse"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     triggerMusicScan: {
         parameters: {
             query?: never;
@@ -6512,6 +7169,20 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    getMovieScanStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MovieScanStatusResponse"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     triggerMovieScan: {
         parameters: {
             query?: never;
@@ -6526,6 +7197,20 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowScanStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowScanStatusResponse"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     triggerShowScan: {
@@ -6718,8 +7403,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -6734,6 +7429,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["RangeNotSatisfiable"];
             500: components["responses"]["InternalServerError"];
         };
@@ -6742,8 +7438,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description HTTP byte range for seeking. */
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
             };
             path: {
                 id: components["parameters"]["IdPath"];
@@ -6752,14 +7458,97 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["BinaryMediaResponse"];
-            206: components["responses"]["PartialBinaryMediaResponse"];
-            304: components["responses"]["NotModified"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            416: components["responses"]["RangeNotSatisfiable"];
-            500: components["responses"]["InternalServerError"];
+            /** @description Complete media file. Movies use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD. */
+            200: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD. */
+            206: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    /** @description Present only for a single range. */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD. */
+            304: {
+                headers: {
+                    /** @description Direct-stream strong validator. */
+                    ETag?: string;
+                    /** @description Static-file modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request. No response body is sent for HEAD. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resource not found. No response body is sent for HEAD. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD. */
+            412: {
+                headers: {
+                    /** @description Present for direct streams only. */
+                    ETag?: string;
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes *\/size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD. */
+            416: {
+                headers: {
+                    /** @description Asset size for a well-formed unsatisfiable range, for example bytes *\/15; omitted for malformed range syntax. */
+                    "Content-Range"?: string | null;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unexpected server error. No response body is sent for HEAD. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     toggleLikeTrack: {
@@ -7068,7 +7857,8 @@ export interface operations {
     getUserTopTracks: {
         parameters: {
             query?: {
-                limit?: components["parameters"]["StatsLimitQuery"];
+                /** @description Default 20; capped at 100. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+                limit?: components["parameters"]["TopTracksLimitQuery"];
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -7085,7 +7875,8 @@ export interface operations {
     getUserTopMusicians: {
         parameters: {
             query?: {
-                limit?: components["parameters"]["StatsLimitQuery"];
+                /** @description Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+                limit?: components["parameters"]["TopMusiciansLimitQuery"];
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -7102,7 +7893,8 @@ export interface operations {
     getUserTopGenres: {
         parameters: {
             query?: {
-                limit?: components["parameters"]["StatsLimitQuery"];
+                /** @description Default 10; capped at 20. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+                limit?: components["parameters"]["TopGenresLimitQuery"];
             };
             header?: never;
             path?: never;
@@ -7118,7 +7910,8 @@ export interface operations {
     getUserTopAlbums: {
         parameters: {
             query?: {
-                limit?: components["parameters"]["StatsLimitQuery"];
+                /** @description Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+                limit?: components["parameters"]["TopAlbumsLimitQuery"];
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -7135,7 +7928,8 @@ export interface operations {
     getUserRecentlyPlayed: {
         parameters: {
             query?: {
-                limit?: components["parameters"]["StatsLimitQuery"];
+                /** @description Default 20; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
+                limit?: components["parameters"]["RecentlyPlayedLimitQuery"];
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -7166,6 +7960,7 @@ export interface operations {
             200: components["responses"]["JsonSuccess"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
         };
     };
 }

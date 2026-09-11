@@ -55,7 +55,11 @@ func createTestUserWithPassword(t *testing.T, app *Application, name, email, pas
 	if err != nil {
 		t.Fatalf("create user %q: %v", email, err)
 	}
-	return user
+	stored, err := app.Queries.GetUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stored
 }
 
 type deviceListResponse struct {
@@ -233,8 +237,13 @@ func TestDeviceRoutes_RejectDeviceTokenAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup device after rejected requests: %v", err)
 	}
-	if unchanged.Name != "Living Room TV" {
-		t.Fatalf("name = %q, want unchanged %q", unchanged.Name, "Living Room TV")
+	var unchangedName string
+	err = app.DB.QueryRow("SELECT name FROM devices WHERE id = ?", unchanged.ID).Scan(&unchangedName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchangedName != "Living Room TV" {
+		t.Fatalf("name = %q, want unchanged %q", unchangedName, "Living Room TV")
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
@@ -380,8 +389,13 @@ func TestRenameDevice_CannotRenameOtherUsersDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup device after rename attempt: %v", err)
 	}
-	if unchanged.Name != "TV" {
-		t.Fatalf("name = %q, want unchanged %q", unchanged.Name, "TV")
+	var unchangedName string
+	err = app.DB.QueryRow("SELECT name FROM devices WHERE id = ?", unchanged.ID).Scan(&unchangedName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchangedName != "TV" {
+		t.Fatalf("name = %q, want unchanged %q", unchangedName, "TV")
 	}
 }
 
@@ -413,7 +427,12 @@ func TestRenameDevice_RenamesOwnDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup renamed device: %v", err)
 	}
-	if renamed.Name != "Bedroom Phone" {
-		t.Fatalf("name = %q, want %q", renamed.Name, "Bedroom Phone")
+	var renamedName string
+	err = app.DB.QueryRow("SELECT name FROM devices WHERE id = ?", renamed.ID).Scan(&renamedName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamedName != "Bedroom Phone" {
+		t.Fatalf("name = %q, want %q", renamedName, "Bedroom Phone")
 	}
 }

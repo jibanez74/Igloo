@@ -26,7 +26,7 @@ func seedStreamTestMovie(t *testing.T, app *Application, container, mimeType str
 		t.Fatalf("write movie file: %v", err)
 	}
 
-	movie, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
+	movieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
 		Title:     "Stream Test",
 		FilePath:  path,
 		FileName:  filepath.Base(path),
@@ -36,6 +36,10 @@ func seedStreamTestMovie(t *testing.T, app *Application, container, mimeType str
 	})
 	if err != nil {
 		t.Fatalf("insert movie: %v", err)
+	}
+	movie, err := app.Queries.GetMovieByID(context.Background(), movieID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return movie
 }

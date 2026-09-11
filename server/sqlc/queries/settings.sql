@@ -37,8 +37,7 @@ SET
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,
-  transcode_dir = ?,
-  updated_at = CURRENT_TIMESTAMP
+  transcode_dir = ?
 WHERE id = (
   SELECT id
   FROM settings
@@ -52,8 +51,7 @@ UPDATE settings
 SET
   movies_dir = ?,
   shows_dir = ?,
-  music_dir = ?,
-  updated_at = CURRENT_TIMESTAMP
+  music_dir = ?
 WHERE id = (
   SELECT id
   FROM settings
@@ -66,8 +64,7 @@ RETURNING *;
 UPDATE settings
 SET
   server_upload_mbps = ?,
-  hardware_acceleration_device = ?,
-  updated_at = CURRENT_TIMESTAMP
+  hardware_acceleration_device = ?
 WHERE id = (
   SELECT id
   FROM settings

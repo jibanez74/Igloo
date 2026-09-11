@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"igloo/cmd/internal/database"
@@ -21,19 +22,52 @@ import (
 	"igloo/cmd/internal/tmdb"
 )
 
+// TMDB no-match backoff: after a second definitive miss, each further miss
+// doubles the wait before the movie is searched again, so an unidentifiable
+// file does not cost a lookup on every scan. Provider failures are not misses.
+const (
+	tmdbMissBackoff    = 24 * time.Hour
+	tmdbMissBackoffMax = 7 * 24 * time.Hour
+	tmdbLookupTimeout  = 30 * time.Second
+)
+
 type movieScanEntry struct {
 	scanner.FileFingerprint
 	ID             int64
 	FilePath       string
 	TmdbID         sql.NullInt64
 	PendingRetry   bool
+	RetryAttempts  int64
+	LastAttemptAt  sql.NullInt64
 	HasFingerprint bool
 }
 
+// pendingEnrichment reports whether the movie still lacks a confirmed TMDB
+// match or was re-queued by a technical change.
+func (e movieScanEntry) pendingEnrichment() bool {
+	return e.PendingRetry || !e.TmdbID.Valid
+}
+
+// enrichmentEligible grants the first miss a retry on the next scan; from the
+// second miss on, the wait doubles from tmdbMissBackoff up to tmdbMissBackoffMax.
+func (e movieScanEntry) enrichmentEligible(now time.Time) bool {
+	if !e.pendingEnrichment() {
+		return false
+	}
+	if e.RetryAttempts <= 1 || !e.LastAttemptAt.Valid {
+		return true
+	}
+	shift := min(e.RetryAttempts-2, 8)
+	backoff := min(tmdbMissBackoff<<shift, tmdbMissBackoffMax)
+	eligibleAt := time.Unix(e.LastAttemptAt.Int64, 0).Add(backoff)
+	return !now.Before(eligibleAt)
+}
+
 type movieScanContext struct {
-	enriched  int
-	deferred  int
-	attempted map[string]bool
+	// enriched and pending are derived from movieIndex and published by the
+	// scan report; they change only through setEntry and deleteEntry.
+	enriched int
+	pending  int
 	// movieIndex holds catalog identities, retry state, and successful fingerprints
 	// by cleaned file path. It is only written after a
 	// successful commit, never inside a transaction, so it is shared (not copied)
@@ -59,12 +93,33 @@ func newMovieScanContext(movieIndex map[string]movieScanEntry) *movieScanContext
 
 	// Take ownership of movieIndex: loadMovieScanIndex already cleaned its keys
 	// and the caller discards its reference, so no defensive copy is needed.
-	return &movieScanContext{
+	scan := &movieScanContext{
 		movieIndex: movieIndex,
-		attempted:  make(map[string]bool),
 		genreIDs:   scanner.NewScanCache[string, int64](),
 		artistIDs:  scanner.NewScanCache[int64, int64](),
 	}
+	for _, entry := range movieIndex {
+		if entry.pendingEnrichment() {
+			scan.pending++
+		}
+	}
+	return scan
+}
+
+func (scan *movieScanContext) setEntry(path string, entry movieScanEntry) {
+	scan.deleteEntry(path)
+	if entry.pendingEnrichment() {
+		scan.pending++
+	}
+	scan.movieIndex[path] = entry
+}
+
+func (scan *movieScanContext) deleteEntry(path string) {
+	previous, exists := scan.movieIndex[path]
+	if exists && previous.pendingEnrichment() {
+		scan.pending--
+	}
+	delete(scan.movieIndex, path)
 }
 
 func (scan *movieScanContext) clone() *movieScanContext {
@@ -81,57 +136,33 @@ func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
 }
 
 // ---------------------------------------------------------------------------
-// Movie resolution (file name -> ffprobe + TMDB metadata)
+// Filename interpretation, local probing, and TMDB matching
 // ---------------------------------------------------------------------------
 
-type resolvedMovie struct {
-	observed     database.Movie
-	attempted    bool
-	metadataOnly bool
-	inspection   *scanner.FileInspection
-	params       database.UpsertMovieParams
-	tmdbMovie    *tmdb.TmdbMovie
-	streams      []ffprobe.Stream
-	chapters     []ffprobe.Chapter
+// localMovie is a probed file waiting to be committed. baseline is the catalog
+// identity the scan index held when the probe started; persistence rejects
+// the result if the row moved on since.
+type localMovie struct {
+	baseline   movieScanEntry
+	inspection *scanner.FileInspection
+	params     database.UpsertMovieParams
+	streams    []ffprobe.Stream
+	chapters   []ffprobe.Chapter
 }
 
-func (s *Scanner) resolveMovie(ctx context.Context, file scanner.ScanFile, attempt, metadataOnly bool) (*resolvedMovie, error) {
-	observed, err := s.queries.GetMovieByPath(ctx, file.Path)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
+// enrichedMovie is a completed TMDB lookup for a committed movie. A nil
+// tmdbMovie is a definitive no-match.
+type enrichedMovie struct {
+	baseline   movieScanEntry
+	inspection *scanner.FileInspection
+	tmdbMovie  *tmdb.TmdbMovie
+}
 
-	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.Path))
+func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile, baseline movieScanEntry) (*localMovie, error) {
+	titleYear := movieTitleYear(file.Path)
+	info, err := s.ffprobe.GetMetadata(ctx, file.Path)
 	if err != nil {
-		baseName := filepath.Base(file.Path)
-		ext := filepath.Ext(baseName)
-		titleYear = &helpers.TitleYearResponse{
-			Title: strings.TrimSuffix(baseName, ext),
-			Year:  0,
-		}
-	}
-
-	searchTitle := NormalizeTitleForSearch(titleYear.Title)
-	if searchTitle == "" {
-		searchTitle = titleYear.Title
-	}
-
-	// ffprobe is required and TMDB is not, so probe first: a file that cannot be
-	// probed is discarded either way, and TMDB search results are never cached.
-	info := &ffprobe.FfprobeResult{}
-	if !metadataOnly {
-		info, err = s.ffprobe.GetMetadata(ctx, file.Path)
-		if err != nil {
-			return nil, fmt.Errorf("ffprobe failed (required): %w", err)
-		}
-	}
-
-	var tmdbMovie *tmdb.TmdbMovie
-	if attempt {
-		tmdbMovie, err = s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year, observed.TmdbID)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
 	mimeType := helpers.VideoMimeTypes[file.Ext]
@@ -162,13 +193,26 @@ func (s *Scanner) resolveMovie(ctx context.Context, file scanner.ScanFile, attem
 		}
 	}
 
-	return &resolvedMovie{
-		observed: observed, attempted: attempt, metadataOnly: metadataOnly,
-		params:    params,
-		tmdbMovie: tmdbMovie,
-		streams:   info.Streams,
-		chapters:  info.Chapters,
+	return &localMovie{
+		baseline: baseline,
+		params:   params,
+		streams:  info.Streams,
+		chapters: info.Chapters,
 	}, nil
+}
+
+func movieTitleYear(path string) *helpers.TitleYearResponse {
+	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(path))
+	if err != nil {
+		baseName := filepath.Base(path)
+		ext := filepath.Ext(baseName)
+		titleYear = &helpers.TitleYearResponse{
+			Title: strings.TrimSuffix(baseName, ext),
+			Year:  0,
+		}
+	}
+
+	return titleYear
 }
 
 // TMDB failures leave enrichment eligible for a later scan.
@@ -176,6 +220,8 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 	if s.tmdb == nil {
 		return nil, nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, tmdbLookupTimeout)
+	defer cancel()
 	movie := &tmdb.TmdbMovie{TmdbID: int(identity.Int64)}
 	if !identity.Valid {
 		interpretations := []movieSearch{{searchTitle, year}}
@@ -184,6 +230,7 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 			interpretations = append(interpretations, movieSearch{fullTitle, 0})
 		}
 		candidates := make(map[int]*TMDBMovieMatch)
+		var searchErr error
 		for _, interpretation := range interpretations {
 			contextErr := ctx.Err()
 			if contextErr != nil {
@@ -196,7 +243,12 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 			}
 			if err != nil {
 				if !errors.Is(err, tmdb.ErrNoMoviesFound) {
+					authentication, _ := tmdb.ProviderFailure(err)
+					if authentication {
+						return nil, err
+					}
 					s.logger.Warn("TMDB movie search failed", "path", path, "error", err)
+					searchErr = err
 				}
 				continue
 			}
@@ -221,7 +273,7 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 
 		slices.SortFunc(ranked, compareTmdbMatches)
 		if len(ranked) == 0 {
-			return nil, nil
+			return nil, searchErr
 		}
 		movie = ranked[0].Movie
 	}
@@ -235,8 +287,7 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 		return nil, contextErr
 	}
 	if err != nil {
-		s.logger.Warn("TMDB movie detail lookup failed", "path", path, "tmdb_id", movie.TmdbID, "error", err)
-		return nil, nil
+		return nil, err
 	}
 	return movie, nil
 }

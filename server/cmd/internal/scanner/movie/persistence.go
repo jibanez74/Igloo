@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -14,32 +15,70 @@ import (
 	"igloo/cmd/internal/tmdb"
 )
 
-func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanContext, resolved *resolvedMovie) error {
-	if resolved.inspection == nil {
+// errStaleEnrichment aborts an enrichment transaction when the catalog row,
+// its baseline, or its retry state moved on since the lookup started.
+var errStaleEnrichment = errors.New("stale enrichment")
+
+type enrichmentOutcome uint8
+
+const (
+	enrichmentSkipped enrichmentOutcome = iota
+	enrichmentApplied
+	enrichmentUnmatched
+)
+
+// persistLocalMovie commits technical metadata, streams, chapters, the file
+// baseline, and pending-enrichment state in one transaction.
+func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext, movie *localMovie) error {
+	defer s.logSlow("slow movie persistence", time.Now(), "path", movie.params.FilePath)
+	if movie.inspection == nil {
 		return fmt.Errorf("missing file inspection")
 	}
 	txScan := scan.clone()
-
-	s.scannerDBMu.Lock()
-	defer s.scannerDBMu.Unlock()
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	qtx := s.queries.WithTx(tx)
-	movieID, err := s.persistResolvedMovieTx(ctx, qtx, txScan, resolved)
-	if err != nil {
-		return err
-	}
-
-	if movieID == 0 {
-		return nil
-	}
-	if !resolved.metadataOnly {
-		// Content changes invalidate persisted playback work in the same transaction.
+	var movieID int64
+	var tmdbID sql.NullInt64
+	var pending bool
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		current, err := qtx.GetMovieByPath(ctx, movie.params.FilePath)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		// A deleted or replaced catalog row must never be recreated by in-flight work.
+		replaced := current.ID != movie.baseline.ID || current.FilePath != movie.baseline.FilePath
+		if replaced {
+			return &scanner.FileDeferral{Reason: scanner.FileChanged}
+		}
+		tmdbID = current.TmdbID
+		movieID, err = qtx.UpsertMovie(ctx, movie.params)
+		if err != nil {
+			return fmt.Errorf("upsert movie failed: %w", err)
+		}
+		// A confirmed TMDB match survives a technical change. Re-queueing it would
+		// re-run applyTmdbMetadata, which overwrites every descriptive field --
+		// including anything set through the Edit dialog -- and a new mtime says
+		// nothing about which movie the file is. Only an unmatched movie is queued.
+		unmatched := !current.TmdbID.Valid
+		if unmatched {
+			err = qtx.MarkMovieTmdbRetry(ctx, movieID)
+			if err != nil {
+				return err
+			}
+		}
+		videoStreamCount, err := processMovieStreams(ctx, qtx, movieID, movie.streams)
+		if err != nil {
+			return fmt.Errorf("process movie streams failed: %w", err)
+		}
+		if videoStreamCount == 0 {
+			return fmt.Errorf("no video stream found - invalid movie file")
+		}
+		err = processChapters(ctx, qtx, movieID, movie.chapters)
+		if err != nil {
+			return fmt.Errorf("process chapters failed: %w", err)
+		}
+		// Technical changes invalidate persisted playback work in the same
+		// transaction. Keeping the rows on a metadata-only change would not help:
+		// their readers key on movieStreamFingerprintBase, which includes
+		// movies.updated_at, so an UpsertMovie here already invalidates them.
 		err = qtx.DeleteMovieRemuxSafetyVerdicts(ctx, movieID)
 		if err != nil {
 			return err
@@ -48,104 +87,108 @@ func (s *Scanner) persistResolvedMovie(ctx context.Context, scan *movieScanConte
 		if err != nil {
 			return err
 		}
-	}
-
-	err = storeMovieFingerprint(ctx, qtx, resolved.params.FilePath, resolved.inspection.Fingerprint)
-	if err != nil {
-		return err
-	}
-	err = validateMovieInspection(ctx, resolved.params.FilePath, resolved.inspection)
-	if err != nil {
-		return err
-	}
-
-	committed, err := qtx.GetMovieByID(ctx, movieID)
-	if err != nil {
-		return err
-	}
-	pending, err := qtx.HasMovieTmdbRetry(ctx, movieID)
-	if err != nil {
-		return err
-	}
-	err = ctx.Err()
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit movie: %w", err)
-	}
-
-	// Both caches describe the committed row, so they are dropped here rather
-	// than inside the transaction: evicting earlier lets a concurrent reader
-	// republish the pre-rescan file path after the new one commits.
-	if !resolved.metadataOnly {
+		err = storeMovieFingerprint(ctx, qtx, movie.params.FilePath, movie.inspection.Fingerprint)
+		if err != nil {
+			return err
+		}
+		pending, err = qtx.HasMovieTmdbRetry(ctx, movieID)
+		if err != nil {
+			return err
+		}
+		err = ctx.Err()
+		if err != nil {
+			return err
+		}
+		return movie.inspection.Validate(ctx)
+	}, func() {
+		// The runtime cache describes the committed row, so it is dropped after
+		// commit: evicting earlier lets a concurrent reader republish the
+		// pre-rescan file path after the new one commits.
 		s.invalidateCommittedMovie(movieID)
+	})
+	if err != nil {
+		return err
 	}
 
 	// movieIndex is shared (never written inside the transaction) and is only
 	// updated here, after a successful commit, so a movie whose transaction
 	// failed is never recorded as scanned/unchanged.
-	scan.movieIndex[filepath.Clean(resolved.params.FilePath)] = movieScanEntry{
-		FileFingerprint: resolved.inspection.Fingerprint, ID: committed.ID, FilePath: committed.FilePath,
-		TmdbID: committed.TmdbID, PendingRetry: pending, HasFingerprint: true,
-	}
-	if resolved.attempted && resolved.tmdbMovie != nil && committed.TmdbID == helpers.NullInt64(int64(resolved.tmdbMovie.TmdbID)) {
-		scan.enriched++
-	}
-
+	scan.setEntry(filepath.Clean(movie.params.FilePath), movieScanEntry{
+		FileFingerprint: movie.inspection.Fingerprint, ID: movieID, FilePath: movie.params.FilePath,
+		TmdbID: tmdbID, PendingRetry: pending, HasFingerprint: true,
+	})
 	scan.mergeFrom(txScan)
-
 	return nil
 }
 
-// persistResolvedMovieTx returns the upserted movie ID so the caller can drop
-// the caches keyed on it once the transaction commits.
-func (s *Scanner) persistResolvedMovieTx(ctx context.Context, qtx *database.Queries, scan *movieScanContext, resolved *resolvedMovie) (int64, error) {
-	current, err := qtx.GetMovieByPath(ctx, resolved.params.FilePath)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, err
-	}
-	// A deleted or replaced catalog row must never be recreated by in-flight work.
-	if current.ID != resolved.observed.ID || current.FilePath != resolved.observed.FilePath {
-		return 0, nil
-	}
-	sameIdentity := current.TmdbID == resolved.observed.TmdbID
-	movie := current
-	if !resolved.metadataOnly {
-		movie, err = qtx.UpsertMovie(ctx, resolved.params)
-		if err != nil {
-			return 0, fmt.Errorf("upsert movie failed: %w", err)
+// persistEnrichment applies a TMDB match, or records a definitive miss, for a
+// movie whose file and catalog identity are unchanged since the lookup.
+// Descriptive updates never invalidate playback data.
+func (s *Scanner) persistEnrichment(ctx context.Context, scan *movieScanContext, movie *enrichedMovie) (enrichmentOutcome, error) {
+	path := movie.baseline.FilePath
+	defer s.logSlow("slow movie enrichment persistence", time.Now(), "path", path)
+	txScan := scan.clone()
+	attemptedAt := s.now()
+	err := s.tx.Run(ctx, func(qtx *database.Queries) error {
+		current, err := qtx.GetMovieByPath(ctx, path)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
 		}
-	}
-	if resolved.attempted && sameIdentity {
-		if resolved.tmdbMovie != nil {
-			err = applyTmdbMetadata(ctx, qtx, scan, movie.ID, resolved.tmdbMovie)
+		stale := current.ID != movie.baseline.ID || current.FilePath != movie.baseline.FilePath || current.TmdbID != movie.baseline.TmdbID
+		if stale {
+			return errStaleEnrichment
+		}
+		stored, err := qtx.GetMovieFileFingerprint(ctx, current.ID)
+		if err != nil {
+			return err
+		}
+		baseline := scanner.FileFingerprint{Size: stored.Size, MtimeNS: stored.MtimeNs, CtimeNS: stored.CtimeNs, Device: stored.Device, Inode: stored.Inode}
+		if baseline != movie.baseline.FileFingerprint {
+			return errStaleEnrichment
+		}
+		pending, err := qtx.HasMovieTmdbRetry(ctx, current.ID)
+		if err != nil {
+			return err
+		}
+		clearedMeanwhile := movie.baseline.PendingRetry && !pending
+		if clearedMeanwhile {
+			return errStaleEnrichment
+		}
+		if movie.tmdbMovie != nil {
+			err = applyTmdbMetadata(ctx, qtx, txScan, current.ID, movie.tmdbMovie)
 		} else {
-			err = qtx.MarkMovieTmdbRetry(ctx, movie.ID)
+			err = qtx.RecordMovieTmdbMiss(ctx, database.RecordMovieTmdbMissParams{MovieID: current.ID, LastAttemptAt: helpers.NullInt64(attemptedAt.Unix())})
 		}
 		if err != nil {
-			return 0, err
+			return err
 		}
+		err = ctx.Err()
+		if err != nil {
+			return err
+		}
+		return movie.inspection.Validate(ctx)
+	}, nil)
+	stale := errors.Is(err, errStaleEnrichment)
+	if stale {
+		return enrichmentSkipped, nil
 	}
-	if resolved.metadataOnly {
-		return movie.ID, nil
-	}
-
-	videoStreamCount, err := s.processMovieStreams(ctx, qtx, movie.ID, resolved.streams)
 	if err != nil {
-		return 0, fmt.Errorf("process movie streams failed: %w", err)
-	}
-	if videoStreamCount == 0 {
-		return 0, fmt.Errorf("no video stream found - invalid movie file")
+		return enrichmentSkipped, err
 	}
 
-	err = processChapters(ctx, qtx, movie.ID, resolved.chapters)
-	if err != nil {
-		return 0, fmt.Errorf("process chapters failed: %w", err)
+	entry := movie.baseline
+	outcome := enrichmentUnmatched
+	if movie.tmdbMovie != nil {
+		outcome = enrichmentApplied
+		entry.TmdbID = helpers.NullInt64(int64(movie.tmdbMovie.TmdbID))
+		entry.PendingRetry, entry.RetryAttempts, entry.LastAttemptAt = false, 0, sql.NullInt64{}
+		scan.enriched++
+	} else {
+		entry.PendingRetry, entry.RetryAttempts, entry.LastAttemptAt = true, entry.RetryAttempts+1, helpers.NullInt64(attemptedAt.Unix())
 	}
-
-	return movie.ID, nil
+	scan.setEntry(filepath.Clean(path), entry)
+	scan.mergeFrom(txScan)
+	return outcome, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -234,10 +277,8 @@ func processProductionCompanies(
 
 	for _, company := range companies {
 		upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
-			Name:    company.Name,
-			TmdbID:  int64(company.ID),
-			Logo:    helpers.NullString(company.LogoPath),
-			Country: helpers.NullString(company.OriginCountry),
+			Name:   company.Name,
+			TmdbID: int64(company.ID),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert production company failed: %w", err)
@@ -245,7 +286,7 @@ func processProductionCompanies(
 
 		err = qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
-			ProductionCompanyID: upserted.ID,
+			ProductionCompanyID: upserted,
 		})
 		if err != nil {
 			return fmt.Errorf("create movie production company relationship failed: %w", err)
@@ -268,7 +309,7 @@ func processCast(
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
-		_, err = qtx.UpsertCast(ctx, database.UpsertCastParams{
+		err = qtx.UpsertCast(ctx, database.UpsertCastParams{
 			MovieID:   movieID,
 			ArtistID:  artistID,
 			Character: castMember.Character,
@@ -296,7 +337,7 @@ func processCrew(
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
-		_, err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
+		err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
 			MovieID:    movieID,
 			ArtistID:   artistID,
 			Job:        crewMember.Job,
@@ -311,26 +352,7 @@ func processCrew(
 	return nil
 }
 
-func getOrCreateArtist(
-	ctx context.Context,
-	qtx *database.Queries,
-	tmdbID int,
-	name string,
-	profilePath string,
-) (*database.Artist, error) {
-	upserted, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
-		Name:    name,
-		TmdbID:  int64(tmdbID),
-		Profile: helpers.NullString(profilePath),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("upsert artist failed: %w", err)
-	}
-
-	return &upserted, nil
-}
-
-// getOrCreateArtistID is the scan-cached form of getOrCreateArtist: the same
+// getOrCreateArtistID upserts a TMDB person once per scan: the same
 // person credited across many movies (or several crew roles of one movie) hits
 // the database once per scan. The first sighting still runs the full upsert,
 // so name/profile refresh from TMDB once per scan instead of once per credit.
@@ -350,15 +372,19 @@ func getOrCreateArtistID(
 		}
 	}
 
-	artist, err := getOrCreateArtist(ctx, qtx, tmdbID, name, profilePath)
+	artist, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
+		Name:    name,
+		TmdbID:  int64(tmdbID),
+		Profile: helpers.NullString(profilePath),
+	})
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("upsert artist failed: %w", err)
 	}
 
 	if scan != nil {
-		scan.artistIDs.Set(int64(tmdbID), artist.ID)
+		scan.artistIDs.Set(int64(tmdbID), artist)
 	}
-	return artist.ID, nil
+	return artist, nil
 }
 
 func processMovieGenres(
@@ -410,9 +436,9 @@ func getOrCreateMovieGenreID(ctx context.Context, qtx *database.Queries, scan *m
 	}
 
 	if scan != nil {
-		scan.genreIDs.Set(cacheKey, dbGenre.ID)
+		scan.genreIDs.Set(cacheKey, dbGenre)
 	}
-	return dbGenre.ID, nil
+	return dbGenre, nil
 }
 
 func processExtraVideos(
@@ -442,7 +468,6 @@ func processExtraVideos(
 			Key:        v.Key,
 			Type:       mapTmdbVideoType(v.Type),
 			Site:       mapTmdbVideoSite(v.Site),
-			Official:   v.Official,
 		})
 		if err != nil {
 			return fmt.Errorf("upsert extra video failed: %w", err)
@@ -450,7 +475,7 @@ func processExtraVideos(
 
 		err = qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
 			MovieID:      movieID,
-			ExtraVideoID: extra.ID,
+			ExtraVideoID: extra,
 		})
 
 		if err != nil {

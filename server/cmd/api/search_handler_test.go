@@ -329,7 +329,7 @@ func createSearchUser(t *testing.T, app *Application) int64 {
 func createSearchMovie(t *testing.T, app *Application, title, filePath string) int64 {
 	t.Helper()
 
-	movie, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
+	movieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
 		Title:     title,
 		FilePath:  filePath,
 		FileName:  strings.TrimPrefix(filePath, "/movies/"),
@@ -341,18 +341,26 @@ func createSearchMovie(t *testing.T, app *Application, title, filePath string) i
 	if err != nil {
 		t.Fatalf("create movie %q: %v", title, err)
 	}
+	movie, err := app.Queries.GetMovieByID(context.Background(), movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return movie.ID
 }
 
 func createSearchMusician(t *testing.T, app *Application, name string) int64 {
 	t.Helper()
 
-	musician, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+	musicianIdentity, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:     name,
 		SortName: strings.ToLower(name),
 	})
 	if err != nil {
 		t.Fatalf("create musician %q: %v", name, err)
+	}
+	musician, err := app.Queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return musician.ID
 }
@@ -360,13 +368,17 @@ func createSearchMusician(t *testing.T, app *Application, name string) int64 {
 func createSearchAlbum(t *testing.T, app *Application, title, musician string) int64 {
 	t.Helper()
 
-	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+	albumIdentity, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
 		Title:     title,
 		SortTitle: strings.ToLower(title),
 		Musician:  sql.NullString{String: musician, Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("create album %q: %v", title, err)
+	}
+	album, err := app.Queries.GetAlbumByID(context.Background(), albumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return album.ID
 }
@@ -396,7 +408,7 @@ func createSearchTrack(t *testing.T, app *Application, title, filePath string, a
 	if err != nil {
 		t.Fatalf("create track %q: %v", title, err)
 	}
-	return track.ID
+	return track
 }
 
 func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID int64, path string) *httptest.ResponseRecorder {

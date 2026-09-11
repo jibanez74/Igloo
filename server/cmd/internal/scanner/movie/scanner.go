@@ -40,36 +40,19 @@ type Dependencies struct {
 // Scanner scans and persists the configured movie library.
 type Scanner struct {
 	now                         func() time.Time
-	db                          *sql.DB
+	waitForRetry                func(context.Context, time.Duration) error
 	queries                     *database.Queries
 	logger                      logger.LoggerInterface
 	ffprobe                     ffprobe.FfprobeInterface
 	tmdb                        tmdb.TmdbInterface
 	scanContext                 context.Context
-	wait                        *sync.WaitGroup
-	scannerDBMu                 *sync.Mutex
+	launcher                    scanner.Launcher
+	tx                          scanner.TxRunner
 	currentMoviesDirectory      func() sql.NullString
 	invalidateCommittedMovie    func(int64)
 	invalidateDeletedWatchRooms func([]int64)
-	guard                       scanner.ScanGuard
-}
-
-// StartStatus describes whether a scan goroutine was launched.
-type StartStatus int
-
-const (
-	// Callers only branch on the two failure statuses and let the success case
-	// fall through, so StartStarted is never named outside tests. It is the
-	// zero value and cannot be dropped.
-	StartStarted StartStatus = iota
-	StartNotConfigured
-	StartAlreadyRunning
-)
-
-// StartResult records the observed directory and start outcome.
-type StartResult struct {
-	Directory string
-	Status    StartStatus
+	statusMu                    sync.RWMutex
+	status                      Status
 }
 
 // New constructs a scanner, defaulting the optional dependencies so the rest
@@ -101,10 +84,11 @@ func New(deps Dependencies) *Scanner {
 	}
 
 	return &Scanner{
-		now: deps.Now,
-		db:  deps.DB, queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
-		tmdb: deps.Tmdb, scanContext: deps.ScanContext, wait: deps.Wait,
-		scannerDBMu: deps.ScannerDBMu, currentMoviesDirectory: deps.CurrentMoviesDirectory,
+		now: deps.Now, waitForRetry: waitForMovieRetry,
+		queries: deps.Queries, logger: deps.Logger, ffprobe: deps.Ffprobe,
+		tmdb: deps.Tmdb, scanContext: deps.ScanContext, launcher: scanner.Launcher{Wait: deps.Wait},
+		tx:                          scanner.TxRunner{DB: deps.DB, Mu: deps.ScannerDBMu, Queries: deps.Queries},
+		currentMoviesDirectory:      deps.CurrentMoviesDirectory,
 		invalidateCommittedMovie:    deps.InvalidateCommittedMovie,
 		invalidateDeletedWatchRooms: deps.InvalidateDeletedWatchRooms,
 	}

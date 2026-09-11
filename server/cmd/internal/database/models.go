@@ -23,15 +23,6 @@ type Album struct {
 	UpdatedAt         string          `json:"updated_at"`
 }
 
-type Artist struct {
-	ID        int64          `json:"id"`
-	Name      string         `json:"name"`
-	TmdbID    int64          `json:"tmdb_id"`
-	Profile   sql.NullString `json:"profile"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt string         `json:"updated_at"`
-}
-
 type AudioStream struct {
 	ID            int64          `json:"id"`
 	MovieID       int64          `json:"movie_id"`
@@ -45,18 +36,6 @@ type AudioStream struct {
 	Language      sql.NullString `json:"language"`
 	Title         sql.NullString `json:"title"`
 	IsDefault     bool           `json:"is_default"`
-	CreatedAt     string         `json:"created_at"`
-	UpdatedAt     string         `json:"updated_at"`
-}
-
-type Cast struct {
-	ID        int64  `json:"id"`
-	MovieID   int64  `json:"movie_id"`
-	ArtistID  int64  `json:"artist_id"`
-	Character string `json:"character"`
-	CastOrder int64  `json:"cast_order"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
 }
 
 type Chapter struct {
@@ -65,57 +44,6 @@ type Chapter struct {
 	StartTime int64          `json:"start_time"`
 	Thumb     sql.NullString `json:"thumb"`
 	MovieID   int64          `json:"movie_id"`
-}
-
-type Crew struct {
-	ID         int64  `json:"id"`
-	MovieID    int64  `json:"movie_id"`
-	ArtistID   int64  `json:"artist_id"`
-	Job        string `json:"job"`
-	Department string `json:"department"`
-	CreatedAt  string `json:"created_at"`
-	UpdatedAt  string `json:"updated_at"`
-}
-
-type Device struct {
-	ID         int64          `json:"id"`
-	UserID     int64          `json:"user_id"`
-	Name       string         `json:"name"`
-	Platform   string         `json:"platform"`
-	AppVersion sql.NullString `json:"app_version"`
-	TokenHash  string         `json:"token_hash"`
-	CreatedAt  string         `json:"created_at"`
-	LastUsedAt string         `json:"last_used_at"`
-}
-
-type ExtraVideo struct {
-	ID         int64          `json:"id"`
-	Title      string         `json:"title"`
-	ExternalID sql.NullString `json:"external_id"`
-	Key        string         `json:"key"`
-	Type       string         `json:"type"`
-	Site       string         `json:"site"`
-	Official   bool           `json:"official"`
-	CreatedAt  string         `json:"created_at"`
-	UpdatedAt  string         `json:"updated_at"`
-}
-
-type Genre struct {
-	ID        int64  `json:"id"`
-	Tag       string `json:"tag"`
-	GenreType string `json:"genre_type"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-}
-
-type KeyframeIndex struct {
-	MovieID     int64   `json:"movie_id"`
-	StreamIndex int64   `json:"stream_index"`
-	Fingerprint string  `json:"fingerprint"`
-	DurationSec float64 `json:"duration_sec"`
-	Keyframes   string  `json:"keyframes"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
 }
 
 type Movie struct {
@@ -147,41 +75,6 @@ type Movie struct {
 	UpdatedAt      string          `json:"updated_at"`
 }
 
-type MovieWatchProgress struct {
-	UserID        int64   `json:"user_id"`
-	MovieID       int64   `json:"movie_id"`
-	ProgressSec   float64 `json:"progress_sec"`
-	DurationSec   float64 `json:"duration_sec"`
-	Watched       bool    `json:"watched"`
-	SaveSessionID string  `json:"save_session_id"`
-	SaveSequence  int64   `json:"save_sequence"`
-	UpdatedAt     string  `json:"updated_at"`
-}
-
-type MusicSpotifyMatch struct {
-	EntityType      string         `json:"entity_type"`
-	EntityID        int64          `json:"entity_id"`
-	SpotifyID       sql.NullString `json:"spotify_id"`
-	Status          string         `json:"status"`
-	Reason          sql.NullString `json:"reason"`
-	Score           sql.NullInt64  `json:"score"`
-	ThresholdValue  sql.NullInt64  `json:"threshold_value"`
-	CandidateName   sql.NullString `json:"candidate_name"`
-	CandidateArtist sql.NullString `json:"candidate_artist"`
-	SearchQuery     sql.NullString `json:"search_query"`
-	Strategy        sql.NullString `json:"strategy"`
-	Error           sql.NullString `json:"error"`
-	UpdatedAt       string         `json:"updated_at"`
-}
-
-type MusicTrackMetadatum struct {
-	TrackID    int64  `json:"track_id"`
-	ArtistTag  string `json:"artist_tag"`
-	ArtistKey  string `json:"artist_key"`
-	ArtistSort string `json:"artist_sort"`
-	AlbumSort  string `json:"album_sort"`
-}
-
 type Musician struct {
 	ID                int64           `json:"id"`
 	Name              string          `json:"name"`
@@ -201,16 +94,6 @@ type Network struct {
 	Name    string         `json:"name"`
 	Logo    sql.NullString `json:"logo"`
 	Country sql.NullString `json:"country"`
-}
-
-type Notification struct {
-	ID              int64  `json:"id"`
-	CreatedByUserID int64  `json:"created_by_user_id"`
-	Title           string `json:"title"`
-	Message         string `json:"message"`
-	IsAdmin         bool   `json:"is_admin"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
 }
 
 type Playlist struct {
@@ -235,26 +118,6 @@ type PlaylistCollaborator struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
-type ProductionCompany struct {
-	ID        int64          `json:"id"`
-	Name      string         `json:"name"`
-	TmdbID    int64          `json:"tmdb_id"`
-	Logo      sql.NullString `json:"logo"`
-	Country   sql.NullString `json:"country"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt string         `json:"updated_at"`
-}
-
-type RemuxSafetyVerdict struct {
-	MovieID     int64  `json:"movie_id"`
-	StreamIndex int64  `json:"stream_index"`
-	Fingerprint string `json:"fingerprint"`
-	Safe        bool   `json:"safe"`
-	Reason      string `json:"reason"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-}
-
 type Setting struct {
 	ID                         int64           `json:"id"`
 	TmdbKey                    sql.NullString  `json:"tmdb_key"`
@@ -273,8 +136,6 @@ type Setting struct {
 	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
 	StaticDir                  string          `json:"static_dir"`
 	TranscodeDir               string          `json:"transcode_dir"`
-	CreatedAt                  string          `json:"created_at"`
-	UpdatedAt                  string          `json:"updated_at"`
 }
 
 type Show struct {
@@ -429,36 +290,6 @@ type Subtitle struct {
 	Title       sql.NullString `json:"title"`
 	IsForced    bool           `json:"is_forced"`
 	IsDefault   bool           `json:"is_default"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
-}
-
-type Track struct {
-	ID            int64          `json:"id"`
-	Title         string         `json:"title"`
-	SortTitle     string         `json:"sort_title"`
-	FilePath      string         `json:"file_path"`
-	FileName      string         `json:"file_name"`
-	Container     string         `json:"container"`
-	MimeType      string         `json:"mime_type"`
-	Codec         string         `json:"codec"`
-	Size          int64          `json:"size"`
-	TrackIndex    int64          `json:"track_index"`
-	Duration      int64          `json:"duration"`
-	Disc          int64          `json:"disc"`
-	Channels      string         `json:"channels"`
-	ChannelLayout string         `json:"channel_layout"`
-	BitRate       int64          `json:"bit_rate"`
-	Profile       string         `json:"profile"`
-	ReleaseDate   sql.NullString `json:"release_date"`
-	Year          sql.NullInt64  `json:"year"`
-	Composer      sql.NullString `json:"composer"`
-	Copyright     sql.NullString `json:"copyright"`
-	Language      sql.NullString `json:"language"`
-	AlbumID       sql.NullInt64  `json:"album_id"`
-	MusicianID    sql.NullInt64  `json:"musician_id"`
-	CreatedAt     string         `json:"created_at"`
-	UpdatedAt     string         `json:"updated_at"`
 }
 
 type User struct {
@@ -498,8 +329,6 @@ type VideoStream struct {
 	Rotation       sql.NullInt64  `json:"rotation"`
 	Language       sql.NullString `json:"language"`
 	Title          sql.NullString `json:"title"`
-	CreatedAt      string         `json:"created_at"`
-	UpdatedAt      string         `json:"updated_at"`
 }
 
 type WatchRoom struct {
@@ -514,5 +343,4 @@ type WatchRoom struct {
 	SubtitleStreamIndex sql.NullInt64  `json:"subtitle_stream_index"`
 	SubtitleLanguage    sql.NullString `json:"subtitle_language"`
 	CreatedAt           string         `json:"created_at"`
-	UpdatedAt           string         `json:"updated_at"`
 }

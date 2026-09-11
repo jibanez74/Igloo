@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/sqlc"
 )
 
@@ -27,12 +28,7 @@ func testDB(t *testing.T) (*sql.DB, *database.Queries) {
 
 func countRows(t *testing.T, db *sql.DB, table string) int {
 	t.Helper()
-	var n int
-	err := db.QueryRow("SELECT count(*) FROM " + table).Scan(&n)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return n
+	return scannertest.CountRows(t, db, "SELECT count(*) FROM "+table)
 }
 
 func TestCatalogOwnershipAndRollback(t *testing.T) {

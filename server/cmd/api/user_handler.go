@@ -19,7 +19,7 @@ import (
 // returned by the auth and user endpoints. It takes explicit fields because the
 // sqlc row types (GetUserRow, UpdateUserNameRow, ...) differ per query. The
 // plaintext PIN is never included — only whether one is set.
-func userResponseMap(id int64, name, email string, isAdmin bool, avatar, pin sql.NullString, createdAt, updatedAt string) map[string]any {
+func userResponseMap(id int64, name, email string, isAdmin bool, avatar sql.NullString, hasPin bool, createdAt, updatedAt string) map[string]any {
 	var avatarValue any
 	if avatar.Valid {
 		avatarValue = avatar.String
@@ -31,7 +31,7 @@ func userResponseMap(id int64, name, email string, isAdmin bool, avatar, pin sql
 		"email":      email,
 		"is_admin":   isAdmin,
 		"avatar":     avatarValue,
-		"has_pin":    pin.Valid,
+		"has_pin":    hasPin,
 		"created_at": createdAt,
 		"updated_at": updatedAt,
 	}
@@ -44,8 +44,9 @@ func validatePassword(password, label string) error {
 	if passwordLength < 9 {
 		return fmt.Errorf("%s must be at least 9 characters", label)
 	}
-	if passwordLength > 128 {
-		return fmt.Errorf("%s must be 128 characters or less", label)
+	passwordBytes := len(password)
+	if passwordBytes > helpers.USER_PASSWORD_MAX_BYTES {
+		return fmt.Errorf("%s must be at most %d UTF-8 bytes", label, helpers.USER_PASSWORD_MAX_BYTES)
 	}
 	return nil
 }
@@ -103,7 +104,7 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -155,7 +156,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -284,7 +285,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -404,7 +405,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		Error:   false,
 		Message: "Avatar uploaded successfully",
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin.Valid, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 

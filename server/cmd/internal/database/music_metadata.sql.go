@@ -10,6 +10,32 @@ import (
 	"database/sql"
 )
 
+const countMusicAlbumRetryCandidates = `-- name: CountMusicAlbumRetryCandidates :one
+SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
+`
+
+func (q *Queries) CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicAlbumRetryCandidatesStmt, countMusicAlbumRetryCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countMusicArtistRetryCandidates = `-- name: CountMusicArtistRetryCandidates :one
+SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
+`
+
+func (q *Queries) CountMusicArtistRetryCandidates(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countMusicArtistRetryCandidatesStmt, countMusicArtistRetryCandidates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteMergedMusicAlbum = `-- name: DeleteMergedMusicAlbum :exec
 DELETE FROM albums WHERE id=?
 `
@@ -70,7 +96,7 @@ func (q *Queries) DeleteMusicCreditMetadata(ctx context.Context, trackID int64) 
 }
 
 const findMusicAlbumIdentity = `-- name: FindMusicAlbumIdentity :one
-SELECT e.id, e.title, e.sort_title, e.spotify_id, e.spotify_popularity, e.musician, e.release_date, e.year, e.total_tracks, e.cover, e.created_at, e.updated_at FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?
+SELECT e.id, e.spotify_id, e.cover FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?
 `
 
 type FindMusicAlbumIdentityParams struct {
@@ -78,63 +104,45 @@ type FindMusicAlbumIdentityParams struct {
 	ArtistKey string `json:"artist_key"`
 }
 
-func (q *Queries) FindMusicAlbumIdentity(ctx context.Context, arg FindMusicAlbumIdentityParams) (Album, error) {
+type FindMusicAlbumIdentityRow struct {
+	ID        int64          `json:"id"`
+	SpotifyID sql.NullString `json:"spotify_id"`
+	Cover     sql.NullString `json:"cover"`
+}
+
+func (q *Queries) FindMusicAlbumIdentity(ctx context.Context, arg FindMusicAlbumIdentityParams) (FindMusicAlbumIdentityRow, error) {
 	row := q.queryRow(ctx, q.findMusicAlbumIdentityStmt, findMusicAlbumIdentity, arg.TitleKey, arg.ArtistKey)
-	var i Album
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.Musician,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.TotalTracks,
-		&i.Cover,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
+	var i FindMusicAlbumIdentityRow
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.Cover)
 	return i, err
 }
 
 const findMusicArtistIdentity = `-- name: FindMusicArtistIdentity :one
-SELECT e.id, e.name, e.sort_name, e.summary, e.spotify_id, e.spotify_popularity, e.spotify_followers, e.thumb, e.created_at, e.updated_at FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?
+SELECT e.id, e.spotify_id, e.thumb FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?
 `
 
-func (q *Queries) FindMusicArtistIdentity(ctx context.Context, identityKey string) (Musician, error) {
+type FindMusicArtistIdentityRow struct {
+	ID        int64          `json:"id"`
+	SpotifyID sql.NullString `json:"spotify_id"`
+	Thumb     sql.NullString `json:"thumb"`
+}
+
+func (q *Queries) FindMusicArtistIdentity(ctx context.Context, identityKey string) (FindMusicArtistIdentityRow, error) {
 	row := q.queryRow(ctx, q.findMusicArtistIdentityStmt, findMusicArtistIdentity, identityKey)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
+	var i FindMusicArtistIdentityRow
+	err := row.Scan(&i.ID, &i.SpotifyID, &i.Thumb)
 	return i, err
 }
 
 const findMusicGenreIdentity = `-- name: FindMusicGenreIdentity :one
-SELECT e.id, e.tag, e.genre_type, e.created_at, e.updated_at FROM genres e JOIN music_genre_identity i ON i.genre_id=e.id WHERE i.identity_key = ?
+SELECT e.id FROM genres e JOIN music_genre_identity i ON i.genre_id=e.id WHERE i.identity_key = ?
 `
 
-func (q *Queries) FindMusicGenreIdentity(ctx context.Context, identityKey string) (Genre, error) {
+func (q *Queries) FindMusicGenreIdentity(ctx context.Context, identityKey string) (int64, error) {
 	row := q.queryRow(ctx, q.findMusicGenreIdentityStmt, findMusicGenreIdentity, identityKey)
-	var i Genre
-	err := row.Scan(
-		&i.ID,
-		&i.Tag,
-		&i.GenreType,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const moveMusicAlbumAliases = `-- name: MoveMusicAlbumAliases :exec
@@ -269,35 +277,28 @@ func (q *Queries) MoveMusicArtistTracks(ctx context.Context, arg MoveMusicArtist
 }
 
 const musicAlbumRetryCandidates = `-- name: MusicAlbumRetryCandidates :many
-SELECT e.id, e.title, e.sort_title, e.spotify_id, e.spotify_popularity, e.musician, e.release_date, e.year, e.total_tracks, e.cover, e.created_at, e.updated_at FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+SELECT e.id, e.title, e.musician FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100
 `
 
-func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]Album, error) {
+type MusicAlbumRetryCandidatesRow struct {
+	ID       int64          `json:"id"`
+	Title    string         `json:"title"`
+	Musician sql.NullString `json:"musician"`
+}
+
+func (q *Queries) MusicAlbumRetryCandidates(ctx context.Context, afterID int64) ([]MusicAlbumRetryCandidatesRow, error) {
 	rows, err := q.query(ctx, q.musicAlbumRetryCandidatesStmt, musicAlbumRetryCandidates, afterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Album{}
+	items := []MusicAlbumRetryCandidatesRow{}
 	for rows.Next() {
-		var i Album
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.SortTitle,
-			&i.SpotifyID,
-			&i.SpotifyPopularity,
-			&i.Musician,
-			&i.ReleaseDate,
-			&i.Year,
-			&i.TotalTracks,
-			&i.Cover,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
+		var i MusicAlbumRetryCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.Musician); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -339,33 +340,27 @@ func (q *Queries) MusicAlbumTrackIDs(ctx context.Context, albumID sql.NullInt64)
 }
 
 const musicArtistRetryCandidates = `-- name: MusicArtistRetryCandidates :many
-SELECT e.id, e.name, e.sort_name, e.summary, e.spotify_id, e.spotify_popularity, e.spotify_followers, e.thumb, e.created_at, e.updated_at FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+SELECT e.id, e.name FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE e.id>?1 AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 ORDER BY e.id LIMIT 100
 `
 
-func (q *Queries) MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]Musician, error) {
+type MusicArtistRetryCandidatesRow struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) MusicArtistRetryCandidates(ctx context.Context, afterID int64) ([]MusicArtistRetryCandidatesRow, error) {
 	rows, err := q.query(ctx, q.musicArtistRetryCandidatesStmt, musicArtistRetryCandidates, afterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Musician{}
+	items := []MusicArtistRetryCandidatesRow{}
 	for rows.Next() {
-		var i Musician
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.SortName,
-			&i.Summary,
-			&i.SpotifyID,
-			&i.SpotifyPopularity,
-			&i.SpotifyFollowers,
-			&i.Thumb,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
+		var i MusicArtistRetryCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -407,8 +402,8 @@ func (q *Queries) MusicArtistTrackIDs(ctx context.Context, musicianID int64) ([]
 }
 
 const musicArtistTrackMetadata = `-- name: MusicArtistTrackMetadata :many
-SELECT m.track_id, m.artist_tag, m.artist_key, m.artist_sort, m.album_sort FROM music_track_metadata m JOIN track_musicians tm ON tm.track_id=m.track_id
-WHERE tm.musician_id=? AND m.track_id>?2 ORDER BY m.track_id LIMIT 100
+SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+WHERE tm.musician_id=? AND tm.track_id>?2 ORDER BY tm.track_id LIMIT 100
 `
 
 type MusicArtistTrackMetadataParams struct {
@@ -416,22 +411,23 @@ type MusicArtistTrackMetadataParams struct {
 	AfterID    int64 `json:"after_id"`
 }
 
-func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicTrackMetadatum, error) {
+type MusicArtistTrackMetadataRow struct {
+	TrackID    int64  `json:"track_id"`
+	ArtistTag  string `json:"artist_tag"`
+	ArtistSort string `json:"artist_sort"`
+}
+
+// The range and order ride idx_track_musicians_musician_track, so keep them on tm.
+func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistTrackMetadataParams) ([]MusicArtistTrackMetadataRow, error) {
 	rows, err := q.query(ctx, q.musicArtistTrackMetadataStmt, musicArtistTrackMetadata, arg.MusicianID, arg.AfterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MusicTrackMetadatum{}
+	items := []MusicArtistTrackMetadataRow{}
 	for rows.Next() {
-		var i MusicTrackMetadatum
-		if err := rows.Scan(
-			&i.TrackID,
-			&i.ArtistTag,
-			&i.ArtistKey,
-			&i.ArtistSort,
-			&i.AlbumSort,
-		); err != nil {
+		var i MusicArtistTrackMetadataRow
+		if err := rows.Scan(&i.TrackID, &i.ArtistTag, &i.ArtistSort); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -446,38 +442,32 @@ func (q *Queries) MusicArtistTrackMetadata(ctx context.Context, arg MusicArtistT
 }
 
 const musicCompoundReconciliationCandidates = `-- name: MusicCompoundReconciliationCandidates :many
-SELECT e.id, e.name, e.sort_name, e.summary, e.spotify_id, e.spotify_popularity, e.spotify_followers, e.thumb, e.created_at, e.updated_at FROM musicians e JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>?1 AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold')
+SELECT e.id FROM musicians e
+WHERE e.id>?1
+AND EXISTS (SELECT 1 FROM music_spotify_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
 AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
 JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
 WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))
 ORDER BY e.id LIMIT 100
 `
 
-func (q *Queries) MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]Musician, error) {
+// Driven from musicians so the keyset cursor rides the primary key, like
+// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+// a temp b-tree sort of every remaining candidate on each 100-row page.
+func (q *Queries) MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error) {
 	rows, err := q.query(ctx, q.musicCompoundReconciliationCandidatesStmt, musicCompoundReconciliationCandidates, afterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Musician{}
+	items := []int64{}
 	for rows.Next() {
-		var i Musician
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.SortName,
-			&i.Summary,
-			&i.SpotifyID,
-			&i.SpotifyPopularity,
-			&i.SpotifyFollowers,
-			&i.Thumb,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -727,7 +717,11 @@ func (q *Queries) SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtis
 }
 
 const updateMusicAlbumEnrichment = `-- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
+UPDATE albums SET
+ spotify_popularity = COALESCE(?1, spotify_popularity),
+ total_tracks = COALESCE(?2, total_tracks),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3
 `
 
 type UpdateMusicAlbumEnrichmentParams struct {
@@ -736,13 +730,19 @@ type UpdateMusicAlbumEnrichmentParams struct {
 	ID                int64           `json:"id"`
 }
 
+// Same NULL-coercion guard as UpdateMusicArtistEnrichment.
 func (q *Queries) UpdateMusicAlbumEnrichment(ctx context.Context, arg UpdateMusicAlbumEnrichmentParams) error {
 	_, err := q.exec(ctx, q.updateMusicAlbumEnrichmentStmt, updateMusicAlbumEnrichment, arg.SpotifyPopularity, arg.TotalTracks, arg.ID)
 	return err
 }
 
 const updateMusicArtistEnrichment = `-- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?
+UPDATE musicians SET
+ summary = COALESCE(?1, summary),
+ spotify_popularity = COALESCE(?2, spotify_popularity),
+ spotify_followers = COALESCE(?3, spotify_followers),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = ?4
 `
 
 type UpdateMusicArtistEnrichmentParams struct {
@@ -752,6 +752,9 @@ type UpdateMusicArtistEnrichmentParams struct {
 	ID                int64           `json:"id"`
 }
 
+// COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+// popularity/follower count to NULL, and an obscure artist legitimately reports
+// both, so an unguarded SET would erase values a previous match stored.
 func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMusicArtistEnrichmentParams) error {
 	_, err := q.exec(ctx, q.updateMusicArtistEnrichmentStmt, updateMusicArtistEnrichment,
 		arg.Summary,
@@ -763,7 +766,7 @@ func (q *Queries) UpdateMusicArtistEnrichment(ctx context.Context, arg UpdateMus
 }
 
 const updateMusicTrackPrimaryArtist = `-- name: UpdateMusicTrackPrimaryArtist :exec
-UPDATE tracks SET musician_id=? WHERE id=?
+UPDATE tracks SET musician_id = ?1 WHERE id = ?2 AND musician_id IS NOT ?1
 `
 
 type UpdateMusicTrackPrimaryArtistParams struct {
@@ -771,6 +774,7 @@ type UpdateMusicTrackPrimaryArtistParams struct {
 	ID         int64         `json:"id"`
 }
 
+// Guarded so an unchanged primary artist does not fire the search triggers.
 func (q *Queries) UpdateMusicTrackPrimaryArtist(ctx context.Context, arg UpdateMusicTrackPrimaryArtistParams) error {
 	_, err := q.exec(ctx, q.updateMusicTrackPrimaryArtistStmt, updateMusicTrackPrimaryArtist, arg.MusicianID, arg.ID)
 	return err

@@ -31,21 +31,21 @@ func applyShow(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVSho
 		}
 	}
 	for _, g := range m.Genres {
-		genre, err := q.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{Tag: g.Name, GenreType: "show"})
+		genreID, err := q.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{Tag: g.Name, GenreType: "show"})
 		if err != nil {
 			return err
 		}
-		err = q.CreateShowGenre(ctx, database.CreateShowGenreParams{ShowID: id, GenreID: genre.ID})
+		err = q.CreateShowGenre(ctx, database.CreateShowGenreParams{ShowID: id, GenreID: genreID})
 		if err != nil {
 			return err
 		}
 	}
 	for _, c := range m.ProductionCompanies {
-		company, err := q.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{Name: c.Name, TmdbID: int64(c.ID), Logo: helpers.NullString(c.LogoPath), Country: helpers.NullString(c.OriginCountry)})
+		companyID, err := q.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{Name: c.Name, TmdbID: int64(c.ID)})
 		if err != nil {
 			return err
 		}
-		err = q.CreateShowProductionCompany(ctx, database.CreateShowProductionCompanyParams{ShowID: id, ProductionCompanyID: company.ID})
+		err = q.CreateShowProductionCompany(ctx, database.CreateShowProductionCompanyParams{ShowID: id, ProductionCompanyID: companyID})
 		if err != nil {
 			return err
 		}
@@ -153,8 +153,7 @@ func upsertPerson(ctx context.Context, q *database.Queries, p tmdb.TVPerson) (in
 	if p.ID <= 0 {
 		return 0, errors.New("invalid TMDB person identity")
 	}
-	artist, err := q.UpsertArtist(ctx, database.UpsertArtistParams{Name: p.Name, TmdbID: int64(p.ID), Profile: helpers.NullString(p.ProfilePath)})
-	return artist.ID, err
+	return q.UpsertArtist(ctx, database.UpsertArtistParams{Name: p.Name, TmdbID: int64(p.ID), Profile: helpers.NullString(p.ProfilePath)})
 }
 func replaceCredits(ctx context.Context, q *database.Queries, owner metadataOwner, rows []credit) error {
 	var remove []func(context.Context, int64) error
@@ -245,14 +244,14 @@ func replaceVideos(ctx context.Context, q *database.Queries, owner metadataOwner
 		if site != "youtube" && site != "vimeo" {
 			site = "other"
 		}
-		extra, err := q.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{Title: title, ExternalID: helpers.NullString(v.ID), Key: v.Key, Type: kind, Site: site, Official: v.Official})
+		extraID, err := q.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{Title: title, ExternalID: helpers.NullString(v.ID), Key: v.Key, Type: kind, Site: site})
 		if err != nil {
 			return err
 		}
 		if owner.show != 0 {
-			err = q.CreateShowExtraVideo(ctx, database.CreateShowExtraVideoParams{ShowID: owner.show, ExtraVideoID: extra.ID})
+			err = q.CreateShowExtraVideo(ctx, database.CreateShowExtraVideoParams{ShowID: owner.show, ExtraVideoID: extraID})
 		} else {
-			err = q.CreateShowSeasonExtraVideo(ctx, database.CreateShowSeasonExtraVideoParams{SeasonID: owner.season, ExtraVideoID: extra.ID})
+			err = q.CreateShowSeasonExtraVideo(ctx, database.CreateShowSeasonExtraVideoParams{SeasonID: owner.season, ExtraVideoID: extraID})
 		}
 		if err != nil {
 			return err

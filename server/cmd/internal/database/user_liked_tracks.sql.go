@@ -61,7 +61,6 @@ SELECT
   t.duration,
   t.codec,
   t.bit_rate,
-  t.file_path,
   a.id    AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,
@@ -89,7 +88,6 @@ type GetLikedTracksForUserRow struct {
 	Duration     int64          `json:"duration"`
 	Codec        string         `json:"codec"`
 	BitRate      int64          `json:"bit_rate"`
-	FilePath     string         `json:"file_path"`
 	AlbumID      sql.NullInt64  `json:"album_id"`
 	AlbumTitle   sql.NullString `json:"album_title"`
 	AlbumCover   sql.NullString `json:"album_cover"`
@@ -112,7 +110,6 @@ func (q *Queries) GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksF
 			&i.Duration,
 			&i.Codec,
 			&i.BitRate,
-			&i.FilePath,
 			&i.AlbumID,
 			&i.AlbumTitle,
 			&i.AlbumCover,

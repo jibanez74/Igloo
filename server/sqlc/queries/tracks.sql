@@ -1,6 +1,35 @@
+-- name: GetTrackForDirectStream :one
+SELECT file_path, file_name, mime_type
+FROM tracks
+WHERE id = ?
+LIMIT 1;
+
 -- name: GetTrack :one
 SELECT
-  *
+  id,
+  title,
+  sort_title,
+  file_name,
+  container,
+  mime_type,
+  codec,
+  size,
+  track_index,
+  duration,
+  disc,
+  channels,
+  channel_layout,
+  bit_rate,
+  profile,
+  release_date,
+  year,
+  composer,
+  copyright,
+  language,
+  album_id,
+  musician_id,
+  created_at,
+  updated_at
 FROM tracks
 WHERE id = ?
 LIMIT 1;
@@ -70,11 +99,21 @@ SET
   album_id = excluded.album_id,
   musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+RETURNING id;
 
 -- name: GetTracksByAlbumID :many
 SELECT
-  *
+  id,
+  title,
+  codec,
+  mime_type,
+  track_index,
+  duration,
+  disc,
+  channel_layout,
+  bit_rate,
+  album_id,
+  musician_id
 FROM tracks
 WHERE album_id = ?
 ORDER BY
@@ -88,7 +127,6 @@ SELECT
   t.duration,
   t.codec,
   t.bit_rate,
-  t.file_path,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,
@@ -143,7 +181,6 @@ SELECT
 SELECT
   t.id,
   t.title,
-  t.file_path,
   t.duration,
   t.codec,
   t.bit_rate,

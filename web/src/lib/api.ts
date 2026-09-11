@@ -1,3 +1,4 @@
+import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 import type {
   AlbumDetailsResponseType,
   AlbumsListResponseType,
@@ -287,8 +288,8 @@ export const deleteUserAccount = () =>
 // Notifications
 // ============================================================================
 
-export const createNotification = (body: CreateNotificationRequest) =>
-  apiRequest<CreateNotificationResponseType>("/api/notifications", {
+export const createNotification = (body: CreateNotificationRequest): Promise<CreateNotificationResponseType | ApiFailureType> =>
+  apiRequest("/api/notifications", {
     method: "POST",
     body,
   });
@@ -694,19 +695,28 @@ export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
   });
 
 export const triggerMusicScan = () =>
-  apiRequest("/api/settings/scan/music", {
+  apiRequest<{ message: string }>("/api/settings/scan/music", {
     method: "POST",
   });
 
+export const getMusicScanStatus = () =>
+  apiRequest<MusicScanStatus>("/api/settings/scan/music");
+
+export const getMovieScanStatus = () =>
+  apiRequest<MovieScanStatus>("/api/settings/scan/movies");
+
 export const triggerMovieScan = () =>
-  apiRequest("/api/settings/scan/movies", {
+  apiRequest<{ message: string }>("/api/settings/scan/movies", {
     method: "POST",
   });
 
 export const triggerShowScan = () =>
-  apiRequest("/api/settings/scan/shows", {
+  apiRequest<{ message: string }>("/api/settings/scan/shows", {
     method: "POST",
   });
+
+export const getShowScanStatus = () =>
+  apiRequest<ShowScanStatus>("/api/settings/scan/shows");
 
 // ============================================================================
 // Admin user management

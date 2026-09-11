@@ -1,17 +1,17 @@
 -- name: FindMusicArtistIdentity :one
-SELECT e.* FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?;
+SELECT e.id, e.spotify_id, e.thumb FROM musicians e JOIN music_artist_identity i ON i.musician_id=e.id WHERE i.identity_key = ?;
 
 -- name: SaveMusicArtistIdentity :exec
 INSERT INTO music_artist_identity(identity_key, musician_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
 -- name: FindMusicAlbumIdentity :one
-SELECT e.* FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?;
+SELECT e.id, e.spotify_id, e.cover FROM albums e JOIN music_album_identity i ON i.album_id=e.id WHERE i.title_key = ? AND i.artist_key = ?;
 
 -- name: SaveMusicAlbumIdentity :exec
 INSERT INTO music_album_identity(title_key, artist_key, album_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING;
 
 -- name: FindMusicGenreIdentity :one
-SELECT e.* FROM genres e JOIN music_genre_identity i ON i.genre_id=e.id WHERE i.identity_key = ?;
+SELECT e.id FROM genres e JOIN music_genre_identity i ON i.genre_id=e.id WHERE i.identity_key = ?;
 
 -- name: SaveMusicGenreIdentity :exec
 INSERT INTO music_genre_identity(identity_key, genre_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
@@ -85,10 +85,15 @@ SELECT sqlc.arg(owner),genre_id,source FROM musician_genres WHERE musician_genre
 DELETE FROM musicians WHERE id=?;
 
 -- name: MusicArtistRetryCandidates :many
-SELECT e.* FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+SELECT e.id, e.name FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id)
 ORDER BY e.id LIMIT 100;
+
+-- name: CountMusicArtistRetryCandidates :one
+SELECT COUNT(*) FROM musicians e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM track_musicians t WHERE t.musician_id=e.id);
 
 -- name: MoveMusicAlbumAliases :exec
 UPDATE music_album_identity SET album_id=sqlc.arg(owner) WHERE album_id=sqlc.arg(redundant);
@@ -104,10 +109,15 @@ SELECT sqlc.arg(owner),genre_id,source FROM album_genres WHERE album_genres.albu
 DELETE FROM albums WHERE id=?;
 
 -- name: MusicAlbumRetryCandidates :many
-SELECT e.* FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+SELECT e.id, e.title, e.musician FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
 WHERE e.id>sqlc.arg(after_id) AND (m.status IS NULL OR m.status='failed')
 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id)
 ORDER BY e.id LIMIT 100;
+
+-- name: CountMusicAlbumRetryCandidates :one
+SELECT COUNT(*) FROM albums e LEFT JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='album'
+WHERE (m.status IS NULL OR m.status='failed')
+AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id=e.id);
 
 -- name: MoveMusicArtistCredits :exec
 INSERT OR IGNORE INTO track_musicians(track_id,musician_id)
@@ -125,11 +135,13 @@ SELECT sqlc.arg(owner),spotify_date FROM music_album_metadata WHERE music_album_
 DELETE FROM music_spotify_matches WHERE entity_type=? AND entity_id=?;
 
 -- name: MusicArtistTrackMetadata :many
-SELECT m.* FROM music_track_metadata m JOIN track_musicians tm ON tm.track_id=m.track_id
-WHERE tm.musician_id=? AND m.track_id>sqlc.arg(after_id) ORDER BY m.track_id LIMIT 100;
+-- The range and order ride idx_track_musicians_musician_track, so keep them on tm.
+SELECT m.track_id, m.artist_tag, m.artist_sort FROM track_musicians tm JOIN music_track_metadata m ON m.track_id=tm.track_id
+WHERE tm.musician_id=? AND tm.track_id>sqlc.arg(after_id) ORDER BY tm.track_id LIMIT 100;
 
 -- name: UpdateMusicTrackPrimaryArtist :exec
-UPDATE tracks SET musician_id=? WHERE id=?;
+-- Guarded so an unchanged primary artist does not fire the search triggers.
+UPDATE tracks SET musician_id = sqlc.arg(musician_id) WHERE id = sqlc.arg(id) AND musician_id IS NOT sqlc.arg(musician_id);
 
 -- name: MusicArtistTrackIDs :many
 SELECT track_id FROM track_musicians WHERE musician_id=?;
@@ -138,14 +150,32 @@ SELECT track_id FROM track_musicians WHERE musician_id=?;
 SELECT id FROM tracks WHERE album_id=?;
 
 -- name: UpdateMusicArtistEnrichment :exec
-UPDATE musicians SET summary=?,spotify_popularity=?,spotify_followers=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
+-- COALESCE like UpsertMusician: the scanner maps an empty summary and a zero
+-- popularity/follower count to NULL, and an obscure artist legitimately reports
+-- both, so an unguarded SET would erase values a previous match stored.
+UPDATE musicians SET
+ summary = COALESCE(sqlc.narg(summary), summary),
+ spotify_popularity = COALESCE(sqlc.narg(spotify_popularity), spotify_popularity),
+ spotify_followers = COALESCE(sqlc.narg(spotify_followers), spotify_followers),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
 
 -- name: UpdateMusicAlbumEnrichment :exec
-UPDATE albums SET spotify_popularity=?,total_tracks=?, updated_at = CURRENT_TIMESTAMP WHERE id=?;
+-- Same NULL-coercion guard as UpdateMusicArtistEnrichment.
+UPDATE albums SET
+ spotify_popularity = COALESCE(sqlc.narg(spotify_popularity), spotify_popularity),
+ total_tracks = COALESCE(sqlc.narg(total_tracks), total_tracks),
+ updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
 
 -- name: MusicCompoundReconciliationCandidates :many
-SELECT e.* FROM musicians e JOIN music_spotify_matches m ON m.entity_id=e.id AND m.entity_type='musician'
-WHERE e.id>sqlc.arg(after_id) AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold')
+-- Driven from musicians so the keyset cursor rides the primary key, like
+-- MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
+-- a temp b-tree sort of every remaining candidate on each 100-row page.
+SELECT e.id FROM musicians e
+WHERE e.id>sqlc.arg(after_id)
+AND EXISTS (SELECT 1 FROM music_spotify_matches m WHERE m.entity_type='musician' AND m.entity_id=e.id
+AND m.status='unmatched' AND m.reason IN ('no_results','score_below_threshold'))
 AND EXISTS (SELECT 1 FROM track_musicians tm JOIN music_track_metadata local ON local.track_id=tm.track_id
 JOIN music_artist_identity i ON i.musician_id=tm.musician_id AND i.identity_key=local.artist_key
 WHERE tm.musician_id=e.id AND (instr(local.artist_tag,' & ')>0 OR instr(local.artist_tag,',')>0))

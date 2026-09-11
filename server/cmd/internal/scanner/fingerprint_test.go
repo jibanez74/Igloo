@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -341,5 +342,36 @@ func BenchmarkStreamingHash(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestMetadataInspectionReadsNoContent(t *testing.T) {
+	for _, size := range []int64{1, 8 << 30, 1 << 40} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "sparse.mkv")
+			file, err := os.Create(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = file.Truncate(size)
+			file.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			inspection, err := InspectFileMetadata(context.Background(), path, nil, func() time.Time { return time.Now().Add(time.Hour) })
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer inspection.Close()
+			// The descriptor's offset must remain at zero regardless of sparse size.
+			offset, err := inspection.file.Seek(0, io.SeekCurrent)
+			if err != nil || offset != 0 || inspection.Fingerprint.SHA256 != [32]byte{} || inspection.Fingerprint.Size != size {
+				t.Fatalf("inspection read content: offset=%d fingerprint=%+v err=%v", offset, inspection.Fingerprint, err)
+			}
+			err = inspection.Validate(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

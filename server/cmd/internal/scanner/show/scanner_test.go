@@ -14,20 +14,37 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 )
 
-type testLogger struct{}
+// scan runs one complete library scan synchronously, publishing the run the
+// way Start does before handing off to the scan goroutine. It reports
+// cancellation and fatal failures, which the scan goroutine records on the
+// run instead of returning.
+func (s *Scanner) scan(directory string) error {
+	s.beginReport()
+	s.runShowScan(directory)
+	contextErr := s.ScanContext.Err()
+	if contextErr != nil {
+		return contextErr
+	}
+	if s.Status().State == scanner.StateFailed {
+		return errors.New("show scan failed")
+	}
+	return nil
+}
 
-func (*testLogger) Debug(string, ...any) {}
-func (*testLogger) Info(string, ...any)  {}
-func (*testLogger) Warn(string, ...any)  {}
-func (*testLogger) Error(string, ...any) {}
-
+// testProbe counts probes so rescans can assert that unchanged files are not
+// re-probed; scannertest.Probe has no counter.
 type testProbe struct {
-	ffprobe.FfprobeInterface
+	scannertest.NoKeyframeProbe
 	calls int
 	hook  func(context.Context, string) (*ffprobe.FfprobeResult, error)
+}
+
+func (p *testProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+	return p.GetMetadata(ctx, path)
 }
 
 func (p *testProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
@@ -45,7 +62,7 @@ func setupScanner(t *testing.T) (*Scanner, *testProbe, string) {
 	db, q := testDB(t)
 	root := t.TempDir()
 	probe := &testProbe{}
-	s := New(Dependencies{DB: db, Queries: q, Logger: &testLogger{}, Ffprobe: probe, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
+	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
 	return s, probe, root
 }
 func writeFile(t *testing.T, root, relative, data string) string {
@@ -329,7 +346,7 @@ func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := scanner.NewReconciliation(root, []scanner.CatalogFile{{ID: stored.ID, Path: link}})
+	r, err := scanner.NewReconciliation(context.Background(), root, []scanner.CatalogFile{{ID: stored.ID, Path: link}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,13 +393,13 @@ func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 		return nil, ctx.Err()
 	}
 	result := s.Start()
-	if result.Status != StartStarted {
+	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
 	<-entered
 	s.CurrentShowsDirectory = func() sql.NullString { return sql.NullString{String: t.TempDir(), Valid: true} }
 	result = s.Start()
-	if result.Status != StartAlreadyRunning {
+	if result.Status != scanner.StartAlreadyRunning {
 		t.Fatal(result)
 	}
 	cancel()
@@ -390,7 +407,7 @@ func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 	s.CurrentShowsDirectory = nil
 	// A default scanner reports missing configuration without starting work.
 	empty := New(Dependencies{})
-	if empty.Start().Status != StartNotConfigured {
+	if empty.Start().Status != scanner.StartNotConfigured {
 		t.Fatal("unconfigured scan started")
 	}
 }
@@ -593,7 +610,7 @@ func TestTechnicalFieldsAndFileOwnedChapters(t *testing.T) {
 				{Index: 2, CodecType: "video", CodecName: "hevc", Profile: "Main 10", Level: 153, BitDepth: "10", Width: 1920, Height: 1080, CodedWidth: 1920, CodedHeight: 1088, FrameRate: "24000/1001", AvgFrameRate: "24000/1001", PixelFormat: "yuv420p10le", ColorTransfer: "smpte2084", FieldOrder: "progressive", SideDataList: []ffprobe.StreamSideData{{SideDataType: "Display Matrix", Rotation: 0}}},
 				{Index: 4, CodecType: "audio", CodecName: "aac", SampleRate: "48000", Channels: 6, ChannelLayout: "5.1", Tags: ffprobe.StreamTags{Language: "eng", Title: "Main"}, Disposition: ffprobe.StreamDisposition{Default: 1}},
 				{Index: 6, CodecType: "subtitle", CodecName: "subrip", Disposition: ffprobe.StreamDisposition{Forced: 1, Default: 1}},
-			}, Chapters: []ffprobe.Chapter{{StartTime: "573.114208", Start: 573114208}, {Start: 12000}},
+			}, Chapters: []ffprobe.Chapter{{StartTime: "573.114208"}, {StartTime: "12.000000"}},
 		}, nil
 	}
 	scanOK(t, s, root)

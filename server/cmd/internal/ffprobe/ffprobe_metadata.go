@@ -210,7 +210,6 @@ type ChapterTags struct {
 
 type Chapter struct {
 	StartTime string      `json:"start_time"`
-	Start     int         `json:"start"`
 	Tags      ChapterTags `json:"tags"`
 }
 

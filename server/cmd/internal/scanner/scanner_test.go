@@ -89,7 +89,7 @@ func TestWalkMediaLibrary(t *testing.T) {
 	var got []ScanFile
 	var walkErrors int
 	err := WalkMediaLibraryContext(context.Background(), root, validExts,
-		func(error) { walkErrors++ },
+		func(string, error) { walkErrors++ },
 		func(f ScanFile) error {
 			got = append(got, f)
 			return nil
@@ -122,7 +122,7 @@ func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	called := false
-	err := WalkMediaLibraryContext(ctx, root, map[string]bool{"mkv": true}, func(error) {}, func(ScanFile) error {
+	err := WalkMediaLibraryContext(ctx, root, map[string]bool{"mkv": true}, func(string, error) {}, func(ScanFile) error {
 		called = true
 		return nil
 	})
@@ -137,7 +137,7 @@ func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
 func TestWalkMediaLibraryMissingRoot(t *testing.T) {
 	err := WalkMediaLibraryContext(context.Background(), filepath.Join(t.TempDir(), "does-not-exist"),
 		map[string]bool{"mkv": true},
-		func(error) {},
+		func(string, error) {},
 		func(ScanFile) error { return nil },
 	)
 	if err == nil {
@@ -153,7 +153,7 @@ func TestWalkMediaLibraryPropagatesOnFileError(t *testing.T) {
 	sentinel := errors.New("stop")
 	count := 0
 	err := WalkMediaLibraryContext(context.Background(), root, map[string]bool{"mkv": true},
-		func(error) {},
+		func(string, error) {},
 		func(ScanFile) error {
 			count++
 			return sentinel
@@ -213,7 +213,7 @@ func TestWalkMediaLibrarySymlinksAndSpecialFiles(t *testing.T) {
 			}
 			var failures []error
 			var files []ScanFile
-			err = WalkMediaLibraryContext(context.Background(), root, map[string]bool{ext: true}, func(err error) { failures = append(failures, err) }, func(file ScanFile) error { files = append(files, file); return nil })
+			err = WalkMediaLibraryContext(context.Background(), root, map[string]bool{ext: true}, func(_ string, err error) { failures = append(failures, err) }, func(file ScanFile) error { files = append(files, file); return nil })
 			if err != nil {
 				t.Fatal(err)
 			}

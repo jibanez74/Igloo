@@ -26,16 +26,8 @@ const (
 )
 
 type resolvedSpotifyMatch struct {
-	status          string
-	spotifyID       sql.NullString
-	reason          sql.NullString
-	score           sql.NullInt64
-	thresholdValue  sql.NullInt64
-	candidateName   sql.NullString
-	candidateArtist sql.NullString
-	searchQuery     sql.NullString
-	strategy        sql.NullString
-	errorText       sql.NullString
+	status string
+	reason sql.NullString
 }
 
 func (s *Scanner) upsertMusicSpotifyMatchAndCacheID(
@@ -49,18 +41,10 @@ func (s *Scanner) upsertMusicSpotifyMatchAndCacheID(
 ) error {
 	if match != nil {
 		err := qtx.UpsertMusicSpotifyMatch(ctx, database.UpsertMusicSpotifyMatchParams{
-			EntityType:      entityType,
-			EntityID:        entityID,
-			SpotifyID:       match.spotifyID,
-			Status:          match.status,
-			Reason:          match.reason,
-			Score:           match.score,
-			ThresholdValue:  match.thresholdValue,
-			CandidateName:   match.candidateName,
-			CandidateArtist: match.candidateArtist,
-			SearchQuery:     match.searchQuery,
-			Strategy:        match.strategy,
-			Error:           match.errorText,
+			EntityType: entityType,
+			EntityID:   entityID,
+			Status:     match.status,
+			Reason:     match.reason,
 		})
 		if err != nil {
 			return err
@@ -72,39 +56,17 @@ func (s *Scanner) upsertMusicSpotifyMatchAndCacheID(
 }
 
 func resolvedSpotifyMatchFromError(err error) resolvedSpotifyMatch {
-	match := resolvedSpotifyMatch{
-		status:    musicSpotifyStatusFailed,
-		errorText: helpers.NullString(err.Error()),
-	}
-
+	match := resolvedSpotifyMatch{status: musicSpotifyStatusFailed}
 	matchErr, ok := spotifyapi.AsMatchError(err)
 	if !ok {
 		return match
 	}
-
 	info := matchErr.Info
 	unmatched := musicSpotifyReasonIsUnmatched(info.Reason)
 	if unmatched {
 		match.status = musicSpotifyStatusUnmatched
-		match.errorText = sql.NullString{}
 	}
-
 	match.reason = helpers.NullString(info.Reason)
-	match.candidateName = helpers.NullString(info.CandidateName)
-	match.candidateArtist = helpers.NullString(info.CandidateArtist)
-	match.searchQuery = helpers.NullString(info.SearchQuery)
-	match.strategy = helpers.NullString(info.Strategy)
-
-	if info.Score > 0 {
-		match.score = sql.NullInt64{Int64: int64(info.Score), Valid: true}
-	}
-	if info.Threshold > 0 {
-		match.thresholdValue = sql.NullInt64{Int64: int64(info.Threshold), Valid: true}
-	}
-	if matchErr.Err != nil && match.status == musicSpotifyStatusFailed {
-		match.errorText = helpers.NullString(matchErr.Err.Error())
-	}
-
 	return match
 }
 

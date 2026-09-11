@@ -90,7 +90,6 @@ SELECT
   m.id,
   m.name,
   m.thumb,
-  m.sort_name,
   (SELECT COUNT(*) FROM musician_albums AS ma WHERE ma.musician_id = m.id) AS album_count,
   -- Must stay identical to GetMusiciansAlphabetical's track_count in
   -- sqlc/queries/musicians.sql: both scan into GetMusiciansAlphabeticalRow, so a
@@ -130,7 +129,7 @@ SELECT COUNT(*) FROM tracks_search_fts WHERE tracks_search_fts MATCH ?`
 
 const searchTracksJoinedSQL = `
 SELECT
-  t.id, t.title, t.duration, t.codec, t.bit_rate, t.file_path,
+  t.id, t.title, t.duration, t.codec, t.bit_rate,
   a.id AS album_id, a.title AS album_title, a.cover AS album_cover,
   mu.id AS musician_id, mu.name AS musician_name
 FROM tracks_search_fts
@@ -202,7 +201,7 @@ var musicianSearchEntity = searchEntity[database.GetMusiciansAlphabeticalRow]{
 	},
 	scan: func(rows *sql.Rows) (database.GetMusiciansAlphabeticalRow, error) {
 		var row database.GetMusiciansAlphabeticalRow
-		err := rows.Scan(&row.ID, &row.Name, &row.Thumb, &row.SortName, &row.AlbumCount, &row.TrackCount)
+		err := rows.Scan(&row.ID, &row.Name, &row.Thumb, &row.AlbumCount, &row.TrackCount)
 		return row, err
 	},
 }
@@ -218,7 +217,7 @@ var trackSearchEntity = searchEntity[database.GetTracksAlphabeticalRow]{
 	scan: func(rows *sql.Rows) (database.GetTracksAlphabeticalRow, error) {
 		var row database.GetTracksAlphabeticalRow
 		err := rows.Scan(
-			&row.ID, &row.Title, &row.Duration, &row.Codec, &row.BitRate, &row.FilePath,
+			&row.ID, &row.Title, &row.Duration, &row.Codec, &row.BitRate,
 			&row.AlbumID, &row.AlbumTitle, &row.AlbumCover,
 			&row.MusicianID, &row.MusicianName,
 		)

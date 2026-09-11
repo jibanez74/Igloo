@@ -237,7 +237,6 @@ function MusicianDetailsContent({
       id: track.id,
       title: track.title,
       duration: track.duration,
-      file_path: track.file_path,
       codec: track.codec,
       bit_rate: track.bit_rate,
       album_id: track.album_id,

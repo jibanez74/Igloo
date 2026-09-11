@@ -11,13 +11,9 @@ import (
 
 const getKeyframeIndex = `-- name: GetKeyframeIndex :one
 SELECT
-  movie_id,
-  stream_index,
   fingerprint,
   duration_sec,
-  keyframes,
-  created_at,
-  updated_at
+  keyframes
 FROM keyframe_indexes
 WHERE movie_id = ?
   AND stream_index = ?
@@ -28,20 +24,18 @@ type GetKeyframeIndexParams struct {
 	StreamIndex int64 `json:"stream_index"`
 }
 
+type GetKeyframeIndexRow struct {
+	Fingerprint string  `json:"fingerprint"`
+	DurationSec float64 `json:"duration_sec"`
+	Keyframes   string  `json:"keyframes"`
+}
+
 // Persisted keyframe index for one video stream; the caller compares the
 // stored fingerprint and treats a mismatch as a miss.
-func (q *Queries) GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (KeyframeIndex, error) {
+func (q *Queries) GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (GetKeyframeIndexRow, error) {
 	row := q.queryRow(ctx, q.getKeyframeIndexStmt, getKeyframeIndex, arg.MovieID, arg.StreamIndex)
-	var i KeyframeIndex
-	err := row.Scan(
-		&i.MovieID,
-		&i.StreamIndex,
-		&i.Fingerprint,
-		&i.DurationSec,
-		&i.Keyframes,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
+	var i GetKeyframeIndexRow
+	err := row.Scan(&i.Fingerprint, &i.DurationSec, &i.Keyframes)
 	return i, err
 }
 
@@ -59,8 +53,7 @@ ON CONFLICT (movie_id, stream_index) DO UPDATE
 SET
   fingerprint = excluded.fingerprint,
   duration_sec = excluded.duration_sec,
-  keyframes = excluded.keyframes,
-  updated_at = CURRENT_TIMESTAMP
+  keyframes = excluded.keyframes
 `
 
 type UpsertKeyframeIndexParams struct {

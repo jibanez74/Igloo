@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { ApiResponseType } from "@/types";
 import {
   adminGetUsers,
   getAlbumDetails,
@@ -14,6 +15,9 @@ import {
   getLikedTracks,
   getLikedTrackIds,
   getMovieDetails,
+  getMovieScanStatus,
+  getMusicScanStatus,
+  getShowScanStatus,
   getMovieInTheaterDetails,
   getMoviePlaylistDetails,
   getMoviePlaylistMovies,
@@ -80,6 +84,9 @@ import {
   MOVIE_LIKE_STATUS_KEY,
   MOVIES_PER_PAGE,
   MOVIES_STATS_KEY,
+  MOVIE_SCAN_STATUS_KEY,
+  MUSIC_SCAN_STATUS_KEY,
+  SHOW_SCAN_STATUS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
@@ -693,3 +700,30 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
     gcTime: GC_DEFAULT,
   });
 }
+
+const scanStatusQueryOpts = <T extends Record<string, unknown>,>(
+  key: string,
+  fetchStatus: () => Promise<ApiResponseType<T>>,
+  unavailableMessage: string,
+) => queryOptions({
+  queryKey: [key],
+  queryFn: async () => {
+    const response = await fetchStatus();
+    if (response.error) {
+      throw new Error(response.message || unavailableMessage);
+    }
+    return response.data;
+  },
+  retry: false,
+});
+
+export type ScanStatusQueryOpts<T extends Record<string, unknown>> = ReturnType<typeof scanStatusQueryOpts<T>>;
+
+export const movieScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(MOVIE_SCAN_STATUS_KEY, getMovieScanStatus, "Movie scan status is unavailable.");
+
+export const musicScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus, "Music scan status is unavailable.");
+
+export const showScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus, "TV shows scan status is unavailable.");

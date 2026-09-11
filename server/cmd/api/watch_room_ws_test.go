@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -151,10 +152,25 @@ func readWatchRoomEvent(t *testing.T, conn *websocket.Conn) watchRoomWSTestEvent
 		t.Fatalf("set read deadline: %v", err)
 	}
 
-	var event watchRoomWSTestEvent
-	err = conn.ReadJSON(&event)
+	var raw json.RawMessage
+	err = conn.ReadJSON(&raw)
 	if err != nil {
 		t.Fatalf("read websocket event: %v", err)
+	}
+	var value any
+	err = json.Unmarshal(raw, &value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, _ := loadOpenAPIContract(t)
+	err = document.Components.Schemas["WatchRoomServerEvent"].Value.VisitJSON(value)
+	if err != nil {
+		t.Fatalf("server event schema: %v", err)
+	}
+	var event watchRoomWSTestEvent
+	err = json.Unmarshal(raw, &event)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return event
 }
@@ -938,5 +954,121 @@ func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for pong after idle period")
+	}
+}
+
+func TestWatchRoomHandshakeFailuresConformToOpenAPI(t *testing.T) {
+	app := setupSessionTestApp(t)
+	defer app.DB.Close()
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	outsider := createTestUser(t, app, "Outsider", "ws-outsider@example.com", false)
+	app.InitRouter()
+	ownerCookie := newAuthSessionCookie(t, app, ownerID)
+	outsiderCookie := newAuthSessionCookie(t, app, outsider.ID)
+	path := fmt.Sprintf("/api/watch-rooms/%d/ws", room.ID)
+	cases := []struct {
+		name, path, header, value string
+		cookie                    *http.Cookie
+		upgrade                   bool
+		status                    int
+		contentType               string
+	}{
+		{"invalid room id", "/api/watch-rooms/invalid/ws", "", "", ownerCookie, false, 400, "application/json"},
+		{"missing authentication", path, "", "", nil, false, 401, "application/json"},
+		{"nonmember", path, "", "", outsiderCookie, false, 403, "application/json"},
+		{"nonexistent room", "/api/watch-rooms/999999/ws", "", "", ownerCookie, false, 403, "application/json"},
+		{"missing upgrade headers", path, "", "", ownerCookie, false, 400, "text/plain; charset=utf-8"},
+		{"invalid version", path, "Sec-WebSocket-Version", "12", ownerCookie, true, 400, "text/plain; charset=utf-8"},
+		{"invalid key", path, "Sec-WebSocket-Key", "invalid", ownerCookie, true, 400, "text/plain; charset=utf-8"},
+		{"rejected origin", path, "Origin", "https://unrelated.example", ownerCookie, true, 403, "text/plain; charset=utf-8"},
+		// ResponseRecorder cannot hijack a socket, exercising the upgrader's 500 response.
+		{"unsupported writer", path, "", "", ownerCookie, true, 500, "text/plain; charset=utf-8"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			if tc.cookie != nil {
+				request.AddCookie(tc.cookie)
+			}
+			if tc.upgrade {
+				request.Header.Set("Connection", "Upgrade")
+				request.Header.Set("Upgrade", "websocket")
+				request.Header.Set("Sec-WebSocket-Version", "13")
+				request.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+			}
+			if tc.header != "" {
+				request.Header.Set(tc.header, tc.value)
+			}
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+			if response.Code != tc.status || response.Header().Get("Content-Type") != tc.contentType {
+				t.Fatalf("response = %d %v %s", response.Code, response.Header(), response.Body.String())
+			}
+			if tc.name == "invalid room id" || tc.cookie == nil {
+				assertOpenAPIResponse(t, "watchRoomWebSocket", request, response)
+			} else {
+				assertOpenAPIExchange(t, "watchRoomWebSocket", request, response)
+			}
+		})
+	}
+}
+
+func TestWatchRoomClientEventsConformToOpenAPI(t *testing.T) {
+	app := setupTestApp(t)
+	defer closeWatchRoomWSTestApp(t, app)
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	server := setupWatchRoomWSTestServer(t, app)
+	defer server.Close()
+	conn, response := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	if conn == nil {
+		t.Fatalf("upgrade failed: %v", response)
+	}
+	defer conn.Close()
+	snapshot := readWatchRoomEvent(t, conn)
+	if snapshot.Type != "room_snapshot" || snapshot.Playback == nil || !snapshot.Playback.Paused {
+		t.Fatalf("initial snapshot = %+v", snapshot)
+	}
+	document, _ := loadOpenAPIContract(t)
+	cases := []struct {
+		body, event string
+		paused      bool
+		position    float64
+	}{
+		{`{"type":"seek","position_sec":12}`, "playback_changed", true, 12},
+		{`{"type":"pause"}`, "playback_changed", true, 12},
+		{`{"type":"seek","position_sec":null}`, "playback_changed", true, 12},
+		{`{"type":"seek","position_sec":-1}`, "playback_changed", true, 12},
+		{`{"type":"join","position_sec":99}`, "room_snapshot", true, 12},
+		{`{"type":"ping","position_sec":99}`, "pong", true, 12},
+		{`{"type":"play"}`, "playback_changed", false, 12},
+		{`{"type":"pause","position_sec":0}`, "playback_changed", true, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.body, func(t *testing.T) {
+			var value any
+			err := json.Unmarshal([]byte(tc.body), &value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = document.Components.Schemas["WatchRoomClientEvent"].Value.VisitJSON(value)
+			if err != nil {
+				t.Fatalf("client schema: %v", err)
+			}
+			err = conn.WriteMessage(websocket.TextMessage, []byte(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			event := readWatchRoomEvent(t, conn)
+			if event.Type != tc.event {
+				t.Fatalf("event = %+v, want %s", event, tc.event)
+			}
+			if tc.event != "pong" && (event.Playback == nil || event.Playback.Paused != tc.paused || event.Playback.PositionSec != tc.position) {
+				t.Fatalf("playback = %+v", event.Playback)
+			}
+		})
 	}
 }

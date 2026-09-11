@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -24,36 +27,14 @@ type movieScannerTestContext struct {
 	moviesDir sql.NullString
 }
 
-type capturedLogEntry struct {
-	msg  string
-	args []any
-}
-
-type capturedLogger struct {
-	mu           sync.Mutex
-	debugEntries []capturedLogEntry
-	infoEntries  []capturedLogEntry
-	warnEntries  []capturedLogEntry
-	errorEntries []capturedLogEntry
-}
-
-func (l *capturedLogger) log(entries *[]capturedLogEntry, msg string, args []any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	entry := capturedLogEntry{msg: msg, args: append([]any(nil), args...)}
-	*entries = append(*entries, entry)
-}
-
-func (l *capturedLogger) Debug(msg string, args ...any) { l.log(&l.debugEntries, msg, args) }
-func (l *capturedLogger) Info(msg string, args ...any)  { l.log(&l.infoEntries, msg, args) }
-func (l *capturedLogger) Warn(msg string, args ...any)  { l.log(&l.warnEntries, msg, args) }
-func (l *capturedLogger) Error(msg string, args ...any) { l.log(&l.errorEntries, msg, args) }
-
 func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 	t.Helper()
+	return setupMovieScannerDatabase(t, ":memory:?_foreign_keys=on")
+}
 
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+func setupMovieScannerDatabase(t *testing.T, source string) *movieScannerTestContext {
+	t.Helper()
+	db, err := sql.Open("sqlite3", source)
 	if err != nil {
 		t.Fatalf("open in-memory database: %v", err)
 	}
@@ -76,7 +57,7 @@ func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 		Now:         func() time.Time { return time.Now().Add(2 * time.Minute) },
 		DB:          db,
 		Queries:     queries,
-		Logger:      &capturedLogger{},
+		Logger:      &scannertest.Logger{},
 		ScanContext: context.Background(),
 		ScannerDBMu: &sync.Mutex{},
 		CurrentMoviesDirectory: func() sql.NullString {
@@ -86,25 +67,17 @@ func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 	return ctx
 }
 
-func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow(query, args...).Scan(&count)
-	if err != nil {
-		t.Fatalf("count rows: %v", err)
-	}
-	return count
-}
-
 type stubMovieScannerFfprobe struct {
-	noKeyframeProbe
+	mu sync.Mutex
+	scannertest.NoKeyframeProbe
 	result  *ffprobe.FfprobeResult
 	results []*ffprobe.FfprobeResult
 	calls   int
 }
 
 func (s *stubMovieScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	callIndex := s.calls
 	s.calls++
 	if callIndex < len(s.results) && s.results[callIndex] != nil {
@@ -117,21 +90,8 @@ func (s *stubMovieScannerFfprobe) GetAudioMetadata(_ context.Context, filePath s
 	return s.GetMetadata(context.Background(), filePath)
 }
 
-// noKeyframeProbe completes ffprobe.FfprobeInterface for stubs that only
-// exercise scanning. Keyframe lookup is advisory on the playback path, so a
-// stub that never serves HLS refuses it rather than inventing an offset.
-type noKeyframeProbe struct{}
-
-func (noKeyframeProbe) KeyframeAtOrBefore(
-	_ context.Context,
-	_ string,
-	_ int64,
-	_ float64,
-) (float64, error) {
-	return 0, errors.New("keyframe probing is not stubbed")
-}
-
 type stubMovieScannerTmdb struct {
+	mu            sync.Mutex
 	searchErr     error
 	detailErr     error
 	theatersErr   error
@@ -148,6 +108,8 @@ type stubMovieScannerTmdbSearchCall struct {
 }
 
 func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMovie) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.detailCalls = append(s.detailCalls, movie.TmdbID)
 	if s.detailErr != nil {
 		return s.detailErr
@@ -164,6 +126,8 @@ func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, movie *tmdb.T
 }
 
 func (s *stubMovieScannerTmdb) SearchMoviesByTitleAndYear(_ context.Context, title string, year ...int) ([]tmdb.TmdbMovie, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	yearCopy := append([]int(nil), year...)
 	s.searchCalls = append(s.searchCalls, stubMovieScannerTmdbSearchCall{title: title, year: yearCopy})
 	if s.searchErr != nil {
@@ -258,6 +222,82 @@ func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
 		t.Fatalf("unmarshal tmdb fixture: %v", err)
 	}
 	return movie
+}
+
+// scan runs one complete library scan synchronously, publishing the run the
+// way Start does before handing off to the scan goroutine.
+func (s *Scanner) scan(directory string) {
+	s.beginReport()
+	s.runMovieScan(directory)
+}
+
+// enrichmentAttempted mirrors the pipeline's one-lookup-per-scan guarantee,
+// which enrichMovies gets structurally by running once, for fixtures that push
+// the same file through processFile several times on one scan context.
+var enrichmentAttempted = map[*movieScanContext]map[string]bool{}
+
+// These focused persistence fixtures execute both phases for one file. Full
+// pipeline tests below exercise scheduling, accounting, and phase separation.
+func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file scanner.ScanFile) (scanner.FileOutcome, error) {
+	file.Path = filepath.Clean(file.Path)
+	result := s.prepareFile(ctx, probeJob{file: file, baseline: scan.movieIndex[file.Path]})
+	if result.inspection != nil {
+		defer result.inspection.Close()
+	}
+	if result.err != nil {
+		return scanner.FileNeedsProcessing, result.err
+	}
+	outcome := result.inspection.Outcome
+	if outcome == scanner.FileDeferred {
+		return outcome, nil
+	}
+	if result.resolved != nil {
+		err := s.persistLocalMovie(ctx, scan, result.resolved)
+		if err != nil {
+			return outcome, err
+		}
+	}
+	baseline := scan.movieIndex[file.Path]
+	if s.tmdb == nil || !baseline.enrichmentEligible(s.now()) || enrichmentAttempted[scan][file.Path] {
+		return outcome, nil
+	}
+	if enrichmentAttempted[scan] == nil {
+		enrichmentAttempted[scan] = map[string]bool{}
+	}
+	enrichmentAttempted[scan][file.Path] = true
+	enriched := s.prepareEnrichment(ctx, enrichmentJob{file: file, baseline: baseline})
+	if enriched.inspection != nil {
+		defer enriched.inspection.Close()
+	}
+	if enriched.err != nil {
+		if ctx.Err() != nil {
+			return outcome, ctx.Err()
+		}
+		return outcome, nil
+	}
+	_, err := s.persistEnrichment(ctx, scan, enriched.resolved)
+	return outcome, err
+}
+
+func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, failures, deferred int) {
+	for _, file := range files {
+		outcome, err := s.processFile(ctx, scan, file)
+		if ctx.Err() != nil {
+			return
+		}
+		var deferral *scanner.FileDeferral
+		isDeferred := errors.As(err, &deferral)
+		if isDeferred || (err == nil && outcome == scanner.FileDeferred) {
+			deferred++
+		} else if err != nil {
+			failures++
+		} else if outcome == scanner.FileUnchanged {
+			skipped++
+		} else {
+			scanned++
+		}
+	}
+	return
 }
 
 func (*stubMovieScannerTmdb) SearchShowsByTitleAndYear(context.Context, string, ...int) ([]tmdb.TVShow, error) {

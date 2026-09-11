@@ -25,7 +25,6 @@ SELECT
   t.duration,
   t.codec,
   t.bit_rate,
-  t.file_path,
   a.id    AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,

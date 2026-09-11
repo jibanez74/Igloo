@@ -7,44 +7,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
+	"strings"
 	"testing"
 	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/sqlc"
 
 	_ "github.com/mattn/go-sqlite3"
 	spotifylib "github.com/zmb3/spotify/v2"
 )
-
-type capturedLogEntry struct {
-	msg  string
-	args []any
-}
-
-type capturedLogger struct {
-	mu           sync.Mutex
-	debugEntries []capturedLogEntry
-	infoEntries  []capturedLogEntry
-	warnEntries  []capturedLogEntry
-	errorEntries []capturedLogEntry
-}
-
-func (l *capturedLogger) log(entries *[]capturedLogEntry, msg string, args []any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	entry := capturedLogEntry{msg: msg, args: append([]any(nil), args...)}
-	*entries = append(*entries, entry)
-}
-
-func (l *capturedLogger) Debug(msg string, args ...any) { l.log(&l.debugEntries, msg, args) }
-func (l *capturedLogger) Info(msg string, args ...any)  { l.log(&l.infoEntries, msg, args) }
-func (l *capturedLogger) Warn(msg string, args ...any)  { l.log(&l.warnEntries, msg, args) }
-func (l *capturedLogger) Error(msg string, args ...any) { l.log(&l.errorEntries, msg, args) }
 
 func setupMusicScanner(t testing.TB) *Scanner {
 	t.Helper()
@@ -65,27 +40,7 @@ func setupMusicScanner(t testing.TB) *Scanner {
 		t.Fatalf("prepare queries: %v", err)
 	}
 	t.Cleanup(func() { queries.Close() })
-	return New(Dependencies{DB: db, Queries: queries, Logger: &capturedLogger{}, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }})
-}
-
-func countScannerRows(t *testing.T, db *sql.DB, query string, args ...any) int {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow(query, args...).Scan(&count)
-	if err != nil {
-		t.Fatalf("count rows: %v", err)
-	}
-
-	return count
-}
-
-// noKeyframeProbe completes ffprobe.FfprobeInterface for music scanner stubs,
-// which never serve HLS.
-type noKeyframeProbe struct{}
-
-func (noKeyframeProbe) KeyframeAtOrBefore(context.Context, string, int64, float64) (float64, error) {
-	return 0, errors.New("keyframe probing is not stubbed")
+	return New(Dependencies{DB: db, Queries: queries, Logger: &scannertest.Logger{}, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }})
 }
 
 func (app *Scanner) processMusicBatchForTest(t testing.TB, ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
@@ -146,7 +101,7 @@ func testMusicMetadataWithTags(tags ffprobe.FormatTags) *ffprobe.FfprobeResult {
 }
 
 type countingMusicScannerFfprobe struct {
-	noKeyframeProbe
+	scannertest.NoKeyframeProbe
 	result *ffprobe.FfprobeResult
 	calls  int
 }
@@ -162,7 +117,7 @@ func (s *countingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePa
 }
 
 type cancelingMusicScannerFfprobe struct {
-	noKeyframeProbe
+	scannertest.NoKeyframeProbe
 	cancel context.CancelFunc
 	calls  int
 }
@@ -178,7 +133,7 @@ func (s *cancelingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, _ str
 }
 
 type failingPathMusicScannerFfprobe struct {
-	noKeyframeProbe
+	scannertest.NoKeyframeProbe
 	result      *ffprobe.FfprobeResult
 	failingPath string
 	calls       int
@@ -203,7 +158,7 @@ func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(_ context.Context, fil
 }
 
 type musicScannerFfprobeByPath struct {
-	noKeyframeProbe
+	scannertest.NoKeyframeProbe
 	results       map[string]*ffprobe.FfprobeResult
 	metadataCalls map[string]int
 	audioCalls    map[string]int
@@ -253,17 +208,28 @@ func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
 }
 
 type musicScannerSpotifyStub struct {
-	artist      *spotifylib.FullArtist
-	artistErr   error
-	artistCalls int
-	album       *spotifylib.FullAlbum
-	albumErr    error
-	albumCalls  int
-	clearCalls  int
+	artist *spotifylib.FullArtist
+	// artistsByName, when set, answers per name (lowercased); a name it does
+	// not carry fails the lookup, so one stub can model a compound credit where
+	// only some members match.
+	artistsByName map[string]*spotifylib.FullArtist
+	artistErr     error
+	artistCalls   int
+	album         *spotifylib.FullAlbum
+	albumErr      error
+	albumCalls    int
+	clearCalls    int
 }
 
-func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, _ string) (*spotifylib.FullArtist, error) {
+func (s *musicScannerSpotifyStub) SearchArtistByName(_ context.Context, name string) (*spotifylib.FullArtist, error) {
 	s.artistCalls++
+	if s.artistsByName != nil {
+		artist, ok := s.artistsByName[strings.ToLower(strings.TrimSpace(name))]
+		if !ok {
+			return nil, errors.New("no spotify match")
+		}
+		return artist, nil
+	}
 	if s.artistErr != nil {
 		return nil, s.artistErr
 	}
@@ -292,10 +258,31 @@ func (s *musicScannerSpotifyStub) ClearAllCaches() {
 	s.clearCalls++
 }
 
+// scan runs one complete library scan synchronously, publishing the run the
+// way Start does.
+func (s *Scanner) scan(directory string) {
+	s.beginReport()
+	s.runMusicScan(directory)
+}
+
 func runMusicScanForTest(t *testing.T, app *Scanner) {
 	t.Helper()
 
-	app.runMusicScan(app.currentMusicDirectory().String)
+	app.scan(app.currentMusicDirectory().String)
+}
+
+// processBatchReport runs one batch against a fresh report.
+func (s *Scanner) processBatchReport(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) *scanReport {
+	report := newScanReport(Status{})
+	s.processMusicBatch(ctx, scan, report, files)
+	return report
+}
+
+// processBatchCounts returns the scanned (imported or updated), skipped and
+// failed counts one batch recorded.
+func (s *Scanner) processBatchCounts(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, failures int) {
+	report := s.processBatchReport(ctx, scan, files)
+	return report.status.Imported + report.status.Updated, report.status.Unchanged, report.status.Failed
 }
 
 func writeMusicScannerTestFile(t *testing.T, path, contents string) int64 {
@@ -346,5 +333,5 @@ func prepareMusicFixtures(t testing.TB, files []scanner.ScanFile) {
 func (s *Scanner) processMusicFixtureBatch(t testing.TB, ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (int, int, int) {
 	t.Helper()
 	prepareMusicFixtures(t, files)
-	return s.processMusicBatch(ctx, scan, files)
+	return s.processBatchCounts(ctx, scan, files)
 }

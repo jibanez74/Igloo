@@ -28,7 +28,7 @@ import {
   SETTINGS_CARD_SURFACE_CLASS,
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
-  USER_PASSWORD_MAX_LENGTH,
+  USER_PASSWORD_MAX_BYTES,
   USER_PASSWORD_MIN_LENGTH,
 } from "@/lib/constants";
 import {
@@ -475,8 +475,8 @@ function CreateUserDialog({
 
     if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (codePointLength(password) > USER_PASSWORD_MAX_LENGTH) {
-      nextErrors.password = `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
+    } else if (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES) {
+      nextErrors.password = `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -594,7 +594,7 @@ function CreateUserDialog({
               aria-label="User password"
             />
             <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
-              Must be {USER_PASSWORD_MIN_LENGTH}–{USER_PASSWORD_MAX_LENGTH} characters
+              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and at most {USER_PASSWORD_MAX_BYTES} UTF-8 bytes
             </p>
             {errors.password && (
               <p id={passwordErrorId} className="text-xs text-destructive" role="alert">
@@ -919,8 +919,8 @@ function ResetPasswordDialog({
 
     if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (codePointLength(password) > USER_PASSWORD_MAX_LENGTH) {
-      nextErrors.password = `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
+    } else if (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES) {
+      nextErrors.password = `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
     }
 
     if (password !== confirmPassword) {
@@ -949,15 +949,15 @@ function ResetPasswordDialog({
     (password.length > 0 && codePointLength(password) < USER_PASSWORD_MIN_LENGTH
       ? `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`
       : undefined) ??
-    (codePointLength(password) > USER_PASSWORD_MAX_LENGTH
-      ? `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`
+    (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES
+      ? `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`
       : undefined);
   const confirmPasswordError =
     errors.confirmPassword ?? (mismatch ? "Passwords do not match." : undefined);
   const resetDisabled =
     isPending ||
     codePointLength(password) < USER_PASSWORD_MIN_LENGTH ||
-    codePointLength(password) > USER_PASSWORD_MAX_LENGTH ||
+    new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES ||
     mismatch;
 
   return (
@@ -998,7 +998,7 @@ function ResetPasswordDialog({
               aria-label="New password"
             />
             <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
-              Must be {USER_PASSWORD_MIN_LENGTH}–{USER_PASSWORD_MAX_LENGTH} characters
+              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and at most {USER_PASSWORD_MAX_BYTES} UTF-8 bytes
             </p>
             {passwordError && (
               <p id={passwordErrorId} className="text-xs text-destructive" role="alert">

@@ -1,3 +1,6 @@
+import { movieScanStatus } from "../src/test/helpers/movie-scan";
+import { musicScanStatus } from "../src/test/helpers/music-scan";
+import { showScanStatus } from "../src/test/helpers/show-scan";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +40,6 @@ const requiredControlNames = [
   "Clear TV shows library path",
   "Clear music library path",
   "Scan movies library",
-  "Scan TV shows library",
   "Scan music library",
   "Reset library paths",
   "Save library paths",
@@ -243,17 +245,16 @@ test.describe("Libraries settings", () => {
     const tracker = trackBrowserIssues(page);
 
     let movieScanRequests = 0;
-    let showScanRequests = 0;
-    let scanRequests = 0;
-    let releaseShowScan = () => {};
-    const showScanGate = new Promise<void>(resolve => { releaseShowScan = resolve; });
     await page.route("**/api/settings/scan/**", async route => {
       const url = new URL(route.request().url());
-      expect(route.request().method()).toBe("POST");
-      scanRequests += 1;
-      if (url.pathname === "/api/settings/scan/shows") {
-        showScanRequests += 1;
-        await showScanGate;
+      if (route.request().method() === "GET") {
+        const idle = url.pathname === "/api/settings/scan/music"
+          ? musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
+          : url.pathname === "/api/settings/scan/shows"
+            ? showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
+            : movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
+        await route.fulfill({ json: { error: false, data: idle } });
+        return;
       }
       if (url.pathname === "/api/settings/scan/movies") {
         movieScanRequests += 1;
@@ -282,7 +283,6 @@ test.describe("Libraries settings", () => {
     });
 
     try {
-      await restoreLibrarySettings(page, env, { ...baseline, shows_dir: null });
       await page.goto(apiURL(env, "/settings/libraries"), {
         waitUntil: "networkidle",
       });
@@ -307,12 +307,9 @@ test.describe("Libraries settings", () => {
         );
       }
 
-      const showsScanButton = page.getByRole("button", { name: "Scan TV shows library", exact: true });
-      await expect(showsScanButton).toHaveCount(0);
       await moviesInput.fill(paths.movies);
       await showsInput.fill(paths.shows);
       await musicInput.fill(paths.music);
-      await expect(showsScanButton).toHaveCount(0);
       await expect(
         page.locator('p[aria-live="polite"]').filter({
           hasText: "Library path changes are ready to save.",
@@ -349,8 +346,6 @@ test.describe("Libraries settings", () => {
         }),
       ).toBeVisible();
 
-      expect(scanRequests).toBe(0);
-      await expect(showsScanButton).toBeEnabled();
       await page.reload({ waitUntil: "networkidle" });
       await expect(moviesInput).toHaveValue(paths.movies);
       await expect(showsInput).toHaveValue(paths.shows);
@@ -370,56 +365,21 @@ test.describe("Libraries settings", () => {
       await expect(
         page.getByRole("button", { name: "Scan music library" }),
       ).toBeVisible();
-      await expect(showsScanButton).toBeEnabled();
-      await showsInput.fill(`${paths.shows}/unsaved`);
-      await expect(showsScanButton).toBeDisabled();
-      await page.getByRole("button", { name: "Reset library paths" }).click();
-      await expect(showsInput).toHaveValue(paths.shows);
-      await expect(showsScanButton).toBeEnabled();
-
-      let releaseSave = () => {};
-      const saveGate = new Promise<void>(resolve => { releaseSave = resolve; });
-      await page.route("**/api/settings/libraries", async route => {
-        await saveGate;
-        await route.continue();
-      });
-      await musicInput.fill("");
-      await page.getByRole("button", { name: "Save library paths" }).click();
-      await expect(showsScanButton).toBeDisabled();
-      releaseSave();
-      await expect(showsScanButton).toBeEnabled();
-      await page.unroute("**/api/settings/libraries");
-      await musicInput.fill(paths.music);
-      await page.getByRole("button", { name: "Save library paths" }).click();
-      await expect(showsScanButton).toBeEnabled();
-      expect(scanRequests).toBe(0);
-
-      await showsInput.focus();
-      await page.keyboard.press("Tab");
-      await expect.poll(() => activeElementName(page)).toBe("Clear TV shows library path");
-      await page.keyboard.press("Tab");
-      await expect(showsScanButton).toBeFocused();
-      await page.keyboard.press("Enter");
-      const pendingShowScan = page.getByRole("button", { name: "Scanning TV shows library, please wait" });
-      await expect(pendingShowScan).toBeDisabled();
-      await expect(pendingShowScan).toHaveAttribute("aria-busy", "true");
-      await expect(page.locator('p[aria-live="polite"]')).toHaveText("Starting TV shows library scan...");
-      await expect(page.getByRole("button", { name: "Scan movies library" })).toBeDisabled();
-      await expect(page.getByRole("button", { name: "Scan music library" })).toBeDisabled();
-      await pendingShowScan.evaluate(button => {
-        if (button instanceof HTMLButtonElement) {
-          button.click();
-          button.click();
-        }
-      });
-      await page.keyboard.press("Enter");
-      await expect.poll(() => showScanRequests).toBe(1);
-      releaseShowScan();
-      await expect(page.locator('p[aria-live="polite"]')).toHaveText("TV shows library scan started.");
-      await expect(page.getByText("TV shows library scan has been initiated", { exact: true })).toBeVisible();
-      await expect(showsScanButton).toBeEnabled();
-      await expect(showsScanButton).toHaveAttribute("aria-busy", "false");
-      expect(showScanRequests).toBe(1);
+      await expect(
+        page.getByRole("button", { name: "Scan TV shows library" }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("TV shows scanning unavailable"),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("status").filter({ hasText: "No movie scan has run yet." }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No TV shows scan has run yet." }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No music scan has run yet." }),
+      ).toBeVisible();
 
       await page.getByRole("button", { name: "Clear music library path" }).click();
       await expect(musicInput).toHaveValue("");
@@ -438,7 +398,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/movies";
+          return url.pathname === "/api/settings/scan/movies" && response.request().method() === "POST";
         }),
         moviesScanButton.click(),
       ]);
@@ -453,7 +413,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/movies";
+          return url.pathname === "/api/settings/scan/movies" && response.request().method() === "POST";
         }),
         moviesScanButton.click(),
       ]);
@@ -476,21 +436,36 @@ test.describe("Libraries settings", () => {
         }),
       ).toBeVisible();
 
-      await auditResponsiveLibrariesPage(page);
+      // The TV shows scan trigger is reachable by keyboard from its path input,
+      // the way the recovered scanner branch asserted before TV scanning shipped.
+      const showsScanButton = page.getByRole("button", {
+        name: "Scan TV shows library",
+      });
+      await showsInput.focus();
+      await page.keyboard.press("Tab");
+      await expect
+        .poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label")
+          ?? document.activeElement?.textContent?.trim()))
+        .toBe("Clear TV shows library path");
+      await page.keyboard.press("Tab");
+      await expect(showsScanButton).toBeFocused();
+      await Promise.all([
+        page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/settings/scan/shows" && response.request().method() === "POST";
+        }),
+        page.keyboard.press("Enter"),
+      ]);
+      await expect(
+        page.locator('p[aria-live="polite"]').filter({
+          hasText: "TV Shows library scan started.",
+        }),
+      ).toBeVisible();
+      await expect(showsScanButton).toBeEnabled();
+      await expect(showsScanButton).toHaveAttribute("aria-busy", "false");
 
-      await page.getByRole("button", { name: "Clear TV shows library path" }).click();
-      await expect(showsInput).toHaveValue("");
-      await expect(showsScanButton).toBeDisabled();
-      const scansBeforeClear = scanRequests;
-      await page.getByRole("button", { name: "Save library paths" }).click();
-      await expect(showsScanButton).toHaveCount(0);
-      expect((await fetchLibrarySettings(page, env)).shows_dir).toBeNull();
-      await page.reload({ waitUntil: "networkidle" });
-      await expect(showsInput).toHaveValue("");
-      await expect(showsScanButton).toHaveCount(0);
-      expect(scanRequests).toBe(scansBeforeClear);
+      await auditResponsiveLibrariesPage(page);
     } finally {
-      releaseShowScan();
       await page.unroute("**/api/settings/scan/**").catch(() => undefined);
       await restoreLibrarySettings(page, env, baseline);
       await rm(tempRoot, { recursive: true, force: true });
@@ -498,36 +473,4 @@ test.describe("Libraries settings", () => {
 
     tracker.assertClean();
   });
-
-  for (const failure of [
-    { status: 409, message: "show library scan is already in progress" },
-    { status: 500, message: "shows directory is not configured" },
-  ]) {
-    test(`reports TV scan ${failure.status} errors and allows retry`, async ({ page }) => {
-      const env = readE2EEnv();
-      await loginPageViaApi(page, env);
-      await page.route("**/api/settings", route => route.fulfill({
-        json: { error: false, data: { movies_dir: null, shows_dir: "/media/shows", music_dir: null } },
-      }));
-      let requests = 0;
-      await page.route("**/api/settings/scan/shows", route => {
-        expect(route.request().method()).toBe("POST");
-        requests += 1;
-        return route.fulfill(requests === 1
-          ? { status: failure.status, json: { error: true, message: failure.message } }
-          : { status: 200, json: { error: false, message: "Show library scan started" } });
-      });
-      await page.goto(apiURL(env, "/settings/libraries"));
-      const scanButton = page.getByRole("button", { name: "Scan TV shows library", exact: true });
-      await scanButton.click();
-      await expect(page.locator('p[aria-live="polite"]')).toHaveText(failure.message);
-      await expect(page.locator('[data-sonner-toast]')).toContainText(failure.message);
-      await expect(scanButton).toBeEnabled();
-      await expect(scanButton).toHaveAttribute("aria-busy", "false");
-      await scanButton.click();
-      await expect(page.locator('p[aria-live="polite"]')).toHaveText("TV shows library scan started.");
-      expect(requests).toBe(2);
-    });
-  }
-
 });

@@ -20,17 +20,15 @@ INSERT INTO user_track_stats (
   track_id,
   play_count,
   total_time_played,
-  last_played_at,
-  first_played_at
+  last_played_at
 )
 VALUES
-  (?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  (?, ?, 1, ?, CURRENT_TIMESTAMP)
 ON CONFLICT (user_id, track_id) DO UPDATE
 SET
   play_count = user_track_stats.play_count + 1,
   total_time_played = user_track_stats.total_time_played + excluded.total_time_played,
-  last_played_at = CURRENT_TIMESTAMP,
-  updated_at = CURRENT_TIMESTAMP;
+  last_played_at = CURRENT_TIMESTAMP;
 
 -- ============================================================================
 -- USER STATISTICS QUERIES
@@ -45,7 +43,6 @@ SELECT
   t.id,
   t.title,
   t.duration,
-  t.file_path,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,
@@ -136,7 +133,6 @@ SELECT
   t.id,
   t.title,
   t.duration,
-  t.file_path,
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover,

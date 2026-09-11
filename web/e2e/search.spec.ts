@@ -49,7 +49,6 @@ const albumResult = {
 const musicianResult = {
   id: 22,
   name: "Casino House Band",
-  sort_name: "Casino House Band",
   thumb: nullableString(),
   album_count: 2,
   track_count: 18,
@@ -61,7 +60,6 @@ const trackResult = {
   duration: 181,
   codec: "flac",
   bit_rate: 900000,
-  file_path: "/music/casino-theme.flac",
   album_id: nullableInt64(12),
   album_title: nullableString("Casino Original Soundtrack"),
   album_cover: nullableString(),

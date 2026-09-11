@@ -24,14 +24,14 @@ VALUES
 
 -- name: GetWatchRoomByID :one
 SELECT
-  *
+  owner_user_id
 FROM watch_rooms
 WHERE id = ?
 LIMIT 1;
 
 -- name: GetWatchRoomsForUser :many
 SELECT
-  wr.*
+  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.created_at
 FROM watch_rooms AS wr
 INNER JOIN watch_room_members AS wrm
   ON wr.id = wrm.room_id

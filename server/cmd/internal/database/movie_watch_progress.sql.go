@@ -88,13 +88,9 @@ func (q *Queries) GetContinueWatchingMovies(ctx context.Context, userID int64) (
 
 const getMovieWatchProgress = `-- name: GetMovieWatchProgress :one
 SELECT
-  user_id,
-  movie_id,
   progress_sec,
   duration_sec,
   watched,
-  save_session_id,
-  save_sequence,
   updated_at
 FROM movie_watch_progress
 WHERE user_id = ?
@@ -106,17 +102,20 @@ type GetMovieWatchProgressParams struct {
 	MovieID int64 `json:"movie_id"`
 }
 
-func (q *Queries) GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error) {
+type GetMovieWatchProgressRow struct {
+	ProgressSec float64 `json:"progress_sec"`
+	DurationSec float64 `json:"duration_sec"`
+	Watched     bool    `json:"watched"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+func (q *Queries) GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (GetMovieWatchProgressRow, error) {
 	row := q.queryRow(ctx, q.getMovieWatchProgressStmt, getMovieWatchProgress, arg.UserID, arg.MovieID)
-	var i MovieWatchProgress
+	var i GetMovieWatchProgressRow
 	err := row.Scan(
-		&i.UserID,
-		&i.MovieID,
 		&i.ProgressSec,
 		&i.DurationSec,
 		&i.Watched,
-		&i.SaveSessionID,
-		&i.SaveSequence,
 		&i.UpdatedAt,
 	)
 	return i, err

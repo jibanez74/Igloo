@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"database/sql"
+	"igloo/cmd/internal/scanner/scannertest"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -35,23 +36,23 @@ func TestMusicMetadataUpdatesTimestamp(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.db.Close()
-			_, err := s.db.Exec(`INSERT INTO musicians(id,name,sort_name) VALUES(1,'Artist','Old'); INSERT INTO albums(id,title,sort_title) VALUES(1,'Album','Old');`)
+			defer s.tx.DB.Close()
+			_, err := s.tx.DB.Exec(`INSERT INTO musicians(id,name,sort_name) VALUES(1,'Artist','Old'); INSERT INTO albums(id,title,sort_title) VALUES(1,'Album','Old');`)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if tc.setup != "" {
-				_, err = s.db.Exec(tc.setup)
+				_, err = s.tx.DB.Exec(tc.setup)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-			_, err = s.db.Exec("UPDATE " + tc.table + " SET updated_at=datetime('now','-1 hour') WHERE id=1")
+			_, err = s.tx.DB.Exec("UPDATE " + tc.table + " SET updated_at=datetime('now','-1 hour') WHERE id=1")
 			if err != nil {
 				t.Fatal(err)
 			}
 			var old string
-			err = s.db.QueryRow("SELECT updated_at FROM " + tc.table + " WHERE id=1").Scan(&old)
+			err = s.tx.DB.QueryRow("SELECT updated_at FROM " + tc.table + " WHERE id=1").Scan(&old)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,18 +60,18 @@ func TestMusicMetadataUpdatesTimestamp(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			count := countScannerRows(t, s.db, "SELECT count(*) FROM "+tc.table+" WHERE id=1 AND updated_at>? AND ("+tc.predicate+")", old)
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+tc.table+" WHERE id=1 AND updated_at>? AND ("+tc.predicate+")", old)
 			if count != 1 {
 				t.Fatal("metadata or timestamp did not update")
 			}
 			if !tc.derived {
 				return
 			}
-			_, err = s.db.Exec("UPDATE "+tc.table+" SET updated_at=? WHERE id=1", old)
+			_, err = s.tx.DB.Exec("UPDATE "+tc.table+" SET updated_at=? WHERE id=1", old)
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = s.db.Exec("CREATE TABLE writes(id INTEGER); CREATE TRIGGER count_writes AFTER UPDATE ON " + tc.table + " BEGIN INSERT INTO writes VALUES(NEW.id); END;")
+			_, err = s.tx.DB.Exec("CREATE TABLE writes(id INTEGER); CREATE TRIGGER count_writes AFTER UPDATE ON " + tc.table + " BEGIN INSERT INTO writes VALUES(NEW.id); END;")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,8 +79,8 @@ func TestMusicMetadataUpdatesTimestamp(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			count = countScannerRows(t, s.db, "SELECT count(*) FROM writes")
-			unchanged := countScannerRows(t, s.db, "SELECT count(*) FROM "+tc.table+" WHERE id=1 AND updated_at=?", old)
+			count = scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM writes")
+			unchanged := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+tc.table+" WHERE id=1 AND updated_at=?", old)
 			if count != 0 || unchanged != 1 {
 				t.Fatal("unchanged derived metadata wrote or advanced timestamp")
 			}
@@ -92,29 +93,29 @@ func TestMusicImageHelpersTimestamp(t *testing.T) {
 		for _, input := range []string{"", "old.jpg", "new.jpg"} {
 			t.Run(entity.table+"/"+input, func(t *testing.T) {
 				s := setupMusicScanner(t)
-				defer s.db.Close()
-				_, err := s.db.Exec(`INSERT INTO musicians(id,name,sort_name,thumb,updated_at) VALUES(1,'Artist','Artist','old.jpg',datetime('now','-1 hour'));
+				defer s.tx.DB.Close()
+				_, err := s.tx.DB.Exec(`INSERT INTO musicians(id,name,sort_name,thumb,updated_at) VALUES(1,'Artist','Artist','old.jpg',datetime('now','-1 hour'));
  INSERT INTO albums(id,title,sort_title,cover,updated_at) VALUES(1,'Album','Album','old.jpg',datetime('now','-1 hour'));`)
 				if err != nil {
 					t.Fatal(err)
 				}
 				var old string
-				err = s.db.QueryRow("SELECT updated_at FROM " + entity.table + " WHERE id=1").Scan(&old)
+				err = s.tx.DB.QueryRow("SELECT updated_at FROM " + entity.table + " WHERE id=1").Scan(&old)
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = s.db.Exec("CREATE TABLE writes(id INTEGER); CREATE TRIGGER count_writes AFTER UPDATE ON " + entity.table + " BEGIN INSERT INTO writes VALUES(NEW.id); END;")
+				_, err = s.tx.DB.Exec("CREATE TABLE writes(id INTEGER); CREATE TRIGGER count_writes AFTER UPDATE ON " + entity.table + " BEGIN INSERT INTO writes VALUES(NEW.id); END;")
 				if err != nil {
 					t.Fatal(err)
 				}
 				image := sql.NullString{String: "old.jpg", Valid: true}
 				var returned sql.NullString
 				if entity.table == "musicians" {
-					row, updateErr := s.updateMusicianThumbIfChanged(context.Background(), s.queries, database.Musician{ID: 1, Thumb: image}, input)
+					row, updateErr := s.updateMusicianThumbIfChanged(context.Background(), s.queries, database.GetMusicianBySpotifyIDRow{ID: 1, Thumb: image}, input)
 					err = updateErr
 					returned = row.Thumb
 				} else {
-					row, updateErr := s.updateAlbumCoverIfChanged(context.Background(), s.queries, database.Album{ID: 1, Cover: image}, input)
+					row, updateErr := s.updateAlbumCoverIfChanged(context.Background(), s.queries, database.GetAlbumBySpotifyIDRow{ID: 1, Cover: image}, input)
 					err = updateErr
 					returned = row.Cover
 				}
@@ -122,11 +123,11 @@ func TestMusicImageHelpersTimestamp(t *testing.T) {
 					t.Fatal(err)
 				}
 				var value, updated string
-				err = s.db.QueryRow("SELECT "+entity.column+",updated_at FROM "+entity.table+" WHERE id=1").Scan(&value, &updated)
+				err = s.tx.DB.QueryRow("SELECT "+entity.column+",updated_at FROM "+entity.table+" WHERE id=1").Scan(&value, &updated)
 				if err != nil {
 					t.Fatal(err)
 				}
-				writes := countScannerRows(t, s.db, "SELECT count(*) FROM writes")
+				writes := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM writes")
 				want := "old.jpg"
 				if input == "new.jpg" {
 					want = input

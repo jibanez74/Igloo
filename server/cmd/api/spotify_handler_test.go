@@ -111,7 +111,7 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	defer app.DB.Close()
 
 	ctx := context.Background()
-	existingAlbum, err := app.Queries.UpsertAlbum(ctx, database.UpsertAlbumParams{
+	existingAlbumIdentity, err := app.Queries.UpsertAlbum(ctx, database.UpsertAlbumParams{
 		Title:     "Blue Record",
 		SortTitle: "Blue Record",
 		SpotifyID: helpers.NullString("album123"),
@@ -119,6 +119,10 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("insert existing album: %v", err)
+	}
+	existingAlbum, err := app.Queries.GetAlbumByID(ctx, existingAlbumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	stub := &spotifyHandlerStub{
