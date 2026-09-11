@@ -1,11 +1,12 @@
 import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { MovieScanStatus, MusicScanStatus } from "@/types/settings";
+import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 
 type ScanState = MovieScanStatus["state"];
 
 type LibraryCopy<Phase extends string> = {
   noun: string;
+  lower: string;
   states: Record<ScanState, string>;
   phases: Record<Phase, string>;
   // Wording of the enrichment line: "<provider>: <processed> of <total> <attempted> · <enriched> <enrichedLabel> · …"
@@ -15,8 +16,10 @@ type LibraryCopy<Phase extends string> = {
   deferred: string;
 };
 
-const stateLabels = (noun: string, committed: string): Record<ScanState, string> => ({
-  idle: `No ${noun.toLowerCase()} scan has run yet.`,
+// lower is passed rather than derived: "TV shows" keeps its capitals
+// mid-sentence, where toLowerCase would produce "tv shows".
+const stateLabels = (noun: string, lower: string, committed: string): Record<ScanState, string> => ({
+  idle: `No ${lower} scan has run yet.`,
   running: `${noun} scan running`,
   completed: `${noun} scan completed`,
   "completed-with-issues": `${noun} scan completed with issues`,
@@ -26,7 +29,8 @@ const stateLabels = (noun: string, committed: string): Record<ScanState, string>
 
 const MOVIE_COPY: LibraryCopy<MovieScanStatus["phase"]> = {
   noun: "Movie",
-  states: stateLabels("Movie", "Committed movies are available."),
+  lower: "movie",
+  states: stateLabels("Movie", "movie", "Committed movies are available."),
   phases: {
     idle: "No movie scan has run yet.",
     discovery: "Discovering movie files",
@@ -43,7 +47,8 @@ const MOVIE_COPY: LibraryCopy<MovieScanStatus["phase"]> = {
 
 const MUSIC_COPY: LibraryCopy<MusicScanStatus["phase"]> = {
   noun: "Music",
-  states: stateLabels("Music", "Committed tracks are available."),
+  lower: "music",
+  states: stateLabels("Music", "music", "Committed tracks are available."),
   phases: {
     idle: "No music scan has run yet.",
     local: "Discovering and importing tracks",
@@ -56,26 +61,55 @@ const MUSIC_COPY: LibraryCopy<MusicScanStatus["phase"]> = {
   deferred: "Files must be quiet for 60 seconds. Deferred files are retried on the next scan.",
 };
 
+const SHOW_COPY: LibraryCopy<ShowScanStatus["phase"]> = {
+  noun: "TV shows",
+  lower: "TV shows",
+  states: stateLabels("TV shows", "TV shows", "Committed episodes are available."),
+  phases: {
+    idle: "No TV shows scan has run yet.",
+    discovery: "Discovering episode files",
+    local: "Inspecting and importing episodes",
+    cleanup: "Checking missing episodes",
+    enrichment: "Updating show descriptions from TMDB",
+  },
+  enrichment: { provider: "Descriptions", attempted: "attempted", enriched: "updated" },
+  removed: "missing episodes removed",
+  unavailable: "TV shows scan status is unavailable. Showing the last known progress; updates will retry automatically.",
+  deferred: "Files must be quiet for 60 seconds. Deferred files are retried on the next scan.",
+};
+
 type Props = { unavailable: boolean } & (
   | { library: "movies"; status?: MovieScanStatus }
   | { library: "music"; status?: MusicScanStatus }
+  | { library: "shows"; status?: ShowScanStatus }
 );
 
 // The discriminated props keep each library's status typed against its own
 // phase enum; the copy tables carry everything else that differs.
-const copyFor = (props: Props) => props.library === "movies" ? MOVIE_COPY : MUSIC_COPY;
+const COPY = { movies: MOVIE_COPY, music: MUSIC_COPY, shows: SHOW_COPY };
 
-const phaseLabel = (props: Props) =>
-  props.library === "movies"
-    ? MOVIE_COPY.phases[props.status?.phase ?? "idle"]
-    : MUSIC_COPY.phases[props.status?.phase ?? "idle"];
+const copyFor = (props: Props) => COPY[props.library];
+
+const phaseLabel = (props: Props) => {
+  const phase = props.status?.phase ?? "idle";
+  // Every library's phase set is a subset of the movie phases, so the copy
+  // table for this library always has an entry for its own status.
+  return (copyFor(props).phases as Record<string, string>)[phase];
+};
 
 const enrichmentLine = (props: Props) => {
   if (!props.status) return null;
   const { provider, attempted, enriched } = copyFor(props).enrichment;
   const status = props.status;
-  const pending = props.library === "movies" ? ` · ${props.status.pending_enrichment} pending` : "";
-  return `${provider}: ${status.enrichment_processed} of ${status.enrichment_total} ${attempted} · ${status.enriched} ${enriched} · ${status.enrichment_failed} failed · ${status.enrichment_unmatched} unmatched${pending}`;
+  // Music has no pending count and TV has no unmatched count; both tallies are
+  // omitted rather than reported as zero.
+  const unmatched = props.library === "music" || props.library === "movies"
+    ? ` · ${props.status.enrichment_unmatched} unmatched`
+    : "";
+  const pending = props.library === "movies" || props.library === "shows"
+    ? ` · ${props.status.pending_enrichment} pending`
+    : "";
+  return `${provider}: ${status.enrichment_processed} of ${status.enrichment_total} ${attempted} · ${status.enriched} ${enriched} · ${status.enrichment_failed} failed${unmatched}${pending}`;
 };
 
 export default function ScanProgress(props: Props) {
@@ -83,7 +117,7 @@ export default function ScanProgress(props: Props) {
   const copy = copyFor(props);
   const announcement = status?.state === "running"
     ? phaseLabel(props)
-    : status ? copy.states[status.state] : `Loading ${copy.noun.toLowerCase()} scan status`;
+    : status ? copy.states[status.state] : `Loading ${copy.lower} scan status`;
   return (
     <div className="space-y-2 text-sm text-muted-foreground">
       <p role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
@@ -92,6 +126,7 @@ export default function ScanProgress(props: Props) {
         <>
           <p>{status.processed} of {status.total} files processed · {status.imported} imported · {status.updated} updated · {status.unchanged} unchanged</p>
           <p>{status.failed} failed · {status.deferred} deferred · {status.deleted} {copy.removed}</p>
+          {props.library === "shows" && <p>{props.status?.episodes} local episodes</p>}
           {status.active_files.length > 0 && <p className="wrap-anywhere">Working on: {status.active_files.join(", ")}</p>}
           <p>{enrichmentLine(props)}</p>
           {status.deferred > 0 && <p>{copy.deferred}</p>}

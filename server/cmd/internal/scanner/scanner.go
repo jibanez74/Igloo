@@ -177,6 +177,7 @@ func WalkMediaLibraryContext(
 	validExts map[string]bool,
 	onError func(path string, err error),
 	onFile func(ScanFile) error,
+	directoryFilter ...func(string) bool,
 ) error {
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		contextErr := ctx.Err()
@@ -192,6 +193,9 @@ func WalkMediaLibraryContext(
 		}
 
 		if entry.IsDir() {
+			if path != root && len(directoryFilter) > 0 && directoryFilter[0] != nil && !directoryFilter[0](path) {
+				return fs.SkipDir
+			}
 			return nil
 		}
 

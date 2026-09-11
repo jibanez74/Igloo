@@ -1,5 +1,6 @@
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
 import { musicScanStatus } from "../src/test/helpers/music-scan";
+import { showScanStatus } from "../src/test/helpers/show-scan";
 import { randomUUID } from "node:crypto";
 import {
   createServer,
@@ -1064,6 +1065,15 @@ async function handleSettingsRoutes(
       return true;
     }
     sendSuccess(response, musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+    return true;
+  }
+
+  if (url.pathname === "/api/settings/scan/shows" && method === "GET") {
+    if (!user.is_admin) {
+      sendFailure(response, 403, "TV shows scan status is admin-only.");
+      return true;
+    }
+    sendSuccess(response, showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
     return true;
   }
 

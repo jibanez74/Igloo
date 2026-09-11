@@ -20,12 +20,16 @@ type Querier interface {
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error)
 	ClearMovieTmdbRetry(ctx context.Context, movieID int64) error
+	ClearShowEpisodeRetry(ctx context.Context, episodeID int64) error
+	ClearShowRetry(ctx context.Context, showID int64) error
+	ClearShowSeasonRetry(ctx context.Context, seasonID int64) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountMusicAlbumRetryCandidates(ctx context.Context) (int64, error)
 	CountMusicArtistRetryCandidates(ctx context.Context) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
+	CountShowRetries(ctx context.Context) (int64, error)
 	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
@@ -41,6 +45,19 @@ type Querier interface {
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) (Playlist, error)
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
+	CreateShowCast(ctx context.Context, arg CreateShowCastParams) error
+	CreateShowCreator(ctx context.Context, arg CreateShowCreatorParams) error
+	CreateShowCrew(ctx context.Context, arg CreateShowCrewParams) error
+	CreateShowEpisodeCast(ctx context.Context, arg CreateShowEpisodeCastParams) error
+	CreateShowEpisodeCrew(ctx context.Context, arg CreateShowEpisodeCrewParams) error
+	CreateShowEpisodeGuestCast(ctx context.Context, arg CreateShowEpisodeGuestCastParams) error
+	CreateShowExtraVideo(ctx context.Context, arg CreateShowExtraVideoParams) error
+	CreateShowGenre(ctx context.Context, arg CreateShowGenreParams) error
+	CreateShowNetwork(ctx context.Context, arg CreateShowNetworkParams) error
+	CreateShowProductionCompany(ctx context.Context, arg CreateShowProductionCompanyParams) error
+	CreateShowSeasonCast(ctx context.Context, arg CreateShowSeasonCastParams) error
+	CreateShowSeasonCrew(ctx context.Context, arg CreateShowSeasonCrewParams) error
+	CreateShowSeasonExtraVideo(ctx context.Context, arg CreateShowSeasonExtraVideoParams) error
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateTrackMusician(ctx context.Context, arg CreateTrackMusicianParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
@@ -53,6 +70,7 @@ type Querier interface {
 	DeleteMergedMusicArtist(ctx context.Context, id int64) error
 	DeleteMergedMusicMatch(ctx context.Context, arg DeleteMergedMusicMatchParams) error
 	DeleteMissingMovie(ctx context.Context, arg DeleteMissingMovieParams) (int64, error)
+	DeleteMissingShowFile(ctx context.Context, arg DeleteMissingShowFileParams) (int64, error)
 	DeleteMissingTrack(ctx context.Context, arg DeleteMissingTrackParams) (int64, error)
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
@@ -82,6 +100,24 @@ type Querier interface {
 	DeleteMusicCreditMetadata(ctx context.Context, trackID int64) error
 	DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
+	DeleteShowCast(ctx context.Context, showID int64) error
+	DeleteShowCreator(ctx context.Context, showID int64) error
+	DeleteShowCrew(ctx context.Context, showID int64) error
+	DeleteShowEpisodeCast(ctx context.Context, episodeID int64) error
+	DeleteShowEpisodeCrew(ctx context.Context, episodeID int64) error
+	DeleteShowEpisodeGuestCast(ctx context.Context, episodeID int64) error
+	DeleteShowExtraVideo(ctx context.Context, showID int64) error
+	DeleteShowFileAudioStreams(ctx context.Context, fileID int64) error
+	DeleteShowFileChapters(ctx context.Context, fileID int64) error
+	DeleteShowFileLinks(ctx context.Context, fileID int64) error
+	DeleteShowFileSubtitles(ctx context.Context, fileID int64) error
+	DeleteShowFileVideoStreams(ctx context.Context, fileID int64) error
+	DeleteShowGenre(ctx context.Context, showID int64) error
+	DeleteShowNetwork(ctx context.Context, showID int64) error
+	DeleteShowProductionCompany(ctx context.Context, showID int64) error
+	DeleteShowSeasonCast(ctx context.Context, seasonID int64) error
+	DeleteShowSeasonCrew(ctx context.Context, seasonID int64) error
+	DeleteShowSeasonExtraVideo(ctx context.Context, seasonID int64) error
 	// Deletes all genre relationships for a track.
 	DeleteTrackGenres(ctx context.Context, trackID int64) error
 	// Deletes all genre relationships for a track except the specified genre.
@@ -188,6 +224,7 @@ type Querier interface {
 	// session outlived its user, which the handler treats as a stale session.
 	GetNotificationBadgeForUser(ctx context.Context, userID int64) (int64, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (int64, error)
+	GetPendingShows(ctx context.Context, afterID int64) ([]Show, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
@@ -231,6 +268,14 @@ type Querier interface {
 	// the stored fingerprint and treats a mismatch as a miss.
 	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (GetRemuxSafetyVerdictRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
+	GetShow(ctx context.Context, id int64) (Show, error)
+	GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, error)
+	GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error)
+	GetShowFileByPath(ctx context.Context, filePath string) (ShowFile, error)
+	GetShowFileEpisodes(ctx context.Context, fileID int64) ([]ShowEpisode, error)
+	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
+	GetShowSeason(ctx context.Context, id int64) (ShowSeason, error)
+	GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeason, error)
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (GetTrackRow, error)
@@ -280,8 +325,15 @@ type Querier interface {
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error)
 	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
+	HasShowEpisodeRetry(ctx context.Context, episodeID int64) (bool, error)
+	HasShowRetry(ctx context.Context, showID int64) (bool, error)
+	HasShowSeasonRetry(ctx context.Context, seasonID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) error
 	InsertChapter(ctx context.Context, arg InsertChapterParams) error
+	InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) (ShowAudioStream, error)
+	InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) (ShowChapter, error)
+	InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitleParams) (ShowSubtitle, error)
+	InsertShowVideoStream(ctx context.Context, arg InsertShowVideoStreamParams) (ShowVideoStream, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) error
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) error
 	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
@@ -289,6 +341,7 @@ type Querier interface {
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
+	LinkShowEpisodeFile(ctx context.Context, arg LinkShowEpisodeFileParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
 	// The shared admin request queue, newest first. Visibility is admin-only and
 	// enforced by the handlers; user_id here only selects the viewer's read state
@@ -302,6 +355,9 @@ type Querier interface {
 	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
 	// Idempotent: marking an already-read or nonexistent notification is a no-op.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
+	MarkShowEpisodeRetry(ctx context.Context, episodeID int64) error
+	MarkShowRetry(ctx context.Context, showID int64) error
+	MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
 	MoveMusicAlbumFallback(ctx context.Context, arg MoveMusicAlbumFallbackParams) error
 	MoveMusicAlbumGenres(ctx context.Context, arg MoveMusicAlbumGenresParams) error
@@ -326,6 +382,9 @@ type Querier interface {
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
 	MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error)
 	MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error)
+	PruneShowEpisodes(ctx context.Context) error
+	PruneShowSeasons(ctx context.Context) error
+	PruneShows(ctx context.Context) error
 	ReconcileMusicAlbumDate(ctx context.Context, id int64) error
 	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
 	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
@@ -375,6 +434,9 @@ type Querier interface {
 	UpdatePlaybackServerSettings(ctx context.Context, arg UpdatePlaybackServerSettingsParams) (Setting, error)
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error
+	UpdateShowEpisodeMetadata(ctx context.Context, arg UpdateShowEpisodeMetadataParams) error
+	UpdateShowMetadata(ctx context.Context, arg UpdateShowMetadataParams) error
+	UpdateShowSeasonMetadata(ctx context.Context, arg UpdateShowSeasonMetadataParams) error
 	UpdateTrackPosition(ctx context.Context, arg UpdateTrackPositionParams) error
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
@@ -391,14 +453,20 @@ type Querier interface {
 	// Call with a non-null external_id so conflicts are detected; then link via CreateMovieExtraVideo.
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (int64, error)
 	UpsertKeyframeIndex(ctx context.Context, arg UpsertKeyframeIndexParams) error
+	UpsertLocalShow(ctx context.Context, arg UpsertLocalShowParams) (Show, error)
+	UpsertLocalShowEpisode(ctx context.Context, arg UpsertLocalShowEpisodeParams) (ShowEpisode, error)
+	UpsertLocalShowSeason(ctx context.Context, arg UpsertLocalShowSeasonParams) (ShowSeason, error)
 	// Existing movies retain descriptions; confirmed TMDB details are applied separately.
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (int64, error)
 	UpsertMovieFileFingerprint(ctx context.Context, arg UpsertMovieFileFingerprintParams) (int64, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (UpsertMusicianRow, error)
+	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (Network, error)
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (int64, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
+	UpsertShowFile(ctx context.Context, arg UpsertShowFileParams) (ShowFile, error)
+	UpsertShowFingerprint(ctx context.Context, arg UpsertShowFingerprintParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error)
 	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
 	// Updates aggregated stats when a play event is recorded

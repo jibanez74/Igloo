@@ -1,5 +1,6 @@
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
 import { musicScanStatus } from "../src/test/helpers/music-scan";
+import { showScanStatus } from "../src/test/helpers/show-scan";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -249,7 +250,9 @@ test.describe("Libraries settings", () => {
       if (route.request().method() === "GET") {
         const idle = url.pathname === "/api/settings/scan/music"
           ? musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
-          : movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
+          : url.pathname === "/api/settings/scan/shows"
+            ? showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
+            : movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
         await route.fulfill({ json: { error: false, data: idle } });
         return;
       }
@@ -364,12 +367,15 @@ test.describe("Libraries settings", () => {
       ).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Scan TV shows library" }),
-      ).toHaveCount(0);
-      await expect(
-        page.getByText("TV shows scanning unavailable"),
       ).toBeVisible();
       await expect(
+        page.getByText("TV shows scanning unavailable"),
+      ).toHaveCount(0);
+      await expect(
         page.getByRole("status").filter({ hasText: "No movie scan has run yet." }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("status").filter({ hasText: "No TV shows scan has run yet." }),
       ).toBeVisible();
       await expect(
         page.getByRole("status").filter({ hasText: "No music scan has run yet." }),
@@ -429,6 +435,34 @@ test.describe("Libraries settings", () => {
           hasText: "Music library scan started.",
         }),
       ).toBeVisible();
+
+      // The TV shows scan trigger is reachable by keyboard from its path input,
+      // the way the recovered scanner branch asserted before TV scanning shipped.
+      const showsScanButton = page.getByRole("button", {
+        name: "Scan TV shows library",
+      });
+      await showsInput.focus();
+      await page.keyboard.press("Tab");
+      await expect
+        .poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label")
+          ?? document.activeElement?.textContent?.trim()))
+        .toBe("Clear TV shows library path");
+      await page.keyboard.press("Tab");
+      await expect(showsScanButton).toBeFocused();
+      await Promise.all([
+        page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/settings/scan/shows" && response.request().method() === "POST";
+        }),
+        page.keyboard.press("Enter"),
+      ]);
+      await expect(
+        page.locator('p[aria-live="polite"]').filter({
+          hasText: "TV Shows library scan started.",
+        }),
+      ).toBeVisible();
+      await expect(showsScanButton).toBeEnabled();
+      await expect(showsScanButton).toHaveAttribute("aria-busy", "false");
 
       await auditResponsiveLibrariesPage(page);
     } finally {

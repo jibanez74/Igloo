@@ -1,12 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { movieScanStatusQueryOpts, musicScanStatusQueryOpts } from "@/lib/query-opts";
+import { movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts } from "@/lib/query-opts";
 import type { ScanStatusQueryOpts } from "@/lib/query-opts";
-import { MOVIES_STATS_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
+import { MOVIES_STATS_KEY, MUSIC_STATS_KEY, SHOW_SCAN_STATUS_KEY } from "@/lib/constants";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
-import type { MovieScanStatus, MusicScanStatus } from "@/types/settings";
+import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 
 const subscribeVisibility = (onChange: () => void) => {
   document.addEventListener("visibilitychange", onChange);
@@ -81,10 +81,22 @@ const MUSIC_SCAN: ScanStatusConfig<MusicScanStatus> = {
   invalidateLibrary: invalidateMusicLibraryQueries,
 };
 
+// TV browsing is not implemented, so a show scan has no library statistics or
+// catalog lists to refresh; only the report itself updates.
+const SHOW_SCAN: ScanStatusConfig<ShowScanStatus> = {
+  queryOptions: showScanStatusQueryOpts,
+  statsKey: SHOW_SCAN_STATUS_KEY,
+  invalidateLibrary: () => {},
+};
+
 export function useMovieScanStatus(options: ScanStatusOptions = {}) {
   return useScanStatus(MOVIE_SCAN, options);
 }
 
 export function useMusicScanStatus(options: ScanStatusOptions = {}) {
   return useScanStatus(MUSIC_SCAN, options);
+}
+
+export function useShowScanStatus(options: ScanStatusOptions = {}) {
+  return useScanStatus(SHOW_SCAN, options);
 }

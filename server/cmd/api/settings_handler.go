@@ -371,6 +371,7 @@ type scanLibrary struct {
 
 var (
 	movieLibrary = scanLibrary{name: "movie", directory: "movies", title: "Movie"}
+	showLibrary  = scanLibrary{name: "show", directory: "shows", title: "Show"}
 	musicLibrary = scanLibrary{name: "music", directory: "music", title: "Music"}
 )
 
@@ -380,6 +381,10 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
 	app.triggerScan(w, movieLibrary, app.MovieScanner.Start())
+}
+
+func (app *Application) TriggerShowScan(w http.ResponseWriter, r *http.Request) {
+	app.triggerScan(w, showLibrary, app.ShowScanner.Start())
 }
 
 func (app *Application) triggerScan(w http.ResponseWriter, library scanLibrary, result scanner.StartResult) {
@@ -402,6 +407,10 @@ func (app *Application) triggerScan(w http.ResponseWriter, library scanLibrary, 
 
 func (app *Application) GetMovieScanStatus(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.MovieScanner.Status()})
+}
+
+func (app *Application) GetShowScanStatus(w http.ResponseWriter, r *http.Request) {
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: app.ShowScanner.Status()})
 }
 
 func (app *Application) GetMusicScanStatus(w http.ResponseWriter, r *http.Request) {

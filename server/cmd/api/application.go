@@ -15,6 +15,7 @@ import (
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
+	"igloo/cmd/internal/scanner/show"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
@@ -85,6 +86,10 @@ type Application struct {
 	MovieScanner                  interface {
 		Start() scanner.StartResult
 		Status() movie.Status
+	}
+	ShowScanner interface {
+		Start() scanner.StartResult
+		Status() show.Status
 	}
 	MusicScanner interface {
 		Start() scanner.StartResult
@@ -218,6 +223,20 @@ func InitApp() (initializedApp *Application, err error) {
 		},
 		InvalidateCommittedTrack: func(trackID int64) {
 			app.StreamFileCache.invalidate(trackStreamFileKey(trackID))
+		},
+	})
+
+	app.ShowScanner = show.New(show.Dependencies{
+		DB:          app.DB,
+		Queries:     app.Queries,
+		Logger:      app.Logger,
+		Ffprobe:     app.Ffprobe,
+		Tmdb:        app.Tmdb,
+		ScanContext: app.ScanContext,
+		Wait:        app.Wait,
+		ScannerDBMu: &app.ScannerDBMu,
+		CurrentShowsDirectory: func() sql.NullString {
+			return app.CurrentSettings().ShowsDir
 		},
 	})
 

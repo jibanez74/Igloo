@@ -3881,6 +3881,52 @@
         }
       }
     },
+    "/api/settings/scan/shows": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Trigger a TV show library scan",
+        "description": "Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Requires Show/Season N/file or Show/Specials/file. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; identical bytes with changed filesystem metadata update only fingerprints. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan. Failed requests preserve existing metadata and retry state; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes unreferenced episodes, seasons, and shows, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. TV browsing, playback, and manual identification are not provided.",
+        "operationId": "triggerShowScan",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get TV show scan progress",
+        "description": "Admin-only current/latest in-memory report. No persistent history. Local counts are physical files; enrichment counts are entities (shows, seasons, and episodes), so the two do not add up. Interrupted scans retain committed work and report canceled or failed, never successful completion.",
+        "operationId": "getShowScanStatus",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ShowScanStatusResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
     "/api/music/stats": {
       "get": {
         "tags": [
@@ -7340,6 +7386,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/MovieScanStatusResponse"
+            }
+          }
+        }
+      },
+      "ShowScanStatusResponse": {
+        "description": "Current or latest TV show scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ShowScanStatusResponse"
             }
           }
         }
@@ -13283,6 +13339,181 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/MovieScanStatusData"
+              }
+            }
+          }
+        ]
+      },
+      "ShowScanStatusData": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "state",
+          "phase",
+          "started_at",
+          "updated_at",
+          "finished_at",
+          "active_files",
+          "total",
+          "processed",
+          "imported",
+          "updated",
+          "unchanged",
+          "failed",
+          "deferred",
+          "deleted",
+          "episodes",
+          "enrichment_total",
+          "enrichment_processed",
+          "enriched",
+          "enrichment_failed",
+          "pending_enrichment",
+          "issue_count",
+          "issues"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "description": "Opaque run identity; empty while idle. Latest report is retained in memory only."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "completed",
+              "completed-with-issues",
+              "canceled",
+              "failed"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "discovery",
+              "local",
+              "cleanup",
+              "enrichment"
+            ]
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "active_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Active filenames only; no directory paths."
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unique files with a local outcome, including deferred and failed files."
+          },
+          "imported": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unchanged": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deferred": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "episodes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Local episodes touched by this run. Combined files link several episodes to one file, so this is unrelated to the file counts."
+          },
+          "enrichment_total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Entities (shows, seasons, and episodes) whose metadata this run attempted. Entities are not files."
+          },
+          "enrichment_processed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Entities with an enrichment outcome this run."
+          },
+          "enriched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Entities whose TMDB metadata committed this run."
+          },
+          "enrichment_failed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Entities whose enrichment failed. Their previous metadata and retry markers are preserved."
+          },
+          "pending_enrichment": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Shows, seasons, and episodes still carrying a retry marker when the run finished. It does not by itself make the final state completed-with-issues."
+          },
+          "issue_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ScanIssue"
+            }
+          }
+        }
+      },
+      "ShowScanStatusResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShowScanStatusData"
               }
             }
           }

@@ -25,6 +25,7 @@ Igloo is **pre-production**. APIs, database schema, configuration, and client be
 
 - **Movies:** library scanning, local metadata and optional TMDB enrichment, posters and backdrops, trailers where available, cast and crew, technical stream details, and admin metadata editing. Playback includes direct streaming, HLS remuxing and transcoding, supported text subtitles, audio/subtitle selection, watch progress, likes, and playlists. HLS remains a work in progress.
 - **Music:** library scanning, albums, tracks, musicians, cover art, optional Spotify enrichment, multi-artist credits, collaborative playlists, liked tracks, playback, and listening statistics.
+- **TV shows:** library scanning with file-owned technical metadata, combined episodes and duplicate copies, optional TMDB show/season/episode enrichment, and safe missing-file cleanup. Browsing and playback are not implemented.
 - **Shared playback:** watch rooms synchronize movie playback over WebSockets, with direct-stream and HLS playback paths.
 - **Accounts and administration:** session-based sign-in, admin user management, account settings and avatars, profile PINs, Quick Connect device pairing, device listing/renaming/revocation, server and library settings, and per-user playback preferences.
 
@@ -37,7 +38,7 @@ The supported server platforms are **Linux x64 (AMD64)** and **macOS ARM64 (Appl
 Current limitations:
 
 - HLS transcoding and decoding are works in progress. Playback depends on source media, browser capabilities, FFmpeg support, and host hardware; see [media behavior and operational notes](docs/ffmpeg.md).
-- TV shows and photos have UI placeholders. TV library paths can be stored, but TV scanning and playback are not implemented.
+- TV library scanning is implemented; TV browsing and playback are not. TV shows and photos still have UI placeholders.
 - Automatic filesystem watching is not implemented, even though an `ENABLE_WATCHER` setting exists. Use startup or manual library scans.
 - Jellyfin and Immich fields are stored settings, not working integrations.
 - TMDB and Spotify enrichment are optional. Without them, scanning uses local file metadata and movie filename defaults.
@@ -121,8 +122,8 @@ Igloo loads one optional `.env` from its **current working directory**. Process 
 | `STATIC_DIR` | Settings seed | Downloaded artwork and uploaded static files; `static` |
 | `LOGS_DIR` | Startup | File logs; `logs` |
 | `TRANSCODE_DIR` | Settings seed | Temporary HLS workspace; `transcode` |
-| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Settings seed | Existing library directories; empty by default. TV paths are placeholders |
-| `TMDB_API_KEY` | Settings seed | Optional movie metadata enrichment; empty by default |
+| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Settings seed | Existing library directories; empty by default |
+| `TMDB_API_KEY` | Settings seed | Optional movie and TV metadata enrichment; empty by default |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Settings seed | Optional music metadata enrichment; empty by default |
 | `JELLYFIN_API_KEY` | Settings seed | Stored Jellyfin setting; no working integration |
 | `DOWNLOAD_IMAGES` | Settings seed | Image downloading setting; `false` |
@@ -130,6 +131,14 @@ Igloo loads one optional `.env` from its **current working directory**. Process 
 | `HARDWARE_ACCELERATION_DEVICE` | Settings seed | `cpu` (default), `apple`, `nvidia`, or `intel` |
 
 Relative runtime paths resolve from the working directory. Igloo creates its application storage directories as needed, but does not create media library directories. The process needs permission to write its database, static files, logs, and transcode workspace. Allow space for temporary HLS output under the configured transcode directory.
+
+### TV library scanning
+
+Set `SHOWS_DIR` on first launch or save the TV path in library Settings. Startup scans TV alongside movies and music. Admin clients can start another scan with `POST /api/settings/scan/shows` and read progress from `GET /api/settings/scan/shows`; saving Settings alone does not launch one. Trigger responses are `200` started, `409` already running, or `500` unconfigured, with normal authentication and admin authorization.
+
+Use `Show Name (optional year)/Season N/filename.mkv`, or `Show Name/Specials/filename.mkv` for season zero. Filename numbering accepts `S01E02`, `S01E02-E04`, `S01E02E03`, and `1x02`, case-insensitively. The filename season must match its directory. Hidden backups, hidden files, nested extras, NFO files, and subtitle sidecars are excluded. Show folders remain separate identities even if TMDB matches the same show.
+
+Files must be quiet for 60 seconds. TMDB is optional: local imports remain in the catalog, and later scans retry pending enrichment without probing unchanged files. Combined files link separate episodes to one physical file and retain its complete duration without guessed episode boundaries. See [media scanning](docs/ffmpeg.md#tv-show-scanning) and the [implementation plan](docs/tv-show-scanner-plan.md).
 
 ### Playback and hardware acceleration
 

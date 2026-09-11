@@ -1,4 +1,4 @@
-package movie
+package show
 
 import (
 	"context"
@@ -10,15 +10,15 @@ import (
 	"igloo/cmd/internal/scanner"
 )
 
-func processChapters(ctx context.Context, qtx *database.Queries, movieID int64, chapters []ffprobe.Chapter) error {
-	err := qtx.DeleteMovieChapters(ctx, movieID)
+func processChapters(ctx context.Context, qtx *database.Queries, fileID int64, chapters []ffprobe.Chapter) error {
+	err := qtx.DeleteShowFileChapters(ctx, fileID)
 	if err != nil {
-		return fmt.Errorf("delete movie chapters failed: %w", err)
+		return fmt.Errorf("delete show chapters failed: %w", err)
 	}
 
 	for _, chapter := range chapters {
-		err := qtx.InsertChapter(ctx, database.InsertChapterParams{
-			MovieID:   movieID,
+		_, err := qtx.InsertShowChapter(ctx, database.InsertShowChapterParams{
+			FileID:    fileID,
 			Title:     chapter.Tags.Title,
 			StartTime: scanner.ChapterStartTimeSeconds(chapter),
 			Thumb:     sql.NullString{},

@@ -17,6 +17,7 @@ import {
   getMovieDetails,
   getMovieScanStatus,
   getMusicScanStatus,
+  getShowScanStatus,
   getMovieInTheaterDetails,
   getMoviePlaylistDetails,
   getMoviePlaylistMovies,
@@ -85,6 +86,7 @@ import {
   MOVIES_STATS_KEY,
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
+  SHOW_SCAN_STATUS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
@@ -722,3 +724,6 @@ export const movieScanStatusQueryOpts = () =>
 
 export const musicScanStatusQueryOpts = () =>
   scanStatusQueryOpts(MUSIC_SCAN_STATUS_KEY, getMusicScanStatus, "Music scan status is unavailable.");
+
+export const showScanStatusQueryOpts = () =>
+  scanStatusQueryOpts(SHOW_SCAN_STATUS_KEY, getShowScanStatus, "TV shows scan status is unavailable.");

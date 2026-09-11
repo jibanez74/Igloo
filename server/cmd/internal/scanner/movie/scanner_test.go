@@ -299,3 +299,16 @@ func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext
 	}
 	return
 }
+
+func (*stubMovieScannerTmdb) SearchShowsByTitleAndYear(context.Context, string, ...int) ([]tmdb.TVShow, error) {
+	return nil, tmdb.ErrNoShowsFound
+}
+func (*stubMovieScannerTmdb) GetShowDetails(context.Context, int) (*tmdb.TVShow, error) {
+	return nil, tmdb.ErrNoShowsFound
+}
+func (*stubMovieScannerTmdb) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
+	return nil, tmdb.ErrNoShowsFound
+}
+func (*stubMovieScannerTmdb) GetEpisodeCredits(context.Context, int, int, int) (*tmdb.TVEpisodeCredits, error) {
+	return nil, tmdb.ErrNoShowsFound
+}

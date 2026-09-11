@@ -76,6 +76,7 @@ func main() {
 
 func startLibraryScansAtStartup(app *Application) {
 	app.startScanAtStartup(movieLibrary, app.MovieScanner.Start())
+	app.startScanAtStartup(showLibrary, app.ShowScanner.Start())
 	app.startScanAtStartup(musicLibrary, app.MusicScanner.Start())
 }
 

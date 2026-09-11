@@ -27,14 +27,15 @@ import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
-import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
+import { musicStatsQueryOpts, moviesStatsQueryOpts, movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
-import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
+import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
 import {
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
+  SHOW_SCAN_STATUS_KEY,
   SETTINGS_CARD_SURFACE_CLASS,
   SETTINGS_INPUT_CLASS,
   SETTINGS_KEY,
@@ -47,7 +48,7 @@ export const Route = createFileRoute("/_auth/settings/libraries")({
 });
 
 type LibraryPathField = keyof SettingsType;
-type ImplementedScan = "movies" | "music";
+type ImplementedScan = "movies" | "music" | "shows";
 
 type ScanLibrary = {
   field: LibraryPathField;
@@ -76,6 +77,16 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     statusKey: MUSIC_SCAN_STATUS_KEY,
     trigger: triggerMusicScan,
     invalidateLibrary: invalidateMusicLibraryQueries,
+  },
+  shows: {
+    field: "shows_dir",
+    label: "TV shows",
+    title: "TV Shows",
+    statusKey: SHOW_SCAN_STATUS_KEY,
+    trigger: triggerShowScan,
+    // TV browsing is not implemented, so a scan has no catalog queries to
+    // invalidate; the scan status query refreshes on its own.
+    invalidateLibrary: () => {},
   },
 };
 
@@ -125,7 +136,7 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
   },
   {
     field: "shows_dir",
-    scan: null,
+    scan: "shows",
     title: "TV Shows Library",
     description: "Manage your TV show collection",
     pathLabel: "TV shows library path",
@@ -219,7 +230,8 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   // The authenticated layout keeps running scans observed across navigation.
   const movieScan = useQuery({ ...movieScanStatusQueryOpts(), enabled: false });
   const musicScan = useQuery({ ...musicScanStatusQueryOpts(), enabled: false });
-  const scanQueries = { movies: movieScan, music: musicScan };
+  const showScan = useQuery({ ...showScanStatusQueryOpts(), enabled: false });
+  const scanQueries = { movies: movieScan, music: musicScan, shows: showScan };
   const [syncedSettings, setSyncedSettings] = useState(settings);
   const [form, setForm] = useState<LibrariesForm>(() =>
     formFromSettings(settings),
@@ -402,9 +414,6 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 {section.field === "movies_dir" && (
                   <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
                 )}
-                {section.field === "shows_dir" && (
-                  <TVShowsUnavailableStatus hasLibrary={Boolean(syncedSettings.shows_dir)} />
-                )}
                 {section.field === "music_dir" && (
                   <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
                 )}
@@ -413,6 +422,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 )}
                 {section.scan === "music" && (
                   <ScanProgress library="music" status={musicScan.data} unavailable={musicScan.isError} />
+                )}
+                {section.scan === "shows" && (
+                  <ScanProgress library="shows" status={showScan.data} unavailable={showScan.isError} />
                 )}
               </LibraryPathSection>
             </Fragment>
@@ -704,33 +716,6 @@ function StatItem({
             <p className="text-sm text-muted-foreground">{label}</p>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function TVShowsUnavailableStatus({ hasLibrary }: StatsProps) {
-  if (!hasLibrary) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-card/30 p-4 text-sm text-muted-foreground">
-        TV shows can be configured now. Scanning will be available after TV show
-        support is implemented.
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-card/30 p-6">
-      <div className="flex items-center gap-3 text-muted-foreground">
-        <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            TV shows scanning unavailable
-          </p>
-          <p className="text-sm">
-            The TV shows path is saved, but TV scanning is not implemented yet.
-          </p>
-        </div>
       </div>
     </div>
   );

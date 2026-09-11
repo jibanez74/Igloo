@@ -1554,6 +1554,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/scan/shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get TV show scan progress
+         * @description Admin-only current/latest in-memory report. No persistent history. Local counts are physical files; enrichment counts are entities (shows, seasons, and episodes), so the two do not add up. Interrupted scans retain committed work and report canceled or failed, never successful completion.
+         */
+        get: operations["getShowScanStatus"];
+        put?: never;
+        /**
+         * Trigger a TV show library scan
+         * @description Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Requires Show/Season N/file or Show/Specials/file. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; identical bytes with changed filesystem metadata update only fingerprints. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan. Failed requests preserve existing metadata and retry state; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes unreferenced episodes, seasons, and shows, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. TV browsing, playback, and manual identification are not provided.
+         */
+        post: operations["triggerShowScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/music/stats": {
         parameters: {
             query?: never;
@@ -3544,6 +3568,48 @@ export interface components {
         MovieScanStatusResponse: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MovieScanStatusData"];
         };
+        ShowScanStatusData: {
+            /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
+            run_id: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "completed" | "completed-with-issues" | "canceled" | "failed";
+            /** @enum {string} */
+            phase: "idle" | "discovery" | "local" | "cleanup" | "enrichment";
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** @description Active filenames only; no directory paths. */
+            active_files: string[];
+            total: number;
+            /** @description Unique files with a local outcome, including deferred and failed files. */
+            processed: number;
+            imported: number;
+            updated: number;
+            unchanged: number;
+            failed: number;
+            deferred: number;
+            deleted: number;
+            /** @description Local episodes touched by this run. Combined files link several episodes to one file, so this is unrelated to the file counts. */
+            episodes: number;
+            /** @description Entities (shows, seasons, and episodes) whose metadata this run attempted. Entities are not files. */
+            enrichment_total: number;
+            /** @description Entities with an enrichment outcome this run. */
+            enrichment_processed: number;
+            /** @description Entities whose TMDB metadata committed this run. */
+            enriched: number;
+            /** @description Entities whose enrichment failed. Their previous metadata and retry markers are preserved. */
+            enrichment_failed: number;
+            /** @description Shows, seasons, and episodes still carrying a retry marker when the run finished. It does not by itself make the final state completed-with-issues. */
+            pending_enrichment: number;
+            issue_count: number;
+            issues: components["schemas"]["ScanIssue"][];
+        };
+        ShowScanStatusResponse: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowScanStatusData"];
+        };
         MusicScanStatusData: {
             /** @description Opaque run identity; empty while idle. Latest report is retained in memory only. */
             run_id: string;
@@ -4620,6 +4686,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["MovieScanStatusResponse"];
+            };
+        };
+        /** @description Current or latest TV show scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
+        ShowScanStatusResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowScanStatusResponse"];
             };
         };
         /** @description Current or latest music scan report. Safe issue summaries are capped at 100; issue_count includes all outstanding issues. Idle means no run has started since this process launched. */
@@ -7109,6 +7184,36 @@ export interface operations {
         };
     };
     triggerMovieScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MessageSuccess"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowScanStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowScanStatusResponse"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    triggerShowScan: {
         parameters: {
             query?: never;
             header?: never;

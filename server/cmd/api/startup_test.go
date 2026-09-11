@@ -8,6 +8,7 @@ import (
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
+	"igloo/cmd/internal/scanner/show"
 )
 
 type musicStartFunc func() scanner.StartResult
@@ -21,6 +22,14 @@ func (musicStartFunc) Status() music.Status {
 type movieStartFunc func() scanner.StartResult
 
 func (f movieStartFunc) Start() scanner.StartResult { return f() }
+
+type showStartFunc func() scanner.StartResult
+
+func (f showStartFunc) Start() scanner.StartResult { return f() }
+
+func (showStartFunc) Status() show.Status {
+	return show.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
+}
 
 type startupLogger struct {
 	mu     sync.Mutex

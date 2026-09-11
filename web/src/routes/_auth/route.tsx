@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMovieScanStatus, useMusicScanStatus } from "@/hooks/useScanStatus";
+import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
 import { redirect, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import AppShell from "@/components/app/AppShell";
@@ -29,6 +29,7 @@ function AuthLayout() {
   };
   useMovieScanStatus(scanOptions);
   useMusicScanStatus(scanOptions);
+  useShowScanStatus(scanOptions);
   return (
     <AppShell>
       <Outlet />
