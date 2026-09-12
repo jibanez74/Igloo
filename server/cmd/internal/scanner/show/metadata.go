@@ -101,7 +101,7 @@ func applySeason(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVS
 	return q.ClearShowSeasonRetry(ctx, id)
 }
 
-func applyEpisode(ctx context.Context, q *database.Queries, id int64, m tmdb.TVEpisode, credits *tmdb.TVEpisodeCredits) error {
+func applyEpisode(ctx context.Context, q *database.Queries, id int64, m tmdb.TVEpisode) error {
 	name := strings.TrimSpace(m.Name)
 	if name == "" {
 		name = fmt.Sprintf("Episode %d", m.EpisodeNumber)
@@ -110,14 +110,11 @@ func applyEpisode(ctx context.Context, q *database.Queries, id int64, m tmdb.TVE
 	if err != nil {
 		return err
 	}
-	rows := make([]credit, 0, len(credits.Cast)+len(credits.GuestStars)+len(credits.Crew))
-	for _, c := range credits.Cast {
-		rows = append(rows, credit{person: c.TVPerson, character: c.Character, order: c.Order, creditID: c.CreditID, count: 1})
-	}
-	for _, c := range credits.GuestStars {
+	rows := make([]credit, 0, len(m.GuestStars)+len(m.Crew))
+	for _, c := range m.GuestStars {
 		rows = append(rows, credit{person: c.TVPerson, character: c.Character, order: c.Order, creditID: c.CreditID, count: 1, guest: true})
 	}
-	for _, c := range credits.Crew {
+	for _, c := range m.Crew {
 		rows = append(rows, credit{person: c.TVPerson, department: c.Department, job: c.Job, creditID: c.CreditID, count: 1, crew: true})
 	}
 	err = replaceCredits(ctx, q, metadataOwner{episode: id}, rows)
@@ -167,7 +164,7 @@ func replaceCredits(ctx context.Context, q *database.Queries, owner metadataOwne
 		remove = []func(context.Context, int64) error{q.DeleteShowSeasonCast, q.DeleteShowSeasonCrew}
 	default:
 		id = owner.episode
-		remove = []func(context.Context, int64) error{q.DeleteShowEpisodeCast, q.DeleteShowEpisodeGuestCast, q.DeleteShowEpisodeCrew}
+		remove = []func(context.Context, int64) error{q.DeleteShowEpisodeGuestCast, q.DeleteShowEpisodeCrew}
 	}
 	for _, fn := range remove {
 		err := fn(ctx, id)
@@ -200,13 +197,10 @@ func replaceCredits(ctx context.Context, q *database.Queries, owner metadataOwne
 				err = q.CreateShowSeasonCast(ctx, database.CreateShowSeasonCastParams{SeasonID: id, ArtistID: artist, Character: c.character, CastOrder: int64(c.order), CreditID: c.creditID, EpisodeCount: int64(c.count)})
 			}
 		default:
-			switch {
-			case c.crew:
+			if c.crew {
 				err = q.CreateShowEpisodeCrew(ctx, database.CreateShowEpisodeCrewParams{EpisodeID: id, ArtistID: artist, Department: c.department, Job: c.job, CreditID: c.creditID, EpisodeCount: int64(c.count)})
-			case c.guest:
+			} else {
 				err = q.CreateShowEpisodeGuestCast(ctx, database.CreateShowEpisodeGuestCastParams{EpisodeID: id, ArtistID: artist, Character: c.character, CastOrder: int64(c.order), CreditID: c.creditID, EpisodeCount: int64(c.count)})
-			default:
-				err = q.CreateShowEpisodeCast(ctx, database.CreateShowEpisodeCastParams{EpisodeID: id, ArtistID: artist, Character: c.character, CastOrder: int64(c.order), CreditID: c.creditID, EpisodeCount: int64(c.count)})
 			}
 		}
 		if err != nil {

@@ -21,7 +21,6 @@ type TmdbInterface interface {
 	SearchShowsByTitleAndYear(ctx context.Context, title string, year ...int) ([]TVShow, error)
 	GetShowDetails(ctx context.Context, id int) (*TVShow, error)
 	GetSeasonDetails(ctx context.Context, id, season int) (*TVSeason, error)
-	GetEpisodeCredits(ctx context.Context, id, season, episode int) (*TVEpisodeCredits, error)
 	GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) error
 	SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]TmdbMovie, error)
 	GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error)

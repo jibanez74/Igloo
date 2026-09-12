@@ -180,14 +180,7 @@ func (s *Scanner) enrichEpisode(ctx context.Context, show database.Show, season 
 	if changedIdentity {
 		return errors.New("TMDB episode identity changed")
 	}
-	credits, err := s.Tmdb.GetEpisodeCredits(ctx, int(show.TmdbID.Int64), int(season.SeasonNumber), int(ep.EpisodeNumber))
-	if err != nil {
-		return err
-	}
-	if credits == nil || credits.ID != remote.ID {
-		return errors.New("TMDB episode credits identity mismatch")
-	}
-	return s.commitMetadata(ctx, show, &season, &ep, func(q *database.Queries) error { return applyEpisode(ctx, q, ep.ID, remote, credits) })
+	return s.commitMetadata(ctx, show, &season, &ep, func(q *database.Queries) error { return applyEpisode(ctx, q, ep.ID, remote) })
 }
 
 // Network requests finish before acquiring the shared writer mutex. Recheck

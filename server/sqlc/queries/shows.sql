@@ -257,12 +257,6 @@ DELETE FROM show_season_extra_videos WHERE season_id = ?;
 -- name: CreateShowSeasonExtraVideo :exec
 INSERT INTO show_season_extra_videos (season_id, extra_video_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
--- name: DeleteShowEpisodeCast :exec
-DELETE FROM show_episode_cast WHERE episode_id = ?;
-
--- name: CreateShowEpisodeCast :exec
-INSERT INTO show_episode_cast (episode_id, artist_id, character, cast_order, credit_id, episode_count) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
-
 -- name: DeleteShowEpisodeCrew :exec
 DELETE FROM show_episode_crew WHERE episode_id = ?;
 

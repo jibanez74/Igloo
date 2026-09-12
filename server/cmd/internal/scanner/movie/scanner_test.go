@@ -292,6 +292,3 @@ func (*stubMovieScannerTmdb) GetShowDetails(context.Context, int) (*tmdb.TVShow,
 func (*stubMovieScannerTmdb) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
 	return nil, tmdb.ErrNoShowsFound
 }
-func (*stubMovieScannerTmdb) GetEpisodeCredits(context.Context, int, int, int) (*tmdb.TVEpisodeCredits, error) {
-	return nil, tmdb.ErrNoShowsFound
-}

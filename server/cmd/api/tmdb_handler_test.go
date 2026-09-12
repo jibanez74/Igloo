@@ -1088,6 +1088,3 @@ func (*stubTmdbClient) GetShowDetails(context.Context, int) (*tmdb.TVShow, error
 func (*stubTmdbClient) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
 	return nil, tmdb.ErrNoShowsFound
 }
-func (*stubTmdbClient) GetEpisodeCredits(context.Context, int, int, int) (*tmdb.TVEpisodeCredits, error) {
-	return nil, tmdb.ErrNoShowsFound
-}

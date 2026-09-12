@@ -48,7 +48,6 @@ type Querier interface {
 	CreateShowCast(ctx context.Context, arg CreateShowCastParams) error
 	CreateShowCreator(ctx context.Context, arg CreateShowCreatorParams) error
 	CreateShowCrew(ctx context.Context, arg CreateShowCrewParams) error
-	CreateShowEpisodeCast(ctx context.Context, arg CreateShowEpisodeCastParams) error
 	CreateShowEpisodeCrew(ctx context.Context, arg CreateShowEpisodeCrewParams) error
 	CreateShowEpisodeGuestCast(ctx context.Context, arg CreateShowEpisodeGuestCastParams) error
 	CreateShowExtraVideo(ctx context.Context, arg CreateShowExtraVideoParams) error
@@ -103,7 +102,6 @@ type Querier interface {
 	DeleteShowCast(ctx context.Context, showID int64) error
 	DeleteShowCreator(ctx context.Context, showID int64) error
 	DeleteShowCrew(ctx context.Context, showID int64) error
-	DeleteShowEpisodeCast(ctx context.Context, episodeID int64) error
 	DeleteShowEpisodeCrew(ctx context.Context, episodeID int64) error
 	DeleteShowEpisodeGuestCast(ctx context.Context, episodeID int64) error
 	DeleteShowExtraVideo(ctx context.Context, showID int64) error

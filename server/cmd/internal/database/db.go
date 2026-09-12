@@ -117,9 +117,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createShowCrewStmt, err = db.PrepareContext(ctx, createShowCrew); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateShowCrew: %w", err)
 	}
-	if q.createShowEpisodeCastStmt, err = db.PrepareContext(ctx, createShowEpisodeCast); err != nil {
-		return nil, fmt.Errorf("error preparing query CreateShowEpisodeCast: %w", err)
-	}
 	if q.createShowEpisodeCrewStmt, err = db.PrepareContext(ctx, createShowEpisodeCrew); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateShowEpisodeCrew: %w", err)
 	}
@@ -251,9 +248,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.deleteShowCrewStmt, err = db.PrepareContext(ctx, deleteShowCrew); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteShowCrew: %w", err)
-	}
-	if q.deleteShowEpisodeCastStmt, err = db.PrepareContext(ctx, deleteShowEpisodeCast); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteShowEpisodeCast: %w", err)
 	}
 	if q.deleteShowEpisodeCrewStmt, err = db.PrepareContext(ctx, deleteShowEpisodeCrew); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteShowEpisodeCrew: %w", err)
@@ -1135,11 +1129,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createShowCrewStmt: %w", cerr)
 		}
 	}
-	if q.createShowEpisodeCastStmt != nil {
-		if cerr := q.createShowEpisodeCastStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing createShowEpisodeCastStmt: %w", cerr)
-		}
-	}
 	if q.createShowEpisodeCrewStmt != nil {
 		if cerr := q.createShowEpisodeCrewStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createShowEpisodeCrewStmt: %w", cerr)
@@ -1358,11 +1347,6 @@ func (q *Queries) Close() error {
 	if q.deleteShowCrewStmt != nil {
 		if cerr := q.deleteShowCrewStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteShowCrewStmt: %w", cerr)
-		}
-	}
-	if q.deleteShowEpisodeCastStmt != nil {
-		if cerr := q.deleteShowEpisodeCastStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteShowEpisodeCastStmt: %w", cerr)
 		}
 	}
 	if q.deleteShowEpisodeCrewStmt != nil {
@@ -2635,7 +2619,6 @@ type Queries struct {
 	createShowCastStmt                          *sql.Stmt
 	createShowCreatorStmt                       *sql.Stmt
 	createShowCrewStmt                          *sql.Stmt
-	createShowEpisodeCastStmt                   *sql.Stmt
 	createShowEpisodeCrewStmt                   *sql.Stmt
 	createShowEpisodeGuestCastStmt              *sql.Stmt
 	createShowExtraVideoStmt                    *sql.Stmt
@@ -2680,7 +2663,6 @@ type Queries struct {
 	deleteShowCastStmt                          *sql.Stmt
 	deleteShowCreatorStmt                       *sql.Stmt
 	deleteShowCrewStmt                          *sql.Stmt
-	deleteShowEpisodeCastStmt                   *sql.Stmt
 	deleteShowEpisodeCrewStmt                   *sql.Stmt
 	deleteShowEpisodeGuestCastStmt              *sql.Stmt
 	deleteShowExtraVideoStmt                    *sql.Stmt
@@ -2958,7 +2940,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createShowCastStmt:                          q.createShowCastStmt,
 		createShowCreatorStmt:                       q.createShowCreatorStmt,
 		createShowCrewStmt:                          q.createShowCrewStmt,
-		createShowEpisodeCastStmt:                   q.createShowEpisodeCastStmt,
 		createShowEpisodeCrewStmt:                   q.createShowEpisodeCrewStmt,
 		createShowEpisodeGuestCastStmt:              q.createShowEpisodeGuestCastStmt,
 		createShowExtraVideoStmt:                    q.createShowExtraVideoStmt,
@@ -3003,7 +2984,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteShowCastStmt:                          q.deleteShowCastStmt,
 		deleteShowCreatorStmt:                       q.deleteShowCreatorStmt,
 		deleteShowCrewStmt:                          q.deleteShowCrewStmt,
-		deleteShowEpisodeCastStmt:                   q.deleteShowEpisodeCastStmt,
 		deleteShowEpisodeCrewStmt:                   q.deleteShowEpisodeCrewStmt,
 		deleteShowEpisodeGuestCastStmt:              q.deleteShowEpisodeGuestCastStmt,
 		deleteShowExtraVideoStmt:                    q.deleteShowExtraVideoStmt,

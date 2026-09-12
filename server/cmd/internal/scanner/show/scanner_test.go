@@ -426,11 +426,10 @@ func TestConcurrentScannerWrites(t *testing.T) {
 
 type testTMDB struct {
 	tmdb.TmdbInterface
-	searchCalls, showCalls, seasonCalls, creditCalls int
-	showHook                                         func(int) (*tmdb.TVShow, error)
-	seasonHook                                       func(int, int) (*tmdb.TVSeason, error)
-	creditsHook                                      func(int, int, int) (*tmdb.TVEpisodeCredits, error)
-	searchHook                                       func(string, int) ([]tmdb.TVShow, error)
+	searchCalls, showCalls, seasonCalls int
+	showHook                            func(int) (*tmdb.TVShow, error)
+	seasonHook                          func(int, int) (*tmdb.TVSeason, error)
+	searchHook                          func(string, int) ([]tmdb.TVShow, error)
 }
 
 func (c *testTMDB) SearchShowsByTitleAndYear(_ context.Context, title string, years ...int) ([]tmdb.TVShow, error) {
@@ -456,16 +455,9 @@ func (c *testTMDB) GetSeasonDetails(_ context.Context, id, season int) (*tmdb.TV
 	if c.seasonHook != nil {
 		return c.seasonHook(id, season)
 	}
-	return &tmdb.TVSeason{ID: 100 + season, SeasonNumber: season, Name: "Enriched season", Episodes: []tmdb.TVEpisode{{ID: 1001, SeasonNumber: season, EpisodeNumber: 1, Name: "First", Runtime: 40}, {ID: 1002, SeasonNumber: season, EpisodeNumber: 2, Name: "Second", Runtime: 41}, {ID: 1003, SeasonNumber: season, EpisodeNumber: 3, Name: "Remote only"}}}, nil
+	guest := []tmdb.TVCastCredit{{TVPerson: tmdb.TVPerson{ID: 2, Name: "Guest"}, Character: "Guest"}}
+	return &tmdb.TVSeason{ID: 100 + season, SeasonNumber: season, Name: "Enriched season", Episodes: []tmdb.TVEpisode{{ID: 1001, SeasonNumber: season, EpisodeNumber: 1, Name: "First", Runtime: 40, GuestStars: guest}, {ID: 1002, SeasonNumber: season, EpisodeNumber: 2, Name: "Second", Runtime: 41, GuestStars: guest}, {ID: 1003, SeasonNumber: season, EpisodeNumber: 3, Name: "Remote only"}}}, nil
 }
-func (c *testTMDB) GetEpisodeCredits(_ context.Context, id, season, episode int) (*tmdb.TVEpisodeCredits, error) {
-	c.creditCalls++
-	if c.creditsHook != nil {
-		return c.creditsHook(id, season, episode)
-	}
-	return &tmdb.TVEpisodeCredits{ID: 1000 + episode, GuestStars: []tmdb.TVCastCredit{{TVPerson: tmdb.TVPerson{ID: 2, Name: "Guest"}, Character: "Guest"}}}, nil
-}
-
 func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	s, p, root := setupScanner(t)
 	writeFile(t, root, "Example (2020)/Season 1/S01E01E02.mkv", "file")
@@ -474,23 +466,23 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 		t.Fatal("offline retry markers missing")
 	}
 	client := &testTMDB{}
-	client.creditsHook = func(_, _, ep int) (*tmdb.TVEpisodeCredits, error) {
-		if ep == 2 {
-			return nil, errors.New("offline")
-		}
-		return &tmdb.TVEpisodeCredits{ID: 1001}, nil
+	// A season payload that omits episode 2 leaves that episode pending.
+	client.seasonHook = func(_, season int) (*tmdb.TVSeason, error) {
+		full, _ := (&testTMDB{}).GetSeasonDetails(context.Background(), 0, season)
+		full.Episodes = full.Episodes[:1]
+		return full, nil
 	}
 	s.Tmdb = client
 	scanOK(t, s, root)
-	if p.Calls() != 1 || client.showCalls != 1 || client.seasonCalls != 1 || client.creditCalls != 2 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
+	if p.Calls() != 1 || client.showCalls != 1 || client.seasonCalls != 1 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
 		t.Fatal("partial enrichment counts", client)
 	}
-	if countRows(t, s.DB, "show_cast") != 2 {
-		t.Fatal("aggregate roles collapsed")
+	if countRows(t, s.DB, "show_cast") != 2 || countRows(t, s.DB, "show_episode_guest_cast") != 1 {
+		t.Fatal("aggregate roles collapsed or episode guest cast missing")
 	}
-	client.creditsHook = nil
+	client.seasonHook = nil
 	scanOK(t, s, root)
-	if client.showCalls != 1 || client.seasonCalls != 2 || client.creditCalls != 3 || p.Calls() != 1 {
+	if client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 1 || countRows(t, s.DB, "show_episode_guest_cast") != 2 {
 		t.Fatal("retry repeated successful entity or probe", client, p.Calls())
 	}
 	pending, err := s.Queries.CountShowRetries(context.Background())
@@ -498,7 +490,7 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 		t.Fatal("retry not cleared", pending, err)
 	}
 	scanOK(t, s, root)
-	if client.showCalls != 1 || client.seasonCalls != 2 || client.creditCalls != 3 {
+	if client.showCalls != 1 || client.seasonCalls != 2 {
 		t.Fatal("successful unchanged metadata refreshed")
 	}
 	// A changed file queues all represented owners, and a failed stored-ID
@@ -521,7 +513,7 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 }
 
 func TestMissingEpisodeAndStaleResponse(t *testing.T) {
-	for _, mode := range []string{"missing", "identity", "rollback", "deleted", "credits_id"} {
+	for _, mode := range []string{"missing", "identity", "rollback", "deleted"} {
 		t.Run(mode, func(t *testing.T) {
 			s, _, root := setupScanner(t)
 			writeFile(t, root, "Example/Season 1/S01E01E02.mkv", "file")
@@ -546,8 +538,6 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-			case "credits_id":
-				client.creditsHook = func(int, int, int) (*tmdb.TVEpisodeCredits, error) { return &tmdb.TVEpisodeCredits{ID: 777}, nil }
 			}
 			scanOK(t, s, root)
 			if mode == "deleted" {

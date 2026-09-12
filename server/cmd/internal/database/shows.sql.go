@@ -112,31 +112,6 @@ func (q *Queries) CreateShowCrew(ctx context.Context, arg CreateShowCrewParams) 
 	return err
 }
 
-const createShowEpisodeCast = `-- name: CreateShowEpisodeCast :exec
-INSERT INTO show_episode_cast (episode_id, artist_id, character, cast_order, credit_id, episode_count) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
-`
-
-type CreateShowEpisodeCastParams struct {
-	EpisodeID    int64  `json:"episode_id"`
-	ArtistID     int64  `json:"artist_id"`
-	Character    string `json:"character"`
-	CastOrder    int64  `json:"cast_order"`
-	CreditID     string `json:"credit_id"`
-	EpisodeCount int64  `json:"episode_count"`
-}
-
-func (q *Queries) CreateShowEpisodeCast(ctx context.Context, arg CreateShowEpisodeCastParams) error {
-	_, err := q.exec(ctx, q.createShowEpisodeCastStmt, createShowEpisodeCast,
-		arg.EpisodeID,
-		arg.ArtistID,
-		arg.Character,
-		arg.CastOrder,
-		arg.CreditID,
-		arg.EpisodeCount,
-	)
-	return err
-}
-
 const createShowEpisodeCrew = `-- name: CreateShowEpisodeCrew :exec
 INSERT INTO show_episode_crew (episode_id, artist_id, department, job, credit_id, episode_count) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
 `
@@ -348,15 +323,6 @@ DELETE FROM show_crew WHERE show_id = ?
 
 func (q *Queries) DeleteShowCrew(ctx context.Context, showID int64) error {
 	_, err := q.exec(ctx, q.deleteShowCrewStmt, deleteShowCrew, showID)
-	return err
-}
-
-const deleteShowEpisodeCast = `-- name: DeleteShowEpisodeCast :exec
-DELETE FROM show_episode_cast WHERE episode_id = ?
-`
-
-func (q *Queries) DeleteShowEpisodeCast(ctx context.Context, episodeID int64) error {
-	_, err := q.exec(ctx, q.deleteShowEpisodeCastStmt, deleteShowEpisodeCast, episodeID)
 	return err
 }
 
