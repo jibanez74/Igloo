@@ -173,6 +173,8 @@ type Querier interface {
 	// stored fingerprint and treats a mismatch as a miss.
 	GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (GetKeyframeIndexRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
+	// The home section renders title, poster and year only; certification is
+	// deliberately absent so the row matches the documented LatestMovie exactly.
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	// created_at is written once by UpsertLocalShow, so it orders by first discovery.
 	// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk scan creates.

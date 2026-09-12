@@ -2384,14 +2384,24 @@ export interface components {
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
         };
-        ContinueWatchingMovie: components["schemas"]["LatestMovie"] & {
+        ContinueWatchingMovie: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            poster_path: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
             /** Format: double */
             progress_sec: number;
             /** Format: double */
             duration_sec: number;
         };
-        MovieLibraryItem: components["schemas"]["LatestMovie"] & {
-            certification?: components["schemas"]["SqlNullString"];
+        MovieLibraryItem: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            poster_path: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
+            certification: components["schemas"]["SqlNullString"];
         };
         MoviesLibraryData: {
             movies: components["schemas"]["MovieLibraryItem"][];
@@ -2640,11 +2650,24 @@ export interface components {
             created_at: string;
             updated_at: string;
         };
-        MoviePlaylistSummary: components["schemas"]["MoviePlaylist"] & {
+        MoviePlaylistSummary: {
             /** Format: int64 */
-            movie_count?: number;
-            is_owner?: boolean;
-            can_edit?: boolean;
+            id: number;
+            /** Format: int64 */
+            user_id: number;
+            name: string;
+            description: components["schemas"]["SqlNullString"];
+            cover_image: components["schemas"]["SqlNullString"];
+            is_public: boolean;
+            movie_id: components["schemas"]["SqlNullInt64"];
+            /** @constant */
+            content_type: "movie";
+            created_at: string;
+            updated_at: string;
+            is_owner: boolean;
+            can_edit: boolean;
+            /** Format: int64 */
+            movie_count: number;
         };
         CreateMoviePlaylistRequest: {
             name: string;

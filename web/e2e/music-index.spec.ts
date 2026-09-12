@@ -17,6 +17,7 @@ import {
   fulfillJSON,
   nullableInt64,
   nullableString,
+  fulfillIdleScanStatus,
 } from "./e2e-api";
 
 type CreatePlaylistRequest = {
@@ -227,6 +228,10 @@ async function mockMusicIndexApi(
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     const method = route.request().method();
+
+    if (await fulfillIdleScanStatus(route, url.pathname)) {
+      return;
+    }
 
     if (url.pathname === "/api/auth/user") {
       await fulfillJSON(route, apiResponse({
