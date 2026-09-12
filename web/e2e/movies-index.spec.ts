@@ -13,6 +13,7 @@ import {
   nullableFloat64,
   nullableInt64,
   nullableString,
+  fulfillIdleScanStatus,
 } from "./e2e-api";
 
 type CreateMoviePlaylistRequest = {
@@ -233,6 +234,10 @@ async function mockMoviesApi(
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
     const method = route.request().method();
+
+    if (await fulfillIdleScanStatus(route, url.pathname)) {
+      return;
+    }
 
     if (url.pathname.startsWith("/api/tmdb/images/")) {
       await route.fulfill({
