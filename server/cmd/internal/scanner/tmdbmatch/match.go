@@ -215,7 +215,7 @@ func isBracketedReleaseGroupToken(token string) bool {
 }
 
 func isTechnicalToken(token string) bool {
-	if strings.Contains(token, "aac") || strings.Contains(token, "x26") || strings.Contains(token, "h26") {
+	if token == "aac" || strings.HasPrefix(token, "x26") || strings.HasPrefix(token, "h26") {
 		return true
 	}
 

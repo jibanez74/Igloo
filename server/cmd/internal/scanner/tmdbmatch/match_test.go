@@ -97,6 +97,7 @@ func TestNormalizeTitleForSearch(t *testing.T) {
 		{input: "Rabbit.Hole.2010.720p.8bit", want: "rabbit hole 2010"},
 		{input: "Orbit.2022.10bit", want: "orbit 2022"},
 		{input: "Gambit.2012.8bit", want: "gambit 2012"},
+		{input: "The.Isaac.Story.2020.1080p.AAC.x264", want: "the isaac story 2020"},
 	}
 
 	for _, tt := range tests {

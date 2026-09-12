@@ -370,6 +370,8 @@ func (s *Scanner) lookupShow(ctx context.Context, breaker *providerBreaker, show
 			}
 			noMatch := errors.Is(err, tmdb.ErrNoShowsFound)
 			if noMatch {
+				// A definitive answer from the provider is a healthy response.
+				breaker.observe(nil)
 				continue
 			}
 			breaker.observe(err)

@@ -120,6 +120,29 @@ func TestShowEnrichmentCircuitBreaker(t *testing.T) {
 	}
 }
 
+// A definitive no-match between transient failures is a healthy provider
+// answer: it resets the consecutive count, so alternating outcomes never trip
+// the breaker.
+func TestShowEnrichmentBreakerResetsOnNoMatch(t *testing.T) {
+	s, _, root := setupScanner(t)
+	for _, show := range []string{"A", "B", "C", "D", "E"} {
+		writeFile(t, root, show+"/Season 1/S01E01.mkv", show)
+	}
+	client := &testTMDB{}
+	client.searchHook = func(string, int) ([]tmdb.TVShow, error) {
+		if client.searchCalls%2 == 1 {
+			return nil, &tmdb.StatusError{StatusCode: http.StatusServiceUnavailable}
+		}
+		return nil, tmdb.ErrNoShowsFound
+	}
+	s.Tmdb = client
+	scanOK(t, s, root)
+	status := s.Status()
+	if client.searchCalls != 5 || status.EnrichmentFailed != 3 || status.EnrichmentUnmatched != 2 || status.EnrichmentProcessed != 5 {
+		t.Fatalf("alternating outcomes tripped the breaker: searches=%d %+v", client.searchCalls, status)
+	}
+}
+
 // A failed season response fails the season and every pending episode that
 // depended on it, once, with one issue naming the season.
 func TestShowSeasonFailureCountsDependents(t *testing.T) {

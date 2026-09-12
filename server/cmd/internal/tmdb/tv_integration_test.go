@@ -117,7 +117,7 @@ func TestTVMetadataIntegration(t *testing.T) {
 		if pilot.ID == 0 {
 			t.Fatal("cannot check credits without the season's episode 1")
 		}
-		if pilot.GuestStars == nil || len(pilot.Crew) == 0 {
+		if len(pilot.GuestStars) == 0 || len(pilot.Crew) == 0 {
 			t.Fatal("season payload is missing episode guest stars or crew")
 		}
 		for _, cast := range pilot.GuestStars {
