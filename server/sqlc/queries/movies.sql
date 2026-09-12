@@ -51,12 +51,13 @@ LEFT JOIN movie_file_fingerprints f ON f.movie_id = c.id
 LEFT JOIN movie_tmdb_retries r ON r.movie_id = c.id;
 
 -- name: GetLatestMovies :many
+-- The home section renders title, poster and year only; certification is
+-- deliberately absent so the row matches the documented LatestMovie exactly.
 SELECT
   id,
   title,
   poster_path,
-  year,
-  certification
+  year
 FROM movies
 ORDER BY created_at DESC
 LIMIT 12;

@@ -8444,43 +8444,68 @@
         "additionalProperties": false
       },
       "ContinueWatchingMovie": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/LatestMovie"
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "poster_path",
+          "year",
+          "progress_sec",
+          "duration_sec"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
           },
-          {
-            "type": "object",
-            "required": [
-              "progress_sec",
-              "duration_sec"
-            ],
-            "properties": {
-              "progress_sec": {
-                "type": "number",
-                "format": "double"
-              },
-              "duration_sec": {
-                "type": "number",
-                "format": "double"
-              }
-            }
+          "title": {
+            "type": "string"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "progress_sec": {
+            "type": "number",
+            "format": "double"
+          },
+          "duration_sec": {
+            "type": "number",
+            "format": "double"
           }
-        ]
+        },
+        "additionalProperties": false
       },
       "MovieLibraryItem": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/LatestMovie"
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "poster_path",
+          "year",
+          "certification"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
           },
-          {
-            "type": "object",
-            "properties": {
-              "certification": {
-                "$ref": "#/components/schemas/SqlNullString"
-              }
-            }
+          "title": {
+            "type": "string"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "certification": {
+            "$ref": "#/components/schemas/SqlNullString"
           }
-        ]
+        },
+        "additionalProperties": false
       },
       "MoviesLibraryData": {
         "type": "object",
@@ -9409,26 +9434,68 @@
         "additionalProperties": false
       },
       "MoviePlaylistSummary": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/MoviePlaylist"
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "description",
+          "cover_image",
+          "is_public",
+          "movie_id",
+          "content_type",
+          "created_at",
+          "updated_at",
+          "is_owner",
+          "can_edit",
+          "movie_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
           },
-          {
-            "type": "object",
-            "properties": {
-              "movie_count": {
-                "type": "integer",
-                "format": "int64"
-              },
-              "is_owner": {
-                "type": "boolean"
-              },
-              "can_edit": {
-                "type": "boolean"
-              }
-            }
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "cover_image": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "movie_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "content_type": {
+            "type": "string",
+            "const": "movie"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "can_edit": {
+            "type": "boolean"
+          },
+          "movie_count": {
+            "type": "integer",
+            "format": "int64"
           }
-        ]
+        },
+        "additionalProperties": false
       },
       "CreateMoviePlaylistRequest": {
         "type": "object",
