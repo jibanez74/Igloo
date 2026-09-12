@@ -732,6 +732,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shows/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List latest TV shows
+         * @description Returns the most recently discovered shows, newest first.
+         */
+        get: operations["getLatestShows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/movies/continue-watching": {
         parameters: {
             query?: never;
@@ -2401,6 +2421,19 @@ export interface components {
                 movies: components["schemas"]["LatestMovie"][];
             };
         };
+        LatestShow: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            poster_path: components["schemas"]["SqlNullString"];
+            premiere_year: components["schemas"]["SqlNullInt64"];
+        };
+        LatestShowsData: {
+            shows: components["schemas"]["LatestShow"][];
+        };
+        LatestShowsEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["LatestShowsData"];
+        };
         ContinueWatchingMoviesEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 movies: components["schemas"]["ContinueWatchingMovie"][];
@@ -3818,6 +3851,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["LatestMoviesEnvelope"];
+            };
+        };
+        /** @description Latest TV shows response. */
+        LatestShowsResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["LatestShowsEnvelope"];
             };
         };
         /** @description Continue watching movies response. */
@@ -5791,6 +5833,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["LatestMoviesResponse"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getLatestShows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LatestShowsResponse"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
         };

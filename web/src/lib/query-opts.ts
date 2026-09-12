@@ -11,6 +11,7 @@ import {
   getPlaybackSettings,
   getLatestAlbums,
   getLatestMovies,
+  getLatestShows,
   getLikedMovies,
   getLikedTracks,
   getLikedTrackIds,
@@ -66,6 +67,7 @@ import {
   PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
+  LATEST_SHOWS_KEY,
   CONTINUE_WATCHING_KEY,
   SPOTIFY_STATUS_KEY,
   TMDB_STATUS_KEY,
@@ -212,6 +214,15 @@ export function latestMoviesQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_MOVIES_KEY],
     queryFn: getLatestMovies,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
+  });
+}
+
+export function latestShowsQueryOpts() {
+  return queryOptions({
+    queryKey: [LATEST_SHOWS_KEY],
+    queryFn: getLatestShows,
     staleTime: STALE_CATALOG,
     gcTime: GC_LONG,
   });

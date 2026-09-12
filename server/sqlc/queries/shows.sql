@@ -1,6 +1,11 @@
 -- name: GetShow :one
 SELECT * FROM shows WHERE id = ?;
 
+-- name: GetLatestShows :many
+-- created_at is written once by UpsertLocalShow, so it orders by first discovery.
+-- CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk scan creates.
+SELECT id, name, poster_path, premiere_year FROM shows ORDER BY created_at DESC, id DESC LIMIT 12;
+
 -- name: UpsertLocalShow :one
 INSERT INTO shows (directory_path, local_name, premiere_year, name) VALUES (?, ?, ?, ?) ON CONFLICT (directory_path) DO UPDATE SET id = shows.id RETURNING *;
 

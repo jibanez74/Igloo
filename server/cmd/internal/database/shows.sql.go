@@ -490,6 +490,47 @@ func (q *Queries) DeleteShowSeasonExtraVideo(ctx context.Context, seasonID int64
 	return err
 }
 
+const getLatestShows = `-- name: GetLatestShows :many
+SELECT id, name, poster_path, premiere_year FROM shows ORDER BY created_at DESC, id DESC LIMIT 12
+`
+
+type GetLatestShowsRow struct {
+	ID           int64          `json:"id"`
+	Name         string         `json:"name"`
+	PosterPath   sql.NullString `json:"poster_path"`
+	PremiereYear sql.NullInt64  `json:"premiere_year"`
+}
+
+// created_at is written once by UpsertLocalShow, so it orders by first discovery.
+// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk scan creates.
+func (q *Queries) GetLatestShows(ctx context.Context) ([]GetLatestShowsRow, error) {
+	rows, err := q.query(ctx, q.getLatestShowsStmt, getLatestShows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetLatestShowsRow{}
+	for rows.Next() {
+		var i GetLatestShowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PremiereYear,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPendingShows = `-- name: GetPendingShows :many
 SELECT s.id, s.directory_path, s.local_name, s.premiere_year, s.name, s.tmdb_id, s.imdb_id, s.original_name, s.overview, s.tagline, s.language, s.origin_countries, s.first_air_date, s.last_air_date, s.status, s.type, s.adult, s.poster_path, s.backdrop_path, s.homepage, s.vote_average, s.vote_count, s.popularity, s.certification, s.tmdb_season_count, s.tmdb_episode_count, s.created_at, s.updated_at FROM shows s WHERE s.id > ?1 AND (
  EXISTS (SELECT 1 FROM show_tmdb_retries r WHERE r.show_id = s.id) OR

@@ -109,6 +109,22 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
       });
     }
 
+    if (url === "/api/shows/latest") {
+      return jsonResponse({
+        error: false,
+        data: {
+          shows: [
+            {
+              id: 301,
+              name: "Frost Harbor",
+              poster_path: { String: "", Valid: false },
+              premiere_year: { Int64: 2025, Valid: true },
+            },
+          ],
+        },
+      });
+    }
+
     if (url === "/api/music/albums/latest") {
       return jsonResponse({
         error: false,
@@ -156,6 +172,7 @@ describe("home route motion", () => {
       "Watch Rooms",
       "Continue Watching",
       "Recently Added Movies",
+      "Recently Added Shows",
       "Recently Added Albums",
       "Now Playing in Theaters",
     ]) {
@@ -182,6 +199,12 @@ describe("home section summaries", () => {
     // Count badges for the single-item sections render the singular noun.
     expect(screen.getAllByText("1 movie").length).toBeGreaterThan(0);
     expect(screen.queryByText(/1 movies/)).not.toBeInTheDocument();
+
+    expect(
+      screen.getByText("1 show available in recently added shows."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("1 show").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/1 shows/)).not.toBeInTheDocument();
   });
 });
 

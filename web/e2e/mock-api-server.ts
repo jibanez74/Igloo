@@ -234,6 +234,21 @@ const latestAlbums = [
   },
 ];
 
+const latestShows = [
+  {
+    id: 401,
+    name: "Frost Harbor",
+    poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
+    premiere_year: nullableInt(2026),
+  },
+  {
+    id: 402,
+    name: "Halcyon Drift",
+    poster_path: nullableString("/api/static/shows/halcyon-drift.svg"),
+    premiere_year: nullableInt(2024),
+  },
+];
+
 const musicians = [
   {
     id: 301,
@@ -1226,6 +1241,21 @@ async function handleSettingsRoutes(
   return false;
 }
 
+function handleShowsRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/shows/latest" && method === "GET") {
+    sendSuccess(response, { shows: latestShows });
+    return true;
+  }
+
+  return false;
+}
+
 function handleMoviesRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1566,6 +1596,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
       if (await handleSettingsRoutes(request, response, url, user)) return;
       if (handleMoviesRoutes(request, response, url)) return;
+      if (handleShowsRoutes(request, response, url)) return;
       if (handleMusicRoutes(request, response, url)) return;
       if (handleTmdbRoutes(request, response, url)) return;
       if (handleWatchRoomRoutes(request, response, url)) return;

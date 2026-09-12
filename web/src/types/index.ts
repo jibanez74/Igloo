@@ -84,6 +84,9 @@ export type {
   UpdateMovieMetadataRequest,
 } from "./movies";
 
+// TV show types
+export type { LatestShowType, LatestShowsDataType } from "./shows";
+
 // Audio player types
 export type {
   AlbumInfoType,

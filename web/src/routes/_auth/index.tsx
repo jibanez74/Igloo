@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   continueWatchingQueryOpts,
   latestMoviesQueryOpts,
+  latestShowsQueryOpts,
   latestAlbumsQueryOpts,
   inTheatersQueryOpts,
   watchRoomsQueryOpts,
@@ -10,6 +11,7 @@ import { Home } from "lucide-react";
 import ContinueWatching from "@/components/home/ContinueWatching";
 import LatestAlbums from "@/components/home/LatestAlbums";
 import LatestMovies from "@/components/home/LatestMovies";
+import LatestShows from "@/components/home/LatestShows";
 import MoviesInTheaters from "@/components/home/MoviesInTheaters";
 import WatchRooms from "@/components/watch-room/WatchRooms";
 import { MOTION_SECTION_ENTER_CLASS } from "@/lib/constants";
@@ -27,6 +29,7 @@ export const Route = createFileRoute("/_auth/")({
       queryClient.ensureQueryData(watchRoomsQueryOpts()),
       queryClient.ensureQueryData(continueWatchingQueryOpts()),
       queryClient.ensureQueryData(latestMoviesQueryOpts()),
+      queryClient.ensureQueryData(latestShowsQueryOpts()),
       queryClient.ensureQueryData(latestAlbumsQueryOpts()),
       queryClient.ensureQueryData(inTheatersQueryOpts()),
     ]);
@@ -70,6 +73,7 @@ function HomePage() {
       <WatchRooms />
       <ContinueWatching />
       <LatestMovies />
+      <LatestShows />
       <LatestAlbums />
       <MoviesInTheaters />
     </div>

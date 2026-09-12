@@ -176,6 +176,9 @@ type Querier interface {
 	// The home section renders title, poster and year only; certification is
 	// deliberately absent so the row matches the documented LatestMovie exactly.
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
+	// created_at is written once by UpsertLocalShow, so it orders by first discovery.
+	// CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk scan creates.
+	GetLatestShows(ctx context.Context) ([]GetLatestShowsRow, error)
 	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)
 	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
