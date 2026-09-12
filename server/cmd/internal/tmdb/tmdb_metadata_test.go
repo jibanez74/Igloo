@@ -599,6 +599,17 @@ func TestProviderStatusClassificationThroughHTTP(t *testing.T) {
 	}
 }
 
+// A definitive no-match from either catalog is not a provider failure, so it
+// never counts toward a scanner's circuit breaker.
+func TestProviderFailureIgnoresNoMatchSentinels(t *testing.T) {
+	for _, err := range []error{ErrNoMoviesFound, ErrNoShowsFound, nil} {
+		authentication, transient := ProviderFailure(err)
+		if authentication || transient {
+			t.Fatalf("%v classified as a provider failure", err)
+		}
+	}
+}
+
 func TestCancelBlockedMovieRequest(t *testing.T) {
 	entered := make(chan struct{})
 	stopped := make(chan struct{})

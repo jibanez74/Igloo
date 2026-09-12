@@ -1,7 +1,6 @@
 package movie
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -9,26 +8,16 @@ import (
 	"math"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/tmdbmatch"
 	"igloo/cmd/internal/tmdb"
-)
-
-// TMDB no-match backoff: after a second definitive miss, each further miss
-// doubles the wait before the movie is searched again, so an unidentifiable
-// file does not cost a lookup on every scan. Provider failures are not misses.
-const (
-	tmdbMissBackoff    = 24 * time.Hour
-	tmdbMissBackoffMax = 7 * 24 * time.Hour
-	tmdbLookupTimeout  = 30 * time.Second
 )
 
 type movieScanEntry struct {
@@ -48,19 +37,9 @@ func (e movieScanEntry) pendingEnrichment() bool {
 	return e.PendingRetry || !e.TmdbID.Valid
 }
 
-// enrichmentEligible grants the first miss a retry on the next scan; from the
-// second miss on, the wait doubles from tmdbMissBackoff up to tmdbMissBackoffMax.
+// enrichmentEligible applies the shared miss backoff to a pending movie.
 func (e movieScanEntry) enrichmentEligible(now time.Time) bool {
-	if !e.pendingEnrichment() {
-		return false
-	}
-	if e.RetryAttempts <= 1 || !e.LastAttemptAt.Valid {
-		return true
-	}
-	shift := min(e.RetryAttempts-2, 8)
-	backoff := min(tmdbMissBackoff<<shift, tmdbMissBackoffMax)
-	eligibleAt := time.Unix(e.LastAttemptAt.Int64, 0).Add(backoff)
-	return !now.Before(eligibleAt)
+	return e.pendingEnrichment() && scanner.MissBackoffElapsed(e.RetryAttempts, e.LastAttemptAt, now)
 }
 
 type movieScanContext struct {
@@ -220,23 +199,23 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 	if s.tmdb == nil {
 		return nil, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, tmdbLookupTimeout)
+	ctx, cancel := context.WithTimeout(ctx, scanner.TmdbLookupTimeout)
 	defer cancel()
 	movie := &tmdb.TmdbMovie{TmdbID: int(identity.Int64)}
 	if !identity.Valid {
-		interpretations := []movieSearch{{searchTitle, year}}
+		interpretations := []tmdbmatch.Interpretation{{Title: searchTitle, Year: year}}
 		fullTitle := ambiguousFullTitle(path, year)
 		if fullTitle != "" {
-			interpretations = append(interpretations, movieSearch{fullTitle, 0})
+			interpretations = append(interpretations, tmdbmatch.Interpretation{Title: fullTitle})
 		}
-		candidates := make(map[int]*TMDBMovieMatch)
+		var candidates tmdbmatch.Candidates
 		var searchErr error
 		for _, interpretation := range interpretations {
 			contextErr := ctx.Err()
 			if contextErr != nil {
 				return nil, contextErr
 			}
-			results, err := s.tmdb.SearchMoviesByTitleAndYear(ctx, interpretation.title, interpretation.year)
+			results, err := s.tmdb.SearchMoviesByTitleAndYear(ctx, interpretation.Title, interpretation.Year)
 			contextErr = ctx.Err()
 			if contextErr != nil {
 				return nil, contextErr
@@ -253,29 +232,14 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 				continue
 			}
 			for _, target := range interpretations {
-				ranked := RankTMDBMovies(results, target.title, target.year)
-				for _, match := range ranked {
-					id := match.Movie.TmdbID
-					if id <= 0 {
-						continue
-					}
-					previous, exists := candidates[id]
-					if !exists || compareTmdbMatches(match, previous) < 0 {
-						candidates[id] = match
-					}
-				}
+				candidates.Add(tmdbmatch.Rank(results, target.Title, target.Year))
 			}
 		}
-		ranked := make([]*TMDBMovieMatch, 0, len(candidates))
-		for _, candidate := range candidates {
-			ranked = append(ranked, candidate)
-		}
-
-		slices.SortFunc(ranked, compareTmdbMatches)
-		if len(ranked) == 0 {
+		best := candidates.Best()
+		if best == nil {
 			return nil, searchErr
 		}
-		movie = ranked[0].Movie
+		movie = best.Movie
 	}
 	contextErr := ctx.Err()
 	if contextErr != nil {
@@ -292,11 +256,6 @@ func (s *Scanner) lookupTmdbMovie(ctx context.Context, path, searchTitle string,
 	return movie, nil
 }
 
-type movieSearch struct {
-	title string
-	year  int
-}
-
 var parenthesizedYear = regexp.MustCompile(`\(\s*[0-9]{4}\s*\)`)
 
 func ambiguousFullTitle(path string, year int) string {
@@ -304,7 +263,7 @@ func ambiguousFullTitle(path string, year int) string {
 		return ""
 	}
 	base := filepath.Base(path)
-	full := NormalizeTitleForSearch(strings.TrimSuffix(base, filepath.Ext(base)))
+	full := tmdbmatch.NormalizeTitleForSearch(strings.TrimSuffix(base, filepath.Ext(base)))
 	count := 0
 	for _, token := range strings.Fields(full) {
 		number, err := strconv.Atoi(token)
@@ -316,233 +275,4 @@ func ambiguousFullTitle(path string, year int) string {
 		return full
 	}
 	return ""
-}
-
-func compareTmdbMatches(a, b *TMDBMovieMatch) int {
-	if a.Score != b.Score {
-		return cmp.Compare(b.Score, a.Score)
-	}
-	if a.Movie.Title != b.Movie.Title {
-		return strings.Compare(a.Movie.Title, b.Movie.Title)
-	}
-	return cmp.Compare(a.Movie.TmdbID, b.Movie.TmdbID)
-}
-
-func extractYearFromReleaseDate(releaseDate string) int {
-	if releaseDate == "" {
-		return 0
-	}
-
-	parsed, err := helpers.ParseDate(releaseDate)
-	if err != nil {
-		return 0
-	}
-
-	return parsed.Year()
-}
-
-// ---------------------------------------------------------------------------
-// TMDB match ranking
-// ---------------------------------------------------------------------------
-
-const tmdbYearMatchScore = 20.0
-
-type TMDBMovieMatch struct {
-	Movie      *tmdb.TmdbMovie
-	Score      float64
-	Confidence float64
-}
-
-// RankTMDBMovies orders TMDB results by the scanner's title and year score.
-func RankTMDBMovies(results []tmdb.TmdbMovie, targetTitle string, targetYear int) []*TMDBMovieMatch {
-	if len(results) == 0 {
-		return nil
-	}
-
-	normalizedTarget := normalizeComparableMovieTitle(targetTitle)
-	targetSequel := sequelIndicator(normalizedTarget)
-
-	scoredMatches := make([]*TMDBMovieMatch, 0, len(results))
-	for i := range results {
-		movie := &results[i]
-		score := scoreTmdbCandidate(normalizedTarget, targetSequel, targetYear, movie)
-		scoredMatches = append(scoredMatches, &TMDBMovieMatch{
-			Movie:      movie,
-			Score:      score,
-			Confidence: clampTmdbConfidence(score),
-		})
-	}
-
-	slices.SortFunc(scoredMatches, compareTmdbMatches)
-
-	return scoredMatches
-}
-
-// scoreTmdbCandidate scores one candidate against an already-normalized target
-// title and its sequel indicator, both of which are loop-invariant across a
-// ranking pass.
-func scoreTmdbCandidate(normalizedTarget, targetSequel string, targetYear int, movie *tmdb.TmdbMovie) float64 {
-	normalizedTitle := normalizeComparableMovieTitle(movie.Title)
-	normalizedOriginalTitle := normalizeComparableMovieTitle(movie.OriginalTitle)
-
-	score := 0.0
-
-	switch {
-	case normalizedTitle == normalizedTarget:
-		score += 60
-	case normalizedOriginalTitle == normalizedTarget:
-		score += 56
-	case normalizedTarget != "" && (strings.Contains(normalizedTitle, normalizedTarget) || strings.Contains(normalizedTarget, normalizedTitle)):
-		score += 38
-	}
-
-	score += tokenOverlapScore(normalizedTarget, normalizedTitle) * 35
-	score += tokenOverlapScore(normalizedTarget, normalizedOriginalTitle) * 20
-
-	if targetSequel != "" && targetSequel == sequelIndicator(normalizedTitle) {
-		score += 8
-	} else if targetSequel != "" {
-		score -= 12
-	}
-
-	movieYear := extractYearFromReleaseDate(movie.ReleaseDate)
-	if targetYear > 0 {
-		switch {
-		case movieYear == targetYear:
-			score += tmdbYearMatchScore
-		case movieYear > 0 && absInt(movieYear-targetYear) == 1:
-			score += 12
-		case movieYear > 0:
-			score -= 15
-		}
-	}
-
-	score += min(movie.Popularity/25, 8)
-	score += min(movie.VoteAverage/2, 5)
-
-	return score
-}
-
-// Replacers are immutable and build a trie on construction, so they are built
-// once here rather than per call: ranking a 20-result TMDB search normalizes
-// titles dozens of times per scanned file.
-var (
-	audioLayoutReplacer    = strings.NewReplacer("5.1", " ", "7.1", " ", "2.0", " ")
-	titleSeparatorReplacer = strings.NewReplacer(".", " ", "_", " ", "-", " ", "(", " ", ")", " ", "[", " ", "]", " ")
-)
-
-// NormalizeTitleForSearch removes filename release noise before a TMDB search.
-func NormalizeTitleForSearch(title string) string {
-	title = audioLayoutReplacer.Replace(title)
-	normalized := titleSeparatorReplacer.Replace(strings.ToLower(strings.TrimSpace(title)))
-	tokens := strings.Fields(normalized)
-	cleaned := make([]string, 0, len(tokens))
-	for _, token := range tokens {
-		token = strings.Trim(token, ".,!?:;'+\"")
-		token = strings.ReplaceAll(token, "'", "")
-		token = strings.ReplaceAll(token, "-", "")
-		if token == "" {
-			continue
-		}
-		if helpers.IsMovieReleaseNoiseToken(token) {
-			continue
-		}
-		if isBracketedReleaseGroupToken(token) {
-			continue
-		}
-		if isTechnicalToken(token) {
-			continue
-		}
-		cleaned = append(cleaned, token)
-	}
-	return strings.Join(cleaned, " ")
-}
-
-func normalizeComparableMovieTitle(title string) string {
-	title = NormalizeTitleForSearch(title)
-	var b strings.Builder
-	for _, r := range title {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' {
-			b.WriteRune(r)
-		}
-	}
-	return strings.Join(strings.Fields(b.String()), " ")
-}
-
-func isBracketedReleaseGroupToken(token string) bool {
-	return strings.HasPrefix(token, "yts") || strings.HasPrefix(token, "rarbg")
-}
-
-func isTechnicalToken(token string) bool {
-	if strings.Contains(token, "aac") || strings.Contains(token, "x26") || strings.Contains(token, "h26") {
-		return true
-	}
-
-	bitDepth := strings.TrimSuffix(token, "bit")
-	if bitDepth != token && len(bitDepth) >= 1 && len(bitDepth) <= 2 {
-		for _, digit := range bitDepth {
-			if digit < '0' || digit > '9' {
-				return false
-			}
-		}
-		return true
-	}
-
-	return false
-}
-
-func tokenOverlapScore(a, b string) float64 {
-	if a == "" || b == "" {
-		return 0
-	}
-
-	aTokens := strings.Fields(a)
-	bTokens := strings.Fields(b)
-	if len(aTokens) == 0 || len(bTokens) == 0 {
-		return 0
-	}
-
-	seen := make(map[string]bool)
-	for _, token := range aTokens {
-		seen[token] = true
-	}
-
-	matches := 0
-	for _, token := range bTokens {
-		if seen[token] {
-			matches++
-		}
-	}
-
-	denominator := max(len(aTokens), len(bTokens))
-	return float64(matches) / float64(denominator)
-}
-
-func clampTmdbConfidence(score float64) float64 {
-	switch {
-	case score < 0:
-		return 0
-	case score > 100:
-		return 100
-	default:
-		return score
-	}
-}
-
-func sequelIndicator(title string) string {
-	tokens := strings.Fields(title)
-	for _, token := range tokens {
-		switch token {
-		case "2", "ii", "3", "iii", "4", "iv", "5", "v":
-			return token
-		}
-	}
-	return ""
-}
-
-func absInt(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
 }

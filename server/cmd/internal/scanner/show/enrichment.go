@@ -6,12 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner"
-	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/tmdbmatch"
 	"igloo/cmd/internal/tmdb"
 )
 
@@ -228,19 +227,13 @@ func (s *Scanner) lookupShow(ctx context.Context, show database.Show) (*tmdb.TVS
 	id := int(show.TmdbID.Int64)
 	if !show.TmdbID.Valid {
 		title, year, full := parseShowTitle(filepath.Base(show.DirectoryPath))
-		interpretations := []struct {
-			title string
-			year  int
-		}{{movie.NormalizeTitleForSearch(title), year}}
+		interpretations := []tmdbmatch.Interpretation{{Title: tmdbmatch.NormalizeTitleForSearch(title), Year: year}}
 		if full != "" {
-			interpretations = append(interpretations, struct {
-				title string
-				year  int
-			}{movie.NormalizeTitleForSearch(full), 0})
+			interpretations = append(interpretations, tmdbmatch.Interpretation{Title: tmdbmatch.NormalizeTitleForSearch(full)})
 		}
-		candidates := map[int]*movie.TMDBMovieMatch{}
+		var candidates tmdbmatch.Candidates
 		for _, query := range interpretations {
-			results, err := s.Tmdb.SearchShowsByTitleAndYear(ctx, query.title, query.year)
+			results, err := s.Tmdb.SearchShowsByTitleAndYear(ctx, query.Title, query.Year)
 			contextErr := ctx.Err()
 			if contextErr != nil {
 				return nil, contextErr
@@ -250,29 +243,17 @@ func (s *Scanner) lookupShow(ctx context.Context, show database.Show) (*tmdb.TVS
 			}
 			mapped := make([]tmdb.TmdbMovie, 0, len(results))
 			for _, r := range results {
-				if r.ID > 0 {
-					mapped = append(mapped, tmdb.TmdbMovie{TmdbID: r.ID, Title: r.Name, OriginalTitle: r.OriginalName, ReleaseDate: r.FirstAirDate, Popularity: r.Popularity, VoteAverage: r.VoteAverage})
-				}
+				mapped = append(mapped, tmdb.TmdbMovie{TmdbID: r.ID, Title: r.Name, OriginalTitle: r.OriginalName, ReleaseDate: r.FirstAirDate, Popularity: r.Popularity, VoteAverage: r.VoteAverage})
 			}
 			for _, target := range interpretations {
-				for _, match := range movie.RankTMDBMovies(mapped, target.title, target.year) {
-					previous, exists := candidates[match.Movie.TmdbID]
-					betterMatch := !exists || compareMatches(match, previous) < 0
-					if betterMatch {
-						candidates[match.Movie.TmdbID] = match
-					}
-				}
+				candidates.Add(tmdbmatch.Rank(mapped, target.Title, target.Year))
 			}
 		}
-		ranked := make([]*movie.TMDBMovieMatch, 0, len(candidates))
-		for _, candidate := range candidates {
-			ranked = append(ranked, candidate)
-		}
-		slices.SortFunc(ranked, compareMatches)
-		if len(ranked) == 0 {
+		best := candidates.Best()
+		if best == nil {
 			return nil, tmdb.ErrNoShowsFound
 		}
-		id = ranked[0].Movie.TmdbID
+		id = best.Movie.TmdbID
 	}
 	result, err := s.Tmdb.GetShowDetails(ctx, id)
 	if err != nil {
@@ -283,24 +264,6 @@ func (s *Scanner) lookupShow(ctx context.Context, show database.Show) (*tmdb.TVS
 		return nil, fmt.Errorf("invalid TMDB show identity %d", id)
 	}
 	return result, nil
-}
-func compareMatches(a, b *movie.TMDBMovieMatch) int {
-	if a.Score > b.Score {
-		return -1
-	}
-	if a.Score < b.Score {
-		return 1
-	}
-	if a.Movie.Title != b.Movie.Title {
-		return strings.Compare(a.Movie.Title, b.Movie.Title)
-	}
-	if a.Movie.TmdbID < b.Movie.TmdbID {
-		return -1
-	}
-	if a.Movie.TmdbID > b.Movie.TmdbID {
-		return 1
-	}
-	return 0
 }
 
 // seasonName and episodeName label enrichment issues with catalog coordinates

@@ -35,33 +35,18 @@ func (s *Scanner) scan(directory string) error {
 	return nil
 }
 
-// testProbe counts probes so rescans can assert that unchanged files are not
-// re-probed; scannertest.Probe has no counter.
-type testProbe struct {
-	scannertest.NoKeyframeProbe
-	calls int
-	hook  func(context.Context, string) (*ffprobe.FfprobeResult, error)
-}
-
-func (p *testProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	return p.GetMetadata(ctx, path)
-}
-
-func (p *testProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	p.calls++
-	if p.hook != nil {
-		return p.hook(ctx, path)
-	}
+func defaultProbeResult() *ffprobe.FfprobeResult {
 	var result ffprobe.FfprobeResult
 	result.Format.Duration = "3600.5"
 	result.Streams = []ffprobe.Stream{{Index: 3, CodecType: "video", CodecName: "h264", Width: 1920, Height: 1080}, {Index: 5, CodecType: "audio", CodecName: "aac", Channels: 2}, {Index: 7, CodecType: "subtitle", CodecName: "subrip"}}
-	return &result, nil
+	return &result
 }
-func setupScanner(t *testing.T) (*Scanner, *testProbe, string) {
+
+func setupScanner(t *testing.T) (*Scanner, *scannertest.CountingProbe, string) {
 	t.Helper()
 	db, q := testDB(t)
 	root := t.TempDir()
-	probe := &testProbe{}
+	probe := &scannertest.CountingProbe{Default: defaultProbeResult()}
 	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
 	return s, probe, root
 }
@@ -176,8 +161,8 @@ func TestNumericTitlesAndResolutionsReachProbing(t *testing.T) {
 	}
 	conflict := writeFile(t, root, "Show/Season 1/S01E01 1x03 [1920x1080].mkv", "conflict")
 	scanOK(t, s, root)
-	if probe.calls != len(files) || countRows(t, s.DB, "show_files") != len(files) || countRows(t, s.DB, "show_episode_files") != len(files) {
-		t.Fatalf("expected two probed and linked files, got %d probes", probe.calls)
+	if probe.Calls() != len(files) || countRows(t, s.DB, "show_files") != len(files) || countRows(t, s.DB, "show_episode_files") != len(files) {
+		t.Fatalf("expected two probed and linked files, got %d probes", probe.Calls())
 	}
 	for _, file := range files {
 		var season, episode int
@@ -209,8 +194,8 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 		writeFile(t, root, path, "ignore")
 	}
 	scanOK(t, s, root)
-	if probe.calls != 3 || countRows(t, s.DB, "show_files") != 3 || countRows(t, s.DB, "show_episodes") != 4 || countRows(t, s.DB, "show_episode_files") != 5 {
-		t.Fatal("wrong physical/logical counts", probe.calls)
+	if probe.Calls() != 3 || countRows(t, s.DB, "show_files") != 3 || countRows(t, s.DB, "show_episodes") != 4 || countRows(t, s.DB, "show_episode_files") != 5 {
+		t.Fatal("wrong physical/logical counts", probe.Calls())
 	}
 	before, err := s.Queries.GetShowFileByPath(context.Background(), combined)
 	if err != nil {
@@ -224,7 +209,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 		t.Fatal("guessed episode metadata")
 	}
 	scanOK(t, s, root)
-	if probe.calls != 3 {
+	if probe.Calls() != 3 {
 		t.Fatal("unchanged scan probed")
 	}
 	// Same bytes and changed filesystem metadata only update the fingerprint.
@@ -234,7 +219,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanOK(t, s, root)
-	if probe.calls != 3 {
+	if probe.Calls() != 3 {
 		t.Fatal("fingerprint-only update probed")
 	}
 	writeFile(t, root, "Example (2020)/Season 1/S01E01-E03.mkv", "different bytes")
@@ -247,7 +232,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.calls != 4 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
+	if probe.Calls() != 4 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
 		t.Fatal("changed file lost identity")
 	}
 	err = os.Remove(copyPath)
@@ -279,9 +264,9 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 			case "quiet":
 				s.Now = time.Now
 			case "probe":
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, errors.New("failed") }
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, errors.New("failed") }
 			case "artwork":
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 					return &ffprobe.FfprobeResult{Streams: []ffprobe.Stream{{CodecType: "video", CodecName: "png"}}}, nil
 				}
 			case "rollback":
@@ -290,7 +275,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "unstable":
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 					err := os.WriteFile(path, []byte("changed during probe"), 0600)
 					if err != nil {
 						return nil, err
@@ -301,7 +286,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				s.ScanContext = ctx
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { cancel(); return nil, ctx.Err() }
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { cancel(); return nil, ctx.Err() }
 			}
 			err := s.scan(root)
 			if mode == "cancel" && !errors.Is(err, context.Canceled) {
@@ -387,7 +372,7 @@ func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.ScanContext = ctx
-	p.hook = func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+	p.Hook = func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
 		close(entered)
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -418,7 +403,7 @@ func TestConcurrentScannerWrites(t *testing.T) {
 	writeFile(t, root, "A/Season 1/S01E01.mkv", "a")
 	writeFile(t, other, "B/Season 1/S01E01.mkv", "b")
 	second := New(s.Dependencies)
-	second.Ffprobe = &testProbe{}
+	second.Ffprobe = &scannertest.CountingProbe{Default: defaultProbeResult()}
 	var wg sync.WaitGroup
 	for _, work := range []struct {
 		s    *Scanner
@@ -497,7 +482,7 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	}
 	s.Tmdb = client
 	scanOK(t, s, root)
-	if p.calls != 1 || client.showCalls != 1 || client.seasonCalls != 1 || client.creditCalls != 2 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
+	if p.Calls() != 1 || client.showCalls != 1 || client.seasonCalls != 1 || client.creditCalls != 2 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
 		t.Fatal("partial enrichment counts", client)
 	}
 	if countRows(t, s.DB, "show_cast") != 2 {
@@ -505,8 +490,8 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	}
 	client.creditsHook = nil
 	scanOK(t, s, root)
-	if client.showCalls != 1 || client.seasonCalls != 2 || client.creditCalls != 3 || p.calls != 1 {
-		t.Fatal("retry repeated successful entity or probe", client, p.calls)
+	if client.showCalls != 1 || client.seasonCalls != 2 || client.creditCalls != 3 || p.Calls() != 1 {
+		t.Fatal("retry repeated successful entity or probe", client, p.Calls())
 	}
 	pending, err := s.Queries.CountShowRetries(context.Background())
 	if err != nil || pending != 0 {
@@ -530,7 +515,7 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Name != "Enriched show" || client.searchCalls != 1 || client.seasonCalls != 2 || p.calls != 2 {
+	if stored.Name != "Enriched show" || client.searchCalls != 1 || client.seasonCalls != 2 || p.Calls() != 2 {
 		t.Fatal("failed ID lookup changed metadata or retried descendants")
 	}
 }
@@ -610,7 +595,7 @@ func TestShowRankingAmbiguousYearAndDeterministicTies(t *testing.T) {
 func TestTechnicalFieldsAndFileOwnedChapters(t *testing.T) {
 	s, p, root := setupScanner(t)
 	writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "file")
-	p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return &ffprobe.FfprobeResult{
 			Streams: []ffprobe.Stream{
 				{Index: 0, CodecType: "video", CodecName: "mjpeg", Disposition: ffprobe.StreamDisposition{AttachedPic: 1}},

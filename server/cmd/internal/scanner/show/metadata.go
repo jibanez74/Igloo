@@ -233,18 +233,7 @@ func replaceVideos(ctx context.Context, q *database.Queries, owner metadataOwner
 		if title == "" {
 			title = v.Key
 		}
-		kind := "other"
-		switch strings.ToLower(strings.TrimSpace(v.Type)) {
-		case "trailer", "teaser":
-			kind = "trailer"
-		case "featurette", "behind the scenes", "clip", "bloopers", "interview":
-			kind = "special_feature"
-		}
-		site := strings.ToLower(strings.TrimSpace(v.Site))
-		if site != "youtube" && site != "vimeo" {
-			site = "other"
-		}
-		extraID, err := q.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{Title: title, ExternalID: helpers.NullString(v.ID), Key: v.Key, Type: kind, Site: site})
+		extraID, err := q.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{Title: title, ExternalID: helpers.NullString(v.ID), Key: v.Key, Type: v.ExtraVideoType(), Site: v.ExtraVideoSite()})
 		if err != nil {
 			return err
 		}

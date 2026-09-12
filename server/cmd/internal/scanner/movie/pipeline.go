@@ -18,10 +18,6 @@ const (
 	progressLogInterval = 10 * time.Second
 	deferredRetryWindow = 120 * time.Second
 	maxDeferredRetries  = 2
-	// discoveryPublishInterval batches the Total updates published while
-	// walking the library. Publishing per file made a large library rebuild
-	// the whole status thousands of times before any work started.
-	discoveryPublishInterval = 100
 )
 
 type fileState uint8
@@ -147,7 +143,7 @@ func (s *Scanner) runMovieScan(directory string) {
 			reconciliation.MarkSeen(file.Path)
 			files = append(files, localFile{file: file})
 			report.status.Total = len(files)
-			if len(files)%discoveryPublishInterval == 0 {
+			if len(files)%scanner.DiscoveryPublishInterval == 0 {
 				s.publish(report)
 			}
 			return nil

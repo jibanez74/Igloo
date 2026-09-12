@@ -315,7 +315,7 @@ func (s *Scanner) persistFile(ctx context.Context, local localEpisodeFile, file 
 				return err
 			}
 			id = stored.ID
-			count, err := s.processStreams(ctx, q, id, info.Streams)
+			count, err := processStreams(ctx, q, id, info.Streams)
 			if err != nil {
 				return err
 			}

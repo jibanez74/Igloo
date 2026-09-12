@@ -8,22 +8,11 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner/scannertest"
-	"igloo/sqlc"
 )
 
 func testDB(t *testing.T) (*sql.DB, *database.Queries) {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	_, err = db.Exec(sqlc.Schema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db, database.New(db)
+	return scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 }
 
 func countRows(t *testing.T, db *sql.DB, table string) int {

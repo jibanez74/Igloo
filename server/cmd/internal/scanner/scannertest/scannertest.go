@@ -1,5 +1,6 @@
-// Package scannertest holds the test doubles the movie and music scanner
-// suites share: a level-capturing logger, a row counter, and ffprobe stubs.
+// Package scannertest holds the test doubles the movie, music, and TV scanner
+// suites share: a level-capturing logger, a row counter, database setup, and
+// ffprobe stubs.
 package scannertest
 
 import (
@@ -90,4 +91,41 @@ func (p *Probe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeR
 
 func (p *Probe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
 	return p.Callback(ctx, path)
+}
+
+// CountingProbe counts metadata requests so rescans can assert that unchanged
+// files are not re-probed. Hook answers a request when set; otherwise a copy
+// of Default is returned. Scanners probe on worker goroutines, so the counter
+// is locked.
+type CountingProbe struct {
+	NoKeyframeProbe
+	mu      sync.Mutex
+	calls   int
+	Hook    func(context.Context, string) (*ffprobe.FfprobeResult, error)
+	Default *ffprobe.FfprobeResult
+}
+
+func (p *CountingProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+	p.mu.Lock()
+	p.calls++
+	hook := p.Hook
+	p.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, path)
+	}
+	if p.Default == nil {
+		return nil, errors.New("no probe result configured")
+	}
+	result := *p.Default
+	return &result, nil
+}
+
+func (p *CountingProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+	return p.GetMetadata(ctx, path)
+}
+
+func (p *CountingProbe) Calls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.calls
 }
