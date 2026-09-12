@@ -91,10 +91,6 @@ func setupWatchRoomWSTestServer(t *testing.T, app *Application) *httptest.Server
 	t.Helper()
 
 	app.InitSession()
-	if app.Wait == nil {
-		app.Wait = &sync.WaitGroup{}
-	}
-
 	app.InitRouter()
 
 	return httptest.NewServer(app.Router)
