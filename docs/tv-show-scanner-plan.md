@@ -46,6 +46,22 @@ The validation record below was produced against the pre-refactor code and has *
 
 Content hashing was removed (inspection is metadata-only, matching movies), the local phase moved onto the shared two-worker pool with discovery completed first, pruning became season-scoped, episode credits are read from the season payload, enrichment publishes its total up front and gained the movie scanner's lookup timeout, provider circuit breaker, unmatched outcome, and miss backoff, and the naming rules above were widened. The validation record below predates these changes: its hashing statements, four-hour timeout, and episode-credits identity assertions no longer describe the scanner.
 
+### Validation record — 2026-09-12 (post-optimization)
+
+- Commit `e65b8fe9` on `fix/tv-shows-scanner`, Linux x64, Go from `server/go.mod`, repository Jellyfin ffprobe/ffmpeg payloads selected with `IGLOO_FFMPEG_PATH`/`IGLOO_FFPROBE_PATH`, sample at `/home/jose-ibanez/samba/tvshows` (read-only CIFS). The sample now holds three shows; `Alien Earth (2025)` is no longer present, so the independent inventory expects 313 files, 16 seasons, and 345 logical episodes.
+- `python3 scripts/tv-sample-inventory.py` → `TestSampleLibraryReadOnly` → reconciliation, all exit zero.
+
+| Scan outcome | Initial scan | Unchanged second scan |
+| --- | ---: | ---: |
+| Wall time | 36.5 s (was 5,713 s with hashing) | 0.47 s |
+| Real probes | 313 | 0 additional |
+| Imported / unchanged files | 313 / 0 | 0 / 313 |
+| Deferred / rejected / deleted files | 0 / 0 / 0 | 0 / 0 / 0 |
+| Local episodes processed | 345 | 345 |
+| Enriched / pending entities | 0 / 364 | 0 / 364 |
+
+All show catalog table snapshots were identical after the rescan. `make test-tmdb-integration` passed with the season payload supplying episode guest stars and crew. Native macOS ARM64 remains deferred.
+
 ## Implementation status
 
 The schema, typed TMDB TV client, scanner, startup/shutdown wiring, and admin endpoints are implemented. The API contract and generated types are present. This validation task changes tests, documentation, and an independent inventory utility; no demonstrated production defect has required a scanner, schema, API, or media-contract change. SQL generation is therefore not required for this task. `make check` verifies OpenAPI route coverage and generated-type currency.
