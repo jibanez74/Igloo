@@ -30,7 +30,7 @@ func processStreams(
 
 	return scanner.ClassifyStreams(streams,
 		func(v scanner.VideoStreamFields) error {
-			_, err := qtx.InsertShowVideoStream(ctx, database.InsertShowVideoStreamParams{
+			err := qtx.InsertShowVideoStream(ctx, database.InsertShowVideoStreamParams{
 				FileID: fileID, StreamIndex: v.StreamIndex, Codec: v.Codec, CodecProfile: v.CodecProfile, CodecLevel: v.CodecLevel,
 				BitRate: v.BitRate, Width: v.Width, Height: v.Height, CodedWidth: v.CodedWidth, CodedHeight: v.CodedHeight,
 				AspectRatio: v.AspectRatio, FrameRate: v.FrameRate, AvgFrameRate: v.AvgFrameRate, BitDepth: v.BitDepth,
@@ -43,7 +43,7 @@ func processStreams(
 			return nil
 		},
 		func(a scanner.AudioStreamFields) error {
-			_, err := qtx.InsertShowAudioStream(ctx, database.InsertShowAudioStreamParams{
+			err := qtx.InsertShowAudioStream(ctx, database.InsertShowAudioStreamParams{
 				FileID: fileID, StreamIndex: a.StreamIndex, Codec: a.Codec, CodecProfile: a.CodecProfile, BitRate: a.BitRate,
 				SampleRate: a.SampleRate, Channels: a.Channels, ChannelLayout: a.ChannelLayout, Language: a.Language, Title: a.Title, IsDefault: a.IsDefault,
 			})
@@ -53,7 +53,7 @@ func processStreams(
 			return nil
 		},
 		func(sub scanner.SubtitleFields) error {
-			_, err := qtx.InsertShowSubtitle(ctx, database.InsertShowSubtitleParams{
+			err := qtx.InsertShowSubtitle(ctx, database.InsertShowSubtitleParams{
 				FileID: fileID, StreamIndex: sub.StreamIndex, Codec: sub.Codec, Language: sub.Language, Title: sub.Title, IsForced: sub.IsForced, IsDefault: sub.IsDefault,
 			})
 			if err != nil {

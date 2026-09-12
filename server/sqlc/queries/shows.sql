@@ -13,7 +13,11 @@ INSERT INTO shows (directory_path, local_name, premiere_year, name) VALUES (?, ?
 UPDATE shows SET name = ?, tmdb_id = ?, imdb_id = ?, original_name = ?, overview = ?, tagline = ?, language = ?, origin_countries = ?, first_air_date = ?, last_air_date = ?, status = ?, type = ?, adult = ?, poster_path = ?, backdrop_path = ?, homepage = ?, vote_average = ?, vote_count = ?, popularity = ?, certification = ?, tmdb_season_count = ?, tmdb_episode_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
 -- name: MarkShowRetry :exec
-INSERT INTO show_tmdb_retries (show_id) VALUES (?) ON CONFLICT DO NOTHING;
+INSERT INTO show_tmdb_retries (show_id) VALUES (?) ON CONFLICT (show_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL;
+
+-- name: RecordShowTmdbMiss :exec
+INSERT INTO show_tmdb_retries (show_id, attempts, last_attempt_at) VALUES (?, 1, ?)
+ON CONFLICT (show_id) DO UPDATE SET attempts = show_tmdb_retries.attempts + 1, last_attempt_at = excluded.last_attempt_at;
 
 -- name: ClearShowRetry :exec
 DELETE FROM show_tmdb_retries WHERE show_id = ?;
@@ -86,30 +90,35 @@ INSERT INTO show_episode_files (episode_id, file_id, season_id, episode_order) V
 -- name: DeleteShowFileLinks :exec
 DELETE FROM show_episode_files WHERE file_id = ?;
 
+-- name: GetShowScanEpisodeLinks :many
+SELECT file_id, episode_id FROM show_episode_files ORDER BY file_id, episode_order;
+
 -- name: UpsertShowFingerprint :exec
-INSERT INTO show_file_fingerprints (file_id, mtime_ns, ctime_ns, device, inode, sha256) VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (file_id) DO UPDATE SET mtime_ns = excluded.mtime_ns, ctime_ns = excluded.ctime_ns, device = excluded.device, inode = excluded.inode, sha256 = excluded.sha256;
+INSERT INTO show_file_fingerprints (file_id, mtime_ns, ctime_ns, device, inode) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (file_id) DO UPDATE SET mtime_ns = excluded.mtime_ns, ctime_ns = excluded.ctime_ns, device = excluded.device, inode = excluded.inode;
 
 -- name: GetShowScanIndex :many
-SELECT f.*, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode, fp.sha256 FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id;
+SELECT f.*, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id;
 
--- name: DeleteMissingShowFile :execrows
-DELETE FROM show_files WHERE id = ? AND file_path = ?;
+-- name: DeleteMissingShowFile :one
+DELETE FROM show_files WHERE id = ? AND file_path = ? RETURNING season_id;
 
--- name: PruneShowEpisodes :exec
-DELETE FROM show_episodes WHERE NOT EXISTS (SELECT 1 FROM show_episode_files l WHERE l.episode_id = show_episodes.id);
+-- Pruning is scoped to the season a file change touched: cascades leave the
+-- catalog rows behind, and a full-table NOT EXISTS per file did not scale.
+-- name: PruneShowSeasonEpisodes :exec
+DELETE FROM show_episodes WHERE show_episodes.season_id = ? AND NOT EXISTS (SELECT 1 FROM show_episode_files l WHERE l.episode_id = show_episodes.id);
 
--- name: PruneShowSeasons :exec
-DELETE FROM show_seasons WHERE NOT EXISTS (SELECT 1 FROM show_files f WHERE f.season_id = show_seasons.id);
+-- name: PruneShowSeason :one
+DELETE FROM show_seasons WHERE show_seasons.id = ? AND NOT EXISTS (SELECT 1 FROM show_files f WHERE f.season_id = show_seasons.id) RETURNING show_id;
 
--- name: PruneShows :exec
-DELETE FROM shows WHERE NOT EXISTS (SELECT 1 FROM show_seasons s WHERE s.show_id = shows.id);
+-- name: PruneShow :exec
+DELETE FROM shows WHERE shows.id = ? AND NOT EXISTS (SELECT 1 FROM show_seasons s WHERE s.show_id = shows.id);
 
 -- name: DeleteShowFileVideoStreams :exec
 DELETE FROM show_video_streams
 WHERE file_id = ?;
 
--- name: InsertShowVideoStream :one
+-- name: InsertShowVideoStream :exec
 INSERT INTO show_video_streams (
   file_id,
   stream_index,
@@ -136,14 +145,13 @@ INSERT INTO show_video_streams (
   title
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteShowFileAudioStreams :exec
 DELETE FROM show_audio_streams
 WHERE file_id = ?;
 
--- name: InsertShowAudioStream :one
+-- name: InsertShowAudioStream :exec
 INSERT INTO show_audio_streams (
   file_id,
   stream_index,
@@ -158,14 +166,13 @@ INSERT INTO show_audio_streams (
   is_default
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteShowFileSubtitles :exec
 DELETE FROM show_subtitles
 WHERE file_id = ?;
 
--- name: InsertShowSubtitle :one
+-- name: InsertShowSubtitle :exec
 INSERT INTO show_subtitles (
   file_id,
   stream_index,
@@ -176,14 +183,13 @@ INSERT INTO show_subtitles (
   is_default
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteShowFileChapters :exec
 DELETE FROM show_chapters
 WHERE file_id = ?;
 
--- name: InsertShowChapter :one
+-- name: InsertShowChapter :exec
 INSERT INTO show_chapters (
   file_id,
   title,
@@ -191,8 +197,7 @@ INSERT INTO show_chapters (
   thumb
 )
 VALUES
-  (?, ?, ?, ?)
-RETURNING *;
+  (?, ?, ?, ?);
 
 -- name: UpsertNetwork :one
 INSERT INTO networks (tmdb_id, name, logo, country) VALUES (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name, logo = excluded.logo, country = excluded.country RETURNING *;

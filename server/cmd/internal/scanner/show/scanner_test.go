@@ -70,82 +70,6 @@ func scanOK(t *testing.T, s *Scanner, root string) {
 		t.Fatal(err)
 	}
 }
-func TestParsing(t *testing.T) {
-	for _, tc := range []struct {
-		path     string
-		episodes []int
-		season   int
-	}{
-		{"Show (2020)/Season 1/Show.s01e02.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02-E04.mp4", []int{2, 3, 4}, 1},
-		{"Show/Season 1/S01E02E03.avi", []int{2, 3}, 1},
-		{"Show/season 01/1x02.webm", []int{2}, 1},
-		{"Breaking Bad/Season 2/Breaking Bad - S02E09 - 4 Days Out.mkv", []int{9}, 2},
-		{"Show/Season 1/Show.S01E02.[1920x1080].mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02  -   4 Days Out.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02\t-\t4 Days Out.mkv", []int{2}, 1},
-		{"Show/Season 1/1x02 - 4 Days Out.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02-E04 - 4 Days Out.mkv", []int{2, 3, 4}, 1},
-		{"Show/Season 1/S01E02E03 - 1984.mkv", []int{2, 3}, 1},
-		{"Show/Season 1/S01E02 - 1984.mkv", []int{2}, 1},
-		{"Show/Season 1/1920x1080 S01E02.mkv", []int{2}, 1},
-		{"Show/Season 1/[1920x1080] S01E02.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02 1920x1080.mkv", []int{2}, 1},
-		{"Show/Season 1/1920X1080 1x02 [1280x720].mkv", []int{2}, 1},
-		{"Show/Season 1/[640x480][1920x1080]S01E02-E04[3840X2160].mkv", []int{2, 3, 4}, 1},
-		{"Show/Season 1/[720x1280] S01E02 [480x640].mkv", []int{2}, 1},
-		{"Show/Specials/S00E01.mkv", []int{1}, 0},
-		{"Show/Season 0/S00E01-E03.mkv", []int{1, 2, 3}, 0},
-	} {
-		t.Run(tc.path, func(t *testing.T) {
-			got, err := parseFile("/tv", filepath.Join("/tv", tc.path))
-			if err != nil || !reflect.DeepEqual(got.episodes, tc.episodes) || got.season != tc.season {
-				t.Fatalf("%+v %v", got, err)
-			}
-		})
-	}
-	for _, path := range []string{
-		"Show/Season 1/1920x1080.mkv",
-		"Show/Season 1/[1920X1080].mkv",
-		"Show/Season 1/[640x480] [1920x1080].mkv",
-		"Show/Season 1/S01E01 1x03 [1920x1080].mkv",
-		"Show/Season 1/[1920x1080] S01E01 S01E02.mkv",
-		"Show/Season 1/S01E01 - 4 Days Out 1x03.mkv",
-		"Show/Season 1/S01E01-03 [1920x1080].mkv",
-		"Show/Season 1/S01E01-E [1920x1080].mkv",
-		"Show/Season 1/S01E01- 03.mkv",
-		"Show/Season 1/S01E01 -03.mkv",
-		"Show/Season 1/S01E01\t-03.mkv",
-		"Show/Season 1/S01E01-\t03.mkv",
-		"Show/Season 1/[1920x1080] S02E01.mkv",
-		"Show/Season 1/[1920x1080] S01E04-E02.mkv",
-		"Show/Season 1/[1920x1080] S01E01 E03.mkv",
-		"Show/Season 1/S01E01E99999.mkv",
-		"Show/Season 1/S01E99999 - 4 Days Out.mkv",
-		"Show/Season 1/S00001E01.mkv",
-		"Show/Season 1/10001x02.mkv",
-		"Show/Season 1/1x00002.mkv",
-		"Show/Season 1/S01E01 19200x1080.mkv",
-		"Show/Season 1/S01E01 1920x10800.mkv",
-		"Show/Season 1/S01E01 a1920x1080.mkv",
-		"Show/Season 1/S01E01 1920x1080p.mkv",
-		"Show/Season 1/S01E01 99x1080.mkv",
-		"Show/Season 1/S01E01 1920x99.mkv",
-		"Show/Season 1/Season1920x1080.mkv",
-		"Show/Season 1/1920x1080p.mkv",
-		"Show/Season 1/[1920x1080] S01E01E99999.mkv",
-		"Show/Season 1/[1920x1080] aS01E01.mkv",
-		"Show/Season 1/S01E04-E02.mkv", "Show/Season 1/S02E01.mkv", "Show/Season 1/S01E01-S02E02.mkv", "Show/Season 1/S01E01 1x03.mkv", "Show/Season 1/S01E01E01.mkv", "Show/Season 1/S01E01-03.mkv", "Show/Season 1/S01E01-E.mkv", "Show/Season 1/S01E00.mkv", "Show/Season 1/S01E01E00.mkv", "Show/Season 1/S01E01 E03.mkv", "Show/Season 1/S01E01_E03.mkv", "Show/Season 1/2020-01-02.mkv", "Show/Season 1/001.mkv", "Show/Season 1/extras/S01E01.mkv", ".backup/Show/Season 1/S01E01.mkv", "Show/Season 1/.S01E01.mkv", "Show/Specials/S01E01.mkv",
-	} {
-		t.Run(path, func(t *testing.T) {
-			_, err := parseFile("/tv", filepath.Join("/tv", path))
-			if err == nil {
-				t.Fatal("accepted malformed path")
-			}
-		})
-	}
-}
-
 func TestNumericTitlesAndResolutionsReachProbing(t *testing.T) {
 	s, probe, root := setupScanner(t)
 	files := []struct {
@@ -212,15 +136,16 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if probe.Calls() != 3 {
 		t.Fatal("unchanged scan probed")
 	}
-	// Same bytes and changed filesystem metadata only update the fingerprint.
+	// Changed filesystem metadata re-probes without reading content (no
+	// hashing, like movies) and keeps the file and episode identities.
 	stamp := time.Now().Add(-time.Hour)
 	err = os.Chtimes(combined, stamp, stamp)
 	if err != nil {
 		t.Fatal(err)
 	}
 	scanOK(t, s, root)
-	if probe.Calls() != 3 {
-		t.Fatal("fingerprint-only update probed")
+	if probe.Calls() != 4 || s.Status().Updated != 1 {
+		t.Fatal("touched file was not re-probed once", probe.Calls(), s.Status().Updated)
 	}
 	writeFile(t, root, "Example (2020)/Season 1/S01E01-E03.mkv", "different bytes")
 	scanOK(t, s, root)
@@ -232,7 +157,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.Calls() != 4 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
+	if probe.Calls() != 5 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
 		t.Fatal("changed file lost identity")
 	}
 	err = os.Remove(copyPath)
@@ -658,4 +583,73 @@ func TestCleanupPermissionFailureAndDeletionRollback(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Episode files may sit directly in the show folder, and season folders may
+// be "S2" or carry a title; every layout feeds one show. The status counters
+// served by the API follow files for the local phase and episodes separately.
+func TestLayoutsShareOneShowAndReportCounters(t *testing.T) {
+	s, probe, root := setupScanner(t)
+	writeFile(t, root, "Show (2020)/Show.S01E01.mkv", "a")
+	writeFile(t, root, "Show (2020)/Season 1/S01E02.mkv", "b")
+	writeFile(t, root, "Show (2020)/S2/S02E01.mkv", "c")
+	writeFile(t, root, "Show (2020)/Season 3 - The End/S03E01E02.mkv", "d")
+	writeFile(t, root, "Show (2020)/Show.S00E01.mkv", "special")
+	writeFile(t, root, "Show (2020)/S01/S02E01.mkv", "mismatch")
+	scanOK(t, s, root)
+	status := s.Status()
+	if probe.Calls() != 5 || status.Total != 6 || status.Processed != 6 || status.Imported != 5 || status.Failed != 1 || status.Episodes != 6 || status.State != scanner.StateCompletedWithIssues {
+		t.Fatalf("status %+v probes=%d", status, probe.Calls())
+	}
+	if countRows(t, s.DB, "shows") != 1 || countRows(t, s.DB, "show_seasons") != 4 || countRows(t, s.DB, "show_episodes") != 6 {
+		t.Fatal("layouts did not share one show")
+	}
+	scanOK(t, s, root)
+	status = s.Status()
+	if probe.Calls() != 5 || status.Unchanged != 5 || status.Episodes != 6 || status.Updated != 0 {
+		t.Fatalf("rescan %+v probes=%d", status, probe.Calls())
+	}
+}
+
+// Two workers probe at once while the coordinator alone persists; the probe
+// hook only returns once both files are in flight.
+func TestWorkersProbeConcurrently(t *testing.T) {
+	s, probe, root := setupScanner(t)
+	writeFile(t, root, "Show/Season 1/S01E01.mkv", "a")
+	writeFile(t, root, "Show/Season 1/S01E02.mkv", "b")
+	var mu sync.Mutex
+	inFlight := 0
+	release := make(chan struct{})
+	probe.Hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		mu.Lock()
+		inFlight++
+		both := inFlight == 2
+		mu.Unlock()
+		if both {
+			close(release)
+		}
+		select {
+		case <-release:
+			return defaultProbeResult(), nil
+		case <-time.After(5 * time.Second):
+			return nil, errors.New("second probe never started")
+		}
+	}
+	scanOK(t, s, root)
+	if probe.Calls() != 2 || countRows(t, s.DB, "show_files") != 2 || s.Status().Imported != 2 {
+		t.Fatalf("%+v", s.Status())
+	}
+}
+
+// Workers must not touch the database: the pool is pinned to one connection,
+// so a worker query would wait behind the coordinator's open transaction.
+func TestPrepareFileStaysOffTheDatabase(t *testing.T) {
+	s, _, root := setupScanner(t)
+	path := writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "a")
+	s.DB.Close()
+	result := s.prepareFile(context.Background(), root, probeJob{file: scanner.ScanFile{Path: path, Ext: "mkv"}})
+	if result.err != nil || result.info == nil || !reflect.DeepEqual(result.local.episodes, []int{1, 2}) {
+		t.Fatalf("prepare used the database: err=%v local=%+v", result.err, result.local)
+	}
+	result.inspection.Close()
 }

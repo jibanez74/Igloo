@@ -282,8 +282,8 @@ func (q *Queries) CreateShowSeasonExtraVideo(ctx context.Context, arg CreateShow
 	return err
 }
 
-const deleteMissingShowFile = `-- name: DeleteMissingShowFile :execrows
-DELETE FROM show_files WHERE id = ? AND file_path = ?
+const deleteMissingShowFile = `-- name: DeleteMissingShowFile :one
+DELETE FROM show_files WHERE id = ? AND file_path = ? RETURNING season_id
 `
 
 type DeleteMissingShowFileParams struct {
@@ -292,11 +292,10 @@ type DeleteMissingShowFileParams struct {
 }
 
 func (q *Queries) DeleteMissingShowFile(ctx context.Context, arg DeleteMissingShowFileParams) (int64, error) {
-	result, err := q.exec(ctx, q.deleteMissingShowFileStmt, deleteMissingShowFile, arg.ID, arg.FilePath)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	row := q.queryRow(ctx, q.deleteMissingShowFileStmt, deleteMissingShowFile, arg.ID, arg.FilePath)
+	var season_id int64
+	err := row.Scan(&season_id)
+	return season_id, err
 }
 
 const deleteShowCast = `-- name: DeleteShowCast :exec
@@ -729,8 +728,40 @@ func (q *Queries) GetShowFileEpisodes(ctx context.Context, fileID int64) ([]Show
 	return items, nil
 }
 
+const getShowScanEpisodeLinks = `-- name: GetShowScanEpisodeLinks :many
+SELECT file_id, episode_id FROM show_episode_files ORDER BY file_id, episode_order
+`
+
+type GetShowScanEpisodeLinksRow struct {
+	FileID    int64 `json:"file_id"`
+	EpisodeID int64 `json:"episode_id"`
+}
+
+func (q *Queries) GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error) {
+	rows, err := q.query(ctx, q.getShowScanEpisodeLinksStmt, getShowScanEpisodeLinks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowScanEpisodeLinksRow{}
+	for rows.Next() {
+		var i GetShowScanEpisodeLinksRow
+		if err := rows.Scan(&i.FileID, &i.EpisodeID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getShowScanIndex = `-- name: GetShowScanIndex :many
-SELECT f.id, f.season_id, f.file_path, f.file_name, f.size, f.container, f.mime_type, f.duration, f.created_at, f.updated_at, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode, fp.sha256 FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
+SELECT f.id, f.season_id, f.file_path, f.file_name, f.size, f.container, f.mime_type, f.duration, f.created_at, f.updated_at, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
 `
 
 type GetShowScanIndexRow struct {
@@ -748,7 +779,6 @@ type GetShowScanIndexRow struct {
 	CtimeNs   sql.NullInt64   `json:"ctime_ns"`
 	Device    sql.NullString  `json:"device"`
 	Inode     sql.NullString  `json:"inode"`
-	Sha256    []byte          `json:"sha256"`
 }
 
 func (q *Queries) GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error) {
@@ -775,7 +805,6 @@ func (q *Queries) GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, 
 			&i.CtimeNs,
 			&i.Device,
 			&i.Inode,
-			&i.Sha256,
 		); err != nil {
 			return nil, err
 		}
@@ -887,7 +916,7 @@ func (q *Queries) HasShowSeasonRetry(ctx context.Context, seasonID int64) (bool,
 	return exists, err
 }
 
-const insertShowAudioStream = `-- name: InsertShowAudioStream :one
+const insertShowAudioStream = `-- name: InsertShowAudioStream :exec
 INSERT INTO show_audio_streams (
   file_id,
   stream_index,
@@ -903,7 +932,6 @@ INSERT INTO show_audio_streams (
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, file_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, is_default, created_at, updated_at
 `
 
 type InsertShowAudioStreamParams struct {
@@ -920,8 +948,8 @@ type InsertShowAudioStreamParams struct {
 	IsDefault     bool           `json:"is_default"`
 }
 
-func (q *Queries) InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) (ShowAudioStream, error) {
-	row := q.queryRow(ctx, q.insertShowAudioStreamStmt, insertShowAudioStream,
+func (q *Queries) InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) error {
+	_, err := q.exec(ctx, q.insertShowAudioStreamStmt, insertShowAudioStream,
 		arg.FileID,
 		arg.StreamIndex,
 		arg.Codec,
@@ -934,27 +962,10 @@ func (q *Queries) InsertShowAudioStream(ctx context.Context, arg InsertShowAudio
 		arg.Title,
 		arg.IsDefault,
 	)
-	var i ShowAudioStream
-	err := row.Scan(
-		&i.ID,
-		&i.FileID,
-		&i.StreamIndex,
-		&i.Codec,
-		&i.CodecProfile,
-		&i.BitRate,
-		&i.SampleRate,
-		&i.Channels,
-		&i.ChannelLayout,
-		&i.Language,
-		&i.Title,
-		&i.IsDefault,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	return err
 }
 
-const insertShowChapter = `-- name: InsertShowChapter :one
+const insertShowChapter = `-- name: InsertShowChapter :exec
 INSERT INTO show_chapters (
   file_id,
   title,
@@ -963,7 +974,6 @@ INSERT INTO show_chapters (
 )
 VALUES
   (?, ?, ?, ?)
-RETURNING id, title, start_time, thumb, file_id
 `
 
 type InsertShowChapterParams struct {
@@ -973,25 +983,17 @@ type InsertShowChapterParams struct {
 	Thumb     sql.NullString `json:"thumb"`
 }
 
-func (q *Queries) InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) (ShowChapter, error) {
-	row := q.queryRow(ctx, q.insertShowChapterStmt, insertShowChapter,
+func (q *Queries) InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) error {
+	_, err := q.exec(ctx, q.insertShowChapterStmt, insertShowChapter,
 		arg.FileID,
 		arg.Title,
 		arg.StartTime,
 		arg.Thumb,
 	)
-	var i ShowChapter
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.StartTime,
-		&i.Thumb,
-		&i.FileID,
-	)
-	return i, err
+	return err
 }
 
-const insertShowSubtitle = `-- name: InsertShowSubtitle :one
+const insertShowSubtitle = `-- name: InsertShowSubtitle :exec
 INSERT INTO show_subtitles (
   file_id,
   stream_index,
@@ -1003,7 +1005,6 @@ INSERT INTO show_subtitles (
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, file_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
 `
 
 type InsertShowSubtitleParams struct {
@@ -1016,8 +1017,8 @@ type InsertShowSubtitleParams struct {
 	IsDefault   bool           `json:"is_default"`
 }
 
-func (q *Queries) InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitleParams) (ShowSubtitle, error) {
-	row := q.queryRow(ctx, q.insertShowSubtitleStmt, insertShowSubtitle,
+func (q *Queries) InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitleParams) error {
+	_, err := q.exec(ctx, q.insertShowSubtitleStmt, insertShowSubtitle,
 		arg.FileID,
 		arg.StreamIndex,
 		arg.Codec,
@@ -1026,23 +1027,10 @@ func (q *Queries) InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitle
 		arg.IsForced,
 		arg.IsDefault,
 	)
-	var i ShowSubtitle
-	err := row.Scan(
-		&i.ID,
-		&i.FileID,
-		&i.StreamIndex,
-		&i.Codec,
-		&i.Language,
-		&i.Title,
-		&i.IsForced,
-		&i.IsDefault,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	return err
 }
 
-const insertShowVideoStream = `-- name: InsertShowVideoStream :one
+const insertShowVideoStream = `-- name: InsertShowVideoStream :exec
 INSERT INTO show_video_streams (
   file_id,
   stream_index,
@@ -1070,7 +1058,6 @@ INSERT INTO show_video_streams (
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, file_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, pixel_format, color_range, color_space, color_primaries, color_transfer, field_order, rotation, language, title, created_at, updated_at
 `
 
 type InsertShowVideoStreamParams struct {
@@ -1099,8 +1086,8 @@ type InsertShowVideoStreamParams struct {
 	Title          sql.NullString `json:"title"`
 }
 
-func (q *Queries) InsertShowVideoStream(ctx context.Context, arg InsertShowVideoStreamParams) (ShowVideoStream, error) {
-	row := q.queryRow(ctx, q.insertShowVideoStreamStmt, insertShowVideoStream,
+func (q *Queries) InsertShowVideoStream(ctx context.Context, arg InsertShowVideoStreamParams) error {
+	_, err := q.exec(ctx, q.insertShowVideoStreamStmt, insertShowVideoStream,
 		arg.FileID,
 		arg.StreamIndex,
 		arg.Codec,
@@ -1125,36 +1112,7 @@ func (q *Queries) InsertShowVideoStream(ctx context.Context, arg InsertShowVideo
 		arg.Language,
 		arg.Title,
 	)
-	var i ShowVideoStream
-	err := row.Scan(
-		&i.ID,
-		&i.FileID,
-		&i.StreamIndex,
-		&i.Codec,
-		&i.CodecProfile,
-		&i.CodecLevel,
-		&i.BitRate,
-		&i.Width,
-		&i.Height,
-		&i.CodedWidth,
-		&i.CodedHeight,
-		&i.AspectRatio,
-		&i.FrameRate,
-		&i.AvgFrameRate,
-		&i.BitDepth,
-		&i.PixelFormat,
-		&i.ColorRange,
-		&i.ColorSpace,
-		&i.ColorPrimaries,
-		&i.ColorTransfer,
-		&i.FieldOrder,
-		&i.Rotation,
-		&i.Language,
-		&i.Title,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	return err
 }
 
 const linkShowEpisodeFile = `-- name: LinkShowEpisodeFile :exec
@@ -1188,7 +1146,7 @@ func (q *Queries) MarkShowEpisodeRetry(ctx context.Context, episodeID int64) err
 }
 
 const markShowRetry = `-- name: MarkShowRetry :exec
-INSERT INTO show_tmdb_retries (show_id) VALUES (?) ON CONFLICT DO NOTHING
+INSERT INTO show_tmdb_retries (show_id) VALUES (?) ON CONFLICT (show_id) DO UPDATE SET attempts = 0, last_attempt_at = NULL
 `
 
 func (q *Queries) MarkShowRetry(ctx context.Context, showID int64) error {
@@ -1205,30 +1163,49 @@ func (q *Queries) MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
 	return err
 }
 
-const pruneShowEpisodes = `-- name: PruneShowEpisodes :exec
-DELETE FROM show_episodes WHERE NOT EXISTS (SELECT 1 FROM show_episode_files l WHERE l.episode_id = show_episodes.id)
+const pruneShow = `-- name: PruneShow :exec
+DELETE FROM shows WHERE shows.id = ? AND NOT EXISTS (SELECT 1 FROM show_seasons s WHERE s.show_id = shows.id)
 `
 
-func (q *Queries) PruneShowEpisodes(ctx context.Context) error {
-	_, err := q.exec(ctx, q.pruneShowEpisodesStmt, pruneShowEpisodes)
+func (q *Queries) PruneShow(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.pruneShowStmt, pruneShow, id)
 	return err
 }
 
-const pruneShowSeasons = `-- name: PruneShowSeasons :exec
-DELETE FROM show_seasons WHERE NOT EXISTS (SELECT 1 FROM show_files f WHERE f.season_id = show_seasons.id)
+const pruneShowSeason = `-- name: PruneShowSeason :one
+DELETE FROM show_seasons WHERE show_seasons.id = ? AND NOT EXISTS (SELECT 1 FROM show_files f WHERE f.season_id = show_seasons.id) RETURNING show_id
 `
 
-func (q *Queries) PruneShowSeasons(ctx context.Context) error {
-	_, err := q.exec(ctx, q.pruneShowSeasonsStmt, pruneShowSeasons)
+func (q *Queries) PruneShowSeason(ctx context.Context, id int64) (int64, error) {
+	row := q.queryRow(ctx, q.pruneShowSeasonStmt, pruneShowSeason, id)
+	var show_id int64
+	err := row.Scan(&show_id)
+	return show_id, err
+}
+
+const pruneShowSeasonEpisodes = `-- name: PruneShowSeasonEpisodes :exec
+DELETE FROM show_episodes WHERE show_episodes.season_id = ? AND NOT EXISTS (SELECT 1 FROM show_episode_files l WHERE l.episode_id = show_episodes.id)
+`
+
+// Pruning is scoped to the season a file change touched: cascades leave the
+// catalog rows behind, and a full-table NOT EXISTS per file did not scale.
+func (q *Queries) PruneShowSeasonEpisodes(ctx context.Context, seasonID int64) error {
+	_, err := q.exec(ctx, q.pruneShowSeasonEpisodesStmt, pruneShowSeasonEpisodes, seasonID)
 	return err
 }
 
-const pruneShows = `-- name: PruneShows :exec
-DELETE FROM shows WHERE NOT EXISTS (SELECT 1 FROM show_seasons s WHERE s.show_id = shows.id)
+const recordShowTmdbMiss = `-- name: RecordShowTmdbMiss :exec
+INSERT INTO show_tmdb_retries (show_id, attempts, last_attempt_at) VALUES (?, 1, ?)
+ON CONFLICT (show_id) DO UPDATE SET attempts = show_tmdb_retries.attempts + 1, last_attempt_at = excluded.last_attempt_at
 `
 
-func (q *Queries) PruneShows(ctx context.Context) error {
-	_, err := q.exec(ctx, q.pruneShowsStmt, pruneShows)
+type RecordShowTmdbMissParams struct {
+	ShowID        int64         `json:"show_id"`
+	LastAttemptAt sql.NullInt64 `json:"last_attempt_at"`
+}
+
+func (q *Queries) RecordShowTmdbMiss(ctx context.Context, arg RecordShowTmdbMissParams) error {
+	_, err := q.exec(ctx, q.recordShowTmdbMissStmt, recordShowTmdbMiss, arg.ShowID, arg.LastAttemptAt)
 	return err
 }
 
@@ -1538,8 +1515,8 @@ func (q *Queries) UpsertShowFile(ctx context.Context, arg UpsertShowFileParams) 
 }
 
 const upsertShowFingerprint = `-- name: UpsertShowFingerprint :exec
-INSERT INTO show_file_fingerprints (file_id, mtime_ns, ctime_ns, device, inode, sha256) VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT (file_id) DO UPDATE SET mtime_ns = excluded.mtime_ns, ctime_ns = excluded.ctime_ns, device = excluded.device, inode = excluded.inode, sha256 = excluded.sha256
+INSERT INTO show_file_fingerprints (file_id, mtime_ns, ctime_ns, device, inode) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (file_id) DO UPDATE SET mtime_ns = excluded.mtime_ns, ctime_ns = excluded.ctime_ns, device = excluded.device, inode = excluded.inode
 `
 
 type UpsertShowFingerprintParams struct {
@@ -1548,7 +1525,6 @@ type UpsertShowFingerprintParams struct {
 	CtimeNs int64  `json:"ctime_ns"`
 	Device  string `json:"device"`
 	Inode   string `json:"inode"`
-	Sha256  []byte `json:"sha256"`
 }
 
 func (q *Queries) UpsertShowFingerprint(ctx context.Context, arg UpsertShowFingerprintParams) error {
@@ -1558,7 +1534,6 @@ func (q *Queries) UpsertShowFingerprint(ctx context.Context, arg UpsertShowFinge
 		arg.CtimeNs,
 		arg.Device,
 		arg.Inode,
-		arg.Sha256,
 	)
 	return err
 }

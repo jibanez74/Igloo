@@ -1,8 +1,6 @@
 package show
 
 import (
-	"igloo/cmd/internal/database"
-
 	"igloo/cmd/internal/scanner"
 )
 
@@ -27,17 +25,36 @@ type Status struct {
 	PendingEnrichment   int `json:"pending_enrichment"`
 }
 
-// showScanContext is the catalog state one run owns: the fingerprint baseline
-// index keyed by cleaned path, and the seasons and episodes this run touched
-// locally, which is what makes their metadata eligible for enrichment.
+// showScanEntry is one catalog file as the scan index saw it: identity,
+// season ownership, the fingerprint baseline, and the episodes it links.
+type showScanEntry struct {
+	scanner.FileFingerprint
+	ID             int64
+	SeasonID       int64
+	FilePath       string
+	HasFingerprint bool
+	Episodes       []int64
+}
+
+// showScanContext is the catalog state one run owns: the index keyed by
+// cleaned path, written only after commit on the scan goroutine, and the
+// seasons and episodes this run touched locally, which is what makes their
+// metadata eligible for enrichment.
 type showScanContext struct {
-	index    map[string]database.GetShowScanIndexRow
+	index    map[string]showScanEntry
 	seasons  map[int64]bool
 	episodes map[int64]bool
 }
 
-func newShowScanContext(index map[string]database.GetShowScanIndexRow) *showScanContext {
+func newShowScanContext(index map[string]showScanEntry) *showScanContext {
 	return &showScanContext{index: index, seasons: make(map[int64]bool), episodes: make(map[int64]bool)}
+}
+
+func (scan *showScanContext) touch(seasonID int64, episodes []int64) {
+	scan.seasons[seasonID] = true
+	for _, episode := range episodes {
+		scan.episodes[episode] = true
+	}
 }
 
 // scanReport is owned by the scan goroutine. Episode totals are not kept here:

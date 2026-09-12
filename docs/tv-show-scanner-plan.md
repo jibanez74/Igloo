@@ -14,11 +14,11 @@ Add typed TV search, show details (aggregate credits, ratings, external IDs, vid
 
 ## Phase 3 — TV scanner (implemented)
 
-Use the existing dependencies, start-status guard, batching, fingerprints, 60-second quiet period, cancellation, shared database mutex, and reconciliation. Capture shows_dir at start. Require Show/Season N/file or Show/Specials/file. Accept case-insensitive S01E02, S01E02-E04, S01E02E03, and 1x02. Reject conflicting seasons, malformed numbering, and reversed ranges. Exclude hidden entries and nested extras; ignore NFO and external subtitles. Follow movie video-extension and symlink behavior.
+Use the existing dependencies, start-status guard, worker pool, metadata-only fingerprints, 60-second quiet period, cancellation, shared database mutex, and reconciliation. Capture shows_dir at start. Accept Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly under the show folder. Accept case-insensitive S01E02, S01E02-E04, S01E02E03, and 1x02. Reject conflicting seasons, malformed numbering, and reversed ranges. Exclude hidden entries and nested extras; ignore NFO and external subtitles. Follow movie video-extension and symlink behavior.
 
-Probe each new or changed file once. Atomically persist fallback catalog entries, file metadata, streams, chapters, links, fingerprints, and retry markers. Retain changed file IDs; identical bytes update fingerprints alone. Preserve absolute stream indices and file duration without guessed episode boundaries. Enrich sequentially after technical processing and safe cleanup, grouped by show/season. Commit each entity only after required responses succeed; preserve old metadata and pending work on failures. Recheck ownership and TMDB identity before applying network responses. Unchanged successful entities are skipped and metadata-only retries never probe.
+Probe each new or changed file once. Atomically persist fallback catalog entries, file metadata, streams, chapters, links, fingerprints, and retry markers. Retain changed file IDs; inspection is metadata-only, so a touched file is re-probed rather than hashed. Preserve absolute stream indices and file duration without guessed episode boundaries. Enrich sequentially after technical processing and safe cleanup, grouped by show/season. Commit each entity only after required responses succeed; preserve old metadata and pending work on failures. Recheck ownership and TMDB identity before applying network responses. Unchanged successful entities are skipped and metadata-only retries never probe.
 
-Delete only confirmed missing files within the captured, identity-checked root. Protect observed failures and deferred files. Prune episodes without files, empty seasons, and empty shows transactionally, retaining shared metadata entities. Log file outcomes separately from episode and enrichment counts.
+Delete only confirmed missing files within the captured, identity-checked root. Protect observed failures and deferred files. Prune the touched season's episodes without files, then the empty season and show, transactionally, retaining shared metadata entities. Log file outcomes separately from episode and enrichment counts.
 
 ## Phase 4 — Integration (implemented) and verification
 
@@ -28,7 +28,7 @@ Validate naming, hidden backups, combined episodes, duplicate copies, offline im
 
 ## Scope and defaults
 
-Use standard TMDB numbering; defer alternate/DVD ordering. Keep TMDB totals separate from local counts derived from file links. Store remote artwork and trailer metadata, without downloads or thumbnails. No TV browsing, playback, watch progress, web controls, NFO ingestion, manual identification, filesystem watcher, or background metadata refresh. Refresh successful metadata on file changes and retry failures on later scans.
+Use standard TMDB numbering; defer alternate/DVD ordering. Keep TMDB totals separate from local counts derived from file links. Store remote artwork and trailer metadata, without downloads or thumbnails. No TV browsing, playback, watch progress, web controls, NFO ingestion, manual identification, filesystem watcher, or background metadata refresh. A technical file change never re-queues a matched entity; only entities without a TMDB identity are queued. Failures retry on later scans.
 
 ## Reintegration — 2026-09-11
 
@@ -41,6 +41,10 @@ This work was developed on `feature/tv-shows-scanner`, whose branch ref was dele
 - `production_companies.logo`/`country` and `extra_videos.official` no longer exist on `dev`, so those TMDB fields are not stored. Chapter start times lost their raw-ticks fallback; the shared `scanner.ChapterStartTimeSeconds` is now the single implementation.
 
 The validation record below was produced against the pre-refactor code and has **not** been re-run. `make check`, the race suite over `./cmd/internal/scanner/... ./cmd/internal/tmdb/... ./cmd/api`, and the mocked `libraries-settings` Playwright spec all pass after reintegration; the 415 GB sample-library run and the live TMDB integration run have not been repeated.
+
+## Optimization — 2026-09-12
+
+Content hashing was removed (inspection is metadata-only, matching movies), the local phase moved onto the shared two-worker pool with discovery completed first, pruning became season-scoped, episode credits are read from the season payload, and the naming rules above were widened. The validation record below predates these changes: its hashing statements, four-hour timeout, and episode-credits identity assertions no longer describe the scanner.
 
 ## Implementation status
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var seasonDirectory = regexp.MustCompile(`(?i)^season\s+(\d{1,4})$`)
+var seasonDirectory = regexp.MustCompile(`(?i)^(?:season\s+(\d{1,4})(?:\s+-\s+\S.*)?|s(\d{1,4}))$`)
 var episodeToken = regexp.MustCompile(`(?i)s(\d{1,4})e(\d{1,4})((?:-e\d{1,4}|e\d{1,4})*)|(\d{1,4})x(\d{1,4})`)
 var conflictingEpisode = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])e\d+`)
 var episodeSuffix = regexp.MustCompile(`(?i)(-?)e(\d{1,4})`)
@@ -24,6 +24,9 @@ type localEpisodeFile struct {
 	episodes []int
 }
 
+// parseFile accepts Show/Season N/episode and Show/episode layouts. With a
+// season directory the token must agree with it; without one the token alone
+// names the season.
 func parseFile(root, path string) (localEpisodeFile, error) {
 	var result localEpisodeFile
 	relative, err := filepath.Rel(root, path)
@@ -31,8 +34,8 @@ func parseFile(root, path string) (localEpisodeFile, error) {
 		return result, err
 	}
 	parts := strings.Split(relative, string(filepath.Separator))
-	if len(parts) != 3 {
-		return result, fmt.Errorf("expected show/season/episode path")
+	if len(parts) != 2 && len(parts) != 3 {
+		return result, fmt.Errorf("expected show/[season/]episode path")
 	}
 	for _, part := range parts {
 		hidden := strings.HasPrefix(part, ".")
@@ -42,16 +45,16 @@ func parseFile(root, path string) (localEpisodeFile, error) {
 	}
 	result.showPath = filepath.Join(root, parts[0])
 	result.title, result.year, _ = parseShowTitle(parts[0])
-	seasonMatch := seasonDirectory.FindStringSubmatch(parts[1])
-	specials := strings.EqualFold(parts[1], "Specials")
-	if specials {
-		result.season = 0
-	} else if seasonMatch != nil {
-		result.season, _ = strconv.Atoi(seasonMatch[1])
-	} else {
-		return result, fmt.Errorf("invalid season directory")
+	hasSeasonDir := len(parts) == 3
+	if hasSeasonDir {
+		directorySeason, ok := parseSeasonDirectory(parts[1])
+		if !ok {
+			return result, fmt.Errorf("invalid season directory")
+		}
+		result.season = directorySeason
 	}
-	base := strings.TrimSuffix(parts[2], filepath.Ext(parts[2]))
+	name := parts[len(parts)-1]
+	base := strings.TrimSuffix(name, filepath.Ext(name))
 	matches := episodeToken.FindAllStringSubmatchIndex(base, -1)
 	episodeMatches := matches[:0]
 	for _, m := range matches {
@@ -123,10 +126,32 @@ func parseFile(root, path string) (localEpisodeFile, error) {
 		first, _ = strconv.Atoi(base[m[10]:m[11]])
 		result.episodes = []int{first}
 	}
-	if season != result.season || first <= 0 {
+	if first <= 0 {
+		return result, fmt.Errorf("invalid episode number")
+	}
+	if hasSeasonDir && season != result.season {
 		return result, fmt.Errorf("episode numbering disagrees with season directory")
 	}
+	result.season = season
 	return result, nil
+}
+
+// parseSeasonDirectory accepts Specials (season 0), "Season N", "Season N -
+// Title", and "SN".
+func parseSeasonDirectory(name string) (int, bool) {
+	if strings.EqualFold(name, "Specials") {
+		return 0, true
+	}
+	match := seasonDirectory.FindStringSubmatch(name)
+	if match == nil {
+		return 0, false
+	}
+	digits := match[1]
+	if digits == "" {
+		digits = match[2]
+	}
+	season, _ := strconv.Atoi(digits)
+	return season, true
 }
 
 func isASCIIAlphaNumeric(b byte) bool {
@@ -168,5 +193,9 @@ func allowDirectory(root, path string) bool {
 			return false
 		}
 	}
-	return len(parts) == 1 || strings.EqualFold(parts[1], "Specials") || seasonDirectory.MatchString(parts[1])
+	if len(parts) == 1 {
+		return true
+	}
+	_, ok := parseSeasonDirectory(parts[1])
+	return ok
 }

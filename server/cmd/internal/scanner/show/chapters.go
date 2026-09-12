@@ -17,7 +17,7 @@ func processChapters(ctx context.Context, qtx *database.Queries, fileID int64, c
 	}
 
 	for _, chapter := range chapters {
-		_, err := qtx.InsertShowChapter(ctx, database.InsertShowChapterParams{
+		err := qtx.InsertShowChapter(ctx, database.InsertShowChapterParams{
 			FileID:    fileID,
 			Title:     chapter.Tags.Title,
 			StartTime: scanner.ChapterStartTimeSeconds(chapter),
