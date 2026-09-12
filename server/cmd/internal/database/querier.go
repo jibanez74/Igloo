@@ -173,6 +173,8 @@ type Querier interface {
 	// stored fingerprint and treats a mismatch as a miss.
 	GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (GetKeyframeIndexRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
+	// The home section renders title, poster and year only; certification is
+	// deliberately absent so the row matches the documented LatestMovie exactly.
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	// id tie-breaker so LIMIT/OFFSET is stable when titles match.
 	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)

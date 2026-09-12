@@ -455,21 +455,21 @@ SELECT
   id,
   title,
   poster_path,
-  year,
-  certification
+  year
 FROM movies
 ORDER BY created_at DESC
 LIMIT 12
 `
 
 type GetLatestMoviesRow struct {
-	ID            int64          `json:"id"`
-	Title         string         `json:"title"`
-	PosterPath    sql.NullString `json:"poster_path"`
-	Year          sql.NullInt64  `json:"year"`
-	Certification sql.NullString `json:"certification"`
+	ID         int64          `json:"id"`
+	Title      string         `json:"title"`
+	PosterPath sql.NullString `json:"poster_path"`
+	Year       sql.NullInt64  `json:"year"`
 }
 
+// The home section renders title, poster and year only; certification is
+// deliberately absent so the row matches the documented LatestMovie exactly.
 func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error) {
 	rows, err := q.query(ctx, q.getLatestMoviesStmt, getLatestMovies)
 	if err != nil {
@@ -484,7 +484,6 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 			&i.Title,
 			&i.PosterPath,
 			&i.Year,
-			&i.Certification,
 		); err != nil {
 			return nil, err
 		}
