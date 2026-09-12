@@ -98,13 +98,10 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 		t.Fatalf("imported %d files with only %d real probes", len(rows), firstProbes)
 	}
 	for _, row := range rows {
-		episodes, err := s.Queries.GetShowFileEpisodes(context.Background(), row.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		episodes := fileEpisodes(t, s.DB, row.ID)
 		numbers := make([]int64, 0, len(episodes))
 		for _, episode := range episodes {
-			numbers = append(numbers, episode.EpisodeNumber)
+			numbers = append(numbers, episode.episodeNumber)
 		}
 		t.Logf("catalog file: %q episodes: %v", row.FilePath, numbers)
 	}

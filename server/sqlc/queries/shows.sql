@@ -273,6 +273,3 @@ DELETE FROM show_episode_guest_cast WHERE episode_id = ?;
 
 -- name: CreateShowEpisodeGuestCast :exec
 INSERT INTO show_episode_guest_cast (episode_id, artist_id, character, cast_order, credit_id, episode_count) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
-
--- name: GetShowFileEpisodes :many
-SELECT e.* FROM show_episodes e JOIN show_episode_files l ON l.episode_id = e.id WHERE l.file_id = ? ORDER BY l.episode_order;

@@ -686,48 +686,6 @@ func (q *Queries) GetShowFileByPath(ctx context.Context, filePath string) (ShowF
 	return i, err
 }
 
-const getShowFileEpisodes = `-- name: GetShowFileEpisodes :many
-SELECT e.id, e.season_id, e.episode_number, e.name, e.tmdb_id, e.overview, e.air_date, e.still_path, e.production_code, e.tmdb_runtime, e.vote_average, e.vote_count, e.created_at, e.updated_at FROM show_episodes e JOIN show_episode_files l ON l.episode_id = e.id WHERE l.file_id = ? ORDER BY l.episode_order
-`
-
-func (q *Queries) GetShowFileEpisodes(ctx context.Context, fileID int64) ([]ShowEpisode, error) {
-	rows, err := q.query(ctx, q.getShowFileEpisodesStmt, getShowFileEpisodes, fileID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ShowEpisode{}
-	for rows.Next() {
-		var i ShowEpisode
-		if err := rows.Scan(
-			&i.ID,
-			&i.SeasonID,
-			&i.EpisodeNumber,
-			&i.Name,
-			&i.TmdbID,
-			&i.Overview,
-			&i.AirDate,
-			&i.StillPath,
-			&i.ProductionCode,
-			&i.TmdbRuntime,
-			&i.VoteAverage,
-			&i.VoteCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getShowPendingEpisodeIDs = `-- name: GetShowPendingEpisodeIDs :many
 SELECT r.episode_id FROM show_episode_tmdb_retries r JOIN show_episodes e ON e.id = r.episode_id JOIN show_seasons se ON se.id = e.season_id WHERE se.show_id = ?
 `

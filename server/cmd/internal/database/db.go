@@ -525,9 +525,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getShowFileByPathStmt, err = db.PrepareContext(ctx, getShowFileByPath); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowFileByPath: %w", err)
 	}
-	if q.getShowFileEpisodesStmt, err = db.PrepareContext(ctx, getShowFileEpisodes); err != nil {
-		return nil, fmt.Errorf("error preparing query GetShowFileEpisodes: %w", err)
-	}
 	if q.getShowPendingEpisodeIDsStmt, err = db.PrepareContext(ctx, getShowPendingEpisodeIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowPendingEpisodeIDs: %w", err)
 	}
@@ -1815,11 +1812,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getShowFileByPathStmt: %w", cerr)
 		}
 	}
-	if q.getShowFileEpisodesStmt != nil {
-		if cerr := q.getShowFileEpisodesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getShowFileEpisodesStmt: %w", cerr)
-		}
-	}
 	if q.getShowPendingEpisodeIDsStmt != nil {
 		if cerr := q.getShowPendingEpisodeIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowPendingEpisodeIDsStmt: %w", cerr)
@@ -2771,7 +2763,6 @@ type Queries struct {
 	getShowEpisodeStmt                          *sql.Stmt
 	getShowEpisodesStmt                         *sql.Stmt
 	getShowFileByPathStmt                       *sql.Stmt
-	getShowFileEpisodesStmt                     *sql.Stmt
 	getShowPendingEpisodeIDsStmt                *sql.Stmt
 	getShowPendingSeasonIDsStmt                 *sql.Stmt
 	getShowRetryStmt                            *sql.Stmt
@@ -3094,7 +3085,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowEpisodeStmt:                          q.getShowEpisodeStmt,
 		getShowEpisodesStmt:                         q.getShowEpisodesStmt,
 		getShowFileByPathStmt:                       q.getShowFileByPathStmt,
-		getShowFileEpisodesStmt:                     q.getShowFileEpisodesStmt,
 		getShowPendingEpisodeIDsStmt:                q.getShowPendingEpisodeIDsStmt,
 		getShowPendingSeasonIDsStmt:                 q.getShowPendingSeasonIDsStmt,
 		getShowRetryStmt:                            q.getShowRetryStmt,

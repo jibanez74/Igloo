@@ -275,7 +275,6 @@ type Querier interface {
 	GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, error)
 	GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error)
 	GetShowFileByPath(ctx context.Context, filePath string) (ShowFile, error)
-	GetShowFileEpisodes(ctx context.Context, fileID int64) ([]ShowEpisode, error)
 	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
 	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
 	GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error)
