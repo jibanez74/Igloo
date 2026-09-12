@@ -276,6 +276,9 @@ type Querier interface {
 	GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error)
 	GetShowFileByPath(ctx context.Context, filePath string) (ShowFile, error)
 	GetShowFileEpisodes(ctx context.Context, fileID int64) ([]ShowEpisode, error)
+	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
+	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
+	GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error)
 	GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error)
 	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
 	GetShowSeason(ctx context.Context, id int64) (ShowSeason, error)
@@ -329,9 +332,6 @@ type Querier interface {
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error)
 	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
-	HasShowEpisodeRetry(ctx context.Context, episodeID int64) (bool, error)
-	HasShowRetry(ctx context.Context, showID int64) (bool, error)
-	HasShowSeasonRetry(ctx context.Context, seasonID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) error
 	InsertChapter(ctx context.Context, arg InsertChapterParams) error
 	InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) error

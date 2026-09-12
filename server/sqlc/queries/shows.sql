@@ -65,14 +65,14 @@ SELECT s.* FROM shows s WHERE s.id > sqlc.arg(after_id) AND (
  EXISTS (SELECT 1 FROM show_seasons se JOIN show_episodes e ON e.season_id = se.id JOIN show_episode_tmdb_retries r ON r.episode_id = e.id WHERE se.show_id = s.id))
  ORDER BY s.id LIMIT 100;
 
--- name: HasShowRetry :one
-SELECT EXISTS(SELECT 1 FROM show_tmdb_retries WHERE show_id = ?);
+-- name: GetShowRetry :one
+SELECT attempts, last_attempt_at FROM show_tmdb_retries WHERE show_id = ?;
 
--- name: HasShowSeasonRetry :one
-SELECT EXISTS(SELECT 1 FROM show_season_tmdb_retries WHERE season_id = ?);
+-- name: GetShowPendingSeasonIDs :many
+SELECT r.season_id FROM show_season_tmdb_retries r JOIN show_seasons se ON se.id = r.season_id WHERE se.show_id = ?;
 
--- name: HasShowEpisodeRetry :one
-SELECT EXISTS(SELECT 1 FROM show_episode_tmdb_retries WHERE episode_id = ?);
+-- name: GetShowPendingEpisodeIDs :many
+SELECT r.episode_id FROM show_episode_tmdb_retries r JOIN show_episodes e ON e.id = r.episode_id JOIN show_seasons se ON se.id = e.season_id WHERE se.show_id = ?;
 
 -- name: CountShowRetries :one
 SELECT (SELECT COUNT(*) FROM show_tmdb_retries) + (SELECT COUNT(*) FROM show_season_tmdb_retries) + (SELECT COUNT(*) FROM show_episode_tmdb_retries);

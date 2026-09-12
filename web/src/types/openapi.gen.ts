@@ -3650,7 +3650,7 @@ export interface components {
             deleted: number;
             /** @description Local episodes touched by this run. Combined files link several episodes to one file, so this is unrelated to the file counts. */
             episodes: number;
-            /** @description Entities (shows, seasons, and episodes) whose metadata this run attempted. Entities are not files. */
+            /** @description Entities (shows, seasons, and episodes) eligible when enrichment started, published before the first request. A show that cannot be resolved this run drops its season and episode entities from the total, so only a provider stop leaves processed short of the total. Entities are not files. */
             enrichment_total: number;
             /** @description Entities with an enrichment outcome this run. */
             enrichment_processed: number;
@@ -3658,7 +3658,9 @@ export interface components {
             enriched: number;
             /** @description Entities whose enrichment failed. Their previous metadata and retry markers are preserved. */
             enrichment_failed: number;
-            /** @description Shows, seasons, and episodes still carrying a retry marker when the run finished. It does not by itself make the final state completed-with-issues. */
+            /** @description Shows with a definitive TMDB no-match during this run. Their seasons and episodes are not attempted until the show matches, and repeated misses back off from one day up to seven. */
+            enrichment_unmatched: number;
+            /** @description Shows, seasons, and episodes still carrying a retry marker when the run finished, including shows whose miss backoff has not elapsed. It does not by itself make the final state completed-with-issues. */
             pending_enrichment: number;
             issue_count: number;
             issues: components["schemas"]["ScanIssue"][];

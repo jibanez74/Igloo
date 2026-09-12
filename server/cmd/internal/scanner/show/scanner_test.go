@@ -352,13 +352,15 @@ func TestConcurrentScannerWrites(t *testing.T) {
 type testTMDB struct {
 	tmdb.TmdbInterface
 	searchCalls, showCalls, seasonCalls int
+	searchCtx                           context.Context
 	showHook                            func(int) (*tmdb.TVShow, error)
 	seasonHook                          func(int, int) (*tmdb.TVSeason, error)
 	searchHook                          func(string, int) ([]tmdb.TVShow, error)
 }
 
-func (c *testTMDB) SearchShowsByTitleAndYear(_ context.Context, title string, years ...int) ([]tmdb.TVShow, error) {
+func (c *testTMDB) SearchShowsByTitleAndYear(ctx context.Context, title string, years ...int) ([]tmdb.TVShow, error) {
 	c.searchCalls++
+	c.searchCtx = ctx
 	year := 0
 	if len(years) > 0 {
 		year = years[0]
@@ -418,9 +420,21 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	if client.showCalls != 1 || client.seasonCalls != 2 {
 		t.Fatal("successful unchanged metadata refreshed")
 	}
-	// A changed file queues all represented owners, and a failed stored-ID
-	// lookup cannot rematch or replace successful descriptive metadata.
+	// A changed file re-probes but never re-queues matched entities: no TMDB
+	// call is made and the descriptions stay.
 	writeFile(t, root, "Example (2020)/Season 1/S01E01E02.mkv", "changed file")
+	scanOK(t, s, root)
+	pending, err = s.Queries.CountShowRetries(context.Background())
+	if err != nil || pending != 0 || client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 2 || s.Status().EnrichmentTotal != 0 {
+		t.Fatal("technical change re-queued matched metadata", pending, client, p.Calls())
+	}
+	// A retry marker on a matched show fetches its stored ID directly; a failed
+	// lookup cannot rematch or replace successful descriptive metadata, and it
+	// defers the show's descendants rather than failing them.
+	_, err = s.DB.Exec("INSERT INTO show_tmdb_retries (show_id) VALUES (1)")
+	if err != nil {
+		t.Fatal(err)
+	}
 	client.showHook = func(id int) (*tmdb.TVShow, error) {
 		if id != 10 {
 			t.Error("lost identity")
@@ -432,8 +446,9 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Name != "Enriched show" || client.searchCalls != 1 || client.seasonCalls != 2 || p.Calls() != 2 {
-		t.Fatal("failed ID lookup changed metadata or retried descendants")
+	status := s.Status()
+	if stored.Name != "Enriched show" || client.searchCalls != 1 || client.seasonCalls != 2 || status.EnrichmentFailed != 1 || status.EnrichmentTotal != 1 || status.PendingEnrichment != 1 {
+		t.Fatalf("failed ID lookup changed metadata or retried descendants: %+v", status)
 	}
 }
 
@@ -474,6 +489,13 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 			if countRows(t, s.DB, "show_episode_tmdb_retries") != 2 {
 				t.Fatal("failure cleared episode retries")
 			}
+			// Episodes TMDB does not list yet stay pending without an outcome.
+			if mode == "missing" {
+				status := s.Status()
+				if status.EnrichmentFailed != 0 || status.EnrichmentUnmatched != 0 || status.EnrichmentProcessed != status.EnrichmentTotal || status.EnrichmentTotal != 2 {
+					t.Fatalf("missing episodes counted as an outcome: %+v", status)
+				}
+			}
 			// The trigger aborts only the cast insert, and SQLite rolls a RAISE
 			// back statement-wide, so the rolled-back transaction is visible in
 			// the writes that preceded it: the artist upserted for that cast row
@@ -501,9 +523,13 @@ func TestShowRankingAmbiguousYearAndDeterministicTies(t *testing.T) {
 		return []tmdb.TVShow{{ID: 30, Name: "Space Adventures", FirstAirDate: "1999-01-01"}, {ID: 20, Name: "Space 1999", FirstAirDate: "1975-01-01"}, {ID: 10, Name: "Space 1999", FirstAirDate: "1975-01-01"}}, nil
 	}
 	s.Tmdb = client
-	result, err := s.lookupShow(context.Background(), database.Show{DirectoryPath: "/tv/Space 1999"})
+	result, err := s.lookupShow(context.Background(), &providerBreaker{}, database.Show{DirectoryPath: "/tv/Space 1999"})
 	if err != nil || result.ID != 10 || client.searchCalls != 2 {
 		t.Fatal("ambiguous ranking", result, err, client.searchCalls)
+	}
+	deadline, ok := client.searchCtx.Deadline()
+	if !ok || time.Until(deadline) > scanner.TmdbLookupTimeout {
+		t.Fatal("lookup ran without the shared timeout budget")
 	}
 }
 

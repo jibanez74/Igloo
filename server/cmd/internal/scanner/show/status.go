@@ -22,6 +22,7 @@ type Status struct {
 	EnrichmentProcessed int `json:"enrichment_processed"`
 	Enriched            int `json:"enriched"`
 	EnrichmentFailed    int `json:"enrichment_failed"`
+	EnrichmentUnmatched int `json:"enrichment_unmatched"`
 	PendingEnrichment   int `json:"pending_enrichment"`
 }
 

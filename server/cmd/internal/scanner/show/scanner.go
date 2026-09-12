@@ -41,6 +41,8 @@ const (
 	reasonDeferred   = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
 	reasonRejected   = "The file could not be read or its name does not identify a season and episode. Existing records are preserved."
 	reasonEnrichment = "TMDB metadata could not be applied. The local entry is usable and the next scan retries it."
+	reasonUnmatched  = "TMDB returned no matching show. Rename the folder or wait for a later scan; repeated misses back off."
+	reasonStopped    = "TMDB enrichment stopped after provider failures. Pending shows will retry on a later scan."
 )
 
 // errStaleCatalogRow aborts a persistence transaction without reporting a
@@ -102,7 +104,7 @@ func (s *Scanner) runShowScan(directory string) {
 		report.Finish(&report.status.Progress, contextErr != nil)
 		s.publish(report)
 		now := *report.status.FinishedAt
-		s.Logger.Info("show scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "episodes", report.status.Episodes, "enriched", report.status.Enriched, "enrichment_failed", report.status.EnrichmentFailed, "pending_enrichment", report.status.PendingEnrichment)
+		s.Logger.Info("show scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "episodes", report.status.Episodes, "enriched", report.status.Enriched, "enrichment_failed", report.status.EnrichmentFailed, "enrichment_unmatched", report.status.EnrichmentUnmatched, "pending_enrichment", report.status.PendingEnrichment)
 	}()
 	// fail marks a fatal error; a cancellation is reported once by the deferred
 	// finish instead.

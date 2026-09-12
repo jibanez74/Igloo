@@ -728,6 +728,76 @@ func (q *Queries) GetShowFileEpisodes(ctx context.Context, fileID int64) ([]Show
 	return items, nil
 }
 
+const getShowPendingEpisodeIDs = `-- name: GetShowPendingEpisodeIDs :many
+SELECT r.episode_id FROM show_episode_tmdb_retries r JOIN show_episodes e ON e.id = r.episode_id JOIN show_seasons se ON se.id = e.season_id WHERE se.show_id = ?
+`
+
+func (q *Queries) GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.getShowPendingEpisodeIDsStmt, getShowPendingEpisodeIDs, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var episode_id int64
+		if err := rows.Scan(&episode_id); err != nil {
+			return nil, err
+		}
+		items = append(items, episode_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowPendingSeasonIDs = `-- name: GetShowPendingSeasonIDs :many
+SELECT r.season_id FROM show_season_tmdb_retries r JOIN show_seasons se ON se.id = r.season_id WHERE se.show_id = ?
+`
+
+func (q *Queries) GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.getShowPendingSeasonIDsStmt, getShowPendingSeasonIDs, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var season_id int64
+		if err := rows.Scan(&season_id); err != nil {
+			return nil, err
+		}
+		items = append(items, season_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowRetry = `-- name: GetShowRetry :one
+SELECT attempts, last_attempt_at FROM show_tmdb_retries WHERE show_id = ?
+`
+
+type GetShowRetryRow struct {
+	Attempts      int64         `json:"attempts"`
+	LastAttemptAt sql.NullInt64 `json:"last_attempt_at"`
+}
+
+func (q *Queries) GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error) {
+	row := q.queryRow(ctx, q.getShowRetryStmt, getShowRetry, showID)
+	var i GetShowRetryRow
+	err := row.Scan(&i.Attempts, &i.LastAttemptAt)
+	return i, err
+}
+
 const getShowScanEpisodeLinks = `-- name: GetShowScanEpisodeLinks :many
 SELECT file_id, episode_id FROM show_episode_files ORDER BY file_id, episode_order
 `
@@ -881,39 +951,6 @@ func (q *Queries) GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeaso
 		return nil, err
 	}
 	return items, nil
-}
-
-const hasShowEpisodeRetry = `-- name: HasShowEpisodeRetry :one
-SELECT EXISTS(SELECT 1 FROM show_episode_tmdb_retries WHERE episode_id = ?)
-`
-
-func (q *Queries) HasShowEpisodeRetry(ctx context.Context, episodeID int64) (bool, error) {
-	row := q.queryRow(ctx, q.hasShowEpisodeRetryStmt, hasShowEpisodeRetry, episodeID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const hasShowRetry = `-- name: HasShowRetry :one
-SELECT EXISTS(SELECT 1 FROM show_tmdb_retries WHERE show_id = ?)
-`
-
-func (q *Queries) HasShowRetry(ctx context.Context, showID int64) (bool, error) {
-	row := q.queryRow(ctx, q.hasShowRetryStmt, hasShowRetry, showID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const hasShowSeasonRetry = `-- name: HasShowSeasonRetry :one
-SELECT EXISTS(SELECT 1 FROM show_season_tmdb_retries WHERE season_id = ?)
-`
-
-func (q *Queries) HasShowSeasonRetry(ctx context.Context, seasonID int64) (bool, error) {
-	row := q.queryRow(ctx, q.hasShowSeasonRetryStmt, hasShowSeasonRetry, seasonID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const insertShowAudioStream = `-- name: InsertShowAudioStream :exec

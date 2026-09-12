@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts } from "@/lib/query-opts";
 import type { ScanStatusQueryOpts } from "@/lib/query-opts";
-import { MOVIES_STATS_KEY, MUSIC_STATS_KEY, SHOW_SCAN_STATUS_KEY } from "@/lib/constants";
+import { MOVIES_STATS_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
@@ -23,7 +23,9 @@ type ScanStatusOptions = {
 
 type ScanStatusConfig<T extends ScanStatusLike & Record<string, unknown>> = {
   queryOptions: () => ScanStatusQueryOpts<T>;
-  statsKey: string;
+  // statsKey is the library statistics query committed work refreshes; a
+  // library without statistics leaves it unset.
+  statsKey?: string;
   invalidateLibrary: (queryClient: QueryClient) => void;
 };
 
@@ -53,7 +55,7 @@ function useScanStatus<T extends ScanStatusLike & Record<string, unknown>>(
   const statsKey = config.statsKey;
 
   useEffect(() => {
-    if (committed > 0) {
+    if (committed > 0 && statsKey) {
       void queryClient.invalidateQueries({ queryKey: [statsKey] });
     }
   }, [queryClient, statsKey, committed]);
@@ -85,7 +87,6 @@ const MUSIC_SCAN: ScanStatusConfig<MusicScanStatus> = {
 // catalog lists to refresh; only the report itself updates.
 const SHOW_SCAN: ScanStatusConfig<ShowScanStatus> = {
   queryOptions: showScanStatusQueryOpts,
-  statsKey: SHOW_SCAN_STATUS_KEY,
   invalidateLibrary: () => {},
 };
 

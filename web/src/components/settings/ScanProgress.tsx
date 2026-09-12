@@ -101,15 +101,12 @@ const enrichmentLine = (props: Props) => {
   if (!props.status) return null;
   const { provider, attempted, enriched } = copyFor(props).enrichment;
   const status = props.status;
-  // Music has no pending count and TV has no unmatched count; both tallies are
-  // omitted rather than reported as zero.
-  const unmatched = props.library === "music" || props.library === "movies"
-    ? ` · ${props.status.enrichment_unmatched} unmatched`
-    : "";
+  // Music has no pending count, so that tally is omitted rather than reported
+  // as zero.
   const pending = props.library === "movies" || props.library === "shows"
     ? ` · ${props.status.pending_enrichment} pending`
     : "";
-  return `${provider}: ${status.enrichment_processed} of ${status.enrichment_total} ${attempted} · ${status.enriched} ${enriched} · ${status.enrichment_failed} failed${unmatched}${pending}`;
+  return `${provider}: ${status.enrichment_processed} of ${status.enrichment_total} ${attempted} · ${status.enriched} ${enriched} · ${status.enrichment_failed} failed · ${status.enrichment_unmatched} unmatched${pending}`;
 };
 
 export default function ScanProgress(props: Props) {

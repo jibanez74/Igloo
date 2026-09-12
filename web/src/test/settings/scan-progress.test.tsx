@@ -3,11 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ScanProgress from "@/components/settings/ScanProgress";
-import { useMovieScanStatus, useMusicScanStatus } from "@/hooks/useScanStatus";
+import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
 import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
 import { createTestQueryClient } from "../helpers/render";
 import { movieScanStatus } from "../helpers/movie-scan";
 import { musicScanStatus } from "../helpers/music-scan";
+import { showScanStatus } from "../helpers/show-scan";
 import { jsonResponse, requestURL } from "../helpers/api";
 
 function ScanView() {
@@ -23,6 +24,11 @@ function BackgroundScanView() {
 function MusicScanView() {
   const query = useMusicScanStatus();
   return <ScanProgress library="music" status={query.data} unavailable={query.isError} />;
+}
+
+function ShowScanView() {
+  const query = useShowScanStatus();
+  return <ScanProgress library="shows" status={query.data} unavailable={query.isError} />;
 }
 
 afterEach(() => {
@@ -165,6 +171,51 @@ describe("music scan progress", () => {
     status = musicScanStatus({ state: "completed", phase: "enrichment", processed: 2267, imported: 2267, enriched: 300 });
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     expect(screen.getByRole("status")).toHaveTextContent("Music scan completed");
+    client.clear();
+  });
+});
+
+describe("TV shows scan progress", () => {
+  it("announces TV phases, the local episode count and the TMDB tallies", async () => {
+    const user = userEvent.setup();
+    const status = showScanStatus({
+      state: "completed-with-issues", phase: "enrichment", processed: 316, imported: 315, failed: 1, deferred: 1, deleted: 3, episodes: 348,
+      enrichment_total: 5, enrichment_processed: 5, enriched: 3, enrichment_failed: 1, enrichment_unmatched: 1, pending_enrichment: 2,
+      issue_count: 2, issues: [
+        { filename: "Unknown (2001)", phase: "enrichment", reason: "TMDB returned no matching show." },
+        { filename: "copying.mkv", phase: "local", reason: "The file is still changing." },
+      ],
+    });
+    render(<ScanProgress library="shows" status={status} unavailable={false} />);
+    expect(screen.getByRole("status")).toHaveTextContent("TV shows scan completed with issues");
+    expect(screen.getByText(/316 of 316 files processed/)).toBeInTheDocument();
+    expect(screen.getByText("348 local episodes")).toBeInTheDocument();
+    expect(screen.getByText(/3 missing episodes removed/)).toBeInTheDocument();
+    expect(screen.getByText("Descriptions: 5 of 5 attempted · 3 updated · 1 failed · 1 unmatched · 2 pending")).toBeInTheDocument();
+    expect(screen.getByText(/retried on the next scan/)).toBeInTheDocument();
+    await user.click(screen.getByText("2 outstanding issues"));
+    expect(screen.getByText(/Unknown \(2001\): TMDB returned no matching show/)).toBeVisible();
+  });
+
+  it("polls the TV report until the scan completes", async () => {
+    vi.useFakeTimers();
+    let status = showScanStatus();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => jsonResponse(requestURL(input) === "/api/settings/scan/shows"
+      ? { error: false, data: status }
+      : { error: true, message: `unexpected request ${requestURL(input)}` }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createTestQueryClient();
+    render(<QueryClientProvider client={client}><ShowScanView /></QueryClientProvider>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing episodes");
+    status = showScanStatus({ processed: 54, imported: 54, episodes: 60, active_files: ["Show.S01E01.mkv"] });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByText(/54 of 316 files processed/)).toBeInTheDocument();
+    expect(screen.getByText("60 local episodes")).toBeInTheDocument();
+    expect(screen.getByText("Working on: Show.S01E01.mkv")).toBeInTheDocument();
+    status = showScanStatus({ state: "completed", phase: "enrichment", processed: 316, imported: 316, episodes: 348, enriched: 369 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(screen.getByRole("status")).toHaveTextContent("TV shows scan completed");
     client.clear();
   });
 });

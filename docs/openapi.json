@@ -13527,6 +13527,7 @@
           "enrichment_processed",
           "enriched",
           "enrichment_failed",
+          "enrichment_unmatched",
           "pending_enrichment",
           "issue_count",
           "issues"
@@ -13626,7 +13627,7 @@
           "enrichment_total": {
             "type": "integer",
             "minimum": 0,
-            "description": "Entities (shows, seasons, and episodes) whose metadata this run attempted. Entities are not files."
+            "description": "Entities (shows, seasons, and episodes) eligible when enrichment started, published before the first request. A show that cannot be resolved this run drops its season and episode entities from the total, so only a provider stop leaves processed short of the total. Entities are not files."
           },
           "enrichment_processed": {
             "type": "integer",
@@ -13643,10 +13644,15 @@
             "minimum": 0,
             "description": "Entities whose enrichment failed. Their previous metadata and retry markers are preserved."
           },
+          "enrichment_unmatched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Shows with a definitive TMDB no-match during this run. Their seasons and episodes are not attempted until the show matches, and repeated misses back off from one day up to seven."
+          },
           "pending_enrichment": {
             "type": "integer",
             "minimum": 0,
-            "description": "Shows, seasons, and episodes still carrying a retry marker when the run finished. It does not by itself make the final state completed-with-issues."
+            "description": "Shows, seasons, and episodes still carrying a retry marker when the run finished, including shows whose miss backoff has not elapsed. It does not by itself make the final state completed-with-issues."
           },
           "issue_count": {
             "type": "integer",

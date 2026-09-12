@@ -528,6 +528,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getShowFileEpisodesStmt, err = db.PrepareContext(ctx, getShowFileEpisodes); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowFileEpisodes: %w", err)
 	}
+	if q.getShowPendingEpisodeIDsStmt, err = db.PrepareContext(ctx, getShowPendingEpisodeIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowPendingEpisodeIDs: %w", err)
+	}
+	if q.getShowPendingSeasonIDsStmt, err = db.PrepareContext(ctx, getShowPendingSeasonIDs); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowPendingSeasonIDs: %w", err)
+	}
+	if q.getShowRetryStmt, err = db.PrepareContext(ctx, getShowRetry); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowRetry: %w", err)
+	}
 	if q.getShowScanEpisodeLinksStmt, err = db.PrepareContext(ctx, getShowScanEpisodeLinks); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowScanEpisodeLinks: %w", err)
 	}
@@ -617,15 +626,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.hasMovieTmdbRetryStmt, err = db.PrepareContext(ctx, hasMovieTmdbRetry); err != nil {
 		return nil, fmt.Errorf("error preparing query HasMovieTmdbRetry: %w", err)
-	}
-	if q.hasShowEpisodeRetryStmt, err = db.PrepareContext(ctx, hasShowEpisodeRetry); err != nil {
-		return nil, fmt.Errorf("error preparing query HasShowEpisodeRetry: %w", err)
-	}
-	if q.hasShowRetryStmt, err = db.PrepareContext(ctx, hasShowRetry); err != nil {
-		return nil, fmt.Errorf("error preparing query HasShowRetry: %w", err)
-	}
-	if q.hasShowSeasonRetryStmt, err = db.PrepareContext(ctx, hasShowSeasonRetry); err != nil {
-		return nil, fmt.Errorf("error preparing query HasShowSeasonRetry: %w", err)
 	}
 	if q.insertAudioStreamStmt, err = db.PrepareContext(ctx, insertAudioStream); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertAudioStream: %w", err)
@@ -1820,6 +1820,21 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getShowFileEpisodesStmt: %w", cerr)
 		}
 	}
+	if q.getShowPendingEpisodeIDsStmt != nil {
+		if cerr := q.getShowPendingEpisodeIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowPendingEpisodeIDsStmt: %w", cerr)
+		}
+	}
+	if q.getShowPendingSeasonIDsStmt != nil {
+		if cerr := q.getShowPendingSeasonIDsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowPendingSeasonIDsStmt: %w", cerr)
+		}
+	}
+	if q.getShowRetryStmt != nil {
+		if cerr := q.getShowRetryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowRetryStmt: %w", cerr)
+		}
+	}
 	if q.getShowScanEpisodeLinksStmt != nil {
 		if cerr := q.getShowScanEpisodeLinksStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowScanEpisodeLinksStmt: %w", cerr)
@@ -1968,21 +1983,6 @@ func (q *Queries) Close() error {
 	if q.hasMovieTmdbRetryStmt != nil {
 		if cerr := q.hasMovieTmdbRetryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing hasMovieTmdbRetryStmt: %w", cerr)
-		}
-	}
-	if q.hasShowEpisodeRetryStmt != nil {
-		if cerr := q.hasShowEpisodeRetryStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing hasShowEpisodeRetryStmt: %w", cerr)
-		}
-	}
-	if q.hasShowRetryStmt != nil {
-		if cerr := q.hasShowRetryStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing hasShowRetryStmt: %w", cerr)
-		}
-	}
-	if q.hasShowSeasonRetryStmt != nil {
-		if cerr := q.hasShowSeasonRetryStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing hasShowSeasonRetryStmt: %w", cerr)
 		}
 	}
 	if q.insertAudioStreamStmt != nil {
@@ -2772,6 +2772,9 @@ type Queries struct {
 	getShowEpisodesStmt                         *sql.Stmt
 	getShowFileByPathStmt                       *sql.Stmt
 	getShowFileEpisodesStmt                     *sql.Stmt
+	getShowPendingEpisodeIDsStmt                *sql.Stmt
+	getShowPendingSeasonIDsStmt                 *sql.Stmt
+	getShowRetryStmt                            *sql.Stmt
 	getShowScanEpisodeLinksStmt                 *sql.Stmt
 	getShowScanIndexStmt                        *sql.Stmt
 	getShowSeasonStmt                           *sql.Stmt
@@ -2802,9 +2805,6 @@ type Queries struct {
 	getWatchRoomMembersByRoomIDsStmt            *sql.Stmt
 	getWatchRoomsForUserStmt                    *sql.Stmt
 	hasMovieTmdbRetryStmt                       *sql.Stmt
-	hasShowEpisodeRetryStmt                     *sql.Stmt
-	hasShowRetryStmt                            *sql.Stmt
-	hasShowSeasonRetryStmt                      *sql.Stmt
 	insertAudioStreamStmt                       *sql.Stmt
 	insertChapterStmt                           *sql.Stmt
 	insertShowAudioStreamStmt                   *sql.Stmt
@@ -3095,6 +3095,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowEpisodesStmt:                         q.getShowEpisodesStmt,
 		getShowFileByPathStmt:                       q.getShowFileByPathStmt,
 		getShowFileEpisodesStmt:                     q.getShowFileEpisodesStmt,
+		getShowPendingEpisodeIDsStmt:                q.getShowPendingEpisodeIDsStmt,
+		getShowPendingSeasonIDsStmt:                 q.getShowPendingSeasonIDsStmt,
+		getShowRetryStmt:                            q.getShowRetryStmt,
 		getShowScanEpisodeLinksStmt:                 q.getShowScanEpisodeLinksStmt,
 		getShowScanIndexStmt:                        q.getShowScanIndexStmt,
 		getShowSeasonStmt:                           q.getShowSeasonStmt,
@@ -3125,9 +3128,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getWatchRoomMembersByRoomIDsStmt:            q.getWatchRoomMembersByRoomIDsStmt,
 		getWatchRoomsForUserStmt:                    q.getWatchRoomsForUserStmt,
 		hasMovieTmdbRetryStmt:                       q.hasMovieTmdbRetryStmt,
-		hasShowEpisodeRetryStmt:                     q.hasShowEpisodeRetryStmt,
-		hasShowRetryStmt:                            q.hasShowRetryStmt,
-		hasShowSeasonRetryStmt:                      q.hasShowSeasonRetryStmt,
 		insertAudioStreamStmt:                       q.insertAudioStreamStmt,
 		insertChapterStmt:                           q.insertChapterStmt,
 		insertShowAudioStreamStmt:                   q.insertShowAudioStreamStmt,
