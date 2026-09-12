@@ -36,9 +36,7 @@ func TestTVRequestsCachingAndFallback(t *testing.T) {
 			if r.URL.Query().Get("append_to_response") != "aggregate_credits,videos" {
 				t.Error("missing appended season endpoints")
 			}
-			fmt.Fprint(w, `{"id":70,"season_number":0,"episodes":[{"id":71,"season_number":0,"episode_number":1}],"aggregate_credits":{},"videos":{"results":[]}}`)
-		case "/tv/7/season/0/episode/1/credits":
-			fmt.Fprint(w, `{"id":71,"cast":[],"guest_stars":[{"id":9,"character":"Guest"}],"crew":[]}`)
+			fmt.Fprint(w, `{"id":70,"season_number":0,"episodes":[{"id":71,"season_number":0,"episode_number":1,"guest_stars":[{"id":9,"character":"Guest"}],"crew":[{"id":10,"job":"Director"}]}],"aggregate_credits":{},"videos":{"results":[]}}`)
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
@@ -68,19 +66,11 @@ func TestTVRequestsCachingAndFallback(t *testing.T) {
 		t.Fatal("caller mutated cached response", err)
 	}
 	season, err := client.GetSeasonDetails(ctx, 7, 0)
-	if err != nil || season.Episodes[0].ID != 71 {
+	if err != nil || season.Episodes[0].ID != 71 || len(season.Episodes[0].GuestStars) != 1 || len(season.Episodes[0].Crew) != 1 {
 		t.Fatal("season", err)
-	}
-	credits, err := client.GetEpisodeCredits(ctx, 7, 0, 1)
-	if err != nil || len(credits.GuestStars) != 1 {
-		t.Fatal("credits", err)
 	}
 	before := calls.Load()
 	_, err = client.GetSeasonDetails(ctx, 7, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = client.GetEpisodeCredits(ctx, 7, 0, 1)
 	if err != nil || calls.Load() != before {
 		t.Fatal("cache miss", err)
 	}
@@ -164,7 +154,7 @@ func TestTVSeasonNumberValidationAndCancellation(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	client := newTestClient(server.URL)
-	go func() { _, err := client.GetEpisodeCredits(ctx, 7, 1, 1); done <- err }()
+	go func() { _, err := client.GetSeasonDetails(ctx, 7, 1); done <- err }()
 	<-entered
 	cancel()
 	err := <-done

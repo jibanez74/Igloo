@@ -54,27 +54,24 @@ func TestWorkersPrepareWithoutDatabase(t *testing.T) {
 	enriched.inspection.Close()
 }
 
-func TestEnrichmentEligibilityBacksOffAfterRepeatedMisses(t *testing.T) {
+// The backoff arithmetic is covered in the scanner package; these cases pin
+// the pending-state gate in front of it.
+func TestEnrichmentEligibilityRequiresPendingState(t *testing.T) {
 	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	missedAt := helpers.NullInt64(now.Add(-time.Hour).Unix())
 	cases := []struct {
 		name  string
 		entry movieScanEntry
-		at    time.Time
 		want  bool
 	}{
-		{"identified and not re-queued", movieScanEntry{TmdbID: helpers.NullInt64(7)}, now, false},
-		{"never attempted", movieScanEntry{}, now, true},
-		{"first miss retries next scan", movieScanEntry{PendingRetry: true, RetryAttempts: 1, LastAttemptAt: missedAt}, now, true},
-		{"second miss waits a day", movieScanEntry{PendingRetry: true, RetryAttempts: 2, LastAttemptAt: missedAt}, now, false},
-		{"second miss eligible after a day", movieScanEntry{PendingRetry: true, RetryAttempts: 2, LastAttemptAt: missedAt}, now.Add(24 * time.Hour), true},
-		{"third miss waits two days", movieScanEntry{PendingRetry: true, RetryAttempts: 3, LastAttemptAt: missedAt}, now.Add(24 * time.Hour), false},
-		{"backoff caps at a week", movieScanEntry{PendingRetry: true, RetryAttempts: 40, LastAttemptAt: missedAt}, now.Add(7 * 24 * time.Hour), true},
-		{"re-queued by rescan resets", movieScanEntry{TmdbID: helpers.NullInt64(7), PendingRetry: true}, now, true},
+		{"identified and not re-queued", movieScanEntry{TmdbID: helpers.NullInt64(7)}, false},
+		{"never attempted", movieScanEntry{}, true},
+		{"second miss waits a day", movieScanEntry{PendingRetry: true, RetryAttempts: 2, LastAttemptAt: missedAt}, false},
+		{"re-queued by rescan resets", movieScanEntry{TmdbID: helpers.NullInt64(7), PendingRetry: true}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.entry.enrichmentEligible(tc.at)
+			got := tc.entry.enrichmentEligible(now)
 			if got != tc.want {
 				t.Fatalf("eligible=%v want=%v", got, tc.want)
 			}

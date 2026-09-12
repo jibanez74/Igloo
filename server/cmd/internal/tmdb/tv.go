@@ -52,12 +52,6 @@ type TVCrewCredit struct {
 	Job        string `json:"job"`
 	CreditID   string `json:"credit_id"`
 }
-type TVEpisodeCredits struct {
-	ID         int            `json:"id"`
-	Cast       []TVCastCredit `json:"cast"`
-	GuestStars []TVCastCredit `json:"guest_stars"`
-	Crew       []TVCrewCredit `json:"crew"`
-}
 type TVVideos struct {
 	Results []TmdbVideoResult `json:"results"`
 }
@@ -122,6 +116,10 @@ type TVEpisode struct {
 	Runtime        int     `json:"runtime"`
 	VoteAverage    float64 `json:"vote_average"`
 	VoteCount      int     `json:"vote_count"`
+	// GuestStars and Crew ride along in the season payload, so episode credits
+	// never need a request of their own.
+	GuestStars []TVCastCredit `json:"guest_stars"`
+	Crew       []TVCrewCredit `json:"crew"`
 }
 
 func (s *TVShow) Certification() string {
@@ -276,23 +274,6 @@ func (t *tmdbClient) GetSeasonDetails(ctx context.Context, id, season int) (*TVS
 		}
 		return nil
 	}, "season_number", "episodes", "aggregate_credits", "videos")
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (t *tmdbClient) GetEpisodeCredits(ctx context.Context, id, season, episode int) (*TVEpisodeCredits, error) {
-	if id <= 0 || season < 0 || episode <= 0 {
-		return nil, errors.New("invalid episode coordinates")
-	}
-	var result TVEpisodeCredits
-	err := t.getTV(ctx, fmt.Sprintf("/tv/%d/season/%d/episode/%d/credits", id, season, episode), url.Values{}, &result, func() error {
-		if result.ID <= 0 {
-			return errors.New("invalid TMDB episode credits identity")
-		}
-		return nil
-	}, "cast", "guest_stars", "crew")
 	if err != nil {
 		return nil, err
 	}

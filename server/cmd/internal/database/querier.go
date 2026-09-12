@@ -48,7 +48,6 @@ type Querier interface {
 	CreateShowCast(ctx context.Context, arg CreateShowCastParams) error
 	CreateShowCreator(ctx context.Context, arg CreateShowCreatorParams) error
 	CreateShowCrew(ctx context.Context, arg CreateShowCrewParams) error
-	CreateShowEpisodeCast(ctx context.Context, arg CreateShowEpisodeCastParams) error
 	CreateShowEpisodeCrew(ctx context.Context, arg CreateShowEpisodeCrewParams) error
 	CreateShowEpisodeGuestCast(ctx context.Context, arg CreateShowEpisodeGuestCastParams) error
 	CreateShowExtraVideo(ctx context.Context, arg CreateShowExtraVideoParams) error
@@ -103,7 +102,6 @@ type Querier interface {
 	DeleteShowCast(ctx context.Context, showID int64) error
 	DeleteShowCreator(ctx context.Context, showID int64) error
 	DeleteShowCrew(ctx context.Context, showID int64) error
-	DeleteShowEpisodeCast(ctx context.Context, episodeID int64) error
 	DeleteShowEpisodeCrew(ctx context.Context, episodeID int64) error
 	DeleteShowEpisodeGuestCast(ctx context.Context, episodeID int64) error
 	DeleteShowExtraVideo(ctx context.Context, showID int64) error
@@ -278,6 +276,10 @@ type Querier interface {
 	GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error)
 	GetShowFileByPath(ctx context.Context, filePath string) (ShowFile, error)
 	GetShowFileEpisodes(ctx context.Context, fileID int64) ([]ShowEpisode, error)
+	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
+	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
+	GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error)
+	GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error)
 	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
 	GetShowSeason(ctx context.Context, id int64) (ShowSeason, error)
 	GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeason, error)
@@ -330,15 +332,12 @@ type Querier interface {
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error)
 	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
-	HasShowEpisodeRetry(ctx context.Context, episodeID int64) (bool, error)
-	HasShowRetry(ctx context.Context, showID int64) (bool, error)
-	HasShowSeasonRetry(ctx context.Context, seasonID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) error
 	InsertChapter(ctx context.Context, arg InsertChapterParams) error
-	InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) (ShowAudioStream, error)
-	InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) (ShowChapter, error)
-	InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitleParams) (ShowSubtitle, error)
-	InsertShowVideoStream(ctx context.Context, arg InsertShowVideoStreamParams) (ShowVideoStream, error)
+	InsertShowAudioStream(ctx context.Context, arg InsertShowAudioStreamParams) error
+	InsertShowChapter(ctx context.Context, arg InsertShowChapterParams) error
+	InsertShowSubtitle(ctx context.Context, arg InsertShowSubtitleParams) error
+	InsertShowVideoStream(ctx context.Context, arg InsertShowVideoStreamParams) error
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) error
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) error
 	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
@@ -387,9 +386,11 @@ type Querier interface {
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
 	MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error)
 	MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error)
-	PruneShowEpisodes(ctx context.Context) error
-	PruneShowSeasons(ctx context.Context) error
-	PruneShows(ctx context.Context) error
+	PruneShow(ctx context.Context, id int64) error
+	PruneShowSeason(ctx context.Context, id int64) (int64, error)
+	// Pruning is scoped to the season a file change touched: cascades leave the
+	// catalog rows behind, and a full-table NOT EXISTS per file did not scale.
+	PruneShowSeasonEpisodes(ctx context.Context, seasonID int64) error
 	ReconcileMusicAlbumDate(ctx context.Context, id int64) error
 	ReconcileMusicAlbumSort(ctx context.Context, id int64) error
 	ReconcileMusicAlbumYear(ctx context.Context, id int64) error
@@ -400,6 +401,7 @@ type Querier interface {
 	// ============================================================================
 	// Records a new play event when a track is played
 	RecordPlayEvent(ctx context.Context, arg RecordPlayEventParams) error
+	RecordShowTmdbMiss(ctx context.Context, arg RecordShowTmdbMissParams) error
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error

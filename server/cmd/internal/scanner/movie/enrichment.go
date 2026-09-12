@@ -7,12 +7,9 @@ import (
 	"time"
 
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/tmdbmatch"
 	"igloo/cmd/internal/tmdb"
 )
-
-// maxConsecutiveProviderFailures stops new enrichment dispatch for the rest of
-// the scan; pending movies retry on a later scan.
-const maxConsecutiveProviderFailures = 3
 
 type enrichmentJob struct {
 	file     scanner.ScanFile
@@ -42,7 +39,7 @@ func (s *Scanner) prepareEnrichment(ctx context.Context, job enrichmentJob) enri
 		return result
 	}
 	titleYear := movieTitleYear(job.file.Path)
-	searchTitle := NormalizeTitleForSearch(titleYear.Title)
+	searchTitle := tmdbmatch.NormalizeTitleForSearch(titleYear.Title)
 	if searchTitle == "" {
 		searchTitle = titleYear.Title
 	}
@@ -99,7 +96,7 @@ func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, repo
 				} else {
 					consecutive = 0
 				}
-				if authentication || consecutive >= maxConsecutiveProviderFailures {
+				if authentication || consecutive >= scanner.MaxConsecutiveProviderFailures {
 					stopped = true
 					report.Issue("", scanner.PhaseEnrichment, "TMDB enrichment stopped after provider failures. Pending movies will retry on a later scan.")
 				}

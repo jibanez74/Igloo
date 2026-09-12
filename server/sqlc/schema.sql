@@ -1206,7 +1206,13 @@ CREATE TABLE IF NOT EXISTS shows (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE IF NOT EXISTS show_tmdb_retries (show_id INTEGER PRIMARY KEY NOT NULL REFERENCES shows(id) ON DELETE CASCADE);
+-- attempts counts definitive TMDB misses; last_attempt_at (unix seconds) drives
+-- the miss backoff shared with movies.
+CREATE TABLE IF NOT EXISTS show_tmdb_retries (
+ show_id INTEGER PRIMARY KEY NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ last_attempt_at INTEGER
+);
 CREATE TABLE IF NOT EXISTS show_seasons (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
@@ -1273,8 +1279,7 @@ CREATE TABLE IF NOT EXISTS show_file_fingerprints (
  mtime_ns INTEGER NOT NULL,
  ctime_ns INTEGER NOT NULL,
  device TEXT NOT NULL,
- inode TEXT NOT NULL,
- sha256 BLOB NOT NULL CHECK (typeof(sha256) = 'blob' AND length(sha256) = 32)
+ inode TEXT NOT NULL
 );
 CREATE TABLE
   IF NOT EXISTS show_video_streams (
@@ -1436,16 +1441,6 @@ CREATE TABLE IF NOT EXISTS show_season_extra_videos (
  PRIMARY KEY (season_id, extra_video_id)
 );
 CREATE INDEX IF NOT EXISTS idx_show_season_extra_videos_extra_video_id ON show_season_extra_videos(extra_video_id);
-CREATE TABLE IF NOT EXISTS show_episode_cast (
- episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
- artist_id INTEGER NOT NULL REFERENCES artist(id),
- character TEXT NOT NULL,
- cast_order INTEGER NOT NULL,
- credit_id TEXT NOT NULL,
- episode_count INTEGER NOT NULL,
- PRIMARY KEY (episode_id, artist_id, character, credit_id)
-);
-CREATE INDEX IF NOT EXISTS idx_show_episode_cast_artist_id ON show_episode_cast(artist_id);
 CREATE TABLE IF NOT EXISTS show_episode_crew (
  episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),

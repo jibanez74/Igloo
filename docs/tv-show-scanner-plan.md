@@ -6,19 +6,19 @@ The requirements below describe the completed implementation. Validation is trac
 
 ## Phase 1 — SQL schema and queries (implemented)
 
-Modify the current schema directly, without migrations. Add shows, seasons, episodes, files, ordered episode/file links, fingerprints, and enrichment retry tables. Enforce ownership, same-season links, uniqueness, numbering constraints, and cascades. Reuse people, companies, genres, and extra videos; add networks and TV relationships, aggregate credits, episode credits, and file-owned streams and chapters. Generate sqlc code and verify relationships, rollback, and pruning.
+Modify the current schema directly, without migrations. Add shows, seasons, episodes, files, ordered episode/file links, fingerprints, and enrichment retry tables. Enforce ownership, same-season links, uniqueness, numbering constraints, and cascades. Reuse people, companies, genres, and extra videos; add networks and TV relationships, aggregate credits, episode guest and crew credits, and file-owned streams and chapters. Generate sqlc code and verify relationships, rollback, and pruning.
 
 ## Phase 2 — TMDB TV support (implemented)
 
-Add typed TV search, show details (aggregate credits, ratings, external IDs, videos), season details (episodes, aggregate credits, videos), and episode credits. Use English metadata and prefer US certification. Search optional premiere years with unfiltered fallback; reuse movie ranking and deterministic ties. Fetch stored IDs directly without automatic rematching. Validate identities and numbering, cache successes with TV namespaces, and reuse HTTP cancellation and retries. Cover requests and failures with deterministic HTTP tests.
+Add typed TV search, show details (aggregate credits, ratings, external IDs, videos), and season details (episodes with their guest stars and crew, aggregate credits, videos); episode credits are read from the season payload rather than requested per episode. Use English metadata and prefer US certification. Search optional premiere years with unfiltered fallback; reuse movie ranking and deterministic ties. Fetch stored IDs directly without automatic rematching. Validate identities and numbering, cache successes with TV namespaces, and reuse HTTP cancellation and retries. Cover requests and failures with deterministic HTTP tests.
 
 ## Phase 3 — TV scanner (implemented)
 
-Use the existing dependencies, start-status guard, batching, fingerprints, 60-second quiet period, cancellation, shared database mutex, and reconciliation. Capture shows_dir at start. Require Show/Season N/file or Show/Specials/file. Accept case-insensitive S01E02, S01E02-E04, S01E02E03, and 1x02. Reject conflicting seasons, malformed numbering, and reversed ranges. Exclude hidden entries and nested extras; ignore NFO and external subtitles. Follow movie video-extension and symlink behavior.
+Use the existing dependencies, start-status guard, worker pool, metadata-only fingerprints, 60-second quiet period, cancellation, shared database mutex, and reconciliation. Capture shows_dir at start. Accept Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly under the show folder. Accept case-insensitive S01E02, S01E02-E04, S01E02E03, and 1x02. Reject conflicting seasons, malformed numbering, and reversed ranges. Exclude hidden entries and nested extras; ignore NFO and external subtitles. Follow movie video-extension and symlink behavior.
 
-Probe each new or changed file once. Atomically persist fallback catalog entries, file metadata, streams, chapters, links, fingerprints, and retry markers. Retain changed file IDs; identical bytes update fingerprints alone. Preserve absolute stream indices and file duration without guessed episode boundaries. Enrich sequentially after technical processing and safe cleanup, grouped by show/season. Commit each entity only after required responses succeed; preserve old metadata and pending work on failures. Recheck ownership and TMDB identity before applying network responses. Unchanged successful entities are skipped and metadata-only retries never probe.
+Probe each new or changed file once. Atomically persist fallback catalog entries, file metadata, streams, chapters, links, fingerprints, and retry markers. Retain changed file IDs; inspection is metadata-only, so a touched file is re-probed rather than hashed. Preserve absolute stream indices and file duration without guessed episode boundaries. Enrich sequentially after technical processing and safe cleanup, grouped by show/season, with the entity total published first, a 30-second budget per lookup, and a provider circuit breaker. Commit each entity only after required responses succeed; preserve old metadata and pending work on failures. Report definitive no-matches as unmatched and back them off like movies. Recheck ownership and TMDB identity before applying network responses. Unchanged successful entities are skipped and metadata-only retries never probe.
 
-Delete only confirmed missing files within the captured, identity-checked root. Protect observed failures and deferred files. Prune episodes without files, empty seasons, and empty shows transactionally, retaining shared metadata entities. Log file outcomes separately from episode and enrichment counts.
+Delete only confirmed missing files within the captured, identity-checked root. Protect observed failures and deferred files. Prune the touched season's episodes without files, then the empty season and show, transactionally, retaining shared metadata entities. Log file outcomes separately from episode and enrichment counts.
 
 ## Phase 4 — Integration (implemented) and verification
 
@@ -28,7 +28,7 @@ Validate naming, hidden backups, combined episodes, duplicate copies, offline im
 
 ## Scope and defaults
 
-Use standard TMDB numbering; defer alternate/DVD ordering. Keep TMDB totals separate from local counts derived from file links. Store remote artwork and trailer metadata, without downloads or thumbnails. No TV browsing, playback, watch progress, web controls, NFO ingestion, manual identification, filesystem watcher, or background metadata refresh. Refresh successful metadata on file changes and retry failures on later scans.
+Use standard TMDB numbering; defer alternate/DVD ordering. Keep TMDB totals separate from local counts derived from file links. Store remote artwork and trailer metadata, without downloads or thumbnails. No TV browsing, playback, watch progress, web controls, NFO ingestion, manual identification, filesystem watcher, or background metadata refresh. A technical file change never re-queues a matched entity; only entities without a TMDB identity are queued. Failures retry on later scans.
 
 ## Reintegration — 2026-09-11
 
@@ -42,6 +42,26 @@ This work was developed on `feature/tv-shows-scanner`, whose branch ref was dele
 
 The validation record below was produced against the pre-refactor code and has **not** been re-run. `make check`, the race suite over `./cmd/internal/scanner/... ./cmd/internal/tmdb/... ./cmd/api`, and the mocked `libraries-settings` Playwright spec all pass after reintegration; the 415 GB sample-library run and the live TMDB integration run have not been repeated.
 
+## Optimization — 2026-09-12
+
+Content hashing was removed (inspection is metadata-only, matching movies), the local phase moved onto the shared two-worker pool with discovery completed first, pruning became season-scoped, episode credits are read from the season payload, enrichment publishes its total up front and gained the movie scanner's lookup timeout, provider circuit breaker, unmatched outcome, and miss backoff, and the naming rules above were widened. The validation record below predates these changes: its hashing statements, four-hour timeout, and episode-credits identity assertions no longer describe the scanner.
+
+### Validation record — 2026-09-12 (post-optimization)
+
+- Commit `e65b8fe9` on `fix/tv-shows-scanner`, Linux x64, Go from `server/go.mod`, repository Jellyfin ffprobe/ffmpeg payloads selected with `IGLOO_FFMPEG_PATH`/`IGLOO_FFPROBE_PATH`, sample at `/home/jose-ibanez/samba/tvshows` (read-only CIFS). The sample now holds three shows; `Alien Earth (2025)` is no longer present, so the independent inventory expects 313 files, 16 seasons, and 345 logical episodes.
+- `python3 scripts/tv-sample-inventory.py` → `TestSampleLibraryReadOnly` → reconciliation, all exit zero.
+
+| Scan outcome | Initial scan | Unchanged second scan |
+| --- | ---: | ---: |
+| Wall time | 36.5 s (was 5,713 s with hashing) | 0.47 s |
+| Real probes | 313 | 0 additional |
+| Imported / unchanged files | 313 / 0 | 0 / 313 |
+| Deferred / rejected / deleted files | 0 / 0 / 0 | 0 / 0 / 0 |
+| Local episodes processed | 345 | 345 |
+| Enriched / pending entities | 0 / 364 | 0 / 364 |
+
+All show catalog table snapshots were identical after the rescan. `make test-tmdb-integration` passed with the season payload supplying episode guest stars and crew. Native macOS ARM64 remains deferred.
+
 ## Implementation status
 
 The schema, typed TMDB TV client, scanner, startup/shutdown wiring, and admin endpoints are implemented. The API contract and generated types are present. This validation task changes tests, documentation, and an independent inventory utility; no demonstrated production defect has required a scanner, schema, API, or media-contract change. SQL generation is therefore not required for this task. `make check` verifies OpenAPI route coverage and generated-type currency.
@@ -50,7 +70,7 @@ Deterministic tests retain coverage for malformed and conflicting numbering, com
 
 `TestSampleLibraryReadOnly` is opt-in through `IGLOO_TV_SAMPLE_DIR`. It uses the real quiet period, an isolated in-memory SQLite database, real ffprobe, and a nil TMDB client even when credentials exist in the environment. It logs scanner outcomes, every real probe, catalog paths with ordered episode numbers, and all TV table counts. It snapshots every column in the show catalog tables (`shows` and `show_*`), including IDs, ownership, ordered links, technical streams and chapters, fingerprints, timestamps, relationships, and retry markers. An unchanged second scan must add zero real probes and leave every snapshot unchanged. Count-only or single-file success is insufficient: pair this test with the independent inventory reconciliation below.
 
-`TestTVMetadataIntegration` lives under the existing `integration` build tag and reuses `loadIntegrationEnv` and `make test-tmdb-integration`. Each request has a 30-second context. Fresh clients exercise title-only search, premiere-year search (2008), and unfiltered fallback from a deliberately unmatched year (1850). Breaking Bad's ID is resolved from search; show details, season 1 details, and episode 1 credits validate required structures and identities. Credits must match the episode ID returned by the season. Ratings, popularity, exact credit counts, and exact total episode/season counts are not fixed assertions. Missing credentials remain a skip, not evidence of live validation.
+`TestTVMetadataIntegration` lives under the existing `integration` build tag and reuses `loadIntegrationEnv` and `make test-tmdb-integration`. Each request has a 30-second context. Fresh clients exercise title-only search, premiere-year search (2008), and unfiltered fallback from a deliberately unmatched year (1850). Breaking Bad's ID is resolved from search; show details and season 1 details validate required structures and identities, including episode 1's guest stars and crew from the season payload. Ratings, popularity, exact credit counts, and exact total episode/season counts are not fixed assertions. Missing credentials remain a skip, not evidence of live validation.
 
 ## Validation record — 2026-09-09 (pre-reintegration)
 

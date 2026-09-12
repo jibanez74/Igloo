@@ -25,6 +25,31 @@ type TmdbVideoResult struct {
 	Official bool   `json:"official"`
 }
 
+// ExtraVideoType maps TMDB's free-form video type onto the extra_videos.type
+// vocabulary shared by the movie and TV catalogs.
+func (v TmdbVideoResult) ExtraVideoType() string {
+	switch strings.ToLower(strings.TrimSpace(v.Type)) {
+	case "trailer", "teaser":
+		return "trailer"
+	case "featurette", "behind the scenes", "clip", "bloopers", "interview":
+		return "special_feature"
+	default:
+		return "other"
+	}
+}
+
+// ExtraVideoSite maps the hosting site onto the extra_videos.site vocabulary.
+func (v TmdbVideoResult) ExtraVideoSite() string {
+	switch strings.ToLower(strings.TrimSpace(v.Site)) {
+	case "youtube":
+		return "youtube"
+	case "vimeo":
+		return "vimeo"
+	default:
+		return "other"
+	}
+}
+
 type ProductionCompany struct {
 	ID            int    `json:"id"`
 	LogoPath      string `json:"logo_path"`
@@ -349,7 +374,8 @@ func ProviderFailure(err error) (authentication, transient bool) {
 	if isStatus {
 		return status.StatusCode == http.StatusUnauthorized || status.StatusCode == http.StatusForbidden, retryableTmdbStatus(status.StatusCode)
 	}
-	return false, err != nil && !errors.Is(err, ErrNoMoviesFound)
+	noMatch := errors.Is(err, ErrNoMoviesFound) || errors.Is(err, ErrNoShowsFound)
+	return false, err != nil && !noMatch
 }
 
 func tmdbStatusError(statusCode int, fallback string) error {

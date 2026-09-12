@@ -15,7 +15,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/tmdb"
-	"igloo/sqlc"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -34,23 +33,7 @@ func setupMovieScanner(t *testing.T) *movieScannerTestContext {
 
 func setupMovieScannerDatabase(t *testing.T, source string) *movieScannerTestContext {
 	t.Helper()
-	db, err := sql.Open("sqlite3", source)
-	if err != nil {
-		t.Fatalf("open in-memory database: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-
-	_, err = db.Exec(sqlc.Schema)
-	if err != nil {
-		db.Close()
-		t.Fatalf("initialize schema: %v", err)
-	}
-	queries, err := database.Prepare(context.Background(), db)
-	if err != nil {
-		db.Close()
-		t.Fatalf("prepare queries: %v", err)
-	}
+	db, queries := scannertest.OpenDB(t, source)
 
 	ctx := &movieScannerTestContext{db: db, queries: queries}
 	ctx.scanner = New(Dependencies{
@@ -307,8 +290,5 @@ func (*stubMovieScannerTmdb) GetShowDetails(context.Context, int) (*tmdb.TVShow,
 	return nil, tmdb.ErrNoShowsFound
 }
 func (*stubMovieScannerTmdb) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
-	return nil, tmdb.ErrNoShowsFound
-}
-func (*stubMovieScannerTmdb) GetEpisodeCredits(context.Context, int, int, int) (*tmdb.TVEpisodeCredits, error) {
 	return nil, tmdb.ErrNoShowsFound
 }

@@ -115,31 +115,22 @@ func TestTVMetadataIntegration(t *testing.T) {
 	})
 	t.Run("episode credits", func(t *testing.T) {
 		if pilot.ID == 0 {
-			t.Fatal("cannot compare credits without the season's episode 1 identity")
+			t.Fatal("cannot check credits without the season's episode 1")
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		credits, err := client.GetEpisodeCredits(ctx, showID, 1, 1)
-		if err != nil {
-			t.Fatal(err)
+		if len(pilot.GuestStars) == 0 || len(pilot.Crew) == 0 {
+			t.Fatal("season payload is missing episode guest stars or crew")
 		}
-		if credits.ID != pilot.ID {
-			t.Fatalf("credits ID %d differs from season episode ID %d", credits.ID, pilot.ID)
-		}
-		if len(credits.Cast) == 0 || credits.GuestStars == nil || len(credits.Crew) == 0 {
-			t.Fatal("missing episode cast, guest stars, or crew")
-		}
-		for _, cast := range append(credits.Cast, credits.GuestStars...) {
+		for _, cast := range pilot.GuestStars {
 			if cast.ID <= 0 || cast.Name == "" || cast.CreditID == "" {
-				t.Errorf("invalid episode cast credit: %+v", cast)
+				t.Errorf("invalid episode guest credit: %+v", cast)
 			}
 		}
-		for _, crew := range credits.Crew {
+		for _, crew := range pilot.Crew {
 			if crew.ID <= 0 || crew.Name == "" || crew.CreditID == "" || crew.Job == "" {
 				t.Errorf("invalid episode crew credit: %+v", crew)
 			}
 		}
-		t.Logf("episode credits identity matches S01E01: %d", credits.ID)
+		t.Logf("S01E01 %d carries %d guest stars and %d crew in the season payload", pilot.ID, len(pilot.GuestStars), len(pilot.Crew))
 	})
 }
 

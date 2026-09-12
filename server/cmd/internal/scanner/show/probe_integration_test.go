@@ -79,13 +79,13 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 	s.Now = time.Now
 	s.Logger = &sampleLogger{t: t}
 	real := realProbe(t)
-	probe.hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-		t.Logf("real probe %d: %q", probe.calls, path)
+	probe.Hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		t.Logf("real probe %d: %q", probe.Calls(), path)
 		return real.GetMetadata(ctx, path)
 	}
 	scanOK(t, s, root)
 	before := sampleCatalogSnapshot(t, s.DB)
-	firstProbes := probe.calls
+	firstProbes := probe.Calls()
 	t.Logf("first scan real probes: %d", firstProbes)
 	rows, err := s.Queries.GetShowScanIndex(context.Background())
 	if err != nil {
@@ -109,9 +109,9 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 		t.Logf("catalog file: %q episodes: %v", row.FilePath, numbers)
 	}
 	scanOK(t, s, root)
-	t.Logf("second scan additional real probes: %d", probe.calls-firstProbes)
-	if probe.calls != firstProbes {
-		t.Errorf("unchanged sample scan made %d additional probes", probe.calls-firstProbes)
+	t.Logf("second scan additional real probes: %d", probe.Calls()-firstProbes)
+	if probe.Calls() != firstProbes {
+		t.Errorf("unchanged sample scan made %d additional probes", probe.Calls()-firstProbes)
 	}
 	after := sampleCatalogSnapshot(t, s.DB)
 	for table, original := range before {

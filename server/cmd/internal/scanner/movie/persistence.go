@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/tmdbmatch"
 	"igloo/cmd/internal/tmdb"
 )
 
@@ -217,7 +218,7 @@ func applyTmdbMetadata(
 		ID: movieID, Title: tmdbMovie.Title, TmdbID: helpers.NullInt64(int64(tmdbMovie.TmdbID)),
 		ImdbID: helpers.NullString(tmdbMovie.ImdbID), PosterPath: helpers.NullString(tmdbMovie.PosterPath),
 		BackdropPath: helpers.NullString(tmdbMovie.BackdropPath), Adult: tmdbMovie.Adult,
-		Language: helpers.NullString(tmdbMovie.OriginalLang), Year: helpers.NullInt64(int64(extractYearFromReleaseDate(tmdbMovie.ReleaseDate))),
+		Language: helpers.NullString(tmdbMovie.OriginalLang), Year: helpers.NullInt64(int64(tmdbmatch.ReleaseYear(tmdbMovie.ReleaseDate))),
 		ReleaseDate: helpers.NullString(tmdbMovie.ReleaseDate), Overview: helpers.NullString(tmdbMovie.Overview),
 		TagLine: helpers.NullString(tmdbMovie.Tagline), Certification: helpers.NullString(tmdbMovie.Certification()),
 		CriticRating: helpers.NullFloat64(tmdbMovie.VoteAverage), Revenue: helpers.NullFloat64(float64(tmdbMovie.Revenue)),
@@ -466,8 +467,8 @@ func processExtraVideos(
 			Title:      title,
 			ExternalID: helpers.NullString(v.ID),
 			Key:        v.Key,
-			Type:       mapTmdbVideoType(v.Type),
-			Site:       mapTmdbVideoSite(v.Site),
+			Type:       v.ExtraVideoType(),
+			Site:       v.ExtraVideoSite(),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert extra video failed: %w", err)
@@ -484,26 +485,4 @@ func processExtraVideos(
 	}
 
 	return nil
-}
-
-func mapTmdbVideoType(t string) string {
-	switch strings.ToLower(strings.TrimSpace(t)) {
-	case "trailer", "teaser":
-		return "trailer"
-	case "featurette", "behind the scenes", "clip", "bloopers", "interview":
-		return "special_feature"
-	default:
-		return "other"
-	}
-}
-
-func mapTmdbVideoSite(s string) string {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "youtube":
-		return "youtube"
-	case "vimeo":
-		return "vimeo"
-	default:
-		return "other"
-	}
 }

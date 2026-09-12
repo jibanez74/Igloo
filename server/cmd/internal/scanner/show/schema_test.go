@@ -3,27 +3,17 @@ package show
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner/scannertest"
-	"igloo/sqlc"
 )
 
 func testDB(t *testing.T) (*sql.DB, *database.Queries) {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	_, err = db.Exec(sqlc.Schema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db, database.New(db)
+	return scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 }
 
 func countRows(t *testing.T, db *sql.DB, table string) int {
@@ -121,12 +111,36 @@ func TestCatalogOwnershipAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = q.PruneShowEpisodes(ctx)
+	err = q.PruneShowSeasonEpisodes(ctx, season.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if countRows(t, db, "show_episodes") != 2 || countRows(t, db, "show_episode_files") != 2 {
+	// Pruning is scoped to the touched season: the other season's unlinked
+	// episode is not this file's business.
+	if countRows(t, db, "show_episodes") != 3 || countRows(t, db, "show_episode_files") != 2 {
 		t.Fatal("deleting a copy deleted logical episodes")
+	}
+	// A season that still owns files survives pruning; an emptied one is
+	// removed and hands back its show for the same check.
+	_, err = q.PruneShowSeason(ctx, season.ID)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatal("season with files was pruned", err)
+	}
+	_, err = db.Exec("DELETE FROM show_files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = q.PruneShowSeasonEpisodes(ctx, season.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	showID, err := q.PruneShowSeason(ctx, season.ID)
+	if err != nil || showID != a.ID {
+		t.Fatal("empty season not pruned", showID, err)
+	}
+	err = q.PruneShow(ctx, a.ID)
+	if err != nil || countRows(t, db, "shows") != 1 || countRows(t, db, "show_episodes") != 1 {
+		t.Fatal("empty show not pruned", err)
 	}
 	_, err = db.Exec("DELETE FROM shows")
 	if err != nil {

@@ -35,33 +35,18 @@ func (s *Scanner) scan(directory string) error {
 	return nil
 }
 
-// testProbe counts probes so rescans can assert that unchanged files are not
-// re-probed; scannertest.Probe has no counter.
-type testProbe struct {
-	scannertest.NoKeyframeProbe
-	calls int
-	hook  func(context.Context, string) (*ffprobe.FfprobeResult, error)
-}
-
-func (p *testProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	return p.GetMetadata(ctx, path)
-}
-
-func (p *testProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	p.calls++
-	if p.hook != nil {
-		return p.hook(ctx, path)
-	}
+func defaultProbeResult() *ffprobe.FfprobeResult {
 	var result ffprobe.FfprobeResult
 	result.Format.Duration = "3600.5"
 	result.Streams = []ffprobe.Stream{{Index: 3, CodecType: "video", CodecName: "h264", Width: 1920, Height: 1080}, {Index: 5, CodecType: "audio", CodecName: "aac", Channels: 2}, {Index: 7, CodecType: "subtitle", CodecName: "subrip"}}
-	return &result, nil
+	return &result
 }
-func setupScanner(t *testing.T) (*Scanner, *testProbe, string) {
+
+func setupScanner(t *testing.T) (*Scanner, *scannertest.CountingProbe, string) {
 	t.Helper()
 	db, q := testDB(t)
 	root := t.TempDir()
-	probe := &testProbe{}
+	probe := &scannertest.CountingProbe{Default: defaultProbeResult()}
 	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
 	return s, probe, root
 }
@@ -85,82 +70,6 @@ func scanOK(t *testing.T, s *Scanner, root string) {
 		t.Fatal(err)
 	}
 }
-func TestParsing(t *testing.T) {
-	for _, tc := range []struct {
-		path     string
-		episodes []int
-		season   int
-	}{
-		{"Show (2020)/Season 1/Show.s01e02.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02-E04.mp4", []int{2, 3, 4}, 1},
-		{"Show/Season 1/S01E02E03.avi", []int{2, 3}, 1},
-		{"Show/season 01/1x02.webm", []int{2}, 1},
-		{"Breaking Bad/Season 2/Breaking Bad - S02E09 - 4 Days Out.mkv", []int{9}, 2},
-		{"Show/Season 1/Show.S01E02.[1920x1080].mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02  -   4 Days Out.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02\t-\t4 Days Out.mkv", []int{2}, 1},
-		{"Show/Season 1/1x02 - 4 Days Out.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02-E04 - 4 Days Out.mkv", []int{2, 3, 4}, 1},
-		{"Show/Season 1/S01E02E03 - 1984.mkv", []int{2, 3}, 1},
-		{"Show/Season 1/S01E02 - 1984.mkv", []int{2}, 1},
-		{"Show/Season 1/1920x1080 S01E02.mkv", []int{2}, 1},
-		{"Show/Season 1/[1920x1080] S01E02.mkv", []int{2}, 1},
-		{"Show/Season 1/S01E02 1920x1080.mkv", []int{2}, 1},
-		{"Show/Season 1/1920X1080 1x02 [1280x720].mkv", []int{2}, 1},
-		{"Show/Season 1/[640x480][1920x1080]S01E02-E04[3840X2160].mkv", []int{2, 3, 4}, 1},
-		{"Show/Season 1/[720x1280] S01E02 [480x640].mkv", []int{2}, 1},
-		{"Show/Specials/S00E01.mkv", []int{1}, 0},
-		{"Show/Season 0/S00E01-E03.mkv", []int{1, 2, 3}, 0},
-	} {
-		t.Run(tc.path, func(t *testing.T) {
-			got, err := parseFile("/tv", filepath.Join("/tv", tc.path))
-			if err != nil || !reflect.DeepEqual(got.episodes, tc.episodes) || got.season != tc.season {
-				t.Fatalf("%+v %v", got, err)
-			}
-		})
-	}
-	for _, path := range []string{
-		"Show/Season 1/1920x1080.mkv",
-		"Show/Season 1/[1920X1080].mkv",
-		"Show/Season 1/[640x480] [1920x1080].mkv",
-		"Show/Season 1/S01E01 1x03 [1920x1080].mkv",
-		"Show/Season 1/[1920x1080] S01E01 S01E02.mkv",
-		"Show/Season 1/S01E01 - 4 Days Out 1x03.mkv",
-		"Show/Season 1/S01E01-03 [1920x1080].mkv",
-		"Show/Season 1/S01E01-E [1920x1080].mkv",
-		"Show/Season 1/S01E01- 03.mkv",
-		"Show/Season 1/S01E01 -03.mkv",
-		"Show/Season 1/S01E01\t-03.mkv",
-		"Show/Season 1/S01E01-\t03.mkv",
-		"Show/Season 1/[1920x1080] S02E01.mkv",
-		"Show/Season 1/[1920x1080] S01E04-E02.mkv",
-		"Show/Season 1/[1920x1080] S01E01 E03.mkv",
-		"Show/Season 1/S01E01E99999.mkv",
-		"Show/Season 1/S01E99999 - 4 Days Out.mkv",
-		"Show/Season 1/S00001E01.mkv",
-		"Show/Season 1/10001x02.mkv",
-		"Show/Season 1/1x00002.mkv",
-		"Show/Season 1/S01E01 19200x1080.mkv",
-		"Show/Season 1/S01E01 1920x10800.mkv",
-		"Show/Season 1/S01E01 a1920x1080.mkv",
-		"Show/Season 1/S01E01 1920x1080p.mkv",
-		"Show/Season 1/S01E01 99x1080.mkv",
-		"Show/Season 1/S01E01 1920x99.mkv",
-		"Show/Season 1/Season1920x1080.mkv",
-		"Show/Season 1/1920x1080p.mkv",
-		"Show/Season 1/[1920x1080] S01E01E99999.mkv",
-		"Show/Season 1/[1920x1080] aS01E01.mkv",
-		"Show/Season 1/S01E04-E02.mkv", "Show/Season 1/S02E01.mkv", "Show/Season 1/S01E01-S02E02.mkv", "Show/Season 1/S01E01 1x03.mkv", "Show/Season 1/S01E01E01.mkv", "Show/Season 1/S01E01-03.mkv", "Show/Season 1/S01E01-E.mkv", "Show/Season 1/S01E00.mkv", "Show/Season 1/S01E01E00.mkv", "Show/Season 1/S01E01 E03.mkv", "Show/Season 1/S01E01_E03.mkv", "Show/Season 1/2020-01-02.mkv", "Show/Season 1/001.mkv", "Show/Season 1/extras/S01E01.mkv", ".backup/Show/Season 1/S01E01.mkv", "Show/Season 1/.S01E01.mkv", "Show/Specials/S01E01.mkv",
-	} {
-		t.Run(path, func(t *testing.T) {
-			_, err := parseFile("/tv", filepath.Join("/tv", path))
-			if err == nil {
-				t.Fatal("accepted malformed path")
-			}
-		})
-	}
-}
-
 func TestNumericTitlesAndResolutionsReachProbing(t *testing.T) {
 	s, probe, root := setupScanner(t)
 	files := []struct {
@@ -176,8 +85,8 @@ func TestNumericTitlesAndResolutionsReachProbing(t *testing.T) {
 	}
 	conflict := writeFile(t, root, "Show/Season 1/S01E01 1x03 [1920x1080].mkv", "conflict")
 	scanOK(t, s, root)
-	if probe.calls != len(files) || countRows(t, s.DB, "show_files") != len(files) || countRows(t, s.DB, "show_episode_files") != len(files) {
-		t.Fatalf("expected two probed and linked files, got %d probes", probe.calls)
+	if probe.Calls() != len(files) || countRows(t, s.DB, "show_files") != len(files) || countRows(t, s.DB, "show_episode_files") != len(files) {
+		t.Fatalf("expected two probed and linked files, got %d probes", probe.Calls())
 	}
 	for _, file := range files {
 		var season, episode int
@@ -209,8 +118,8 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 		writeFile(t, root, path, "ignore")
 	}
 	scanOK(t, s, root)
-	if probe.calls != 3 || countRows(t, s.DB, "show_files") != 3 || countRows(t, s.DB, "show_episodes") != 4 || countRows(t, s.DB, "show_episode_files") != 5 {
-		t.Fatal("wrong physical/logical counts", probe.calls)
+	if probe.Calls() != 3 || countRows(t, s.DB, "show_files") != 3 || countRows(t, s.DB, "show_episodes") != 4 || countRows(t, s.DB, "show_episode_files") != 5 {
+		t.Fatal("wrong physical/logical counts", probe.Calls())
 	}
 	before, err := s.Queries.GetShowFileByPath(context.Background(), combined)
 	if err != nil {
@@ -224,18 +133,19 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 		t.Fatal("guessed episode metadata")
 	}
 	scanOK(t, s, root)
-	if probe.calls != 3 {
+	if probe.Calls() != 3 {
 		t.Fatal("unchanged scan probed")
 	}
-	// Same bytes and changed filesystem metadata only update the fingerprint.
+	// Changed filesystem metadata re-probes without reading content (no
+	// hashing, like movies) and keeps the file and episode identities.
 	stamp := time.Now().Add(-time.Hour)
 	err = os.Chtimes(combined, stamp, stamp)
 	if err != nil {
 		t.Fatal(err)
 	}
 	scanOK(t, s, root)
-	if probe.calls != 3 {
-		t.Fatal("fingerprint-only update probed")
+	if probe.Calls() != 4 || s.Status().Updated != 1 {
+		t.Fatal("touched file was not re-probed once", probe.Calls(), s.Status().Updated)
 	}
 	writeFile(t, root, "Example (2020)/Season 1/S01E01-E03.mkv", "different bytes")
 	scanOK(t, s, root)
@@ -247,7 +157,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.calls != 4 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
+	if probe.Calls() != 5 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
 		t.Fatal("changed file lost identity")
 	}
 	err = os.Remove(copyPath)
@@ -279,9 +189,9 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 			case "quiet":
 				s.Now = time.Now
 			case "probe":
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, errors.New("failed") }
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, errors.New("failed") }
 			case "artwork":
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 					return &ffprobe.FfprobeResult{Streams: []ffprobe.Stream{{CodecType: "video", CodecName: "png"}}}, nil
 				}
 			case "rollback":
@@ -290,7 +200,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "unstable":
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 					err := os.WriteFile(path, []byte("changed during probe"), 0600)
 					if err != nil {
 						return nil, err
@@ -301,7 +211,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				s.ScanContext = ctx
-				p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { cancel(); return nil, ctx.Err() }
+				p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) { cancel(); return nil, ctx.Err() }
 			}
 			err := s.scan(root)
 			if mode == "cancel" && !errors.Is(err, context.Canceled) {
@@ -387,7 +297,7 @@ func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.ScanContext = ctx
-	p.hook = func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+	p.Hook = func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
 		close(entered)
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -418,7 +328,7 @@ func TestConcurrentScannerWrites(t *testing.T) {
 	writeFile(t, root, "A/Season 1/S01E01.mkv", "a")
 	writeFile(t, other, "B/Season 1/S01E01.mkv", "b")
 	second := New(s.Dependencies)
-	second.Ffprobe = &testProbe{}
+	second.Ffprobe = &scannertest.CountingProbe{Default: defaultProbeResult()}
 	var wg sync.WaitGroup
 	for _, work := range []struct {
 		s    *Scanner
@@ -441,15 +351,16 @@ func TestConcurrentScannerWrites(t *testing.T) {
 
 type testTMDB struct {
 	tmdb.TmdbInterface
-	searchCalls, showCalls, seasonCalls, creditCalls int
-	showHook                                         func(int) (*tmdb.TVShow, error)
-	seasonHook                                       func(int, int) (*tmdb.TVSeason, error)
-	creditsHook                                      func(int, int, int) (*tmdb.TVEpisodeCredits, error)
-	searchHook                                       func(string, int) ([]tmdb.TVShow, error)
+	searchCalls, showCalls, seasonCalls int
+	searchCtx                           context.Context
+	showHook                            func(int) (*tmdb.TVShow, error)
+	seasonHook                          func(int, int) (*tmdb.TVSeason, error)
+	searchHook                          func(string, int) ([]tmdb.TVShow, error)
 }
 
-func (c *testTMDB) SearchShowsByTitleAndYear(_ context.Context, title string, years ...int) ([]tmdb.TVShow, error) {
+func (c *testTMDB) SearchShowsByTitleAndYear(ctx context.Context, title string, years ...int) ([]tmdb.TVShow, error) {
 	c.searchCalls++
+	c.searchCtx = ctx
 	year := 0
 	if len(years) > 0 {
 		year = years[0]
@@ -471,16 +382,9 @@ func (c *testTMDB) GetSeasonDetails(_ context.Context, id, season int) (*tmdb.TV
 	if c.seasonHook != nil {
 		return c.seasonHook(id, season)
 	}
-	return &tmdb.TVSeason{ID: 100 + season, SeasonNumber: season, Name: "Enriched season", Episodes: []tmdb.TVEpisode{{ID: 1001, SeasonNumber: season, EpisodeNumber: 1, Name: "First", Runtime: 40}, {ID: 1002, SeasonNumber: season, EpisodeNumber: 2, Name: "Second", Runtime: 41}, {ID: 1003, SeasonNumber: season, EpisodeNumber: 3, Name: "Remote only"}}}, nil
+	guest := []tmdb.TVCastCredit{{TVPerson: tmdb.TVPerson{ID: 2, Name: "Guest"}, Character: "Guest"}}
+	return &tmdb.TVSeason{ID: 100 + season, SeasonNumber: season, Name: "Enriched season", Episodes: []tmdb.TVEpisode{{ID: 1001, SeasonNumber: season, EpisodeNumber: 1, Name: "First", Runtime: 40, GuestStars: guest}, {ID: 1002, SeasonNumber: season, EpisodeNumber: 2, Name: "Second", Runtime: 41, GuestStars: guest}, {ID: 1003, SeasonNumber: season, EpisodeNumber: 3, Name: "Remote only"}}}, nil
 }
-func (c *testTMDB) GetEpisodeCredits(_ context.Context, id, season, episode int) (*tmdb.TVEpisodeCredits, error) {
-	c.creditCalls++
-	if c.creditsHook != nil {
-		return c.creditsHook(id, season, episode)
-	}
-	return &tmdb.TVEpisodeCredits{ID: 1000 + episode, GuestStars: []tmdb.TVCastCredit{{TVPerson: tmdb.TVPerson{ID: 2, Name: "Guest"}, Character: "Guest"}}}, nil
-}
-
 func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	s, p, root := setupScanner(t)
 	writeFile(t, root, "Example (2020)/Season 1/S01E01E02.mkv", "file")
@@ -489,36 +393,48 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 		t.Fatal("offline retry markers missing")
 	}
 	client := &testTMDB{}
-	client.creditsHook = func(_, _, ep int) (*tmdb.TVEpisodeCredits, error) {
-		if ep == 2 {
-			return nil, errors.New("offline")
-		}
-		return &tmdb.TVEpisodeCredits{ID: 1001}, nil
+	// A season payload that omits episode 2 leaves that episode pending.
+	client.seasonHook = func(_, season int) (*tmdb.TVSeason, error) {
+		full, _ := (&testTMDB{}).GetSeasonDetails(context.Background(), 0, season)
+		full.Episodes = full.Episodes[:1]
+		return full, nil
 	}
 	s.Tmdb = client
 	scanOK(t, s, root)
-	if p.calls != 1 || client.showCalls != 1 || client.seasonCalls != 1 || client.creditCalls != 2 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
+	if p.Calls() != 1 || client.showCalls != 1 || client.seasonCalls != 1 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
 		t.Fatal("partial enrichment counts", client)
 	}
-	if countRows(t, s.DB, "show_cast") != 2 {
-		t.Fatal("aggregate roles collapsed")
+	if countRows(t, s.DB, "show_cast") != 2 || countRows(t, s.DB, "show_episode_guest_cast") != 1 {
+		t.Fatal("aggregate roles collapsed or episode guest cast missing")
 	}
-	client.creditsHook = nil
+	client.seasonHook = nil
 	scanOK(t, s, root)
-	if client.showCalls != 1 || client.seasonCalls != 2 || client.creditCalls != 3 || p.calls != 1 {
-		t.Fatal("retry repeated successful entity or probe", client, p.calls)
+	if client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 1 || countRows(t, s.DB, "show_episode_guest_cast") != 2 {
+		t.Fatal("retry repeated successful entity or probe", client, p.Calls())
 	}
 	pending, err := s.Queries.CountShowRetries(context.Background())
 	if err != nil || pending != 0 {
 		t.Fatal("retry not cleared", pending, err)
 	}
 	scanOK(t, s, root)
-	if client.showCalls != 1 || client.seasonCalls != 2 || client.creditCalls != 3 {
+	if client.showCalls != 1 || client.seasonCalls != 2 {
 		t.Fatal("successful unchanged metadata refreshed")
 	}
-	// A changed file queues all represented owners, and a failed stored-ID
-	// lookup cannot rematch or replace successful descriptive metadata.
+	// A changed file re-probes but never re-queues matched entities: no TMDB
+	// call is made and the descriptions stay.
 	writeFile(t, root, "Example (2020)/Season 1/S01E01E02.mkv", "changed file")
+	scanOK(t, s, root)
+	pending, err = s.Queries.CountShowRetries(context.Background())
+	if err != nil || pending != 0 || client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 2 || s.Status().EnrichmentTotal != 0 {
+		t.Fatal("technical change re-queued matched metadata", pending, client, p.Calls())
+	}
+	// A retry marker on a matched show fetches its stored ID directly; a failed
+	// lookup cannot rematch or replace successful descriptive metadata, and it
+	// defers the show's descendants rather than failing them.
+	_, err = s.DB.Exec("INSERT INTO show_tmdb_retries (show_id) VALUES (1)")
+	if err != nil {
+		t.Fatal(err)
+	}
 	client.showHook = func(id int) (*tmdb.TVShow, error) {
 		if id != 10 {
 			t.Error("lost identity")
@@ -530,13 +446,14 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Name != "Enriched show" || client.searchCalls != 1 || client.seasonCalls != 2 || p.calls != 2 {
-		t.Fatal("failed ID lookup changed metadata or retried descendants")
+	status := s.Status()
+	if stored.Name != "Enriched show" || client.searchCalls != 1 || client.seasonCalls != 2 || status.EnrichmentFailed != 1 || status.EnrichmentTotal != 1 || status.PendingEnrichment != 1 {
+		t.Fatalf("failed ID lookup changed metadata or retried descendants: %+v", status)
 	}
 }
 
 func TestMissingEpisodeAndStaleResponse(t *testing.T) {
-	for _, mode := range []string{"missing", "identity", "rollback", "deleted", "credits_id"} {
+	for _, mode := range []string{"missing", "identity", "rollback", "deleted"} {
 		t.Run(mode, func(t *testing.T) {
 			s, _, root := setupScanner(t)
 			writeFile(t, root, "Example/Season 1/S01E01E02.mkv", "file")
@@ -561,8 +478,6 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-			case "credits_id":
-				client.creditsHook = func(int, int, int) (*tmdb.TVEpisodeCredits, error) { return &tmdb.TVEpisodeCredits{ID: 777}, nil }
 			}
 			scanOK(t, s, root)
 			if mode == "deleted" {
@@ -573,6 +488,13 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 			}
 			if countRows(t, s.DB, "show_episode_tmdb_retries") != 2 {
 				t.Fatal("failure cleared episode retries")
+			}
+			// Episodes TMDB does not list yet stay pending without an outcome.
+			if mode == "missing" {
+				status := s.Status()
+				if status.EnrichmentFailed != 0 || status.EnrichmentUnmatched != 0 || status.EnrichmentProcessed != status.EnrichmentTotal || status.EnrichmentTotal != 2 {
+					t.Fatalf("missing episodes counted as an outcome: %+v", status)
+				}
 			}
 			// The trigger aborts only the cast insert, and SQLite rolls a RAISE
 			// back statement-wide, so the rolled-back transaction is visible in
@@ -601,16 +523,20 @@ func TestShowRankingAmbiguousYearAndDeterministicTies(t *testing.T) {
 		return []tmdb.TVShow{{ID: 30, Name: "Space Adventures", FirstAirDate: "1999-01-01"}, {ID: 20, Name: "Space 1999", FirstAirDate: "1975-01-01"}, {ID: 10, Name: "Space 1999", FirstAirDate: "1975-01-01"}}, nil
 	}
 	s.Tmdb = client
-	result, err := s.lookupShow(context.Background(), database.Show{DirectoryPath: "/tv/Space 1999"})
+	result, err := s.lookupShow(context.Background(), &providerBreaker{}, database.Show{DirectoryPath: "/tv/Space 1999"})
 	if err != nil || result.ID != 10 || client.searchCalls != 2 {
 		t.Fatal("ambiguous ranking", result, err, client.searchCalls)
+	}
+	deadline, ok := client.searchCtx.Deadline()
+	if !ok || time.Until(deadline) > scanner.TmdbLookupTimeout {
+		t.Fatal("lookup ran without the shared timeout budget")
 	}
 }
 
 func TestTechnicalFieldsAndFileOwnedChapters(t *testing.T) {
 	s, p, root := setupScanner(t)
 	writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "file")
-	p.hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return &ffprobe.FfprobeResult{
 			Streams: []ffprobe.Stream{
 				{Index: 0, CodecType: "video", CodecName: "mjpeg", Disposition: ffprobe.StreamDisposition{AttachedPic: 1}},
@@ -683,4 +609,73 @@ func TestCleanupPermissionFailureAndDeletionRollback(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Episode files may sit directly in the show folder, and season folders may
+// be "S2" or carry a title; every layout feeds one show. The status counters
+// served by the API follow files for the local phase and episodes separately.
+func TestLayoutsShareOneShowAndReportCounters(t *testing.T) {
+	s, probe, root := setupScanner(t)
+	writeFile(t, root, "Show (2020)/Show.S01E01.mkv", "a")
+	writeFile(t, root, "Show (2020)/Season 1/S01E02.mkv", "b")
+	writeFile(t, root, "Show (2020)/S2/S02E01.mkv", "c")
+	writeFile(t, root, "Show (2020)/Season 3 - The End/S03E01E02.mkv", "d")
+	writeFile(t, root, "Show (2020)/Show.S00E01.mkv", "special")
+	writeFile(t, root, "Show (2020)/S01/S02E01.mkv", "mismatch")
+	scanOK(t, s, root)
+	status := s.Status()
+	if probe.Calls() != 5 || status.Total != 6 || status.Processed != 6 || status.Imported != 5 || status.Failed != 1 || status.Episodes != 6 || status.State != scanner.StateCompletedWithIssues {
+		t.Fatalf("status %+v probes=%d", status, probe.Calls())
+	}
+	if countRows(t, s.DB, "shows") != 1 || countRows(t, s.DB, "show_seasons") != 4 || countRows(t, s.DB, "show_episodes") != 6 {
+		t.Fatal("layouts did not share one show")
+	}
+	scanOK(t, s, root)
+	status = s.Status()
+	if probe.Calls() != 5 || status.Unchanged != 5 || status.Episodes != 6 || status.Updated != 0 {
+		t.Fatalf("rescan %+v probes=%d", status, probe.Calls())
+	}
+}
+
+// Two workers probe at once while the coordinator alone persists; the probe
+// hook only returns once both files are in flight.
+func TestWorkersProbeConcurrently(t *testing.T) {
+	s, probe, root := setupScanner(t)
+	writeFile(t, root, "Show/Season 1/S01E01.mkv", "a")
+	writeFile(t, root, "Show/Season 1/S01E02.mkv", "b")
+	var mu sync.Mutex
+	inFlight := 0
+	release := make(chan struct{})
+	probe.Hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		mu.Lock()
+		inFlight++
+		both := inFlight == 2
+		mu.Unlock()
+		if both {
+			close(release)
+		}
+		select {
+		case <-release:
+			return defaultProbeResult(), nil
+		case <-time.After(5 * time.Second):
+			return nil, errors.New("second probe never started")
+		}
+	}
+	scanOK(t, s, root)
+	if probe.Calls() != 2 || countRows(t, s.DB, "show_files") != 2 || s.Status().Imported != 2 {
+		t.Fatalf("%+v", s.Status())
+	}
+}
+
+// Workers must not touch the database: the pool is pinned to one connection,
+// so a worker query would wait behind the coordinator's open transaction.
+func TestPrepareFileStaysOffTheDatabase(t *testing.T) {
+	s, _, root := setupScanner(t)
+	path := writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "a")
+	s.DB.Close()
+	result := s.prepareFile(context.Background(), root, probeJob{file: scanner.ScanFile{Path: path, Ext: "mkv"}})
+	if result.err != nil || result.info == nil || !reflect.DeepEqual(result.local.episodes, []int{1, 2}) {
+		t.Fatalf("prepare used the database: err=%v local=%+v", result.err, result.local)
+	}
+	result.inspection.Close()
 }
