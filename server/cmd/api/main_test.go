@@ -1214,6 +1214,11 @@ func setupTestApp(t *testing.T) *Application {
 	dataDir := t.TempDir()
 	app := &Application{
 		DB: db,
+		// The scanners below capture this group, and movie.New/music.New/show.New
+		// silently substitute a private one when it is nil. Leaving it unset gave
+		// every scanner its own group, so app.Wait.Wait() fenced nothing and tests
+		// that use it to await a scan raced the still-running scan goroutine.
+		Wait: &sync.WaitGroup{},
 		Config: RuntimeConfig{
 			// Both are absolute: InitSettings persists them, and handlers that
 			// write beneath StaticDir would otherwise create ./static in the

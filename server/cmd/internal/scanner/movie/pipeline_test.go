@@ -46,6 +46,28 @@ func awaitScanSignal(t *testing.T, signal <-chan struct{}) {
 	}
 }
 
+// awaitActiveFiles waits for the coordinator to publish count active files and
+// reports whether it got there. The probe stub signals from inside the worker,
+// but the dispatch loop records the activation afterwards on its own goroutine,
+// so a probe that has started is not yet a file the status reports. Polling
+// closes that window; reading the status once races the coordinator.
+//
+// It returns rather than failing so the caller can still stop the scan it
+// started before the test goroutine exits.
+func awaitActiveFiles(s *Scanner, count int) (Status, bool) {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		status := s.Status()
+		if len(status.ActiveFiles) == count {
+			return status, true
+		}
+		if time.Now().After(deadline) {
+			return status, false
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestMoviePipeline418Files(t *testing.T) {
 	for _, canceled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("canceled=%v", canceled), func(t *testing.T) {
@@ -83,8 +105,8 @@ func TestMoviePipeline418Files(t *testing.T) {
 			go func() { s.scan(root); close(done) }()
 			awaitScanSignal(t, entered)
 			awaitScanSignal(t, entered)
-			status := s.Status()
-			if status.Total != 418 || status.Phase != "local" || len(status.ActiveFiles) != 2 {
+			status, bothActive := awaitActiveFiles(s, 2)
+			if !bothActive || status.Total != 418 || status.Phase != "local" {
 				cancel()
 				awaitScanSignal(t, done)
 				t.Fatalf("discovery/active accounting: %+v", status)
