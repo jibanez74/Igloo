@@ -9464,6 +9464,21 @@
           "id",
           "title",
           "adult",
+          "tmdb_id",
+          "imdb_id",
+          "poster_path",
+          "backdrop_path",
+          "language",
+          "year",
+          "release_date",
+          "overview",
+          "tag_line",
+          "certification",
+          "critic_rating",
+          "audience_rating",
+          "revenue",
+          "budget",
+          "run_time",
           "duration"
         ],
         "properties": {
@@ -11983,7 +11998,12 @@
           "title",
           "duration",
           "codec",
-          "bit_rate"
+          "bit_rate",
+          "album_id",
+          "album_title",
+          "album_cover",
+          "musician_id",
+          "musician_name"
         ],
         "properties": {
           "id": {
@@ -11994,7 +12014,8 @@
             "type": "string"
           },
           "duration": {
-            "type": "number"
+            "type": "integer",
+            "format": "int64"
           },
           "codec": {
             "type": "string"
@@ -12002,6 +12023,21 @@
           "bit_rate": {
             "type": "integer",
             "format": "int64"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "album_title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "album_cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "musician_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "musician_name": {
+            "$ref": "#/components/schemas/SqlNullString"
           }
         },
         "additionalProperties": false
@@ -12606,6 +12642,8 @@
           "description",
           "cover_image",
           "is_public",
+          "movie_id",
+          "content_type",
           "created_at",
           "updated_at",
           "track_count",
@@ -12633,6 +12671,13 @@
           },
           "is_public": {
             "type": "boolean"
+          },
+          "movie_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "content_type": {
+            "type": "string",
+            "const": "track"
           },
           "created_at": {
             "type": "string"
@@ -13929,7 +13974,8 @@
           "reason": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "MovieScanStatusData": {
         "type": "object",
@@ -14082,7 +14128,8 @@
               "$ref": "#/components/schemas/ScanIssue"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "MovieScanStatusResponse": {
         "allOf": [
@@ -14263,7 +14310,8 @@
               "$ref": "#/components/schemas/ScanIssue"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "ShowScanStatusResponse": {
         "allOf": [
@@ -14438,7 +14486,8 @@
               "$ref": "#/components/schemas/ScanIssue"
             }
           }
-        }
+        },
+        "additionalProperties": false
       },
       "MusicScanStatusResponse": {
         "allOf": [

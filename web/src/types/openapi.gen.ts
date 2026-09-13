@@ -2645,21 +2645,21 @@ export interface components {
             id: number;
             title: string;
             adult: boolean;
-            tmdb_id?: components["schemas"]["SqlNullInt64"];
-            imdb_id?: components["schemas"]["SqlNullString"];
-            poster_path?: components["schemas"]["SqlNullString"];
-            backdrop_path?: components["schemas"]["SqlNullString"];
-            language?: components["schemas"]["SqlNullString"];
-            year?: components["schemas"]["SqlNullInt64"];
-            release_date?: components["schemas"]["SqlNullString"];
-            overview?: components["schemas"]["SqlNullString"];
-            tag_line?: components["schemas"]["SqlNullString"];
-            certification?: components["schemas"]["SqlNullString"];
-            critic_rating?: components["schemas"]["SqlNullFloat64"];
-            audience_rating?: components["schemas"]["SqlNullFloat64"];
-            revenue?: components["schemas"]["SqlNullFloat64"];
-            budget?: components["schemas"]["SqlNullFloat64"];
-            run_time?: components["schemas"]["SqlNullInt64"];
+            tmdb_id: components["schemas"]["SqlNullInt64"];
+            imdb_id: components["schemas"]["SqlNullString"];
+            poster_path: components["schemas"]["SqlNullString"];
+            backdrop_path: components["schemas"]["SqlNullString"];
+            language: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
+            release_date: components["schemas"]["SqlNullString"];
+            overview: components["schemas"]["SqlNullString"];
+            tag_line: components["schemas"]["SqlNullString"];
+            certification: components["schemas"]["SqlNullString"];
+            critic_rating: components["schemas"]["SqlNullFloat64"];
+            audience_rating: components["schemas"]["SqlNullFloat64"];
+            revenue: components["schemas"]["SqlNullFloat64"];
+            budget: components["schemas"]["SqlNullFloat64"];
+            run_time: components["schemas"]["SqlNullInt64"];
             duration: components["schemas"]["SqlNullFloat64"];
         };
         MovieDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -3261,10 +3261,16 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** Format: int64 */
             duration: number;
             codec: string;
             /** Format: int64 */
             bit_rate: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            album_title: components["schemas"]["SqlNullString"];
+            album_cover: components["schemas"]["SqlNullString"];
+            musician_id: components["schemas"]["SqlNullInt64"];
+            musician_name: components["schemas"]["SqlNullString"];
         };
         SimpleMusician: {
             /** Format: int64 */
@@ -3418,6 +3424,9 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
+            movie_id: components["schemas"]["SqlNullInt64"];
+            /** @constant */
+            content_type: "track";
             created_at: string;
             updated_at: string;
             /** Format: int64 */
