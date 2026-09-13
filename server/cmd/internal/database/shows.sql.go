@@ -899,6 +899,117 @@ func (q *Queries) GetShow(ctx context.Context, id int64) (Show, error) {
 	return i, err
 }
 
+const getShowAudioStreamsByFileID = `-- name: GetShowAudioStreamsByFileID :many
+SELECT
+  id,
+  file_id,
+  stream_index,
+  codec,
+  codec_profile,
+  bit_rate,
+  sample_rate,
+  channels,
+  channel_layout,
+  language,
+  title,
+  is_default
+FROM show_audio_streams
+WHERE file_id = ?
+ORDER BY stream_index
+`
+
+type GetShowAudioStreamsByFileIDRow struct {
+	ID            int64          `json:"id"`
+	FileID        int64          `json:"file_id"`
+	StreamIndex   int64          `json:"stream_index"`
+	Codec         string         `json:"codec"`
+	CodecProfile  sql.NullString `json:"codec_profile"`
+	BitRate       int64          `json:"bit_rate"`
+	SampleRate    sql.NullInt64  `json:"sample_rate"`
+	Channels      int64          `json:"channels"`
+	ChannelLayout sql.NullString `json:"channel_layout"`
+	Language      sql.NullString `json:"language"`
+	Title         sql.NullString `json:"title"`
+	IsDefault     bool           `json:"is_default"`
+}
+
+func (q *Queries) GetShowAudioStreamsByFileID(ctx context.Context, fileID int64) ([]GetShowAudioStreamsByFileIDRow, error) {
+	rows, err := q.query(ctx, q.getShowAudioStreamsByFileIDStmt, getShowAudioStreamsByFileID, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowAudioStreamsByFileIDRow{}
+	for rows.Next() {
+		var i GetShowAudioStreamsByFileIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FileID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.CodecProfile,
+			&i.BitRate,
+			&i.SampleRate,
+			&i.Channels,
+			&i.ChannelLayout,
+			&i.Language,
+			&i.Title,
+			&i.IsDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowChaptersByFileID = `-- name: GetShowChaptersByFileID :many
+SELECT
+  id,
+  title,
+  start_time,
+  thumb,
+  file_id
+FROM show_chapters
+WHERE file_id = ?
+ORDER BY start_time
+`
+
+func (q *Queries) GetShowChaptersByFileID(ctx context.Context, fileID int64) ([]ShowChapter, error) {
+	rows, err := q.query(ctx, q.getShowChaptersByFileIDStmt, getShowChaptersByFileID, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ShowChapter{}
+	for rows.Next() {
+		var i ShowChapter
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.StartTime,
+			&i.Thumb,
+			&i.FileID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getShowDetails = `-- name: GetShowDetails :one
 
 SELECT
@@ -1015,6 +1126,110 @@ func (q *Queries) GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, er
 	return i, err
 }
 
+const getShowEpisodeForDirectStream = `-- name: GetShowEpisodeForDirectStream :one
+SELECT
+  f.file_path,
+  f.file_name,
+  f.container,
+  f.mime_type
+FROM show_episode_files AS l
+INNER JOIN show_files AS f
+  ON f.id = l.file_id
+WHERE l.episode_id = ?
+ORDER BY f.id
+LIMIT 1
+`
+
+type GetShowEpisodeForDirectStreamRow struct {
+	FilePath  string `json:"file_path"`
+	FileName  string `json:"file_name"`
+	Container string `json:"container"`
+	MimeType  string `json:"mime_type"`
+}
+
+// Direct-stream twin of GetMovieForDirectStream, resolved through the same
+// lowest-file-id rule as GetShowFileForEpisode.
+func (q *Queries) GetShowEpisodeForDirectStream(ctx context.Context, episodeID int64) (GetShowEpisodeForDirectStreamRow, error) {
+	row := q.queryRow(ctx, q.getShowEpisodeForDirectStreamStmt, getShowEpisodeForDirectStream, episodeID)
+	var i GetShowEpisodeForDirectStreamRow
+	err := row.Scan(
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.MimeType,
+	)
+	return i, err
+}
+
+const getShowEpisodePlaybackDetails = `-- name: GetShowEpisodePlaybackDetails :one
+SELECT
+  e.id,
+  e.episode_number,
+  e.name,
+  e.overview,
+  e.air_date,
+  e.still_path,
+  e.tmdb_runtime,
+  e.vote_average,
+  e.vote_count,
+  s.season_number,
+  s.name AS season_name,
+  sh.id AS show_id,
+  sh.name AS show_name,
+  sh.poster_path AS show_poster_path,
+  sh.backdrop_path AS show_backdrop_path
+FROM show_episodes AS e
+INNER JOIN show_seasons AS s
+  ON s.id = e.season_id
+INNER JOIN shows AS sh
+  ON sh.id = s.show_id
+WHERE e.id = ?
+LIMIT 1
+`
+
+type GetShowEpisodePlaybackDetailsRow struct {
+	ID               int64           `json:"id"`
+	EpisodeNumber    int64           `json:"episode_number"`
+	Name             string          `json:"name"`
+	Overview         sql.NullString  `json:"overview"`
+	AirDate          sql.NullString  `json:"air_date"`
+	StillPath        sql.NullString  `json:"still_path"`
+	TmdbRuntime      sql.NullInt64   `json:"tmdb_runtime"`
+	VoteAverage      sql.NullFloat64 `json:"vote_average"`
+	VoteCount        sql.NullInt64   `json:"vote_count"`
+	SeasonNumber     int64           `json:"season_number"`
+	SeasonName       string          `json:"season_name"`
+	ShowID           int64           `json:"show_id"`
+	ShowName         string          `json:"show_name"`
+	ShowPosterPath   sql.NullString  `json:"show_poster_path"`
+	ShowBackdropPath sql.NullString  `json:"show_backdrop_path"`
+}
+
+// Player header for one episode: the episode row plus the season number and
+// show identity the page titles itself with and navigates back to.
+func (q *Queries) GetShowEpisodePlaybackDetails(ctx context.Context, id int64) (GetShowEpisodePlaybackDetailsRow, error) {
+	row := q.queryRow(ctx, q.getShowEpisodePlaybackDetailsStmt, getShowEpisodePlaybackDetails, id)
+	var i GetShowEpisodePlaybackDetailsRow
+	err := row.Scan(
+		&i.ID,
+		&i.EpisodeNumber,
+		&i.Name,
+		&i.Overview,
+		&i.AirDate,
+		&i.StillPath,
+		&i.TmdbRuntime,
+		&i.VoteAverage,
+		&i.VoteCount,
+		&i.SeasonNumber,
+		&i.SeasonName,
+		&i.ShowID,
+		&i.ShowName,
+		&i.ShowPosterPath,
+		&i.ShowBackdropPath,
+	)
+	return i, err
+}
+
 const getShowEpisodes = `-- name: GetShowEpisodes :many
 SELECT id, season_id, episode_number, name, tmdb_id, overview, air_date, still_path, production_code, tmdb_runtime, vote_average, vote_count, created_at, updated_at FROM show_episodes WHERE season_id = ? ORDER BY episode_number
 `
@@ -1067,16 +1282,23 @@ SELECT
   e.still_path,
   e.tmdb_runtime,
   e.vote_average,
-  e.vote_count
+  e.vote_count,
+  wp.progress_sec,
+  wp.duration_sec,
+  CAST((wp.watched IS NOT NULL AND wp.watched) AS BOOLEAN) AS watched
 FROM show_episodes AS e
 INNER JOIN show_seasons AS s
   ON s.id = e.season_id
-WHERE s.show_id = ?
-  AND s.season_number = ?
+LEFT JOIN show_episode_watch_progress AS wp
+  ON wp.episode_id = e.id
+  AND wp.user_id = ?1
+WHERE s.show_id = ?2
+  AND s.season_number = ?3
 ORDER BY e.episode_number
 `
 
 type GetShowEpisodesBySeasonNumberParams struct {
+	UserID       int64 `json:"user_id"`
 	ShowID       int64 `json:"show_id"`
 	SeasonNumber int64 `json:"season_number"`
 }
@@ -1091,14 +1313,19 @@ type GetShowEpisodesBySeasonNumberRow struct {
 	TmdbRuntime   sql.NullInt64   `json:"tmdb_runtime"`
 	VoteAverage   sql.NullFloat64 `json:"vote_average"`
 	VoteCount     sql.NullInt64   `json:"vote_count"`
+	ProgressSec   sql.NullFloat64 `json:"progress_sec"`
+	DurationSec   sql.NullFloat64 `json:"duration_sec"`
+	Watched       bool            `json:"watched"`
 }
 
 // Episodes of one season, addressed by (show_id, season_number) so the route
 // never exposes an internal season id. Carries no file, stream, codec, or
 // chapter data: those belong to a physical file, and one file can back several
-// episodes.
+// episodes. The requesting user's watch progress rides along so the episode
+// list can show resume and watched state without a query per row; the CAST
+// keeps sqlc typing `watched` as a plain bool across the LEFT JOIN.
 func (q *Queries) GetShowEpisodesBySeasonNumber(ctx context.Context, arg GetShowEpisodesBySeasonNumberParams) ([]GetShowEpisodesBySeasonNumberRow, error) {
-	rows, err := q.query(ctx, q.getShowEpisodesBySeasonNumberStmt, getShowEpisodesBySeasonNumber, arg.ShowID, arg.SeasonNumber)
+	rows, err := q.query(ctx, q.getShowEpisodesBySeasonNumberStmt, getShowEpisodesBySeasonNumber, arg.UserID, arg.ShowID, arg.SeasonNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -1116,6 +1343,9 @@ func (q *Queries) GetShowEpisodesBySeasonNumber(ctx context.Context, arg GetShow
 			&i.TmdbRuntime,
 			&i.VoteAverage,
 			&i.VoteCount,
+			&i.ProgressSec,
+			&i.DurationSec,
+			&i.Watched,
 		); err != nil {
 			return nil, err
 		}
@@ -1201,6 +1431,90 @@ func (q *Queries) GetShowFileByPath(ctx context.Context, filePath string) (ShowF
 		&i.MimeType,
 		&i.Duration,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getShowFileEpisodeIDs = `-- name: GetShowFileEpisodeIDs :many
+SELECT episode_id
+FROM show_episode_files
+WHERE file_id = ?
+ORDER BY episode_order
+`
+
+// Episodes linked to a file, read before a deletion cascades the links away so
+// the per-episode runtime caches can be evicted after commit.
+func (q *Queries) GetShowFileEpisodeIDs(ctx context.Context, fileID int64) ([]int64, error) {
+	rows, err := q.query(ctx, q.getShowFileEpisodeIDsStmt, getShowFileEpisodeIDs, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var episode_id int64
+		if err := rows.Scan(&episode_id); err != nil {
+			return nil, err
+		}
+		items = append(items, episode_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowFileForEpisode = `-- name: GetShowFileForEpisode :one
+SELECT
+  f.id,
+  f.season_id,
+  f.file_path,
+  f.file_name,
+  f.size,
+  f.container,
+  f.mime_type,
+  f.duration,
+  f.updated_at
+FROM show_episode_files AS l
+INNER JOIN show_files AS f
+  ON f.id = l.file_id
+WHERE l.episode_id = ?
+ORDER BY f.id
+LIMIT 1
+`
+
+type GetShowFileForEpisodeRow struct {
+	ID        int64           `json:"id"`
+	SeasonID  int64           `json:"season_id"`
+	FilePath  string          `json:"file_path"`
+	FileName  string          `json:"file_name"`
+	Size      int64           `json:"size"`
+	Container string          `json:"container"`
+	MimeType  string          `json:"mime_type"`
+	Duration  sql.NullFloat64 `json:"duration"`
+	UpdatedAt string          `json:"updated_at"`
+}
+
+// The physical file behind an episode. An episode may be linked to more than
+// one file (duplicate copies), so the lowest file id is the deterministic
+// playback target; a combined file is returned whole, playback never seeks to
+// a guessed episode offset.
+func (q *Queries) GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error) {
+	row := q.queryRow(ctx, q.getShowFileForEpisodeStmt, getShowFileForEpisode, episodeID)
+	var i GetShowFileForEpisodeRow
+	err := row.Scan(
+		&i.ID,
+		&i.SeasonID,
+		&i.FilePath,
+		&i.FileName,
+		&i.Size,
+		&i.Container,
+		&i.MimeType,
+		&i.Duration,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -1536,6 +1850,171 @@ func (q *Queries) GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeaso
 			&i.TmdbEpisodeCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowSubtitlesByFileID = `-- name: GetShowSubtitlesByFileID :many
+SELECT
+  id,
+  file_id,
+  stream_index,
+  codec,
+  language,
+  title,
+  is_forced,
+  is_default
+FROM show_subtitles
+WHERE file_id = ?
+ORDER BY stream_index
+`
+
+type GetShowSubtitlesByFileIDRow struct {
+	ID          int64          `json:"id"`
+	FileID      int64          `json:"file_id"`
+	StreamIndex int64          `json:"stream_index"`
+	Codec       string         `json:"codec"`
+	Language    sql.NullString `json:"language"`
+	Title       sql.NullString `json:"title"`
+	IsForced    bool           `json:"is_forced"`
+	IsDefault   bool           `json:"is_default"`
+}
+
+func (q *Queries) GetShowSubtitlesByFileID(ctx context.Context, fileID int64) ([]GetShowSubtitlesByFileIDRow, error) {
+	rows, err := q.query(ctx, q.getShowSubtitlesByFileIDStmt, getShowSubtitlesByFileID, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowSubtitlesByFileIDRow{}
+	for rows.Next() {
+		var i GetShowSubtitlesByFileIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FileID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.Language,
+			&i.Title,
+			&i.IsForced,
+			&i.IsDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowVideoStreamsByFileID = `-- name: GetShowVideoStreamsByFileID :many
+SELECT
+  id,
+  file_id,
+  stream_index,
+  codec,
+  codec_profile,
+  codec_level,
+  bit_rate,
+  width,
+  height,
+  coded_width,
+  coded_height,
+  aspect_ratio,
+  frame_rate,
+  avg_frame_rate,
+  bit_depth,
+  pixel_format,
+  color_range,
+  color_space,
+  color_primaries,
+  color_transfer,
+  field_order,
+  rotation,
+  language,
+  title
+FROM show_video_streams
+WHERE file_id = ?
+ORDER BY stream_index
+`
+
+type GetShowVideoStreamsByFileIDRow struct {
+	ID             int64          `json:"id"`
+	FileID         int64          `json:"file_id"`
+	StreamIndex    int64          `json:"stream_index"`
+	Codec          string         `json:"codec"`
+	CodecProfile   sql.NullString `json:"codec_profile"`
+	CodecLevel     sql.NullInt64  `json:"codec_level"`
+	BitRate        int64          `json:"bit_rate"`
+	Width          int64          `json:"width"`
+	Height         int64          `json:"height"`
+	CodedWidth     sql.NullInt64  `json:"coded_width"`
+	CodedHeight    sql.NullInt64  `json:"coded_height"`
+	AspectRatio    sql.NullString `json:"aspect_ratio"`
+	FrameRate      float64        `json:"frame_rate"`
+	AvgFrameRate   sql.NullString `json:"avg_frame_rate"`
+	BitDepth       sql.NullInt64  `json:"bit_depth"`
+	PixelFormat    sql.NullString `json:"pixel_format"`
+	ColorRange     sql.NullString `json:"color_range"`
+	ColorSpace     sql.NullString `json:"color_space"`
+	ColorPrimaries sql.NullString `json:"color_primaries"`
+	ColorTransfer  sql.NullString `json:"color_transfer"`
+	FieldOrder     sql.NullString `json:"field_order"`
+	Rotation       sql.NullInt64  `json:"rotation"`
+	Language       sql.NullString `json:"language"`
+	Title          sql.NullString `json:"title"`
+}
+
+// Video streams of a show file, in the same order the movie twin uses.
+func (q *Queries) GetShowVideoStreamsByFileID(ctx context.Context, fileID int64) ([]GetShowVideoStreamsByFileIDRow, error) {
+	rows, err := q.query(ctx, q.getShowVideoStreamsByFileIDStmt, getShowVideoStreamsByFileID, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowVideoStreamsByFileIDRow{}
+	for rows.Next() {
+		var i GetShowVideoStreamsByFileIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FileID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.CodecProfile,
+			&i.CodecLevel,
+			&i.BitRate,
+			&i.Width,
+			&i.Height,
+			&i.CodedWidth,
+			&i.CodedHeight,
+			&i.AspectRatio,
+			&i.FrameRate,
+			&i.AvgFrameRate,
+			&i.BitDepth,
+			&i.PixelFormat,
+			&i.ColorRange,
+			&i.ColorSpace,
+			&i.ColorPrimaries,
+			&i.ColorTransfer,
+			&i.FieldOrder,
+			&i.Rotation,
+			&i.Language,
+			&i.Title,
 		); err != nil {
 			return nil, err
 		}

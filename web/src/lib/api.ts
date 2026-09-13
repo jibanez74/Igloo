@@ -1,4 +1,5 @@
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
+import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
 import type {
   AlbumDetailsResponseType,
   AlbumsListResponseType,
@@ -30,7 +31,10 @@ import type {
   MoviePlaylistRowType,
   MoviePlaylistsListResponseType,
   MovieTechnicalDetailsResponse,
-  MovieWatchProgressType,
+  PlaybackMediaRef,
+  ShowEpisodePlaybackDataType,
+  ShowEpisodeTechnicalDetailsDataType,
+  WatchProgressType,
   MovieGenreWithCountType,
   MoviesLibraryPaginatedDataType,
   MoviesStatsDataType,
@@ -335,6 +339,14 @@ export const getShowSeasonEpisodes = (showId: number, seasonNumber: number) =>
     `/api/shows/${showId}/seasons/${seasonNumber}/episodes`,
   );
 
+export const getShowEpisode = (episodeId: number) =>
+  apiRequest<ShowEpisodePlaybackDataType>(`/api/shows/episodes/${episodeId}`);
+
+export const getShowEpisodeTechnicalDetails = (episodeId: number) =>
+  apiRequest<ShowEpisodeTechnicalDetailsDataType>(
+    `/api/shows/episodes/${episodeId}/technical-details`,
+  );
+
 export const getContinueWatchingMovies = () =>
   apiRequest<{ movies: ContinueWatchingMovieType[] }>(
     "/api/movies/continue-watching",
@@ -464,39 +476,56 @@ export const toggleLikeMovie = (movieId: number) =>
     { method: "POST" },
   );
 
-export const getMovieWatchProgress = (movieId: number) =>
-  apiRequest<MovieWatchProgressType>(`/api/movies/${movieId}/watch-progress`);
+// Watch progress is one contract for movies and TV episodes; only the route
+// prefix differs (see mediaApiBasePath). The movie-named wrappers below keep
+// the movie call sites readable.
 
-export const updateMovieWatchProgress = (
-  movieId: number,
+export const getMediaWatchProgress = (media: PlaybackMediaRef) =>
+  apiRequest<WatchProgressType>(`${mediaApiBasePath(media)}/watch-progress`);
+
+export const updateMediaWatchProgress = (
+  media: PlaybackMediaRef,
   progressSec: number,
   durationSec: number,
   saveSessionId: string,
   saveSequence: number,
 ) =>
-  apiRequest<{ watched: boolean }>(`/api/movies/${movieId}/watch-progress`, {
-    method: "PUT",
-    body: {
-      progress_sec: progressSec,
-      duration_sec: durationSec,
-      save_session_id: saveSessionId,
-      save_sequence: saveSequence,
+  apiRequest<{ watched: boolean }>(
+    `${mediaApiBasePath(media)}/watch-progress`,
+    {
+      method: "PUT",
+      body: {
+        progress_sec: progressSec,
+        duration_sec: durationSec,
+        save_session_id: saveSessionId,
+        save_sequence: saveSequence,
+      },
     },
-  });
+  );
 
-export const deleteMovieWatchProgress = (movieId: number) =>
-  apiRequest<{ cleared: boolean }>(`/api/movies/${movieId}/watch-progress`, {
-    method: "DELETE",
-  });
+export const deleteMediaWatchProgress = (media: PlaybackMediaRef) =>
+  apiRequest<{ cleared: boolean }>(
+    `${mediaApiBasePath(media)}/watch-progress`,
+    { method: "DELETE" },
+  );
 
-export const setMovieWatched = (movieId: number, watched: boolean) =>
-  apiRequest<{ movie_id: number; watched: boolean }>(
-    `/api/movies/${movieId}/watch-progress/watched`,
+export const setMediaWatched = (media: PlaybackMediaRef, watched: boolean) =>
+  apiRequest<{ watched: boolean }>(
+    `${mediaApiBasePath(media)}/watch-progress/watched`,
     {
       method: "PUT",
       body: { watched },
     },
   );
+
+export const getMovieWatchProgress = (movieId: number) =>
+  getMediaWatchProgress(movieMediaRef(movieId));
+
+export const deleteMovieWatchProgress = (movieId: number) =>
+  deleteMediaWatchProgress(movieMediaRef(movieId));
+
+export const setMovieWatched = (movieId: number, watched: boolean) =>
+  setMediaWatched(movieMediaRef(movieId), watched);
 
 // ============================================================================
 // Music (albums, tracks, musicians, stats, play events)

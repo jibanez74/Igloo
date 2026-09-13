@@ -781,9 +781,183 @@ export interface paths {
         };
         /**
          * List episodes of a TV show season
-         * @description Returns one season and its episodes, ordered by episode number. The season is addressed by its number rather than by an internal id; specials are season zero. Answers 404 when the show or that season number does not exist. Episodes carry no file, stream, codec, or chapter data: technical metadata belongs to a physical file, one file can back several episodes, and file duration is never divided into guessed episode runtimes.
+         * @description Returns one season and its episodes, ordered by episode number, each with the requesting user's watch progress. The season is addressed by its number rather than by an internal id; specials are season zero. Answers 404 when the show or that season number does not exist. Episodes carry no file, stream, codec, or chapter data: technical metadata belongs to a physical file, one file can back several episodes, and file duration is never divided into guessed episode runtimes. Playback and technical details are addressed by episode id under /api/shows/episodes/{id}.
          */
         get: operations["getShowSeasonEpisodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the playback header for a TV episode
+         * @description Returns the episode with its season number and show identity, for the episode player's title and back navigation. Stream and track metadata come from the episode's technical details.
+         */
+        get: operations["getShowEpisode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/technical-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get technical stream details for a TV episode
+         * @description The playback-relevant subset of the file behind the episode and its probed streams, in stream_index order. A file that backs several episodes answers identically for each of them; playback always covers the whole file.
+         */
+        get: operations["getShowEpisodeTechnicalDetails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/watch-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current user's watch progress for a TV episode */
+        get: operations["getEpisodeWatchProgress"];
+        /** Update current user's watch progress for a TV episode */
+        put: operations["updateEpisodeWatchProgress"];
+        post?: never;
+        /** Clear current user's watch progress for a TV episode */
+        delete: operations["deleteEpisodeWatchProgress"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/watch-progress/watched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark or unmark an episode as watched */
+        put: operations["setEpisodeWatched"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/hls/session/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop a personal episode HLS playback session */
+        post: operations["stopEpisodeHlsSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/hls/{profile}/playlist.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an HLS playlist for a TV episode
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. A cold manifest request can spend up to 15 seconds waiting for transcode capacity and up to 30 seconds waiting for the first copy-video playlist, for a maximum 45-second server wait before a retryable 503.
+         */
+        get: operations["episodeHlsManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/hls/{profile}/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an HLS initialization file or media segment for a TV episode
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
+         */
+        get: operations["episodeHlsSegment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Direct-stream a TV episode's file
+         * @description Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain.
+         */
+        get: operations["streamEpisode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /**
+         * Headers for a direct episode stream
+         * @description Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.
+         */
+        head: operations["streamEpisodeHead"];
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/episodes/{id}/subtitles/{trackIndex}/web.vtt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Extract a subtitle track as WebVTT */
+        get: operations["episodeSubtitleWebVTT"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2510,6 +2684,7 @@ export interface components {
             /** Format: int64 */
             available_episode_count: number;
         };
+        /** @description One episode in a season listing, with the requesting user's watch progress. progress_sec and duration_sec are null until a position is saved; watched is false until the episode is marked or played to completion. Every listed episode is playable: episodes exist only for probed files. */
         ShowEpisode: {
             /** Format: int64 */
             id: number;
@@ -2522,6 +2697,9 @@ export interface components {
             tmdb_runtime: components["schemas"]["SqlNullInt64"];
             vote_average: components["schemas"]["SqlNullFloat64"];
             vote_count: components["schemas"]["SqlNullInt64"];
+            progress_sec: components["schemas"]["SqlNullFloat64"];
+            duration_sec: components["schemas"]["SqlNullFloat64"];
+            watched: boolean;
         };
         ShowCastCredit: {
             credit_id: string;
@@ -2792,7 +2970,7 @@ export interface components {
                 chapters: components["schemas"]["Chapter"][];
             };
         };
-        UpdateMovieWatchProgressRequest: {
+        UpdateWatchProgressRequest: {
             progress_sec: number;
             duration_sec: number;
             /** Format: uuid */
@@ -2800,19 +2978,20 @@ export interface components {
             /** Format: int64 */
             save_sequence: number;
         };
-        SetMovieWatchedRequest: {
+        SetWatchedRequest: {
             watched: boolean;
         };
-        MovieWatchProgress: {
+        /** @description The caller's saved position on one movie or TV episode. Null fields mean no progress has been saved. */
+        WatchProgress: {
             progress_sec: number | null;
             duration_sec: number | null;
             watched: boolean;
             updated_at: string | null;
         };
-        MovieWatchProgressEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["MovieWatchProgress"];
+        WatchProgressEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["WatchProgress"];
         };
-        MovieWatchProgressUpdateEnvelope: components["schemas"]["JsonSuccess"] & {
+        WatchProgressUpdateEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 watched: boolean;
             };
@@ -4073,6 +4252,147 @@ export interface components {
         MusicScanStatusResponse: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MusicScanStatusData"];
         };
+        /** @description One episode's catalog metadata (TMDB fields only). */
+        ShowEpisodeSummary: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            episode_number: number;
+            name: string;
+            overview: components["schemas"]["SqlNullString"];
+            air_date: components["schemas"]["SqlNullString"];
+            still_path: components["schemas"]["SqlNullString"];
+            tmdb_runtime: components["schemas"]["SqlNullInt64"];
+            vote_average: components["schemas"]["SqlNullFloat64"];
+            vote_count: components["schemas"]["SqlNullInt64"];
+        };
+        ShowEpisodePlaybackShow: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            poster_path: components["schemas"]["SqlNullString"];
+            backdrop_path: components["schemas"]["SqlNullString"];
+        };
+        ShowEpisodePlaybackSeason: {
+            /** Format: int64 */
+            season_number: number;
+            name: string;
+        };
+        /** @description What the episode player needs to title itself and navigate back: the episode, its season number, and its show. */
+        ShowEpisodePlaybackData: {
+            show: components["schemas"]["ShowEpisodePlaybackShow"];
+            season: components["schemas"]["ShowEpisodePlaybackSeason"];
+            episode: components["schemas"]["ShowEpisodeSummary"];
+        };
+        ShowEpisodePlaybackEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowEpisodePlaybackData"];
+        };
+        /** @description A probed video stream of a show file. Same columns as VideoStream, keyed by the file rather than a movie. */
+        ShowFileVideoStream: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            file_id: number;
+            /** Format: int64 */
+            stream_index: number;
+            codec: string;
+            codec_profile: components["schemas"]["SqlNullString"];
+            codec_level: components["schemas"]["SqlNullInt64"];
+            /** Format: int64 */
+            bit_rate: number;
+            /** Format: int64 */
+            width: number;
+            /** Format: int64 */
+            height: number;
+            coded_width: components["schemas"]["SqlNullInt64"];
+            coded_height: components["schemas"]["SqlNullInt64"];
+            aspect_ratio: components["schemas"]["SqlNullString"];
+            frame_rate: number;
+            avg_frame_rate: components["schemas"]["SqlNullString"];
+            bit_depth: components["schemas"]["SqlNullInt64"];
+            pixel_format: components["schemas"]["SqlNullString"];
+            color_range: components["schemas"]["SqlNullString"];
+            color_space: components["schemas"]["SqlNullString"];
+            color_primaries: components["schemas"]["SqlNullString"];
+            color_transfer: components["schemas"]["SqlNullString"];
+            field_order: components["schemas"]["SqlNullString"];
+            rotation: components["schemas"]["SqlNullInt64"];
+            language: components["schemas"]["SqlNullString"];
+            title: components["schemas"]["SqlNullString"];
+        };
+        /** @description A probed audio stream of a show file. */
+        ShowFileAudioStream: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            file_id: number;
+            /** Format: int64 */
+            stream_index: number;
+            codec: string;
+            codec_profile: components["schemas"]["SqlNullString"];
+            /** Format: int64 */
+            bit_rate: number;
+            sample_rate: components["schemas"]["SqlNullInt64"];
+            /** Format: int64 */
+            channels: number;
+            channel_layout: components["schemas"]["SqlNullString"];
+            language: components["schemas"]["SqlNullString"];
+            title: components["schemas"]["SqlNullString"];
+            is_default: boolean;
+        };
+        /** @description A probed subtitle track of a show file. */
+        ShowFileSubtitle: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            file_id: number;
+            /** Format: int64 */
+            stream_index: number;
+            codec: string;
+            language: components["schemas"]["SqlNullString"];
+            title: components["schemas"]["SqlNullString"];
+            is_forced: boolean;
+            is_default: boolean;
+        };
+        /** @description A chapter of a show file, start time normalized into the file duration. */
+        ShowFileChapter: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            /** Format: int64 */
+            start_time: number;
+            thumb: components["schemas"]["SqlNullString"];
+            /** Format: int64 */
+            file_id: number;
+        };
+        /** @description The playback-relevant subset of the file behind an episode. Filesystem locations are never exposed. A combined file answers identically for every episode it backs. */
+        ShowTechnicalFile: {
+            file_name: string;
+            /** Format: int64 */
+            size: number;
+            container: string;
+            /** @description The container media type the client direct-play gate reads, normalized from the stored value. */
+            mime_type: string;
+            duration: components["schemas"]["SqlNullFloat64"];
+        };
+        ShowEpisodeTechnicalDetailsData: {
+            file: components["schemas"]["ShowTechnicalFile"];
+            video_streams: components["schemas"]["ShowFileVideoStream"][];
+            audio_streams: components["schemas"]["ShowFileAudioStream"][];
+            subtitles: components["schemas"]["ShowFileSubtitle"][];
+            chapters: components["schemas"]["ShowFileChapter"][];
+        };
+        ShowEpisodeTechnicalDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowEpisodeTechnicalDetailsData"];
+        };
+        EpisodeWatchedData: {
+            /** Format: int64 */
+            episode_id: number;
+            watched: boolean;
+        };
+        EpisodeWatchedEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["EpisodeWatchedData"];
+        };
     };
     responses: {
         /** @description Successful JSON response. */
@@ -4310,22 +4630,22 @@ export interface components {
                 "application/json": components["schemas"]["MovieTechnicalDetailsEnvelope"];
             };
         };
-        /** @description Movie watch progress response. */
-        MovieWatchProgressResponse: {
+        /** @description Watch progress response. */
+        WatchProgressResponse: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["MovieWatchProgressEnvelope"];
+                "application/json": components["schemas"]["WatchProgressEnvelope"];
             };
         };
-        /** @description Movie watch progress update response. */
-        MovieWatchProgressUpdateResponse: {
+        /** @description Watch progress update response. */
+        WatchProgressUpdateResponse: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["MovieWatchProgressUpdateEnvelope"];
+                "application/json": components["schemas"]["WatchProgressUpdateEnvelope"];
             };
         };
         /** @description Clear operation response. */
@@ -5147,6 +5467,33 @@ export interface components {
                 "application/json": components["schemas"]["MusicScanStatusResponse"];
             };
         };
+        /** @description TV episode playback header response. */
+        ShowEpisodePlaybackResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowEpisodePlaybackEnvelope"];
+            };
+        };
+        /** @description TV episode technical details response. */
+        ShowEpisodeTechnicalDetailsResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowEpisodeTechnicalDetailsEnvelope"];
+            };
+        };
+        /** @description TV episode watched status response. */
+        EpisodeWatchedResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["EpisodeWatchedEnvelope"];
+            };
+        };
     };
     parameters: {
         IdPath: number;
@@ -5370,14 +5717,14 @@ export interface components {
                 "application/json": components["schemas"]["DeleteMovieRequest"];
             };
         };
-        UpdateMovieWatchProgressRequest: {
+        UpdateWatchProgressRequest: {
             content: {
-                "application/json": components["schemas"]["UpdateMovieWatchProgressRequest"];
+                "application/json": components["schemas"]["UpdateWatchProgressRequest"];
             };
         };
-        SetMovieWatchedRequest: {
+        SetWatchedRequest: {
             content: {
-                "application/json": components["schemas"]["SetMovieWatchedRequest"];
+                "application/json": components["schemas"]["SetWatchedRequest"];
             };
         };
         CreateWatchRoomRequest: {
@@ -6265,6 +6612,396 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    getShowEpisode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowEpisodePlaybackResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowEpisodeTechnicalDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowEpisodeTechnicalDetailsResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getEpisodeWatchProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WatchProgressResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    updateEpisodeWatchProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateWatchProgressRequest"];
+        responses: {
+            200: components["responses"]["WatchProgressUpdateResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    deleteEpisodeWatchProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ClearedResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    setEpisodeWatched: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SetWatchedRequest"];
+        responses: {
+            200: components["responses"]["EpisodeWatchedResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    stopEpisodeHlsSession: {
+        parameters: {
+            query: {
+                /** @description UUID that scopes one personal HLS playback session. */
+                playback_session: components["parameters"]["PlaybackSessionQuery"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["JsonSuccess"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    episodeHlsManifest: {
+        parameters: {
+            query: {
+                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                audio_track?: components["parameters"]["AudioTrackQuery"];
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
+                /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
+                audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
+                /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+                start: components["parameters"]["StartQuery"];
+                /** @description UUID that scopes one personal HLS playback session. */
+                playback_session: components["parameters"]["PlaybackSessionQuery"];
+                /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
+                reload?: components["parameters"]["HLSReloadQuery"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+                profile: components["parameters"]["HLSProfilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["HLSPlaylistResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["HLSServiceUnavailable"];
+        };
+    };
+    episodeHlsSegment: {
+        parameters: {
+            query: {
+                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                audio_track?: components["parameters"]["AudioTrackQuery"];
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
+                /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
+                audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
+                /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+                start: components["parameters"]["StartQuery"];
+                /** @description UUID that scopes one personal HLS playback session. */
+                playback_session: components["parameters"]["PlaybackSessionQuery"];
+                /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
+                reload?: components["parameters"]["HLSReloadQuery"];
+            };
+            header?: {
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
+                Range?: components["parameters"]["RangeHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
+            };
+            path: {
+                id: components["parameters"]["IdPath"];
+                profile: components["parameters"]["HLSProfilePath"];
+                /** @description HLS asset name. Valid values are init.mp4 or segment_N.m4s. */
+                filename: components["parameters"]["HLSFilenamePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["HLSSegmentResponse"];
+            206: components["responses"]["PartialHLSSegmentResponse"];
+            304: components["responses"]["HLSNotModifiedResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+            416: components["responses"]["HLSRangeNotSatisfiableResponse"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["HLSServiceUnavailable"];
+        };
+    };
+    streamEpisode: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
+                Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
+            };
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["BinaryMediaResponse"];
+            206: components["responses"]["PartialBinaryMediaResponse"];
+            304: components["responses"]["NotModified"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+            416: components["responses"]["RangeNotSatisfiable"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    streamEpisodeHead: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
+                Range?: components["parameters"]["RangeHeader"];
+                /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
+                "If-Match"?: components["parameters"]["IfMatchHeader"];
+                /** @description A matching entity tag or * returns bodyless 304. Direct streams emit strong ETags; static files and HLS assets emit none, so only * matches there. Takes precedence over If-Modified-Since. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatchHeader"];
+                /** @description HTTP date for cache revalidation when If-None-Match is absent. Returns bodyless 304 if the file has not changed; invalid dates are ignored. */
+                "If-Modified-Since"?: components["parameters"]["IfModifiedSinceHeader"];
+                /** @description HTTP-date precondition checked when If-Match is absent. A file modified after this date returns an empty 412; invalid dates are ignored. */
+                "If-Unmodified-Since"?: components["parameters"]["IfUnmodifiedSinceHeader"];
+                /** @description With Range, send partial content only when the strong ETag or HTTP date matches; otherwise send the complete 200 representation. Static files and HLS assets have no ETag, so only a matching Last-Modified date can satisfy If-Range. */
+                "If-Range"?: components["parameters"]["IfRangeHeader"];
+            };
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete media file. Episodes use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD. */
+            200: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD. */
+            206: {
+                headers: {
+                    /** @description Byte-range support. */
+                    "Accept-Ranges": "bytes";
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified": string;
+                    /** @description Representation length in bytes (including multipart framing for multiple ranges). */
+                    "Content-Length"?: number;
+                    /** @description Strong validator derived from file size and nanosecond modification time. */
+                    ETag: string;
+                    /** @description Present only for a single range. */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD. */
+            304: {
+                headers: {
+                    /** @description Direct-stream strong validator. */
+                    ETag?: string;
+                    /** @description Static-file modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request. No response body is sent for HEAD. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resource not found. No response body is sent for HEAD. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD. */
+            412: {
+                headers: {
+                    /** @description Present for direct streams only. */
+                    ETag?: string;
+                    /** @description File modification time as an HTTP date. */
+                    "Last-Modified"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes *\/size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD. */
+            416: {
+                headers: {
+                    /** @description Asset size for a well-formed unsatisfiable range, for example bytes *\/15; omitted for malformed range syntax. */
+                    "Content-Range"?: string | null;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unexpected server error. No response body is sent for HEAD. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    episodeSubtitleWebVTT: {
+        parameters: {
+            query?: {
+                /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
+                start?: components["parameters"]["SubtitleStartQuery"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+                /** @description Zero-based index into the movie subtitle rows ordered by stream_index. */
+                trackIndex: components["parameters"]["TrackIndexPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WebVTTResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
     getContinueWatchingMovies: {
         parameters: {
             query?: never;
@@ -6634,7 +7371,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["MovieWatchProgressResponse"];
+            200: components["responses"]["WatchProgressResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
@@ -6650,9 +7387,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["UpdateMovieWatchProgressRequest"];
+        requestBody: components["requestBodies"]["UpdateWatchProgressRequest"];
         responses: {
-            200: components["responses"]["MovieWatchProgressUpdateResponse"];
+            200: components["responses"]["WatchProgressUpdateResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
@@ -6704,7 +7441,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["SetMovieWatchedRequest"];
+        requestBody: components["requestBodies"]["SetWatchedRequest"];
         responses: {
             200: components["responses"]["MovieWatchedResponse"];
             400: components["responses"]["BadRequest"];

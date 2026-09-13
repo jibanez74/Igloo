@@ -79,7 +79,7 @@ WHERE movie_watch_progress.save_session_id <> excluded.save_session_id
 
 -- name: GetContinueWatchingMovies :many
 -- The 30-second floor must match the web client's
--- MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
+-- WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 SELECT
   m.id,
   m.title,

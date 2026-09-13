@@ -70,7 +70,7 @@
     },
     {
       "name": "TV Shows",
-      "description": "TV show library"
+      "description": "TV show library, episode playback, and watch progress"
     },
     {
       "name": "Admin Users",
@@ -1580,7 +1580,7 @@
           "TV Shows"
         ],
         "summary": "List episodes of a TV show season",
-        "description": "Returns one season and its episodes, ordered by episode number. The season is addressed by its number rather than by an internal id; specials are season zero. Answers 404 when the show or that season number does not exist. Episodes carry no file, stream, codec, or chapter data: technical metadata belongs to a physical file, one file can back several episodes, and file duration is never divided into guessed episode runtimes.",
+        "description": "Returns one season and its episodes, ordered by episode number, each with the requesting user's watch progress. The season is addressed by its number rather than by an internal id; specials are season zero. Answers 404 when the show or that season number does not exist. Episodes carry no file, stream, codec, or chapter data: technical metadata belongs to a physical file, one file can back several episodes, and file duration is never divided into guessed episode runtimes. Playback and technical details are addressed by episode id under /api/shows/episodes/{id}.",
         "operationId": "getShowSeasonEpisodes",
         "parameters": [
           {
@@ -1602,6 +1602,645 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Get the playback header for a TV episode",
+        "description": "Returns the episode with its season number and show identity, for the episode player's title and back navigation. Stream and track metadata come from the episode's technical details.",
+        "operationId": "getShowEpisode",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ShowEpisodePlaybackResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/technical-details": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Get technical stream details for a TV episode",
+        "operationId": "getShowEpisodeTechnicalDetails",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ShowEpisodeTechnicalDetailsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "description": "The playback-relevant subset of the file behind the episode and its probed streams, in stream_index order. A file that backs several episodes answers identically for each of them; playback always covers the whole file."
+      }
+    },
+    "/api/shows/episodes/{id}/watch-progress": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Get current user's watch progress for a TV episode",
+        "operationId": "getEpisodeWatchProgress",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WatchProgressResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Update current user's watch progress for a TV episode",
+        "operationId": "updateEpisodeWatchProgress",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UpdateWatchProgressRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WatchProgressUpdateResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Clear current user's watch progress for a TV episode",
+        "operationId": "deleteEpisodeWatchProgress",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ClearedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/watch-progress/watched": {
+      "put": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Mark or unmark an episode as watched",
+        "operationId": "setEpisodeWatched",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/SetWatchedRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/EpisodeWatchedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/hls/session/stop": {
+      "post": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Stop a personal episode HLS playback session",
+        "operationId": "stopEpisodeHlsSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/PlaybackSessionQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/hls/{profile}/playlist.m3u8": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Get an HLS playlist for a TV episode",
+        "description": "Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. A cold manifest request can spend up to 15 seconds waiting for transcode capacity and up to 30 seconds waiting for the first copy-video playlist, for a maximum 45-second server wait before a retryable 503.",
+        "operationId": "episodeHlsManifest",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/HLSProfilePath"
+          },
+          {
+            "$ref": "#/components/parameters/AudioTrackQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioCodecQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioChannelsQuery"
+          },
+          {
+            "$ref": "#/components/parameters/StartQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PlaybackSessionQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSReloadQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/HLSPlaylistResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/HLSServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/hls/{profile}/{filename}": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Get an HLS initialization file or media segment for a TV episode",
+        "description": "Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.",
+        "operationId": "episodeHlsSegment",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/HLSProfilePath"
+          },
+          {
+            "$ref": "#/components/parameters/HLSFilenamePath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AudioTrackQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioCodecQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSAudioChannelsQuery"
+          },
+          {
+            "$ref": "#/components/parameters/StartQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PlaybackSessionQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSReloadQuery"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/HLSSegmentResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialHLSSegmentResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/HLSNotModifiedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/HLSRangeNotSatisfiableResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/HLSServiceUnavailable"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/stream": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Direct-stream a TV episode's file",
+        "operationId": "streamEpisode",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BinaryMediaResponse"
+          },
+          "206": {
+            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          }
+        },
+        "description": "Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain."
+      },
+      "head": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Headers for a direct episode stream",
+        "description": "Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.",
+        "operationId": "streamEpisodeHead",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfModifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfUnmodifiedSinceHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IfRangeHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete media file. Episodes use the pinned container MIME type (or stored MIME type for an unknown container); tracks use their stored MIME type. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              }
+            }
+          },
+          "206": {
+            "description": "Partial media file. A single range retains the file MIME type and has Content-Range. Multiple ranges use multipart/byteranges with a boundary parameter, one part per range, and no response-level Content-Range. No response body is sent for HEAD.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range support.",
+                "schema": {
+                  "type": "string",
+                  "const": "bytes"
+                },
+                "required": true
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Length": {
+                "description": "Representation length in bytes (including multipart framing for multiple ranges).",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "ETag": {
+                "description": "Strong validator derived from file size and nanosecond modification time.",
+                "schema": {
+                  "type": "string"
+                },
+                "required": true
+              },
+              "Content-Range": {
+                "description": "Present only for a single range.",
+                "schema": {
+                  "type": "string",
+                  "example": "bytes 0-3/16"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Bodyless cache revalidation response. Direct streams retain ETag and omit Last-Modified on 304; static files retain Last-Modified and emit no ETag. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Direct-stream strong validator.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Static-file modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request. No response body is sent for HEAD."
+          },
+          "401": {
+            "description": "Missing or invalid session. No response body is sent for HEAD."
+          },
+          "404": {
+            "description": "Resource not found. No response body is sent for HEAD."
+          },
+          "416": {
+            "description": "Malformed or non-overlapping byte range. Returns text/plain; Content-Range: bytes */size is present for a well-formed non-overlapping range and omitted for malformed syntax. No response body is sent for HEAD.",
+            "headers": {
+              "Content-Range": {
+                "description": "Asset size for a well-formed unsatisfiable range, for example bytes */15; omitted for malformed range syntax.",
+                "schema": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. No response body is sent for HEAD."
+          },
+          "412": {
+            "description": "The If-Match or If-Unmodified-Since precondition failed. Empty response body. No response body is sent for HEAD.",
+            "headers": {
+              "ETag": {
+                "description": "Present for direct streams only.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "File modification time as an HTTP date.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shows/episodes/{id}/subtitles/{trackIndex}/web.vtt": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Extract a subtitle track as WebVTT",
+        "operationId": "episodeSubtitleWebVTT",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/TrackIndexPath"
+          },
+          {
+            "$ref": "#/components/parameters/SubtitleStartQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/WebVTTResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2239,7 +2878,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/MovieWatchProgressResponse"
+            "$ref": "#/components/responses/WatchProgressResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -2267,11 +2906,11 @@
           }
         ],
         "requestBody": {
-          "$ref": "#/components/requestBodies/UpdateMovieWatchProgressRequest"
+          "$ref": "#/components/requestBodies/UpdateWatchProgressRequest"
         },
         "responses": {
           "200": {
-            "$ref": "#/components/responses/MovieWatchProgressUpdateResponse"
+            "$ref": "#/components/responses/WatchProgressUpdateResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -2361,7 +3000,7 @@
           }
         ],
         "requestBody": {
-          "$ref": "#/components/requestBodies/SetMovieWatchedRequest"
+          "$ref": "#/components/requestBodies/SetWatchedRequest"
         },
         "responses": {
           "200": {
@@ -5976,22 +6615,22 @@
           }
         }
       },
-      "UpdateMovieWatchProgressRequest": {
+      "UpdateWatchProgressRequest": {
         "required": true,
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/UpdateMovieWatchProgressRequest"
+              "$ref": "#/components/schemas/UpdateWatchProgressRequest"
             }
           }
         }
       },
-      "SetMovieWatchedRequest": {
+      "SetWatchedRequest": {
         "required": true,
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/SetMovieWatchedRequest"
+              "$ref": "#/components/schemas/SetWatchedRequest"
             }
           }
         }
@@ -6336,22 +6975,22 @@
           }
         }
       },
-      "MovieWatchProgressResponse": {
-        "description": "Movie watch progress response.",
+      "WatchProgressResponse": {
+        "description": "Watch progress response.",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/MovieWatchProgressEnvelope"
+              "$ref": "#/components/schemas/WatchProgressEnvelope"
             }
           }
         }
       },
-      "MovieWatchProgressUpdateResponse": {
-        "description": "Movie watch progress update response.",
+      "WatchProgressUpdateResponse": {
+        "description": "Watch progress update response.",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/MovieWatchProgressUpdateEnvelope"
+              "$ref": "#/components/schemas/WatchProgressUpdateEnvelope"
             }
           }
         }
@@ -7538,6 +8177,36 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/MusicScanStatusResponse"
+            }
+          }
+        }
+      },
+      "ShowEpisodePlaybackResponse": {
+        "description": "TV episode playback header response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ShowEpisodePlaybackEnvelope"
+            }
+          }
+        }
+      },
+      "ShowEpisodeTechnicalDetailsResponse": {
+        "description": "TV episode technical details response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ShowEpisodeTechnicalDetailsEnvelope"
+            }
+          }
+        }
+      },
+      "EpisodeWatchedResponse": {
+        "description": "TV episode watched status response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EpisodeWatchedEnvelope"
             }
           }
         }
@@ -8913,7 +9582,10 @@
           "still_path",
           "tmdb_runtime",
           "vote_average",
-          "vote_count"
+          "vote_count",
+          "progress_sec",
+          "duration_sec",
+          "watched"
         ],
         "properties": {
           "id": {
@@ -8944,9 +9616,19 @@
           },
           "vote_count": {
             "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "progress_sec": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "duration_sec": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "watched": {
+            "type": "boolean"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "One episode in a season listing, with the requesting user's watch progress. progress_sec and duration_sec are null until a position is saved; watched is false until the episode is marked or played to completion. Every listed episode is playable: episodes exist only for probed files."
       },
       "ShowCastCredit": {
         "type": "object",
@@ -10029,7 +10711,7 @@
           }
         ]
       },
-      "UpdateMovieWatchProgressRequest": {
+      "UpdateWatchProgressRequest": {
         "type": "object",
         "required": [
           "progress_sec",
@@ -10058,7 +10740,7 @@
         },
         "additionalProperties": false
       },
-      "SetMovieWatchedRequest": {
+      "SetWatchedRequest": {
         "type": "object",
         "required": [
           "watched"
@@ -10070,7 +10752,7 @@
         },
         "additionalProperties": false
       },
-      "MovieWatchProgress": {
+      "WatchProgress": {
         "type": "object",
         "required": [
           "progress_sec",
@@ -10101,9 +10783,10 @@
             ]
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "The caller's saved position on one movie or TV episode. Null fields mean no progress has been saved."
       },
-      "MovieWatchProgressEnvelope": {
+      "WatchProgressEnvelope": {
         "allOf": [
           {
             "$ref": "#/components/schemas/JsonSuccess"
@@ -10115,13 +10798,13 @@
             ],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/MovieWatchProgress"
+                "$ref": "#/components/schemas/WatchProgress"
               }
             }
           }
         ]
       },
-      "MovieWatchProgressUpdateEnvelope": {
+      "WatchProgressUpdateEnvelope": {
         "allOf": [
           {
             "$ref": "#/components/schemas/JsonSuccess"
@@ -15242,6 +15925,507 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/MusicScanStatusData"
+              }
+            }
+          }
+        ]
+      },
+      "ShowEpisodeSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "episode_number",
+          "name",
+          "overview",
+          "air_date",
+          "still_path",
+          "tmdb_runtime",
+          "vote_average",
+          "vote_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "air_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "still_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_runtime": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "vote_average": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "vote_count": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          }
+        },
+        "additionalProperties": false,
+        "description": "One episode's catalog metadata (TMDB fields only)."
+      },
+      "ShowEpisodePlaybackShow": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "poster_path",
+          "backdrop_path"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowEpisodePlaybackSeason": {
+        "type": "object",
+        "required": [
+          "season_number",
+          "name"
+        ],
+        "properties": {
+          "season_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowEpisodePlaybackData": {
+        "type": "object",
+        "description": "What the episode player needs to title itself and navigate back: the episode, its season number, and its show.",
+        "required": [
+          "show",
+          "season",
+          "episode"
+        ],
+        "properties": {
+          "show": {
+            "$ref": "#/components/schemas/ShowEpisodePlaybackShow"
+          },
+          "season": {
+            "$ref": "#/components/schemas/ShowEpisodePlaybackSeason"
+          },
+          "episode": {
+            "$ref": "#/components/schemas/ShowEpisodeSummary"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowEpisodePlaybackEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShowEpisodePlaybackData"
+              }
+            }
+          }
+        ]
+      },
+      "ShowFileVideoStream": {
+        "type": "object",
+        "required": [
+          "id",
+          "file_id",
+          "stream_index",
+          "codec",
+          "codec_profile",
+          "codec_level",
+          "bit_rate",
+          "width",
+          "height",
+          "coded_width",
+          "coded_height",
+          "aspect_ratio",
+          "frame_rate",
+          "avg_frame_rate",
+          "bit_depth",
+          "pixel_format",
+          "color_range",
+          "color_space",
+          "color_primaries",
+          "color_transfer",
+          "field_order",
+          "rotation",
+          "language",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "codec_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "codec_level": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "coded_width": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "coded_height": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "aspect_ratio": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "frame_rate": {
+            "type": "number"
+          },
+          "avg_frame_rate": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "bit_depth": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "pixel_format": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_range": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_space": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_primaries": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "color_transfer": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "field_order": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A probed video stream of a show file. Same columns as VideoStream, keyed by the file rather than a movie."
+      },
+      "ShowFileAudioStream": {
+        "type": "object",
+        "required": [
+          "id",
+          "file_id",
+          "stream_index",
+          "codec",
+          "codec_profile",
+          "bit_rate",
+          "sample_rate",
+          "channels",
+          "channel_layout",
+          "language",
+          "title",
+          "is_default"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "codec_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sample_rate": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "channels": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "channel_layout": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_default": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A probed audio stream of a show file."
+      },
+      "ShowFileSubtitle": {
+        "type": "object",
+        "required": [
+          "id",
+          "file_id",
+          "stream_index",
+          "codec",
+          "language",
+          "title",
+          "is_forced",
+          "is_default"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream_index": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "is_forced": {
+            "type": "boolean"
+          },
+          "is_default": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A probed subtitle track of a show file."
+      },
+      "ShowFileChapter": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "start_time",
+          "thumb",
+          "file_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thumb": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "file_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A chapter of a show file, start time normalized into the file duration."
+      },
+      "ShowTechnicalFile": {
+        "type": "object",
+        "description": "The playback-relevant subset of the file behind an episode. Filesystem locations are never exposed. A combined file answers identically for every episode it backs.",
+        "required": [
+          "file_name",
+          "size",
+          "container",
+          "mime_type",
+          "duration"
+        ],
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "container": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "The container media type the client direct-play gate reads, normalized from the stored value."
+          },
+          "duration": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowEpisodeTechnicalDetailsData": {
+        "type": "object",
+        "required": [
+          "file",
+          "video_streams",
+          "audio_streams",
+          "subtitles",
+          "chapters"
+        ],
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/ShowTechnicalFile"
+          },
+          "video_streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowFileVideoStream"
+            }
+          },
+          "audio_streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowFileAudioStream"
+            }
+          },
+          "subtitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowFileSubtitle"
+            }
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowFileChapter"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowEpisodeTechnicalDetailsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShowEpisodeTechnicalDetailsData"
+              }
+            }
+          }
+        ]
+      },
+      "EpisodeWatchedData": {
+        "type": "object",
+        "required": [
+          "episode_id",
+          "watched"
+        ],
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "watched": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EpisodeWatchedEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/EpisodeWatchedData"
               }
             }
           }

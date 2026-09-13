@@ -140,8 +140,14 @@ func (app *Application) GetShowDetails(w http.ResponseWriter, r *http.Request) {
 
 // One season of a show, addressed by season number rather than by the internal
 // season id. Specials are season zero, so the number is only rejected when it
-// does not parse or is negative.
+// does not parse or is negative. Each episode carries the caller's own watch
+// progress, so the page needs no per-row query for resume or watched state.
 func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
+		return
+	}
+
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
@@ -190,6 +196,7 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 	}
 
 	episodes, err := qtx.GetShowEpisodesBySeasonNumber(ctx, database.GetShowEpisodesBySeasonNumberParams{
+		UserID:       userID,
 		ShowID:       id,
 		SeasonNumber: seasonNumber,
 	})

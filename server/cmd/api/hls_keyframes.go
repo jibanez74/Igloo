@@ -15,8 +15,61 @@ import (
 // keyframeIndexFingerprint keys the persisted keyframe index. The index
 // depends only on the file's bytes, so unlike remuxSafetyFingerprint no
 // stream properties are included — file identity alone invalidates it.
-func keyframeIndexFingerprint(movie *database.Movie, video *database.VideoStream) string {
-	return movieStreamFingerprintBase(movie, video.StreamIndex)
+func keyframeIndexFingerprint(source playbackSource, video *database.VideoStream) string {
+	return sourceStreamFingerprintBase(source, video.StreamIndex)
+}
+
+// persistedKeyframeIndex is the stored row shape shared by the movie and show
+// tables, so the validation below reads one type whichever table it came from.
+type persistedKeyframeIndex struct {
+	Fingerprint string
+	DurationSec float64
+	Keyframes   string
+}
+
+// readKeyframeIndexRow reads the row from the table the source's kind keys
+// on: movies by movie id, show files by show_files.id.
+func (app *Application) readKeyframeIndexRow(ctx context.Context, source playbackSource, streamIndex int64) (persistedKeyframeIndex, error) {
+	if source.Ref.Kind == mediaKindEpisode {
+		row, err := app.Queries.GetShowKeyframeIndex(ctx, database.GetShowKeyframeIndexParams{
+			FileID:      source.FileID,
+			StreamIndex: streamIndex,
+		})
+		if err != nil {
+			return persistedKeyframeIndex{}, err
+		}
+		return persistedKeyframeIndex{Fingerprint: row.Fingerprint, DurationSec: row.DurationSec, Keyframes: row.Keyframes}, nil
+	}
+
+	row, err := app.Queries.GetKeyframeIndex(ctx, database.GetKeyframeIndexParams{
+		MovieID:     source.FileID,
+		StreamIndex: streamIndex,
+	})
+	if err != nil {
+		return persistedKeyframeIndex{}, err
+	}
+	return persistedKeyframeIndex{Fingerprint: row.Fingerprint, DurationSec: row.DurationSec, Keyframes: row.Keyframes}, nil
+}
+
+// writeKeyframeIndexRow is the upsert twin of readKeyframeIndexRow.
+func (app *Application) writeKeyframeIndexRow(ctx context.Context, source playbackSource, streamIndex int64, row persistedKeyframeIndex) error {
+	if source.Ref.Kind == mediaKindEpisode {
+		return app.Queries.UpsertShowKeyframeIndex(ctx, database.UpsertShowKeyframeIndexParams{
+			FileID:      source.FileID,
+			StreamIndex: streamIndex,
+			Fingerprint: row.Fingerprint,
+			DurationSec: row.DurationSec,
+			Keyframes:   row.Keyframes,
+		})
+	}
+
+	return app.Queries.UpsertKeyframeIndex(ctx, database.UpsertKeyframeIndexParams{
+		MovieID:     source.FileID,
+		StreamIndex: streamIndex,
+		Fingerprint: row.Fingerprint,
+		DurationSec: row.DurationSec,
+		Keyframes:   row.Keyframes,
+	})
 }
 
 // getKeyframeIndex reads the persisted index for one video stream. Any miss —
@@ -24,18 +77,15 @@ func keyframeIndexFingerprint(movie *database.Movie, video *database.VideoStream
 // fresh extraction, which rewrites the row.
 func (app *Application) getKeyframeIndex(
 	ctx context.Context,
-	movieID int64,
+	source playbackSource,
 	streamIndex int64,
 	fingerprint string,
 ) (keyframeindex.Index, bool) {
-	row, err := app.Queries.GetKeyframeIndex(ctx, database.GetKeyframeIndexParams{
-		MovieID:     movieID,
-		StreamIndex: streamIndex,
-	})
+	row, err := app.readKeyframeIndexRow(ctx, source, streamIndex)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			app.Logger.Warn("failed to read keyframe index",
-				"movie_id", movieID,
+				"media", source.Ref.String(),
 				"stream_index", streamIndex,
 				"error", err,
 			)
@@ -63,7 +113,7 @@ func (app *Application) getKeyframeIndex(
 	})
 	if err != nil {
 		app.Logger.Warn("discarding invalid persisted keyframe index",
-			"movie_id", movieID,
+			"media", source.Ref.String(),
 			"stream_index", streamIndex,
 			"error", err,
 		)
@@ -79,7 +129,7 @@ func (app *Application) getKeyframeIndex(
 // a background context for the same reason). A write failure only means the
 // index is re-extracted on the next play.
 func (app *Application) setKeyframeIndex(
-	movieID int64,
+	source playbackSource,
 	streamIndex int64,
 	fingerprint string,
 	idx keyframeindex.Index,
@@ -87,23 +137,21 @@ func (app *Application) setKeyframeIndex(
 	payload, err := json.Marshal(idx.KeyframeSec)
 	if err != nil {
 		app.Logger.Warn("failed to encode keyframe index",
-			"movie_id", movieID,
+			"media", source.Ref.String(),
 			"stream_index", streamIndex,
 			"error", err,
 		)
 		return
 	}
 
-	err = app.Queries.UpsertKeyframeIndex(context.Background(), database.UpsertKeyframeIndexParams{
-		MovieID:     movieID,
-		StreamIndex: streamIndex,
+	err = app.writeKeyframeIndexRow(context.Background(), source, streamIndex, persistedKeyframeIndex{
 		Fingerprint: fingerprint,
 		DurationSec: idx.DurationSec,
 		Keyframes:   string(payload),
 	})
 	if err != nil {
 		app.Logger.Warn("failed to persist keyframe index",
-			"movie_id", movieID,
+			"media", source.Ref.String(),
 			"stream_index", streamIndex,
 			"error", err,
 		)
@@ -126,9 +174,7 @@ func keyframeAtOrBefore(keyframes []float64, targetSec float64) (float64, bool) 
 
 type hlsActualStartParams struct {
 	Session     *HLSSession
-	FilePath    string
-	Container   string
-	MovieID     int64
+	Source      playbackSource
 	StreamIndex int64
 	Fingerprint string
 	// RequestedStartSec of 0 means prefetch only: populate the index for
@@ -160,9 +206,9 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	extractCtx, cancelExtract := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
 	defer cancelExtract()
 
-	idx, err := app.extractKeyframeIndexFromFile(extractCtx, p.FilePath, p.Container)
+	idx, err := app.extractKeyframeIndexFromFile(extractCtx, p.Source.FilePath, p.Source.Container)
 	if err == nil {
-		app.setKeyframeIndex(p.MovieID, p.StreamIndex, p.Fingerprint, idx)
+		app.setKeyframeIndex(p.Source, p.StreamIndex, p.Fingerprint, idx)
 		if p.RequestedStartSec > 0 {
 			keyframe, ok := keyframeAtOrBefore(idx.KeyframeSec, p.RequestedStartSec)
 			if ok {
@@ -174,13 +220,13 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 
 	if errors.Is(err, keyframeindex.ErrUnsupportedContainer) {
 		app.Logger.Debug("keyframe index unsupported for container",
-			"movie_id", p.MovieID,
-			"container", p.Container,
+			"media", p.Source.Ref.String(),
+			"container", p.Source.Container,
 		)
 	} else {
 		app.Logger.Warn("keyframe index extraction failed",
-			"movie_id", p.MovieID,
-			"container", p.Container,
+			"media", p.Source.Ref.String(),
+			"container", p.Source.Container,
 			"error", err,
 		)
 	}
@@ -197,10 +243,10 @@ func (app *Application) resolveHLSActualStart(parentCtx context.Context, p hlsAc
 	probeCtx, cancelProbe := context.WithTimeout(parentCtx, hlsStartProbeTimeout)
 	defer cancelProbe()
 
-	actualStartSec, probeErr := app.Ffprobe.KeyframeAtOrBefore(probeCtx, p.FilePath, p.StreamIndex, p.RequestedStartSec)
+	actualStartSec, probeErr := app.Ffprobe.KeyframeAtOrBefore(probeCtx, p.Source.FilePath, p.StreamIndex, p.RequestedStartSec)
 	if probeErr != nil {
 		app.Logger.Warn("hls actual start probe failed",
-			"movie_id", p.MovieID,
+			"media", p.Source.Ref.String(),
 			"requested_start_sec", p.RequestedStartSec,
 			"error", probeErr.Error(),
 		)

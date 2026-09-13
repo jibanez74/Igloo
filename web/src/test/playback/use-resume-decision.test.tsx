@@ -1,12 +1,12 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useMovieResumeDecision } from "@/hooks/useMovieResumeDecision";
-import { MOVIE_WATCH_PROGRESS_MIN_SECONDS } from "@/lib/constants";
+import { useResumeDecision } from "@/hooks/useResumeDecision";
+import { WATCH_PROGRESS_MIN_SECONDS } from "@/lib/constants";
 
-type HookProps = Parameters<typeof useMovieResumeDecision>[0];
+type HookProps = Parameters<typeof useResumeDecision>[0];
 
 const eligibleProps: HookProps = {
-  movieId: 7,
+  mediaKey: "movie:7",
   start: 0,
   playing: false,
   watchProgressPending: false,
@@ -15,10 +15,10 @@ const eligibleProps: HookProps = {
 };
 
 function renderDecision(initialProps: HookProps) {
-  return renderHook(props => useMovieResumeDecision(props), { initialProps });
+  return renderHook(props => useResumeDecision(props), { initialProps });
 }
 
-describe("useMovieResumeDecision", () => {
+describe("useResumeDecision", () => {
   it("offers resume once the progress query resolves with eligible progress", () => {
     const { result, rerender } = renderDecision({
       ...eligibleProps,
@@ -38,12 +38,12 @@ describe("useMovieResumeDecision", () => {
   it("treats progress at the eligibility floor as resumable", () => {
     const { result } = renderDecision({
       ...eligibleProps,
-      savedProgressSec: MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+      savedProgressSec: WATCH_PROGRESS_MIN_SECONDS,
     });
 
     expect(result.current.resumeDialogOpen).toBe(true);
     expect(result.current.resumeTargetSec).toBe(
-      MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+      WATCH_PROGRESS_MIN_SECONDS,
     );
   });
 
@@ -124,9 +124,22 @@ describe("useMovieResumeDecision", () => {
     rerender(eligibleProps);
     expect(result.current.resumeDialogOpen).toBe(false);
 
-    rerender({ ...eligibleProps, movieId: 8, savedProgressSec: 600 });
+    rerender({ ...eligibleProps, mediaKey: "movie:8", savedProgressSec: 600 });
 
     expect(result.current.resumeDialogOpen).toBe(true);
     expect(result.current.resumeTargetSec).toBe(600);
+  });
+
+  it("treats an episode with the same id as a different item", () => {
+    const { result, rerender } = renderDecision(eligibleProps);
+
+    result.current.dismissResumeDecision();
+    rerender(eligibleProps);
+    expect(result.current.resumeDialogOpen).toBe(false);
+
+    rerender({ ...eligibleProps, mediaKey: "episode:7", savedProgressSec: 300 });
+
+    expect(result.current.resumeDialogOpen).toBe(true);
+    expect(result.current.resumeTargetSec).toBe(300);
   });
 });

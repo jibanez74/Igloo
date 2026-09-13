@@ -44,7 +44,7 @@ const (
 	// measured; callers fall back to the requested start.
 	hlsUnknownActualStart = -1.0
 	hlsStartProbeTimeout  = 15 * time.Second
-	// A session generates the whole remaining movie, so it needs real headroom.
+	// A session generates the whole remaining file, so it needs real headroom.
 	// This is a floor that keeps a home server from filling its disk mid-film,
 	// not an estimate of any particular session's output size.
 	hlsMinFreeTranscodeBytes = 2 << 30
@@ -56,7 +56,11 @@ const (
 
 // HLSSession holds state for one HLS transcode session.
 type HLSSession struct {
-	MovieID         int64
+	// Media is the client-facing identity the session was created for and
+	// FileID the physical file behind it (see playbackSource): keys, access
+	// checks and stops are scoped by Media, a rescan invalidates by FileID.
+	Media           mediaRef
+	FileID          int64
 	OwnerUserID     int64
 	PlaybackSession string
 	TempDir         string
@@ -153,14 +157,14 @@ func (s *HLSSession) exitStatus() (bool, error) {
 // whose stored channel metadata cannot resolve a safe output profile. It is a
 // media-profile problem (HTTP 422), not a malformed query.
 type hlsAudioMetadataError struct {
-	MovieID    int64
+	Media      mediaRef
 	AudioTrack int
 }
 
 func (e *hlsAudioMetadataError) Error() string {
 	return fmt.Sprintf(
-		"audio track %d of movie %d has no stored channel metadata; cannot resolve the requested audio profile",
-		e.AudioTrack, e.MovieID,
+		"audio track %d of %s has no stored channel metadata; cannot resolve the requested audio profile",
+		e.AudioTrack, e.Media,
 	)
 }
 
@@ -176,30 +180,30 @@ func (e *hlsAudioEncoderUnavailableError) Error() string {
 }
 
 // hlsInvalidAudioSelectionError reports a syntactically valid request whose
-// audio selection cannot apply to the stored movie. PublicMessage is safe to
-// return to clients; Error keeps the movie context for server logs.
+// audio selection cannot apply to the stored media. PublicMessage is safe to
+// return to clients; Error keeps the media context for server logs.
 type hlsInvalidAudioSelectionError struct {
-	MovieID       int64
+	Media         mediaRef
 	PublicMessage string
 }
 
 func (e *hlsInvalidAudioSelectionError) Error() string {
-	return fmt.Sprintf("movie %d: %s", e.MovieID, e.PublicMessage)
+	return fmt.Sprintf("%s: %s", e.Media, e.PublicMessage)
 }
 
 // hlsMediaMetadataError reports stored media rows that cannot create an HLS
 // session. A rescan may repair these rows, but changing the request cannot.
 type hlsMediaMetadataError struct {
-	MovieID int64
-	Reason  string
+	Media  mediaRef
+	Reason string
 }
 
 func (e *hlsMediaMetadataError) Error() string {
-	return fmt.Sprintf("movie %d has unusable stored media metadata: %s", e.MovieID, e.Reason)
+	return fmt.Sprintf("%s has unusable stored media metadata: %s", e.Media, e.Reason)
 }
 
 type hlsSessionStartParams struct {
-	Movie            *database.Movie
+	Source           playbackSource
 	PrimaryVideo     *database.VideoStream
 	SelectedAudio    *database.AudioStream
 	RequestedProfile string
@@ -400,9 +404,11 @@ func hlsAudioModeKey(audioProfile *helpers.HLSAudioProfileRequest) string {
 	return fmt.Sprintf("explicit:%s:%d", audioProfile.Codec, audioProfile.MaxChannels)
 }
 
-// HLSSessionKey returns an owner-scoped personal HLS session identity.
-func HLSSessionKey(movieID int64, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, playbackSession string, startSec int, ownerUserID int64) string {
-	return fmt.Sprintf("user:%d:movie:%d:%s:%s:%s:session:%s:start:%d", ownerUserID, movieID, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), playbackSession, startSec)
+// HLSSessionKey returns an owner-scoped personal HLS session identity. The
+// media ref carries its kind ("movie:12", "episode:12"), so a movie and an
+// episode with the same id never share a session.
+func HLSSessionKey(media mediaRef, profile string, audioTrack *int, audioProfile *helpers.HLSAudioProfileRequest, playbackSession string, startSec int, ownerUserID int64) string {
+	return fmt.Sprintf("user:%d:%s:%s:%s:%s:session:%s:start:%d", ownerUserID, media, profile, audioTrackCacheKey(audioTrack), hlsAudioModeKey(audioProfile), playbackSession, startSec)
 }
 
 // RoomHLSSessionKey returns the HLS session cache key for a watch room.
@@ -451,9 +457,9 @@ func (app *Application) removePersonalHLSSession(key string) {
 	cleanupHLSSession(session)
 }
 
-func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
+func (app *Application) cleanupPersonalHLSSessionsForOwner(media mediaRef, ownerUserID int64, playbackSession string, keepKey string) int {
 	app.PersonalHLSMu.Lock()
-	sessions := app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, keepKey)
+	sessions := app.cleanupPersonalHLSSessionsForOwnerLocked(media, ownerUserID, playbackSession, keepKey)
 	app.PersonalHLSMu.Unlock()
 
 	cleanupRemovedHLSSessions(sessions)
@@ -461,18 +467,18 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerU
 }
 
 // cleanupPersonalHLSSessionsForOwnerLocked requires PersonalHLSMu to be held.
-// It removes only the owner's other sessions for this movie and this
+// It removes only the owner's other sessions for this media and this
 // playback_session UUID — superseded windows from the same client (seeks,
 // profile or audio-track switches). Sessions from the owner's other clients
 // (different UUIDs, e.g. a TV playing the same movie) are never touched.
-func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, ownerUserID int64, playbackSession string, keepKey string) []*HLSSession {
+func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(media mediaRef, ownerUserID int64, playbackSession string, keepKey string) []*HLSSession {
 	var removed []*HLSSession
 	for key, item := range app.HLSSessionCache.Items() {
 		if key == keepKey {
 			continue
 		}
 		session, ok := item.Object.(*HLSSession)
-		if !ok || session == nil || !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
+		if !ok || session == nil || !canAccessPersonalHLSSession(session, media, ownerUserID) {
 			continue
 		}
 		if session.PlaybackSession == playbackSession {
@@ -488,20 +494,22 @@ func cleanupRemovedHLSSessions(sessions []*HLSSession) {
 	}
 }
 
-// invalidateHLSSessionsForMovie removes every live HLS session (personal and
-// room) built from a movie whose stream rows were just rewritten by a rescan:
+// invalidateHLSSessionsForFile removes every live HLS session (personal and
+// room) built from a file whose stream rows were just rewritten by a rescan:
 // their ffmpeg mappings referenced the replaced file. The next manifest
 // request rebuilds them from the new rows, and rooms re-validate their stored
 // track pins there — so no room tombstone is set; the room still exists.
+// The file is addressed by kind and FileID rather than by media ref because a
+// combined TV file backs several episode refs and the scanner knows the file.
 // Teardown runs in app.Wait-tracked goroutines because the scanner calls this
 // while holding ScannerDBMu and cleanupHLSSession can block for seconds.
-func (app *Application) invalidateHLSSessionsForMovie(movieID int64) {
+func (app *Application) invalidateHLSSessionsForFile(kind mediaKind, fileID int64) {
 	var removed []*HLSSession
 
 	app.PersonalHLSMu.Lock()
 	for key, item := range app.HLSSessionCache.Items() {
 		session, ok := item.Object.(*HLSSession)
-		if !ok || session == nil || session.IsRoom || session.MovieID != movieID {
+		if !ok || session == nil || session.IsRoom || session.Media.Kind != kind || session.FileID != fileID {
 			continue
 		}
 		deleted := app.deleteHLSSession(key)
@@ -514,7 +522,7 @@ func (app *Application) invalidateHLSSessionsForMovie(movieID int64) {
 	app.RoomHLSMu.Lock()
 	for key, item := range app.HLSSessionCache.Items() {
 		session, ok := item.Object.(*HLSSession)
-		if !ok || session == nil || !session.IsRoom || session.MovieID != movieID {
+		if !ok || session == nil || !session.IsRoom || session.Media.Kind != kind || session.FileID != fileID {
 			continue
 		}
 		deleted := app.deleteHLSSession(key)
@@ -538,7 +546,7 @@ func (app *Application) invalidateHLSSessionsForMovie(movieID int64) {
 }
 
 // personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
-// session cache entries across all movies, sorted least-recently-used first.
+// session cache entries across all media, sorted least-recently-used first.
 // Every access re-sets the entry with the full personal TTL, so ascending
 // Item.Expiration is LRU order. Requires PersonalHLSMu to be held.
 func (app *Application) personalHLSSessionsForOwnerLocked(ownerUserID int64) []hlsOwnedSessionEntry {
@@ -586,7 +594,7 @@ func (reservation *hlsPersonalSessionReservation) release() {
 }
 
 func (reservation *hlsPersonalSessionReservation) commit(
-	movieID int64,
+	media mediaRef,
 	key string,
 	session *HLSSession,
 ) {
@@ -594,7 +602,7 @@ func (reservation *hlsPersonalSessionReservation) commit(
 		app := reservation.app
 		app.PersonalHLSMu.Lock()
 		removed := app.cleanupPersonalHLSSessionsForOwnerLocked(
-			movieID,
+			media,
 			reservation.ownerUserID,
 			session.PlaybackSession,
 			key,
@@ -616,14 +624,14 @@ func (reservation *hlsPersonalSessionReservation) commit(
 // reservePersonalHLSSession admits one personal session before FFmpeg starts.
 // Cached sessions and concurrent reservations share the same per-user cap.
 func (app *Application) reservePersonalHLSSession(
-	movieID int64,
+	media mediaRef,
 	ownerUserID int64,
 	playbackSession string,
 ) (*hlsPersonalSessionReservation, error) {
 	app.PersonalHLSMu.Lock()
 
 	app.HLSSessionCache.DeleteExpired()
-	removed := app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, "")
+	removed := app.cleanupPersonalHLSSessionsForOwnerLocked(media, ownerUserID, playbackSession, "")
 
 	limit := app.hlsMaxPersonalSessionsPerUser()
 	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
@@ -701,10 +709,10 @@ func (app *Application) hlsMaxPersonalSessionsPerUser() int {
 	return hlsMaxPersonalSessionsPerUserDefault
 }
 
-func canAccessPersonalHLSSession(session *HLSSession, movieID int64, ownerUserID int64) bool {
+func canAccessPersonalHLSSession(session *HLSSession, media mediaRef, ownerUserID int64) bool {
 	return session != nil &&
 		!session.IsRoom &&
-		session.MovieID == movieID &&
+		session.Media == media &&
 		session.OwnerUserID == ownerUserID
 }
 
@@ -794,7 +802,7 @@ func cleanupHLSSession(session *HLSSession) {
 				// A leaked dir survives until the next boot sweep, so at least
 				// leave a trace of it.
 				session.Logger.Warn("failed to remove hls session temp dir",
-					"movie_id", session.MovieID,
+					"media", session.Media.String(),
 					"temp_dir", session.TempDir,
 					"error", removeErr,
 				)
@@ -933,7 +941,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 			removeErr := os.RemoveAll(tempDir)
 			if removeErr != nil {
 				app.Logger.Warn("failed to remove hls temp dir after transcode limiter rejection",
-					"movie_id", params.Movie.ID,
+					"media", params.Source.Ref.String(),
 					"temp_dir", tempDir,
 					"error", removeErr,
 				)
@@ -954,7 +962,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	}
 
 	hlsRunParams := ffmpeg.HLSParams{
-		SourcePath:       params.Movie.FilePath,
+		SourcePath:       params.Source.FilePath,
 		OutDir:           tempDir,
 		Profile:          params.EffectiveProfile,
 		VideoStreamIndex: videoStreamIndex,
@@ -972,7 +980,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
-		MovieID:               params.Movie.ID,
+		Media:                 params.Source.Ref,
+		FileID:                params.Source.FileID,
 		PlaybackSession:       params.PlaybackSession,
 		TempDir:               tempDir,
 		Cancel:                cancel,
@@ -1000,8 +1009,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	// ffprobe probe for files without a usable container index. Misses launch
 	// even at start 0 to prefetch the index for later seeks.
 	if copyVideo && app.Wait != nil {
-		fingerprint := keyframeIndexFingerprint(params.Movie, params.PrimaryVideo)
-		idx, hit := app.getKeyframeIndex(runCtx, params.Movie.ID, params.PrimaryVideo.StreamIndex, fingerprint)
+		fingerprint := keyframeIndexFingerprint(params.Source, params.PrimaryVideo)
+		idx, hit := app.getKeyframeIndex(runCtx, params.Source, params.PrimaryVideo.StreamIndex, fingerprint)
 		switch {
 		case hit && startSec > 0:
 			keyframe, ok := keyframeAtOrBefore(idx.KeyframeSec, startSec)
@@ -1025,9 +1034,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 			// almost never written and every play re-extracted.
 			go app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
 				Session:           session,
-				FilePath:          params.Movie.FilePath,
-				Container:         params.Movie.Container,
-				MovieID:           params.Movie.ID,
+				Source:            params.Source,
 				StreamIndex:       params.PrimaryVideo.StreamIndex,
 				Fingerprint:       fingerprint,
 				RequestedStartSec: startSec,
@@ -1057,7 +1064,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	startLogAttrs := []any{
 		"session_dir", filepath.Base(tempDir),
 		"playback_session", params.PlaybackSession,
-		"movie_id", params.Movie.ID,
+		"media", params.Source.Ref.String(),
 		"requested_profile", params.RequestedProfile,
 		"effective_profile", params.EffectiveProfile,
 		"audio_track", audioTrackLogValue,
@@ -1146,7 +1153,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 			if expectedStop {
 				app.Logger.Info("hls session stopped",
 					"session_dir", filepath.Base(tempDir),
-					"movie_id", params.Movie.ID,
+					"media", params.Source.Ref.String(),
 					"requested_profile", params.RequestedProfile,
 					"effective_profile", params.EffectiveProfile,
 					"effective_audio_codec", exitAudioCodec,
@@ -1158,7 +1165,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 
 			app.Logger.Error("hls session failed",
 				"session_dir", filepath.Base(tempDir),
-				"movie_id", params.Movie.ID,
+				"media", params.Source.Ref.String(),
 				"requested_profile", params.RequestedProfile,
 				"effective_profile", params.EffectiveProfile,
 				"effective_audio_codec", exitAudioCodec,
@@ -1172,7 +1179,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 
 		app.Logger.Info("hls session finished",
 			"session_dir", filepath.Base(tempDir),
-			"movie_id", params.Movie.ID,
+			"media", params.Source.Ref.String(),
 			"requested_profile", params.RequestedProfile,
 			"effective_profile", params.EffectiveProfile,
 			"effective_audio_codec", exitAudioCodec,
@@ -1193,7 +1200,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	// ttfs_ms can be attributed to the right side.
 	app.Logger.Info("hls ffmpeg spawned",
 		"session_dir", filepath.Base(tempDir),
-		"movie_id", params.Movie.ID,
+		"media", params.Source.Ref.String(),
 		"copy_video", copyVideo,
 		"spawn_ms", time.Since(startedAt).Milliseconds(),
 	)
@@ -1206,7 +1213,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 // Personal sessions are isolated by owner, playback_session, and normalized start time.
 func (app *Application) GetOrCreateHLSSession(
 	ctx context.Context,
-	movieID int64,
+	media mediaRef,
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
@@ -1214,18 +1221,18 @@ func (app *Application) GetOrCreateHLSSession(
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	requestedKey := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
+	requestedKey := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
 
 	// Warm path first, before touching the database. The stored key uses the
 	// normalized start, which equals the raw start whenever it was not clamped
 	// to the duration tail -- every keepalive and live-playlist re-fetch -- so
-	// this lookup hits without needing the movie row. A clamped start simply
+	// this lookup hits without needing the media row. A clamped start simply
 	// misses here and takes the load-and-normalize path below.
 	if raw, ok := app.HLSSessionCache.Get(requestedKey); ok {
 		session, typeOK := raw.(*HLSSession)
 		if !typeOK || session == nil {
 			app.removePersonalHLSSession(requestedKey)
-		} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
+		} else if !canAccessPersonalHLSSession(session, media, ownerUserID) {
 			return nil, requestedKey, errHLSSessionNotFound
 		} else {
 			refreshed := app.RefreshHLSSessionTTL(requestedKey, session)
@@ -1235,18 +1242,18 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 	}
 
-	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
+	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, media, startSec)
 	if err != nil {
 		return nil, requestedKey, err
 	}
-	key := HLSSessionKey(movieID, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
+	key := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
 
 	if key != requestedKey {
 		if raw, ok := app.HLSSessionCache.Get(key); ok {
 			session, typeOK := raw.(*HLSSession)
 			if !typeOK || session == nil {
 				app.removePersonalHLSSession(key)
-			} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
+			} else if !canAccessPersonalHLSSession(session, media, ownerUserID) {
 				return nil, key, errHLSSessionNotFound
 			} else {
 				refreshed := app.RefreshHLSSessionTTL(key, session)
@@ -1262,7 +1269,7 @@ func (app *Application) GetOrCreateHLSSession(
 			existing, typeOK := raw.(*HLSSession)
 			if !typeOK || existing == nil {
 				app.removePersonalHLSSession(key)
-			} else if !canAccessPersonalHLSSession(existing, movieID, ownerUserID) {
+			} else if !canAccessPersonalHLSSession(existing, media, ownerUserID) {
 				return nil, errHLSSessionNotFound
 			} else {
 				refreshed := app.RefreshHLSSessionTTL(key, existing)
@@ -1273,7 +1280,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 
 		reservation, reserveErr := app.reservePersonalHLSSession(
-			movieID,
+			media,
 			ownerUserID,
 			playbackSession,
 		)
@@ -1284,7 +1291,7 @@ func (app *Application) GetOrCreateHLSSession(
 
 		session, createErr := app.createHLSSession(
 			ctx,
-			&movie,
+			&source,
 			profile,
 			audioTrack,
 			audioProfile,
@@ -1306,13 +1313,13 @@ func (app *Application) GetOrCreateHLSSession(
 			if errors.As(createErr, &capErr) {
 				if !app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
 					app.Logger.Info("hls limiter reclaim found no idle session",
-						"movie_id", movieID,
+						"media", media.String(),
 						"owner_user_id", ownerUserID,
 					)
 				}
 				session, createErr = app.createHLSSession(
 					ctx,
-					&movie,
+					&source,
 					profile,
 					audioTrack,
 					audioProfile,
@@ -1329,7 +1336,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		session.OwnerUserID = ownerUserID
 
-		reservation.commit(movieID, key, session)
+		reservation.commit(media, key, session)
 		return session, nil
 	})
 
@@ -1348,7 +1355,7 @@ func (app *Application) GetOrCreateHLSSession(
 // If a session for this room already exists in the cache, it is a no-op.
 // Always warms up from startSec=0 so participants start from the beginning.
 // preloaded, when non-nil, is a movie row the caller already fetched; it is
-// validated the same way loadHLSMovieForSession would and saves the re-fetch.
+// validated the same way loadHLSSourceForSession would and saves the re-fetch.
 // preloadedAudio, when non-nil, is the movie's audio streams the caller
 // already fetched and saves that re-fetch the same way.
 func (app *Application) WarmUpRoomHLSSession(
@@ -1400,16 +1407,16 @@ func (app *Application) GetOrCreateRoomHLSSession(
 			return nil, fmt.Errorf("watch room %d was deleted", roomID)
 		}
 
-		var movie database.Movie
+		var source playbackSource
 		if preloaded != nil {
-			validateErr := validateHLSMovieDuration(*preloaded, movieID)
+			source = playbackSourceFromMovie(*preloaded)
+			validateErr := validateHLSSourceDuration(source)
 			if validateErr != nil {
 				return nil, validateErr
 			}
-			movie = *preloaded
 		} else {
 			var loadErr error
-			movie, _, loadErr = app.loadHLSMovieForSession(ctx, movieID, 0)
+			source, _, loadErr = app.loadHLSSourceForSession(ctx, movieRef(movieID), 0)
 			if loadErr != nil {
 				return nil, loadErr
 			}
@@ -1418,7 +1425,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		audioTrackCopy := audioTrack
 		// Watch rooms always use legacy audio mode: room audio output is a
 		// room-level persisted setting concern, not a query-parameter one.
-		session, createErr := app.createHLSSession(ctx, &movie, profile, &audioTrackCopy, nil, preloadedAudio, "", 0, true, 0)
+		session, createErr := app.createHLSSession(ctx, &source, profile, &audioTrackCopy, nil, preloadedAudio, "", 0, true, 0)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -1444,7 +1451,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 // It is a no-op if no session exists for the room.
 //
 // Teardown runs after RoomHLSMu is released, for the reason
-// invalidateHLSSessionsForMovie documents: cleanupHLSSession waits seconds for
+// invalidateHLSSessionsForFile documents: cleanupHLSSession waits seconds for
 // FFmpeg to exit, and holding the lock across it stalls every room manifest
 // and segment request behind a process that is already being killed.
 func (app *Application) CleanupRoomHLSSession(roomID int64) {
@@ -1458,59 +1465,60 @@ func (app *Application) CleanupRoomHLSSession(roomID int64) {
 	cleanupHLSSession(session)
 }
 
-// validateHLSMovieDuration is the duration check every HLS session creation
-// requires, shared by loadHLSMovieForSession and the preloaded-row path.
-func validateHLSMovieDuration(movie database.Movie, movieID int64) error {
-	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
-		return &hlsMediaMetadataError{MovieID: movieID, Reason: "no valid duration is stored"}
+// validateHLSSourceDuration is the duration check every HLS session creation
+// requires, shared by loadHLSSourceForSession and the preloaded-row path.
+func validateHLSSourceDuration(source playbackSource) error {
+	if !source.Duration.Valid || source.Duration.Float64 <= 0 {
+		return &hlsMediaMetadataError{Media: source.Ref, Reason: "no valid duration is stored"}
 	}
 	return nil
 }
 
-// loadHLSMovieForSession loads the movie, validates that it has a usable
-// duration, and normalizes the requested start into the duration tail.
-func (app *Application) loadHLSMovieForSession(
+// loadHLSSourceForSession loads the file behind the media, validates that it
+// has a usable duration, and normalizes the requested start into the duration
+// tail.
+func (app *Application) loadHLSSourceForSession(
 	ctx context.Context,
-	movieID int64,
+	media mediaRef,
 	startSec int,
-) (database.Movie, int, error) {
-	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+) (playbackSource, int, error) {
+	source, err := app.loadPlaybackSource(ctx, media)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return database.Movie{}, 0, fmt.Errorf("%w: movie %d", errHLSMovieNotFound, movieID)
+			return playbackSource{}, 0, &hlsMediaNotFoundError{Media: media}
 		}
-		return database.Movie{}, 0, fmt.Errorf("load movie %d for HLS: %w", movieID, err)
+		return playbackSource{}, 0, fmt.Errorf("load %s for HLS: %w", media, err)
 	}
-	err = validateHLSMovieDuration(movie, movieID)
+	err = validateHLSSourceDuration(source)
 	if err != nil {
-		return database.Movie{}, 0, err
+		return playbackSource{}, 0, err
 	}
 	if startSec < 0 {
-		return database.Movie{}, 0, fmt.Errorf("start %d is outside movie duration %.3f", startSec, movie.Duration.Float64)
+		return playbackSource{}, 0, fmt.Errorf("start %d is outside media duration %.3f", startSec, source.Duration.Float64)
 	}
 
-	effectiveStartSec := normalizedHLSStartSec(startSec, movie.Duration.Float64)
+	effectiveStartSec := normalizedHLSStartSec(startSec, source.Duration.Float64)
 	if effectiveStartSec != startSec {
 		app.Logger.Warn("hls start clamped to duration tail",
-			"movie_id", movieID,
+			"media", media.String(),
 			"requested_start", startSec,
 			"clamped_start", effectiveStartSec,
-			"duration", movie.Duration.Float64,
+			"duration", source.Duration.Float64,
 		)
 	}
-	return movie, effectiveStartSec, nil
+	return source, effectiveStartSec, nil
 }
 
 // createHLSSession loads stream metadata from the database (audio streams may
 // be preloaded by the caller), creates a temp dir, and starts FFmpeg. No
-// runtime ffprobe call is made. The movie must come from
-// loadHLSMovieForSession, and startSec must already be normalized by it.
+// runtime ffprobe call is made. The source must come from
+// loadHLSSourceForSession, and startSec must already be normalized by it.
 //
 // FFmpeg runs on context.Background() so the process outlives the originating
 // HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
 func (app *Application) createHLSSession(
 	ctx context.Context,
-	movie *database.Movie,
+	source *playbackSource,
 	profile string,
 	audioTrack *int,
 	audioProfile *helpers.HLSAudioProfileRequest,
@@ -1520,23 +1528,23 @@ func (app *Application) createHLSSession(
 	isRoom bool,
 	acquireWait time.Duration,
 ) (*HLSSession, error) {
-	movieID := movie.ID
-	durationSec := movie.Duration.Float64
+	media := source.Ref
+	durationSec := source.Duration.Float64
 
-	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movieID)
+	videoStreams, err := loadPlaybackVideoStreams(ctx, app.Queries, *source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load video streams: %w", err)
 	}
 	primaryVideo := primaryVideoStream(videoStreams)
 	if primaryVideo == nil {
-		return nil, &hlsMediaMetadataError{MovieID: movieID, Reason: "no playable video track is stored"}
+		return nil, &hlsMediaMetadataError{Media: media, Reason: "no playable video track is stored"}
 	}
 
 	// nil means "not preloaded", not "no audio": sqlc returns a nil slice for
 	// zero rows, so a silent movie's preloaded slice degrades to a re-fetch.
 	audioStreams := preloadedAudio
 	if audioStreams == nil {
-		audioStreams, err = app.Queries.GetAudioStreamsByMovieID(ctx, movieID)
+		audioStreams, err = loadPlaybackAudioStreams(ctx, app.Queries, *source)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load audio streams: %w", err)
 		}
@@ -1545,26 +1553,26 @@ func (app *Application) createHLSSession(
 	if len(audioStreams) == 0 {
 		if audioProfile != nil {
 			return nil, &hlsInvalidAudioSelectionError{
-				MovieID:       movieID,
+				Media:         media,
 				PublicMessage: "audio profiles are not valid for video-only media",
 			}
 		}
 		if audioTrack != nil {
 			return nil, &hlsInvalidAudioSelectionError{
-				MovieID:       movieID,
+				Media:         media,
 				PublicMessage: "audio_track is not valid for video-only media",
 			}
 		}
 	} else {
 		if audioTrack == nil {
 			return nil, &hlsInvalidAudioSelectionError{
-				MovieID:       movieID,
+				Media:         media,
 				PublicMessage: "audio_track is required for media with audio",
 			}
 		}
 		if *audioTrack < 0 || *audioTrack >= len(audioStreams) {
 			return nil, &hlsInvalidAudioSelectionError{
-				MovieID:       movieID,
+				Media:         media,
 				PublicMessage: "audio_track is out of range",
 			}
 		}
@@ -1581,7 +1589,7 @@ func (app *Application) createHLSSession(
 	var resolvedAudio *helpers.HLSResolvedAudioProfile
 	if audioProfile != nil && selectedAudio != nil {
 		if selectedAudio.Channels <= 0 {
-			return nil, &hlsAudioMetadataError{MovieID: movieID, AudioTrack: *audioTrack}
+			return nil, &hlsAudioMetadataError{Media: media, AudioTrack: *audioTrack}
 		}
 
 		resolved := helpers.ResolveHLSAudioProfile(
@@ -1605,7 +1613,7 @@ func (app *Application) createHLSSession(
 	requestedProfile := profile
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
-	fingerprint := remuxSafetyFingerprint(movie, primaryVideo, app.FFmpeg.Capabilities().Version)
+	fingerprint := remuxSafetyFingerprint(*source, primaryVideo, app.FFmpeg.Capabilities().Version)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
@@ -1615,18 +1623,18 @@ func (app *Application) createHLSSession(
 			// lookup below, which never sees statically-unsafe streams.
 			effectiveProfile = fallbackProfile
 			app.Logger.Warn("remux safety fallback engaged",
-				"movie_id", movieID,
+				"media", media.String(),
 				"requested_profile", requestedProfile,
 				"effective_profile", effectiveProfile,
 				"validation_result", "unsafe",
 				"fallback_reason", fallbackReason,
 			)
 		} else {
-			verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, primaryVideo.StreamIndex, fingerprint)
+			verdict, ok := app.getRemuxSafetyVerdict(ctx, *source, primaryVideo.StreamIndex, fingerprint)
 			if ok {
 				if verdict.Safe {
 					app.Logger.Info("remux safety verdict hit",
-						"movie_id", movieID,
+						"media", media.String(),
 						"requested_profile", requestedProfile,
 						"effective_profile", requestedProfile,
 						"validation_result", "safe",
@@ -1638,7 +1646,7 @@ func (app *Application) createHLSSession(
 						fallbackReason = "cached unsafe remux"
 					}
 					app.Logger.Warn("remux safety fallback engaged",
-						"movie_id", movieID,
+						"media", media.String(),
 						"requested_profile", requestedProfile,
 						"effective_profile", effectiveProfile,
 						"validation_result", "unsafe",
@@ -1652,7 +1660,7 @@ func (app *Application) createHLSSession(
 	}
 
 	hlsParams := hlsSessionStartParams{
-		Movie:                 movie,
+		Source:                *source,
 		PrimaryVideo:          primaryVideo,
 		SelectedAudio:         selectedAudio,
 		RequestedProfile:      requestedProfile,
@@ -1686,7 +1694,7 @@ func (app *Application) createHLSSession(
 		// Preflight wait failures can be transient (timeout, early exit, partial output),
 		// so fall back without persisting an unsafe remux verdict.
 		app.Logger.Warn("remux safety fallback engaged",
-			"movie_id", movieID,
+			"media", media.String(),
 			"requested_profile", requestedProfile,
 			"effective_profile", fallbackProfile,
 			"validation_result", "preflight_failed",
@@ -1704,9 +1712,9 @@ func (app *Application) createHLSSession(
 	)
 	if err != nil {
 		fallbackReason := err.Error()
-		app.setRemuxSafetyVerdict(movieID, primaryVideo.StreamIndex, fingerprint, false, fallbackReason)
+		app.setRemuxSafetyVerdict(*source, primaryVideo.StreamIndex, fingerprint, false, fallbackReason)
 		app.Logger.Warn("remux safety fallback engaged",
-			"movie_id", movieID,
+			"media", media.String(),
 			"requested_profile", requestedProfile,
 			"effective_profile", fallbackProfile,
 			"validation_result", "unsafe",
@@ -1720,9 +1728,9 @@ func (app *Application) createHLSSession(
 		return app.startHLSSession(ctx, &fp)
 	}
 
-	app.setRemuxSafetyVerdict(movieID, primaryVideo.StreamIndex, fingerprint, true, "validated safe remux")
+	app.setRemuxSafetyVerdict(*source, primaryVideo.StreamIndex, fingerprint, true, "validated safe remux")
 	app.Logger.Info("remux safety validated",
-		"movie_id", movieID,
+		"media", media.String(),
 		"requested_profile", requestedProfile,
 		"effective_profile", requestedProfile,
 		"validation_result", "safe",

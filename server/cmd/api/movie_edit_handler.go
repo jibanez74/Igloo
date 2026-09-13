@@ -244,10 +244,10 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 
 	// After the delete, never before: a request that missed the cache while the
 	// row still existed would otherwise republish it behind the eviction.
-	app.invalidateSubtitleVTTCache(id)
+	app.invalidateSubtitleVTTCache(mediaKindMovie, id)
 	app.StreamFileCache.invalidate(movieStreamFileKey(id))
 	app.MovieStreamsCache.invalidate(movieStreamsKey(id))
-	app.invalidateHLSSessionsForMovie(id)
+	app.invalidateHLSSessionsForFile(mediaKindMovie, id)
 
 	if payload.DeleteFile {
 		if err := os.Remove(movie.FilePath); err != nil && !os.IsNotExist(err) {

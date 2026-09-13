@@ -2,10 +2,13 @@ import { expect, test, type Page, type Response } from "@playwright/test";
 
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
 import {
-  clearMovieWatchProgress,
+  clearWatchProgress,
   expectVideoAdvances,
-  fetchMovieTechnicalDetails,
+  fetchTechnicalDetails,
   loginWithCredentials,
+  mediaApiPath,
+  mediaPlayPath,
+  type E2EMedia,
 } from "./media-e2e-helpers";
 
 type VideoStream = {
@@ -22,7 +25,7 @@ type HlsProfile = keyof typeof transcodeProfiles;
 
 type HlsCase = {
   title: string;
-  movieId: number;
+  media: E2EMedia;
   profile: HlsProfile;
   minimumSourceHeight?: number;
 };
@@ -69,8 +72,41 @@ function readHlsEnv(): HlsEnv | null {
   const secondMovieId = positiveIntEnv("E2E_HLS_SECOND_MOVIE_ID");
   const fourKProfile = profileEnv("E2E_HLS_4K_PROFILE", "2160p_16mbps");
   const secondProfile = profileEnv("E2E_HLS_SECOND_PROFILE", "720p_3mbps");
+  // Optional: a TV episode transcoded through the episode HLS routes.
+  const episodeId = positiveIntEnv("E2E_EPISODE_ID");
+  const episodeProfile = profileEnv("E2E_HLS_EPISODE_PROFILE", "720p_3mbps");
 
-  if (!fourKMovieId || !secondMovieId) {
+  // The two movie cases come as a pair (the second exists to prove profile
+  // and movie isolation against the first); the episode case stands alone so
+  // a TV-only library can run it.
+  const movieCases: HlsCase[] =
+    fourKMovieId && secondMovieId
+      ? [
+          {
+            title: "4K movie transcodes at 2160p",
+            media: { kind: "movie", id: fourKMovieId },
+            profile: fourKProfile,
+            minimumSourceHeight: 2160,
+          },
+          {
+            title: "second movie transcodes with a different profile",
+            media: { kind: "movie", id: secondMovieId },
+            profile: secondProfile,
+          },
+        ]
+      : [];
+  const episodeCases: HlsCase[] = episodeId
+    ? [
+        {
+          title: "TV episode transcodes through the episode routes",
+          media: { kind: "episode", id: episodeId },
+          profile: episodeProfile,
+        },
+      ]
+    : [];
+  const cases = [...movieCases, ...episodeCases];
+
+  if (cases.length === 0) {
     return null;
   }
 
@@ -80,24 +116,12 @@ function readHlsEnv(): HlsEnv | null {
     audioTrack: positiveIntEnv("E2E_HLS_AUDIO_TRACK", 0) ?? 0,
     responseTimeoutMs:
       positiveIntEnv("E2E_HLS_RESPONSE_TIMEOUT_MS", 240_000) ?? 240_000,
-    cases: [
-      {
-        title: "4K movie transcodes at 2160p",
-        movieId: fourKMovieId,
-        profile: fourKProfile,
-        minimumSourceHeight: 2160,
-      },
-      {
-        title: "second movie transcodes with a different profile",
-        movieId: secondMovieId,
-        profile: secondProfile,
-      },
-    ],
+    cases,
   };
 }
 
-function hlsAssetPath(movieId: number, profile: HlsProfile) {
-  return `/api/movies/${movieId}/hls/${profile}/`;
+function hlsAssetPath(media: E2EMedia, profile: HlsProfile) {
+  return `${mediaApiPath(media)}/hls/${profile}/`;
 }
 
 function responsePath(response: Response) {
@@ -158,26 +182,27 @@ async function expectMovieSupportsCase(
   hlsCase: HlsCase,
   audioTrack: number,
 ) {
-  const details = await fetchMovieTechnicalDetails<MovieTechnicalDetails>(
+  const details = await fetchTechnicalDetails<MovieTechnicalDetails>(
     page,
-    hlsCase.movieId,
+    hlsCase.media,
   );
   const primaryVideo = primaryVideoStream(details.video_streams);
+  const label = `${hlsCase.media.kind} ${hlsCase.media.id}`;
 
-  expect(primaryVideo, "movie must have a primary video stream").toBeTruthy();
+  expect(primaryVideo, `${label} must have a primary video stream`).toBeTruthy();
   expect(
     details.audio_streams.length,
-    `movie ${hlsCase.movieId} must have audio track ${audioTrack}`,
+    `${label} must have audio track ${audioTrack}`,
   ).toBeGreaterThan(audioTrack);
   expect(
     primaryVideo.height,
-    `movie ${hlsCase.movieId} source height must support ${hlsCase.profile}`,
+    `${label} source height must support ${hlsCase.profile}`,
   ).toBeGreaterThanOrEqual(transcodeProfiles[hlsCase.profile].maxHeight);
 
   if (hlsCase.minimumSourceHeight) {
     expect(
       primaryVideo.height,
-      `movie ${hlsCase.movieId} must be a 4K source`,
+      `${label} must be a 4K source`,
     ).toBeGreaterThanOrEqual(hlsCase.minimumSourceHeight);
   }
 }
@@ -222,13 +247,13 @@ const hlsEnv = readHlsEnv();
 const hlsCases: HlsCase[] = hlsEnv?.cases ?? [
   {
     title: "4K movie transcodes at 2160p",
-    movieId: 1,
+    media: { kind: "movie", id: 1 },
     profile: "2160p_16mbps",
     minimumSourceHeight: 2160,
   },
   {
     title: "second movie transcodes with a different profile",
-    movieId: 2,
+    media: { kind: "movie", id: 2 },
     profile: "720p_3mbps",
   },
 ];
@@ -238,26 +263,28 @@ test.describe.configure({ mode: "serial" });
 test.describe("HLS transcoding playback", () => {
   test.skip(
     !hlsEnv,
-    "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID to run HLS e2e tests.",
+    "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID, or E2E_EPISODE_ID, to run HLS e2e tests.",
   );
   test.beforeEach(async ({ page }) => {
     await loginWithCredentials(page, hlsEnv!);
   });
 
   test.beforeAll(() => {
+    const movieCases = hlsEnv!.cases.filter(hlsCase => hlsCase.media.kind === "movie");
+    if (movieCases.length < 2) return;
     expect(
-      hlsEnv!.cases[1].profile,
+      movieCases[1].profile,
       "second movie must use a different profile from the 4K case",
-    ).not.toBe(hlsEnv!.cases[0].profile);
+    ).not.toBe(movieCases[0].profile);
     expect(
-      hlsEnv!.cases[1].movieId,
+      movieCases[1].media.id,
       "second movie must use a different movie from the 4K case",
-    ).not.toBe(hlsEnv!.cases[0].movieId);
+    ).not.toBe(movieCases[0].media.id);
   });
 
   for (const hlsCase of hlsCases) {
     test(hlsCase.title, async ({ page }) => {
-      const assetPath = hlsAssetPath(hlsCase.movieId, hlsCase.profile);
+      const assetPath = hlsAssetPath(hlsCase.media, hlsCase.profile);
       const hlsResponses: Response[] = [];
       page.on("response", response => {
         if (responsePath(response).startsWith(assetPath)) {
@@ -266,7 +293,8 @@ test.describe("HLS transcoding playback", () => {
       });
 
       await expectMovieSupportsCase(page, hlsCase, hlsEnv!.audioTrack);
-      await clearMovieWatchProgress(page, hlsCase.movieId);
+      await clearWatchProgress(page, hlsCase.media);
+      const playPath = await mediaPlayPath(page, hlsCase.media);
 
       const manifestResponsePromise = page.waitForResponse(
         response =>
@@ -276,7 +304,7 @@ test.describe("HLS transcoding playback", () => {
       );
 
       await page.goto(
-        `/movies/${hlsCase.movieId}/play?mode=${hlsCase.profile}&audio_track=${hlsEnv!.audioTrack}&start=0`,
+        `${playPath}?mode=${hlsCase.profile}&audio_track=${hlsEnv!.audioTrack}&start=0`,
       );
       await expect(page.locator("video")).toBeVisible({
         timeout: hlsEnv!.responseTimeoutMs,

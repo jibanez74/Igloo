@@ -61,7 +61,7 @@ func TestSubtitleWebVTT_ShiftsCuesBySessionStart(t *testing.T) {
 	insertTestSubtitleFixture(t, app, movieID, "subrip")
 
 	absolute := "WEBVTT\n\n00:10:05.000 --> 00:10:07.000\nLine\n"
-	app.SubtitleVTTCache.Set(helpers.SubtitleCacheKey(movieID, 2), []byte(absolute), subtitleCacheTTL)
+	app.SubtitleVTTCache.Set(helpers.SubtitleCacheKey("movie", movieID, 2), []byte(absolute), subtitleCacheTTL)
 
 	recorder := serveSubtitleWebVTTWithQuery(app, movieID, "0", "?start=600")
 

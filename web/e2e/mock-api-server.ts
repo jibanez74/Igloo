@@ -116,6 +116,7 @@ const devices: MockDevice[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
 const likedMovieIds = new Set<number>();
 const watchProgress = new Map<number, MovieWatchProgress>();
+const episodeWatchProgress = new Map<number, MovieWatchProgress>();
 const moviePlaylists = [
   {
     id: 1,
@@ -1241,6 +1242,57 @@ async function handleSettingsRoutes(
   return false;
 }
 
+// One mocked episode is enough for the episode player specs: its header
+// names a show and season, and its file mirrors the movie technical fixture
+// keyed by file_id instead of movie_id.
+const mockEpisodeId = 70103;
+
+function showEpisodePlayback(episodeId: number) {
+  return {
+    show: {
+      id: 401,
+      name: "Frost Harbor",
+      poster_path: nullableString("/frost-harbor.jpg"),
+      backdrop_path: nullableString("/frost-harbor-backdrop.jpg"),
+    },
+    season: { season_number: 1, name: "Season 1" },
+    episode: {
+      id: episodeId,
+      episode_number: 3,
+      name: "The Thaw",
+      overview: nullableString("The ice gives way."),
+      air_date: nullableString("2026-03-22"),
+      still_path: nullableString("/still.jpg"),
+      tmdb_runtime: nullableInt(47),
+      vote_average: nullableFloat(8.1),
+      vote_count: nullableInt(220),
+    },
+  };
+}
+
+function episodeTechnicalDetails(episodeId: number) {
+  const { movie, ...streams } = movieTechnicalDetails(101);
+  const fileId = episodeId;
+  const withFileId = <T extends { movie_id: unknown }>(rows: T[]) =>
+    rows.map(({ movie_id, ...row }) => {
+      void movie_id;
+      return { ...row, file_id: fileId };
+    });
+  return {
+    file: {
+      file_name: "Frost.Harbor.S01E03.mp4",
+      size: movie.size,
+      container: movie.container,
+      mime_type: movie.mime_type,
+      duration: movie.duration,
+    },
+    video_streams: withFileId(streams.video_streams),
+    audio_streams: withFileId(streams.audio_streams),
+    subtitles: withFileId(streams.subtitles),
+    chapters: withFileId(streams.chapters),
+  };
+}
+
 function handleShowsRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1250,6 +1302,85 @@ function handleShowsRoutes(
 
   if (url.pathname === "/api/shows/latest" && method === "GET") {
     sendSuccess(response, { shows: latestShows });
+    return true;
+  }
+
+  const episodeMatch = url.pathname.match(/^\/api\/shows\/episodes\/(\d+)$/);
+  if (episodeMatch && method === "GET") {
+    const episodeId = Number(episodeMatch[1]);
+    if (episodeId !== mockEpisodeId) {
+      sendJSON(response, 404, { error: true, message: "episode not found" });
+      return true;
+    }
+    sendSuccess(response, showEpisodePlayback(episodeId));
+    return true;
+  }
+
+  const episodeTechnicalMatch = url.pathname.match(
+    /^\/api\/shows\/episodes\/(\d+)\/technical-details$/,
+  );
+  if (episodeTechnicalMatch && method === "GET") {
+    sendSuccess(
+      response,
+      episodeTechnicalDetails(Number(episodeTechnicalMatch[1])),
+    );
+    return true;
+  }
+
+  const episodeProgressMatch = url.pathname.match(
+    /^\/api\/shows\/episodes\/(\d+)\/watch-progress$/,
+  );
+  if (episodeProgressMatch && method === "GET") {
+    const episodeId = Number(episodeProgressMatch[1]);
+    sendSuccess(
+      response,
+      episodeWatchProgress.get(episodeId) ?? {
+        progress_sec: null,
+        duration_sec: null,
+        watched: false,
+        updated_at: null,
+      },
+    );
+    return true;
+  }
+
+  if (episodeProgressMatch && method === "PUT") {
+    episodeWatchProgress.set(Number(episodeProgressMatch[1]), {
+      progress_sec: 0,
+      duration_sec: 2700,
+      watched: false,
+      updated_at: new Date().toISOString(),
+    });
+    sendSuccess(response, { watched: false });
+    return true;
+  }
+
+  if (episodeProgressMatch && method === "DELETE") {
+    episodeWatchProgress.delete(Number(episodeProgressMatch[1]));
+    sendSuccess(response, { cleared: true });
+    return true;
+  }
+
+  const episodeWatchedMatch = url.pathname.match(
+    /^\/api\/shows\/episodes\/(\d+)\/watch-progress\/watched$/,
+  );
+  if (episodeWatchedMatch && method === "PUT") {
+    const episodeId = Number(episodeWatchedMatch[1]);
+    episodeWatchProgress.set(episodeId, {
+      progress_sec: 0,
+      duration_sec: 0,
+      watched: true,
+      updated_at: new Date().toISOString(),
+    });
+    sendSuccess(response, { episode_id: episodeId, watched: true });
+    return true;
+  }
+
+  const episodeStreamMatch = url.pathname.match(
+    /^\/api\/shows\/episodes\/(\d+)\/stream$/,
+  );
+  if (episodeStreamMatch && method === "GET") {
+    sendNoContent(response);
     return true;
   }
 

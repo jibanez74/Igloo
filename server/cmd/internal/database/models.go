@@ -169,6 +169,14 @@ type Show struct {
 	UpdatedAt        string          `json:"updated_at"`
 }
 
+type ShowChapter struct {
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	StartTime int64          `json:"start_time"`
+	Thumb     sql.NullString `json:"thumb"`
+	FileID    int64          `json:"file_id"`
+}
+
 type ShowEpisode struct {
 	ID             int64           `json:"id"`
 	SeasonID       int64           `json:"season_id"`

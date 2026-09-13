@@ -33,15 +33,39 @@ export async function loginWithCredentials(
   expect(authResponse.status()).toBe(200);
 }
 
-export async function fetchMovieTechnicalDetails<T>(
-  page: Page,
-  movieId: number,
-): Promise<T> {
-  const response = await page
-    .context()
-    .request.get(`/api/movies/${movieId}/technical-details`, {
-      failOnStatusCode: false,
-    });
+/**
+ * A movie or a TV episode under test. Movies and episodes expose the same
+ * playback endpoints under different prefixes and play on different routes;
+ * the helpers below resolve both from this pair.
+ */
+export type E2EMedia =
+  | { kind: "movie"; id: number }
+  | { kind: "episode"; id: number };
+
+export function mediaApiPath(media: E2EMedia) {
+  return media.kind === "movie"
+    ? `/api/movies/${media.id}`
+    : `/api/shows/episodes/${media.id}`;
+}
+
+/**
+ * The player route for the media. An episode's route carries its show id,
+ * which only the episode's playback header knows.
+ */
+export async function mediaPlayPath(page: Page, media: E2EMedia) {
+  if (media.kind === "movie") return `/movies/${media.id}/play`;
+
+  const header = await fetchMediaJSON<{ show: { id: number } }>(
+    page,
+    mediaApiPath(media),
+  );
+  return `/tv-shows/${header.show.id}/episodes/${media.id}/play`;
+}
+
+async function fetchMediaJSON<T>(page: Page, path: string): Promise<T> {
+  const response = await page.context().request.get(path, {
+    failOnStatusCode: false,
+  });
   expect(response.status()).toBe(200);
 
   const body = (await response.json()) as MediaApiResponse<T>;
@@ -50,8 +74,12 @@ export async function fetchMovieTechnicalDetails<T>(
   return body.data!;
 }
 
-export async function clearMovieWatchProgress(page: Page, movieId: number) {
-  await page.context().request.delete(`/api/movies/${movieId}/watch-progress`, {
+export function fetchTechnicalDetails<T>(page: Page, media: E2EMedia) {
+  return fetchMediaJSON<T>(page, `${mediaApiPath(media)}/technical-details`);
+}
+
+export async function clearWatchProgress(page: Page, media: E2EMedia) {
+  await page.context().request.delete(`${mediaApiPath(media)}/watch-progress`, {
     failOnStatusCode: false,
   });
 }

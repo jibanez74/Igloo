@@ -104,6 +104,7 @@ type Querier interface {
 	DeleteShowCrew(ctx context.Context, showID int64) error
 	DeleteShowEpisodeCrew(ctx context.Context, episodeID int64) error
 	DeleteShowEpisodeGuestCast(ctx context.Context, episodeID int64) error
+	DeleteShowEpisodeWatchProgress(ctx context.Context, arg DeleteShowEpisodeWatchProgressParams) error
 	DeleteShowExtraVideo(ctx context.Context, showID int64) error
 	DeleteShowFileAudioStreams(ctx context.Context, fileID int64) error
 	DeleteShowFileChapters(ctx context.Context, fileID int64) error
@@ -293,6 +294,8 @@ type Querier interface {
 	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (GetRemuxSafetyVerdictRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	GetShow(ctx context.Context, id int64) (Show, error)
+	GetShowAudioStreamsByFileID(ctx context.Context, fileID int64) ([]GetShowAudioStreamsByFileIDRow, error)
+	GetShowChaptersByFileID(ctx context.Context, fileID int64) ([]ShowChapter, error)
 	// ============================================================================
 	// Show details page reads.
 	//
@@ -306,17 +309,40 @@ type Querier interface {
 	// timestamps).
 	GetShowDetails(ctx context.Context, id int64) (GetShowDetailsRow, error)
 	GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, error)
+	// Direct-stream twin of GetMovieForDirectStream, resolved through the same
+	// lowest-file-id rule as GetShowFileForEpisode.
+	GetShowEpisodeForDirectStream(ctx context.Context, episodeID int64) (GetShowEpisodeForDirectStreamRow, error)
+	// Player header for one episode: the episode row plus the season number and
+	// show identity the page titles itself with and navigates back to.
+	GetShowEpisodePlaybackDetails(ctx context.Context, id int64) (GetShowEpisodePlaybackDetailsRow, error)
+	GetShowEpisodeWatchProgress(ctx context.Context, arg GetShowEpisodeWatchProgressParams) (GetShowEpisodeWatchProgressRow, error)
 	GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error)
 	// Episodes of one season, addressed by (show_id, season_number) so the route
 	// never exposes an internal season id. Carries no file, stream, codec, or
 	// chapter data: those belong to a physical file, and one file can back several
-	// episodes.
+	// episodes. The requesting user's watch progress rides along so the episode
+	// list can show resume and watched state without a query per row; the CAST
+	// keeps sqlc typing `watched` as a plain bool across the LEFT JOIN.
 	GetShowEpisodesBySeasonNumber(ctx context.Context, arg GetShowEpisodesBySeasonNumberParams) ([]GetShowEpisodesBySeasonNumberRow, error)
 	// List all extra videos (trailers, special features) linked to a show.
 	GetShowExtraVideos(ctx context.Context, showID int64) ([]GetShowExtraVideosRow, error)
 	GetShowFileByPath(ctx context.Context, filePath string) (ShowFile, error)
+	// Episodes linked to a file, read before a deletion cascades the links away so
+	// the per-episode runtime caches can be evicted after commit.
+	GetShowFileEpisodeIDs(ctx context.Context, fileID int64) ([]int64, error)
+	// The physical file behind an episode. An episode may be linked to more than
+	// one file (duplicate copies), so the lowest file id is the deterministic
+	// playback target; a combined file is returned whole, playback never seeks to
+	// a guessed episode offset.
+	GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error)
+	// Persisted keyframe index for one video stream of a show file; the caller
+	// compares the stored fingerprint and treats a mismatch as a miss.
+	GetShowKeyframeIndex(ctx context.Context, arg GetShowKeyframeIndexParams) (GetShowKeyframeIndexRow, error)
 	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
 	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
+	// Persisted remux-safety verdict for one video stream of a show file; the
+	// caller compares the stored fingerprint and treats a mismatch as a miss.
+	GetShowRemuxSafetyVerdict(ctx context.Context, arg GetShowRemuxSafetyVerdictParams) (GetShowRemuxSafetyVerdictRow, error)
 	GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error)
 	GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error)
 	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
@@ -330,6 +356,9 @@ type Querier interface {
 	// The GetShowSeasonSummaries aggregate for one season, addressed by number.
 	GetShowSeasonSummaryByNumber(ctx context.Context, arg GetShowSeasonSummaryByNumberParams) (GetShowSeasonSummaryByNumberRow, error)
 	GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeason, error)
+	GetShowSubtitlesByFileID(ctx context.Context, fileID int64) ([]GetShowSubtitlesByFileIDRow, error)
+	// Video streams of a show file, in the same order the movie twin uses.
+	GetShowVideoStreamsByFileID(ctx context.Context, fileID int64) ([]GetShowVideoStreamsByFileIDRow, error)
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (GetTrackRow, error)
@@ -407,6 +436,9 @@ type Querier interface {
 	// Idempotent: marking an already-read or nonexistent notification is a no-op.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
 	MarkShowEpisodeRetry(ctx context.Context, episodeID int64) error
+	MarkShowEpisodeUnwatched(ctx context.Context, arg MarkShowEpisodeUnwatchedParams) error
+	MarkShowEpisodeWatched(ctx context.Context, arg MarkShowEpisodeWatchedParams) error
+	MarkShowEpisodeWatchedFromProgress(ctx context.Context, arg MarkShowEpisodeWatchedFromProgressParams) error
 	MarkShowRetry(ctx context.Context, showID int64) error
 	MarkShowSeasonRetry(ctx context.Context, seasonID int64) error
 	MoveMusicAlbumAliases(ctx context.Context, arg MoveMusicAlbumAliasesParams) error
@@ -463,6 +495,9 @@ type Querier interface {
 	SaveMusicTrackMetadata(ctx context.Context, arg SaveMusicTrackMetadataParams) error
 	SetMusicAlbumSpotifyID(ctx context.Context, arg SetMusicAlbumSpotifyIDParams) error
 	SetMusicArtistSpotifyID(ctx context.Context, arg SetMusicArtistSpotifyIDParams) error
+	// Existence probe for the watch-progress handlers, which only need to 404 on
+	// an unknown episode.
+	ShowEpisodeExists(ctx context.Context, id int64) (bool, error)
 	// Existence probe for handlers that only need to 404 on an unknown track.
 	TrackExists(ctx context.Context, id int64) (bool, error)
 	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) (int64, error)
@@ -519,8 +554,11 @@ type Querier interface {
 	UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) (Network, error)
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (int64, error)
 	UpsertRemuxSafetyVerdict(ctx context.Context, arg UpsertRemuxSafetyVerdictParams) error
+	UpsertShowEpisodeWatchProgress(ctx context.Context, arg UpsertShowEpisodeWatchProgressParams) error
 	UpsertShowFile(ctx context.Context, arg UpsertShowFileParams) (ShowFile, error)
 	UpsertShowFingerprint(ctx context.Context, arg UpsertShowFingerprintParams) error
+	UpsertShowKeyframeIndex(ctx context.Context, arg UpsertShowKeyframeIndexParams) error
+	UpsertShowRemuxSafetyVerdict(ctx context.Context, arg UpsertShowRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error)
 	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
 	// Updates aggregated stats when a play event is recorded

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildMovieSubtitleTrackInfo } from "@/lib/movie-playback";
+import { buildSubtitleTrackInfo } from "@/lib/video-playback";
+import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 import { effectiveModeLabel } from "@/lib/playback";
 import type { SubtitleType } from "@/types";
 
@@ -16,13 +17,25 @@ function subtitle(overrides: Partial<SubtitleType> = {}): SubtitleType {
   } as SubtitleType;
 }
 
-describe("buildMovieSubtitleTrackInfo", () => {
+describe("buildSubtitleTrackInfo", () => {
+  it("builds episode subtitle URLs under the episode route", () => {
+    const info = buildSubtitleTrackInfo({
+      media: episodeMediaRef(9),
+      resolvedSubtitleTrack: 1,
+      techLoaded: true,
+      subtitleStreams: [subtitle(), subtitle()],
+      actualHlsStartSec: 30,
+    });
+
+    expect(info?.url).toBe("/api/shows/episodes/9/subtitles/1/web.vtt?start=30");
+  });
+
   // Cues are extracted with absolute source timestamps while a rebased HLS
   // session's media timeline starts at zero, so the server needs the offset to
   // shift them or every subtitle is out by the session start (audit H4).
   it("passes the session start so the server can rebase the cues", () => {
-    const info = buildMovieSubtitleTrackInfo({
-      movieId: 7,
+    const info = buildSubtitleTrackInfo({
+      media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
@@ -36,8 +49,8 @@ describe("buildMovieSubtitleTrackInfo", () => {
   // 591.174), and the server parses `start` as a float — flooring it would
   // misalign every cue by up to a second.
   it("preserves a fractional session start", () => {
-    const info = buildMovieSubtitleTrackInfo({
-      movieId: 7,
+    const info = buildSubtitleTrackInfo({
+      media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
@@ -48,8 +61,8 @@ describe("buildMovieSubtitleTrackInfo", () => {
   });
 
   it("omits the offset when the session starts at zero", () => {
-    const info = buildMovieSubtitleTrackInfo({
-      movieId: 7,
+    const info = buildSubtitleTrackInfo({
+      media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
@@ -60,8 +73,8 @@ describe("buildMovieSubtitleTrackInfo", () => {
   });
 
   it("omits the offset for direct play, which has no offset to apply", () => {
-    const info = buildMovieSubtitleTrackInfo({
-      movieId: 7,
+    const info = buildSubtitleTrackInfo({
+      media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
@@ -74,17 +87,17 @@ describe("buildMovieSubtitleTrackInfo", () => {
   // subtitle effect on the URL alone.
   it("changes the URL when the session rebases", () => {
     const args = {
-      movieId: 7,
+      media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
       subtitleStreams: [subtitle()],
     };
 
-    const first = buildMovieSubtitleTrackInfo({
+    const first = buildSubtitleTrackInfo({
       ...args,
       actualHlsStartSec: 0,
     });
-    const rebased = buildMovieSubtitleTrackInfo({
+    const rebased = buildSubtitleTrackInfo({
       ...args,
       actualHlsStartSec: 900,
     });

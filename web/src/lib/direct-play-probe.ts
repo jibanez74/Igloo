@@ -1,5 +1,8 @@
 import { unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
-import type { AudioStreamType, VideoStreamType } from "@/types/movies";
+import type {
+  PlaybackAudioStreamType,
+  PlaybackVideoStreamType,
+} from "@/types/playback";
 
 /** Result of `HTMLMediaElement.canPlayType`: `""` | `"maybe"` | `"probably"`. */
 export type CanPlayProbe = (typeString: string) => string;
@@ -29,8 +32,8 @@ const AAC_PROFILE_CODECS: Record<string, string> = {
   "he-aacv2": "mp4a.40.29",
 };
 
-type ProbeVideoInfo = Pick<VideoStreamType, "codec_profile" | "codec_level">;
-type ProbeAudioInfo = Pick<AudioStreamType, "codec" | "codec_profile">;
+type ProbeVideoInfo = Pick<PlaybackVideoStreamType, "codec_profile" | "codec_level">;
+type ProbeAudioInfo = Pick<PlaybackAudioStreamType, "codec" | "codec_profile">;
 
 function audioCodecString(audio: ProbeAudioInfo | undefined): string | undefined {
   // mp3/flac/opus tokens inside video/mp4 get inconsistent canPlayType answers

@@ -31,6 +31,10 @@ type Dependencies struct {
 	Wait                  *sync.WaitGroup
 	ScannerDBMu           *sync.Mutex
 	CurrentShowsDirectory func() sql.NullString
+	// InvalidateCommittedShowFile runs after a file's rows commit (rescan or
+	// deletion), under the scanner mutex, with the episode ids the file backs,
+	// so the API drops the runtime caches derived from the replaced rows.
+	InvalidateCommittedShowFile func(fileID int64, episodeIDs []int64)
 }
 
 const (
@@ -74,6 +78,9 @@ func New(deps Dependencies) *Scanner {
 	}
 	if deps.CurrentShowsDirectory == nil {
 		deps.CurrentShowsDirectory = func() sql.NullString { return sql.NullString{} }
+	}
+	if deps.InvalidateCommittedShowFile == nil {
+		deps.InvalidateCommittedShowFile = func(int64, []int64) {}
 	}
 	return &Scanner{
 		Dependencies: deps,
@@ -433,7 +440,12 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 		}
 		entry = showScanEntry{FileFingerprint: f, ID: id, SeasonID: season.ID, FilePath: file.Path, HasFingerprint: true, Episodes: linked}
 		return inspection.Validate(ctx)
-	}, nil)
+	}, func() {
+		// The runtime caches describe the committed rows, so they are dropped
+		// after commit: evicting earlier lets a concurrent reader republish the
+		// pre-rescan file before the new rows land.
+		s.InvalidateCommittedShowFile(entry.ID, entry.Episodes)
+	})
 	if err != nil {
 		return err
 	}
@@ -460,7 +472,16 @@ func (s *Scanner) cleanup(ctx context.Context, r *scanner.Reconciliation, report
 // deleteMissing removes one catalog file and prunes only what it could have
 // emptied: episodes of its season, the season, then the show.
 func (s *Scanner) deleteMissing(ctx context.Context, r *scanner.Reconciliation, file scanner.CatalogFile) (bool, error) {
+	// The delete cascades the episode links away, so the ids the runtime
+	// caches are keyed on are read first and evicted only once the deletion is
+	// durable.
+	var episodeIDs []int64
 	return r.DeleteConfirmed(ctx, s.tx, file, func(q *database.Queries) (bool, error) {
+		linked, err := q.GetShowFileEpisodeIDs(ctx, file.ID)
+		if err != nil {
+			return false, err
+		}
+		episodeIDs = linked
 		seasonID, err := q.DeleteMissingShowFile(ctx, database.DeleteMissingShowFileParams{ID: file.ID, FilePath: file.Path})
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -484,5 +505,7 @@ func (s *Scanner) deleteMissing(ctx context.Context, r *scanner.Reconciliation, 
 			return false, err
 		}
 		return true, nil
-	}, nil)
+	}, func() {
+		s.InvalidateCommittedShowFile(file.ID, episodeIDs)
+	})
 }

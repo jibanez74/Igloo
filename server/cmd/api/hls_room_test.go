@@ -14,7 +14,7 @@ import (
 func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	roomKey := RoomHLSSessionKey(1)
 	audioTrack := 0
-	personalKey := HLSSessionKey(1, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 0, 100)
+	personalKey := HLSSessionKey(movieRef(1), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 0, 100)
 
 	if roomKey == personalKey {
 		t.Errorf("room key %q collides with personal key %q", roomKey, personalKey)
@@ -337,15 +337,15 @@ func TestInvalidateHLSSessionsForMovie(t *testing.T) {
 
 	const roomA = int64(41)
 	const roomB = int64(42)
-	personalKeyA := HLSSessionKey(1, "720p_3mbps", nil, nil, "session-a", 0, 100)
-	personalKeyB := HLSSessionKey(2, "720p_3mbps", nil, nil, "session-b", 0, 100)
+	personalKeyA := HLSSessionKey(movieRef(1), "720p_3mbps", nil, nil, "session-a", 0, 100)
+	personalKeyB := HLSSessionKey(movieRef(2), "720p_3mbps", nil, nil, "session-b", 0, 100)
 
-	app.HLSSessionCache.SetDefault(personalKeyA, &HLSSession{MovieID: 1, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomA), &HLSSession{MovieID: 1, IsRoom: true, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(personalKeyB, &HLSSession{MovieID: 2, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomB), &HLSSession{MovieID: 2, IsRoom: true, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(personalKeyA, &HLSSession{Media: movieRef(1), FileID: 1, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomA), &HLSSession{Media: movieRef(1), FileID: 1, IsRoom: true, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(personalKeyB, &HLSSession{Media: movieRef(2), FileID: 2, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(roomB), &HLSSession{Media: movieRef(2), FileID: 2, IsRoom: true, TempDir: t.TempDir()})
 
-	app.invalidateHLSSessionsForMovie(1)
+	app.invalidateHLSSessionsForFile(mediaKindMovie, 1)
 
 	if _, ok := app.HLSSessionCache.Get(personalKeyA); ok {
 		t.Error("expected movie 1 personal session to be removed")

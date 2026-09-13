@@ -61,15 +61,15 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 
 	const baseVersion = "7.0.2-Jellyfin"
 
-	baseKey := remuxSafetyFingerprint(&baseMovie, &baseVideo, baseVersion)
-	if got := remuxSafetyFingerprint(&baseMovie, &baseVideo, baseVersion); got != baseKey {
+	baseKey := remuxSafetyFingerprint(playbackSourceFromMovie(baseMovie), &baseVideo, baseVersion)
+	if got := remuxSafetyFingerprint(playbackSourceFromMovie(baseMovie), &baseVideo, baseVersion); got != baseKey {
 		t.Fatalf("fingerprint not stable: %q vs %q", got, baseKey)
 	}
 
 	// The verdict validates FFmpeg-generated fMP4 output, so a different muxer
 	// must not inherit it.
 	t.Run("ffmpeg version", func(t *testing.T) {
-		if got := remuxSafetyFingerprint(&baseMovie, &baseVideo, "7.1-Jellyfin"); got == baseKey {
+		if got := remuxSafetyFingerprint(playbackSourceFromMovie(baseMovie), &baseVideo, "7.1-Jellyfin"); got == baseKey {
 			t.Fatal("fingerprint unchanged after an ffmpeg version change")
 		}
 	})
@@ -109,7 +109,7 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 			movie := baseMovie
 			video := baseVideo
 			tt.mutate(&movie, &video)
-			if got := remuxSafetyFingerprint(&movie, &video, baseVersion); got == baseKey {
+			if got := remuxSafetyFingerprint(playbackSourceFromMovie(movie), &video, baseVersion); got == baseKey {
 				t.Fatalf("fingerprint unchanged after %s change", tt.name)
 			}
 		})
@@ -122,13 +122,14 @@ func TestRemuxSafetyVerdictStore(t *testing.T) {
 
 	ctx := context.Background()
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	source := playbackSourceFromMovie(database.Movie{ID: movieID})
 	const streamIndex = int64(0)
 	const fingerprint = "fingerprint-a"
 
 	t.Run("returns a persisted verdict", func(t *testing.T) {
-		app.setRemuxSafetyVerdict(movieID, streamIndex, fingerprint, false, "10-bit H.264")
+		app.setRemuxSafetyVerdict(source, streamIndex, fingerprint, false, "10-bit H.264")
 
-		verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, fingerprint)
+		verdict, ok := app.getRemuxSafetyVerdict(ctx, source, streamIndex, fingerprint)
 		if !ok {
 			t.Fatal("persisted verdict was not returned")
 		}
@@ -144,14 +145,14 @@ func TestRemuxSafetyVerdictStore(t *testing.T) {
 	// verdict was computed; serving it could remux a stream that is no longer
 	// safe.
 	t.Run("treats a changed fingerprint as a miss", func(t *testing.T) {
-		_, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, "fingerprint-b")
+		_, ok := app.getRemuxSafetyVerdict(ctx, source, streamIndex, "fingerprint-b")
 		if ok {
 			t.Fatal("a stale fingerprint was reported as a hit")
 		}
 	})
 
 	t.Run("reports an absent row as a miss", func(t *testing.T) {
-		_, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex+1, fingerprint)
+		_, ok := app.getRemuxSafetyVerdict(ctx, source, streamIndex+1, fingerprint)
 		if ok {
 			t.Fatal("an absent verdict was reported as a hit")
 		}
@@ -161,10 +162,10 @@ func TestRemuxSafetyVerdictStore(t *testing.T) {
 		// Written here rather than relied on from the first subtest: the row
 		// count below only proves an upsert when a row already existed, and
 		// this subtest must hold under -run on its own.
-		app.setRemuxSafetyVerdict(movieID, streamIndex, fingerprint, false, "10-bit H.264")
-		app.setRemuxSafetyVerdict(movieID, streamIndex, "fingerprint-b", true, "validated safe remux")
+		app.setRemuxSafetyVerdict(source, streamIndex, fingerprint, false, "10-bit H.264")
+		app.setRemuxSafetyVerdict(source, streamIndex, "fingerprint-b", true, "validated safe remux")
 
-		verdict, ok := app.getRemuxSafetyVerdict(ctx, movieID, streamIndex, "fingerprint-b")
+		verdict, ok := app.getRemuxSafetyVerdict(ctx, source, streamIndex, "fingerprint-b")
 		if !ok {
 			t.Fatal("upserted verdict was not returned")
 		}

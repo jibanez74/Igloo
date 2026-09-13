@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
-import { hasEligibleMovieResumeProgress } from "@/lib/movie-playback";
+import WatchProgressBar from "@/components/shared/WatchProgressBar";
+import { hasEligibleResumeProgress } from "@/lib/video-playback";
 import { formatMinutesLeft } from "@/lib/format";
 
 type MovieDetailsResumeProgressProps = {
@@ -23,29 +24,20 @@ export default function MovieDetailsResumeProgress({
   const { progress_sec, duration_sec, watched } = data.data;
   if (
     watched ||
-    !hasEligibleMovieResumeProgress(progress_sec, duration_sec) ||
+    !hasEligibleResumeProgress(progress_sec, duration_sec) ||
     progress_sec == null ||
     duration_sec == null
   ) {
     return null;
   }
 
-  const progressPct = Math.min(
-    100,
-    Math.max(0, (progress_sec / duration_sec) * 100),
-  );
-
   return (
     <div className="mx-auto mt-5 flex w-full max-w-md flex-col items-center gap-1.5 lg:mx-0 lg:items-start">
-      <div
-        className="h-1 w-full overflow-hidden rounded-full bg-white/25"
-        aria-hidden="true"
-      >
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${progressPct}%` }}
-        />
-      </div>
+      <WatchProgressBar
+        progressSec={progress_sec}
+        durationSec={duration_sec}
+        trackClassName="bg-white/25"
+      />
       <p className="text-xs text-white/80">
         {formatMinutesLeft(progress_sec, duration_sec)}
       </p>

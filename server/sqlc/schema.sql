@@ -1358,6 +1358,45 @@ CREATE TABLE
     FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
   );
 CREATE INDEX IF NOT EXISTS idx_show_chapters_file ON show_chapters(file_id, start_time);
+-- Per-file playback caches for TV. One show_files row can back several
+-- episodes, so these key on the physical file, exactly as the movie twins key
+-- on the movie row. Same fingerprint rules as remux_safety_verdicts and
+-- keyframe_indexes above.
+CREATE TABLE IF NOT EXISTS show_remux_safety_verdicts (
+  file_id INTEGER NOT NULL,
+  stream_index INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  safe BOOLEAN NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (file_id, stream_index),
+  FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS show_keyframe_indexes (
+  file_id INTEGER NOT NULL,
+  stream_index INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  duration_sec REAL NOT NULL,
+  keyframes TEXT NOT NULL,
+  PRIMARY KEY (file_id, stream_index),
+  FOREIGN KEY (file_id) REFERENCES show_files (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+-- Watch progress is per logical episode, not per file: two episodes in one
+-- combined file keep separate positions. Same write-ordering columns as
+-- movie_watch_progress.
+CREATE TABLE IF NOT EXISTS show_episode_watch_progress (
+  user_id INTEGER NOT NULL,
+  episode_id INTEGER NOT NULL,
+  progress_sec REAL NOT NULL DEFAULT 0,
+  duration_sec REAL NOT NULL DEFAULT 0,
+  watched BOOLEAN NOT NULL DEFAULT false,
+  save_session_id TEXT NOT NULL DEFAULT '',
+  save_sequence INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, episode_id),
+  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (episode_id) REFERENCES show_episodes (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_show_episode_watch_progress_episode ON show_episode_watch_progress (episode_id);
 CREATE TABLE IF NOT EXISTS networks (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  tmdb_id INTEGER NOT NULL UNIQUE,

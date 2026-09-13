@@ -58,6 +58,9 @@ export const MOVIES_STATS_KEY = "movies-stats";
 export const MOVIES_LIKED_KEY = "movies-liked";
 export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
 export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";
+export const EPISODE_KEY = "episode";
+export const EPISODE_TECHNICAL_DETAILS_KEY = "episode-technical-details";
+export const EPISODE_WATCH_PROGRESS_KEY = "episode-watch-progress";
 export const MOVIE_PLAYLISTS_KEY = "movie-playlists";
 export const MOVIE_PLAYLIST_DETAILS_KEY = "movie-playlist-details";
 export const MOVIE_PLAYLIST_MOVIES_KEY = "movie-playlist-movies";
@@ -224,14 +227,14 @@ export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
 export const AUDIO_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
-export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+export const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
 /** Window in which visibilitychange(hidden) + pagehide keepalive saves at the same position collapse into one PUT. */
-export const MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS = 2_000;
-export const MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
+export const WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS = 2_000;
+export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 /** Floor for persisting/offering resume; the server's continue-watching query uses the same 30s floor. */
-export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 30;
-export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
-export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
+export const WATCH_PROGRESS_MIN_SECONDS = 30;
+export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
+export const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 /** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
 export const MOVIE_BUFFERING_SPINNER_DELAY_MS = 300;
 export const MEDIA_ERR_DECODE = 3;

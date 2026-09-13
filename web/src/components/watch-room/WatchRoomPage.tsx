@@ -28,7 +28,8 @@ import {
   movieTechnicalDetailsQueryOpts,
   watchRoomQueryOpts,
 } from "@/lib/query-opts";
-import { buildMovieSubtitleTrackInfo } from "@/lib/movie-playback";
+import { movieMediaRef } from "@/lib/media-ref";
+import { buildSubtitleTrackInfo } from "@/lib/video-playback";
 import { watchRoomStreamUrl } from "@/lib/watch-room";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
@@ -116,8 +117,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const techLoaded = techData?.data != null;
   const subtitleStreams = techData?.data?.subtitles ?? [];
   const subtitleTrack = room
-    ? buildMovieSubtitleTrackInfo({
-        movieId: room.movie_id,
+    ? buildSubtitleTrackInfo({
+        media: movieMediaRef(room.movie_id),
         resolvedSubtitleTrack: subtitleTrackIndex,
         techLoaded,
         subtitleStreams,

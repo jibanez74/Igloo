@@ -1,12 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"math"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"igloo/cmd/internal/database"
@@ -17,7 +17,7 @@ import (
 
 const watchCompletionThreshold = 0.98
 
-type updateMovieWatchProgressRequest struct {
+type updateWatchProgressRequest struct {
 	ProgressSec   *float64 `json:"progress_sec"`
 	DurationSec   *float64 `json:"duration_sec"`
 	SaveSessionID *string  `json:"save_session_id"`
@@ -34,28 +34,114 @@ func validUUID(value string) bool {
 	return err == nil
 }
 
-type setMovieWatchedRequest struct {
+type setWatchedRequest struct {
 	Watched *bool `json:"watched"`
 }
 
-type movieWatchProgressResponse struct {
+type watchProgressResponse struct {
 	ProgressSec *float64 `json:"progress_sec"`
 	DurationSec *float64 `json:"duration_sec"`
 	Watched     bool     `json:"watched"`
 	UpdatedAt   *string  `json:"updated_at"`
 }
 
-func parseMovieID(r *http.Request) (int64, error) {
-	idParam := chi.URLParam(r, "id")
-	movieID, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil || movieID <= 0 {
-		return 0, errors.New("invalid movie id")
-	}
-	return movieID, nil
+// watchProgressRow is the stored progress shape shared by movies and episodes.
+type watchProgressRow struct {
+	ProgressSec float64
+	DurationSec float64
+	Watched     bool
+	UpdatedAt   string
 }
 
-func (app *Application) ensureMovieExists(r *http.Request, movieID int64) error {
-	exists, err := app.Queries.MovieExists(r.Context(), movieID)
+// watchProgressWrite is one progress save. SaveSessionID and SaveSequence let
+// the store reject a stale write from an earlier save of the same session.
+type watchProgressWrite struct {
+	UserID        int64
+	MediaID       int64
+	ProgressSec   float64
+	DurationSec   float64
+	SaveSessionID string
+	SaveSequence  int64
+}
+
+// watchProgressStore is what the shared handlers need from a progress table.
+// Movies and episodes keep separate tables (each with a foreign key to its own
+// catalog row) behind the same handler logic.
+type watchProgressStore interface {
+	exists(ctx context.Context, id int64) (bool, error)
+	get(ctx context.Context, userID int64, id int64) (watchProgressRow, error)
+	upsert(ctx context.Context, write watchProgressWrite) error
+	remove(ctx context.Context, userID int64, id int64) error
+	markWatched(ctx context.Context, userID int64, id int64) error
+	markWatchedFromProgress(ctx context.Context, write watchProgressWrite) error
+	markUnwatched(ctx context.Context, userID int64, id int64) error
+}
+
+// movieWatchProgressStore is the movie adapter over movie_watch_progress.
+type movieWatchProgressStore struct {
+	q *database.Queries
+}
+
+func (s movieWatchProgressStore) exists(ctx context.Context, id int64) (bool, error) {
+	return s.q.MovieExists(ctx, id)
+}
+
+func (s movieWatchProgressStore) get(ctx context.Context, userID int64, id int64) (watchProgressRow, error) {
+	row, err := s.q.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{UserID: userID, MovieID: id})
+	if err != nil {
+		return watchProgressRow{}, err
+	}
+	return watchProgressRow{ProgressSec: row.ProgressSec, DurationSec: row.DurationSec, Watched: row.Watched, UpdatedAt: row.UpdatedAt}, nil
+}
+
+func (s movieWatchProgressStore) upsert(ctx context.Context, write watchProgressWrite) error {
+	return s.q.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        write.UserID,
+		MovieID:       write.MediaID,
+		ProgressSec:   write.ProgressSec,
+		DurationSec:   write.DurationSec,
+		SaveSessionID: write.SaveSessionID,
+		SaveSequence:  write.SaveSequence,
+	})
+}
+
+func (s movieWatchProgressStore) remove(ctx context.Context, userID int64, id int64) error {
+	return s.q.DeleteMovieWatchProgress(ctx, database.DeleteMovieWatchProgressParams{UserID: userID, MovieID: id})
+}
+
+func (s movieWatchProgressStore) markWatched(ctx context.Context, userID int64, id int64) error {
+	return s.q.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{UserID: userID, MovieID: id})
+}
+
+func (s movieWatchProgressStore) markWatchedFromProgress(ctx context.Context, write watchProgressWrite) error {
+	return s.q.MarkMovieWatchedFromProgress(ctx, database.MarkMovieWatchedFromProgressParams{
+		UserID:        write.UserID,
+		MovieID:       write.MediaID,
+		SaveSessionID: write.SaveSessionID,
+		SaveSequence:  write.SaveSequence,
+	})
+}
+
+func (s movieWatchProgressStore) markUnwatched(ctx context.Context, userID int64, id int64) error {
+	return s.q.MarkMovieUnwatched(ctx, database.MarkMovieUnwatchedParams{UserID: userID, MovieID: id})
+}
+
+// watchProgressStoreFor picks the table for a media kind.
+func (app *Application) watchProgressStoreFor(kind mediaKind) watchProgressStore {
+	if kind == mediaKindEpisode {
+		return showEpisodeWatchProgressStore{q: app.Queries}
+	}
+	return movieWatchProgressStore{q: app.Queries}
+}
+
+// watchedIDField names the media id in the watched response: "movie_id" or
+// "episode_id".
+func watchedIDField(kind mediaKind) string {
+	return string(kind) + "_id"
+}
+
+func (app *Application) ensureMediaExists(r *http.Request, store watchProgressStore, media mediaRef) error {
+	exists, err := store.exists(r.Context(), media.ID)
 	if err != nil {
 		return err
 	}
@@ -65,27 +151,27 @@ func (app *Application) ensureMovieExists(r *http.Request, movieID int64) error 
 	return nil
 }
 
-// rejectWatchProgressWrite turns a failed movie_watch_progress write into a
-// response. The movie_id foreign key already rejects an unknown movie, so the
-// write paths do not pre-check existence -- they pay one query on success and
-// only the failure path probes MovieExists to tell "no such movie" (404) from
-// a real error (500). Same shape, and the same reasoning, as the playlist add
-// path in movie_playlist_handler.go. The read and delete paths keep their
-// pre-check: neither can trip a foreign key, so nothing else would produce the
-// documented 404.
-func (app *Application) rejectWatchProgressWrite(w http.ResponseWriter, r *http.Request, writeErr error, movieID int64, logMessage, userMessage string) {
-	exists, existsErr := app.Queries.MovieExists(r.Context(), movieID)
+// rejectWatchProgressWrite turns a failed watch-progress write into a
+// response. The media foreign key already rejects an unknown row, so the write
+// paths do not pre-check existence -- they pay one query on success and only
+// the failure path probes existence to tell "no such media" (404) from a real
+// error (500). Same shape, and the same reasoning, as the playlist add path in
+// movie_playlist_handler.go. The read and delete paths keep their pre-check:
+// neither can trip a foreign key, so nothing else would produce the documented
+// 404.
+func (app *Application) rejectWatchProgressWrite(w http.ResponseWriter, r *http.Request, store watchProgressStore, writeErr error, media mediaRef, logMessage, userMessage string) {
+	exists, existsErr := store.exists(r.Context(), media.ID)
 	if existsErr == nil && !exists {
-		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 		return
 	}
 
-	app.Logger.Error(logMessage, "error", writeErr, "movie_id", movieID)
+	app.Logger.Error(logMessage, "error", writeErr, "media", media.String())
 	helpers.ErrorJSON(w, errors.New(userMessage))
 }
 
-func emptyMovieWatchProgressResponse() movieWatchProgressResponse {
-	return movieWatchProgressResponse{
+func emptyWatchProgressResponse() watchProgressResponse {
+	return watchProgressResponse{
 		ProgressSec: nil,
 		DurationSec: nil,
 		Watched:     false,
@@ -93,12 +179,12 @@ func emptyMovieWatchProgressResponse() movieWatchProgressResponse {
 	}
 }
 
-func movieWatchProgressToResponse(row database.GetMovieWatchProgressRow) movieWatchProgressResponse {
+func watchProgressToResponse(row watchProgressRow) watchProgressResponse {
 	progressSec := row.ProgressSec
 	durationSec := row.DurationSec
 	updatedAt := row.UpdatedAt
 
-	return movieWatchProgressResponse{
+	return watchProgressResponse{
 		ProgressSec: &progressSec,
 		DurationSec: &durationSec,
 		Watched:     row.Watched,
@@ -106,48 +192,52 @@ func movieWatchProgressToResponse(row database.GetMovieWatchProgressRow) movieWa
 	}
 }
 
+// GetMovieWatchProgress returns the caller's progress on one movie.
 func (app *Application) GetMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
+	app.getWatchProgress(w, r, mediaKindMovie)
+}
+
+func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	movieID, err := parseMovieID(r)
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
+	store := app.watchProgressStoreFor(kind)
 
-	if err := app.ensureMovieExists(r, movieID); err != nil {
+	err = app.ensureMediaExists(r, store, media)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to verify movie exists for watch progress", "error", err, "movie_id", movieID)
+		app.Logger.Error("failed to verify media exists for watch progress", "error", err, "media", media.String())
 		helpers.ErrorJSON(w, errors.New("failed to fetch watch progress"))
 		return
 	}
 
-	row, err := app.Queries.GetMovieWatchProgress(r.Context(), database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
+	row, err := store.get(r.Context(), userID, media.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 				Error: false,
-				Data:  emptyMovieWatchProgressResponse(),
+				Data:  emptyWatchProgressResponse(),
 			})
 			return
 		}
-		app.Logger.Error("failed to get movie watch progress", "error", err, "movie_id", movieID, "user_id", userID)
+		app.Logger.Error("failed to get watch progress", "error", err, "media", media.String(), "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch watch progress"))
 		return
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
-		Data:  movieWatchProgressToResponse(row),
+		Data:  watchProgressToResponse(row),
 	})
 }
 
@@ -172,20 +262,27 @@ func (app *Application) GetContinueWatchingMovies(w http.ResponseWriter, r *http
 	})
 }
 
+// UpdateMovieWatchProgress records a playback position for one movie.
 func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
+	app.updateWatchProgress(w, r, mediaKindMovie)
+}
+
+func (app *Application) updateWatchProgress(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	movieID, err := parseMovieID(r)
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
+	store := app.watchProgressStoreFor(kind)
 
-	var req updateMovieWatchProgressRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	var req updateWatchProgressRequest
+	err = helpers.ReadJSON(w, r, &req, 0)
+	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -227,19 +324,20 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	progressSec := helpers.ClampFloat64(progressVal, 0, durationVal)
-	durationSec := durationVal
+	write := watchProgressWrite{
+		UserID:        userID,
+		MediaID:       media.ID,
+		ProgressSec:   helpers.ClampFloat64(progressVal, 0, durationVal),
+		DurationSec:   durationVal,
+		SaveSessionID: *req.SaveSessionID,
+		SaveSequence:  *req.SaveSequence,
+	}
 
-	if progressSec/durationSec >= watchCompletionThreshold {
-		err := app.Queries.MarkMovieWatchedFromProgress(r.Context(), database.MarkMovieWatchedFromProgressParams{
-			UserID:        userID,
-			MovieID:       movieID,
-			SaveSessionID: *req.SaveSessionID,
-			SaveSequence:  *req.SaveSequence,
-		})
+	if write.ProgressSec/write.DurationSec >= watchCompletionThreshold {
+		err = store.markWatchedFromProgress(r.Context(), write)
 		if err != nil {
-			app.rejectWatchProgressWrite(w, r, err, movieID,
-				"failed to mark movie watched from progress update", "failed to update watch progress")
+			app.rejectWatchProgressWrite(w, r, store, err, media,
+				"failed to mark media watched from progress update", "failed to update watch progress")
 			return
 		}
 
@@ -252,17 +350,10 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = app.Queries.UpsertMovieWatchProgress(r.Context(), database.UpsertMovieWatchProgressParams{
-		UserID:        userID,
-		MovieID:       movieID,
-		ProgressSec:   progressSec,
-		DurationSec:   durationSec,
-		SaveSessionID: *req.SaveSessionID,
-		SaveSequence:  *req.SaveSequence,
-	})
+	err = store.upsert(r.Context(), write)
 	if err != nil {
-		app.rejectWatchProgressWrite(w, r, err, movieID,
-			"failed to upsert movie watch progress", "failed to update watch progress")
+		app.rejectWatchProgressWrite(w, r, store, err, media,
+			"failed to upsert watch progress", "failed to update watch progress")
 		return
 	}
 
@@ -274,33 +365,38 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 	})
 }
 
+// DeleteMovieWatchProgress clears the caller's progress on one movie.
 func (app *Application) DeleteMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
+	app.deleteWatchProgress(w, r, mediaKindMovie)
+}
+
+func (app *Application) deleteWatchProgress(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	movieID, err := parseMovieID(r)
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
+	store := app.watchProgressStoreFor(kind)
 
-	if err := app.ensureMovieExists(r, movieID); err != nil {
+	err = app.ensureMediaExists(r, store, media)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to verify movie exists for watch progress delete", "error", err, "movie_id", movieID)
+		app.Logger.Error("failed to verify media exists for watch progress delete", "error", err, "media", media.String())
 		helpers.ErrorJSON(w, errors.New("failed to clear watch progress"))
 		return
 	}
 
-	if err := app.Queries.DeleteMovieWatchProgress(r.Context(), database.DeleteMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	}); err != nil {
-		app.Logger.Error("failed to delete movie watch progress", "error", err, "movie_id", movieID, "user_id", userID)
+	err = store.remove(r.Context(), userID, media.ID)
+	if err != nil {
+		app.Logger.Error("failed to delete watch progress", "error", err, "media", media.String(), "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to clear watch progress"))
 		return
 	}
@@ -313,20 +409,27 @@ func (app *Application) DeleteMovieWatchProgress(w http.ResponseWriter, r *http.
 	})
 }
 
+// SetMovieWatched marks one movie watched or unwatched for the caller.
 func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) {
+	app.setWatched(w, r, mediaKindMovie)
+}
+
+func (app *Application) setWatched(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	movieID, err := parseMovieID(r)
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
+	store := app.watchProgressStoreFor(kind)
 
-	var req setMovieWatchedRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	var req setWatchedRequest
+	err = helpers.ReadJSON(w, r, &req, 0)
+	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -339,21 +442,17 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 	watched := *req.Watched
 
 	if watched {
-		if err := app.Queries.MarkMovieWatched(r.Context(), database.MarkMovieWatchedParams{
-			UserID:  userID,
-			MovieID: movieID,
-		}); err != nil {
-			app.rejectWatchProgressWrite(w, r, err, movieID,
-				"failed to mark movie watched", "failed to update watched status")
+		err = store.markWatched(r.Context(), userID, media.ID)
+		if err != nil {
+			app.rejectWatchProgressWrite(w, r, store, err, media,
+				"failed to mark media watched", "failed to update watched status")
 			return
 		}
 	} else {
-		if err := app.Queries.MarkMovieUnwatched(r.Context(), database.MarkMovieUnwatchedParams{
-			UserID:  userID,
-			MovieID: movieID,
-		}); err != nil {
-			app.rejectWatchProgressWrite(w, r, err, movieID,
-				"failed to mark movie unwatched", "failed to update watched status")
+		err = store.markUnwatched(r.Context(), userID, media.ID)
+		if err != nil {
+			app.rejectWatchProgressWrite(w, r, store, err, media,
+				"failed to mark media unwatched", "failed to update watched status")
 			return
 		}
 	}
@@ -361,8 +460,8 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"movie_id": movieID,
-			"watched":  watched,
+			watchedIDField(kind): media.ID,
+			"watched":            watched,
 		},
 	})
 }

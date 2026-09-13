@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { STREAM_MODES, TMDB_POSTER_SIZE } from "@/lib/constants";
+import { STREAM_MODES } from "@/lib/constants";
+import { mediaKey } from "@/lib/media-ref";
 import {
   directPlayModeLabel,
   getAvailableModes,
@@ -10,44 +11,55 @@ import {
   resolvePlaybackSettings,
 } from "@/lib/playback";
 import {
-  buildMovieStreamUrl,
-  buildMovieSubtitleTrackInfo,
-  clampMoviePlaybackTime,
+  buildStreamUrl,
+  buildSubtitleTrackInfo,
+  clampPlaybackTime,
   hlsPlaybackOffsetSec,
   hlsStartTimeSec,
-} from "@/lib/movie-playback";
+} from "@/lib/video-playback";
 import {
   authUserQueryOpts,
-  libraryMovieDetailsQueryOpts,
-  movieTechnicalDetailsQueryOpts,
-  movieWatchProgressQueryOpts,
+  mediaTechnicalDetailsQueryOpts,
+  mediaWatchProgressQueryOpts,
   playbackSettingsQueryOpts,
+  playbackTechnicalFile,
 } from "@/lib/query-opts";
 import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferences";
-import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
+import { unwrapFloatOrUndefined } from "@/lib/nullable";
 import {
   playbackSettingsToPlaySearch,
   subtitleTrackFromPlaySearch,
   type PlaySearchParams,
 } from "@/lib/route-search";
-import type { PlaybackSettings, StreamModeId } from "@/types";
+import type { PlaybackMediaRef, PlaybackSettings, StreamModeId } from "@/types";
 
-type UseMoviePlaybackDataArgs = {
-  movieId: number;
+type UseVideoPlaybackDataArgs = {
+  media: PlaybackMediaRef;
   search: PlaySearchParams;
   streamReloadKey: number;
   playbackSessionId: string;
+  /**
+   * Duration known before the technical details resolve (a movie details
+   * row carries one); the file's own duration wins once it is loaded.
+   */
+  fallbackDurationSec?: number;
   onSyncSearch: (target: PlaybackSettings) => void;
 };
 
-export function useMoviePlaybackData({
-  movieId,
+/**
+ * Everything the player derives from the URL and the media's technical
+ * details: the resolved mode and tracks, the stream and subtitle URLs, and
+ * the absolute-time bookkeeping a rebased HLS session needs. The caller owns
+ * the media's own details query (title, artwork), which differs per kind.
+ */
+export function useVideoPlaybackData({
+  media,
   search,
   streamReloadKey,
   playbackSessionId,
+  fallbackDurationSec,
   onSyncSearch,
-}: UseMoviePlaybackDataArgs) {
+}: UseVideoPlaybackDataArgs) {
   const {
     audio_track: audioTrack,
     start,
@@ -56,23 +68,11 @@ export function useMoviePlaybackData({
   const mode: StreamModeId = search.mode ?? "direct";
   const provisionalMode = resolveModeForAudioTrack(mode, audioTrack);
 
-  const {
-    data,
-    isPending: movieIsPending,
-    isError,
-  } = useQuery(libraryMovieDetailsQueryOpts(movieId));
-  const movie = data && !data.error ? data.data?.movie : null;
-  const title = movie?.title ?? "Movie";
-  const posterUrl = movie
-    ? buildTmdbImageUrl(unwrapString(movie.poster_path), TMDB_POSTER_SIZE)
-    : null;
-  const movieNotFound = Boolean(isError || (data && data.error));
-
   const { data: techData, isPending: techPending } = useQuery(
-    movieTechnicalDetailsQueryOpts(movieId),
+    mediaTechnicalDetailsQueryOpts(media),
   );
   const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
-    movieWatchProgressQueryOpts(movieId),
+    mediaWatchProgressQueryOpts(media),
   );
   const { data: userData, isPending: authUserPending } = useQuery(
     authUserQueryOpts(),
@@ -91,11 +91,13 @@ export function useMoviePlaybackData({
     devicePrefs,
     serverPlaybackSettings,
   );
-  const techLoaded = !techPending && techData?.data != null;
-  const videoStreams = techData?.data?.video_streams ?? [];
-  const audioStreams = techData?.data?.audio_streams ?? [];
-  const subtitleStreams = techData?.data?.subtitles ?? [];
-  const chapters = techData?.data?.chapters ?? [];
+  const techPayload = techData?.error === false ? techData.data : null;
+  const techLoaded = !techPending && techPayload != null;
+  const techFile = techPayload ? playbackTechnicalFile(techPayload) : null;
+  const videoStreams = techPayload?.video_streams ?? [];
+  const audioStreams = techPayload?.audio_streams ?? [];
+  const subtitleStreams = techPayload?.subtitles ?? [];
+  const chapters = techPayload?.chapters ?? [];
   const primaryVideo = techLoaded
     ? getPrimaryVideoStream(videoStreams)
     : undefined;
@@ -104,7 +106,7 @@ export function useMoviePlaybackData({
         video: primaryVideo,
         videoStreamsLoaded: true,
         audioStreams,
-        mimeType: techData.data.movie?.mime_type,
+        mimeType: techFile?.mime_type,
       })
     : null;
   // Device preferences are synchronous, so the only thing still worth waiting
@@ -143,13 +145,12 @@ export function useMoviePlaybackData({
   const resolvedAudioTrack = resolvedPlaybackSettings.audioTrack;
   const resolvedSubtitleTrack = resolvedPlaybackSettings.subtitleTrack;
   const isHlsPlayback = resolvedMode !== "direct";
-  const movieDurationSec =
-    unwrapFloatOrUndefined(techData?.data?.movie?.duration) ??
-    unwrapFloatOrUndefined(movie?.duration);
-  const playbackStartSec = clampMoviePlaybackTime(
+  const mediaDurationSec =
+    unwrapFloatOrUndefined(techFile?.duration) ?? fallbackDurationSec;
+  const playbackStartSec = clampPlaybackTime(
     start,
     0,
-    movieDurationSec ?? 0,
+    mediaDurationSec ?? 0,
   );
   const streamAudioTrack =
     techLoaded && audioStreams.length === 0 ? null : resolvedAudioTrack;
@@ -157,7 +158,7 @@ export function useMoviePlaybackData({
     isHlsPlayback,
     playbackStartSec,
   );
-  const sessionWindowKey = `${movieId}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(requestedHlsStartSec)}`;
+  const sessionWindowKey = `${mediaKey(media)}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(requestedHlsStartSec)}`;
   const [reportedActualStart, setReportedActualStart] = useState<{
     sessionWindowKey: string;
     startSec: number;
@@ -171,8 +172,8 @@ export function useMoviePlaybackData({
     playbackStartSec,
     actualHlsStartSec,
   );
-  const streamUrl = buildMovieStreamUrl(
-    movieId,
+  const streamUrl = buildStreamUrl(
+    media,
     resolvedMode,
     streamAudioTrack,
     requestedHlsStartSec,
@@ -191,10 +192,10 @@ export function useMoviePlaybackData({
   const playbackTiming = {
     isHlsPlayback,
     actualHlsStartSec,
-    movieDurationSec,
+    mediaDurationSec,
   };
-  const subtitleInfo = buildMovieSubtitleTrackInfo({
-    movieId,
+  const subtitleInfo = buildSubtitleTrackInfo({
+    media,
     resolvedSubtitleTrack,
     techLoaded,
     subtitleStreams,
@@ -256,17 +257,12 @@ export function useMoviePlaybackData({
   ]);
 
   return {
-    movie,
-    movieIsPending,
-    movieNotFound,
     techPending,
     techLoaded,
     directPlayAvailable,
     playbackPreferencesReady,
     watchProgressData,
     watchProgressPending,
-    title,
-    posterUrl,
     modeLabel,
     chapters,
     modeUnavailable,
@@ -281,7 +277,7 @@ export function useMoviePlaybackData({
     streamUrl,
     subtitleInfo,
     playbackTiming,
-    movieDurationSec,
+    mediaDurationSec,
     sessionWindowKey,
     handleActualHlsStart,
   };

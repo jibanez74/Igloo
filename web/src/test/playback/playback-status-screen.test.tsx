@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import MoviePlaybackStatusScreen from "@/components/movies/MoviePlaybackStatusScreen";
+import PlaybackStatusScreen from "@/components/playback/PlaybackStatusScreen";
 
-describe("MoviePlaybackStatusScreen", () => {
+describe("PlaybackStatusScreen", () => {
   it("announces error variants with role=alert", () => {
     render(
-      <MoviePlaybackStatusScreen
+      <PlaybackStatusScreen
         title="Playback failed"
         message="The stream could not be played."
       />,
@@ -18,7 +18,7 @@ describe("MoviePlaybackStatusScreen", () => {
 
   it("keeps the loading variant out of the alert channel", () => {
     render(
-      <MoviePlaybackStatusScreen variant="loading" message="Preparing playback" />,
+      <PlaybackStatusScreen variant="loading" message="Preparing playback" />,
     );
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

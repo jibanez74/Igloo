@@ -1,17 +1,24 @@
 import type { Ref } from "react";
-import MoviePlaybackStatusScreen from "@/components/movies/MoviePlaybackStatusScreen";
-import type { MoviePlaybackStatus } from "@/types";
+import PlaybackStatusScreen from "@/components/playback/PlaybackStatusScreen";
+import type { PlaybackStatus } from "@/types";
 
 type PlaybackStatusViewProps = {
-  status: Exclude<MoviePlaybackStatus, { kind: "ready" }>;
+  status: Exclude<PlaybackStatus, { kind: "ready" }>;
+  /** What is being played, for the copy: "movie" or "episode". */
+  mediaNoun: string;
   onBack: () => void;
   onRetry: () => void;
   backButtonRef: Ref<HTMLButtonElement>;
   containerRef: Ref<HTMLDivElement>;
 };
 
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 export default function PlaybackStatusView({
   status,
+  mediaNoun,
   onBack,
   onRetry,
   backButtonRef,
@@ -29,29 +36,29 @@ export default function PlaybackStatusView({
   switch (status.kind) {
     case "notFound":
       return (
-        <MoviePlaybackStatusScreen
+        <PlaybackStatusScreen
           containerRef={containerRef}
-          title="Movie not found"
-          message="The movie could not be found or you don't have access to it."
+          title={`${capitalize(mediaNoun)} not found`}
+          message={`The ${mediaNoun} could not be found or you don't have access to it.`}
           actions={[backAction]}
         />
       );
     case "loading":
       return (
-        <MoviePlaybackStatusScreen
+        <PlaybackStatusScreen
           variant="loading"
           message={status.message}
         />
       );
     case "modeUnavailable":
       return (
-        <MoviePlaybackStatusScreen
+        <PlaybackStatusScreen
           containerRef={containerRef}
           title="Quality not available"
           message={
             <>
               <strong className="text-foreground">{status.modeLabel}</strong> is
-              not available for this movie. Go back and choose a different
+              not available for this {mediaNoun}. Go back and choose a different
               quality in Playback Settings.
             </>
           }
@@ -60,7 +67,7 @@ export default function PlaybackStatusView({
       );
     case "error":
       return (
-        <MoviePlaybackStatusScreen
+        <PlaybackStatusScreen
           containerRef={containerRef}
           title="Playback failed"
           message={status.message}

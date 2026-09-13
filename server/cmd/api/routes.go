@@ -194,6 +194,22 @@ func (app *Application) registerShowRoutes(r chi.Router) {
 		r.Get("/latest", app.GetLatestShows)
 		r.Get("/details/{id}", app.GetShowDetails)
 		r.Get("/{id}/seasons/{seasonNumber}/episodes", app.GetShowSeasonEpisodes)
+		// Episode playback mirrors the movie routes one for one; the static
+		// "episodes" segment wins over "{id}" in chi, as "details" does above.
+		r.Route("/episodes/{id}", func(r chi.Router) {
+			r.Get("/", app.GetShowEpisode)
+			r.Get("/technical-details", app.GetShowEpisodeTechnicalDetails)
+			r.Get("/watch-progress", app.GetEpisodeWatchProgress)
+			r.Put("/watch-progress", app.UpdateEpisodeWatchProgress)
+			r.Delete("/watch-progress", app.DeleteEpisodeWatchProgress)
+			r.Put("/watch-progress/watched", app.SetEpisodeWatched)
+			r.Post("/hls/session/stop", app.StopEpisodeHLSSession)
+			r.Get("/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, app.EpisodeHLSManifest)
+			r.Get("/hls/{profile}/{filename}", app.EpisodeHLSSegment)
+			r.Get("/stream", app.StreamEpisode)
+			r.Head("/stream", app.StreamEpisode)
+			r.Get("/subtitles/{trackIndex}/web.vtt", app.EpisodeSubtitleWebVTT)
+		})
 	})
 }
 

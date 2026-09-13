@@ -17,13 +17,15 @@ type remuxSafetyVerdict struct {
 	Reason string
 }
 
-// movieStreamFingerprintBase captures file identity for one video stream:
-// movie, stream, size, and update timestamp. movie.UpdatedAt bumps on scanner
+// sourceStreamFingerprintBase captures file identity for one video stream:
+// file, stream, size, and update timestamp. UpdatedAt bumps on scanner
 // metadata upserts for re-processed files too, which re-pays one computation
 // per file — acceptable, since re-processing implies the file's size or path
-// changed. Shared by every per-stream persistence fingerprint.
-func movieStreamFingerprintBase(movie *database.Movie, streamIndex int64) string {
-	return fmt.Sprintf("%d:%d:%d:%s", movie.ID, streamIndex, movie.Size, movie.UpdatedAt)
+// changed. Shared by every per-stream persistence fingerprint. The file id is
+// the movie id or show_files.id; the two kinds persist to separate tables, so
+// the format needs no kind and stays byte-identical to what movie rows carry.
+func sourceStreamFingerprintBase(source playbackSource, streamIndex int64) string {
+	return fmt.Sprintf("%d:%d:%d:%s", source.FileID, streamIndex, source.Size, source.UpdatedAt)
 }
 
 // remuxVerdictProducerRevision versions everything on our side of the verdict:
@@ -42,13 +44,13 @@ const remuxVerdictProducerRevision = 1
 // own argument and validator changes. A mismatch fails open into a fresh
 // preflight, which costs one re-validation per file.
 func remuxSafetyFingerprint(
-	movie *database.Movie,
+	source playbackSource,
 	video *database.VideoStream,
 	ffmpegVersion string,
 ) string {
 	return fmt.Sprintf(
 		"%s:%s:%s:%d:%s:%s:p%d:%s",
-		movieStreamFingerprintBase(movie, video.StreamIndex),
+		sourceStreamFingerprintBase(source, video.StreamIndex),
 		video.Codec,
 		video.CodecProfile.String,
 		video.BitDepth.Int64,
@@ -62,20 +64,69 @@ func remuxSafetyFingerprint(
 // getRemuxSafetyVerdict reads the persisted verdict for one video stream. Any
 // miss — no row, stale fingerprint, or a read error — fails open into a fresh
 // preflight, which rewrites the row with a current verdict.
-func (app *Application) getRemuxSafetyVerdict(
-	ctx context.Context,
-	movieID int64,
-	streamIndex int64,
-	fingerprint string,
-) (remuxSafetyVerdict, bool) {
+// persistedRemuxVerdict is the stored row shape shared by the movie and show
+// tables.
+type persistedRemuxVerdict struct {
+	Fingerprint string
+	Safe        bool
+	Reason      string
+}
+
+// readRemuxVerdictRow reads the row from the table the source's kind keys on.
+func (app *Application) readRemuxVerdictRow(ctx context.Context, source playbackSource, streamIndex int64) (persistedRemuxVerdict, error) {
+	if source.Ref.Kind == mediaKindEpisode {
+		row, err := app.Queries.GetShowRemuxSafetyVerdict(ctx, database.GetShowRemuxSafetyVerdictParams{
+			FileID:      source.FileID,
+			StreamIndex: streamIndex,
+		})
+		if err != nil {
+			return persistedRemuxVerdict{}, err
+		}
+		return persistedRemuxVerdict{Fingerprint: row.Fingerprint, Safe: row.Safe, Reason: row.Reason}, nil
+	}
+
 	row, err := app.Queries.GetRemuxSafetyVerdict(ctx, database.GetRemuxSafetyVerdictParams{
-		MovieID:     movieID,
+		MovieID:     source.FileID,
 		StreamIndex: streamIndex,
 	})
 	if err != nil {
+		return persistedRemuxVerdict{}, err
+	}
+	return persistedRemuxVerdict{Fingerprint: row.Fingerprint, Safe: row.Safe, Reason: row.Reason}, nil
+}
+
+// writeRemuxVerdictRow is the upsert twin of readRemuxVerdictRow.
+func (app *Application) writeRemuxVerdictRow(ctx context.Context, source playbackSource, streamIndex int64, row persistedRemuxVerdict) error {
+	if source.Ref.Kind == mediaKindEpisode {
+		return app.Queries.UpsertShowRemuxSafetyVerdict(ctx, database.UpsertShowRemuxSafetyVerdictParams{
+			FileID:      source.FileID,
+			StreamIndex: streamIndex,
+			Fingerprint: row.Fingerprint,
+			Safe:        row.Safe,
+			Reason:      row.Reason,
+		})
+	}
+
+	return app.Queries.UpsertRemuxSafetyVerdict(ctx, database.UpsertRemuxSafetyVerdictParams{
+		MovieID:     source.FileID,
+		StreamIndex: streamIndex,
+		Fingerprint: row.Fingerprint,
+		Safe:        row.Safe,
+		Reason:      row.Reason,
+	})
+}
+
+func (app *Application) getRemuxSafetyVerdict(
+	ctx context.Context,
+	source playbackSource,
+	streamIndex int64,
+	fingerprint string,
+) (remuxSafetyVerdict, bool) {
+	row, err := app.readRemuxVerdictRow(ctx, source, streamIndex)
+	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			app.Logger.Warn("failed to read remux safety verdict",
-				"movie_id", movieID,
+				"media", source.Ref.String(),
 				"stream_index", streamIndex,
 				"error", err,
 			)
@@ -99,22 +150,20 @@ func (app *Application) getRemuxSafetyVerdict(
 // runs on a background context for the same reason). A write failure only
 // means the verdict is recomputed on the next play.
 func (app *Application) setRemuxSafetyVerdict(
-	movieID int64,
+	source playbackSource,
 	streamIndex int64,
 	fingerprint string,
 	safe bool,
 	reason string,
 ) {
-	err := app.Queries.UpsertRemuxSafetyVerdict(context.Background(), database.UpsertRemuxSafetyVerdictParams{
-		MovieID:     movieID,
-		StreamIndex: streamIndex,
+	err := app.writeRemuxVerdictRow(context.Background(), source, streamIndex, persistedRemuxVerdict{
 		Fingerprint: fingerprint,
 		Safe:        safe,
 		Reason:      reason,
 	})
 	if err != nil {
 		app.Logger.Warn("failed to persist remux safety verdict",
-			"movie_id", movieID,
+			"media", source.Ref.String(),
 			"stream_index", streamIndex,
 			"error", err,
 		)

@@ -149,11 +149,11 @@ func createTestHLSSessionWithAudio(
 	startSec int,
 	isRoom bool,
 ) (*HLSSession, error) {
-	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
+	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, movieRef(movieID), startSec)
 	if err != nil {
 		return nil, err
 	}
-	return app.createHLSSession(ctx, &movie, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
+	return app.createHLSSession(ctx, &source, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
 }
 
 type testFMP4Fixture = fmp4testutil.Fixture
@@ -180,10 +180,17 @@ func hlsRunPlan(fixture testFMP4Fixture) fakeFFmpegRunPlan {
 	}
 }
 
-// newHLSTestHandler wires the three personal HLS routes behind the session
-// middleware with userID already authenticated, mirroring the paths registered
-// in routes.go.
+// newHLSTestHandler wires the three personal movie HLS routes behind the
+// session middleware with userID already authenticated, mirroring the paths
+// registered in routes.go.
 func newHLSTestHandler(t *testing.T, app *Application, userID int64) http.Handler {
+	t.Helper()
+	return newMediaHLSTestHandler(t, app, userID, mediaKindMovie)
+}
+
+// newMediaHLSTestHandler is newHLSTestHandler for either media kind: the
+// episode routes are the movie routes under /api/shows/episodes/{id}.
+func newMediaHLSTestHandler(t *testing.T, app *Application, userID int64, kind mediaKind) http.Handler {
 	t.Helper()
 
 	app.InitSession()
@@ -195,9 +202,15 @@ func newHLSTestHandler(t *testing.T, app *Application, userID int64) http.Handle
 	}
 
 	router := chi.NewRouter()
-	router.Post("/api/movies/{id}/hls/session/stop", authenticated(app.StopPersonalHLSSession))
-	router.Get("/api/movies/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.HLSManifest))
-	router.Get("/api/movies/{id}/hls/{profile}/{filename}", authenticated(app.HLSSegment))
+	if kind == mediaKindEpisode {
+		router.Post("/api/shows/episodes/{id}/hls/session/stop", authenticated(app.StopEpisodeHLSSession))
+		router.Get("/api/shows/episodes/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.EpisodeHLSManifest))
+		router.Get("/api/shows/episodes/{id}/hls/{profile}/{filename}", authenticated(app.EpisodeHLSSegment))
+	} else {
+		router.Post("/api/movies/{id}/hls/session/stop", authenticated(app.StopPersonalHLSSession))
+		router.Get("/api/movies/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.HLSManifest))
+		router.Get("/api/movies/{id}/hls/{profile}/{filename}", authenticated(app.HLSSegment))
+	}
 
 	return app.SessionManager.LoadAndSave(router)
 }

@@ -32,6 +32,7 @@ export function seasonSummary(
 export function episode(
   seasonNumber: number,
   episodeNumber: number,
+  overrides: Partial<ShowEpisodeType> = {},
 ): ShowEpisodeType {
   return {
     id: 70000 + seasonNumber * 100 + episodeNumber,
@@ -43,6 +44,11 @@ export function episode(
     tmdb_runtime: nullableInt64(47),
     vote_average: nullableFloat64(8.1),
     vote_count: nullableInt64(220),
+    // No progress by default; tests seed resume/watched state explicitly.
+    progress_sec: nullableFloat64(null),
+    duration_sec: nullableFloat64(null),
+    watched: false,
+    ...overrides,
   };
 }
 

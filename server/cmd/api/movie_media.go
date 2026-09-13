@@ -7,17 +7,17 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-// movieContentType resolves the single MIME type a movie is described by:
+// videoContentType resolves the single MIME type a video file is described by:
 // served as Content-Type on the direct stream endpoints, reported to the web
-// client by GetMovieTechnicalDetails, and compared against "video/mp4" when a
-// watch room asks for direct playback. Every caller must use this function —
-// the client's direct-play decision and the server's validation of it are only
-// in agreement while they read the same string.
+// client by the technical-details endpoints, and compared against "video/mp4"
+// when a watch room asks for direct playback. Every caller must use this
+// function — the client's direct-play decision and the server's validation of
+// it are only in agreement while they read the same string.
 //
 // The pinned container map wins so the answer stays correct for rows scanned
 // before the map existed (audit D1); the stored mime_type is the fallback for
 // containers the map does not cover.
-func movieContentType(container string, storedMimeType string) string {
+func videoContentType(container string, storedMimeType string) string {
 	contentType := helpers.VideoMimeTypes[container]
 	if contentType == "" {
 		return storedMimeType

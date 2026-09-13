@@ -408,7 +408,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	// only direct-play MP4 containers, and 10-bit / 4:2:2 / 4:4:4 H.264 does
 	// not decode even though the codec name passes.
 	if req.Mode == watchRoomPlaybackModeDirect {
-		if movieContentType(movie.Container, movie.MimeType) != "video/mp4" {
+		if videoContentType(movie.Container, movie.MimeType) != "video/mp4" {
 			helpers.ErrorJSON(w, errors.New("direct playback is only available for MP4 movies; choose another playback mode"), http.StatusBadRequest)
 			return
 		}

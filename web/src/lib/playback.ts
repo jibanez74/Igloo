@@ -12,7 +12,11 @@ import {
 } from "@/lib/direct-play-probe";
 import { unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
-import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
+import type {
+  PlaybackAudioStreamType,
+  PlaybackSubtitleType,
+  PlaybackVideoStreamType,
+} from "@/types/playback";
 import type {
   DevicePlaybackPreferences,
   PlaybackSettings,
@@ -104,8 +108,8 @@ const COVER_ART_CODECS = ["mjpeg", "png", "gif", "bmp"];
 
 /** First real video stream, skipping embedded cover art (mjpeg/png/gif/bmp). */
 export function getPrimaryVideoStream(
-  streams: VideoStreamType[] | undefined,
-): VideoStreamType | undefined {
+  streams: PlaybackVideoStreamType[] | undefined,
+): PlaybackVideoStreamType | undefined {
   if (!streams || streams.length === 0) return undefined;
   const primary = streams.find(
     (s) => !COVER_ART_CODECS.includes(s.codec.toLowerCase()),
@@ -128,7 +132,7 @@ function isContainerDirectPlayable(mimeType: string): boolean {
 
 /** Video fields the direct-play eligibility rules consult. */
 export type DirectPlayVideoInfo = Pick<
-  VideoStreamType,
+  PlaybackVideoStreamType,
   | "codec"
   | "codec_profile"
   | "codec_level"
@@ -198,7 +202,7 @@ function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
 
 /** Audio fields the direct-play eligibility rules consult. */
 export type DirectPlayAudioInfo = Pick<
-  AudioStreamType,
+  PlaybackAudioStreamType,
   "codec" | "codec_profile" | "is_default"
 >;
 
@@ -210,7 +214,7 @@ export type DirectPlayAudioInfo = Pick<
  * (watch_room_handler.go) — keep the two in sync. Audit §6.2 (D8).
  */
 export function directPlayAudioSelectionEligible(
-  audioStreams: Pick<AudioStreamType, "is_default">[],
+  audioStreams: Pick<PlaybackAudioStreamType, "is_default">[],
 ): boolean {
   if (audioStreams.length <= 1) return true;
   const defaultCount = audioStreams.filter((s) => s.is_default).length;
@@ -332,8 +336,8 @@ export function normalizeLang(raw: string | undefined): string | undefined {
 export function getDefaultPlaybackSettings(
   availableModes: readonly PlaybackModeOption[],
   userPrefs?: PlaybackDefaultsInput | null,
-  audioStreams?: AudioStreamType[],
-  subtitleStreams?: SubtitleType[],
+  audioStreams?: PlaybackAudioStreamType[],
+  subtitleStreams?: PlaybackSubtitleType[],
 ): PlaybackSettings {
   const fallbackMode =
     availableModes[0]?.id ?? DEFAULT_PLAYBACK_SETTINGS.mode;
@@ -396,8 +400,8 @@ export function getDefaultPlaybackSettings(
 export function resolvePlaybackSettings(
   settings: PlaybackSettingsInput | null | undefined,
   availableModes: readonly PlaybackModeOption[],
-  audioStreams: AudioStreamType[] | undefined,
-  subtitleStreams: SubtitleType[] | undefined,
+  audioStreams: PlaybackAudioStreamType[] | undefined,
+  subtitleStreams: PlaybackSubtitleType[] | undefined,
   userPrefs?: PlaybackDefaultsInput | null,
 ): PlaybackSettings {
   const defaults = getDefaultPlaybackSettings(
@@ -473,7 +477,7 @@ export function describePlaybackChannelLayout(
 }
 
 export function formatPlaybackAudioLabel(
-  stream: AudioStreamType,
+  stream: PlaybackAudioStreamType,
   index: number,
 ): string {
   const langRaw = unwrapStringOrUndefined(stream.language);
@@ -496,7 +500,7 @@ export function formatPlaybackAudioLabel(
  * language is unknown.
  */
 export function directPlayModeLabel(
-  audioStreams: AudioStreamType[] | undefined,
+  audioStreams: PlaybackAudioStreamType[] | undefined,
 ): string {
   const fallback =
     STREAM_MODES.find(m => m.id === "direct")?.label ?? "direct";
@@ -540,7 +544,7 @@ export function effectiveModeLabel(
 
 export function describePlaybackExperience(
   mode: StreamModeId,
-  audioStream: AudioStreamType | undefined,
+  audioStream: PlaybackAudioStreamType | undefined,
   audioTrackIndex: number,
 ): string {
   const entry = STREAM_MODES.find(m => m.id === mode);
@@ -572,7 +576,7 @@ export function isBitmapSubtitleCodec(codec: string): boolean {
 }
 
 export function formatSubtitleLabel(
-  subtitle: SubtitleType,
+  subtitle: PlaybackSubtitleType,
   index: number,
 ): string {
   const lang = formatLanguageName(unwrapStringOrUndefined(subtitle.language));

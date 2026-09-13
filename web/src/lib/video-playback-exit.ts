@@ -1,53 +1,62 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
-  MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
-  MOVIE_WATCH_PROGRESS_KEY,
+  PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
+  SHOW_SEASON_EPISODES_KEY,
 } from "@/lib/constants";
+import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
+import type { PlaybackMediaRef } from "@/types/playback";
 
 type PlaybackLocation = {
   routeId: string;
   pathname: string;
 };
 
-type MoviePlaybackExitSyncOptions = {
+type PlaybackExitSyncOptions = {
   pausePlayback: () => void;
   flushProgress: () => Promise<void>;
   refreshWatchQueries: () => Promise<unknown>;
   onSaveError: () => void;
 };
 
-// Both watch-related caches must refresh on exit: continue-watching feeds the
-// home page, and the movie's watch-progress entry (staleTime 30s) feeds the
-// Resume dialog when the play page is reopened right away.
-export function refreshMovieWatchQueries(
+// Both watch-related caches must refresh on exit: the media's own
+// watch-progress entry (staleTime 30s) feeds the Resume dialog when the play
+// page is reopened right away, and the list that shows progress alongside it
+// (continue-watching on Home for movies, the season's episode rows for TV)
+// must not keep the pre-playback position.
+export function refreshWatchQueries(
   queryClient: QueryClient,
-  movieId: number,
+  media: PlaybackMediaRef,
 ) {
+  const listKey =
+    media.kind === "movie"
+      ? [CONTINUE_WATCHING_KEY]
+      : [SHOW_SEASON_EPISODES_KEY];
+
   return Promise.all([
     queryClient.invalidateQueries({
-      queryKey: [CONTINUE_WATCHING_KEY],
+      queryKey: listKey,
       refetchType: "all",
     }),
     queryClient.invalidateQueries({
-      queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId],
+      queryKey: mediaWatchProgressQueryKey(media),
     }),
   ]);
 }
 
-export function staysOnCurrentMoviePlayback(
+export function staysOnCurrentPlayback(
   current: PlaybackLocation,
   next: PlaybackLocation,
 ) {
   return current.routeId === next.routeId && current.pathname === next.pathname;
 }
 
-export async function synchronizeMoviePlaybackExit({
+export async function synchronizePlaybackExit({
   pausePlayback,
   flushProgress,
   refreshWatchQueries,
   onSaveError,
-}: MoviePlaybackExitSyncOptions) {
+}: PlaybackExitSyncOptions) {
   pausePlayback();
 
   const synchronization = (async () => {
@@ -66,7 +75,7 @@ export async function synchronizeMoviePlaybackExit({
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(resolve, MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS);
+    timeoutId = setTimeout(resolve, PLAYBACK_EXIT_SYNC_TIMEOUT_MS);
   });
 
   try {

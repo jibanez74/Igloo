@@ -14,7 +14,7 @@ import {
 import type {
   ApiResponseType,
   LibraryMovieDetailsMovieType,
-  MovieWatchProgressType,
+  WatchProgressType,
 } from "@/types";
 import { createTestQueryClient } from "../helpers/render";
 
@@ -148,8 +148,8 @@ function movie(overrides: Partial<LibraryMovieDetailsMovieType> = {}) {
 }
 
 function progress(
-  overrides: Partial<MovieWatchProgressType> = {},
-): ApiResponseType<MovieWatchProgressType> {
+  overrides: Partial<WatchProgressType> = {},
+): ApiResponseType<WatchProgressType> {
   return success({
     progress_sec: 120,
     duration_sec: 3600,

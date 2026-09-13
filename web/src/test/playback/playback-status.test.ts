@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { deriveMoviePlaybackStatus } from "@/lib/movie-playback";
+import { derivePlaybackStatus } from "@/lib/video-playback";
 import type { StreamModeId } from "@/types";
 
-describe("deriveMoviePlaybackStatus", () => {
+describe("derivePlaybackStatus", () => {
   it.each<StreamModeId>(["direct", "720p_3mbps"])(
     "keeps a %s deep link preparing while playback preferences are pending",
     requestedMode => {
       expect(
-        deriveMoviePlaybackStatus({
-          movieNotFound: false,
-          movieIsPending: false,
-          hasMovie: true,
+        derivePlaybackStatus({
+          mediaNoun: "movie",
+          notFound: false,
+          detailsPending: false,
+          hasDetails: true,
           requestedMode,
           techPending: false,
           playbackPreferencesReady: false,
@@ -27,10 +28,11 @@ describe("deriveMoviePlaybackStatus", () => {
     "keeps a %s deep link preparing while technical details are pending",
     requestedMode => {
       expect(
-        deriveMoviePlaybackStatus({
-          movieNotFound: false,
-          movieIsPending: false,
-          hasMovie: true,
+        derivePlaybackStatus({
+          mediaNoun: "movie",
+          notFound: false,
+          detailsPending: false,
+          hasDetails: true,
           requestedMode,
           techPending: true,
           playbackPreferencesReady: true,
@@ -41,12 +43,29 @@ describe("deriveMoviePlaybackStatus", () => {
     },
   );
 
+  it("names the media kind while its header loads", () => {
+    expect(
+      derivePlaybackStatus({
+        mediaNoun: "episode",
+        notFound: false,
+        detailsPending: true,
+        hasDetails: false,
+        requestedMode: "direct",
+        techPending: true,
+        playbackPreferencesReady: false,
+        modeUnavailable: false,
+        playbackError: null,
+      }),
+    ).toEqual({ kind: "loading", message: "Loading episode..." });
+  });
+
   it("reports ready once preferences and technical details resolve", () => {
     expect(
-      deriveMoviePlaybackStatus({
-        movieNotFound: false,
-        movieIsPending: false,
-        hasMovie: true,
+      derivePlaybackStatus({
+        mediaNoun: "movie",
+        notFound: false,
+        detailsPending: false,
+        hasDetails: true,
         requestedMode: "direct",
         techPending: false,
         playbackPreferencesReady: true,

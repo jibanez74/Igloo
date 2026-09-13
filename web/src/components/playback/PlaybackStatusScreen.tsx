@@ -13,7 +13,7 @@ type StatusAction = {
   buttonRef?: Ref<HTMLButtonElement>;
 };
 
-type MoviePlaybackStatusScreenProps = {
+type PlaybackStatusScreenProps = {
   title?: string;
   message: ReactNode;
   variant?: "loading" | "error";
@@ -34,13 +34,13 @@ function StatusActionIcon({ icon }: { icon: StatusAction["icon"] }) {
   return <ArrowLeft className="size-5" aria-hidden="true" />;
 }
 
-export default function MoviePlaybackStatusScreen({
+export default function PlaybackStatusScreen({
   title,
   message,
   variant = "error",
   actions = EMPTY_STATUS_ACTIONS,
   containerRef,
-}: MoviePlaybackStatusScreenProps) {
+}: PlaybackStatusScreenProps) {
   const isLoading = variant === "loading";
 
   return (

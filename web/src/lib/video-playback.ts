@@ -1,26 +1,30 @@
-import { updateMovieWatchProgress } from "@/lib/api";
+import { updateMediaWatchProgress } from "@/lib/api";
 import {
   HLS_PLAYBACK_SESSION_QUERY_PARAM,
   HLS_RESUME_REWIND_BUFFER_SEC,
   MEDIA_ERR_DECODE,
   MEDIA_ERR_SRC_NOT_SUPPORTED,
-  MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC,
-  MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
-  MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+  HLS_FORWARD_REBASE_THRESHOLD_SEC,
+  WATCH_PROGRESS_COMPLETION_THRESHOLD,
+  WATCH_PROGRESS_MIN_SECONDS,
   STREAM_MODES,
 } from "@/lib/constants";
+import { mediaApiBasePath, mediaKey } from "@/lib/media-ref";
 import { formatSubtitleLabel, normalizeLang } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type {
-  MoviePlaybackStatus,
+  PlaybackMediaRef,
+  PlaybackStatus,
+  PlaybackSubtitleType,
   StreamModeId,
 } from "@/types/playback";
-import type { SubtitleType } from "@/types/movies";
 
-type MoviePlaybackStatusArgs = {
-  movieNotFound: boolean;
-  movieIsPending: boolean;
-  hasMovie: boolean;
+type PlaybackStatusArgs = {
+  /** The noun the loading and not-found copy names: "movie" or "episode". */
+  mediaNoun: string;
+  notFound: boolean;
+  detailsPending: boolean;
+  hasDetails: boolean;
   requestedMode: StreamModeId;
   techPending: boolean;
   playbackPreferencesReady: boolean;
@@ -31,14 +35,14 @@ type MoviePlaybackStatusArgs = {
 type PlaybackTimingOptions = {
   isHlsPlayback: boolean;
   actualHlsStartSec: number;
-  movieDurationSec?: number;
+  mediaDurationSec?: number;
 };
 
 type SubtitleTrackInfoOptions = {
-  movieId: number;
+  media: PlaybackMediaRef;
   resolvedSubtitleTrack: number | null;
   techLoaded: boolean;
-  subtitleStreams: SubtitleType[];
+  subtitleStreams: PlaybackSubtitleType[];
   /** Session start the cues must be rebased onto; 0 for direct play. */
   actualHlsStartSec?: number;
 };
@@ -50,15 +54,17 @@ type RebaseOptions = {
   currentVideoTimeSec: number;
 };
 
-const MOVIE_HLS_PLAYBACK_SESSION_STORAGE_PREFIX = "igloo:movie-hls-playback-session:";
+const HLS_PLAYBACK_SESSION_STORAGE_PREFIX = "igloo:hls-playback-session:";
 const HLS_PLAYBACK_SESSION_ID_PATTERN = new RegExp(
   "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
 );
 
 type HlsPlaybackSessionStorage = Pick<Storage, "getItem" | "setItem">;
 
-function movieHlsPlaybackSessionStorageKey(movieId: number): string {
-  return MOVIE_HLS_PLAYBACK_SESSION_STORAGE_PREFIX + String(movieId);
+// Keyed on kind and id: a movie and an episode with the same id are different
+// media and must not share a server-side session window.
+function hlsPlaybackSessionStorageKey(media: PlaybackMediaRef): string {
+  return HLS_PLAYBACK_SESSION_STORAGE_PREFIX + mediaKey(media);
 }
 
 function browserSessionStorage(): HlsPlaybackSessionStorage | null {
@@ -71,14 +77,18 @@ function browserSessionStorage(): HlsPlaybackSessionStorage | null {
   }
 }
 
-export function getOrCreateMovieHlsPlaybackSessionId(
-  movieId: number,
+function validMediaId(media: PlaybackMediaRef): boolean {
+  return Number.isFinite(media.id) && media.id > 0;
+}
+
+export function getOrCreateHlsPlaybackSessionId(
+  media: PlaybackMediaRef,
   storage: HlsPlaybackSessionStorage | null = browserSessionStorage(),
 ): string {
   const create = () => createPlaybackSessionId();
-  if (!Number.isFinite(movieId) || movieId <= 0 || !storage) return create();
+  if (!validMediaId(media) || !storage) return create();
 
-  const key = movieHlsPlaybackSessionStorageKey(movieId);
+  const key = hlsPlaybackSessionStorageKey(media);
   try {
     const existing = storage.getItem(key);
     if (existing && HLS_PLAYBACK_SESSION_ID_PATTERN.test(existing)) {
@@ -93,14 +103,13 @@ export function getOrCreateMovieHlsPlaybackSessionId(
   }
 }
 
-export async function stopMovieHlsPlaybackSession(
-  movieId: number,
+export async function stopHlsPlaybackSession(
+  media: PlaybackMediaRef,
   playbackSessionId: string,
   options?: { keepalive?: boolean },
 ): Promise<void> {
   if (
-    !Number.isFinite(movieId) ||
-    movieId <= 0 ||
+    !validMediaId(media) ||
     !HLS_PLAYBACK_SESSION_ID_PATTERN.test(playbackSessionId)
   ) {
     return;
@@ -111,22 +120,23 @@ export async function stopMovieHlsPlaybackSession(
   });
 
   try {
-    await fetch(`/api/movies/${movieId}/hls/session/stop?${params.toString()}`, {
-      method: "POST",
-      credentials: "include",
-      keepalive: options?.keepalive === true,
-    });
+    await fetch(
+      `${mediaApiBasePath(media)}/hls/session/stop?${params.toString()}`,
+      {
+        method: "POST",
+        credentials: "include",
+        keepalive: options?.keepalive === true,
+      },
+    );
   } catch {
     // Best-effort HLS cleanup; server TTL remains the fallback.
   }
 }
 
-export function deriveMoviePlaybackStatus(
-  args: MoviePlaybackStatusArgs,
-): MoviePlaybackStatus {
-  if (args.movieNotFound) return { kind: "notFound" };
-  if (args.movieIsPending || !args.hasMovie) {
-    return { kind: "loading", message: "Loading movie..." };
+export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
+  if (args.notFound) return { kind: "notFound" };
+  if (args.detailsPending || !args.hasDetails) {
+    return { kind: "loading", message: `Loading ${args.mediaNoun}...` };
   }
   if (!args.playbackPreferencesReady) {
     return { kind: "loading", message: "Preparing playback..." };
@@ -167,17 +177,18 @@ export function createPlaybackSessionId(): string {
   return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
 }
 
-export function buildMovieStreamUrl(
-  movieId: number,
+export function buildStreamUrl(
+  media: PlaybackMediaRef,
   mode: StreamModeId,
   audioTrack: number | null,
   hlsStartSec: number,
   reloadKey: number,
   playbackSessionId: string,
 ): string {
+  const base = mediaApiBasePath(media);
   // Direct play serves the raw container, so there is no track to select;
   // resolvePlaybackSettings guarantees audioTrack is the first stream here.
-  if (mode === "direct") return `/api/movies/${movieId}/stream`;
+  if (mode === "direct") return `${base}/stream`;
 
   const params = new URLSearchParams({
     [HLS_PLAYBACK_SESSION_QUERY_PARAM]: playbackSessionId,
@@ -190,7 +201,7 @@ export function buildMovieStreamUrl(
     params.set("reload", String(reloadKey));
   }
 
-  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?${params}`;
+  return `${base}/hls/${mode}/playlist.m3u8?${params}`;
 }
 
 export function hlsStartTimeSec(isHlsPlayback: boolean, startSec: number) {
@@ -226,28 +237,28 @@ export function toAbsoluteDuration(
   {
     isHlsPlayback,
     actualHlsStartSec,
-    movieDurationSec,
+    mediaDurationSec,
   }: PlaybackTimingOptions,
 ) {
   if (!isHlsPlayback) return durationSec;
-  if (movieDurationSec && movieDurationSec > 0) {
-    return movieDurationSec;
+  if (mediaDurationSec && mediaDurationSec > 0) {
+    return mediaDurationSec;
   }
   return actualHlsStartSec + durationSec;
 }
 
-export function displayedMovieDuration(
+export function displayedMediaDuration(
   durationSec: number,
-  { isHlsPlayback, movieDurationSec }: PlaybackTimingOptions,
+  { isHlsPlayback, mediaDurationSec }: PlaybackTimingOptions,
 ) {
-  if (isHlsPlayback && movieDurationSec && movieDurationSec > 0) {
-    return movieDurationSec;
+  if (isHlsPlayback && mediaDurationSec && mediaDurationSec > 0) {
+    return mediaDurationSec;
   }
   return durationSec;
 }
 
-export function buildMovieSubtitleTrackInfo({
-  movieId,
+export function buildSubtitleTrackInfo({
+  media,
   resolvedSubtitleTrack,
   techLoaded,
   subtitleStreams,
@@ -270,13 +281,13 @@ export function buildMovieSubtitleTrackInfo({
     actualHlsStartSec > 0 ? `?start=${actualHlsStartSec}` : "";
 
   return {
-    url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt${query}`,
+    url: `${mediaApiBasePath(media)}/subtitles/${resolvedSubtitleTrack}/web.vtt${query}`,
     label: formatSubtitleLabel(sub, resolvedSubtitleTrack),
     srclang: normalizeLang(unwrapStringOrUndefined(sub.language)) ?? "",
   };
 }
 
-export function hasEligibleMovieResumeProgress(
+export function hasEligibleResumeProgress(
   progressSec: number | null,
   durationSec: number | null,
 ) {
@@ -284,12 +295,12 @@ export function hasEligibleMovieResumeProgress(
     progressSec !== null &&
     durationSec !== null &&
     durationSec > 0 &&
-    progressSec >= MOVIE_WATCH_PROGRESS_MIN_SECONDS &&
-    progressSec / durationSec < MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD
+    progressSec >= WATCH_PROGRESS_MIN_SECONDS &&
+    progressSec / durationSec < WATCH_PROGRESS_COMPLETION_THRESHOLD
   );
 }
 
-export function clampMoviePlaybackTime(
+export function clampPlaybackTime(
   value: number,
   currentDuration: number,
   fallbackDuration: number,
@@ -303,7 +314,7 @@ export function clampMoviePlaybackTime(
   return Math.max(0, Math.min(value, knownDuration));
 }
 
-export function shouldRebaseHlsMovieSession({
+export function shouldRebaseHlsSession({
   isHlsPlayback,
   targetTimeSec,
   actualHlsStartSec,
@@ -313,7 +324,7 @@ export function shouldRebaseHlsMovieSession({
     isHlsPlayback &&
     (targetTimeSec < actualHlsStartSec ||
       targetTimeSec >
-        currentVideoTimeSec + MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC)
+        currentVideoTimeSec + HLS_FORWARD_REBASE_THRESHOLD_SEC)
   );
 }
 
@@ -353,8 +364,8 @@ export function shouldDirectPlayFallback(args: DirectPlayFallbackArgs): boolean 
   );
 }
 
-// shouldPersistMovieWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= MOVIE_WATCH_PROGRESS_MIN_SECONDS; hasEligibleMovieResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.
-function shouldPersistMovieWatchProgress(
+// shouldPersistWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= WATCH_PROGRESS_MIN_SECONDS; hasEligibleResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.
+function shouldPersistWatchProgress(
   progressSec: number,
   durationSec: number,
 ) {
@@ -363,13 +374,13 @@ function shouldPersistMovieWatchProgress(
   const completionRatio = clampedProgress / durationSec;
 
   return (
-    completionRatio >= MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD ||
-    clampedProgress >= MOVIE_WATCH_PROGRESS_MIN_SECONDS
+    completionRatio >= WATCH_PROGRESS_COMPLETION_THRESHOLD ||
+    clampedProgress >= WATCH_PROGRESS_MIN_SECONDS
   );
 }
 
-export async function persistMovieWatchProgress(
-  movieId: number,
+export async function persistWatchProgress(
+  media: PlaybackMediaRef,
   progressSec: number,
   durationSec: number,
   saveSessionId: string,
@@ -379,11 +390,11 @@ export async function persistMovieWatchProgress(
   if (!(durationSec > 0)) return;
 
   const clampedProgress = Math.max(0, Math.min(progressSec, durationSec));
-  if (!shouldPersistMovieWatchProgress(clampedProgress, durationSec)) return;
+  if (!shouldPersistWatchProgress(clampedProgress, durationSec)) return;
 
   if (options?.keepalive) {
     try {
-      await fetch(`/api/movies/${movieId}/watch-progress`, {
+      await fetch(`${mediaApiBasePath(media)}/watch-progress`, {
         method: "PUT",
         credentials: "include",
         keepalive: true,
@@ -403,8 +414,8 @@ export async function persistMovieWatchProgress(
     return;
   }
 
-  const res = await updateMovieWatchProgress(
-    movieId,
+  const res = await updateMediaWatchProgress(
+    media,
     clampedProgress,
     durationSec,
     saveSessionId,

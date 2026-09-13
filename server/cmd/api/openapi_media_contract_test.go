@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,6 +40,7 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	episode := seedPlaybackEpisodeAt(t, app, mediaPath, "mp4")
 	track := seedStreamTestTrack(t, app, sql.NullInt64{}, payload)
 	err = os.Chtimes(track.FilePath, modTime, modTime)
 	if err != nil {
@@ -61,9 +63,11 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 		}
 	}
 	audioTrack := 0
-	personalKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
-	app.HLSSessionCache.SetDefault(personalKey, &HLSSession{MovieID: movieID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
-	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(hlsRoom.ID), &HLSSession{MovieID: movieID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
+	personalKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
+	app.HLSSessionCache.SetDefault(personalKey, &HLSSession{Media: movieRef(movieID), FileID: movieID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(hlsRoom.ID), &HLSSession{Media: movieRef(movieID), FileID: movieID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
+	episodeKey := HLSSessionKey(episodeRef(episode.Episode1), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
+	app.HLSSessionCache.SetDefault(episodeKey, &HLSSession{Media: episodeRef(episode.Episode1), FileID: episode.FileID, OwnerUserID: ownerID, PlaybackSession: testPlaybackSessionID, TempDir: dir, TempFileSegments: true, EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS})
 	app.InitRouter()
 	cookie := newAuthSessionCookie(t, app, ownerID)
 	server := httptest.NewServer(app.Router)
@@ -105,6 +109,8 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 	}
 	endpoints := []mediaEndpoint{
 		{"streamMovie", fmt.Sprintf("/api/movies/%d/stream", movieID), "video/mp4", true, true},
+		{"streamEpisode", fmt.Sprintf("/api/shows/episodes/%d/stream", episode.Episode1), "video/mp4", true, true},
+		{"streamEpisode", fmt.Sprintf("/api/shows/episodes/%d/stream", episode.Episode2), "video/mp4", true, true},
 		{"streamTrack", fmt.Sprintf("/api/music/tracks/%d/stream", track.ID), "audio/flac", true, true},
 		{"streamWatchRoomMovie", fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID), "video/mp4", true, true},
 		{"serveStaticFiles", "/api/static/poster.png", "image/png", false, false},
@@ -114,10 +120,12 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 			"hlsSegment", fmt.Sprintf("/api/movies/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0", movieID, helpers.HLS_PROFILE_720P_3MBPS, filename, testPlaybackSessionID), "video/mp4", false, false,
 		}, mediaEndpoint{
 			"watchRoomHLSSegment", fmt.Sprintf("/api/watch-rooms/%d/hls/%s?audio_track=0", hlsRoom.ID, filename), "video/mp4", false, false,
+		}, mediaEndpoint{
+			"episodeHlsSegment", fmt.Sprintf("/api/shows/episodes/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0", episode.Episode1, helpers.HLS_PROFILE_720P_3MBPS, filename, testPlaybackSessionID), "video/mp4", false, false,
 		})
 	}
 	for _, endpoint := range endpoints {
-		t.Run(endpoint.operation+"/"+filepath.Base(endpoint.path), func(t *testing.T) {
+		t.Run(endpoint.operation+"/"+strings.TrimPrefix(endpoint.path, "/api/"), func(t *testing.T) {
 			request, full := exchange(t, http.MethodGet, endpoint.path, nil)
 			if full.Code != http.StatusOK {
 				t.Fatalf("status = %d: %s", full.Code, full.Body.String())
@@ -246,6 +254,10 @@ func TestNonJSONRoutesMiddlewareErrorsConformToOpenAPI(t *testing.T) {
 		{"/api/movies/1/subtitles/0/web.vtt", "subtitleWebVTT"},
 		{"/api/movies/1/hls/720p_3mbps/playlist.m3u8?start=0&playback_session=" + testPlaybackSessionID, "hlsManifest"},
 		{"/api/movies/1/hls/720p_3mbps/init.mp4?start=0&playback_session=" + testPlaybackSessionID, "hlsSegment"},
+		{"/api/shows/episodes/1/stream", "streamEpisode"},
+		{"/api/shows/episodes/1/subtitles/0/web.vtt", "episodeSubtitleWebVTT"},
+		{"/api/shows/episodes/1/hls/720p_3mbps/playlist.m3u8?start=0&playback_session=" + testPlaybackSessionID, "episodeHlsManifest"},
+		{"/api/shows/episodes/1/hls/720p_3mbps/init.mp4?start=0&playback_session=" + testPlaybackSessionID, "episodeHlsSegment"},
 		{"/api/watch-rooms/1/stream", "streamWatchRoomMovie"},
 		{"/api/watch-rooms/1/hls/playlist.m3u8", "watchRoomHLSManifest"},
 		{"/api/watch-rooms/1/hls/init.mp4", "watchRoomHLSSegment"},

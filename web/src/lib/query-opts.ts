@@ -1,5 +1,12 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import type { ApiResponseType } from "@/types";
+import type {
+  ApiResponseType,
+  MovieTechnicalDetailsResponse,
+  PlaybackMediaRef,
+  ShowEpisodeTechnicalDetailsDataType,
+  WatchProgressType,
+} from "@/types";
+import { movieMediaRef } from "@/lib/media-ref";
 import {
   adminGetUsers,
   getAlbumDetails,
@@ -14,6 +21,9 @@ import {
   getLatestShows,
   getShowDetails,
   getShowSeasonEpisodes,
+  getShowEpisode,
+  getShowEpisodeTechnicalDetails,
+  getMediaWatchProgress,
   getLikedMovies,
   getLikedTracks,
   getLikedTrackIds,
@@ -33,7 +43,6 @@ import {
   getMoviesLibrary,
   getMoviesStats,
   getMovieTechnicalDetails,
-  getMovieWatchProgress,
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
@@ -81,6 +90,9 @@ import {
   MOVIE_PLAYLISTS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_WATCH_PROGRESS_KEY,
+  EPISODE_KEY,
+  EPISODE_TECHNICAL_DETAILS_KEY,
+  EPISODE_WATCH_PROGRESS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
   MOVIES_BY_GENRE_KEY,
@@ -342,12 +354,68 @@ export function movieTechnicalDetailsQueryOpts(id: number) {
   });
 }
 
-export function movieWatchProgressQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [MOVIE_WATCH_PROGRESS_KEY, id],
-    queryFn: () => getMovieWatchProgress(id),
-    enabled: id > 0,
+/**
+ * Either technical-details payload: the player reads the streams and the file
+ * through playbackTechnicalFile, so the two shapes share one query.
+ */
+export type PlaybackTechnicalDetailsType =
+  | MovieTechnicalDetailsResponse
+  | ShowEpisodeTechnicalDetailsDataType;
+
+/** The file half of either technical-details payload. */
+export function playbackTechnicalFile(data: PlaybackTechnicalDetailsType) {
+  return "movie" in data ? data.movie : data.file;
+}
+
+/**
+ * Technical details for whatever the player is playing. The movie branch
+ * shares movieTechnicalDetailsQueryOpts' key so a details page that already
+ * fetched the streams warms the player.
+ */
+export function mediaTechnicalDetailsQueryOpts(media: PlaybackMediaRef) {
+  return queryOptions<ApiResponseType<PlaybackTechnicalDetailsType>>({
+    queryKey:
+      media.kind === "movie"
+        ? [MOVIE_TECHNICAL_DETAILS_KEY, media.id]
+        : [EPISODE_TECHNICAL_DETAILS_KEY, media.id],
+    queryFn: () =>
+      media.kind === "movie"
+        ? getMovieTechnicalDetails(media.id)
+        : getShowEpisodeTechnicalDetails(media.id),
+    enabled: media.id > 0,
+    staleTime: STALE_TECH,
+    gcTime: GC_LONG,
+  });
+}
+
+// Progress changes with every playback session, so keep it as fresh as the
+// resume dialog needs; the exit sync invalidates it explicitly.
+export function mediaWatchProgressQueryOpts(media: PlaybackMediaRef) {
+  return queryOptions<ApiResponseType<WatchProgressType>>({
+    queryKey: mediaWatchProgressQueryKey(media),
+    queryFn: () => getMediaWatchProgress(media),
+    enabled: media.id > 0,
     staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function mediaWatchProgressQueryKey(media: PlaybackMediaRef) {
+  return media.kind === "movie"
+    ? ([MOVIE_WATCH_PROGRESS_KEY, media.id] as const)
+    : ([EPISODE_WATCH_PROGRESS_KEY, media.id] as const);
+}
+
+export function movieWatchProgressQueryOpts(id: number) {
+  return mediaWatchProgressQueryOpts(movieMediaRef(id));
+}
+
+export function showEpisodeQueryOpts(episodeId: number) {
+  return queryOptions({
+    queryKey: [EPISODE_KEY, episodeId],
+    queryFn: () => getShowEpisode(episodeId),
+    enabled: episodeId > 0,
+    staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
 }

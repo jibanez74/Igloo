@@ -51,7 +51,17 @@ const (
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
 var errHLSSessionNotFound = errors.New("session not found")
-var errHLSMovieNotFound = errors.New("movie not found")
+
+// hlsMediaNotFoundError reports a manifest request for a movie or episode
+// that does not exist; it carries the media so the response names the kind
+// ("movie not found", "episode not found") the way every other route does.
+type hlsMediaNotFoundError struct {
+	Media mediaRef
+}
+
+func (e *hlsMediaNotFoundError) Error() string {
+	return e.Media.notFoundMessage()
+}
 
 // errHLSPlaylistNotReady means FFmpeg has not published a usable playlist yet.
 // It is retryable: the session is healthy, it just has not produced output.
@@ -67,7 +77,7 @@ var errHLSSessionEmpty = errors.New("no playable media at this position")
 var errHLSSessionFailed = errors.New("transcoding stopped before publishing a playlist")
 
 type hlsRequestParams struct {
-	MovieID    int64
+	Media      mediaRef
 	Profile    string
 	AudioTrack *int
 	// AudioProfile is the validated audio_codec/audio_channels pair; nil means
@@ -78,23 +88,33 @@ type hlsRequestParams struct {
 	Reload          string
 }
 
-// Rebased HLS sessions are exposed as session-local VOD playlists that start
-// at segment_0 on disk. The web player keeps absolute movie time in the UI and
-// converts seeks to session-relative media time client-side.
+// HLSManifest serves a movie's personal HLS playlist.
 func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
+	app.serveHLSManifest(w, r, mediaKindMovie)
+}
+
+// EpisodeHLSManifest serves a TV episode's personal HLS playlist.
+func (app *Application) EpisodeHLSManifest(w http.ResponseWriter, r *http.Request) {
+	app.serveHLSManifest(w, r, mediaKindEpisode)
+}
+
+// Rebased HLS sessions are exposed as session-local VOD playlists that start
+// at segment_0 on disk. The web player keeps absolute media time in the UI and
+// converts seeks to session-relative media time client-side.
+func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	params, ok := parseHLSParams(w, r)
+	params, ok := parseHLSParams(w, r, kind)
 	if !ok {
 		return
 	}
 
 	session, key, err := app.GetOrCreateHLSSession(
 		r.Context(),
-		params.MovieID,
+		params.Media,
 		params.Profile,
 		params.AudioTrack,
 		params.AudioProfile,
@@ -108,7 +128,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		app.Logger.Error("hls session failed", "error", err, "movie_id", params.MovieID)
+		app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())
 		writeHLSSessionError(w, err)
 		return
 	}
@@ -128,7 +148,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		app.Logger.Error("hls playlist unavailable", "error", err, "movie_id", params.MovieID)
+		app.Logger.Error("hls playlist unavailable", "error", err, "media", params.Media.String())
 		writeHLSSessionError(w, err)
 		return
 	}
@@ -180,14 +200,24 @@ func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
 	}
 }
 
-// FFmpeg writes segments asynchronously; serve only once complete.
+// HLSSegment serves one asset of a movie's personal HLS session.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
+	app.serveHLSSegment(w, r, mediaKindMovie)
+}
+
+// EpisodeHLSSegment serves one asset of a TV episode's personal HLS session.
+func (app *Application) EpisodeHLSSegment(w http.ResponseWriter, r *http.Request) {
+	app.serveHLSSegment(w, r, mediaKindEpisode)
+}
+
+// FFmpeg writes segments asynchronously; serve only once complete.
+func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	params, ok := parseHLSParams(w, r)
+	params, ok := parseHLSParams(w, r, kind)
 	if !ok {
 		return
 	}
@@ -198,7 +228,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := HLSSessionKey(params.MovieID, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec, userID)
+	key := HLSSessionKey(params.Media, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec, userID)
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
@@ -210,7 +240,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
-	if !canAccessPersonalHLSSession(session, params.MovieID, userID) {
+	if !canAccessPersonalHLSSession(session, params.Media, userID) {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
@@ -429,7 +459,7 @@ func logHLSAssetServeError(session *HLSSession, filename string, path string, op
 		return
 	}
 	session.Logger.Error("failed to serve ready hls asset",
-		"movie_id", session.MovieID,
+		"media", session.Media.String(),
 		"filename", filename,
 		"path", path,
 		"operation", operation,
@@ -450,7 +480,7 @@ func logFirstHLSSegmentServed(session *HLSSession, filename string, requestStart
 	session.FirstServeOnce.Do(func() {
 		session.Logger.Info("hls first segment served",
 			"session_dir", filepath.Base(session.TempDir),
-			"movie_id", session.MovieID,
+			"media", session.Media.String(),
 			"filename", filename,
 			"ttfs_ms", time.Since(session.StartedAt).Milliseconds(),
 			"request_wait_ms", time.Since(requestStart).Milliseconds(),
@@ -478,8 +508,9 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errHLSMovieNotFound) {
-		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+	var notFound *hlsMediaNotFoundError
+	if errors.As(err, &notFound) {
+		helpers.ErrorJSON(w, errors.New(notFound.Error()), http.StatusNotFound)
 		return
 	}
 
@@ -557,13 +588,24 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 	helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
 }
 
+// StopPersonalHLSSession ends the caller's personal HLS sessions for a movie.
 func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Request) {
+	app.stopPersonalHLSSession(w, r, mediaKindMovie)
+}
+
+// StopEpisodeHLSSession ends the caller's personal HLS sessions for a TV
+// episode.
+func (app *Application) StopEpisodeHLSSession(w http.ResponseWriter, r *http.Request) {
+	app.stopPersonalHLSSession(w, r, mediaKindEpisode)
+}
+
+func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	movieID, err := parseMovieID(r)
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
@@ -575,18 +617,18 @@ func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	app.cleanupPersonalHLSSessionsForOwner(movieID, userID, playbackSession, "")
+	app.cleanupPersonalHLSSessionsForOwner(media, userID, playbackSession, "")
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false})
 }
 
-func parseHLSParams(w http.ResponseWriter, r *http.Request) (hlsRequestParams, bool) {
+func parseHLSParams(w http.ResponseWriter, r *http.Request, kind mediaKind) (hlsRequestParams, bool) {
 	var params hlsRequestParams
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return params, false
 	}
-	params.MovieID = id
+	params.Media = media
 
 	profile := chi.URLParam(r, "profile")
 	if !helpers.IsAllowedHLSProfile(profile) {

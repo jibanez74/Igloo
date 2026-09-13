@@ -30,7 +30,7 @@ import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import { playbackSettingsToPlaySearch } from "@/lib/route-search";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type { ApiResponseType, MovieWatchProgressType } from "@/types";
+import type { ApiResponseType, WatchProgressType } from "@/types";
 import type { LibraryMovieDetailsMovieType } from "@/types/movies";
 import type { PlaybackSettings } from "@/types/playback";
 import type { AuthUser } from "@/types/user";
@@ -64,7 +64,7 @@ const EditMovieDialog = lazy(loadEditMovieDialog);
 const DeleteMovieDialog = lazy(loadDeleteMovieDialog);
 const CreateWatchRoomDialog = lazy(loadCreateWatchRoomDialog);
 
-const emptyWatchProgress = (): MovieWatchProgressType => ({
+const emptyWatchProgress = (): WatchProgressType => ({
   progress_sec: null,
   duration_sec: null,
   watched: false,
@@ -125,12 +125,12 @@ export default function MovieDetailsHeroActions({
       });
       const key = [MOVIE_WATCH_PROGRESS_KEY, movieId] as const;
       const previous =
-        queryClient.getQueryData<ApiResponseType<MovieWatchProgressType>>(key);
+        queryClient.getQueryData<ApiResponseType<WatchProgressType>>(key);
       const currentProgress = previous?.error === false
         ? previous.data
         : emptyWatchProgress();
 
-      queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
+      queryClient.setQueryData<ApiResponseType<WatchProgressType>>(key, {
         error: false,
         data: {
           ...currentProgress,
@@ -146,7 +146,7 @@ export default function MovieDetailsHeroActions({
       if (context?.previous !== undefined) {
         queryClient.setQueryData(key, context.previous);
       } else {
-        queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
+        queryClient.setQueryData<ApiResponseType<WatchProgressType>>(key, {
           error: false,
           data: emptyWatchProgress(),
         });
@@ -162,7 +162,7 @@ export default function MovieDetailsHeroActions({
         if (context?.previous !== undefined) {
           queryClient.setQueryData(key, context.previous);
         } else {
-          queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(
+          queryClient.setQueryData<ApiResponseType<WatchProgressType>>(
             key,
             {
               error: false,
@@ -175,11 +175,11 @@ export default function MovieDetailsHeroActions({
       }
 
       const previous =
-        queryClient.getQueryData<ApiResponseType<MovieWatchProgressType>>(key);
+        queryClient.getQueryData<ApiResponseType<WatchProgressType>>(key);
       const currentProgress = previous?.error === false
         ? previous.data
         : emptyWatchProgress();
-      queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
+      queryClient.setQueryData<ApiResponseType<WatchProgressType>>(key, {
         error: false,
         data: {
           ...currentProgress,

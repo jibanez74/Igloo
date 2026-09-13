@@ -280,6 +280,21 @@ export function seasonLabel(seasonNumber: number): string {
   return seasonNumber === 0 ? "Specials" : `Season ${seasonNumber}`;
 }
 
+/** "S1 E3": the compact episode code used in play labels and player titles. */
+export function episodeCode(seasonNumber: number, episodeNumber: number): string {
+  return `S${seasonNumber} E${episodeNumber}`;
+}
+
+/** "Frost Harbor · S1 E3 · Pilot": the player header for an episode. */
+export function episodeTitle(
+  showName: string,
+  seasonNumber: number,
+  episodeNumber: number,
+  episodeName: string,
+): string {
+  return `${showName} · ${episodeCode(seasonNumber, episodeNumber)} · ${episodeName}`;
+}
+
 /** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */
 export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;

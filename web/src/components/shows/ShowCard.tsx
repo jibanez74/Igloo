@@ -17,9 +17,10 @@ type ShowCardProps = {
   show: LatestShowType;
 };
 
-// Shows have no play route, so this card carries no play action - like
-// InTheatersCard. It does prefetch its detail query on hover and focus, as
-// every media card with a detail query does.
+// A show has no single thing to play (episodes do), so this card carries no
+// play action - like InTheatersCard; the details page's hero picks the
+// episode. It does prefetch its detail query on hover and focus, as every
+// media card with a detail query does.
 export default function ShowCard({ show }: ShowCardProps) {
   const { id, name, poster_path, premiere_year } = show;
   const queryClient = useQueryClient();
