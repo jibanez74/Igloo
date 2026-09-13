@@ -358,7 +358,9 @@ GROUP BY s.id;
 -- Episodes of one season, addressed by (show_id, season_number) so the route
 -- never exposes an internal season id. Carries no file, stream, codec, or
 -- chapter data: those belong to a physical file, and one file can back several
--- episodes.
+-- episodes. The requesting user's watch progress rides along so the episode
+-- list can show resume and watched state without a query per row; the CAST
+-- keeps sqlc typing `watched` as a plain bool across the LEFT JOIN.
 SELECT
   e.id,
   e.episode_number,
@@ -368,13 +370,165 @@ SELECT
   e.still_path,
   e.tmdb_runtime,
   e.vote_average,
-  e.vote_count
+  e.vote_count,
+  wp.progress_sec,
+  wp.duration_sec,
+  CAST((wp.watched IS NOT NULL AND wp.watched) AS BOOLEAN) AS watched
 FROM show_episodes AS e
 INNER JOIN show_seasons AS s
   ON s.id = e.season_id
-WHERE s.show_id = ?
-  AND s.season_number = ?
+LEFT JOIN show_episode_watch_progress AS wp
+  ON wp.episode_id = e.id
+  AND wp.user_id = sqlc.arg(user_id)
+WHERE s.show_id = sqlc.arg(show_id)
+  AND s.season_number = sqlc.arg(season_number)
 ORDER BY e.episode_number;
+
+-- name: GetShowEpisodePlaybackDetails :one
+-- Player header for one episode: the episode row plus the season number and
+-- show identity the page titles itself with and navigates back to.
+SELECT
+  e.id,
+  e.episode_number,
+  e.name,
+  e.overview,
+  e.air_date,
+  e.still_path,
+  e.tmdb_runtime,
+  e.vote_average,
+  e.vote_count,
+  s.season_number,
+  s.name AS season_name,
+  sh.id AS show_id,
+  sh.name AS show_name,
+  sh.poster_path AS show_poster_path,
+  sh.backdrop_path AS show_backdrop_path
+FROM show_episodes AS e
+INNER JOIN show_seasons AS s
+  ON s.id = e.season_id
+INNER JOIN shows AS sh
+  ON sh.id = s.show_id
+WHERE e.id = ?
+LIMIT 1;
+
+-- name: GetShowFileForEpisode :one
+-- The physical file behind an episode. An episode may be linked to more than
+-- one file (duplicate copies), so the lowest file id is the deterministic
+-- playback target; a combined file is returned whole, playback never seeks to
+-- a guessed episode offset.
+SELECT
+  f.id,
+  f.season_id,
+  f.file_path,
+  f.file_name,
+  f.size,
+  f.container,
+  f.mime_type,
+  f.duration,
+  f.updated_at
+FROM show_episode_files AS l
+INNER JOIN show_files AS f
+  ON f.id = l.file_id
+WHERE l.episode_id = ?
+ORDER BY f.id
+LIMIT 1;
+
+-- name: GetShowEpisodeForDirectStream :one
+-- Direct-stream twin of GetMovieForDirectStream, resolved through the same
+-- lowest-file-id rule as GetShowFileForEpisode.
+SELECT
+  f.file_path,
+  f.file_name,
+  f.container,
+  f.mime_type
+FROM show_episode_files AS l
+INNER JOIN show_files AS f
+  ON f.id = l.file_id
+WHERE l.episode_id = ?
+ORDER BY f.id
+LIMIT 1;
+
+-- name: GetShowFileEpisodeIDs :many
+-- Episodes linked to a file, read before a deletion cascades the links away so
+-- the per-episode runtime caches can be evicted after commit.
+SELECT episode_id
+FROM show_episode_files
+WHERE file_id = ?
+ORDER BY episode_order;
+
+-- name: GetShowVideoStreamsByFileID :many
+-- Video streams of a show file, in the same order the movie twin uses.
+SELECT
+  id,
+  file_id,
+  stream_index,
+  codec,
+  codec_profile,
+  codec_level,
+  bit_rate,
+  width,
+  height,
+  coded_width,
+  coded_height,
+  aspect_ratio,
+  frame_rate,
+  avg_frame_rate,
+  bit_depth,
+  pixel_format,
+  color_range,
+  color_space,
+  color_primaries,
+  color_transfer,
+  field_order,
+  rotation,
+  language,
+  title
+FROM show_video_streams
+WHERE file_id = ?
+ORDER BY stream_index;
+
+-- name: GetShowAudioStreamsByFileID :many
+SELECT
+  id,
+  file_id,
+  stream_index,
+  codec,
+  codec_profile,
+  bit_rate,
+  sample_rate,
+  channels,
+  channel_layout,
+  language,
+  title,
+  is_default
+FROM show_audio_streams
+WHERE file_id = ?
+ORDER BY stream_index;
+
+-- name: GetShowSubtitlesByFileID :many
+SELECT
+  id,
+  file_id,
+  stream_index,
+  codec,
+  language,
+  title,
+  is_forced,
+  is_default
+FROM show_subtitles
+WHERE file_id = ?
+ORDER BY stream_index;
+
+-- name: GetShowChaptersByFileID :many
+SELECT
+  id,
+  title,
+  start_time,
+  thumb,
+  file_id
+FROM show_chapters
+WHERE file_id = ?
+ORDER BY start_time;
 
 -- name: GetCastByShowID :many
 -- Aggregate cast with artist name and profile. show_cast has no row id, so

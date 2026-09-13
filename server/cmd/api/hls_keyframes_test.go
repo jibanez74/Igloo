@@ -18,7 +18,7 @@ func TestKeyframeIndexFingerprint(t *testing.T) {
 	movie := database.Movie{ID: 7, Size: 1_000_000, UpdatedAt: "2026-08-07"}
 	video := database.VideoStream{StreamIndex: 2}
 
-	got := keyframeIndexFingerprint(&movie, &video)
+	got := keyframeIndexFingerprint(playbackSourceFromMovie(movie), &video)
 	want := "7:2:1000000:2026-08-07"
 	if got != want {
 		t.Fatalf("fingerprint = %q, want %q", got, want)
@@ -31,15 +31,16 @@ func TestKeyframeIndexStore(t *testing.T) {
 
 	ctx := context.Background()
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	source := playbackSourceFromMovie(database.Movie{ID: movieID})
 	const streamIndex = int64(0)
 	const fingerprint = "fingerprint-a"
 
 	stored := keyframeindex.Index{KeyframeSec: []float64{0, 4.2, 9.96}, DurationSec: 14}
 
 	t.Run("round trips an index", func(t *testing.T) {
-		app.setKeyframeIndex(movieID, streamIndex, fingerprint, stored)
+		app.setKeyframeIndex(source, streamIndex, fingerprint, stored)
 
-		idx, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
+		idx, ok := app.getKeyframeIndex(ctx, source, streamIndex, fingerprint)
 		if !ok {
 			t.Fatal("persisted index was not returned")
 		}
@@ -52,14 +53,14 @@ func TestKeyframeIndexStore(t *testing.T) {
 	})
 
 	t.Run("treats a changed fingerprint as a miss", func(t *testing.T) {
-		_, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, "fingerprint-b")
+		_, ok := app.getKeyframeIndex(ctx, source, streamIndex, "fingerprint-b")
 		if ok {
 			t.Fatal("a stale fingerprint was reported as a hit")
 		}
 	})
 
 	t.Run("reports an absent row as a miss", func(t *testing.T) {
-		_, ok := app.getKeyframeIndex(ctx, movieID, streamIndex+1, fingerprint)
+		_, ok := app.getKeyframeIndex(ctx, source, streamIndex+1, fingerprint)
 		if ok {
 			t.Fatal("an absent index was reported as a hit")
 		}
@@ -68,7 +69,7 @@ func TestKeyframeIndexStore(t *testing.T) {
 	t.Run("treats a corrupt payload as a miss", func(t *testing.T) {
 		writeRawKeyframes(t, app, movieID, streamIndex, "not json")
 
-		_, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
+		_, ok := app.getKeyframeIndex(ctx, source, streamIndex, fingerprint)
 		if ok {
 			t.Fatal("a corrupt payload was reported as a hit")
 		}
@@ -79,7 +80,7 @@ func TestKeyframeIndexStore(t *testing.T) {
 	t.Run("repairs a row written out of order", func(t *testing.T) {
 		writeRawKeyframes(t, app, movieID, streamIndex, "[9.96, 0, 4.2]")
 
-		idx, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
+		idx, ok := app.getKeyframeIndex(ctx, source, streamIndex, fingerprint)
 		if !ok {
 			t.Fatal("an unsorted payload was reported as a miss")
 		}
@@ -101,7 +102,7 @@ func TestKeyframeIndexStore(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				writeRawKeyframes(t, app, movieID, streamIndex, payload)
 
-				_, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, fingerprint)
+				_, ok := app.getKeyframeIndex(ctx, source, streamIndex, fingerprint)
 				if ok {
 					t.Fatalf("payload %s was reported as a hit", payload)
 				}
@@ -110,9 +111,9 @@ func TestKeyframeIndexStore(t *testing.T) {
 	})
 
 	t.Run("upserts over the previous row", func(t *testing.T) {
-		app.setKeyframeIndex(movieID, streamIndex, "fingerprint-b", stored)
+		app.setKeyframeIndex(source, streamIndex, "fingerprint-b", stored)
 
-		idx, ok := app.getKeyframeIndex(ctx, movieID, streamIndex, "fingerprint-b")
+		idx, ok := app.getKeyframeIndex(ctx, source, streamIndex, "fingerprint-b")
 		if !ok {
 			t.Fatal("upserted index was not returned")
 		}
@@ -212,8 +213,8 @@ func TestStartHLSSession_KeyframeIndexHitNeedsNoProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read movie row: %v", err)
 	}
-	fingerprint := keyframeIndexFingerprint(&movie, &database.VideoStream{StreamIndex: 0})
-	app.setKeyframeIndex(movieID, 0, fingerprint, keyframeindex.Index{
+	fingerprint := keyframeIndexFingerprint(playbackSourceFromMovie(movie), &database.VideoStream{StreamIndex: 0})
+	app.setKeyframeIndex(playbackSourceFromMovie(movie), 0, fingerprint, keyframeindex.Index{
 		KeyframeSec: []float64{0, 47.5, 95, 142.5},
 		DurationSec: 7200,
 	})
@@ -280,7 +281,7 @@ func TestStartHLSSession_KeyframeIndexMissExtractsFromContainer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read movie row: %v", err)
 	}
-	if want := keyframeIndexFingerprint(&movie, &database.VideoStream{StreamIndex: 0}); row.Fingerprint != want {
+	if want := keyframeIndexFingerprint(playbackSourceFromMovie(movie), &database.VideoStream{StreamIndex: 0}); row.Fingerprint != want {
 		t.Fatalf("persisted fingerprint = %q, want %q", row.Fingerprint, want)
 	}
 }

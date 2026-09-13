@@ -665,7 +665,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 				"container": movie.Container,
 				// The value the client's direct-play container gate reads, so
 				// it must be the one the watch-room handler validates against.
-				"mime_type": movieContentType(movie.Container, movie.MimeType),
+				"mime_type": videoContentType(movie.Container, movie.MimeType),
 				"run_time":  movie.RunTime,
 				"duration":  movie.Duration,
 			},
@@ -680,27 +680,5 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
-		return
-	}
-
-	movie, err := app.movieStreamFile(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
-			return
-		}
-
-		app.Logger.Error("failed to get movie for streaming", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
-		return
-	}
-
-	err = serveMediaFile(w, r, movie.Path, movie.Name, movie.ContentType)
-	if err != nil {
-		app.Logger.Error("failed to stream movie file", "error", err, "path", movie.Path, "id", id)
-	}
+	app.serveStreamFile(w, r, mediaKindMovie, app.movieStreamFile)
 }

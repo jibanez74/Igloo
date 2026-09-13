@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { fireEvent } from "@testing-library/dom";
-import { shouldDirectPlayFallback } from "@/lib/movie-playback";
+import { shouldDirectPlayFallback } from "@/lib/video-playback";
 import { useDirectPlayFallback } from "@/hooks/useDirectPlayFallback";
 import {
   DIRECT_PLAY_STALL_TIMEOUT_MS,

@@ -1,17 +1,17 @@
 import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import MoviePlayerControls from "@/components/movies/MoviePlayerControls";
+import PlayerControls from "@/components/playback/PlayerControls";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
 } from "@/lib/constants";
 
-describe("MoviePlayerControls", () => {
+describe("PlayerControls", () => {
   it("keeps playback buttons labelled and on shared chrome contracts", () => {
     render(
-      <MoviePlayerControls
+      <PlayerControls
         chromeFullscreenMode
         controlsVisible
         isFullscreen={false}
@@ -59,7 +59,7 @@ describe("MoviePlayerControls", () => {
   // the badge announces its meaning through visually-hidden text instead.
   it("announces the stream-quality badge with screen-reader context", () => {
     render(
-      <MoviePlayerControls
+      <PlayerControls
         chromeFullscreenMode
         controlsVisible
         isFullscreen={false}
@@ -90,7 +90,7 @@ describe("MoviePlayerControls", () => {
 
   it("pads the current time to h:mm:ss for movies over an hour", () => {
     render(
-      <MoviePlayerControls
+      <PlayerControls
         chromeFullscreenMode
         controlsVisible
         isFullscreen={false}

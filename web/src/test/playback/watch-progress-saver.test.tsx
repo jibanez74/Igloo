@@ -1,11 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { useMovieWatchProgressSaver } from "@/hooks/useMovieWatchProgressSaver";
+import { useWatchProgressSaver } from "@/hooks/useWatchProgressSaver";
+import { movieMediaRef } from "@/lib/media-ref";
 
-const updateMovieWatchProgress = vi.hoisted(() => vi.fn());
+const updateMediaWatchProgress = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api", () => ({
-  updateMovieWatchProgress,
+  updateMediaWatchProgress,
 }));
 
 function deferred<T>() {
@@ -29,14 +30,14 @@ const successfulUpdate = {
 describe("movie watch progress saver", () => {
   it("queues the exit snapshot after an in-flight save", async () => {
     const firstSave = deferred<typeof successfulUpdate>();
-    updateMovieWatchProgress
+    updateMediaWatchProgress
       .mockReturnValueOnce(firstSave.promise)
       .mockResolvedValueOnce(successfulUpdate);
     const currentTimeRef = { current: 300 };
     const durationRef = { current: 1000 };
     const { result } = renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -47,35 +48,35 @@ describe("movie watch progress saver", () => {
     act(() => {
       pauseSave = result.current.handlePauseSave();
     });
-    await waitFor(() => expect(updateMovieWatchProgress).toHaveBeenCalledOnce());
+    await waitFor(() => expect(updateMediaWatchProgress).toHaveBeenCalledOnce());
 
     currentTimeRef.current = 450;
     let exitSave!: Promise<void>;
     act(() => {
       exitSave = result.current.flushProgress();
     });
-    expect(updateMovieWatchProgress).toHaveBeenCalledOnce();
+    expect(updateMediaWatchProgress).toHaveBeenCalledOnce();
 
     firstSave.resolve(successfulUpdate);
     await pauseSave;
     await waitFor(() =>
-      expect(updateMovieWatchProgress).toHaveBeenCalledTimes(2),
+      expect(updateMediaWatchProgress).toHaveBeenCalledTimes(2),
     );
     await exitSave;
 
-    const saveSessionId = updateMovieWatchProgress.mock.calls[0]?.[3];
+    const saveSessionId = updateMediaWatchProgress.mock.calls[0]?.[3];
     expect(saveSessionId).toEqual(expect.any(String));
-    expect(updateMovieWatchProgress).toHaveBeenNthCalledWith(
+    expect(updateMediaWatchProgress).toHaveBeenNthCalledWith(
       1,
-      7,
+      { kind: "movie", id: 7 },
       300,
       1000,
       saveSessionId,
       1,
     );
-    expect(updateMovieWatchProgress).toHaveBeenNthCalledWith(
+    expect(updateMediaWatchProgress).toHaveBeenNthCalledWith(
       2,
-      7,
+      { kind: "movie", id: 7 },
       450,
       1000,
       saveSessionId,
@@ -89,8 +90,8 @@ describe("movie watch progress saver", () => {
     const currentTimeRef = { current: 300 };
     const durationRef = { current: 1000 };
     const { unmount } = renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -119,7 +120,7 @@ describe("movie watch progress saver", () => {
 
     unmount();
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(updateMovieWatchProgress).not.toHaveBeenCalled();
+    expect(updateMediaWatchProgress).not.toHaveBeenCalled();
   });
 
   it("saves with a keepalive request when the tab is hidden", async () => {
@@ -128,8 +129,8 @@ describe("movie watch progress saver", () => {
     const currentTimeRef = { current: 300 };
     const durationRef = { current: 1000 };
     renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -167,8 +168,8 @@ describe("movie watch progress saver", () => {
     const currentTimeRef = { current: 300 };
     const durationRef = { current: 1000 };
     renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -193,8 +194,8 @@ describe("movie watch progress saver", () => {
     const currentTimeRef = { current: 300 };
     const durationRef = { current: 0 };
     renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -225,14 +226,14 @@ describe("movie watch progress saver", () => {
 
   it("dispatches a captured lifecycle snapshot while an ordinary save is unresolved", async () => {
     const firstSave = deferred<typeof successfulUpdate>();
-    updateMovieWatchProgress.mockReturnValueOnce(firstSave.promise);
+    updateMediaWatchProgress.mockReturnValueOnce(firstSave.promise);
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     vi.stubGlobal("fetch", fetchMock);
     const currentTimeRef = { current: 300 };
     const durationRef = { current: 1000 };
     const { result } = renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -243,7 +244,7 @@ describe("movie watch progress saver", () => {
     act(() => {
       pauseSave = result.current.handlePauseSave();
     });
-    await waitFor(() => expect(updateMovieWatchProgress).toHaveBeenCalledOnce());
+    await waitFor(() => expect(updateMediaWatchProgress).toHaveBeenCalledOnce());
 
     currentTimeRef.current = 450;
     act(() => {
@@ -257,9 +258,9 @@ describe("movie watch progress saver", () => {
         keepalive: true,
       }),
     );
-    const saveSessionId = updateMovieWatchProgress.mock.calls[0]?.[3];
-    expect(updateMovieWatchProgress).toHaveBeenCalledWith(
-      7,
+    const saveSessionId = updateMediaWatchProgress.mock.calls[0]?.[3];
+    expect(updateMediaWatchProgress).toHaveBeenCalledWith(
+      { kind: "movie", id: 7 },
       300,
       1000,
       saveSessionId,
@@ -277,12 +278,12 @@ describe("movie watch progress saver", () => {
   });
 
   it("saves progress above the 30-second floor", async () => {
-    updateMovieWatchProgress.mockResolvedValueOnce(successfulUpdate);
+    updateMediaWatchProgress.mockResolvedValueOnce(successfulUpdate);
     const currentTimeRef = { current: 45 };
     const durationRef = { current: 1000 };
     const { result } = renderHook(() =>
-      useMovieWatchProgressSaver({
-        movieId: 7,
+      useWatchProgressSaver({
+        media: movieMediaRef(7),
         playing: false,
         currentTimeRef,
         durationRef,
@@ -293,8 +294,8 @@ describe("movie watch progress saver", () => {
       await result.current.handlePauseSave();
     });
 
-    expect(updateMovieWatchProgress).toHaveBeenCalledWith(
-      7,
+    expect(updateMediaWatchProgress).toHaveBeenCalledWith(
+      { kind: "movie", id: 7 },
       45,
       1000,
       expect.any(String),

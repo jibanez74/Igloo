@@ -1,12 +1,12 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useMovieResumeDecision } from "@/hooks/useMovieResumeDecision";
+import { useResumeDecision } from "@/hooks/useResumeDecision";
 import { MOVIE_WATCH_PROGRESS_MIN_SECONDS } from "@/lib/constants";
 
-type HookProps = Parameters<typeof useMovieResumeDecision>[0];
+type HookProps = Parameters<typeof useResumeDecision>[0];
 
 const eligibleProps: HookProps = {
-  movieId: 7,
+  mediaKey: "movie:7",
   start: 0,
   playing: false,
   watchProgressPending: false,
@@ -15,10 +15,10 @@ const eligibleProps: HookProps = {
 };
 
 function renderDecision(initialProps: HookProps) {
-  return renderHook(props => useMovieResumeDecision(props), { initialProps });
+  return renderHook(props => useResumeDecision(props), { initialProps });
 }
 
-describe("useMovieResumeDecision", () => {
+describe("useResumeDecision", () => {
   it("offers resume once the progress query resolves with eligible progress", () => {
     const { result, rerender } = renderDecision({
       ...eligibleProps,
@@ -124,7 +124,7 @@ describe("useMovieResumeDecision", () => {
     rerender(eligibleProps);
     expect(result.current.resumeDialogOpen).toBe(false);
 
-    rerender({ ...eligibleProps, movieId: 8, savedProgressSec: 600 });
+    rerender({ ...eligibleProps, mediaKey: "movie:8", savedProgressSec: 600 });
 
     expect(result.current.resumeDialogOpen).toBe(true);
     expect(result.current.resumeTargetSec).toBe(600);

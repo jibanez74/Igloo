@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  getOrCreateMovieHlsPlaybackSessionId,
-  stopMovieHlsPlaybackSession,
-} from "@/lib/movie-playback";
+  getOrCreateHlsPlaybackSessionId,
+  stopHlsPlaybackSession,
+} from "@/lib/video-playback";
+import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
 type MemoryStorage = Pick<Storage, "getItem" | "setItem"> & {
   entries: () => [string, string][];
@@ -21,12 +22,45 @@ function createMemoryStorage(initial: Record<string, string> = {}): MemoryStorag
   };
 }
 
-describe("movie HLS playback sessions", () => {
+describe("HLS playback sessions", () => {
+  it("stores different sessions for a movie and an episode with the same id", () => {
+    const storage = createMemoryStorage();
+
+    const movie = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
+    const episode = getOrCreateHlsPlaybackSessionId(episodeMediaRef(6), storage);
+
+    expect(episode).toMatch(uuidPattern);
+    expect(episode).not.toBe(movie);
+    expect(storage.entries().map(([key]) => key)).toEqual([
+      "igloo:hls-playback-session:movie:6",
+      "igloo:hls-playback-session:episode:6",
+    ]);
+  });
+
+  it("stops an episode session on the episode route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await stopHlsPlaybackSession(
+      episodeMediaRef(9),
+      "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/shows/episodes/9/hls/session/stop?playback_session=4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
+      {
+        method: "POST",
+        credentials: "include",
+        keepalive: false,
+      },
+    );
+  });
+
   it("reuses the same stored UUID for the same movie", () => {
     const storage = createMemoryStorage();
 
-    const first = getOrCreateMovieHlsPlaybackSessionId(6, storage);
-    const second = getOrCreateMovieHlsPlaybackSessionId(6, storage);
+    const first = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
+    const second = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
 
     expect(first).toMatch(uuidPattern);
     expect(second).toBe(first);
@@ -35,8 +69,8 @@ describe("movie HLS playback sessions", () => {
   it("stores different sessions for different movies", () => {
     const storage = createMemoryStorage();
 
-    const first = getOrCreateMovieHlsPlaybackSessionId(6, storage);
-    const second = getOrCreateMovieHlsPlaybackSessionId(7, storage);
+    const first = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
+    const second = getOrCreateHlsPlaybackSessionId(movieMediaRef(7), storage);
 
     expect(second).toMatch(uuidPattern);
     expect(second).not.toBe(first);
@@ -49,11 +83,11 @@ describe("movie HLS playback sessions", () => {
 
   it("replaces malformed stored values", () => {
     const storage = createMemoryStorage();
-    getOrCreateMovieHlsPlaybackSessionId(6, storage);
+    getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
     const [[key]] = storage.entries();
     storage.setItem(key, "bad-session");
 
-    const next = getOrCreateMovieHlsPlaybackSessionId(6, storage);
+    const next = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
 
     expect(next).toMatch(uuidPattern);
     expect(next).not.toBe("bad-session");
@@ -61,15 +95,15 @@ describe("movie HLS playback sessions", () => {
   });
 
   it("falls back when storage is unavailable", () => {
-    expect(getOrCreateMovieHlsPlaybackSessionId(6, null)).toMatch(uuidPattern);
+    expect(getOrCreateHlsPlaybackSessionId(movieMediaRef(6), null)).toMatch(uuidPattern);
   });
 
   it("sends a credentialed keepalive stop request", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
-    await stopMovieHlsPlaybackSession(
-      6,
+    await stopHlsPlaybackSession(
+      movieMediaRef(6),
       "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
       { keepalive: true },
     );
@@ -88,7 +122,7 @@ describe("movie HLS playback sessions", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
-    await stopMovieHlsPlaybackSession(6, "bad-session", { keepalive: true });
+    await stopHlsPlaybackSession(movieMediaRef(6), "bad-session", { keepalive: true });
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

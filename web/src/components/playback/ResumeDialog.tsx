@@ -55,7 +55,7 @@ export default function ResumeDialog({
         onInteractOutside={event => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">Resume movie?</DialogTitle>
+          <DialogTitle className="text-foreground">Resume playback?</DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {resumeTargetSec !== null
               ? `Resume from ${formatTimecode(resumeTargetSec)} or start from the beginning.`

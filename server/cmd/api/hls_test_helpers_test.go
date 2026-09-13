@@ -149,11 +149,11 @@ func createTestHLSSessionWithAudio(
 	startSec int,
 	isRoom bool,
 ) (*HLSSession, error) {
-	movie, effectiveStartSec, err := app.loadHLSMovieForSession(ctx, movieID, startSec)
+	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, movieRef(movieID), startSec)
 	if err != nil {
 		return nil, err
 	}
-	return app.createHLSSession(ctx, &movie, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
+	return app.createHLSSession(ctx, &source, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
 }
 
 type testFMP4Fixture = fmp4testutil.Fixture

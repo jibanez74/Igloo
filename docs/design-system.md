@@ -496,7 +496,22 @@ inside an `overflow-x-auto` rail, and one `TabsContent` panel holding
 album track-list idiom inside `DETAIL_TRACK_LIST_CONTAINER_CLASS`, owning its
 own skeleton, empty, and error states because its query is separate from its
 page's, and announces the loaded and empty ones through `LiveAnnouncer` since
-the tab change itself says nothing; the error state is left to its alert. The TMDB community score is always the labelled
+the tab change itself says nothing; the error state is left to its alert.
+Each episode row is playable: a round accent `Play` icon link
+(`buttonVariants({ variant: "accent", size: "icon" })`, min 40px) named in
+full — "Play S1 E3 The Thaw", or "Resume …" when a position is saved — leads
+to `/tv-shows/$id/episodes/$episodeId/play`, and a ghost `Check` toggle
+(`aria-pressed`, "Mark S1 E3 as watched/unwatched", `text-success` when on)
+flips watched state optimistically on the season query
+(`EpisodeWatchedToggle`). Resume state is the shared `WatchProgressBar`
+strip over the still plus a "12 min left" note in the metadata line, so the
+position is never conveyed by colour alone; a watched episode swaps the
+strip for an outline `Badge` reading "Watched". The show hero's
+`actionsSlot` is `ShowDetailsHeroActions`, one accent button that reads the
+same season query and picks its target for the viewer: "Resume S1 E3" for
+the first partly watched episode, else "Play S1 E4" for the first unwatched,
+else the season's first episode; it renders nothing while the season is
+unknown or empty. The TMDB community score is always the labelled
 `TmdbScoreBadge`, never a tiered rating chip: it is a different metric.
 
 ### 3.3 Images
@@ -557,9 +572,14 @@ the tab change itself says nothing; the error state is left to its alert. The TM
 Playback code is high-risk (see `docs/ffmpeg.md`) — style changes here still
 require the full playback test pass.
 
-- **Video player** (`routes/_auth/movies/$id/play.tsx` + `VideoPlayer.tsx` +
-  `MoviePlayerControls.tsx`): renders **in-shell** as a windowed player
-  (header bar: film icon + title + Back; controls footer below the video —
+- **Video player** (`components/playback/VideoPlaybackPage.tsx`, mounted by
+  `routes/_auth/movies/$id/play.tsx` and
+  `routes/_auth/tv-shows/$id/episodes/$episodeId/play.tsx`, + `VideoPlayer.tsx`
+  + `PlayerControls.tsx`): one page for movies and TV episodes, addressed by a
+  `PlaybackMediaRef` (`{ kind, id }`); the route supplies the header (film or
+  TV icon, title — "Show · S1 E3 · Episode" for TV — artwork, not-found copy,
+  where Back falls back to). It renders **in-shell** as a windowed player
+  (header bar: media icon + title + Back; controls footer below the video —
   progress group, time readouts in `tabular-nums`, rewind / play-pause /
   fast-forward cluster, quality chip, chapter menu, volume, fullscreen).
   In immersive/fullscreen mode (`isImmersiveViewport` /

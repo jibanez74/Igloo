@@ -4,7 +4,7 @@ import { DIRECT_PLAY_STALL_TIMEOUT_MS } from "@/lib/constants";
 import {
   shouldDirectPlayFallback,
   type DirectPlayFallbackTrigger,
-} from "@/lib/movie-playback";
+} from "@/lib/video-playback";
 import type { StreamModeId } from "@/types";
 
 type DirectPlayFallbackOptions = {

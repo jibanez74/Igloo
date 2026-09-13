@@ -28,6 +28,7 @@ import DetailSkeleton from "@/components/shared/DetailSkeleton";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import DetailHero from "@/components/shared/DetailHero";
 import OverviewSection from "@/components/shared/OverviewSection";
+import ShowDetailsHeroActions from "@/components/shows/ShowDetailsHeroActions";
 import ShowDetailsMetadataChips from "@/components/shows/ShowDetailsMetadataChips";
 import ShowSeasonsSection, {
   ShowSeasonsSectionPlaceholder,
@@ -37,7 +38,7 @@ import ShowAboutSection from "@/components/shows/ShowAboutSection";
 import type { CastSectionItem } from "@/components/shared/CastSection";
 import type { ShowDetailsDataType } from "@/types";
 
-export const Route = createFileRoute("/_auth/tv-shows/$id")({
+export const Route = createFileRoute("/_auth/tv-shows/$id/")({
   validateSearch: showDetailsSearchSchema,
   loaderDeps: ({ search: { season } }) => ({ season }),
   loader: async ({ context, params, deps: { season } }) => {
@@ -120,7 +121,7 @@ function ShowDetailsPage() {
 
   if (isPending) {
     return (
-      <DetailSkeleton label="Loading show details" withActions={false}>
+      <DetailSkeleton label="Loading show details" withActions>
         <ShowSeasonsSectionPlaceholder />
       </DetailSkeleton>
     );
@@ -253,6 +254,14 @@ function ShowDetailsContent({
             availableEpisodeCount={availableEpisodeCount}
             tmdbEpisodeCount={unwrapInt(show.tmdb_episode_count)}
           />
+        }
+        actionsSlot={
+          seasons.length > 0 && (
+            <ShowDetailsHeroActions
+              showId={showId}
+              selectedSeason={selectedSeason}
+            />
+          )
         }
       />
 

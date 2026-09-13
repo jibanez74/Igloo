@@ -23,8 +23,11 @@ const (
 	subtitleCacheCleanup      = 10 * time.Minute
 )
 
-func (app *Application) invalidateSubtitleVTTCache(movieID int64) {
-	prefix := helpers.SubtitleCachePrefix(movieID)
+// invalidateSubtitleVTTCache drops every extracted track of one file; the
+// cache is keyed on the physical file, so a combined TV file is cleared for
+// all of its episodes at once.
+func (app *Application) invalidateSubtitleVTTCache(kind mediaKind, fileID int64) {
+	prefix := helpers.SubtitleCachePrefix(string(kind), fileID)
 	for key := range app.SubtitleVTTCache.Items() {
 		if strings.HasPrefix(key, prefix) {
 			app.SubtitleVTTCache.Delete(key)
@@ -32,11 +35,22 @@ func (app *Application) invalidateSubtitleVTTCache(movieID int64) {
 	}
 }
 
-// trackIndex refers to the subtitle row order, not the raw ffprobe stream index.
+// SubtitleWebVTT converts one of a movie's subtitle tracks to WebVTT.
 func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
-	movieID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || movieID <= 0 {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+	app.serveSubtitleWebVTT(w, r, mediaKindMovie)
+}
+
+// EpisodeSubtitleWebVTT converts one of a TV episode's subtitle tracks to
+// WebVTT.
+func (app *Application) EpisodeSubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
+	app.serveSubtitleWebVTT(w, r, mediaKindEpisode)
+}
+
+// trackIndex refers to the subtitle row order, not the raw ffprobe stream index.
+func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -56,20 +70,20 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	movie, err := app.Queries.GetMovieByID(r.Context(), movieID)
+	source, err := app.loadPlaybackSource(r.Context(), media)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie", "error", err, "id", movieID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
+		app.Logger.Error("failed to resolve media file", "error", err, "media", media.String())
+		helpers.ErrorJSON(w, errors.New("failed to fetch media"))
 		return
 	}
 
-	subtitles, err := app.Queries.GetSubtitlesByMovieID(r.Context(), movieID)
+	subtitles, err := loadPlaybackSubtitles(r.Context(), app.Queries, source)
 	if err != nil {
-		app.Logger.Error("failed to get subtitles", "error", err, "movie_id", movieID)
+		app.Logger.Error("failed to get subtitles", "error", err, "media", media.String())
 		helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
 		return
 	}
@@ -86,7 +100,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cacheKey := helpers.SubtitleCacheKey(movieID, sub.StreamIndex)
+	cacheKey := helpers.SubtitleCacheKey(string(kind), source.FileID, sub.StreamIndex)
 
 	if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
 		vtt, ok := cached.([]byte)
@@ -114,7 +128,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		out, extractErr := app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, movie.FilePath, sub.StreamIndex)
+		out, extractErr := app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, source.FilePath, sub.StreamIndex)
 		if extractErr != nil {
 			return nil, extractErr
 		}
@@ -125,7 +139,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		app.Logger.Error("subtitle extraction failed",
 			"error", err,
-			"movie_id", movieID,
+			"media", media.String(),
 			"stream_index", sub.StreamIndex,
 			"codec", sub.Codec,
 		)
@@ -137,7 +151,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		app.Logger.Error("subtitle extraction returned unexpected type",
 			"got_type", fmt.Sprintf("%T", v),
-			"movie_id", movieID,
+			"media", media.String(),
 			"stream_index", sub.StreamIndex,
 		)
 		helpers.ErrorJSON(w, errors.New("failed to extract subtitle track"))
@@ -174,7 +188,7 @@ func parseSubtitleStartSec(r *http.Request) (float64, error) {
 }
 
 // writeSubtitleWebVTT serves the cached absolute-timestamp WebVTT, rebased onto
-// the requesting session's timeline. The cache stays keyed on movie and stream
+// the requesting session's timeline. The cache stays keyed on file and stream
 // alone, so shifting here costs no extra extraction and no extra cache entries.
 func writeSubtitleWebVTT(w http.ResponseWriter, vtt []byte, startSec float64) {
 	w.Header().Set("Content-Type", subtitleWebVTTContentType)

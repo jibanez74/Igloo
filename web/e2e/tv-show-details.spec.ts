@@ -64,6 +64,9 @@ function episode(seasonNumber: number, episodeNumber: number) {
     tmdb_runtime: nullableInt64(47),
     vote_average: nullableFloat64(8.1),
     vote_count: nullableInt64(220),
+    progress_sec: nullableFloat64(null),
+    duration_sec: nullableFloat64(null),
+    watched: false,
   };
 }
 
@@ -274,6 +277,20 @@ test("show details renders hero, seasons, and credits without console issues", a
   await expect(
     page.getByRole("list", { name: /Season 1 episodes, 2 in this library/ }),
   ).toBeVisible();
+
+  // Nothing is watched, so the hero starts the season from its first episode
+  // and every row links to its own player. The hero and the first row share
+  // a target, so each is scoped to its own region.
+  const rows = page.getByRole("tabpanel");
+  await expect(
+    page.locator("header").getByRole("link", { name: "Play S1 E1 Season 1 Episode 1" }),
+  ).toHaveAttribute("href", /^\/tv-shows\/401\/episodes\/70101\/play(\?|$)/);
+  await expect(
+    rows.getByRole("link", { name: "Play S1 E1 Season 1 Episode 1" }),
+  ).toHaveAttribute("href", /^\/tv-shows\/401\/episodes\/70101\/play(\?|$)/);
+  await expect(
+    rows.getByRole("link", { name: "Play S1 E2 Season 1 Episode 2" }),
+  ).toHaveAttribute("href", /^\/tv-shows\/401\/episodes\/70102\/play(\?|$)/);
 
   await expect(
     page.getByRole("heading", { name: "About Frost Harbor" }),

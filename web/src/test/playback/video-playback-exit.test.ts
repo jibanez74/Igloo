@@ -2,14 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
+  EPISODE_WATCH_PROGRESS_KEY,
   MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
   MOVIE_WATCH_PROGRESS_KEY,
+  SHOW_SEASON_EPISODES_KEY,
 } from "@/lib/constants";
 import {
-  refreshMovieWatchQueries,
-  staysOnCurrentMoviePlayback,
-  synchronizeMoviePlaybackExit,
-} from "@/lib/movie-playback-exit";
+  refreshWatchQueries,
+  staysOnCurrentPlayback,
+  synchronizePlaybackExit,
+} from "@/lib/video-playback-exit";
+import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -31,7 +34,7 @@ describe("movie playback exit synchronization", () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
     const pause = vi.fn();
 
-    const synchronization = synchronizeMoviePlaybackExit({
+    const synchronization = synchronizePlaybackExit({
       pausePlayback: pause,
       flushProgress: () => save.promise,
       refreshWatchQueries: refresh,
@@ -52,7 +55,7 @@ describe("movie playback exit synchronization", () => {
     const onSaveError = vi.fn();
 
     await expect(
-      synchronizeMoviePlaybackExit({
+      synchronizePlaybackExit({
         pausePlayback: vi.fn(),
         flushProgress: () => Promise.reject(new Error("save failed")),
         refreshWatchQueries: refresh,
@@ -70,7 +73,7 @@ describe("movie playback exit synchronization", () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
     const onSettled = vi.fn();
 
-    const synchronization = synchronizeMoviePlaybackExit({
+    const synchronization = synchronizePlaybackExit({
       pausePlayback: vi.fn(),
       flushProgress: () => save.promise,
       refreshWatchQueries: refresh,
@@ -101,7 +104,7 @@ describe("movie playback exit synchronization", () => {
     const onSettled = vi.fn();
     const refreshWatchQueries = vi.fn(() => refresh.promise);
 
-    const synchronization = synchronizeMoviePlaybackExit({
+    const synchronization = synchronizePlaybackExit({
       pausePlayback: vi.fn(),
       flushProgress: () => save.promise,
       refreshWatchQueries,
@@ -138,7 +141,7 @@ describe("movie playback exit synchronization", () => {
       queryFn: () => Promise.resolve("watch-progress"),
     });
 
-    await refreshMovieWatchQueries(queryClient, movieId);
+    await refreshWatchQueries(queryClient, movieMediaRef(movieId));
 
     // refetchType "all" refetches the inactive continue-watching query.
     expect(
@@ -152,21 +155,47 @@ describe("movie playback exit synchronization", () => {
     queryClient.clear();
   });
 
+  it("invalidates the season list and the episode's watch progress", async () => {
+    const queryClient = new QueryClient();
+    const episodeId = 9;
+    await queryClient.prefetchQuery({
+      queryKey: [SHOW_SEASON_EPISODES_KEY, 401, 1],
+      queryFn: () => Promise.resolve("episodes"),
+    });
+    await queryClient.prefetchQuery({
+      queryKey: [EPISODE_WATCH_PROGRESS_KEY, episodeId],
+      queryFn: () => Promise.resolve("watch-progress"),
+    });
+
+    await refreshWatchQueries(queryClient, episodeMediaRef(episodeId));
+
+    expect(
+      queryClient.getQueryState([SHOW_SEASON_EPISODES_KEY, 401, 1])
+        ?.dataUpdateCount,
+    ).toBe(2);
+    expect(
+      queryClient.getQueryState([EPISODE_WATCH_PROGRESS_KEY, episodeId])
+        ?.isInvalidated,
+    ).toBe(true);
+
+    queryClient.clear();
+  });
+
   it("only bypasses synchronization within the same movie pathname", () => {
     const current = {
       routeId: "/_auth/movies/$id/play",
       pathname: "/movies/7/play",
     };
 
-    expect(staysOnCurrentMoviePlayback(current, current)).toBe(true);
+    expect(staysOnCurrentPlayback(current, current)).toBe(true);
     expect(
-      staysOnCurrentMoviePlayback(current, {
+      staysOnCurrentPlayback(current, {
         ...current,
         pathname: "/movies/8/play",
       }),
     ).toBe(false);
     expect(
-      staysOnCurrentMoviePlayback(current, {
+      staysOnCurrentPlayback(current, {
         routeId: "/_auth/",
         pathname: "/",
       }),

@@ -3,7 +3,7 @@ import {
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
-import { currentPlaybackTimestampMs } from "@/lib/movie-playback";
+import { currentPlaybackTimestampMs } from "@/lib/video-playback";
 type HlsSessionRecoveryOptions = {
   streamWindowKey: string;
   onRecover: (currentTimeSec: number) => void;

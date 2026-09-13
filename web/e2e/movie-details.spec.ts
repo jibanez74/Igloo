@@ -7,7 +7,7 @@ import {
   AUDIO_TRACK_MODE_NOTE,
   MOVIES_PER_PAGE,
 } from "../src/lib/constants";
-import type { MovieWatchProgressType } from "../src/types";
+import type { WatchProgressType } from "../src/types";
 import {
   fulfillJSON,
   nullableFloat64,
@@ -27,7 +27,7 @@ const moviesAllPath =
 const movieId = 711;
 const chapterStartSeconds = 372;
 const extraVideoKey = "signal-fire-trailer";
-const noWatchProgress: MovieWatchProgressType = {
+const noWatchProgress: WatchProgressType = {
   progress_sec: null,
   duration_sec: null,
   watched: false,
@@ -214,7 +214,7 @@ const technicalDetailsPayload = {
 
 async function mockMovieDetailsApi(
   page: Page,
-  watchProgress: MovieWatchProgressType = noWatchProgress,
+  watchProgress: WatchProgressType = noWatchProgress,
 ) {
   const unexpectedApiRequests: string[] = [];
 
@@ -679,7 +679,7 @@ for (const { state, watchProgress, watchedButtonName } of [
   },
 ] satisfies {
   state: string;
-  watchProgress: MovieWatchProgressType;
+  watchProgress: WatchProgressType;
   watchedButtonName: string;
 }[]) {
   test(`movie details page suppresses resume progress when ${state}`, async ({

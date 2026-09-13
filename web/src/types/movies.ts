@@ -165,12 +165,10 @@ export type MovieTechnicalDetailsResponse = {
   chapters: ChapterType[];
 };
 
-export type MovieWatchProgressType = {
-  progress_sec: number | null;
-  duration_sec: number | null;
-  watched: boolean;
-  updated_at: string | null;
-};
+// `data` payload of the watch-progress routes, shared by movies and TV
+// episodes: GET /api/movies/{id}/watch-progress and
+// GET /api/shows/episodes/{id}/watch-progress.
+export type WatchProgressType = components["schemas"]["WatchProgress"];
 
 export type VideoStreamType = {
   id: number;

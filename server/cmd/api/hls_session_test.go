@@ -46,7 +46,7 @@ func TestHLSSessionKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := HLSSessionKey(123, "720p_3mbps", &audioTrack, tt.audioProfile, testPlaybackSessionID, 40, 456)
+			key := HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, tt.audioProfile, testPlaybackSessionID, 40, 456)
 			want := "user:456:movie:123:720p_3mbps:audio:2:" + tt.wantMode + ":session:" + testPlaybackSessionID + ":start:40"
 			if key != want {
 				t.Errorf("HLSSessionKey = %q, want %q", key, want)
@@ -54,16 +54,16 @@ func TestHLSSessionKey(t *testing.T) {
 		})
 	}
 
-	base := HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456)
+	base := HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456)
 	otherAudioTrack := 3
 	variants := map[string]string{
-		"owner":            HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 457),
-		"movie":            HLSSessionKey(124, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
-		"profile":          HLSSessionKey(123, "1080p_8mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
-		"audio track":      HLSSessionKey(123, "720p_3mbps", &otherAudioTrack, nil, testPlaybackSessionID, 40, 456),
-		"audio mode":       HLSSessionKey(123, "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), testPlaybackSessionID, 40, 456),
-		"playback session": HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testOtherPlaybackSessionID, 40, 456),
-		"start":            HLSSessionKey(123, "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 41, 456),
+		"owner":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 457),
+		"movie":            HLSSessionKey(movieRef(124), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"profile":          HLSSessionKey(movieRef(123), "1080p_8mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
+		"audio track":      HLSSessionKey(movieRef(123), "720p_3mbps", &otherAudioTrack, nil, testPlaybackSessionID, 40, 456),
+		"audio mode":       HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), testPlaybackSessionID, 40, 456),
+		"playback session": HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testOtherPlaybackSessionID, 40, 456),
+		"start":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 41, 456),
 	}
 	for dimension, key := range variants {
 		if key == base {
@@ -704,11 +704,11 @@ func TestLoadHLSMovieForSession_RejectsNegativeStart(t *testing.T) {
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
-	_, _, err := app.loadHLSMovieForSession(context.Background(), movieID, -1)
+	_, _, err := app.loadHLSSourceForSession(context.Background(), movieRef(movieID), -1)
 	if err == nil {
-		t.Fatal("loadHLSMovieForSession error = nil, want a rejection")
+		t.Fatal("loadHLSSourceForSession error = nil, want a rejection")
 	}
-	if !strings.Contains(err.Error(), "outside movie duration") {
+	if !strings.Contains(err.Error(), "outside media duration") {
 		t.Fatalf("error = %v, want it to mention the duration bound", err)
 	}
 }
@@ -981,7 +981,7 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 			userID := int64(100)
 			session, key, err := app.GetOrCreateHLSSession(
 				context.Background(),
-				movieID,
+				movieRef(movieID),
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
 				nil,
@@ -994,8 +994,8 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 			}
 			defer cleanupHLSSession(session)
 
-			wantKey := HLSSessionKey(
-				movieID,
+			wantKey := HLSSessionKey(movieRef(
+				movieID),
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
 				nil,
@@ -1078,15 +1078,13 @@ func TestResolveHLSActualStart_FallsBackToProbeWithoutContainerIndex(t *testing.
 	prober := &stubKeyframeFfprobe{keyframeSec: 591.174}
 	app.Ffprobe = prober
 
-	session := &HLSSession{MovieID: 1, CopyVideo: true, StartSec: 600}
+	session := &HLSSession{Media: movieRef(1), FileID: 1, CopyVideo: true, StartSec: 600}
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
 	app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
 		Session:           session,
-		FilePath:          "/movies/example.mp4",
-		Container:         "mp4",
-		MovieID:           1,
+		Source:            playbackSource{Ref: movieRef(1), FileID: 1, FilePath: "/movies/example.mp4", Container: "mp4"},
 		StreamIndex:       0,
 		RequestedStartSec: 600,
 	})
@@ -1113,15 +1111,13 @@ func TestResolveHLSActualStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	app.Wait = &sync.WaitGroup{}
 	app.Ffprobe = &stubKeyframeFfprobe{err: errors.New("probe failed")}
 
-	session := &HLSSession{MovieID: 1, CopyVideo: true, StartSec: 600}
+	session := &HLSSession{Media: movieRef(1), FileID: 1, CopyVideo: true, StartSec: 600}
 	session.setActualStartSec(hlsUnknownActualStart)
 
 	app.Wait.Add(1)
 	app.resolveHLSActualStart(context.Background(), hlsActualStartParams{
 		Session:           session,
-		FilePath:          "/movies/example.mp4",
-		Container:         "mp4",
-		MovieID:           1,
+		Source:            playbackSource{Ref: movieRef(1), FileID: 1, FilePath: "/movies/example.mp4", Container: "mp4"},
 		StreamIndex:       0,
 		RequestedStartSec: 600,
 	})

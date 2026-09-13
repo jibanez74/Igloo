@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { hasEligibleMovieResumeProgress } from "@/lib/movie-playback";
+import { hasEligibleResumeProgress } from "@/lib/video-playback";
 
 type ResumeDecision =
   | { status: "pending" }
   | { status: "show"; resumeTargetSec: number }
   | { status: "dismissed" };
 
-type MovieResumeDecisionOptions = {
-  movieId: number;
+type ResumeDecisionOptions = {
+  /** Identity of the media being played; a change resets the decision. */
+  mediaKey: string;
   start: number;
   playing: boolean;
   watchProgressPending: boolean;
@@ -19,28 +20,28 @@ const PENDING: ResumeDecision = { status: "pending" };
 const DISMISSED: ResumeDecision = { status: "dismissed" };
 
 /**
- * Decides once per movie whether to offer resuming from saved progress.
+ * Decides once per media item whether to offer resuming from saved progress.
  *
  * The decision is a snapshot taken when the watch-progress query first
  * resolves and is latched afterwards, so background refetches (window focus,
  * stale-time expiry) and progress saved during the current playback can never
- * re-open the dialog mid-movie.
+ * re-open the dialog mid-playback.
  */
-export function useMovieResumeDecision({
-  movieId,
+export function useResumeDecision({
+  mediaKey,
   start,
   playing,
   watchProgressPending,
   savedProgressSec,
   savedDurationSec,
-}: MovieResumeDecisionOptions) {
+}: ResumeDecisionOptions) {
   const initialDecision = start > 0 ? DISMISSED : PENDING;
-  const [trackedMovieId, setTrackedMovieId] = useState(movieId);
+  const [trackedMediaKey, setTrackedMediaKey] = useState(mediaKey);
   const [decision, setDecision] = useState(initialDecision);
 
   let effectiveDecision = decision;
-  if (trackedMovieId !== movieId) {
-    setTrackedMovieId(movieId);
+  if (trackedMediaKey !== mediaKey) {
+    setTrackedMediaKey(mediaKey);
     setDecision(initialDecision);
     effectiveDecision = initialDecision;
   }
@@ -52,7 +53,7 @@ export function useMovieResumeDecision({
       setDecision(DISMISSED);
       effectiveDecision = DISMISSED;
     } else if (!watchProgressPending) {
-      const eligible = hasEligibleMovieResumeProgress(
+      const eligible = hasEligibleResumeProgress(
         savedProgressSec,
         savedDurationSec,
       );

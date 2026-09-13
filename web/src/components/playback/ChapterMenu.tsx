@@ -11,10 +11,10 @@ import {
 } from "@/lib/constants";
 import { formatSpokenTime, formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ChapterType } from "@/types";
+import type { PlaybackChapterType } from "@/types";
 
 type ChapterMenuProps = {
-  chapters: ChapterType[];
+  chapters: PlaybackChapterType[];
   currentTimeSec: number;
   onSelectChapter: (startTimeSec: number, title: string) => void;
   portalContainer?: HTMLElement | null;
@@ -24,7 +24,7 @@ type ChapterMenuProps = {
 // few dozen chapters is cheaper than any caching the React Compiler can't
 // already do, so leave it unmemoized.
 function getActiveChapterIndex(
-  chapters: ChapterType[],
+  chapters: PlaybackChapterType[],
   currentTimeSec: number,
 ): number {
   for (let i = chapters.length - 1; i >= 0; i--) {
@@ -39,11 +39,11 @@ function getActiveChapterIndex(
 // blank or whitespace. When present we use the title; otherwise fall back to a
 // human-readable "Chapter N" label so every entry has a meaningful name on
 // screen and for screen readers.
-function getChapterTitle(chapter: ChapterType): string {
+function getChapterTitle(chapter: PlaybackChapterType): string {
   return chapter.title?.trim() ?? "";
 }
 
-function getChapterLabel(chapter: ChapterType, index: number): string {
+function getChapterLabel(chapter: PlaybackChapterType, index: number): string {
   return getChapterTitle(chapter) || `Chapter ${index + 1}`;
 }
 

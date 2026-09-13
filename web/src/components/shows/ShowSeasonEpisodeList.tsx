@@ -1,15 +1,24 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Tv } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Check, Play, Tv } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import WatchProgressBar from "@/components/shared/WatchProgressBar";
+import EpisodeWatchedToggle from "@/components/shows/EpisodeWatchedToggle";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   MOTION_LOADING_STATE_CLASS,
   TMDB_STILL_SIZE,
 } from "@/lib/constants";
+import { episodeResumeProgress } from "@/lib/episode-playback";
 import {
+  episodeCode,
   formatDate,
+  formatMinutesLeft,
   formatRuntimeMinutes,
   pluralize,
   seasonLabel,
@@ -31,15 +40,44 @@ const LIST_CLASS = cn(
 );
 const ROW_CLASS = "flex gap-3 p-3 sm:gap-4 sm:p-4";
 const STILL_CLASS =
-  "aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-muted sm:w-40";
+  "relative aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-muted sm:w-40";
 
-function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
+type EpisodeRowProps = {
+  showId: number;
+  seasonNumber: number;
+  episode: ShowEpisodeType;
+};
+
+/**
+ * One episode: still, title, metadata, and the two actions the row offers —
+ * Play (a link to the episode player) and the watched toggle. Resume state
+ * shows as a progress strip over the still plus a "N min left" note; a
+ * watched episode shows a chip instead. Everything is keyed off the season
+ * payload, which carries the viewer's own progress per episode.
+ */
+function EpisodeRow({ showId, seasonNumber, episode }: EpisodeRowProps) {
   const stillPath = unwrapString(episode.still_path);
   const stillUrl = buildTmdbImageUrl(stillPath, TMDB_STILL_SIZE);
   const overview = unwrapString(episode.overview);
   const airDate = unwrapString(episode.air_date);
   const runtime = formatRuntimeMinutes(unwrapInt(episode.tmdb_runtime));
   const headingId = `episode-${episode.id}-title`;
+  const code = episodeCode(seasonNumber, episode.episode_number);
+  const resume = episodeResumeProgress(episode);
+  const metaParts: { key: string; node: ReactNode }[] = [];
+  if (runtime) metaParts.push({ key: "runtime", node: runtime });
+  if (airDate) {
+    metaParts.push({
+      key: "air-date",
+      node: <time dateTime={airDate}>{formatDate(airDate)}</time>,
+    });
+  }
+  if (resume) {
+    metaParts.push({
+      key: "left",
+      node: formatMinutesLeft(resume.progressSec, resume.durationSec),
+    });
+  }
 
   return (
     <article className={ROW_CLASS} aria-labelledby={headingId}>
@@ -57,6 +95,14 @@ function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
             <Tv className="size-5 text-muted-foreground" aria-hidden="true" />
           </div>
         )}
+        {resume && (
+          <WatchProgressBar
+            progressSec={resume.progressSec}
+            durationSec={resume.durationSec}
+            trackClassName="bg-black/40"
+            className="absolute inset-x-0 bottom-0 rounded-none"
+          />
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -69,11 +115,20 @@ function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
           {episode.name}
         </h4>
 
-        {(runtime || airDate) && (
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-            {runtime && <span>{runtime}</span>}
-            {runtime && airDate && <span aria-hidden="true">·</span>}
-            {airDate && <time dateTime={airDate}>{formatDate(airDate)}</time>}
+        {(metaParts.length > 0 || episode.watched) && (
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            {metaParts.map((part, index) => (
+              <span key={part.key} className="contents">
+                {index > 0 && <span aria-hidden="true">·</span>}
+                <span>{part.node}</span>
+              </span>
+            ))}
+            {episode.watched && (
+              <Badge variant="outline">
+                <Check className="size-3 text-success" aria-hidden="true" />
+                Watched
+              </Badge>
+            )}
           </p>
         )}
 
@@ -82,6 +137,28 @@ function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
             {overview}
           </p>
         )}
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-start">
+        <Link
+          to="/tv-shows/$id/episodes/$episodeId/play"
+          params={{ id: String(showId), episodeId: String(episode.id) }}
+          search={{ start: 0, audio_track: 0 }}
+          className={cn(
+            buttonVariants({ variant: "accent", size: "icon" }),
+            "min-h-10 min-w-10 touch-manipulation rounded-full",
+          )}
+          aria-label={`${resume ? "Resume" : "Play"} ${code} ${episode.name}`}
+        >
+          <Play className="size-4 fill-current" aria-hidden="true" />
+        </Link>
+        <EpisodeWatchedToggle
+          showId={showId}
+          seasonNumber={seasonNumber}
+          episodeId={episode.id}
+          watched={episode.watched}
+          episodeCode={code}
+        />
       </div>
     </article>
   );
@@ -172,7 +249,11 @@ export default function ShowSeasonEpisodeList({
         >
           {episodes.map(episode => (
             <li key={episode.id}>
-              <EpisodeRow episode={episode} />
+              <EpisodeRow
+                showId={showId}
+                seasonNumber={seasonNumber}
+                episode={episode}
+              />
             </li>
           ))}
         </ul>

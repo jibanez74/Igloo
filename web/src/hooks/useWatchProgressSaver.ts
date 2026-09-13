@@ -2,39 +2,41 @@ import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import {
   createPlaybackSessionId,
-  persistMovieWatchProgress,
-} from "@/lib/movie-playback";
+  persistWatchProgress,
+} from "@/lib/video-playback";
 import {
   MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS,
   MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS,
 } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
+import type { PlaybackMediaRef } from "@/types/playback";
 
-type MovieWatchProgressSaverOptions = {
-  movieId: number;
+type WatchProgressSaverOptions = {
+  media: PlaybackMediaRef;
   playing: boolean;
   currentTimeRef: RefObject<number>;
   durationRef: RefObject<number>;
   /**
-   * Duration from the movie's technical details, used when the video element
+   * Duration from the media's technical details, used when the video element
    * has not reported a duration yet (HLS streams report the session-local
    * duration late). Without it, exit saves before metadata loads are dropped.
    */
   fallbackDurationSec?: number;
 };
 
-export function useMovieWatchProgressSaver({
-  movieId,
+export function useWatchProgressSaver({
+  media,
   playing,
   currentTimeRef,
   durationRef,
   fallbackDurationSec,
-}: MovieWatchProgressSaverOptions) {
+}: WatchProgressSaverOptions) {
   // Null until the first save; the chain starts from a resolved promise then.
   const pendingSaveRef = useRef<Promise<void> | null>(null);
   const fallbackDurationRef = useRef(fallbackDurationSec ?? 0);
   const saveSessionIdRef = useRef<string | null>(null);
   const saveSequenceRef = useRef(0);
+  const { kind, id } = media;
 
   if (saveSessionIdRef.current === null) {
     saveSessionIdRef.current = createPlaybackSessionId();
@@ -53,8 +55,8 @@ export function useMovieWatchProgressSaver({
     (progressSec: number, durationSec: number) => {
       const saveSequence = ++saveSequenceRef.current;
       const save = (pendingSaveRef.current ?? Promise.resolve()).then(() =>
-        persistMovieWatchProgress(
-          movieId,
+        persistWatchProgress(
+          { kind, id },
           progressSec,
           durationSec,
           saveSessionIdRef.current!,
@@ -64,7 +66,7 @@ export function useMovieWatchProgressSaver({
       pendingSaveRef.current = save.catch(() => {});
       return save;
     },
-    [movieId],
+    [kind, id],
   );
 
   useEffect(() => {
@@ -103,8 +105,8 @@ export function useMovieWatchProgressSaver({
       const durationSec = effectiveDurationSec();
       const saveSequence = ++saveSequenceRef.current;
       lastKeepalive = { progressSec, atMs };
-      void persistMovieWatchProgress(
-        movieId,
+      void persistWatchProgress(
+        { kind, id },
         progressSec,
         durationSec,
         saveSessionIdRef.current!,
@@ -124,7 +126,7 @@ export function useMovieWatchProgressSaver({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", flushKeepalive);
     };
-  }, [currentTimeRef, effectiveDurationSec, movieId]);
+  }, [currentTimeRef, effectiveDurationSec, kind, id]);
 
   const handlePauseSave = async () => {
     try {
@@ -144,7 +146,7 @@ export function useMovieWatchProgressSaver({
     } catch {
       showActionFailed(
         "save watch progress",
-        "Unable to mark this movie as watched.",
+        `Unable to mark this ${kind} as watched.`,
       );
     }
   };

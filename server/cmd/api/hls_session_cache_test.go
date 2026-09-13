@@ -17,15 +17,15 @@ func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
 
 	userID := int64(100)
 	audioTrack := 0
-	oldKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
-	keepKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 40, userID)
-	otherKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 80, userID+1)
+	oldKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+	keepKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 40, userID)
+	otherKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 80, userID+1)
 
-	app.HLSSessionCache.SetDefault(oldKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(keepKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(otherKey, &HLSSession{MovieID: 5, OwnerUserID: userID + 1, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(oldKey, &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(keepKey, &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(otherKey, &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: userID + 1, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
 
-	removed := app.cleanupPersonalHLSSessionsForOwner(5, userID, testPlaybackSessionID, keepKey)
+	removed := app.cleanupPersonalHLSSessionsForOwner(movieRef(5), userID, testPlaybackSessionID, keepKey)
 	if removed != 1 {
 		t.Fatalf("removed=%d, want 1", removed)
 	}
@@ -45,9 +45,9 @@ func TestCleanupPersonalHLSSessionsForOwner_ReleasesLockBeforeTeardown(t *testin
 
 	userID := int64(100)
 	audioTrack := 0
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
+	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
 	session := &HLSSession{
-		MovieID:         5,
+		Media: movieRef(5), FileID: 5,
 		OwnerUserID:     userID,
 		PlaybackSession: testPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -56,7 +56,7 @@ func TestCleanupPersonalHLSSessionsForOwner_ReleasesLockBeforeTeardown(t *testin
 	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
 	resultCh := make(chan int, 1)
 	go func() {
-		resultCh <- app.cleanupPersonalHLSSessionsForOwner(5, userID, testPlaybackSessionID, "")
+		resultCh <- app.cleanupPersonalHLSSessionsForOwner(movieRef(5), userID, testPlaybackSessionID, "")
 	}()
 
 	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
@@ -87,14 +87,14 @@ func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 	defer app.DB.Close()
 
 	audioTrack := 0
-	personalKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, 100)
+	personalKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, 100)
 	roomKey := RoomHLSSessionKey(9)
-	personalSession := &HLSSession{MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID}
+	personalSession := &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID}
 
 	before := time.Now()
 	app.HLSSessionCache.Set(personalKey, personalSession, time.Minute)
 	app.RefreshHLSSessionTTL(personalKey, personalSession)
-	app.RefreshHLSSessionTTL(roomKey, &HLSSession{MovieID: 5, IsRoom: true})
+	app.RefreshHLSSessionTTL(roomKey, &HLSSession{Media: movieRef(5), FileID: 5, IsRoom: true})
 	after := time.Now()
 
 	items := app.HLSSessionCache.Items()
@@ -124,9 +124,9 @@ func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T
 	defer app.DB.Close()
 
 	audioTrack := 0
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, 100)
+	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, 100)
 	session := &HLSSession{
-		MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID,
+		Media: movieRef(5), FileID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID,
 	}
 	app.HLSSessionCache.Set(key, session, time.Minute)
 	app.removePersonalHLSSession(key)
@@ -174,7 +174,7 @@ func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T
 		go func() {
 			session, _, err := app.GetOrCreateHLSSession(
 				context.Background(),
-				movieID,
+				movieRef(movieID),
 				helpers.HLS_PROFILE_REMUX,
 				testIntPtr(0),
 				nil,
@@ -192,7 +192,7 @@ func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T
 	for i := 2; i < len(playbackSessions); i++ {
 		_, _, err := app.GetOrCreateHLSSession(
 			context.Background(),
-			movieID,
+			movieRef(movieID),
 			helpers.HLS_PROFILE_REMUX,
 			testIntPtr(0),
 			nil,
@@ -237,9 +237,9 @@ func TestReservePersonalHLSSession_UpdatesCapacityBeforeBlockingTeardown(t *test
 
 	userID := int64(100)
 	movieID := int64(5)
-	oldKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testOtherPlaybackSessionID, 0, userID)
+	oldKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testOtherPlaybackSessionID, 0, userID)
 	oldSession := &HLSSession{
-		MovieID:         movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testOtherPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -253,7 +253,7 @@ func TestReservePersonalHLSSession_UpdatesCapacityBeforeBlockingTeardown(t *test
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		reservation, err := app.reservePersonalHLSSession(movieID, userID, testPlaybackSessionID)
+		reservation, err := app.reservePersonalHLSSession(movieRef(movieID), userID, testPlaybackSessionID)
 		resultCh <- result{reservation: reservation, err: err}
 	}()
 
@@ -292,16 +292,16 @@ func TestPersonalHLSSessionReservationCommit_UpdatesAccountingBeforeBlockingTear
 
 	userID := int64(100)
 	movieID := int64(5)
-	oldKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testPlaybackSessionID, 0, userID)
-	newKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testPlaybackSessionID, 30, userID)
+	oldKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testPlaybackSessionID, 0, userID)
+	newKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testPlaybackSessionID, 30, userID)
 	oldSession := &HLSSession{
-		MovieID:         movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testPlaybackSessionID,
 		TempDir:         t.TempDir(),
 	}
 	newSession := &HLSSession{
-		MovieID:         movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -314,7 +314,7 @@ func TestPersonalHLSSessionReservationCommit_UpdatesAccountingBeforeBlockingTear
 	reservation := &hlsPersonalSessionReservation{app: app, ownerUserID: userID}
 	commitDone := make(chan struct{})
 	go func() {
-		reservation.commit(movieID, newKey, newSession)
+		reservation.commit(movieRef(movieID), newKey, newSession)
 		close(commitDone)
 	}()
 
@@ -354,9 +354,9 @@ func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) 
 
 	userID := int64(100)
 	movieID := int64(5)
-	key := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testOtherPlaybackSessionID, 0, userID)
+	key := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testOtherPlaybackSessionID, 0, userID)
 	session := &HLSSession{
-		MovieID:               movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:           userID,
 		PlaybackSession:       testOtherPlaybackSessionID,
 		TempDir:               t.TempDir(),
@@ -409,7 +409,7 @@ func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 	userID := int64(100)
 	_, _, err := app.GetOrCreateHLSSession(
 		context.Background(),
-		movieID,
+		movieRef(movieID),
 		helpers.HLS_PROFILE_720P_3MBPS,
 		testIntPtr(0),
 		nil,
@@ -430,7 +430,7 @@ func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 
 	session, _, err := app.GetOrCreateHLSSession(
 		context.Background(),
-		movieID,
+		movieRef(movieID),
 		helpers.HLS_PROFILE_720P_3MBPS,
 		testIntPtr(0),
 		nil,
@@ -458,19 +458,19 @@ func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) 
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	userID := int64(100)
-	oldKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
-	otherOwnerKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, "11111111-1111-4111-8111-111111111111", 0, userID+1)
+	oldKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	otherOwnerKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, "11111111-1111-4111-8111-111111111111", 0, userID+1)
 	roomKey := RoomHLSSessionKey(9)
 	app.HLSSessionCache.Set(oldKey, &HLSSession{
-		MovieID: movieID, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID,
+		Media: movieRef(movieID), FileID: movieID, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID,
 		TempDir: t.TempDir(), Exited: true,
 	}, 2*time.Minute)
 	app.HLSSessionCache.Set(otherOwnerKey, &HLSSession{
-		MovieID: movieID, OwnerUserID: userID + 1, PlaybackSession: "11111111-1111-4111-8111-111111111111",
+		Media: movieRef(movieID), FileID: movieID, OwnerUserID: userID + 1, PlaybackSession: "11111111-1111-4111-8111-111111111111",
 		TempDir: t.TempDir(), Exited: true,
 	}, time.Minute)
 	app.HLSSessionCache.Set(roomKey, &HLSSession{
-		MovieID: movieID, IsRoom: true, TempDir: t.TempDir(), Exited: true,
+		Media: movieRef(movieID), FileID: movieID, IsRoom: true, TempDir: t.TempDir(), Exited: true,
 	}, time.Minute)
 
 	type result struct {
@@ -481,7 +481,7 @@ func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) 
 	go func() {
 		session, _, err := app.GetOrCreateHLSSession(
 			context.Background(),
-			movieID,
+			movieRef(movieID),
 			helpers.HLS_PROFILE_720P_3MBPS,
 			testIntPtr(0),
 			nil,
@@ -538,17 +538,17 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	completedKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
-	runningKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, "11111111-1111-4111-8111-111111111111", 10, userID)
+	completedKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	runningKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, "11111111-1111-4111-8111-111111111111", 10, userID)
 	completedSession := &HLSSession{
-		MovieID:         movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testOtherPlaybackSessionID,
 		TempDir:         t.TempDir(),
 		Exited:          true,
 	}
 	runningSession := &HLSSession{
-		MovieID:               movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:           userID,
 		PlaybackSession:       "11111111-1111-4111-8111-111111111111",
 		TempDir:               t.TempDir(),
@@ -558,7 +558,7 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	app.HLSSessionCache.Set(completedKey, completedSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-2*time.Second)
 	app.HLSSessionCache.Set(runningKey, runningSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
 
-	session, _, err := app.GetOrCreateHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	session, _, err := app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
 	if err != nil {
 		t.Fatalf("GetOrCreateHLSSession returned error: %v", err)
 	}
@@ -596,9 +596,9 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	activeKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	activeKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
 	activeSession := &HLSSession{
-		MovieID:         movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testOtherPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -606,7 +606,7 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	}
 	app.HLSSessionCache.Set(activeKey, activeSession, hlsPersonalSessionTTL)
 
-	_, _, err = app.GetOrCreateHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	_, _, err = app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
 	var capacityErr *hlsTranscodeCapacityError
 	if !errors.As(err, &capacityErr) {
 		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
@@ -637,9 +637,9 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	activeKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	activeKey := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
 	app.HLSSessionCache.Set(activeKey, &HLSSession{
-		MovieID:         movieID,
+		Media: movieRef(movieID), FileID: movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testOtherPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -653,7 +653,7 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 	resultCh := make(chan createResult, 1)
 	go func() {
 		session, _, createErr := app.GetOrCreateHLSSession(
-			context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS,
+			context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
 			testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
 		)
 		resultCh <- createResult{session: session, err: createErr}
@@ -690,9 +690,9 @@ func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
 	defer app.DB.Close()
 
 	userID := int64(100)
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
 	session := &HLSSession{
-		MovieID:               5,
+		Media: movieRef(5), FileID: 5,
 		OwnerUserID:           userID,
 		PlaybackSession:       testOtherPlaybackSessionID,
 		TempDir:               t.TempDir(),
@@ -714,10 +714,10 @@ func TestReclaimIdlePersonalHLSSession_ReclaimsCopyVideoAudioEncode(t *testing.T
 	defer app.DB.Close()
 
 	userID := int64(100)
-	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
 	canceled := make(chan struct{})
 	session := &HLSSession{
-		MovieID:               5,
+		Media: movieRef(5), FileID: 5,
 		OwnerUserID:           userID,
 		PlaybackSession:       testOtherPlaybackSessionID,
 		TempDir:               t.TempDir(),
@@ -779,7 +779,7 @@ func TestDeleteHLSSession(t *testing.T) {
 	})
 
 	t.Run("returns and removes a cached session", func(t *testing.T) {
-		session := &HLSSession{MovieID: 5, TempDir: t.TempDir()}
+		session := &HLSSession{Media: movieRef(5), FileID: 5, TempDir: t.TempDir()}
 		app.HLSSessionCache.SetDefault("live", session)
 
 		if got := app.deleteHLSSession("live"); got != session {
@@ -802,7 +802,7 @@ func TestGetOrCreateHLSSession_WarmPathNeedsNoDatabase(t *testing.T) {
 
 	created, key, err := app.GetOrCreateHLSSession(
 		context.Background(),
-		movieID,
+		movieRef(movieID),
 		helpers.HLS_PROFILE_REMUX,
 		testIntPtr(0),
 		nil,
@@ -825,7 +825,7 @@ func TestGetOrCreateHLSSession_WarmPathNeedsNoDatabase(t *testing.T) {
 
 	cached, cachedKey, err := app.GetOrCreateHLSSession(
 		context.Background(),
-		movieID,
+		movieRef(movieID),
 		helpers.HLS_PROFILE_REMUX,
 		testIntPtr(0),
 		nil,
@@ -869,7 +869,7 @@ func TestGetOrCreateHLSSession_SingleflightSharesIdenticalOwnerRequest(t *testin
 	results := make(chan result, 2)
 	create := func() {
 		session, key, err := app.GetOrCreateHLSSession(
-			context.Background(), movieID, helpers.HLS_PROFILE_REMUX,
+			context.Background(), movieRef(movieID), helpers.HLS_PROFILE_REMUX,
 			testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
 		)
 		results <- result{session: session, key: key, err: err}
@@ -926,7 +926,7 @@ func TestGetOrCreateHLSSession_SingleflightIsolatedByOwner(t *testing.T) {
 	for _, userID := range userIDs {
 		go func() {
 			session, key, err := app.GetOrCreateHLSSession(
-				context.Background(), movieID, helpers.HLS_PROFILE_REMUX,
+				context.Background(), movieRef(movieID), helpers.HLS_PROFILE_REMUX,
 				testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
 			)
 			results <- result{userID: userID, session: session, key: key, err: err}
@@ -989,7 +989,7 @@ func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 	eac3Surround := &helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 6}
 
 	legacySession, legacyKey, err := app.GetOrCreateHLSSession(
-		context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS,
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
 		testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
 	)
 	if err != nil {
@@ -1000,7 +1000,7 @@ func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 	// Switching to an explicit profile in the same playback session starts a
 	// new FFmpeg process and supersedes the legacy window.
 	explicitSession, explicitKey, err := app.GetOrCreateHLSSession(
-		context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS,
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
 		testIntPtr(0), eac3Surround, testPlaybackSessionID, 0, userID,
 	)
 	if err != nil {
@@ -1020,7 +1020,7 @@ func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 
 	// An identical normalized explicit request reuses the cached session.
 	reused, reusedKey, err := app.GetOrCreateHLSSession(
-		context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS,
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
 		testIntPtr(0), &helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 6},
 		testPlaybackSessionID, 0, userID,
 	)
@@ -1037,7 +1037,7 @@ func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 	// A different playback session's explicit window is isolated: creating it
 	// must not touch this one.
 	otherSession, _, err := app.GetOrCreateHLSSession(
-		context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS,
+		context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
 		testIntPtr(0), eac3Surround, testOtherPlaybackSessionID, 0, userID,
 	)
 	if err != nil {

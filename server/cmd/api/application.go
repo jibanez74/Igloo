@@ -238,6 +238,7 @@ func InitApp() (initializedApp *Application, err error) {
 		CurrentShowsDirectory: func() sql.NullString {
 			return app.CurrentSettings().ShowsDir
 		},
+		InvalidateCommittedShowFile: app.invalidateCommittedShowFile,
 	})
 
 	app.MovieScanner = movie.New(movie.Dependencies{
@@ -282,10 +283,25 @@ func (app *Application) invalidateDeletedWatchRooms(roomIDs []int64) {
 // the test harness can wire the same list; a cache missing from here serves
 // pre-rescan data until its TTL expires.
 func (app *Application) invalidateCommittedMovie(movieID int64) {
-	app.invalidateSubtitleVTTCache(movieID)
+	app.invalidateSubtitleVTTCache(mediaKindMovie, movieID)
 	app.StreamFileCache.invalidate(movieStreamFileKey(movieID))
 	app.MovieStreamsCache.invalidate(movieStreamsKey(movieID))
-	app.invalidateHLSSessionsForMovie(movieID)
+	app.invalidateHLSSessionsForFile(mediaKindMovie, movieID)
+}
+
+// invalidateCommittedShowFile is the TV twin of invalidateCommittedMovie. The
+// subtitle cache and HLS sessions are keyed on the physical file, so one call
+// covers every episode a combined file backs; the direct-stream cache is keyed
+// per episode, so the scanner passes the ids it linked (or, on deletion, the
+// ids it read before the cascade removed the links). There is no
+// MovieStreamsCache twin: that cache only serves watch-room track pins, and
+// rooms do not play episodes.
+func (app *Application) invalidateCommittedShowFile(fileID int64, episodeIDs []int64) {
+	app.invalidateSubtitleVTTCache(mediaKindEpisode, fileID)
+	for _, episodeID := range episodeIDs {
+		app.StreamFileCache.invalidate(episodeStreamFileKey(episodeID))
+	}
+	app.invalidateHLSSessionsForFile(mediaKindEpisode, fileID)
 }
 
 func (app *Application) initRuntimeCaches() {

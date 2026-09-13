@@ -73,7 +73,7 @@ func TestMovieScanDeletionTearsDownWatchRooms(t *testing.T) {
 	started, resume := make(chan struct{}, 1), make(chan struct{})
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}, {}, {Started: started, Continue: resume}}}
 	audioTrack := 0
-	personal, personalKey, err := app.GetOrCreateHLSSession(ctx, movieID, helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
+	personal, personalKey, err := app.GetOrCreateHLSSession(ctx, movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, ownerID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -673,3 +673,40 @@ func TestPrepareFileStaysOffTheDatabase(t *testing.T) {
 	}
 	result.inspection.Close()
 }
+
+// The API drops its per-file runtime caches from the after-commit hook, so
+// the hook must fire with the file and every episode it backs, on a rescan
+// and on deletion, and never before the rows are durable.
+func TestInvalidateCommittedShowFileHookFiresAfterCommit(t *testing.T) {
+	s, _, root := setupScanner(t)
+	type call struct {
+		fileID   int64
+		episodes []int64
+	}
+	var calls []call
+	s.InvalidateCommittedShowFile = func(fileID int64, episodeIDs []int64) {
+		calls = append(calls, call{fileID: fileID, episodes: append([]int64(nil), episodeIDs...)})
+	}
+	combined := writeFile(t, root, "Example (2020)/Season 1/S01E01-E02.mkv", "combined")
+	scanOK(t, s, root)
+	file, err := s.Queries.GetShowFileByPath(context.Background(), combined)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eps := fileEpisodes(t, s.DB, file.ID)
+	if len(calls) != 1 || calls[0].fileID != file.ID || len(calls[0].episodes) != 2 || calls[0].episodes[0] != eps[0].id || calls[0].episodes[1] != eps[1].id {
+		t.Fatalf("import hook calls = %+v, want one call for file %d with episodes %v", calls, file.ID, eps)
+	}
+	scanOK(t, s, root)
+	if len(calls) != 1 {
+		t.Fatal("an unchanged scan invalidated caches")
+	}
+	err = os.Remove(combined)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanOK(t, s, root)
+	if len(calls) != 2 || calls[1].fileID != file.ID || len(calls[1].episodes) != 2 {
+		t.Fatalf("deletion hook calls = %+v, want a second call for file %d with both episodes", calls, file.ID)
+	}
+}

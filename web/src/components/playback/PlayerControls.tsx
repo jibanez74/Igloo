@@ -8,7 +8,7 @@ import {
   Rewind,
 } from "lucide-react";
 import ProgressBar from "@/components/playback/ProgressBar";
-import ChapterMenu from "@/components/movies/ChapterMenu";
+import ChapterMenu from "@/components/playback/ChapterMenu";
 import VolumeControl from "@/components/playback/VolumeControl";
 import {
   MOVIE_SEEK_STEP_SEC,
@@ -17,9 +17,9 @@ import {
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ChapterType } from "@/types";
+import type { PlaybackChapterType } from "@/types";
 
-type MoviePlayerControlsProps = {
+type PlayerControlsProps = {
   chromeFullscreenMode: boolean;
   controlsVisible: boolean;
   isFullscreen: boolean;
@@ -29,7 +29,7 @@ type MoviePlayerControlsProps = {
   displayedDuration: number;
   playing: boolean;
   modeLabel: string;
-  chapters: ChapterType[];
+  chapters: PlaybackChapterType[];
   videoRef: RefObject<HTMLVideoElement | null>;
   onSeek: (time: number) => void;
   onSeekBackward: () => void;
@@ -39,7 +39,7 @@ type MoviePlayerControlsProps = {
   onSelectChapter: (startTimeSec: number, title: string) => void;
 };
 
-export default function MoviePlayerControls({
+export default function PlayerControls({
   chromeFullscreenMode,
   controlsVisible,
   isFullscreen,
@@ -57,7 +57,7 @@ export default function MoviePlayerControls({
   onTogglePlay,
   onToggleFullscreen,
   onSelectChapter,
-}: MoviePlayerControlsProps) {
+}: PlayerControlsProps) {
   return (
     <footer
       className={

@@ -21,11 +21,11 @@ import { Route as AuthPhotosIndexRouteImport } from './routes/_auth/photos/index
 import { Route as AuthMusicIndexRouteImport } from './routes/_auth/music/index'
 import { Route as AuthMoviesIndexRouteImport } from './routes/_auth/movies/index'
 import { Route as AuthWatchRoomsIdRouteImport } from './routes/_auth/watch-rooms/$id'
-import { Route as AuthTvShowsIdRouteImport } from './routes/_auth/tv-shows/$id'
 import { Route as AuthSettingsUsersRouteImport } from './routes/_auth/settings/users'
 import { Route as AuthSettingsPlaybackRouteImport } from './routes/_auth/settings/playback'
 import { Route as AuthSettingsLibrariesRouteImport } from './routes/_auth/settings/libraries'
 import { Route as AuthSettingsAccountRouteImport } from './routes/_auth/settings/account'
+import { Route as AuthTvShowsIdIndexRouteImport } from './routes/_auth/tv-shows/$id/index'
 import { Route as AuthMoviesIdIndexRouteImport } from './routes/_auth/movies/$id/index'
 import { Route as AuthMusicPlaylistIdRouteImport } from './routes/_auth/music/playlist.$id'
 import { Route as AuthMusicMusicianIdRouteImport } from './routes/_auth/music/musician.$id'
@@ -33,6 +33,7 @@ import { Route as AuthMusicAlbumIdRouteImport } from './routes/_auth/music/album
 import { Route as AuthMoviesPlaylistIdRouteImport } from './routes/_auth/movies/playlist.$id'
 import { Route as AuthMoviesInTheatersIdRouteImport } from './routes/_auth/movies/in-theaters.$id'
 import { Route as AuthMoviesIdPlayRouteImport } from './routes/_auth/movies/$id/play'
+import { Route as AuthTvShowsIdEpisodesEpisodeIdPlayRouteImport } from './routes/_auth/tv-shows/$id/episodes/$episodeId/play'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -93,11 +94,6 @@ const AuthWatchRoomsIdRoute = AuthWatchRoomsIdRouteImport.update({
   path: '/watch-rooms/$id',
   getParentRoute: () => AuthRouteRoute,
 } as any)
-const AuthTvShowsIdRoute = AuthTvShowsIdRouteImport.update({
-  id: '/tv-shows/$id',
-  path: '/tv-shows/$id',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
 const AuthSettingsUsersRoute = AuthSettingsUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -117,6 +113,11 @@ const AuthSettingsAccountRoute = AuthSettingsAccountRouteImport.update({
   id: '/account',
   path: '/account',
   getParentRoute: () => AuthSettingsRouteRoute,
+} as any)
+const AuthTvShowsIdIndexRoute = AuthTvShowsIdIndexRouteImport.update({
+  id: '/tv-shows/$id/',
+  path: '/tv-shows/$id/',
+  getParentRoute: () => AuthRouteRoute,
 } as any)
 const AuthMoviesIdIndexRoute = AuthMoviesIdIndexRouteImport.update({
   id: '/movies/$id/',
@@ -153,6 +154,12 @@ const AuthMoviesIdPlayRoute = AuthMoviesIdPlayRouteImport.update({
   path: '/movies/$id/play',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const AuthTvShowsIdEpisodesEpisodeIdPlayRoute =
+  AuthTvShowsIdEpisodesEpisodeIdPlayRouteImport.update({
+    id: '/tv-shows/$id/episodes/$episodeId/play',
+    path: '/tv-shows/$id/episodes/$episodeId/play',
+    getParentRoute: () => AuthRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
@@ -163,7 +170,6 @@ export interface FileRoutesByFullPath {
   '/settings/libraries': typeof AuthSettingsLibrariesRoute
   '/settings/playback': typeof AuthSettingsPlaybackRoute
   '/settings/users': typeof AuthSettingsUsersRoute
-  '/tv-shows/$id': typeof AuthTvShowsIdRoute
   '/watch-rooms/$id': typeof AuthWatchRoomsIdRoute
   '/movies/': typeof AuthMoviesIndexRoute
   '/music/': typeof AuthMusicIndexRoute
@@ -178,6 +184,8 @@ export interface FileRoutesByFullPath {
   '/music/musician/$id': typeof AuthMusicMusicianIdRoute
   '/music/playlist/$id': typeof AuthMusicPlaylistIdRoute
   '/movies/$id/': typeof AuthMoviesIdIndexRoute
+  '/tv-shows/$id/': typeof AuthTvShowsIdIndexRoute
+  '/tv-shows/$id/episodes/$episodeId/play': typeof AuthTvShowsIdEpisodesEpisodeIdPlayRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -187,7 +195,6 @@ export interface FileRoutesByTo {
   '/settings/libraries': typeof AuthSettingsLibrariesRoute
   '/settings/playback': typeof AuthSettingsPlaybackRoute
   '/settings/users': typeof AuthSettingsUsersRoute
-  '/tv-shows/$id': typeof AuthTvShowsIdRoute
   '/watch-rooms/$id': typeof AuthWatchRoomsIdRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
@@ -202,6 +209,8 @@ export interface FileRoutesByTo {
   '/music/musician/$id': typeof AuthMusicMusicianIdRoute
   '/music/playlist/$id': typeof AuthMusicPlaylistIdRoute
   '/movies/$id': typeof AuthMoviesIdIndexRoute
+  '/tv-shows/$id': typeof AuthTvShowsIdIndexRoute
+  '/tv-shows/$id/episodes/$episodeId/play': typeof AuthTvShowsIdEpisodesEpisodeIdPlayRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -214,7 +223,6 @@ export interface FileRoutesById {
   '/_auth/settings/libraries': typeof AuthSettingsLibrariesRoute
   '/_auth/settings/playback': typeof AuthSettingsPlaybackRoute
   '/_auth/settings/users': typeof AuthSettingsUsersRoute
-  '/_auth/tv-shows/$id': typeof AuthTvShowsIdRoute
   '/_auth/watch-rooms/$id': typeof AuthWatchRoomsIdRoute
   '/_auth/movies/': typeof AuthMoviesIndexRoute
   '/_auth/music/': typeof AuthMusicIndexRoute
@@ -229,6 +237,8 @@ export interface FileRoutesById {
   '/_auth/music/musician/$id': typeof AuthMusicMusicianIdRoute
   '/_auth/music/playlist/$id': typeof AuthMusicPlaylistIdRoute
   '/_auth/movies/$id/': typeof AuthMoviesIdIndexRoute
+  '/_auth/tv-shows/$id/': typeof AuthTvShowsIdIndexRoute
+  '/_auth/tv-shows/$id/episodes/$episodeId/play': typeof AuthTvShowsIdEpisodesEpisodeIdPlayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -241,7 +251,6 @@ export interface FileRouteTypes {
     | '/settings/libraries'
     | '/settings/playback'
     | '/settings/users'
-    | '/tv-shows/$id'
     | '/watch-rooms/$id'
     | '/movies/'
     | '/music/'
@@ -256,6 +265,8 @@ export interface FileRouteTypes {
     | '/music/musician/$id'
     | '/music/playlist/$id'
     | '/movies/$id/'
+    | '/tv-shows/$id/'
+    | '/tv-shows/$id/episodes/$episodeId/play'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -265,7 +276,6 @@ export interface FileRouteTypes {
     | '/settings/libraries'
     | '/settings/playback'
     | '/settings/users'
-    | '/tv-shows/$id'
     | '/watch-rooms/$id'
     | '/movies'
     | '/music'
@@ -280,6 +290,8 @@ export interface FileRouteTypes {
     | '/music/musician/$id'
     | '/music/playlist/$id'
     | '/movies/$id'
+    | '/tv-shows/$id'
+    | '/tv-shows/$id/episodes/$episodeId/play'
   id:
     | '__root__'
     | '/_auth'
@@ -291,7 +303,6 @@ export interface FileRouteTypes {
     | '/_auth/settings/libraries'
     | '/_auth/settings/playback'
     | '/_auth/settings/users'
-    | '/_auth/tv-shows/$id'
     | '/_auth/watch-rooms/$id'
     | '/_auth/movies/'
     | '/_auth/music/'
@@ -306,6 +317,8 @@ export interface FileRouteTypes {
     | '/_auth/music/musician/$id'
     | '/_auth/music/playlist/$id'
     | '/_auth/movies/$id/'
+    | '/_auth/tv-shows/$id/'
+    | '/_auth/tv-shows/$id/episodes/$episodeId/play'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -399,13 +412,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthWatchRoomsIdRouteImport
       parentRoute: typeof AuthRouteRoute
     }
-    '/_auth/tv-shows/$id': {
-      id: '/_auth/tv-shows/$id'
-      path: '/tv-shows/$id'
-      fullPath: '/tv-shows/$id'
-      preLoaderRoute: typeof AuthTvShowsIdRouteImport
-      parentRoute: typeof AuthRouteRoute
-    }
     '/_auth/settings/users': {
       id: '/_auth/settings/users'
       path: '/users'
@@ -433,6 +439,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/account'
       preLoaderRoute: typeof AuthSettingsAccountRouteImport
       parentRoute: typeof AuthSettingsRouteRoute
+    }
+    '/_auth/tv-shows/$id/': {
+      id: '/_auth/tv-shows/$id/'
+      path: '/tv-shows/$id'
+      fullPath: '/tv-shows/$id/'
+      preLoaderRoute: typeof AuthTvShowsIdIndexRouteImport
+      parentRoute: typeof AuthRouteRoute
     }
     '/_auth/movies/$id/': {
       id: '/_auth/movies/$id/'
@@ -483,6 +496,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthMoviesIdPlayRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/_auth/tv-shows/$id/episodes/$episodeId/play': {
+      id: '/_auth/tv-shows/$id/episodes/$episodeId/play'
+      path: '/tv-shows/$id/episodes/$episodeId/play'
+      fullPath: '/tv-shows/$id/episodes/$episodeId/play'
+      preLoaderRoute: typeof AuthTvShowsIdEpisodesEpisodeIdPlayRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
   }
 }
 
@@ -509,7 +529,6 @@ interface AuthRouteRouteChildren {
   AuthSettingsRouteRoute: typeof AuthSettingsRouteRouteWithChildren
   AuthTrailerRoute: typeof AuthTrailerRoute
   AuthIndexRoute: typeof AuthIndexRoute
-  AuthTvShowsIdRoute: typeof AuthTvShowsIdRoute
   AuthWatchRoomsIdRoute: typeof AuthWatchRoomsIdRoute
   AuthMoviesIndexRoute: typeof AuthMoviesIndexRoute
   AuthMusicIndexRoute: typeof AuthMusicIndexRoute
@@ -523,13 +542,14 @@ interface AuthRouteRouteChildren {
   AuthMusicMusicianIdRoute: typeof AuthMusicMusicianIdRoute
   AuthMusicPlaylistIdRoute: typeof AuthMusicPlaylistIdRoute
   AuthMoviesIdIndexRoute: typeof AuthMoviesIdIndexRoute
+  AuthTvShowsIdIndexRoute: typeof AuthTvShowsIdIndexRoute
+  AuthTvShowsIdEpisodesEpisodeIdPlayRoute: typeof AuthTvShowsIdEpisodesEpisodeIdPlayRoute
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthSettingsRouteRoute: AuthSettingsRouteRouteWithChildren,
   AuthTrailerRoute: AuthTrailerRoute,
   AuthIndexRoute: AuthIndexRoute,
-  AuthTvShowsIdRoute: AuthTvShowsIdRoute,
   AuthWatchRoomsIdRoute: AuthWatchRoomsIdRoute,
   AuthMoviesIndexRoute: AuthMoviesIndexRoute,
   AuthMusicIndexRoute: AuthMusicIndexRoute,
@@ -543,6 +563,9 @@ const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthMusicMusicianIdRoute: AuthMusicMusicianIdRoute,
   AuthMusicPlaylistIdRoute: AuthMusicPlaylistIdRoute,
   AuthMoviesIdIndexRoute: AuthMoviesIdIndexRoute,
+  AuthTvShowsIdIndexRoute: AuthTvShowsIdIndexRoute,
+  AuthTvShowsIdEpisodesEpisodeIdPlayRoute:
+    AuthTvShowsIdEpisodesEpisodeIdPlayRoute,
 }
 
 const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(

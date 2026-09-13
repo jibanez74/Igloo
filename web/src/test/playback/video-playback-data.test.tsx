@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useMoviePlaybackData } from "@/hooks/useMoviePlaybackData";
+import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
+import { movieMediaRef } from "@/lib/media-ref";
 import {
   AUTH_USER_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
@@ -11,12 +12,12 @@ import {
   PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import {
-  deriveMoviePlaybackStatus,
-  shouldRebaseHlsMovieSession,
+  derivePlaybackStatus,
+  shouldRebaseHlsSession,
   toAbsoluteDuration,
   toAbsolutePlaybackTime,
   toMediaPlaybackTime,
-} from "@/lib/movie-playback";
+} from "@/lib/video-playback";
 import {
   resetDevicePlaybackPreferencesCache,
   setDevicePlaybackPreferences,
@@ -198,13 +199,16 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function playbackStatus(
-  data: ReturnType<typeof useMoviePlaybackData>,
+  data: ReturnType<typeof useVideoPlaybackData>,
   requestedMode: StreamModeId,
 ) {
-  return deriveMoviePlaybackStatus({
-    movieNotFound: data.movieNotFound,
-    movieIsPending: data.movieIsPending,
-    hasMovie: !!data.movie,
+  // The route owns the media header query; the hook only knows technical
+  // details, so the header is treated as loaded here.
+  return derivePlaybackStatus({
+    mediaNoun: "movie",
+    notFound: false,
+    detailsPending: false,
+    hasDetails: true,
     requestedMode,
     techPending: data.techPending,
     playbackPreferencesReady: data.playbackPreferencesReady,
@@ -218,7 +222,7 @@ beforeEach(() => {
   resetDevicePlaybackPreferencesCache();
 });
 
-describe("useMoviePlaybackData", () => {
+describe("useVideoPlaybackData", () => {
   it("clamps a stale start before deriving every HLS timing value", () => {
     const movieId = 7;
     const queryClient = createTestQueryClient();
@@ -253,8 +257,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "720p_3mbps",
             audio_track: 0,
@@ -279,7 +283,7 @@ describe("useMoviePlaybackData", () => {
       toAbsolutePlaybackTime(10, result.current.playbackTiming),
     ).toBe(120);
     expect(result.current.sessionWindowKey).toBe(
-      `7:720p_3mbps:0:${playbackSessionId}:110`,
+      `movie:7:720p_3mbps:0:${playbackSessionId}:110`,
     );
   });
 
@@ -297,8 +301,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result, rerender } = renderHook(
       (props: { search: typeof search }) =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: props.search,
           streamReloadKey: 0,
           playbackSessionId,
@@ -325,7 +329,7 @@ describe("useMoviePlaybackData", () => {
     expect(result.current.streamUrl).toContain("start=590");
     expect(result.current.streamUrl).not.toContain("start=581");
     expect(result.current.sessionWindowKey).toBe(
-      `74:remux:0:${playbackSessionId}:590`,
+      `movie:74:remux:0:${playbackSessionId}:590`,
     );
     expect(result.current.subtitleInfo?.url).toContain("start=581");
     expect(
@@ -334,7 +338,7 @@ describe("useMoviePlaybackData", () => {
     expect(toMediaPlaybackTime(600, result.current.playbackTiming)).toBe(19);
     expect(toAbsoluteDuration(19, result.current.playbackTiming)).toBe(600);
     expect(
-      shouldRebaseHlsMovieSession({
+      shouldRebaseHlsSession({
         isHlsPlayback: true,
         targetTimeSec: 580,
         actualHlsStartSec: result.current.actualHlsStartSec,
@@ -342,7 +346,7 @@ describe("useMoviePlaybackData", () => {
       }),
     ).toBe(true);
     expect(
-      shouldRebaseHlsMovieSession({
+      shouldRebaseHlsSession({
         isHlsPlayback: true,
         targetTimeSec: 581,
         actualHlsStartSec: result.current.actualHlsStartSec,
@@ -379,8 +383,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 0,
@@ -406,8 +410,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "remux",
             audio_track: 1,
@@ -462,8 +466,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 0,
@@ -525,8 +529,8 @@ describe("useMoviePlaybackData", () => {
     const onSyncSearch = vi.fn();
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 0,
@@ -559,8 +563,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 0,
@@ -594,8 +598,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 0,
@@ -648,8 +652,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 1,
@@ -684,8 +688,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 1,
@@ -706,7 +710,7 @@ describe("useMoviePlaybackData", () => {
       `/api/movies/91/hls/remux/playlist.m3u8?playback_session=${playbackSessionId}&start=0&audio_track=1`,
     );
     expect(result.current.sessionWindowKey).toBe(
-      `91:remux:1:${playbackSessionId}:0`,
+      `movie:91:remux:1:${playbackSessionId}:0`,
     );
     expect(playbackStatus(result.current, "direct")).toEqual({
       kind: "loading",
@@ -750,8 +754,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 1,
@@ -784,8 +788,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "direct",
             audio_track: 0,
@@ -859,8 +863,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "2160p_16mbps",
             audio_track: 99,
@@ -949,8 +953,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "2160p_16mbps",
             audio_track: 99,
@@ -1004,8 +1008,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "2160p_16mbps",
             audio_track: 99,
@@ -1062,8 +1066,8 @@ describe("useMoviePlaybackData", () => {
 
     const { result } = renderHook(
       () =>
-        useMoviePlaybackData({
-          movieId,
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
           search: {
             mode: "2160p_16mbps",
             audio_track: 99,

@@ -21,8 +21,8 @@ func TestMovieContentType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := movieContentType(tt.container, tt.storedMime); got != tt.want {
-				t.Errorf("movieContentType(%q, %q) = %q, want %q", tt.container, tt.storedMime, got, tt.want)
+			if got := videoContentType(tt.container, tt.storedMime); got != tt.want {
+				t.Errorf("videoContentType(%q, %q) = %q, want %q", tt.container, tt.storedMime, got, tt.want)
 			}
 		})
 	}
