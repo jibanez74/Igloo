@@ -20,6 +20,8 @@ import type {
   ContinueWatchingMovieType,
   LatestMovieType,
   LatestShowsDataType,
+  ShowDetailsDataType,
+  ShowSeasonEpisodesDataType,
   LibraryMovieDetailsResponse,
   GeneralSettingsResponseType,
   PlaybackSettingsResponseType,
@@ -324,6 +326,14 @@ export const getLatestMovies = () =>
 
 export const getLatestShows = () =>
   apiRequest<LatestShowsDataType>("/api/shows/latest");
+
+export const getShowDetails = (id: number) =>
+  apiRequest<ShowDetailsDataType>(`/api/shows/details/${id}`);
+
+export const getShowSeasonEpisodes = (showId: number, seasonNumber: number) =>
+  apiRequest<ShowSeasonEpisodesDataType>(
+    `/api/shows/${showId}/seasons/${seasonNumber}/episodes`,
+  );
 
 export const getContinueWatchingMovies = () =>
   apiRequest<{ movies: ContinueWatchingMovieType[] }>(

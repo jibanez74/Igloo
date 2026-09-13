@@ -85,7 +85,22 @@ export type {
 } from "./movies";
 
 // TV show types
-export type { LatestShowType, LatestShowsDataType } from "./shows";
+export type {
+  LatestShowType,
+  LatestShowsDataType,
+  ShowDetailsDataType,
+  ShowSeasonEpisodesDataType,
+  ShowType,
+  ShowSeasonSummaryType,
+  ShowEpisodeType,
+  ShowCastCreditType,
+  ShowCrewCreditType,
+  ShowPersonType,
+  ShowGenreType,
+  ShowNetworkType,
+  ShowProductionCompanyType,
+  ExtraVideoType,
+} from "./shows";
 
 // Audio player types
 export type {

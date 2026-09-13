@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Tv } from "lucide-react";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
@@ -7,6 +8,7 @@ import {
   CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { showDetailsQueryOpts } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { cn } from "@/lib/utils";
 import type { LatestShowType } from "@/types";
@@ -15,10 +17,14 @@ type ShowCardProps = {
   show: LatestShowType;
 };
 
-// Shows have no play route and no detail query yet, so this card carries no play
-// action and no prefetch - like InTheatersCard and MusicianCard.
+// Shows have no play route, so this card carries no play action - like
+// InTheatersCard. It does prefetch its detail query on hover and focus, as
+// every media card with a detail query does.
 export default function ShowCard({ show }: ShowCardProps) {
   const { id, name, poster_path, premiere_year } = show;
+  const queryClient = useQueryClient();
+
+  const handlePrefetch = () => queryClient.prefetchQuery(showDetailsQueryOpts(id));
 
   const posterUrl =
     poster_path.Valid && poster_path.String !== ""
@@ -33,6 +39,8 @@ export default function ShowCard({ show }: ShowCardProps) {
   return (
     <article
       className={cn(CARD_SURFACE_CLASS, "min-w-0", CARD_FOCUS_WITHIN_RING_CLASS)}
+      onMouseEnter={handlePrefetch}
+      onFocus={handlePrefetch}
     >
       <Link
         to="/tv-shows/$id"

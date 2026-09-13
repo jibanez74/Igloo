@@ -15,14 +15,14 @@ import {
 } from "@/lib/format";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
-import CastSection from "@/components/movies/CastSection";
+import CastSection from "@/components/shared/CastSection";
 import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
 import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
 import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
 import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
 import MovieAboutSection from "@/components/movies/MovieAboutSection";
-import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection";
+import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
@@ -156,7 +156,12 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const crewForSection = tmdbCrewToLibraryCrew(
     movie.credits?.crew ?? [],
   );
-  const castList = movie.credits?.cast ?? [];
+  const castList = (movie.credits?.cast ?? []).map(c => ({
+    key: String(c.id),
+    name: c.name,
+    character: c.character,
+    profilePath: c.profile_path ?? null,
+  }));
   const youtubeExtraVideos = tmdbYouTubeResultsToLibraryExtras(
     movie.videos?.results ?? [],
   );
@@ -244,10 +249,9 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
 
         {castList.length > 0 && <CastSection cast={castList} />}
 
-        <MovieExtraVideosSection
+        <ExtraVideosSection
           videos={youtubeExtraVideos}
-          movieId={movie.id}
-          trailerReturnTo={trailerReturnPath}
+          returnTo={trailerReturnPath}
         />
 
         <MovieAboutSection

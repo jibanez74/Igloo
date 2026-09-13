@@ -3,13 +3,13 @@ import {
   DETAIL_HERO_SCRIM_FADE_CLASS,
   DETAIL_HERO_SCRIM_SIDE_CLASS,
 } from "@/lib/constants";
-type MovieDetailsBackdropProps = {
+type DetailBackdropProps = {
   backdropUrl: string | null;
 };
 
-export default function MovieDetailsBackdrop({
+export default function DetailBackdrop({
   backdropUrl,
-}: MovieDetailsBackdropProps) {
+}: DetailBackdropProps) {
   return (
     <div className="relative size-full" aria-hidden="true">
       {backdropUrl ? (

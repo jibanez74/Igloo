@@ -22,7 +22,7 @@ import {
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
-import CastSection from "@/components/movies/CastSection";
+import CastSection from "@/components/shared/CastSection";
 import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
 import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
@@ -31,7 +31,7 @@ import MovieDetailsResumeProgress from "@/components/movies/MovieDetailsResumePr
 import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
 import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
 import MovieAboutSection from "@/components/movies/MovieAboutSection";
-import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection";
+import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
 import MovieChaptersSection from "@/components/movies/MovieChaptersSection";
 import {
   getAvailableModes,
@@ -43,11 +43,8 @@ import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferenc
 import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
-import type {
-  AuthUser,
-  CastMemberType,
-  LibraryMovieDetailsResponse,
-} from "@/types";
+import type { AuthUser, LibraryMovieDetailsResponse } from "@/types";
+import type { CastSectionItem } from "@/components/shared/CastSection";
 
 export const Route = createFileRoute("/_auth/movies/$id/")({
   loader: async ({ context, params }) => {
@@ -74,13 +71,12 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
 
 function libraryCastToCastSection(
   cast: LibraryMovieDetailsResponse["cast"],
-): CastMemberType[] {
+): CastSectionItem[] {
   return cast.map(c => ({
-    id: c.id,
+    key: String(c.id),
     name: c.artist_name,
     character: c.character,
-    profile_path: unwrapString(c.artist_profile) ?? "",
-    order: c.cast_order,
+    profilePath: unwrapString(c.artist_profile),
   }));
 }
 
@@ -312,9 +308,9 @@ function LibraryMovieDetailsContent({
           playbackSettings={playbackSettings}
         />
 
-        <MovieExtraVideosSection
+        <ExtraVideosSection
           videos={youtubeExtraVideos}
-          movieId={movieId}
+          returnTo={`/movies/${movieId}`}
         />
 
         <MovieAboutSection

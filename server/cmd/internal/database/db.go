@@ -351,14 +351,23 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getCastByMovieIDStmt, err = db.PrepareContext(ctx, getCastByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCastByMovieID: %w", err)
 	}
+	if q.getCastByShowIDStmt, err = db.PrepareContext(ctx, getCastByShowID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetCastByShowID: %w", err)
+	}
 	if q.getChaptersByMovieIDStmt, err = db.PrepareContext(ctx, getChaptersByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChaptersByMovieID: %w", err)
 	}
 	if q.getContinueWatchingMoviesStmt, err = db.PrepareContext(ctx, getContinueWatchingMovies); err != nil {
 		return nil, fmt.Errorf("error preparing query GetContinueWatchingMovies: %w", err)
 	}
+	if q.getCreatorsByShowIDStmt, err = db.PrepareContext(ctx, getCreatorsByShowID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetCreatorsByShowID: %w", err)
+	}
 	if q.getCrewByMovieIDStmt, err = db.PrepareContext(ctx, getCrewByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCrewByMovieID: %w", err)
+	}
+	if q.getCrewByShowIDStmt, err = db.PrepareContext(ctx, getCrewByShowID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetCrewByShowID: %w", err)
 	}
 	if q.getDeviceByTokenHashStmt, err = db.PrepareContext(ctx, getDeviceByTokenHash); err != nil {
 		return nil, fmt.Errorf("error preparing query GetDeviceByTokenHash: %w", err)
@@ -374,6 +383,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getGenresByMusicianIDStmt, err = db.PrepareContext(ctx, getGenresByMusicianID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByMusicianID: %w", err)
+	}
+	if q.getGenresByShowIDStmt, err = db.PrepareContext(ctx, getGenresByShowID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetGenresByShowID: %w", err)
 	}
 	if q.getKeyframeIndexStmt, err = db.PrepareContext(ctx, getKeyframeIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query GetKeyframeIndex: %w", err)
@@ -471,6 +483,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMusiciansCountStmt, err = db.PrepareContext(ctx, getMusiciansCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansCount: %w", err)
 	}
+	if q.getNetworksByShowIDStmt, err = db.PrepareContext(ctx, getNetworksByShowID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNetworksByShowID: %w", err)
+	}
 	if q.getNotificationBadgeForUserStmt, err = db.PrepareContext(ctx, getNotificationBadgeForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetNotificationBadgeForUser: %w", err)
 	}
@@ -504,6 +519,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getProductionCompaniesByMovieIDStmt, err = db.PrepareContext(ctx, getProductionCompaniesByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetProductionCompaniesByMovieID: %w", err)
 	}
+	if q.getProductionCompaniesByShowIDStmt, err = db.PrepareContext(ctx, getProductionCompaniesByShowID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetProductionCompaniesByShowID: %w", err)
+	}
 	if q.getRandomTracksStmt, err = db.PrepareContext(ctx, getRandomTracks); err != nil {
 		return nil, fmt.Errorf("error preparing query GetRandomTracks: %w", err)
 	}
@@ -516,11 +534,20 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getShowStmt, err = db.PrepareContext(ctx, getShow); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShow: %w", err)
 	}
+	if q.getShowDetailsStmt, err = db.PrepareContext(ctx, getShowDetails); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowDetails: %w", err)
+	}
 	if q.getShowEpisodeStmt, err = db.PrepareContext(ctx, getShowEpisode); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowEpisode: %w", err)
 	}
 	if q.getShowEpisodesStmt, err = db.PrepareContext(ctx, getShowEpisodes); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowEpisodes: %w", err)
+	}
+	if q.getShowEpisodesBySeasonNumberStmt, err = db.PrepareContext(ctx, getShowEpisodesBySeasonNumber); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowEpisodesBySeasonNumber: %w", err)
+	}
+	if q.getShowExtraVideosStmt, err = db.PrepareContext(ctx, getShowExtraVideos); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowExtraVideos: %w", err)
 	}
 	if q.getShowFileByPathStmt, err = db.PrepareContext(ctx, getShowFileByPath); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowFileByPath: %w", err)
@@ -542,6 +569,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getShowSeasonStmt, err = db.PrepareContext(ctx, getShowSeason); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowSeason: %w", err)
+	}
+	if q.getShowSeasonSummariesStmt, err = db.PrepareContext(ctx, getShowSeasonSummaries); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowSeasonSummaries: %w", err)
+	}
+	if q.getShowSeasonSummaryByNumberStmt, err = db.PrepareContext(ctx, getShowSeasonSummaryByNumber); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowSeasonSummaryByNumber: %w", err)
 	}
 	if q.getShowSeasonsStmt, err = db.PrepareContext(ctx, getShowSeasons); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowSeasons: %w", err)
@@ -1522,6 +1555,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getCastByMovieIDStmt: %w", cerr)
 		}
 	}
+	if q.getCastByShowIDStmt != nil {
+		if cerr := q.getCastByShowIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getCastByShowIDStmt: %w", cerr)
+		}
+	}
 	if q.getChaptersByMovieIDStmt != nil {
 		if cerr := q.getChaptersByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getChaptersByMovieIDStmt: %w", cerr)
@@ -1532,9 +1570,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getContinueWatchingMoviesStmt: %w", cerr)
 		}
 	}
+	if q.getCreatorsByShowIDStmt != nil {
+		if cerr := q.getCreatorsByShowIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getCreatorsByShowIDStmt: %w", cerr)
+		}
+	}
 	if q.getCrewByMovieIDStmt != nil {
 		if cerr := q.getCrewByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getCrewByMovieIDStmt: %w", cerr)
+		}
+	}
+	if q.getCrewByShowIDStmt != nil {
+		if cerr := q.getCrewByShowIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getCrewByShowIDStmt: %w", cerr)
 		}
 	}
 	if q.getDeviceByTokenHashStmt != nil {
@@ -1560,6 +1608,11 @@ func (q *Queries) Close() error {
 	if q.getGenresByMusicianIDStmt != nil {
 		if cerr := q.getGenresByMusicianIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getGenresByMusicianIDStmt: %w", cerr)
+		}
+	}
+	if q.getGenresByShowIDStmt != nil {
+		if cerr := q.getGenresByShowIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getGenresByShowIDStmt: %w", cerr)
 		}
 	}
 	if q.getKeyframeIndexStmt != nil {
@@ -1722,6 +1775,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMusiciansCountStmt: %w", cerr)
 		}
 	}
+	if q.getNetworksByShowIDStmt != nil {
+		if cerr := q.getNetworksByShowIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNetworksByShowIDStmt: %w", cerr)
+		}
+	}
 	if q.getNotificationBadgeForUserStmt != nil {
 		if cerr := q.getNotificationBadgeForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getNotificationBadgeForUserStmt: %w", cerr)
@@ -1777,6 +1835,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getProductionCompaniesByMovieIDStmt: %w", cerr)
 		}
 	}
+	if q.getProductionCompaniesByShowIDStmt != nil {
+		if cerr := q.getProductionCompaniesByShowIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getProductionCompaniesByShowIDStmt: %w", cerr)
+		}
+	}
 	if q.getRandomTracksStmt != nil {
 		if cerr := q.getRandomTracksStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getRandomTracksStmt: %w", cerr)
@@ -1797,6 +1860,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getShowStmt: %w", cerr)
 		}
 	}
+	if q.getShowDetailsStmt != nil {
+		if cerr := q.getShowDetailsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowDetailsStmt: %w", cerr)
+		}
+	}
 	if q.getShowEpisodeStmt != nil {
 		if cerr := q.getShowEpisodeStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowEpisodeStmt: %w", cerr)
@@ -1805,6 +1873,16 @@ func (q *Queries) Close() error {
 	if q.getShowEpisodesStmt != nil {
 		if cerr := q.getShowEpisodesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowEpisodesStmt: %w", cerr)
+		}
+	}
+	if q.getShowEpisodesBySeasonNumberStmt != nil {
+		if cerr := q.getShowEpisodesBySeasonNumberStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowEpisodesBySeasonNumberStmt: %w", cerr)
+		}
+	}
+	if q.getShowExtraVideosStmt != nil {
+		if cerr := q.getShowExtraVideosStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowExtraVideosStmt: %w", cerr)
 		}
 	}
 	if q.getShowFileByPathStmt != nil {
@@ -1840,6 +1918,16 @@ func (q *Queries) Close() error {
 	if q.getShowSeasonStmt != nil {
 		if cerr := q.getShowSeasonStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowSeasonStmt: %w", cerr)
+		}
+	}
+	if q.getShowSeasonSummariesStmt != nil {
+		if cerr := q.getShowSeasonSummariesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowSeasonSummariesStmt: %w", cerr)
+		}
+	}
+	if q.getShowSeasonSummaryByNumberStmt != nil {
+		if cerr := q.getShowSeasonSummaryByNumberStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowSeasonSummaryByNumberStmt: %w", cerr)
 		}
 	}
 	if q.getShowSeasonsStmt != nil {
@@ -2705,14 +2793,18 @@ type Queries struct {
 	getAllUsersStmt                             *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
 	getCastByMovieIDStmt                        *sql.Stmt
+	getCastByShowIDStmt                         *sql.Stmt
 	getChaptersByMovieIDStmt                    *sql.Stmt
 	getContinueWatchingMoviesStmt               *sql.Stmt
+	getCreatorsByShowIDStmt                     *sql.Stmt
 	getCrewByMovieIDStmt                        *sql.Stmt
+	getCrewByShowIDStmt                         *sql.Stmt
 	getDeviceByTokenHashStmt                    *sql.Stmt
 	getDevicesByUserStmt                        *sql.Stmt
 	getGenresByAlbumIDStmt                      *sql.Stmt
 	getGenresByMovieIDStmt                      *sql.Stmt
 	getGenresByMusicianIDStmt                   *sql.Stmt
+	getGenresByShowIDStmt                       *sql.Stmt
 	getKeyframeIndexStmt                        *sql.Stmt
 	getLatestAlbumsStmt                         *sql.Stmt
 	getLatestMoviesStmt                         *sql.Stmt
@@ -2745,6 +2837,7 @@ type Queries struct {
 	getMusiciansAlphabeticalStmt                *sql.Stmt
 	getMusiciansByAlbumIDStmt                   *sql.Stmt
 	getMusiciansCountStmt                       *sql.Stmt
+	getNetworksByShowIDStmt                     *sql.Stmt
 	getNotificationBadgeForUserStmt             *sql.Stmt
 	getOrCreateGenreStmt                        *sql.Stmt
 	getPendingShowsStmt                         *sql.Stmt
@@ -2756,12 +2849,16 @@ type Queries struct {
 	getPlaylistWithAccessStmt                   *sql.Stmt
 	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
 	getProductionCompaniesByMovieIDStmt         *sql.Stmt
+	getProductionCompaniesByShowIDStmt          *sql.Stmt
 	getRandomTracksStmt                         *sql.Stmt
 	getRemuxSafetyVerdictStmt                   *sql.Stmt
 	getSettingsStmt                             *sql.Stmt
 	getShowStmt                                 *sql.Stmt
+	getShowDetailsStmt                          *sql.Stmt
 	getShowEpisodeStmt                          *sql.Stmt
 	getShowEpisodesStmt                         *sql.Stmt
+	getShowEpisodesBySeasonNumberStmt           *sql.Stmt
+	getShowExtraVideosStmt                      *sql.Stmt
 	getShowFileByPathStmt                       *sql.Stmt
 	getShowPendingEpisodeIDsStmt                *sql.Stmt
 	getShowPendingSeasonIDsStmt                 *sql.Stmt
@@ -2769,6 +2866,8 @@ type Queries struct {
 	getShowScanEpisodeLinksStmt                 *sql.Stmt
 	getShowScanIndexStmt                        *sql.Stmt
 	getShowSeasonStmt                           *sql.Stmt
+	getShowSeasonSummariesStmt                  *sql.Stmt
+	getShowSeasonSummaryByNumberStmt            *sql.Stmt
 	getShowSeasonsStmt                          *sql.Stmt
 	getSubtitlesByMovieIDStmt                   *sql.Stmt
 	getTrackStmt                                *sql.Stmt
@@ -3027,14 +3126,18 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
+		getCastByShowIDStmt:                         q.getCastByShowIDStmt,
 		getChaptersByMovieIDStmt:                    q.getChaptersByMovieIDStmt,
 		getContinueWatchingMoviesStmt:               q.getContinueWatchingMoviesStmt,
+		getCreatorsByShowIDStmt:                     q.getCreatorsByShowIDStmt,
 		getCrewByMovieIDStmt:                        q.getCrewByMovieIDStmt,
+		getCrewByShowIDStmt:                         q.getCrewByShowIDStmt,
 		getDeviceByTokenHashStmt:                    q.getDeviceByTokenHashStmt,
 		getDevicesByUserStmt:                        q.getDevicesByUserStmt,
 		getGenresByAlbumIDStmt:                      q.getGenresByAlbumIDStmt,
 		getGenresByMovieIDStmt:                      q.getGenresByMovieIDStmt,
 		getGenresByMusicianIDStmt:                   q.getGenresByMusicianIDStmt,
+		getGenresByShowIDStmt:                       q.getGenresByShowIDStmt,
 		getKeyframeIndexStmt:                        q.getKeyframeIndexStmt,
 		getLatestAlbumsStmt:                         q.getLatestAlbumsStmt,
 		getLatestMoviesStmt:                         q.getLatestMoviesStmt,
@@ -3067,6 +3170,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,
 		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:                       q.getMusiciansCountStmt,
+		getNetworksByShowIDStmt:                     q.getNetworksByShowIDStmt,
 		getNotificationBadgeForUserStmt:             q.getNotificationBadgeForUserStmt,
 		getOrCreateGenreStmt:                        q.getOrCreateGenreStmt,
 		getPendingShowsStmt:                         q.getPendingShowsStmt,
@@ -3078,12 +3182,16 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getPlaylistWithAccessStmt:                   q.getPlaylistWithAccessStmt,
 		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
 		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,
+		getProductionCompaniesByShowIDStmt:          q.getProductionCompaniesByShowIDStmt,
 		getRandomTracksStmt:                         q.getRandomTracksStmt,
 		getRemuxSafetyVerdictStmt:                   q.getRemuxSafetyVerdictStmt,
 		getSettingsStmt:                             q.getSettingsStmt,
 		getShowStmt:                                 q.getShowStmt,
+		getShowDetailsStmt:                          q.getShowDetailsStmt,
 		getShowEpisodeStmt:                          q.getShowEpisodeStmt,
 		getShowEpisodesStmt:                         q.getShowEpisodesStmt,
+		getShowEpisodesBySeasonNumberStmt:           q.getShowEpisodesBySeasonNumberStmt,
+		getShowExtraVideosStmt:                      q.getShowExtraVideosStmt,
 		getShowFileByPathStmt:                       q.getShowFileByPathStmt,
 		getShowPendingEpisodeIDsStmt:                q.getShowPendingEpisodeIDsStmt,
 		getShowPendingSeasonIDsStmt:                 q.getShowPendingSeasonIDsStmt,
@@ -3091,6 +3199,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowScanEpisodeLinksStmt:                 q.getShowScanEpisodeLinksStmt,
 		getShowScanIndexStmt:                        q.getShowScanIndexStmt,
 		getShowSeasonStmt:                           q.getShowSeasonStmt,
+		getShowSeasonSummariesStmt:                  q.getShowSeasonSummariesStmt,
+		getShowSeasonSummaryByNumberStmt:            q.getShowSeasonSummaryByNumberStmt,
 		getShowSeasonsStmt:                          q.getShowSeasonsStmt,
 		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                                q.getTrackStmt,

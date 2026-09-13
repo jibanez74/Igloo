@@ -192,6 +192,8 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 func (app *Application) registerShowRoutes(r chi.Router) {
 	r.Route("/shows", func(r chi.Router) {
 		r.Get("/latest", app.GetLatestShows)
+		r.Get("/details/{id}", app.GetShowDetails)
+		r.Get("/{id}/seasons/{seasonNumber}/episodes", app.GetShowSeasonEpisodes)
 	})
 }
 

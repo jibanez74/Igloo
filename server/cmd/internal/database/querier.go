@@ -153,13 +153,22 @@ type Querier interface {
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
+	// Aggregate cast with artist name and profile. show_cast has no row id, so
+	// credit_id is the stable identity; TMDB can credit one artist with several
+	// roles, which is why the artist id alone will not do.
+	GetCastByShowID(ctx context.Context, showID int64) ([]GetCastByShowIDRow, error)
 	// Chapters for a movie (for technical details display).
 	GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error)
 	// The 30-second floor must match the web client's
 	// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)
+	// Series creators, billed ahead of the aggregate crew on the details page.
+	GetCreatorsByShowID(ctx context.Context, showID int64) ([]GetCreatorsByShowIDRow, error)
 	// Crew for a movie with artist name (for details view).
 	GetCrewByMovieID(ctx context.Context, movieID int64) ([]GetCrewByMovieIDRow, error)
+	// Aggregate crew with artist name. credit_id is the stable identity, as in
+	// GetCastByShowID.
+	GetCrewByShowID(ctx context.Context, showID int64) ([]GetCrewByShowIDRow, error)
 	GetDeviceByTokenHash(ctx context.Context, tokenHash string) (GetDeviceByTokenHashRow, error)
 	GetDevicesByUser(ctx context.Context, userID int64) ([]GetDevicesByUserRow, error)
 	GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetGenresByAlbumIDRow, error)
@@ -167,6 +176,8 @@ type Querier interface {
 	GetGenresByMovieID(ctx context.Context, movieID int64) ([]GetGenresByMovieIDRow, error)
 	// Returns all genres associated with a musician
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]string, error)
+	// Genres linked to a show (for details view).
+	GetGenresByShowID(ctx context.Context, showID int64) ([]GetGenresByShowIDRow, error)
 	// Persisted keyframe index for one video stream; the caller compares the
 	// stored fingerprint and treats a mismatch as a miss.
 	GetKeyframeIndex(ctx context.Context, arg GetKeyframeIndexParams) (GetKeyframeIndexRow, error)
@@ -219,6 +230,9 @@ type Querier interface {
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
+	// Networks linked to a show, with the logo and country the About section
+	// renders. The only query in the project that reads networks.
+	GetNetworksByShowID(ctx context.Context, showID int64) ([]GetNetworksByShowIDRow, error)
 	// The bell badge in one round trip. The client polls this endpoint, and the
 	// database runs on a single shared connection (InitDB), so the admin check and
 	// the count are folded into one statement instead of GetUserIsAdmin followed by
@@ -257,6 +271,8 @@ type Querier interface {
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, requestingUserID int64) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
+	// Production companies linked to a show (for details view).
+	GetProductionCompaniesByShowID(ctx context.Context, showID int64) ([]GetProductionCompaniesByShowIDRow, error)
 	// The random pick happens over the bare tracks primary key, so the album and
 	// musician joins run only for the chosen rows instead of the whole library.
 	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
@@ -272,8 +288,27 @@ type Querier interface {
 	GetRemuxSafetyVerdict(ctx context.Context, arg GetRemuxSafetyVerdictParams) (GetRemuxSafetyVerdictRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	GetShow(ctx context.Context, id int64) (Show, error)
+	// ============================================================================
+	// Show details page reads.
+	//
+	// Everything above this line serves the scanner. These are the only queries a
+	// client payload is built from: explicit projections that never expose
+	// directory_path or local_name, and that address a season by its number rather
+	// than by an internal row id.
+	// ============================================================================
+	// Show header for the details page. Omits the filesystem columns and the
+	// fields the page does not render (adult, imdb_id, homepage, popularity,
+	// timestamps).
+	GetShowDetails(ctx context.Context, id int64) (GetShowDetailsRow, error)
 	GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, error)
 	GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEpisode, error)
+	// Episodes of one season, addressed by (show_id, season_number) so the route
+	// never exposes an internal season id. Carries no file, stream, codec, or
+	// chapter data: those belong to a physical file, and one file can back several
+	// episodes.
+	GetShowEpisodesBySeasonNumber(ctx context.Context, arg GetShowEpisodesBySeasonNumberParams) ([]GetShowEpisodesBySeasonNumberRow, error)
+	// List all extra videos (trailers, special features) linked to a show.
+	GetShowExtraVideos(ctx context.Context, showID int64) ([]GetShowExtraVideosRow, error)
 	GetShowFileByPath(ctx context.Context, filePath string) (ShowFile, error)
 	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
 	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
@@ -281,6 +316,14 @@ type Querier interface {
 	GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error)
 	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
 	GetShowSeason(ctx context.Context, id int64) (ShowSeason, error)
+	// Seasons with the count of episodes actually present. Pruning deletes episodes
+	// that lost their last file, so a stored episode always has one and the stored
+	// count is the available count; TMDB's tmdb_episode_count rides alongside it so
+	// the page can state how much of a season is here. Specials (season 0) sort
+	// last rather than first.
+	GetShowSeasonSummaries(ctx context.Context, showID int64) ([]GetShowSeasonSummariesRow, error)
+	// The GetShowSeasonSummaries aggregate for one season, addressed by number.
+	GetShowSeasonSummaryByNumber(ctx context.Context, arg GetShowSeasonSummaryByNumberParams) (GetShowSeasonSummaryByNumberRow, error)
 	GetShowSeasons(ctx context.Context, showID int64) ([]ShowSeason, error)
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)

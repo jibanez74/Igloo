@@ -63,6 +63,19 @@ export const moviesSearchSchema = z.object({
 
 export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
 
+// The selected season on a show details page is URL state, never component
+// state. Wrapped in z.catch so a malformed season in the URL degrades to the
+// default season instead of failing the route. Specials are season zero, so the
+// bound is >= 0 rather than positive.
+export const showDetailsSearchSchema = z.object({
+  season: z.catch(
+    z.optional(z.coerce.number().check(z.int(), z.minimum(0))),
+    undefined,
+  ),
+});
+
+export type ShowDetailsSearchParams = z.infer<typeof showDetailsSearchSchema>;
+
 export const musicSearchSchema = z.object({
   tab: z._default(
     z.catch(z.enum(["musicians", "albums", "tracks", "playlists"]), "albums"),

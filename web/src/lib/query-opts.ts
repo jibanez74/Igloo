@@ -12,6 +12,8 @@ import {
   getLatestAlbums,
   getLatestMovies,
   getLatestShows,
+  getShowDetails,
+  getShowSeasonEpisodes,
   getLikedMovies,
   getLikedTracks,
   getLikedTrackIds,
@@ -68,6 +70,8 @@ import {
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
   LATEST_SHOWS_KEY,
+  SHOW_DETAILS_KEY,
+  SHOW_SEASON_EPISODES_KEY,
   CONTINUE_WATCHING_KEY,
   SPOTIFY_STATUS_KEY,
   TMDB_STATUS_KEY,
@@ -225,6 +229,33 @@ export function latestShowsQueryOpts() {
     queryFn: getLatestShows,
     staleTime: STALE_CATALOG,
     gcTime: GC_LONG,
+  });
+}
+
+export function showDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [SHOW_DETAILS_KEY, id],
+    queryFn: () => getShowDetails(id),
+    enabled: id > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+// Season episodes are fetched per selection rather than embedded in the details
+// payload: a long-running show holds hundreds of episodes with overview text,
+// and the page renders one season at a time. Specials are season zero, so the
+// guard is >= 0.
+export function showSeasonEpisodesQueryOpts(
+  showId: number,
+  seasonNumber: number,
+) {
+  return queryOptions({
+    queryKey: [SHOW_SEASON_EPISODES_KEY, showId, seasonNumber],
+    queryFn: () => getShowSeasonEpisodes(showId, seasonNumber),
+    enabled: showId > 0 && seasonNumber >= 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 

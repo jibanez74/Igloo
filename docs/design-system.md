@@ -147,7 +147,8 @@ Rules:
   `px-4 py-6 sm:px-6 lg:px-8`.
 - **Aspect ratios are part of the design vocabulary**: `aspect-2/3` movie
   posters, `aspect-square` album covers and musician thumbs, `aspect-21/9`
-  detail-page backdrops (clamped `max-h-[min(42vh,22rem)]` at `md+`),
+  detail-page backdrops (clamped `max-h-[min(42vh,22rem)]` at `md+`; the
+  shared `DetailBackdrop` owns the scrims),
   `aspect-video` trailers/extras.
 - **Elevation**: `shadow-xs`–`shadow-2xl`. Interactive media cards add a
   glacier glow on hover (`hover:shadow-xl hover:shadow-primary/20`); the
@@ -267,7 +268,8 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   announce their load/empty/error summaries.
 - **Skip links**: a global "Skip to content" in `AppShell` targeting `#main`,
   plus per-page section skip navs on long pages
-  (`MovieDetailsSkipLinks` pattern, `sr-only focus-within:not-sr-only`).
+  (`MovieDetailsSkipLinks` / `ShowDetailsSkipLinks` pattern, `sr-only
+  focus-within:not-sr-only`).
 - **Labels everywhere**: icon-only buttons get `aria-label`; decorative
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses
@@ -355,8 +357,9 @@ facto token layer above Tailwind. Key families:
 - `LIBRARY_TABS_LIST_CLASS` / `LIBRARY_TAB_TRIGGER_CLASS`,
   `TRACK_LIST_CONTAINER_CLASS` (library/search lists) and
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
-  by the album and musician detail pages), playback-settings select classes,
-  virtual-list row heights (`VIRTUAL_LIST_*`).
+  by the album and musician detail pages and the show episode list),
+  playback-settings select classes, virtual-list row heights
+  (`VIRTUAL_LIST_*`).
 
 **Promotion rule**: a class string used by ≥2 components, or containing
 motion/focus behavior, moves here (where the contracts tests can see it)
@@ -453,7 +456,8 @@ Rules: 2:3 posters, square covers, circular musician thumbs; titles clamp at
 with no secondary play action (`ShowCard`, `InTheatersCard`, `MusicianCard`)
 omit the overlay and play control entirely rather than rendering an empty
 wash; cards prefetch their detail query on `onMouseEnter`/`onFocus`
-(`queryClient.prefetchQuery`) when a detail query exists; rating chips tier
+(`queryClient.prefetchQuery`) once a detail query exists — as `ShowCard` now
+does; rating chips tier
 via the shared `criticRatingClass`/`audienceRatingClass` helpers in
 `lib/rating.ts` (`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`), rendered
 with the `Badge` primitive where no list semantics are needed (§1.6).
@@ -468,14 +472,24 @@ instead of stretching one poster across the content column; pinned by
 `constants-contracts.test.ts`) inside the
 shared `HomeMediaSection` wrapper (heading + count pill + announced summary +
 pending/error/empty/grid states). True horizontal rails (cast, chapters,
-extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars.
+extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars; the
+cast and extras rails are the shared `CastSection` and `ExtraVideosSection`,
+used by both the movie and show detail pages.
+A long control strip scrolls the same way rather than wrapping:
+`ShowSeasonSelector` is a shadcn `Tabs` list on `LIBRARY_TAB_TRIGGER_CLASS`
+with `overflow-x-auto` and fully named triggers ("Season 3", "Specials"), and
+`ShowSeasonEpisodeList` renders the selected season as divided rows in the
+album track-list idiom inside `DETAIL_TRACK_LIST_CONTAINER_CLASS`, owning its
+own skeleton, empty, and error states because its query is separate from its
+page's.
 
 ### 3.3 Images
 
 - **Movie/TMDB images are same-origin proxied**: build URLs with
   `buildTmdbImageUrl(path, size)` (`lib/tmdb-image-url.ts`) →
   `/api/tmdb/images/{size}{path}`; sizes are the exported constants
-  (`w500` posters, `w1280` backdrops, `w185` profiles, `w92` logos). Music
+  (`w500` posters and episode stills, `w1280` backdrops, `w185` profiles,
+  `w92` network logos). Music
   images go through `getMediaImageUrl()` (`lib/media-image-url.ts`). Never
   hit `image.tmdb.org` directly from the client.
 - **Standard `<img>` recipe**: `loading="lazy" decoding="async"
@@ -498,7 +512,8 @@ extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars.
   screen (`RouterPending` → `AppLoadingScreen`, `role="status"`). Within a
   page, each query renders a **skeleton that matches the real layout's grid
   geometry exactly** (same columns, same aspect boxes) so content arrival
-  causes no layout shift — see `AllMoviesTabSkeleton`, `MovieDetailsSkeleton`.
+  causes no layout shift — see `AllMoviesTabSkeleton`, `MovieDetailsSkeleton`,
+  `ShowDetailsSkeleton`.
   Skeleton geometry is authored directly in each loading layout with muted
   boxes and the shared `MOTION_LOADING_STATE_CLASS`; this keeps the placeholder
   beside the real layout it must mirror. `ui/spinner.tsx` (`role="status"`)

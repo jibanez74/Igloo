@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatDate,
   formatRuntimeMinutes,
   formatSpokenRuntimeMinutes,
   formatSpokenTime,
@@ -116,5 +117,20 @@ describe("formatSpokenRuntimeMinutes", () => {
   it("floors fractional runtimes before formatting words", () => {
     expect(formatSpokenRuntimeMinutes(116.75)).toBe("1 hour 56 minutes");
     expect(formatSpokenRuntimeMinutes(0.75)).toBeNull();
+  });
+});
+
+describe("formatDate", () => {
+  it("keeps a date-only catalog date on its own day", () => {
+    // Stored dates are date-only. Parsed as UTC midnight and read back locally
+    // they land a day early anywhere west of UTC, which showed a show that
+    // first aired 2024-03-01 as "February 29, 2024".
+    expect(formatDate("2024-03-01")).toBe("March 1, 2024");
+    expect(formatDate("2024-01-01")).toBe("January 1, 2024");
+    expect(formatDate("2024-12-31")).toBe("December 31, 2024");
+  });
+
+  it("still formats a timestamp that carries a time", () => {
+    expect(formatDate("2024-03-01T18:30:00Z")).toMatch(/^(February|March) \d{1,2}, 2024$/);
   });
 });

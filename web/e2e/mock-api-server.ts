@@ -1241,6 +1241,156 @@ async function handleSettingsRoutes(
   return false;
 }
 
+
+// Show details fixtures. Seasons are ordered the way GetShowSeasonSummaries
+// returns them: specials (season 0) last. Season 2 is deliberately partial, so
+// the availability chips have something to say.
+const showSeasons = [
+  {
+    id: 5001,
+    season_number: 1,
+    name: "Season 1",
+    overview: nullableString("The harbor freezes."),
+    air_date: nullableString("2026-03-01"),
+    poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
+    tmdb_episode_count: nullableInt(2),
+    available_episode_count: 2,
+  },
+  {
+    id: 5002,
+    season_number: 2,
+    name: "Season 2",
+    overview: nullableString("The thaw begins."),
+    air_date: nullableString("2026-09-01"),
+    poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
+    tmdb_episode_count: nullableInt(8),
+    available_episode_count: 1,
+  },
+  {
+    id: 5000,
+    season_number: 0,
+    name: "Specials",
+    overview: nullableString("Behind the ice."),
+    air_date: nullableString("2026-02-01"),
+    poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
+    tmdb_episode_count: nullableInt(1),
+    available_episode_count: 1,
+  },
+];
+
+function showEpisode(seasonNumber: number, episodeNumber: number) {
+  return {
+    id: 70000 + seasonNumber * 100 + episodeNumber,
+    episode_number: episodeNumber,
+    name: `Episode ${episodeNumber} of season ${seasonNumber}`,
+    overview: nullableString("Something happens in the harbor."),
+    air_date: nullableString("2026-03-08"),
+    still_path: nullableString("/api/static/shows/frost-harbor.svg"),
+    tmdb_runtime: nullableInt(47),
+    vote_average: nullableFloat(8.1),
+    vote_count: nullableInt(220),
+  };
+}
+
+function showDetails(id: number) {
+  return {
+    show: {
+      id,
+      name: "Frost Harbor",
+      original_name: nullableString("Frost Harbor"),
+      premiere_year: nullableInt(2026),
+      tmdb_id: nullableInt(90210),
+      overview: nullableString(
+        "A harbor freezes over and the town changes with it.",
+      ),
+      tagline: nullableString("The ice remembers."),
+      language: nullableString("en"),
+      origin_countries: nullableString("US"),
+      first_air_date: nullableString("2026-03-01"),
+      last_air_date: nullableString("2026-11-20"),
+      status: nullableString("Returning Series"),
+      type: nullableString("Scripted"),
+      poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
+      backdrop_path: nullableString("/api/static/shows/frost-harbor.svg"),
+      vote_average: nullableFloat(8.4),
+      vote_count: nullableInt(1200),
+      certification: nullableString("TV-14"),
+      tmdb_season_count: nullableInt(2),
+      tmdb_episode_count: nullableInt(10),
+    },
+    seasons: showSeasons,
+    cast: [
+      {
+        credit_id: "credit-lead-1",
+        artist_id: 900,
+        character: "Harbor Master",
+        cast_order: 0,
+        episode_count: 10,
+        artist_name: "Ada Frost",
+        artist_profile: nullableString("/api/static/shows/frost-harbor.svg"),
+      },
+      {
+        credit_id: "credit-lead-2",
+        artist_id: 900,
+        character: "The Stranger",
+        cast_order: 1,
+        episode_count: 2,
+        artist_name: "Ada Frost",
+        artist_profile: nullableString("/api/static/shows/frost-harbor.svg"),
+      },
+    ],
+    crew: [
+      {
+        credit_id: "crew-1",
+        artist_id: 901,
+        department: "Directing",
+        job: "Director",
+        episode_count: 6,
+        artist_name: "Bo Winter",
+        artist_profile: nullableString(null),
+      },
+    ],
+    creators: [
+      {
+        id: 900,
+        name: "Ada Frost",
+        profile: nullableString("/api/static/shows/frost-harbor.svg"),
+      },
+    ],
+    genres: [{ id: 1, tag: "Drama" }],
+    networks: [
+      {
+        id: 77,
+        name: "Glacier Network",
+        logo: nullableString("/api/static/shows/frost-harbor.svg"),
+        country: nullableString("US"),
+      },
+    ],
+    production_companies: [{ id: 88, name: "Glacier Pictures" }],
+    extra_videos: [
+      {
+        id: 1,
+        title: "Frost Harbor Trailer",
+        key: "frost-harbor-trailer",
+        type: "trailer",
+        site: "youtube",
+      },
+    ],
+  };
+}
+
+function showSeasonEpisodes(seasonNumber: number) {
+  const season = showSeasons.find(s => s.season_number === seasonNumber);
+  if (!season) return null;
+
+  return {
+    season,
+    episodes: Array.from({ length: season.available_episode_count }, (_, i) =>
+      showEpisode(seasonNumber, i + 1),
+    ),
+  };
+}
+
 function handleShowsRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1250,6 +1400,26 @@ function handleShowsRoutes(
 
   if (url.pathname === "/api/shows/latest" && method === "GET") {
     sendSuccess(response, { shows: latestShows });
+    return true;
+  }
+
+  const detailsMatch = url.pathname.match(/^\/api\/shows\/details\/(\d+)$/);
+  if (detailsMatch && method === "GET") {
+    sendSuccess(response, showDetails(Number(detailsMatch[1])));
+    return true;
+  }
+
+  const episodesMatch = url.pathname.match(
+    /^\/api\/shows\/(\d+)\/seasons\/(\d+)\/episodes$/,
+  );
+  if (episodesMatch && method === "GET") {
+    const payload = showSeasonEpisodes(Number(episodesMatch[2]));
+    if (payload === null) {
+      sendFailure(response, 404, "season not found");
+      return true;
+    }
+
+    sendSuccess(response, payload);
     return true;
   }
 

@@ -10,19 +10,29 @@ import {
 import { formatExtraVideoType } from "@/lib/format";
 import { buildYouTubeThumbnailUrl } from "@/lib/youtube-thumb-url";
 import { cn } from "@/lib/utils";
-import type { LibraryMovieExtraVideoType } from "@/types";
+/**
+ * What this section renders, structurally: movie and show payloads both satisfy
+ * it, so neither media type's named contract type leaks into shared code.
+ */
+export type ExtraVideoItem = {
+  id: number;
+  title: string;
+  key: string;
+  type: string;
+  site: string;
+};
 
-type MovieExtraVideosSectionProps = {
-  videos: LibraryMovieExtraVideoType[];
-  movieId: number;
-  trailerReturnTo?: string;
+type ExtraVideosSectionProps = {
+  videos: ExtraVideoItem[];
+  /** Where the trailer player returns to when the viewer backs out. */
+  returnTo: string;
 };
 
 function ExtraVideoCard({
   video,
   returnTo,
 }: {
-  video: LibraryMovieExtraVideoType;
+  video: ExtraVideoItem;
   returnTo: string;
 }) {
   const thumbnailUrl = buildYouTubeThumbnailUrl(video.key);
@@ -84,14 +94,11 @@ function ExtraVideoCard({
   );
 }
 
-export default function MovieExtraVideosSection({
+export default function ExtraVideosSection({
   videos,
-  movieId,
-  trailerReturnTo,
-}: MovieExtraVideosSectionProps) {
+  returnTo,
+}: ExtraVideosSectionProps) {
   if (videos.length === 0) return null;
-
-  const returnTo = trailerReturnTo ?? `/movies/${movieId}`;
 
   return (
     <section

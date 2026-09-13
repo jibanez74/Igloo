@@ -455,6 +455,212 @@ func (q *Queries) DeleteShowSeasonExtraVideo(ctx context.Context, seasonID int64
 	return err
 }
 
+const getCastByShowID = `-- name: GetCastByShowID :many
+SELECT
+  sc.credit_id,
+  sc.artist_id,
+  sc.character,
+  sc.cast_order,
+  sc.episode_count,
+  a.name AS artist_name,
+  a.profile AS artist_profile
+FROM show_cast AS sc
+INNER JOIN artist AS a
+  ON a.id = sc.artist_id
+WHERE sc.show_id = ?
+ORDER BY
+  sc.cast_order,
+  a.name
+`
+
+type GetCastByShowIDRow struct {
+	CreditID      string         `json:"credit_id"`
+	ArtistID      int64          `json:"artist_id"`
+	Character     string         `json:"character"`
+	CastOrder     int64          `json:"cast_order"`
+	EpisodeCount  int64          `json:"episode_count"`
+	ArtistName    string         `json:"artist_name"`
+	ArtistProfile sql.NullString `json:"artist_profile"`
+}
+
+// Aggregate cast with artist name and profile. show_cast has no row id, so
+// credit_id is the stable identity; TMDB can credit one artist with several
+// roles, which is why the artist id alone will not do.
+func (q *Queries) GetCastByShowID(ctx context.Context, showID int64) ([]GetCastByShowIDRow, error) {
+	rows, err := q.query(ctx, q.getCastByShowIDStmt, getCastByShowID, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCastByShowIDRow{}
+	for rows.Next() {
+		var i GetCastByShowIDRow
+		if err := rows.Scan(
+			&i.CreditID,
+			&i.ArtistID,
+			&i.Character,
+			&i.CastOrder,
+			&i.EpisodeCount,
+			&i.ArtistName,
+			&i.ArtistProfile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCreatorsByShowID = `-- name: GetCreatorsByShowID :many
+SELECT
+  a.id,
+  a.name,
+  a.profile
+FROM artist AS a
+INNER JOIN show_creators AS sc
+  ON sc.artist_id = a.id
+WHERE sc.show_id = ?
+ORDER BY a.name
+`
+
+type GetCreatorsByShowIDRow struct {
+	ID      int64          `json:"id"`
+	Name    string         `json:"name"`
+	Profile sql.NullString `json:"profile"`
+}
+
+// Series creators, billed ahead of the aggregate crew on the details page.
+func (q *Queries) GetCreatorsByShowID(ctx context.Context, showID int64) ([]GetCreatorsByShowIDRow, error) {
+	rows, err := q.query(ctx, q.getCreatorsByShowIDStmt, getCreatorsByShowID, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCreatorsByShowIDRow{}
+	for rows.Next() {
+		var i GetCreatorsByShowIDRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Profile); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCrewByShowID = `-- name: GetCrewByShowID :many
+SELECT
+  sc.credit_id,
+  sc.artist_id,
+  sc.department,
+  sc.job,
+  sc.episode_count,
+  a.name AS artist_name,
+  a.profile AS artist_profile
+FROM show_crew AS sc
+INNER JOIN artist AS a
+  ON a.id = sc.artist_id
+WHERE sc.show_id = ?
+ORDER BY
+  sc.department,
+  sc.job,
+  a.name
+`
+
+type GetCrewByShowIDRow struct {
+	CreditID      string         `json:"credit_id"`
+	ArtistID      int64          `json:"artist_id"`
+	Department    string         `json:"department"`
+	Job           string         `json:"job"`
+	EpisodeCount  int64          `json:"episode_count"`
+	ArtistName    string         `json:"artist_name"`
+	ArtistProfile sql.NullString `json:"artist_profile"`
+}
+
+// Aggregate crew with artist name. credit_id is the stable identity, as in
+// GetCastByShowID.
+func (q *Queries) GetCrewByShowID(ctx context.Context, showID int64) ([]GetCrewByShowIDRow, error) {
+	rows, err := q.query(ctx, q.getCrewByShowIDStmt, getCrewByShowID, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCrewByShowIDRow{}
+	for rows.Next() {
+		var i GetCrewByShowIDRow
+		if err := rows.Scan(
+			&i.CreditID,
+			&i.ArtistID,
+			&i.Department,
+			&i.Job,
+			&i.EpisodeCount,
+			&i.ArtistName,
+			&i.ArtistProfile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getGenresByShowID = `-- name: GetGenresByShowID :many
+SELECT
+  g.id,
+  g.tag
+FROM genres AS g
+INNER JOIN show_genres AS sg
+  ON sg.genre_id = g.id
+WHERE sg.show_id = ?
+ORDER BY g.tag
+`
+
+type GetGenresByShowIDRow struct {
+	ID  int64  `json:"id"`
+	Tag string `json:"tag"`
+}
+
+// Genres linked to a show (for details view).
+func (q *Queries) GetGenresByShowID(ctx context.Context, showID int64) ([]GetGenresByShowIDRow, error) {
+	rows, err := q.query(ctx, q.getGenresByShowIDStmt, getGenresByShowID, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetGenresByShowIDRow{}
+	for rows.Next() {
+		var i GetGenresByShowIDRow
+		if err := rows.Scan(&i.ID, &i.Tag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestShows = `-- name: GetLatestShows :many
 SELECT id, name, poster_path, premiere_year FROM shows ORDER BY created_at DESC, id DESC LIMIT 12
 `
@@ -482,6 +688,56 @@ func (q *Queries) GetLatestShows(ctx context.Context) ([]GetLatestShowsRow, erro
 			&i.Name,
 			&i.PosterPath,
 			&i.PremiereYear,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNetworksByShowID = `-- name: GetNetworksByShowID :many
+SELECT
+  n.id,
+  n.name,
+  n.logo,
+  n.country
+FROM networks AS n
+INNER JOIN show_networks AS sn
+  ON sn.network_id = n.id
+WHERE sn.show_id = ?
+ORDER BY n.name
+`
+
+type GetNetworksByShowIDRow struct {
+	ID      int64          `json:"id"`
+	Name    string         `json:"name"`
+	Logo    sql.NullString `json:"logo"`
+	Country sql.NullString `json:"country"`
+}
+
+// Networks linked to a show, with the logo and country the About section
+// renders. The only query in the project that reads networks.
+func (q *Queries) GetNetworksByShowID(ctx context.Context, showID int64) ([]GetNetworksByShowIDRow, error) {
+	rows, err := q.query(ctx, q.getNetworksByShowIDStmt, getNetworksByShowID, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetNetworksByShowIDRow{}
+	for rows.Next() {
+		var i GetNetworksByShowIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Logo,
+			&i.Country,
 		); err != nil {
 			return nil, err
 		}
@@ -556,6 +812,46 @@ func (q *Queries) GetPendingShows(ctx context.Context, afterID int64) ([]Show, e
 	return items, nil
 }
 
+const getProductionCompaniesByShowID = `-- name: GetProductionCompaniesByShowID :many
+SELECT
+  pc.id,
+  pc.name
+FROM production_companies AS pc
+INNER JOIN show_production_companies AS spc
+  ON spc.production_company_id = pc.id
+WHERE spc.show_id = ?
+ORDER BY pc.name
+`
+
+type GetProductionCompaniesByShowIDRow struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// Production companies linked to a show (for details view).
+func (q *Queries) GetProductionCompaniesByShowID(ctx context.Context, showID int64) ([]GetProductionCompaniesByShowIDRow, error) {
+	rows, err := q.query(ctx, q.getProductionCompaniesByShowIDStmt, getProductionCompaniesByShowID, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetProductionCompaniesByShowIDRow{}
+	for rows.Next() {
+		var i GetProductionCompaniesByShowIDRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getShow = `-- name: GetShow :one
 SELECT id, directory_path, local_name, premiere_year, name, tmdb_id, imdb_id, original_name, overview, tagline, language, origin_countries, first_air_date, last_air_date, status, type, adult, poster_path, backdrop_path, homepage, vote_average, vote_count, popularity, certification, tmdb_season_count, tmdb_episode_count, created_at, updated_at FROM shows WHERE id = ?
 `
@@ -592,6 +888,96 @@ func (q *Queries) GetShow(ctx context.Context, id int64) (Show, error) {
 		&i.TmdbEpisodeCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getShowDetails = `-- name: GetShowDetails :one
+
+SELECT
+  id,
+  name,
+  original_name,
+  premiere_year,
+  tmdb_id,
+  overview,
+  tagline,
+  language,
+  origin_countries,
+  first_air_date,
+  last_air_date,
+  status,
+  type,
+  poster_path,
+  backdrop_path,
+  vote_average,
+  vote_count,
+  certification,
+  tmdb_season_count,
+  tmdb_episode_count
+FROM shows
+WHERE id = ?
+LIMIT 1
+`
+
+type GetShowDetailsRow struct {
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	OriginalName     sql.NullString  `json:"original_name"`
+	PremiereYear     sql.NullInt64   `json:"premiere_year"`
+	TmdbID           sql.NullInt64   `json:"tmdb_id"`
+	Overview         sql.NullString  `json:"overview"`
+	Tagline          sql.NullString  `json:"tagline"`
+	Language         sql.NullString  `json:"language"`
+	OriginCountries  sql.NullString  `json:"origin_countries"`
+	FirstAirDate     sql.NullString  `json:"first_air_date"`
+	LastAirDate      sql.NullString  `json:"last_air_date"`
+	Status           sql.NullString  `json:"status"`
+	Type             sql.NullString  `json:"type"`
+	PosterPath       sql.NullString  `json:"poster_path"`
+	BackdropPath     sql.NullString  `json:"backdrop_path"`
+	VoteAverage      sql.NullFloat64 `json:"vote_average"`
+	VoteCount        sql.NullInt64   `json:"vote_count"`
+	Certification    sql.NullString  `json:"certification"`
+	TmdbSeasonCount  sql.NullInt64   `json:"tmdb_season_count"`
+	TmdbEpisodeCount sql.NullInt64   `json:"tmdb_episode_count"`
+}
+
+// ============================================================================
+// Show details page reads.
+//
+// Everything above this line serves the scanner. These are the only queries a
+// client payload is built from: explicit projections that never expose
+// directory_path or local_name, and that address a season by its number rather
+// than by an internal row id.
+// ============================================================================
+// Show header for the details page. Omits the filesystem columns and the
+// fields the page does not render (adult, imdb_id, homepage, popularity,
+// timestamps).
+func (q *Queries) GetShowDetails(ctx context.Context, id int64) (GetShowDetailsRow, error) {
+	row := q.queryRow(ctx, q.getShowDetailsStmt, getShowDetails, id)
+	var i GetShowDetailsRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.OriginalName,
+		&i.PremiereYear,
+		&i.TmdbID,
+		&i.Overview,
+		&i.Tagline,
+		&i.Language,
+		&i.OriginCountries,
+		&i.FirstAirDate,
+		&i.LastAirDate,
+		&i.Status,
+		&i.Type,
+		&i.PosterPath,
+		&i.BackdropPath,
+		&i.VoteAverage,
+		&i.VoteCount,
+		&i.Certification,
+		&i.TmdbSeasonCount,
+		&i.TmdbEpisodeCount,
 	)
 	return i, err
 }
@@ -650,6 +1036,133 @@ func (q *Queries) GetShowEpisodes(ctx context.Context, seasonID int64) ([]ShowEp
 			&i.VoteCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowEpisodesBySeasonNumber = `-- name: GetShowEpisodesBySeasonNumber :many
+SELECT
+  e.id,
+  e.episode_number,
+  e.name,
+  e.overview,
+  e.air_date,
+  e.still_path,
+  e.tmdb_runtime,
+  e.vote_average,
+  e.vote_count
+FROM show_episodes AS e
+INNER JOIN show_seasons AS s
+  ON s.id = e.season_id
+WHERE s.show_id = ?
+  AND s.season_number = ?
+ORDER BY e.episode_number
+`
+
+type GetShowEpisodesBySeasonNumberParams struct {
+	ShowID       int64 `json:"show_id"`
+	SeasonNumber int64 `json:"season_number"`
+}
+
+type GetShowEpisodesBySeasonNumberRow struct {
+	ID            int64           `json:"id"`
+	EpisodeNumber int64           `json:"episode_number"`
+	Name          string          `json:"name"`
+	Overview      sql.NullString  `json:"overview"`
+	AirDate       sql.NullString  `json:"air_date"`
+	StillPath     sql.NullString  `json:"still_path"`
+	TmdbRuntime   sql.NullInt64   `json:"tmdb_runtime"`
+	VoteAverage   sql.NullFloat64 `json:"vote_average"`
+	VoteCount     sql.NullInt64   `json:"vote_count"`
+}
+
+// Episodes of one season, addressed by (show_id, season_number) so the route
+// never exposes an internal season id. Carries no file, stream, codec, or
+// chapter data: those belong to a physical file, and one file can back several
+// episodes.
+func (q *Queries) GetShowEpisodesBySeasonNumber(ctx context.Context, arg GetShowEpisodesBySeasonNumberParams) ([]GetShowEpisodesBySeasonNumberRow, error) {
+	rows, err := q.query(ctx, q.getShowEpisodesBySeasonNumberStmt, getShowEpisodesBySeasonNumber, arg.ShowID, arg.SeasonNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowEpisodesBySeasonNumberRow{}
+	for rows.Next() {
+		var i GetShowEpisodesBySeasonNumberRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EpisodeNumber,
+			&i.Name,
+			&i.Overview,
+			&i.AirDate,
+			&i.StillPath,
+			&i.TmdbRuntime,
+			&i.VoteAverage,
+			&i.VoteCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowExtraVideos = `-- name: GetShowExtraVideos :many
+SELECT
+  ev.id,
+  ev.title,
+  ev.key,
+  ev.type,
+  ev.site
+FROM extra_videos AS ev
+INNER JOIN show_extra_videos AS sev
+  ON sev.extra_video_id = ev.id
+WHERE sev.show_id = ?
+ORDER BY
+  ev.type,
+  ev.title
+`
+
+type GetShowExtraVideosRow struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	Key   string `json:"key"`
+	Type  string `json:"type"`
+	Site  string `json:"site"`
+}
+
+// List all extra videos (trailers, special features) linked to a show.
+func (q *Queries) GetShowExtraVideos(ctx context.Context, showID int64) ([]GetShowExtraVideosRow, error) {
+	rows, err := q.query(ctx, q.getShowExtraVideosStmt, getShowExtraVideos, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowExtraVideosRow{}
+	for rows.Next() {
+		var i GetShowExtraVideosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Key,
+			&i.Type,
+			&i.Site,
 		); err != nil {
 			return nil, err
 		}
@@ -867,6 +1380,125 @@ func (q *Queries) GetShowSeason(ctx context.Context, id int64) (ShowSeason, erro
 		&i.TmdbEpisodeCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getShowSeasonSummaries = `-- name: GetShowSeasonSummaries :many
+SELECT
+  s.id,
+  s.season_number,
+  s.name,
+  s.overview,
+  s.air_date,
+  s.poster_path,
+  s.tmdb_episode_count,
+  COUNT(e.id) AS available_episode_count
+FROM show_seasons AS s
+LEFT JOIN show_episodes AS e
+  ON e.season_id = s.id
+WHERE s.show_id = ?
+GROUP BY s.id
+ORDER BY
+  s.season_number = 0,
+  s.season_number
+`
+
+type GetShowSeasonSummariesRow struct {
+	ID                    int64          `json:"id"`
+	SeasonNumber          int64          `json:"season_number"`
+	Name                  string         `json:"name"`
+	Overview              sql.NullString `json:"overview"`
+	AirDate               sql.NullString `json:"air_date"`
+	PosterPath            sql.NullString `json:"poster_path"`
+	TmdbEpisodeCount      sql.NullInt64  `json:"tmdb_episode_count"`
+	AvailableEpisodeCount int64          `json:"available_episode_count"`
+}
+
+// Seasons with the count of episodes actually present. Pruning deletes episodes
+// that lost their last file, so a stored episode always has one and the stored
+// count is the available count; TMDB's tmdb_episode_count rides alongside it so
+// the page can state how much of a season is here. Specials (season 0) sort
+// last rather than first.
+func (q *Queries) GetShowSeasonSummaries(ctx context.Context, showID int64) ([]GetShowSeasonSummariesRow, error) {
+	rows, err := q.query(ctx, q.getShowSeasonSummariesStmt, getShowSeasonSummaries, showID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowSeasonSummariesRow{}
+	for rows.Next() {
+		var i GetShowSeasonSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeasonNumber,
+			&i.Name,
+			&i.Overview,
+			&i.AirDate,
+			&i.PosterPath,
+			&i.TmdbEpisodeCount,
+			&i.AvailableEpisodeCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowSeasonSummaryByNumber = `-- name: GetShowSeasonSummaryByNumber :one
+SELECT
+  s.id,
+  s.season_number,
+  s.name,
+  s.overview,
+  s.air_date,
+  s.poster_path,
+  s.tmdb_episode_count,
+  COUNT(e.id) AS available_episode_count
+FROM show_seasons AS s
+LEFT JOIN show_episodes AS e
+  ON e.season_id = s.id
+WHERE s.show_id = ?
+  AND s.season_number = ?
+GROUP BY s.id
+`
+
+type GetShowSeasonSummaryByNumberParams struct {
+	ShowID       int64 `json:"show_id"`
+	SeasonNumber int64 `json:"season_number"`
+}
+
+type GetShowSeasonSummaryByNumberRow struct {
+	ID                    int64          `json:"id"`
+	SeasonNumber          int64          `json:"season_number"`
+	Name                  string         `json:"name"`
+	Overview              sql.NullString `json:"overview"`
+	AirDate               sql.NullString `json:"air_date"`
+	PosterPath            sql.NullString `json:"poster_path"`
+	TmdbEpisodeCount      sql.NullInt64  `json:"tmdb_episode_count"`
+	AvailableEpisodeCount int64          `json:"available_episode_count"`
+}
+
+// The GetShowSeasonSummaries aggregate for one season, addressed by number.
+func (q *Queries) GetShowSeasonSummaryByNumber(ctx context.Context, arg GetShowSeasonSummaryByNumberParams) (GetShowSeasonSummaryByNumberRow, error) {
+	row := q.queryRow(ctx, q.getShowSeasonSummaryByNumberStmt, getShowSeasonSummaryByNumber, arg.ShowID, arg.SeasonNumber)
+	var i GetShowSeasonSummaryByNumberRow
+	err := row.Scan(
+		&i.ID,
+		&i.SeasonNumber,
+		&i.Name,
+		&i.Overview,
+		&i.AirDate,
+		&i.PosterPath,
+		&i.TmdbEpisodeCount,
+		&i.AvailableEpisodeCount,
 	)
 	return i, err
 }

@@ -1542,6 +1542,73 @@
         }
       }
     },
+    "/api/shows/details/{id}": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "Get TV show details",
+        "description": "Returns one show with its seasons, aggregate cast and crew, creators, genres, networks, production companies, and extra videos, read in a single read-only transaction so the payload is one consistent snapshot. Seasons carry TMDB's episode count beside the number of episodes actually present; the local season count is the length of the seasons array. Episodes are fetched per season from the season episodes endpoint. Filesystem locations are never exposed, and this endpoint provides no playback.",
+        "operationId": "getShowDetails",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ShowDetailsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/shows/{id}/seasons/{seasonNumber}/episodes": {
+      "get": {
+        "tags": [
+          "TV Shows"
+        ],
+        "summary": "List episodes of a TV show season",
+        "description": "Returns one season and its episodes, ordered by episode number. The season is addressed by its number rather than by an internal id; specials are season zero. Answers 404 when the show or that season number does not exist. Episodes carry no file, stream, codec, or chapter data: technical metadata belongs to a physical file, one file can back several episodes, and file duration is never divided into guessed episode runtimes.",
+        "operationId": "getShowSeasonEpisodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/SeasonNumberPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ShowSeasonEpisodesResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/movies/continue-watching": {
       "get": {
         "tags": [
@@ -3912,7 +3979,7 @@
           "Settings"
         ],
         "summary": "Trigger a TV show library scan",
-        "description": "Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Accepts Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly inside the show folder, where the token names the season. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; changed filesystem metadata re-probes the file without reading its content, and a technical change never re-queues matched metadata. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan, with the entity total published before the first request. Failed requests preserve existing metadata and retry state; a definitive no-match is reported as unmatched and backs off before the show is searched again; an authentication failure or repeated transient failures stop enrichment for the run; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes the affected season of unreferenced episodes and then the empty season and show, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. TV browsing, playback, and manual identification are not provided.",
+        "description": "Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Accepts Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly inside the show folder, where the token names the season. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; changed filesystem metadata re-probes the file without reading its content, and a technical change never re-queues matched metadata. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan, with the entity total published before the first request. Failed requests preserve existing metadata and retry state; a definitive no-match is reported as unmatched and backs off before the show is searched again; an authentication failure or repeated transient failures stop enrichment for the run; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes the affected season of unreferenced episodes and then the empty season and show, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. Scanned shows are browsable through the TV show details endpoints; playback and manual identification are not provided.",
         "operationId": "triggerShowScan",
         "responses": {
           "200": {
@@ -5303,6 +5370,16 @@
           "minimum": 0
         }
       },
+      "SeasonNumberPath": {
+        "name": "seasonNumber",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        }
+      },
       "PageQuery": {
         "name": "page",
         "in": "query",
@@ -6155,6 +6232,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/LatestShowsEnvelope"
+            }
+          }
+        }
+      },
+      "ShowDetailsResponse": {
+        "description": "TV show details response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ShowDetailsEnvelope"
+            }
+          }
+        }
+      },
+      "ShowSeasonEpisodesResponse": {
+        "description": "TV show season episodes response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ShowSeasonEpisodesEnvelope"
             }
           }
         }
@@ -8668,6 +8765,503 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/LatestShowsData"
+              }
+            }
+          }
+        ]
+      },
+      "Show": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "original_name",
+          "premiere_year",
+          "tmdb_id",
+          "overview",
+          "tagline",
+          "language",
+          "origin_countries",
+          "first_air_date",
+          "last_air_date",
+          "status",
+          "type",
+          "poster_path",
+          "backdrop_path",
+          "vote_average",
+          "vote_count",
+          "certification",
+          "tmdb_season_count",
+          "tmdb_episode_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "original_name": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "premiere_year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "tmdb_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tagline": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "origin_countries": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "first_air_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "last_air_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "backdrop_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "vote_average": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "vote_count": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "certification": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_season_count": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "tmdb_episode_count": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowSeasonSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "season_number",
+          "name",
+          "overview",
+          "air_date",
+          "poster_path",
+          "tmdb_episode_count",
+          "available_episode_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "season_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "air_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_episode_count": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "available_episode_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowEpisode": {
+        "type": "object",
+        "required": [
+          "id",
+          "episode_number",
+          "name",
+          "overview",
+          "air_date",
+          "still_path",
+          "tmdb_runtime",
+          "vote_average",
+          "vote_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overview": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "air_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "still_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "tmdb_runtime": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "vote_average": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "vote_count": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowCastCredit": {
+        "type": "object",
+        "required": [
+          "credit_id",
+          "artist_id",
+          "character",
+          "cast_order",
+          "episode_count",
+          "artist_name",
+          "artist_profile"
+        ],
+        "properties": {
+          "credit_id": {
+            "type": "string"
+          },
+          "artist_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "character": {
+            "type": "string"
+          },
+          "cast_order": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "artist_name": {
+            "type": "string"
+          },
+          "artist_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowCrewCredit": {
+        "type": "object",
+        "required": [
+          "credit_id",
+          "artist_id",
+          "department",
+          "job",
+          "episode_count",
+          "artist_name",
+          "artist_profile"
+        ],
+        "properties": {
+          "credit_id": {
+            "type": "string"
+          },
+          "artist_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "department": {
+            "type": "string"
+          },
+          "job": {
+            "type": "string"
+          },
+          "episode_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "artist_name": {
+            "type": "string"
+          },
+          "artist_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowPerson": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "profile"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowGenre": {
+        "type": "object",
+        "required": [
+          "id",
+          "tag"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowNetwork": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "logo",
+          "country"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "logo": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "country": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowProductionCompany": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExtraVideo": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "key",
+          "type",
+          "site"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "trailer",
+              "special_feature",
+              "other"
+            ]
+          },
+          "site": {
+            "type": "string",
+            "enum": [
+              "youtube",
+              "vimeo",
+              "other"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowDetailsData": {
+        "type": "object",
+        "required": [
+          "show",
+          "seasons",
+          "cast",
+          "crew",
+          "creators",
+          "genres",
+          "networks",
+          "production_companies",
+          "extra_videos"
+        ],
+        "properties": {
+          "show": {
+            "$ref": "#/components/schemas/Show"
+          },
+          "seasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowSeasonSummary"
+            }
+          },
+          "cast": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowCastCredit"
+            }
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowCrewCredit"
+            }
+          },
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowPerson"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowGenre"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowNetwork"
+            }
+          },
+          "production_companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowProductionCompany"
+            }
+          },
+          "extra_videos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExtraVideo"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowSeasonEpisodesData": {
+        "type": "object",
+        "required": [
+          "season",
+          "episodes"
+        ],
+        "properties": {
+          "season": {
+            "$ref": "#/components/schemas/ShowSeasonSummary"
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowEpisode"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowDetailsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShowDetailsData"
+              }
+            }
+          }
+        ]
+      },
+      "ShowSeasonEpisodesEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShowSeasonEpisodesData"
               }
             }
           }

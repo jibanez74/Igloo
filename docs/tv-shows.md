@@ -4,9 +4,9 @@ Igloo scans a local TV catalog but does not read it back: one route, `GET /api/s
 
 Show identity is the show row id. Responses never expose `directory_path` or `local_name`. TMDB totals stay separate from local availability derived from file links, as [media behavior](ffmpeg.md#tv-show-scanning) requires. The [API contract](openapi.json) and the [design system](design-system.md) remain authoritative, and both are updated in the same task as the implementation they describe.
 
-The phases below describe planned work; nothing in them is implemented. [Scanner behavior](tv-show-scanner-plan.md) is unchanged by this work.
+The phases below are implemented; see Implementation status. [Scanner behavior](ffmpeg.md#tv-show-scanning) is unchanged by this work.
 
-## Phase 1 — SQL queries (planned)
+## Phase 1 — SQL queries
 
 Do not modify the schema. Every column the page needs already exists, so `server/sqlc/schema.sql` is untouched, no dev database needs an `ALTER`, and no migration question arises. Add read queries to `server/sqlc/queries/shows.sql` and run `make generate`. Every query there today serves the scanner: the few that read catalog rows — `GetShow`, `GetShowSeasons`, `GetShowEpisodes` — select whole rows keyed by internal ids, so they are neither addressable from a URL nor safe to hand to a client.
 
@@ -18,7 +18,7 @@ Add `GetCastByShowID` and `GetCrewByShowID`, joining `artist` for the name and p
 
 Add no indexes. Every filter rides an existing key prefix: `show_seasons` is unique on `(show_id, season_number)`, `show_episodes` on `(season_id, episode_number)`, and the credit and taxonomy tables lead their composite primary keys with `show_id`. Confirm each plan with `EXPLAIN QUERY PLAN` executed through `python3`, not the `sqlite3` binary, which this checkout does not provide.
 
-## Phase 2 — HTTP API (planned)
+## Phase 2 — HTTP API
 
 Add two authenticated, non-admin routes to `registerShowRoutes` in `server/cmd/api/routes.go` and two handlers to `server/cmd/api/show_handler.go`. Each handler parses its path parameters with `strconv.ParseInt` and rejects failures with `400`, then opens one read-only transaction with `defer tx.Rollback()` and reads every collection through `app.Queries.WithTx(tx)`, so a page's payload is one consistent snapshot. This is `GetMovieDetails` exactly. Assign results and errors before the conditions that test them, keep internal detail out of client messages, and log the underlying error separately.
 
@@ -32,7 +32,7 @@ Update `docs/openapi.json` in the same task. Follow the conforming TV precedent,
 
 Correct the contract text that this work makes false: the `triggerShowScan` description ends "TV browsing, playback, and manual identification are not provided."
 
-## Phase 3 — Web client (planned)
+## Phase 3 — Web client
 
 Alias the new schemas in `web/src/types/shows.ts`, which holds two aliases today, and re-export them from `web/src/types/index.ts`. Alias the named `*Data` payload schemas directly; never index an envelope, which inherits `JsonSuccess.data`'s open index signature and silently disables property checking. Add `getShowDetails` and `getShowSeasonEpisodes` to `web/src/lib/api.ts` on the existing `apiRequest` helper, which never rejects — check the envelope rather than wrapping the call in `try`/`catch`. Add `showDetailsQueryOpts(id)` and `showSeasonEpisodesQueryOpts(showId, seasonNumber)` to `web/src/lib/query-opts.ts` with `STALE_LIST`/`GC_DEFAULT` and the existing `enabled` guards, and register `SHOW_DETAILS_KEY` and `SHOW_SEASON_EPISODES_KEY` in `web/src/lib/constants.ts`.
 
@@ -56,7 +56,7 @@ Add `TMDB_STILL_SIZE` and `TMDB_LOGO_SIZE` to the client constants. The image pr
 
 Accessibility is part of the work, not a later pass: every control carries an accessible name, the season tabs are operable from the keyboard with visible focus, no affordance is hover-only, availability is never communicated by color alone, and the heading hierarchy runs from the single page heading through each section's heading.
 
-## Phase 4 — Tests and documentation (planned)
+## Phase 4 — Tests and documentation
 
 Cover the server in `server/cmd/api/show_handler_test.go`, built on `setupTestApp` and seeded through the scanner's own upserts so the fixtures cannot drift from what a scan produces. Every operation with a JSON success response must call `assertOpenAPIExchange` from a passing focused test, or the unfiltered API package run fails at completion. Cover an unparsable id, an unknown show, an unknown season number, an unauthenticated request, specials ordering last, and a season whose TMDB episode count exceeds the episodes actually present.
 
@@ -64,7 +64,7 @@ Cover the client in `web/src/test/shows/`, which does not exist yet; unit tests 
 
 Add `web/e2e/tv-show-details.spec.ts` with a per-spec route mock that collects unexpected API requests and asserts the collection is empty, and add a show-details fixture and the two new route branches to `handleShowsRoutes` in `web/e2e/mock-api-server.ts`. A page-level call that is not stubbed hangs a mocked spec. Run Playwright on `E2E_MOCK_API_PORT` rather than the default port, and stub the unread-notification poll.
 
-Update the documents this work makes stale, in the same task: the API contract as described above; the deferral sentences that say TV browsing is not provided, in [media behavior](ffmpeg.md#tv-show-scanning), in the [scanner specification](tv-show-scanner-plan.md)'s scope section, and in the scan-trigger description; the two statements in `README.md`; and the [design system](design-system.md), for the three moved component names and one sentence naming the season-selector and episode-list patterns.
+Update the documents this work makes stale, in the same task: the API contract as described above; the deferral sentences that say TV browsing is not provided, in [media behavior](ffmpeg.md#tv-show-scanning) and in the scan-trigger description; the two statements in `README.md`; and the [design system](design-system.md), for the three moved component names and one sentence naming the season-selector and episode-list patterns.
 
 ## Scope and defaults
 
@@ -80,4 +80,16 @@ Then exercise the page against a real `make dev` instance holding a scanned samp
 
 ## Implementation status
 
-Nothing in this specification is implemented. The schema, scanner, and scan endpoints it builds on are. This document was approved on 2026-09-12 and is the plan of record for `feature/tv-shows-details`; record validation here, under a dated heading, when the implementation lands.
+This document was approved on 2026-09-12 and is the plan of record for `feature/tv-shows-details`.
+
+### 2026-09-12 — implemented
+
+All four phases landed on `feature/tv-shows-details`. The schema did not change and no index was added; every new query plans as an indexed `SEARCH`, confirmed with `EXPLAIN QUERY PLAN` through `python3`.
+
+Three deviations from the text above, each deliberate:
+
+- **`docs/tv-show-scanner-plan.md` no longer exists.** It was deleted when the scanner merged, so Phase 4's instruction to update its scope section is moot, and the two links to it here plus the one in `README.md` were repointed.
+- **`ExtraVideosSection` takes one required `returnTo`**, replacing both `movieId` and the optional `trailerReturnTo` it already had, rather than keeping the override alongside it.
+- **Specials are excluded from the hero's season and episode tallies.** TMDB's `tmdb_season_count` and `tmdb_episode_count` cover the numbered run only, so counting season zero locally would render a show with two seasons and a specials season as "3 of 2 seasons". The season list itself still shows specials, sorted last.
+
+Verified: the unfiltered API package run (contract-coverage gate included), `make test-openapi`, `make check`, 18 new web unit tests, and 5 new Playwright specs covering the default season, a season switch through the URL, keyboard operation of the season tabs, and the 390-pixel layout.
