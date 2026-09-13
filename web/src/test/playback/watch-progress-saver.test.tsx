@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useWatchProgressSaver } from "@/hooks/useWatchProgressSaver";
-import { movieMediaRef } from "@/lib/media-ref";
+import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
 const updateMediaWatchProgress = vi.hoisted(() => vi.fn());
 
@@ -27,7 +27,7 @@ const successfulUpdate = {
   data: { watched: false },
 };
 
-describe("movie watch progress saver", () => {
+describe("watch progress saver", () => {
   it("queues the exit snapshot after an in-flight save", async () => {
     const firstSave = deferred<typeof successfulUpdate>();
     updateMediaWatchProgress
@@ -82,6 +82,44 @@ describe("movie watch progress saver", () => {
       saveSessionId,
       2,
     );
+  });
+
+  it("addresses an episode's own watch-progress route", async () => {
+    updateMediaWatchProgress.mockResolvedValueOnce(successfulUpdate);
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useWatchProgressSaver({
+        media: episodeMediaRef(70103),
+        playing: false,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handlePauseSave();
+    });
+    expect(updateMediaWatchProgress).toHaveBeenCalledWith(
+      episodeMediaRef(70103),
+      300,
+      1000,
+      expect.any(String),
+      1,
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/shows/episodes/70103/watch-progress",
+        expect.objectContaining({ method: "PUT", keepalive: true }),
+      ),
+    );
+    expect(requestBody(fetchMock).save_sequence).toBe(2);
   });
 
   it("uses a keepalive request on pagehide without saving again on unmount", async () => {

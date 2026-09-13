@@ -28,3 +28,16 @@ export function countFetchRequests(
   return fetchMock.mock.calls.filter(([input]) => requestURL(input) === url)
     .length;
 }
+
+/**
+ * A `fetch` result the test resolves by hand, for asserting what a component
+ * shows while a request is still in flight (an optimistic update, a pending
+ * state) before deciding how the server answers.
+ */
+export function deferredResponse() {
+  let resolve!: (response: Response | PromiseLike<Response>) => void;
+  const promise = new Promise<Response>(resolvePromise => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}

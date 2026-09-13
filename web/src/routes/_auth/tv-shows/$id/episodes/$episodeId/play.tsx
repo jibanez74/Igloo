@@ -57,7 +57,7 @@ function PlayEpisodePage() {
     showEpisodeQueryOpts(episodeId),
   );
   const payload = data && !data.error ? data.data : null;
-  const notFound = Boolean(isError || (data && data.error) || (data && !payload));
+  const notFound = Boolean(isError || (data && data.error));
 
   // Back lands on the season the episode belongs to, so a viewer who paged
   // to season four is not dropped on season one.

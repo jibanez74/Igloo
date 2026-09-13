@@ -24,8 +24,3 @@ export function mediaApiBasePath(ref: PlaybackMediaRef): string {
 export function mediaKey(ref: PlaybackMediaRef): string {
   return `${ref.kind}:${ref.id}`;
 }
-
-/** The noun user-facing copy uses for this media. */
-export function mediaNoun(ref: PlaybackMediaRef): string {
-  return ref.kind;
-}

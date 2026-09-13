@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
   EPISODE_WATCH_PROGRESS_KEY,
-  MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
+  PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
   MOVIE_WATCH_PROGRESS_KEY,
   SHOW_SEASON_EPISODES_KEY,
 } from "@/lib/constants";
@@ -28,7 +28,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("movie playback exit synchronization", () => {
+describe("playback exit synchronization", () => {
   it("saves progress before refreshing the watch queries", async () => {
     const save = deferred<void>();
     const refresh = vi.fn().mockResolvedValue(undefined);
@@ -82,7 +82,7 @@ describe("movie playback exit synchronization", () => {
     void synchronization.then(onSettled);
 
     await vi.advanceTimersByTimeAsync(
-      MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS - 1,
+      PLAYBACK_EXIT_SYNC_TIMEOUT_MS - 1,
     );
     expect(onSettled).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe("movie playback exit synchronization", () => {
     expect(refreshWatchQueries).toHaveBeenCalledOnce();
 
     await vi.advanceTimersByTimeAsync(
-      MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS - 1_501,
+      PLAYBACK_EXIT_SYNC_TIMEOUT_MS - 1_501,
     );
     expect(onSettled).not.toHaveBeenCalled();
 
@@ -181,7 +181,7 @@ describe("movie playback exit synchronization", () => {
     queryClient.clear();
   });
 
-  it("only bypasses synchronization within the same movie pathname", () => {
+  it("only bypasses synchronization within the same playback pathname", () => {
     const current = {
       routeId: "/_auth/movies/$id/play",
       pathname: "/movies/7/play",
@@ -200,5 +200,20 @@ describe("movie playback exit synchronization", () => {
         pathname: "/",
       }),
     ).toBe(false);
+
+    // Two episodes of one show share a route id; only the pathname tells
+    // them apart, and moving between them must save the first one's progress.
+    const episode = {
+      routeId: "/_auth/tv-shows/$id/episodes/$episodeId/play",
+      pathname: "/tv-shows/401/episodes/70101/play",
+    };
+    expect(staysOnCurrentPlayback(episode, episode)).toBe(true);
+    expect(
+      staysOnCurrentPlayback(episode, {
+        ...episode,
+        pathname: "/tv-shows/401/episodes/70102/play",
+      }),
+    ).toBe(false);
+    expect(staysOnCurrentPlayback(episode, current)).toBe(false);
   });
 });

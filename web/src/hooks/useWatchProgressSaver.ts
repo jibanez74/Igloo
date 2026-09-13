@@ -5,8 +5,8 @@ import {
   persistWatchProgress,
 } from "@/lib/video-playback";
 import {
-  MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS,
-  MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS,
+  WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS,
+  WATCH_PROGRESS_SAVE_INTERVAL_MS,
 } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 import type { PlaybackMediaRef } from "@/types/playback";
@@ -80,7 +80,7 @@ export function useWatchProgressSaver({
       } catch {
         // Silent background save failure; pause/end handlers surface failures when needed.
       }
-    }, MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS);
+    }, WATCH_PROGRESS_SAVE_INTERVAL_MS);
     return () => {
       window.clearInterval(interval);
     };
@@ -98,7 +98,7 @@ export function useWatchProgressSaver({
         lastKeepalive !== null &&
         Math.abs(lastKeepalive.progressSec - progressSec) < 1 &&
         Date.now() - lastKeepalive.atMs <
-          MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS;
+          WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS;
       if (isDuplicate) return;
 
       const atMs = Date.now();

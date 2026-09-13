@@ -171,7 +171,7 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 
 // StreamEpisode direct-plays the file behind a TV episode.
 func (app *Application) StreamEpisode(w http.ResponseWriter, r *http.Request) {
-	app.serveStreamFile(w, r, mediaKindEpisode, app.episodeStreamFile)
+	app.serveStreamFile(w, r, mediaKindEpisode)
 }
 
 // showEpisodeWatchProgressStore is the episode adapter for the shared

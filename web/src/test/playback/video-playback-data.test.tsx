@@ -6,7 +6,6 @@ import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { movieMediaRef } from "@/lib/media-ref";
 import {
   AUTH_USER_KEY,
-  LIBRARY_MOVIE_DETAILS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_WATCH_PROGRESS_KEY,
   PLAYBACK_SETTINGS_KEY,
@@ -112,16 +111,6 @@ function seedPreferenceResolutionMovie(
   queryClient: QueryClient,
   movieId: number,
 ) {
-  queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
-    error: false,
-    data: {
-      movie: {
-        title: "Preference Race",
-        poster_path: { String: "", Valid: false },
-        duration: nullableFloat64(600),
-      },
-    },
-  });
   queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
     error: false,
     data: {
@@ -165,16 +154,6 @@ function seedMovieWithoutTechnicalDetails(
   queryClient: QueryClient,
   movieId: number,
 ) {
-  queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
-    error: false,
-    data: {
-      movie: {
-        title: "Cold Playback",
-        poster_path: { String: "", Valid: false },
-        duration: nullableFloat64(600),
-      },
-    },
-  });
   queryClient.setQueryData([MOVIE_WATCH_PROGRESS_KEY, movieId], {
     error: false,
     data: null,
@@ -226,16 +205,6 @@ describe("useVideoPlaybackData", () => {
   it("clamps a stale start before deriving every HLS timing value", () => {
     const movieId = 7;
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
-      error: false,
-      data: {
-        movie: {
-          title: "Stale Resume",
-          poster_path: { String: "", Valid: false },
-          duration: nullableFloat64(120),
-        },
-      },
-    });
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -435,16 +404,6 @@ describe("useVideoPlaybackData", () => {
   it("marks every mode unavailable when metadata has no video stream", () => {
     const movieId = 21;
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
-      error: false,
-      data: {
-        movie: {
-          title: "No Video Streams",
-          poster_path: { String: "", Valid: false },
-          duration: nullableFloat64(600),
-        },
-      },
-    });
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -491,16 +450,6 @@ describe("useVideoPlaybackData", () => {
   it("drops a subtitle_track URL param that points at a bitmap subtitle", () => {
     const movieId = 8;
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
-      error: false,
-      data: {
-        movie: {
-          title: "Bitmap Subs",
-          poster_path: { String: "", Valid: false },
-          duration: nullableFloat64(120),
-        },
-      },
-    });
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -620,16 +569,6 @@ describe("useVideoPlaybackData", () => {
   it("streams a direct-play deep link through remux when it asks for a non-first audio track", () => {
     const movieId = 9;
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData([LIBRARY_MOVIE_DETAILS_KEY, movieId], {
-      error: false,
-      data: {
-        movie: {
-          title: "Multi Audio",
-          poster_path: { String: "", Valid: false },
-          duration: nullableFloat64(600),
-        },
-      },
-    });
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
       error: false,
       data: {
@@ -833,6 +772,54 @@ describe("useVideoPlaybackData", () => {
     expect(result.current.resolvedMode).toBe("direct");
     expect(result.current.streamUrl).toBe("/api/movies/93/stream");
     expect(playbackStatus(result.current, "direct")).toEqual({ kind: "ready" });
+  });
+
+  it("clamps the start with the header's duration until technical details resolve", () => {
+    const movieId = 94;
+    const queryClient = createTestQueryClient();
+    seedMovieWithoutTechnicalDetails(queryClient, movieId);
+    vi.stubGlobal("fetch", vi.fn(() => createDeferredResponse().promise));
+    const search = {
+      mode: "720p_3mbps" as const,
+      audio_track: 0,
+      subtitle_track: "off" as const,
+      start: 1000,
+    };
+
+    // A movie header carries the file duration, so a stale deep link is
+    // clamped before the technical details arrive.
+    const withFallback = renderHook(
+      () =>
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
+          search,
+          streamReloadKey: 0,
+          playbackSessionId,
+          fallbackDurationSec: 600,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+    expect(withFallback.result.current.techPending).toBe(true);
+    expect(withFallback.result.current.mediaDurationSec).toBe(600);
+    expect(withFallback.result.current.playbackStartSec).toBe(600);
+    expect(withFallback.result.current.requestedHlsStartSec).toBe(590);
+
+    // An episode header has no duration, so the requested start stands
+    // until the file's own duration is known.
+    const withoutFallback = renderHook(
+      () =>
+        useVideoPlaybackData({
+          media: movieMediaRef(movieId),
+          search,
+          streamReloadKey: 0,
+          playbackSessionId,
+          onSyncSearch: vi.fn(),
+        }),
+      { wrapper: wrapperFor(queryClient) },
+    );
+    expect(withoutFallback.result.current.mediaDurationSec).toBeUndefined();
+    expect(withoutFallback.result.current.playbackStartSec).toBe(1000);
   });
 
   // Only one path still waits on the network: no preferred profile, but a

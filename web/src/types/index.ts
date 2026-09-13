@@ -64,7 +64,6 @@ export type {
   LibraryMovieExtraVideoType,
   MediaCapabilityBadge,
   MovieTechnicalDetailsResponse,
-  WatchProgressType,
   TmdbSearchResultType,
   VideoStreamType,
   AudioStreamType,
@@ -164,6 +163,7 @@ export type {
   PlaybackSubtitleType,
   PlaybackChapterType,
   PlaybackTechnicalFile,
+  WatchProgressType,
   PlaybackSettings,
   StreamModeId,
 } from "./playback";

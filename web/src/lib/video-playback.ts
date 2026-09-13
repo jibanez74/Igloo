@@ -4,9 +4,9 @@ import {
   HLS_RESUME_REWIND_BUFFER_SEC,
   MEDIA_ERR_DECODE,
   MEDIA_ERR_SRC_NOT_SUPPORTED,
-  MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC,
-  MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
-  MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+  HLS_FORWARD_REBASE_THRESHOLD_SEC,
+  WATCH_PROGRESS_COMPLETION_THRESHOLD,
+  WATCH_PROGRESS_MIN_SECONDS,
   STREAM_MODES,
 } from "@/lib/constants";
 import { mediaApiBasePath, mediaKey } from "@/lib/media-ref";
@@ -295,8 +295,8 @@ export function hasEligibleResumeProgress(
     progressSec !== null &&
     durationSec !== null &&
     durationSec > 0 &&
-    progressSec >= MOVIE_WATCH_PROGRESS_MIN_SECONDS &&
-    progressSec / durationSec < MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD
+    progressSec >= WATCH_PROGRESS_MIN_SECONDS &&
+    progressSec / durationSec < WATCH_PROGRESS_COMPLETION_THRESHOLD
   );
 }
 
@@ -324,7 +324,7 @@ export function shouldRebaseHlsSession({
     isHlsPlayback &&
     (targetTimeSec < actualHlsStartSec ||
       targetTimeSec >
-        currentVideoTimeSec + MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC)
+        currentVideoTimeSec + HLS_FORWARD_REBASE_THRESHOLD_SEC)
   );
 }
 
@@ -364,7 +364,7 @@ export function shouldDirectPlayFallback(args: DirectPlayFallbackArgs): boolean 
   );
 }
 
-// shouldPersistWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= MOVIE_WATCH_PROGRESS_MIN_SECONDS; hasEligibleResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.
+// shouldPersistWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= WATCH_PROGRESS_MIN_SECONDS; hasEligibleResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.
 function shouldPersistWatchProgress(
   progressSec: number,
   durationSec: number,
@@ -374,8 +374,8 @@ function shouldPersistWatchProgress(
   const completionRatio = clampedProgress / durationSec;
 
   return (
-    completionRatio >= MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD ||
-    clampedProgress >= MOVIE_WATCH_PROGRESS_MIN_SECONDS
+    completionRatio >= WATCH_PROGRESS_COMPLETION_THRESHOLD ||
+    clampedProgress >= WATCH_PROGRESS_MIN_SECONDS
   );
 }
 

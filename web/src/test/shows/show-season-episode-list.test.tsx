@@ -1,53 +1,25 @@
-import type { ReactNode } from "react";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ShowSeasonEpisodeList from "@/components/shows/ShowSeasonEpisodeList";
-import { jsonResponse, requestURL } from "../helpers/api";
+import {
+  countFetchRequests,
+  deferredResponse,
+  jsonResponse,
+  requestURL,
+} from "../helpers/api";
 import { nullableFloat64 } from "../helpers/fixtures";
 import { renderWithQueryClient } from "../helpers/render";
+import { linkSearch } from "../helpers/router-link-mock";
 import { SHOW_ID, episode, seasonEpisodes } from "../helpers/show-details";
 
 const showActionFailedMock = vi.fn();
 
 // The rows link into the episode player; the component is rendered without a
 // router here, so Link becomes a plain anchor that keeps the resolved href.
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>(
-      "@tanstack/react-router",
-    );
-
-  return {
-    ...actual,
-    Link: ({
-      children,
-      params,
-      search,
-      to,
-      ...props
-    }: {
-      children: ReactNode;
-      params?: { id?: string; episodeId?: string };
-      search?: unknown;
-      to?: string;
-    }) => {
-      void search;
-      const href =
-        typeof to === "string"
-          ? to
-              .replace("$id", params?.id ?? "")
-              .replace("$episodeId", params?.episodeId ?? "")
-          : "#";
-
-      return (
-        <a href={href} {...props}>
-          {children}
-        </a>
-      );
-    },
-  };
-});
+vi.mock("@tanstack/react-router", async () =>
+  (await import("../helpers/router-link-mock")).routerWithAnchorLinks(),
+);
 
 vi.mock("@/lib/toast-helpers", async () => {
   const actual =
@@ -93,6 +65,7 @@ describe("ShowSeasonEpisodeList", () => {
       "href",
       `/tv-shows/${SHOW_ID}/episodes/70102/play`,
     );
+    expect(linkSearch(play)).toEqual({ start: 0, audio_track: 0 });
   });
 
   it("shows resume progress and watched state from the season payload", async () => {
@@ -124,8 +97,9 @@ describe("ShowSeasonEpisodeList", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("marks an episode watched through the API and updates the row in place", async () => {
+  it("marks an episode watched optimistically and keeps the server's answer", async () => {
     const user = userEvent.setup();
+    const watchedRequest = deferredResponse();
     // The server owns the state: once marked, the season refetch that the
     // toggle triggers must return the watched row too.
     let markedWatched = false;
@@ -134,19 +108,18 @@ describe("ShowSeasonEpisodeList", () => {
       if (url === "/api/shows/episodes/70101/watch-progress/watched") {
         expect(init?.method).toBe("PUT");
         expect(JSON.parse(String(init?.body))).toEqual({ watched: true });
-        markedWatched = true;
-        return jsonResponse({
-          error: false,
-          data: { episode_id: 70101, watched: true },
-        });
+        return watchedRequest.promise;
       }
-      const season = seasonEpisodes(1);
+      const season = seasonWithProgress();
       return jsonResponse({
         error: false,
         data: markedWatched
           ? {
               ...season,
-              episodes: [episode(1, 1, { watched: true }), episode(1, 2)],
+              episodes: [
+                episode(1, 1, { watched: true }),
+                episode(1, 2, { watched: true }),
+              ],
             }
           : season,
       });
@@ -158,27 +131,51 @@ describe("ShowSeasonEpisodeList", () => {
     );
 
     const row = await screen.findByRole("article", { name: /1\.\s*S1 Episode 1/ });
+    expect(within(row).getByText("25 min left")).toBeInTheDocument();
     await user.click(
       within(row).getByRole("button", { name: "Mark S1 E1 as watched" }),
     );
 
+    // The row flips before the server has answered: the request is still
+    // pending, and the saved position goes with it, as the server would.
     await waitFor(() => {
       expect(
         within(row).getByRole("button", { name: "Mark S1 E1 as unwatched" }),
       ).toHaveAttribute("aria-pressed", "true");
     });
     expect(within(row).getByText("Watched")).toBeInTheDocument();
+    expect(within(row).queryByText("25 min left")).not.toBeInTheDocument();
+    expect(
+      countFetchRequests(
+        fetchMock,
+        "/api/shows/episodes/70101/watch-progress/watched",
+      ),
+    ).toBe(1);
+
+    markedWatched = true;
+    watchedRequest.resolve(
+      jsonResponse({ error: false, data: { episode_id: 70101, watched: true } }),
+    );
+    await waitFor(() =>
+      expect(
+        countFetchRequests(fetchMock, `/api/shows/${SHOW_ID}/seasons/1/episodes`),
+      ).toBeGreaterThan(1),
+    );
+    expect(
+      within(row).getByRole("button", { name: "Mark S1 E1 as unwatched" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(showActionFailedMock).not.toHaveBeenCalled();
   });
 
-  it("restores the row and reports the failure when marking watched fails", async () => {
+  it("rolls the row back and reports the failure when marking watched fails", async () => {
     const user = userEvent.setup();
+    const watchedRequest = deferredResponse();
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = requestURL(input);
       if (url === "/api/shows/episodes/70101/watch-progress/watched") {
-        return jsonResponse({ error: true, message: "nope" }, 500);
+        return watchedRequest.promise;
       }
-      return jsonResponse({ error: false, data: seasonEpisodes(1) });
+      return jsonResponse({ error: false, data: seasonWithProgress() });
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -190,6 +187,14 @@ describe("ShowSeasonEpisodeList", () => {
     await user.click(
       within(row).getByRole("button", { name: "Mark S1 E1 as watched" }),
     );
+    await waitFor(() => {
+      expect(
+        within(row).getByRole("button", { name: "Mark S1 E1 as unwatched" }),
+      ).toHaveAttribute("aria-pressed", "true");
+    });
+    expect(within(row).queryByText("25 min left")).not.toBeInTheDocument();
+
+    watchedRequest.resolve(jsonResponse({ error: true, message: "nope" }, 500));
 
     await waitFor(() => {
       expect(showActionFailedMock).toHaveBeenCalledWith(
@@ -200,6 +205,8 @@ describe("ShowSeasonEpisodeList", () => {
     expect(
       within(row).getByRole("button", { name: "Mark S1 E1 as watched" }),
     ).toHaveAttribute("aria-pressed", "false");
+    expect(within(row).getByText("25 min left")).toBeInTheDocument();
+    expect(within(row).queryByText("Watched")).not.toBeInTheDocument();
   });
 
   it("renders episode rows with number, runtime, air date, and overview", async () => {

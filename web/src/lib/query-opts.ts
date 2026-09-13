@@ -90,7 +90,7 @@ import {
   MOVIE_PLAYLISTS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_WATCH_PROGRESS_KEY,
-  SHOW_EPISODE_KEY,
+  EPISODE_KEY,
   EPISODE_TECHNICAL_DETAILS_KEY,
   EPISODE_WATCH_PROGRESS_KEY,
   MOVIE_DETAILS_KEY,
@@ -412,7 +412,7 @@ export function movieWatchProgressQueryOpts(id: number) {
 
 export function showEpisodeQueryOpts(episodeId: number) {
   return queryOptions({
-    queryKey: [SHOW_EPISODE_KEY, episodeId],
+    queryKey: [EPISODE_KEY, episodeId],
     queryFn: () => getShowEpisode(episodeId),
     enabled: episodeId > 0,
     staleTime: STALE_LIST,

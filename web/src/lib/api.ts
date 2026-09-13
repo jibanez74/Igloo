@@ -1,9 +1,5 @@
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
-import {
-  episodeMediaRef,
-  mediaApiBasePath,
-  movieMediaRef,
-} from "@/lib/media-ref";
+import { mediaApiBasePath, movieMediaRef } from "@/lib/media-ref";
 import type {
   AlbumDetailsResponseType,
   AlbumsListResponseType,
@@ -348,7 +344,7 @@ export const getShowEpisode = (episodeId: number) =>
 
 export const getShowEpisodeTechnicalDetails = (episodeId: number) =>
   apiRequest<ShowEpisodeTechnicalDetailsDataType>(
-    `${mediaApiBasePath(episodeMediaRef(episodeId))}/technical-details`,
+    `/api/shows/episodes/${episodeId}/technical-details`,
   );
 
 export const getContinueWatchingMovies = () =>

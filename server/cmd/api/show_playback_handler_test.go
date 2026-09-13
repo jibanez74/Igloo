@@ -668,17 +668,7 @@ func TestEpisodeHLSManifest_ValidatesParamsAgainstTheEpisodeRoute(t *testing.T) 
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	authenticated := func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), cookieUserID, int64(42))
-			handler(w, r)
-		}
-	}
-	router := chi.NewRouter()
-	router.Get("/api/shows/episodes/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.EpisodeHLSManifest))
-	router.Get("/api/shows/episodes/{id}/hls/{profile}/{filename}", authenticated(app.EpisodeHLSSegment))
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := newMediaHLSTestHandler(t, app, 42, mediaKindEpisode)
 
 	for _, tc := range []struct {
 		name   string
@@ -697,5 +687,110 @@ func TestEpisodeHLSManifest_ValidatesParamsAgainstTheEpisodeRoute(t *testing.T) 
 				t.Fatalf("response = %d %s, want %d %q", recorder.Code, recorder.Body.String(), tc.status, tc.body)
 			}
 		})
+	}
+}
+
+// The show stream rows reach FFmpeg through the movie row types
+// (showVideoStreamAsPlayback and friends), so a successful session is the
+// only thing that proves the column mapping: a mis-mapped stream index or
+// audio row would start FFmpeg on the wrong track and nothing earlier would
+// notice.
+func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture), hlsRunPlan(transcodeFixture)}}
+	app.FFmpeg = ffmpegRunner
+	fixture := seedPlaybackEpisode(t, app)
+	userID := int64(42)
+	handler := newMediaHLSTestHandler(t, app, userID, mediaKindEpisode)
+
+	// Both episodes of the combined file start a session on that one file.
+	for _, episodeID := range []int64{fixture.Episode1, fixture.Episode2} {
+		manifestURL := fmt.Sprintf(
+			"/api/shows/episodes/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
+			episodeID, helpers.HLS_PROFILE_720P_3MBPS, testPlaybackSessionID,
+		)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, manifestURL, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("episode %d manifest = %d %s", episodeID, recorder.Code, recorder.Body.String())
+		}
+
+		key := HLSSessionKey(episodeRef(episodeID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+		raw, ok := app.HLSSessionCache.Get(key)
+		session, _ := raw.(*HLSSession)
+		if !ok || session == nil {
+			t.Fatalf("episode %d: no session cached under %q", episodeID, key)
+		}
+		defer cleanupHLSSession(session)
+		if session.Media != episodeRef(episodeID) || session.FileID != fixture.FileID {
+			t.Fatalf("episode %d session identity = %s file %d, want %s file %d", episodeID, session.Media, session.FileID, episodeRef(episodeID), fixture.FileID)
+		}
+	}
+
+	calls := ffmpegRunner.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("FFmpeg calls = %d, want one per episode", len(calls))
+	}
+	for i, call := range calls {
+		if call.SourcePath != fixture.FilePath || call.Profile != helpers.HLS_PROFILE_720P_3MBPS {
+			t.Fatalf("call %d source/profile = %q/%q, want the show file and %s", i, call.SourcePath, call.Profile, helpers.HLS_PROFILE_720P_3MBPS)
+		}
+		// The fixture's video is stream 0 and its audio stream 1; the ordinal
+		// audio_track=0 must map to the stored audio row's ffprobe index.
+		if call.VideoStreamIndex != 0 || call.AudioStreamIndex != 1 {
+			t.Fatalf("call %d stream indexes = video %d audio %d, want 0 and 1", i, call.VideoStreamIndex, call.AudioStreamIndex)
+		}
+		if !call.CopyAudio {
+			t.Fatalf("call %d did not copy the AAC-LC audio row", i)
+		}
+	}
+}
+
+// An episode with two copies on disk resolves to the lowest file id every
+// time, on both the HLS/subtitle path (loadPlaybackSource) and the direct
+// stream path (episodeStreamFile).
+func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	fixture := seedPlaybackEpisode(t, app)
+	ctx := context.Background()
+
+	copyPath := strings.TrimSuffix(fixture.FilePath, ".mkv") + " (copy).mkv"
+	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
+		SeasonID:  fixture.SeasonID,
+		FilePath:  copyPath,
+		FileName:  filepath.Base(copyPath),
+		Size:      2_000_000,
+		Container: "mkv",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
+		Duration:  sql.NullFloat64{Float64: 7200, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("upsert duplicate file: %v", err)
+	}
+	if duplicate.ID <= fixture.FileID {
+		t.Fatalf("duplicate id %d is not above the original %d", duplicate.ID, fixture.FileID)
+	}
+	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
+		EpisodeID:    fixture.Episode1,
+		FileID:       duplicate.ID,
+		SeasonID:     fixture.SeasonID,
+		EpisodeOrder: 0,
+	})
+	if err != nil {
+		t.Fatalf("link duplicate file: %v", err)
+	}
+
+	source := episodePlaybackSource(t, app, fixture.Episode1)
+	if source.FileID != fixture.FileID || source.FilePath != fixture.FilePath {
+		t.Fatalf("playback source = file %d %q, want the lower id %d %q", source.FileID, source.FilePath, fixture.FileID, fixture.FilePath)
+	}
+	stream, err := app.episodeStreamFile(ctx, fixture.Episode1)
+	if err != nil {
+		t.Fatalf("episode stream file: %v", err)
+	}
+	if stream.Path != fixture.FilePath {
+		t.Fatalf("direct stream path = %q, want %q", stream.Path, fixture.FilePath)
 	}
 }

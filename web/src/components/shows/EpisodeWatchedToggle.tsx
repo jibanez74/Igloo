@@ -76,13 +76,6 @@ export default function EpisodeWatchedToggle({
       setSeasonWatched(nextWatched);
       return { previous };
     },
-    onError: (_err, _nextWatched, context) => {
-      queryClient.setQueryData(seasonKey, context?.previous);
-      showActionFailed(
-        "update watched status",
-        "Unable to update watched status. Please try again.",
-      );
-    },
     onSuccess: (res, _nextWatched, context) => {
       if (res.error) {
         queryClient.setQueryData(seasonKey, context?.previous);

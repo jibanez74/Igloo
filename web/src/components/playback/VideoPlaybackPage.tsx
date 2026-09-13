@@ -10,7 +10,7 @@ import PlayerControls from "@/components/playback/PlayerControls";
 import PlaybackStatusView from "@/components/playback/PlaybackStatus";
 import { effectiveModeLabel } from "@/lib/playback";
 import { deleteMediaWatchProgress } from "@/lib/api";
-import { mediaKey, mediaNoun } from "@/lib/media-ref";
+import { mediaKey } from "@/lib/media-ref";
 import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
 import {
   clampPlaybackTime,
@@ -105,7 +105,7 @@ export default function VideoPlaybackPage({
 }: VideoPlaybackPageProps) {
   const { start } = search;
   const mode = search.mode ?? "direct";
-  const noun = mediaNoun(media);
+  const { kind, id } = media;
   const currentMediaKey = mediaKey(media);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -220,7 +220,7 @@ export default function VideoPlaybackPage({
   });
 
   const status = derivePlaybackStatus({
-    mediaNoun: noun,
+    mediaNoun: kind,
     notFound,
     detailsPending,
     hasDetails: !notFound && !detailsPending,
@@ -243,7 +243,7 @@ export default function VideoPlaybackPage({
     const stopSession = (keepalive: boolean) => {
       if (stopped) return;
       stopped = true;
-      void stopHlsPlaybackSession(media, playbackSessionId, {
+      void stopHlsPlaybackSession({ kind, id }, playbackSessionId, {
         keepalive,
       });
     };
@@ -266,9 +266,7 @@ export default function VideoPlaybackPage({
       window.removeEventListener("pagehide", handlePageHide);
       scheduleStopSession();
     };
-    // media is identified by its key: the ref object is rebuilt per render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHlsPlayback, currentMediaKey, playbackSessionId]);
+  }, [isHlsPlayback, kind, id, playbackSessionId]);
 
   const displayedDuration = displayedMediaDuration(duration, playbackTiming);
 
@@ -689,7 +687,7 @@ export default function VideoPlaybackPage({
     return (
       <PlaybackStatusView
         status={status}
-        mediaNoun={noun}
+        mediaNoun={kind}
         onBack={handleBack}
         onRetry={() => {
           setPlaybackError(null);

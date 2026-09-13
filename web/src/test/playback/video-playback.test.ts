@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
+import {
+  EPISODE_TECHNICAL_DETAILS_KEY,
+  EPISODE_WATCH_PROGRESS_KEY,
+  MOVIE_TECHNICAL_DETAILS_KEY,
+  MOVIE_WATCH_PROGRESS_KEY,
+} from "@/lib/constants";
 import { episodeMediaRef, mediaApiBasePath, mediaKey, movieMediaRef } from "@/lib/media-ref";
+import {
+  mediaTechnicalDetailsQueryOpts,
+  mediaWatchProgressQueryKey,
+  movieTechnicalDetailsQueryOpts,
+} from "@/lib/query-opts";
 import { buildStreamUrl } from "@/lib/video-playback";
 
 const session = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
@@ -34,5 +45,32 @@ describe("buildStreamUrl", () => {
     ).toBe(
       `/api/movies/9/hls/720p_3mbps/playlist.m3u8?playback_session=${session}&start=0`,
     );
+  });
+});
+
+describe("media query keys", () => {
+  it("caches a movie and an episode with the same id separately", () => {
+    expect(mediaWatchProgressQueryKey(movieMediaRef(12))).toEqual([
+      MOVIE_WATCH_PROGRESS_KEY,
+      12,
+    ]);
+    expect(mediaWatchProgressQueryKey(episodeMediaRef(12))).toEqual([
+      EPISODE_WATCH_PROGRESS_KEY,
+      12,
+    ]);
+    expect(mediaTechnicalDetailsQueryOpts(episodeMediaRef(12)).queryKey).toEqual([
+      EPISODE_TECHNICAL_DETAILS_KEY,
+      12,
+    ]);
+  });
+
+  it("shares the movie technical-details entry with the details page", () => {
+    expect(mediaTechnicalDetailsQueryOpts(movieMediaRef(12)).queryKey).toEqual(
+      movieTechnicalDetailsQueryOpts(12).queryKey,
+    );
+    expect(mediaTechnicalDetailsQueryOpts(movieMediaRef(12)).queryKey).toEqual([
+      MOVIE_TECHNICAL_DETAILS_KEY,
+      12,
+    ]);
   });
 });

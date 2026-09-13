@@ -680,5 +680,5 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
-	app.serveStreamFile(w, r, mediaKindMovie, app.movieStreamFile)
+	app.serveStreamFile(w, r, mediaKindMovie)
 }

@@ -2043,7 +2043,7 @@
         "tags": [
           "TV Shows"
         ],
-        "summary": "Headers for a direct movie stream",
+        "summary": "Headers for a direct episode stream",
         "description": "Identical to GET but returns headers only, with no response body. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors.",
         "operationId": "streamEpisodeHead",
         "parameters": [

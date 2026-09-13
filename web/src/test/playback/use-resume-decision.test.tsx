@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
-import { MOVIE_WATCH_PROGRESS_MIN_SECONDS } from "@/lib/constants";
+import { WATCH_PROGRESS_MIN_SECONDS } from "@/lib/constants";
 
 type HookProps = Parameters<typeof useResumeDecision>[0];
 
@@ -38,12 +38,12 @@ describe("useResumeDecision", () => {
   it("treats progress at the eligibility floor as resumable", () => {
     const { result } = renderDecision({
       ...eligibleProps,
-      savedProgressSec: MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+      savedProgressSec: WATCH_PROGRESS_MIN_SECONDS,
     });
 
     expect(result.current.resumeDialogOpen).toBe(true);
     expect(result.current.resumeTargetSec).toBe(
-      MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+      WATCH_PROGRESS_MIN_SECONDS,
     );
   });
 
@@ -128,5 +128,18 @@ describe("useResumeDecision", () => {
 
     expect(result.current.resumeDialogOpen).toBe(true);
     expect(result.current.resumeTargetSec).toBe(600);
+  });
+
+  it("treats an episode with the same id as a different item", () => {
+    const { result, rerender } = renderDecision(eligibleProps);
+
+    result.current.dismissResumeDecision();
+    rerender(eligibleProps);
+    expect(result.current.resumeDialogOpen).toBe(false);
+
+    rerender({ ...eligibleProps, mediaKey: "episode:7", savedProgressSec: 300 });
+
+    expect(result.current.resumeDialogOpen).toBe(true);
+    expect(result.current.resumeTargetSec).toBe(300);
   });
 });

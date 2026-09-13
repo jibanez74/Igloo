@@ -78,17 +78,25 @@ func (app *Application) episodeStreamFile(ctx context.Context, episodeID int64) 
 	})
 }
 
+// videoStreamFile resolves the cached file behind a movie or an episode.
+func (app *Application) videoStreamFile(ctx context.Context, media mediaRef) (streamFile, error) {
+	if media.Kind == mediaKindEpisode {
+		return app.episodeStreamFile(ctx, media.ID)
+	}
+	return app.movieStreamFile(ctx, media.ID)
+}
+
 // serveStreamFile is the direct-play handler body shared by movies and
 // episodes: resolve the cached file for the media id, map a missing row to
 // 404, and hand the bytes to serveMediaFile.
-func (app *Application) serveStreamFile(w http.ResponseWriter, r *http.Request, kind mediaKind, resolve func(context.Context, int64) (streamFile, error)) {
+func (app *Application) serveStreamFile(w http.ResponseWriter, r *http.Request, kind mediaKind) {
 	media, err := parseMediaID(chi.URLParam(r, "id"), kind)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
-	file, err := resolve(r.Context(), media.ID)
+	file, err := app.videoStreamFile(r.Context(), media)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(media.notFoundMessage()), http.StatusNotFound)

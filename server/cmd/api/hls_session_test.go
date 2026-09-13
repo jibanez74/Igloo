@@ -994,8 +994,8 @@ func TestGetOrCreateHLSSession_EffectiveStartControlsKeyAndFFmpeg(t *testing.T) 
 			}
 			defer cleanupHLSSession(session)
 
-			wantKey := HLSSessionKey(movieRef(
-				movieID),
+			wantKey := HLSSessionKey(
+				movieRef(movieID),
 				helpers.HLS_PROFILE_720P_3MBPS,
 				testIntPtr(0),
 				nil,

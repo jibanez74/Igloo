@@ -311,8 +311,8 @@ E2E_HLS_4K_MOVIE_ID=1 E2E_HLS_SECOND_MOVIE_ID=2 bun run test:e2e:hls
 E2E_WATCH_ROOM_MOVIE_ID=1 bun run test:e2e:watch-room
 ```
 
-Replace example IDs with your library's IDs. HLS profile defaults are `2160p_16mbps` and `720p_3mbps`; optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_AUDIO_TRACK`, `E2E_HLS_TEST_TIMEOUT_MS`, and `E2E_HLS_RESPONSE_TIMEOUT_MS`. The watch-room suite needs a movie suitable for direct playback and accepts `E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS`.
+Replace example IDs with your library's IDs. HLS profile defaults are `2160p_16mbps` and `720p_3mbps`; optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_AUDIO_TRACK`, `E2E_HLS_TEST_TIMEOUT_MS`, and `E2E_HLS_RESPONSE_TIMEOUT_MS`. Set `E2E_EPISODE_ID` to a scanned TV episode to add the episode case to the HLS suite (its profile defaults to `720p_3mbps`; override with `E2E_HLS_EPISODE_PROFILE`). The watch-room suite needs a movie suitable for direct playback and accepts `E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS`.
 
-The [direct-media suite](web/e2e/direct-play-media.spec.ts) requires `E2E_DIRECT_MKV_MOVIE_ID` (H.264/AAC MKV), `E2E_DIRECT_10BIT_MOVIE_ID` (10-bit H.264 MP4), and `E2E_DIRECT_MULTIAUDIO_MOVIE_ID` (MP4 with multiple audio streams). Optional controls use `E2E_DIRECT_MP4_MOVIE_ID` (ordinary H.264/AAC MP4) and `E2E_DIRECT_SUBTITLE_MOVIE_ID` (direct-eligible MP4 with an embedded text subtitle and at least 90 seconds duration).
+The [direct-media suite](web/e2e/direct-play-media.spec.ts) runs its movie cases when `E2E_DIRECT_MKV_MOVIE_ID` (H.264/AAC MKV), `E2E_DIRECT_10BIT_MOVIE_ID` (10-bit H.264 MP4), and `E2E_DIRECT_MULTIAUDIO_MOVIE_ID` (MP4 with multiple audio streams) are all set, and its episode case when `E2E_EPISODE_ID` is set; either group runs without the other. Optional controls use `E2E_DIRECT_MP4_MOVIE_ID` (ordinary H.264/AAC MP4) and `E2E_DIRECT_SUBTITLE_MOVIE_ID` (direct-eligible MP4 with an embedded text subtitle and at least 90 seconds duration).
 
 Unset `E2E_BASE_URL` before returning to the managed mock or production-startup setup.

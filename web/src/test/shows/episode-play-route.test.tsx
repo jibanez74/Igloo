@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
@@ -94,7 +94,13 @@ const technicalDetails = {
   chapters: [],
 };
 
-function mockEpisodeApi(options: { episodeStatus?: number } = {}) {
+type EpisodeApiOptions = {
+  episodeStatus?: number;
+  /** A saved position for the episode; omitted means never watched. */
+  progress?: { progress_sec: number; duration_sec: number };
+};
+
+function mockEpisodeApi(options: EpisodeApiOptions = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
 
@@ -123,12 +129,14 @@ function mockEpisodeApi(options: { episodeStatus?: number } = {}) {
     if (url === `/api/shows/episodes/${EPISODE_ID}/watch-progress`) {
       return jsonResponse({
         error: false,
-        data: {
-          progress_sec: null,
-          duration_sec: null,
-          watched: false,
-          updated_at: null,
-        },
+        data: options.progress
+          ? { ...options.progress, watched: false, updated_at: "2026-09-01T00:00:00Z" }
+          : {
+              progress_sec: null,
+              duration_sec: null,
+              watched: false,
+              updated_at: null,
+            },
       });
     }
 
@@ -175,6 +183,33 @@ describe("episode play route", () => {
     expect(search.mode).toBe("direct");
     expect(search.audio_track).toBe(0);
     expect(search.subtitle_track).toBe("off");
+  });
+
+  it("offers to resume an episode with a saved position", async () => {
+    mockEpisodeApi({ progress: { progress_sec: 600, duration_sec: 2700 } });
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Resume playback?" });
+    expect(dialog).toHaveTextContent("Resume from 10:00");
+  });
+
+  it("falls back to the episode's season on the show page when there is no history", async () => {
+    mockEpisodeApi();
+
+    const { router } = await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    await screen.findByRole("region", { name: /Video player for/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to previous page" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/tv-shows/${SHOW_ID}`),
+    );
+    expect(router.state.location.search).toEqual({ season: 1 });
   });
 
   it("reports an unknown episode in the player's not-found copy", async () => {

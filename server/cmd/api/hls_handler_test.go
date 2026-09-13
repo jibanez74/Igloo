@@ -817,7 +817,8 @@ func TestPersonalHLSAssetResponsesConformToOpenAPI(t *testing.T) {
 	}
 
 	session := &HLSSession{
-		Media: movieRef(movieID), FileID: movieID,
+		Media:            movieRef(movieID),
+		FileID:           movieID,
 		OwnerUserID:      userID,
 		PlaybackSession:  testPlaybackSessionID,
 		TempDir:          tempDir,
@@ -1180,7 +1181,8 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	userID := int64(42)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	session := &HLSSession{
-		Media: movieRef(movieID), FileID: movieID,
+		Media:           movieRef(movieID),
+		FileID:          movieID,
 		OwnerUserID:     userID,
 		PlaybackSession: testPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -1257,8 +1259,8 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 		t.Fatalf("manifest assets expose invalid requested start: %s", manifestRecorder.Body.String())
 	}
 
-	effectiveKey := HLSSessionKey(movieRef(
-		movieID),
+	effectiveKey := HLSSessionKey(
+		movieRef(movieID),
 		helpers.HLS_PROFILE_720P_3MBPS,
 		&audioTrack,
 		nil,
@@ -1340,7 +1342,8 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	}
 
 	session := &HLSSession{
-		Media: movieRef(5), FileID: 5,
+		Media:       movieRef(5),
+		FileID:      5,
 		OwnerUserID: userID,
 		TempDir:     dir,
 		StartSec:    0,
@@ -1440,7 +1443,8 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 	userID := int64(100)
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
 	app.HLSSessionCache.SetDefault(key, &HLSSession{
-		Media: movieRef(5), FileID: 5,
+		Media:           movieRef(5),
+		FileID:          5,
 		OwnerUserID:     userID + 1,
 		PlaybackSession: testPlaybackSessionID,
 		TempDir:         t.TempDir(),
@@ -1481,7 +1485,8 @@ func TestHLSSegment_ResolvesAuthenticatedOwnersCacheEntry(t *testing.T) {
 		}
 		key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID)
 		app.HLSSessionCache.SetDefault(key, &HLSSession{
-			Media: movieRef(5), FileID: 5,
+			Media:           movieRef(5),
+			FileID:          5,
 			OwnerUserID:     userID,
 			PlaybackSession: testPlaybackSessionID,
 			TempDir:         dir,
@@ -1793,8 +1798,9 @@ func TestWriteHLSPlaylistHeaders_OmitsUnknownStart(t *testing.T) {
 func TestLogFirstHLSSegmentServed(t *testing.T) {
 	var buf bytes.Buffer
 	session := &HLSSession{
-		TempDir: "/transcode/igloo-hls-abc",
-		Media:   movieRef(7), FileID: 7,
+		TempDir:          "/transcode/igloo-hls-abc",
+		Media:            movieRef(7),
+		FileID:           7,
 		Logger:           slog.New(slog.NewTextHandler(&buf, nil)),
 		StartedAt:        time.Now(),
 		EffectiveProfile: helpers.HLS_PROFILE_720P_3MBPS,
@@ -1958,8 +1964,8 @@ func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 		t.Fatalf("RunHLS AudioProfile = %+v, want the resolved eac3 5.1 profile", calls[0].AudioProfile)
 	}
 
-	explicitKey := HLSSessionKey(movieRef(
-		movieID),
+	explicitKey := HLSSessionKey(
+		movieRef(movieID),
 		helpers.HLS_PROFILE_720P_3MBPS,
 		&audioTrack,
 		&helpers.HLSAudioProfileRequest{Codec: helpers.HLSAudioCodecEAC3, MaxChannels: 6},

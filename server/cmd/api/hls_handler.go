@@ -51,21 +51,16 @@ const (
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
 var errHLSSessionNotFound = errors.New("session not found")
-var errHLSMediaNotFound = errors.New("media not found")
 
-// hlsMediaNotFoundError is errHLSMediaNotFound with the media attached, so the
-// response can name the kind ("movie not found", "episode not found") the way
-// every other route does. errors.Is(err, errHLSMediaNotFound) still matches.
+// hlsMediaNotFoundError reports a manifest request for a movie or episode
+// that does not exist; it carries the media so the response names the kind
+// ("movie not found", "episode not found") the way every other route does.
 type hlsMediaNotFoundError struct {
 	Media mediaRef
 }
 
 func (e *hlsMediaNotFoundError) Error() string {
 	return e.Media.notFoundMessage()
-}
-
-func (e *hlsMediaNotFoundError) Is(target error) bool {
-	return target == errHLSMediaNotFound
 }
 
 // errHLSPlaylistNotReady means FFmpeg has not published a usable playlist yet.
@@ -513,13 +508,9 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errHLSMediaNotFound) {
-		message := errHLSMediaNotFound.Error()
-		var notFound *hlsMediaNotFoundError
-		if errors.As(err, &notFound) {
-			message = notFound.Error()
-		}
-		helpers.ErrorJSON(w, errors.New(message), http.StatusNotFound)
+	var notFound *hlsMediaNotFoundError
+	if errors.As(err, &notFound) {
+		helpers.ErrorJSON(w, errors.New(notFound.Error()), http.StatusNotFound)
 		return
 	}
 

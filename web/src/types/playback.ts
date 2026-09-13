@@ -6,6 +6,7 @@ import type {
   VideoStreamType,
 } from "@/types/movies";
 import type { NullableFloat64 } from "@/types/nullable";
+import type { components } from "@/types/openapi.gen";
 
 export type StreamModeId = (typeof STREAM_MODE_IDS)[number];
 
@@ -31,6 +32,11 @@ export type PlaybackVideoStreamType = Omit<VideoStreamType, "movie_id">;
 export type PlaybackAudioStreamType = Omit<AudioStreamType, "movie_id">;
 export type PlaybackSubtitleType = Omit<SubtitleType, "movie_id">;
 export type PlaybackChapterType = Omit<ChapterType, "movie_id">;
+
+// `data` payload of the watch-progress routes, shared by movies and TV
+// episodes: GET /api/movies/{id}/watch-progress and
+// GET /api/shows/episodes/{id}/watch-progress.
+export type WatchProgressType = components["schemas"]["WatchProgress"];
 
 /** The file behind the media, as far as the player needs it. */
 export type PlaybackTechnicalFile = {

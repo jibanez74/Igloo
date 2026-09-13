@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   CONTINUE_WATCHING_KEY,
-  MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
+  PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
   SHOW_SEASON_EPISODES_KEY,
 } from "@/lib/constants";
 import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
@@ -75,7 +75,7 @@ export async function synchronizePlaybackExit({
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(resolve, MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS);
+    timeoutId = setTimeout(resolve, PLAYBACK_EXIT_SYNC_TIMEOUT_MS);
   });
 
   try {
