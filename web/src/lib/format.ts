@@ -24,10 +24,33 @@ const usdCurrencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// takes in a date string and returns a Date in the viewer's local time
+//
+// Catalog dates (movie release, album release, show air dates) are stored
+// date-only. `new Date("2024-03-01")` parses those as UTC midnight but reads
+// back in local time, so every such date rendered a day early west of UTC —
+// and a January date reported the previous year. A date-only string is
+// therefore split and built as a local date; anything carrying a time or zone
+// is left to the normal parser. Use this anywhere a stored date is rendered or
+// a calendar field is read off it, never a bare `new Date(stored)`.
+export function parseCatalogDate(date: string) {
+  const dateOnly = DATE_ONLY_PATTERN.exec(date);
+
+  return dateOnly
+    ? new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      )
+    : new Date(date);
+}
+
 // takes in a date string and returns a formatted date string
 // format is month day, year
 export function formatDate(date: string) {
-  const d = new Date(date);
+  const d = parseCatalogDate(date);
 
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
@@ -246,4 +269,12 @@ export function sortLibraryCrewForDisplay(
   return a.artist_name.localeCompare(b.artist_name, undefined, {
     sensitivity: "base",
   });
+}
+
+/**
+ * Season tab and heading label. Season zero is TMDB's specials bucket, which
+ * reads as "Specials" rather than "Season 0".
+ */
+export function seasonLabel(seasonNumber: number): string {
+  return seasonNumber === 0 ? "Specials" : `Season ${seasonNumber}`;
 }

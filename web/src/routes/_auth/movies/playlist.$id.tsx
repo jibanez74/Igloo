@@ -20,11 +20,12 @@ import { scrollWindowToTop } from "@/lib/motion";
 import { unwrapString } from "@/lib/nullable";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
+import { parseRouteId } from "@/lib/route-id";
 
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({
   loader: async ({ context, params }) => {
-    const id = parseInt(params.id, 10);
-    if (Number.isNaN(id)) return;
+    const id = parseRouteId(params.id);
+    if (id == null) return;
     await Promise.all([
       context.queryClient.ensureQueryData(moviePlaylistDetailsQueryOpts(id)),
       context.queryClient.ensureQueryData(
@@ -37,7 +38,9 @@ export const Route = createFileRoute("/_auth/movies/playlist/$id")({
 
 function MoviePlaylistPage() {
   const { id } = Route.useParams();
-  const playlistId = parseInt(id, 10);
+  // 0 for a malformed id: the request then fails into the error branch
+  // below, exactly as an unknown playlist does.
+  const playlistId = parseRouteId(id) ?? 0;
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"asc" | "desc">("asc");
 

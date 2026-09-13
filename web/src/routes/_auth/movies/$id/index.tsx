@@ -17,12 +17,14 @@ import {
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
   formatRuntimeMinutes,
+  parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
+import { parseRouteId } from "@/lib/route-id";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
-import CastSection from "@/components/movies/CastSection";
+import CastSection from "@/components/shared/CastSection";
 import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
 import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
@@ -31,7 +33,7 @@ import MovieDetailsResumeProgress from "@/components/movies/MovieDetailsResumePr
 import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
 import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
 import MovieAboutSection from "@/components/movies/MovieAboutSection";
-import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection";
+import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
 import MovieChaptersSection from "@/components/movies/MovieChaptersSection";
 import {
   getAvailableModes,
@@ -43,16 +45,13 @@ import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferenc
 import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
-import type {
-  AuthUser,
-  CastMemberType,
-  LibraryMovieDetailsResponse,
-} from "@/types";
+import type { AuthUser, LibraryMovieDetailsResponse } from "@/types";
+import type { CastSectionItem } from "@/components/shared/CastSection";
 
 export const Route = createFileRoute("/_auth/movies/$id/")({
   loader: async ({ context, params }) => {
-    const movieId = parseInt(params.id, 10);
-    if (!Number.isNaN(movieId) && movieId > 0) {
+    const movieId = parseRouteId(params.id);
+    if (movieId != null) {
       await Promise.all([
         context.queryClient.ensureQueryData(
           libraryMovieDetailsQueryOpts(movieId),
@@ -74,26 +73,38 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
 
 function libraryCastToCastSection(
   cast: LibraryMovieDetailsResponse["cast"],
-): CastMemberType[] {
+): CastSectionItem[] {
   return cast.map(c => ({
-    id: c.id,
+    key: String(c.id),
     name: c.artist_name,
     character: c.character,
-    profile_path: unwrapString(c.artist_profile) ?? "",
-    order: c.cast_order,
+    profilePath: unwrapString(c.artist_profile),
   }));
 }
 
 function MovieDetailsPage() {
   const { id } = Route.useParams();
-  const movieId = parseInt(id, 10);
+  const movieId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery(
-    libraryMovieDetailsQueryOpts(movieId),
-  );
+  const { data, isPending, isError } = useQuery({
+    ...libraryMovieDetailsQueryOpts(movieId ?? 0),
+    enabled: movieId != null,
+  });
 
   const payload = data?.data;
   const movie = payload?.movie;
+
+  // A malformed id never reaches the API: the query stays disabled and the
+  // page goes straight to not-found rather than sitting on a skeleton.
+  if (movieId == null) {
+    return (
+      <MediaNotFound
+        message="That movie link is not valid."
+        backTo="/movies"
+        backLabel="Back to Movies"
+      />
+    );
+  }
 
   if (isError || (data && data.error)) {
     return (
@@ -219,7 +230,8 @@ function LibraryMovieDetailsContent({
   const backdropUrl = buildTmdbImageUrl(backdropPath, TMDB_BACKDROP_SIZE);
 
   const releaseYear =
-    year ?? (releaseDateStr ? new Date(releaseDateStr).getFullYear() : null);
+    year ??
+    (releaseDateStr ? parseCatalogDate(releaseDateStr).getFullYear() : null);
   const pageTitle = releaseYear
     ? `${movie.title} (${releaseYear}) - Igloo`
     : `${movie.title} - Igloo`;
@@ -312,9 +324,9 @@ function LibraryMovieDetailsContent({
           playbackSettings={playbackSettings}
         />
 
-        <MovieExtraVideosSection
+        <ExtraVideosSection
           videos={youtubeExtraVideos}
-          movieId={movieId}
+          returnTo={`/movies/${movieId}`}
         />
 
         <MovieAboutSection

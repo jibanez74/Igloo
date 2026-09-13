@@ -77,7 +77,7 @@ Each entity's required responses must succeed before its metadata and relationsh
 
 Cleanup follows the root-identity and confirmed-nonexistence checks below. File deletion cascades through links and technical rows; the same transaction prunes the file's season of episodes with no files, then that season if it has no files, then its show if it has no seasons. A re-processed file prunes its season the same way. Removing one copy preserves episodes with other copies. Shared people, genres, companies, networks, and extra videos remain. Observed failures and deferred files are protected. Renames import a new path and clean up the missing old path. Completion logs and the status report distinguish imported, updated, unchanged, deferred, failed, and deleted files from local episode and entity enrichment counts (updated, failed, unmatched, and pending): one file can carry several episodes, so the two never add up. TMDB season/episode totals are stored separately from available counts derived from file relationships.
 
-TV browsing, playback, watch progress, manual Identify, alternate/DVD numbering, NFO ingestion, filesystem watching, and background metadata refresh are deferred.
+Scanned shows are read back by the show details endpoints, which serve a read-only page of seasons, episodes, and credits and describe no media behavior. TV playback, watch progress, manual Identify, alternate/DVD numbering, NFO ingestion, filesystem watching, and background metadata refresh are deferred.
 
 ### Library scan lifecycle and persistence
 

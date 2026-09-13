@@ -45,6 +45,8 @@ export const SPOTIFY_STATUS_KEY = "spotify-status";
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
 export const LATEST_SHOWS_KEY = "latest-shows";
+export const SHOW_DETAILS_KEY = "show-details";
+export const SHOW_SEASON_EPISODES_KEY = "show-season-episodes";
 export const CONTINUE_WATCHING_KEY = "continue-watching";
 export const MOVIE_DETAILS_KEY = "movie-details";
 export const LIBRARY_MOVIE_DETAILS_KEY = "library-movie-details";
@@ -136,6 +138,11 @@ export const YOUTUBE_THUMBNAIL_BASE = "/api/youtube/thumbnails";
 export const TMDB_BACKDROP_SIZE = "w1280";
 export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";
+// Episode stills are 16:9, so they take the wide poster size rather than a
+// profile size; network logos are small and take the narrowest size the proxy
+// accepts. The proxy allows only original, w1280, w500, w185, and w92.
+export const TMDB_STILL_SIZE = "w500";
+export const TMDB_LOGO_SIZE = "w92";
 
 // Virtual-list measurements in pixels. These keep virtualized rows stable and
 // must match the rendered heights of TrackItem (p-3 row + two text lines) and

@@ -9,20 +9,22 @@ import {
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { pickTmdbCertification } from "@/lib/tmdb-certification";
+import { parseRouteId } from "@/lib/route-id";
 import {
   formatRuntimeMinutes,
+  parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
-import CastSection from "@/components/movies/CastSection";
+import CastSection from "@/components/shared/CastSection";
 import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
 import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
 import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
 import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
 import MovieAboutSection from "@/components/movies/MovieAboutSection";
-import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection";
+import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
@@ -89,10 +91,25 @@ function tmdbProductionCompaniesToLibrary(
 
 function MovieDetailsPage() {
   const { id } = Route.useParams();
-  const movieId = parseInt(id, 10);
+  const movieId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery(movieDetailsQueryOpts(movieId));
+  const { data, isPending, isError } = useQuery({
+    ...movieDetailsQueryOpts(movieId ?? 0),
+    enabled: movieId != null,
+  });
   const movie = data?.data?.movie;
+
+  // A malformed id never reaches TMDB: the query stays disabled and the page
+  // goes straight to not-found rather than sitting on a skeleton.
+  if (movieId == null) {
+    return (
+      <MediaNotFound
+        message="That movie link is not valid."
+        backTo="/"
+        backLabel="Back to Home"
+      />
+    );
+  }
 
   if (isError || (data && data.error)) {
     return (
@@ -136,7 +153,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
 
   const releaseDateStr = movie.release_date || null;
   const releaseYear = releaseDateStr
-    ? new Date(releaseDateStr).getFullYear()
+    ? parseCatalogDate(releaseDateStr).getFullYear()
     : null;
 
   const pageTitle = releaseYear
@@ -156,7 +173,12 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const crewForSection = tmdbCrewToLibraryCrew(
     movie.credits?.crew ?? [],
   );
-  const castList = movie.credits?.cast ?? [];
+  const castList = (movie.credits?.cast ?? []).map(c => ({
+    key: String(c.id),
+    name: c.name,
+    character: c.character,
+    profilePath: c.profile_path ?? null,
+  }));
   const youtubeExtraVideos = tmdbYouTubeResultsToLibraryExtras(
     movie.videos?.results ?? [],
   );
@@ -244,10 +266,9 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
 
         {castList.length > 0 && <CastSection cast={castList} />}
 
-        <MovieExtraVideosSection
+        <ExtraVideosSection
           videos={youtubeExtraVideos}
-          movieId={movie.id}
-          trailerReturnTo={trailerReturnPath}
+          returnTo={trailerReturnPath}
         />
 
         <MovieAboutSection

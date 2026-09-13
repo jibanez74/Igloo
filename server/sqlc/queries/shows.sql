@@ -274,5 +274,215 @@ DELETE FROM show_episode_guest_cast WHERE episode_id = ?;
 -- name: CreateShowEpisodeGuestCast :exec
 INSERT INTO show_episode_guest_cast (episode_id, artist_id, character, cast_order, credit_id, episode_count) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING;
 
--- name: GetShowFileEpisodes :many
-SELECT e.* FROM show_episodes e JOIN show_episode_files l ON l.episode_id = e.id WHERE l.file_id = ? ORDER BY l.episode_order;
+-- ============================================================================
+-- Show details page reads.
+--
+-- The queries below build the show details payload. Like GetLatestShows above,
+-- they are explicit projections that never expose directory_path or local_name,
+-- and they address a season by its number rather than by an internal row id;
+-- the rest of the queries above serve the scanner.
+-- ============================================================================
+
+-- name: GetShowDetails :one
+-- Show header for the details page. Omits the filesystem columns and the
+-- fields the page does not render (adult, imdb_id, homepage, popularity,
+-- timestamps).
+SELECT
+  id,
+  name,
+  original_name,
+  premiere_year,
+  tmdb_id,
+  overview,
+  tagline,
+  language,
+  origin_countries,
+  first_air_date,
+  last_air_date,
+  status,
+  type,
+  poster_path,
+  backdrop_path,
+  vote_average,
+  vote_count,
+  certification,
+  tmdb_season_count,
+  tmdb_episode_count
+FROM shows
+WHERE id = ?
+LIMIT 1;
+
+-- name: GetShowSeasonSummaries :many
+-- Seasons with the count of episodes actually present. Pruning deletes episodes
+-- that lost their last file, so a stored episode always has one and the stored
+-- count is the available count; TMDB's tmdb_episode_count rides alongside it so
+-- the page can state how much of a season is here. Specials (season 0) sort
+-- last rather than first.
+SELECT
+  s.id,
+  s.season_number,
+  s.name,
+  s.overview,
+  s.air_date,
+  s.poster_path,
+  s.tmdb_episode_count,
+  COUNT(e.id) AS available_episode_count
+FROM show_seasons AS s
+LEFT JOIN show_episodes AS e
+  ON e.season_id = s.id
+WHERE s.show_id = ?
+GROUP BY s.id
+ORDER BY
+  s.season_number = 0,
+  s.season_number;
+
+-- name: GetShowSeasonSummaryByNumber :one
+-- The GetShowSeasonSummaries aggregate for one season, addressed by number.
+SELECT
+  s.id,
+  s.season_number,
+  s.name,
+  s.overview,
+  s.air_date,
+  s.poster_path,
+  s.tmdb_episode_count,
+  COUNT(e.id) AS available_episode_count
+FROM show_seasons AS s
+LEFT JOIN show_episodes AS e
+  ON e.season_id = s.id
+WHERE s.show_id = ?
+  AND s.season_number = ?
+GROUP BY s.id;
+
+-- name: GetShowEpisodesBySeasonNumber :many
+-- Episodes of one season, addressed by (show_id, season_number) so the route
+-- never exposes an internal season id. Carries no file, stream, codec, or
+-- chapter data: those belong to a physical file, and one file can back several
+-- episodes.
+SELECT
+  e.id,
+  e.episode_number,
+  e.name,
+  e.overview,
+  e.air_date,
+  e.still_path,
+  e.tmdb_runtime,
+  e.vote_average,
+  e.vote_count
+FROM show_episodes AS e
+INNER JOIN show_seasons AS s
+  ON s.id = e.season_id
+WHERE s.show_id = ?
+  AND s.season_number = ?
+ORDER BY e.episode_number;
+
+-- name: GetCastByShowID :many
+-- Aggregate cast with artist name and profile. show_cast has no row id, so
+-- credit_id is the stable identity; TMDB can credit one artist with several
+-- roles, which is why the artist id alone will not do.
+--
+-- Capped at 100 rows. TMDB aggregate credits for a long-running show reach into
+-- the thousands, while the details page bills a few dozen; the cap follows
+-- cast_order, so the billing TMDB considers most relevant is what survives it.
+-- The cap is part of the HTTP contract - see docs/openapi.json.
+SELECT
+  sc.credit_id,
+  sc.artist_id,
+  sc.character,
+  sc.cast_order,
+  sc.episode_count,
+  a.name AS artist_name,
+  a.profile AS artist_profile
+FROM show_cast AS sc
+INNER JOIN artist AS a
+  ON a.id = sc.artist_id
+WHERE sc.show_id = ?
+ORDER BY
+  sc.cast_order,
+  a.name
+LIMIT 100;
+
+-- name: GetCrewByShowID :many
+-- Aggregate crew with artist name. credit_id is the stable identity, as in
+-- GetCastByShowID, and the same 100-row cap applies for the same reason.
+SELECT
+  sc.credit_id,
+  sc.artist_id,
+  sc.department,
+  sc.job,
+  sc.episode_count,
+  a.name AS artist_name,
+  a.profile AS artist_profile
+FROM show_crew AS sc
+INNER JOIN artist AS a
+  ON a.id = sc.artist_id
+WHERE sc.show_id = ?
+ORDER BY
+  sc.department,
+  sc.job,
+  a.name
+LIMIT 100;
+
+-- name: GetCreatorsByShowID :many
+-- Series creators, billed ahead of the aggregate crew on the details page.
+SELECT
+  a.id,
+  a.name,
+  a.profile
+FROM artist AS a
+INNER JOIN show_creators AS sc
+  ON sc.artist_id = a.id
+WHERE sc.show_id = ?
+ORDER BY a.name;
+
+-- name: GetGenresByShowID :many
+-- Genres linked to a show (for details view).
+SELECT
+  g.id,
+  g.tag
+FROM genres AS g
+INNER JOIN show_genres AS sg
+  ON sg.genre_id = g.id
+WHERE sg.show_id = ?
+ORDER BY g.tag;
+
+-- name: GetNetworksByShowID :many
+-- Networks linked to a show, with the logo and country the About section
+-- renders. The only query in the project that reads networks.
+SELECT
+  n.id,
+  n.name,
+  n.logo,
+  n.country
+FROM networks AS n
+INNER JOIN show_networks AS sn
+  ON sn.network_id = n.id
+WHERE sn.show_id = ?
+ORDER BY n.name;
+
+-- name: GetProductionCompaniesByShowID :many
+-- Production companies linked to a show (for details view).
+SELECT
+  pc.id,
+  pc.name
+FROM production_companies AS pc
+INNER JOIN show_production_companies AS spc
+  ON spc.production_company_id = pc.id
+WHERE spc.show_id = ?
+ORDER BY pc.name;
+
+-- name: GetShowExtraVideos :many
+-- List all extra videos (trailers, special features) linked to a show.
+SELECT
+  ev.id,
+  ev.title,
+  ev.key,
+  ev.type,
+  ev.site
+FROM extra_videos AS ev
+INNER JOIN show_extra_videos AS sev
+  ON sev.extra_video_id = ev.id
+WHERE sev.show_id = ?
+ORDER BY
+  ev.type,
+  ev.title;

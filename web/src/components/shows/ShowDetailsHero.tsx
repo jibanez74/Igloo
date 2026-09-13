@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { Film } from "lucide-react";
+import { Tv } from "lucide-react";
 import DetailBackdrop from "@/components/shared/DetailBackdrop";
-import MovieDetailsTitleHeading from "@/components/movies/MovieDetailsTitleHeading";
-import MovieDetailsGenresList from "@/components/movies/MovieDetailsGenresList";
+import ShowDetailsTitleHeading from "@/components/shows/ShowDetailsTitleHeading";
+import ShowDetailsGenresList from "@/components/shows/ShowDetailsGenresList";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   DETAIL_HERO_CONTENT_CLASS,
@@ -11,33 +11,34 @@ import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { LibraryMovieGenreType } from "@/types/movies";
+import type { ShowGenreType } from "@/types";
 
-type MovieDetailsHeroProps = {
+type ShowDetailsHeroProps = {
   backdropUrl: string | null;
   posterUrl: string | null;
-  movieTitle: string;
-  releaseYear: number | null;
-  releaseDateStr: string | null;
-  tagLine: string | null;
-  genres: LibraryMovieGenreType[];
+  name: string;
+  premiereYear: number | null;
+  firstAirDate: string | null;
+  tagline: string | null;
+  genres: ShowGenreType[];
   metadataSlot: ReactNode;
-  progressSlot?: ReactNode;
-  actionsSlot?: ReactNode;
 };
 
-export default function MovieDetailsHero({
+/**
+ * The show hero has no actions slot: this page plays nothing, so it always
+ * takes the no-actions bottom padding that keeps the last text line clear of
+ * the hero's fade gradient.
+ */
+export default function ShowDetailsHero({
   backdropUrl,
   posterUrl,
-  movieTitle,
-  releaseYear,
-  releaseDateStr,
-  tagLine,
+  name,
+  premiereYear,
+  firstAirDate,
+  tagline,
   genres,
   metadataSlot,
-  progressSlot,
-  actionsSlot,
-}: MovieDetailsHeroProps) {
+}: ShowDetailsHeroProps) {
   const { showPoster, onError } = usePosterFallback(posterUrl ?? "");
 
   return (
@@ -55,14 +56,14 @@ export default function MovieDetailsHero({
         <div
           className={cn(
             DETAIL_HERO_CONTENT_CLASS,
-            !actionsSlot && DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS,
+            DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS,
           )}
         >
           <figure className="mx-auto mb-4 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 shadow-2xl shadow-black/40 sm:w-32 lg:hidden">
             {showPoster ? (
               <img
                 src={posterUrl ?? ""}
-                alt={`Movie poster for ${movieTitle}`}
+                alt={`Poster for ${name}`}
                 width={500}
                 height={750}
                 className="block aspect-2/3 w-full object-cover"
@@ -74,33 +75,26 @@ export default function MovieDetailsHero({
                 role="img"
                 aria-label="No poster available"
               >
-                <Film
-                  className="size-8 text-muted-foreground"
-                  aria-hidden="true"
-                />
+                <Tv className="size-8 text-muted-foreground" aria-hidden="true" />
               </div>
             )}
           </figure>
 
-          <MovieDetailsTitleHeading
-            title={movieTitle}
-            releaseYear={releaseYear}
-            releaseDateStr={releaseDateStr}
+          <ShowDetailsTitleHeading
+            name={name}
+            premiereYear={premiereYear}
+            firstAirDate={firstAirDate}
           />
 
-          {tagLine && (
+          {tagline && (
             <p className="mt-2 max-w-full text-base wrap-break-word text-white/85 italic drop-shadow-md sm:text-lg">
-              <q>{tagLine}</q>
+              <q>{tagline}</q>
             </p>
           )}
 
           {metadataSlot}
 
-          <MovieDetailsGenresList genres={genres} />
-
-          {progressSlot}
-
-          {actionsSlot}
+          <ShowDetailsGenresList genres={genres} />
         </div>
       </div>
     </header>

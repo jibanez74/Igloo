@@ -752,6 +752,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shows/details/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get TV show details
+         * @description Returns one show with its seasons, aggregate cast and crew, creators, genres, networks, production companies, and extra videos, read in a single read-only transaction so the payload is one consistent snapshot. Seasons carry TMDB's episode count beside the number of episodes actually present; the local season count is the length of the seasons array. Episodes are fetched per season from the season episodes endpoint. Aggregate cast and crew are each capped at 100 rows. Filesystem locations are never exposed, and this endpoint provides no playback.
+         */
+        get: operations["getShowDetails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/{id}/seasons/{seasonNumber}/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List episodes of a TV show season
+         * @description Returns one season and its episodes, ordered by episode number. The season is addressed by its number rather than by an internal id; specials are season zero. Answers 404 when the show or that season number does not exist. Episodes carry no file, stream, codec, or chapter data: technical metadata belongs to a physical file, one file can back several episodes, and file duration is never divided into guessed episode runtimes.
+         */
+        get: operations["getShowSeasonEpisodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/movies/continue-watching": {
         parameters: {
             query?: never;
@@ -1589,7 +1629,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a TV show library scan
-         * @description Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Accepts Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly inside the show folder, where the token names the season. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; changed filesystem metadata re-probes the file without reading its content, and a technical change never re-queues matched metadata. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan, with the entity total published before the first request. Failed requests preserve existing metadata and retry state; a definitive no-match is reported as unmatched and backs off before the show is searched again; an authentication failure or repeated transient failures stop enrichment for the run; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes the affected season of unreferenced episodes and then the empty season and show, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. TV browsing, playback, and manual identification are not provided.
+         * @description Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Accepts Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly inside the show folder, where the token names the season. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; changed filesystem metadata re-probes the file without reading its content, and a technical change never re-queues matched metadata. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan, with the entity total published before the first request. Failed requests preserve existing metadata and retry state; a definitive no-match is reported as unmatched and backs off before the show is searched again; an authentication failure or repeated transient failures stop enrichment for the run; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes the affected season of unreferenced episodes and then the empty season and show, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. Scanned shows are browsable through the TV show details endpoints; playback and manual identification are not provided.
          */
         post: operations["triggerShowScan"];
         delete?: never;
@@ -2433,6 +2473,134 @@ export interface components {
         };
         LatestShowsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["LatestShowsData"];
+        };
+        Show: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            original_name: components["schemas"]["SqlNullString"];
+            premiere_year: components["schemas"]["SqlNullInt64"];
+            tmdb_id: components["schemas"]["SqlNullInt64"];
+            overview: components["schemas"]["SqlNullString"];
+            tagline: components["schemas"]["SqlNullString"];
+            language: components["schemas"]["SqlNullString"];
+            origin_countries: components["schemas"]["SqlNullString"];
+            first_air_date: components["schemas"]["SqlNullString"];
+            last_air_date: components["schemas"]["SqlNullString"];
+            status: components["schemas"]["SqlNullString"];
+            type: components["schemas"]["SqlNullString"];
+            poster_path: components["schemas"]["SqlNullString"];
+            backdrop_path: components["schemas"]["SqlNullString"];
+            vote_average: components["schemas"]["SqlNullFloat64"];
+            vote_count: components["schemas"]["SqlNullInt64"];
+            certification: components["schemas"]["SqlNullString"];
+            tmdb_season_count: components["schemas"]["SqlNullInt64"];
+            tmdb_episode_count: components["schemas"]["SqlNullInt64"];
+        };
+        ShowSeasonSummary: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            season_number: number;
+            name: string;
+            overview: components["schemas"]["SqlNullString"];
+            air_date: components["schemas"]["SqlNullString"];
+            poster_path: components["schemas"]["SqlNullString"];
+            tmdb_episode_count: components["schemas"]["SqlNullInt64"];
+            /** Format: int64 */
+            available_episode_count: number;
+        };
+        ShowEpisode: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            episode_number: number;
+            name: string;
+            overview: components["schemas"]["SqlNullString"];
+            air_date: components["schemas"]["SqlNullString"];
+            still_path: components["schemas"]["SqlNullString"];
+            tmdb_runtime: components["schemas"]["SqlNullInt64"];
+            vote_average: components["schemas"]["SqlNullFloat64"];
+            vote_count: components["schemas"]["SqlNullInt64"];
+        };
+        ShowCastCredit: {
+            credit_id: string;
+            /** Format: int64 */
+            artist_id: number;
+            character: string;
+            /** Format: int64 */
+            cast_order: number;
+            /** Format: int64 */
+            episode_count: number;
+            artist_name: string;
+            artist_profile: components["schemas"]["SqlNullString"];
+        };
+        ShowCrewCredit: {
+            credit_id: string;
+            /** Format: int64 */
+            artist_id: number;
+            department: string;
+            job: string;
+            /** Format: int64 */
+            episode_count: number;
+            artist_name: string;
+            artist_profile: components["schemas"]["SqlNullString"];
+        };
+        ShowPerson: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            profile: components["schemas"]["SqlNullString"];
+        };
+        ShowGenre: {
+            /** Format: int64 */
+            id: number;
+            tag: string;
+        };
+        ShowNetwork: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            logo: components["schemas"]["SqlNullString"];
+            country: components["schemas"]["SqlNullString"];
+        };
+        ShowProductionCompany: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        ExtraVideo: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            key: string;
+            /** @enum {string} */
+            type: "trailer" | "special_feature" | "other";
+            /** @enum {string} */
+            site: "youtube" | "vimeo" | "other";
+        };
+        ShowDetailsData: {
+            show: components["schemas"]["Show"];
+            seasons: components["schemas"]["ShowSeasonSummary"][];
+            /** @description Capped at 100 rows, ordered by billing order first so the cap keeps the billing TMDB considers most relevant. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
+            cast: components["schemas"]["ShowCastCredit"][];
+            /** @description Capped at 100 rows, ordered by department and job first so the cap keeps the billing TMDB considers most relevant. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
+            crew: components["schemas"]["ShowCrewCredit"][];
+            creators: components["schemas"]["ShowPerson"][];
+            genres: components["schemas"]["ShowGenre"][];
+            networks: components["schemas"]["ShowNetwork"][];
+            production_companies: components["schemas"]["ShowProductionCompany"][];
+            extra_videos: components["schemas"]["ExtraVideo"][];
+        };
+        ShowSeasonEpisodesData: {
+            season: components["schemas"]["ShowSeasonSummary"];
+            episodes: components["schemas"]["ShowEpisode"][];
+        };
+        ShowDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowDetailsData"];
+        };
+        ShowSeasonEpisodesEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowSeasonEpisodesData"];
         };
         ContinueWatchingMoviesEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -3864,6 +4032,24 @@ export interface components {
                 "application/json": components["schemas"]["LatestShowsEnvelope"];
             };
         };
+        /** @description TV show details response. */
+        ShowDetailsResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowDetailsEnvelope"];
+            };
+        };
+        /** @description TV show season episodes response. */
+        ShowSeasonEpisodesResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowSeasonEpisodesEnvelope"];
+            };
+        };
         /** @description Continue watching movies response. */
         ContinueWatchingMoviesResponse: {
             headers: {
@@ -4793,6 +4979,7 @@ export interface components {
         HLSFilenamePath: string;
         /** @description Zero-based index into the movie subtitle rows ordered by stream_index. */
         TrackIndexPath: number;
+        SeasonNumberPath: number;
         PageQuery: number;
         PerPageQuery: number;
         MoviePerPageQuery: number;
@@ -5850,6 +6037,43 @@ export interface operations {
         responses: {
             200: components["responses"]["LatestShowsResponse"];
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowDetailsResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowSeasonEpisodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+                seasonNumber: components["parameters"]["SeasonNumberPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowSeasonEpisodesResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };

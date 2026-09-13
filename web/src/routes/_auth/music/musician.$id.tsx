@@ -14,6 +14,7 @@ import {
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { parseRouteId } from "@/lib/route-id";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MediaNotFound from "@/components/shared/MediaNotFound";
@@ -47,9 +48,9 @@ import type {
 
 export const Route = createFileRoute("/_auth/music/musician/$id")({
   loader: async ({ context, params }) => {
-    const musicianId = parseInt(params.id, 10);
+    const musicianId = parseRouteId(params.id);
 
-    if (!Number.isNaN(musicianId) && musicianId > 0) {
+    if (musicianId != null) {
       await context.queryClient.ensureQueryData(
         musicianDetailsQueryOpts(musicianId),
       );
@@ -60,15 +61,14 @@ export const Route = createFileRoute("/_auth/music/musician/$id")({
 
 function MusicianDetailsPage() {
   const { id } = Route.useParams();
-  const musicianId = parseInt(id, 10);
-  const isValidId = !Number.isNaN(musicianId) && musicianId > 0;
+  const musicianId = parseRouteId(id);
 
   const { data, isPending, isError } = useQuery({
-    ...musicianDetailsQueryOpts(musicianId),
-    enabled: isValidId,
+    ...musicianDetailsQueryOpts(musicianId ?? 0),
+    enabled: musicianId != null,
   });
 
-  if (!isValidId) {
+  if (musicianId == null) {
     return (
       <div className="py-12 text-center">
         <h2 className="text-xl font-semibold text-muted-foreground">

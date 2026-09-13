@@ -125,11 +125,8 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eps, err := s.Queries.GetShowFileEpisodes(context.Background(), before.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if before.Duration.Float64 != 3600.5 || eps[0].TmdbRuntime.Valid || eps[0].Name != "Episode 1" {
+	eps := fileEpisodes(t, s.DB, before.ID)
+	if before.Duration.Float64 != 3600.5 || eps[0].tmdbRuntime.Valid || eps[0].name != "Episode 1" {
 		t.Fatal("guessed episode metadata")
 	}
 	scanOK(t, s, root)
@@ -153,11 +150,8 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	afterEps, err := s.Queries.GetShowFileEpisodes(context.Background(), after.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if probe.Calls() != 5 || after.ID != before.ID || afterEps[1].ID != eps[1].ID {
+	afterEps := fileEpisodes(t, s.DB, after.ID)
+	if probe.Calls() != 5 || after.ID != before.ID || afterEps[1].id != eps[1].id {
 		t.Fatal("changed file lost identity")
 	}
 	err = os.Remove(copyPath)
