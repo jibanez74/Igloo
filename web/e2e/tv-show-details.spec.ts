@@ -222,6 +222,13 @@ async function mockShowDetailsApi(page: Page) {
       /^\/api\/shows\/(\d+)\/seasons\/(\d+)\/episodes$/,
     );
     if (episodesMatch) {
+      // Validate the show id too: a season fixture served for any id would
+      // hide an episode URL built against the wrong show.
+      if (Number(episodesMatch[1]) !== showId) {
+        await fulfillJSON(route, { error: true, message: "show not found" }, 404);
+        return;
+      }
+
       const payload = seasonEpisodesPayload(Number(episodesMatch[2]));
       if (payload === null) {
         await fulfillJSON(route, { error: true, message: "season not found" }, 404);

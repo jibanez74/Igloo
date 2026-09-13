@@ -51,6 +51,7 @@ import {
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { parseRouteId } from "@/lib/route-id";
 import type { PlayableTrackData, PlaylistTrackType } from "@/types";
 
 // A playlist row already carries every field the player needs, including the
@@ -76,8 +77,8 @@ function playlistTrackToPlayableData(
 
 export const Route = createFileRoute("/_auth/music/playlist/$id")({
   loader: async ({ context, params }) => {
-    const id = parseInt(params.id, 10);
-    if (isNaN(id)) return;
+    const id = parseRouteId(params.id);
+    if (id == null) return;
     await context.queryClient.ensureQueryData(playlistDetailsQueryOpts(id));
   },
   component: PlaylistPage,
@@ -85,7 +86,9 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
 
 function PlaylistPage() {
   const { id } = Route.useParams();
-  const playlistId = parseInt(id, 10);
+  // 0 for a malformed id: the request then fails into the error branch
+  // below, exactly as an unknown playlist does.
+  const playlistId = parseRouteId(id) ?? 0;
 
   const { data, isLoading, error } = useQuery(
     playlistDetailsQueryOpts(playlistId)

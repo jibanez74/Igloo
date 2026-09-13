@@ -761,7 +761,7 @@ export interface paths {
         };
         /**
          * Get TV show details
-         * @description Returns one show with its seasons, aggregate cast and crew, creators, genres, networks, production companies, and extra videos, read in a single read-only transaction so the payload is one consistent snapshot. Seasons carry TMDB's episode count beside the number of episodes actually present; the local season count is the length of the seasons array. Episodes are fetched per season from the season episodes endpoint. Filesystem locations are never exposed, and this endpoint provides no playback.
+         * @description Returns one show with its seasons, aggregate cast and crew, creators, genres, networks, production companies, and extra videos, read in a single read-only transaction so the payload is one consistent snapshot. Seasons carry TMDB's episode count beside the number of episodes actually present; the local season count is the length of the seasons array. Episodes are fetched per season from the season episodes endpoint. Aggregate cast and crew are each capped at 100 rows. Filesystem locations are never exposed, and this endpoint provides no playback.
          */
         get: operations["getShowDetails"];
         put?: never;
@@ -2582,7 +2582,9 @@ export interface components {
         ShowDetailsData: {
             show: components["schemas"]["Show"];
             seasons: components["schemas"]["ShowSeasonSummary"][];
+            /** @description Capped at 100 rows, ordered by billing order first so the cap keeps the billing TMDB considers most relevant. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
             cast: components["schemas"]["ShowCastCredit"][];
+            /** @description Capped at 100 rows, ordered by department and job first so the cap keeps the billing TMDB considers most relevant. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
             crew: components["schemas"]["ShowCrewCredit"][];
             creators: components["schemas"]["ShowPerson"][];
             genres: components["schemas"]["ShowGenre"][];

@@ -28,6 +28,7 @@ import {
 } from "@/lib/playback";
 import { getDevicePlaybackPreferences } from "@/lib/playback-preferences";
 import { deleteMovieWatchProgress } from "@/lib/api";
+import { parseRouteId } from "@/lib/route-id";
 import {
   clampMoviePlaybackTime,
   getOrCreateMovieHlsPlaybackSessionId,
@@ -84,8 +85,8 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     start: search.start,
   }),
   loader: async ({ context, params, deps }) => {
-    const movieId = parseInt(params.id, 10);
-    if (Number.isNaN(movieId) || movieId <= 0) return;
+    const movieId = parseRouteId(params.id);
+    if (movieId == null) return;
 
     if (deps.mode !== undefined) {
       // The player waits for technical details before requesting media
@@ -174,7 +175,9 @@ function PlayMoviePage() {
   const search = Route.useSearch();
   const { start } = search;
   const mode = search.mode ?? "direct";
-  const movieId = parseInt(id, 10);
+  // 0 for a malformed id: the request then 404s into the player's error
+  // screen, exactly as an unknown movie does.
+  const movieId = parseRouteId(id) ?? 0;
   const navigate = Route.useNavigate();
   const router = useRouter();
   const queryClient = useQueryClient();

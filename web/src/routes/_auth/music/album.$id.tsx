@@ -20,6 +20,7 @@ import {
   authUserQueryOpts,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
+import { parseRouteId } from "@/lib/route-id";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
@@ -64,9 +65,9 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_auth/music/album/$id")({
   loader: async ({ context, params }) => {
-    const albumId = parseInt(params.id, 10);
+    const albumId = parseRouteId(params.id);
 
-    if (!Number.isNaN(albumId) && albumId > 0) {
+    if (albumId != null) {
       await context.queryClient.ensureQueryData(albumDetailsQueryOpts(albumId));
     }
   },
@@ -75,11 +76,14 @@ export const Route = createFileRoute("/_auth/music/album/$id")({
 
 function AlbumDetailsPage() {
   const { id } = Route.useParams();
-  const albumId = parseInt(id, 10);
+  const albumId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery(albumDetailsQueryOpts(albumId));
+  const { data, isPending, isError } = useQuery({
+    ...albumDetailsQueryOpts(albumId ?? 0),
+    enabled: albumId != null,
+  });
 
-  if (Number.isNaN(albumId) || albumId <= 0) {
+  if (albumId == null) {
     return (
       <div className="py-12 text-center">
         <h2 className="text-xl font-semibold text-muted-foreground">

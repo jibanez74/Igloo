@@ -8,6 +8,7 @@ import {
   CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { parseCatalogDate } from "@/lib/format";
 import { criticRatingClass } from "@/lib/rating";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,9 @@ export default function InTheatersCard({ movie }: InTheatersCardProps) {
   const { showPoster, onError } = usePosterFallback(posterUrl);
 
   const rating = vote_average ? vote_average.toFixed(1) : null;
-  const year = release_date ? new Date(release_date).getFullYear() : null;
+  const year = release_date
+    ? parseCatalogDate(release_date).getFullYear()
+    : null;
 
   return (
     <article

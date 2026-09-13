@@ -28,11 +28,11 @@ describe("ShowSeasonEpisodeList", () => {
     ).toBeInTheDocument();
     expect(within(rows[0]).getByText("47 min")).toBeInTheDocument();
     expect(within(rows[0]).getByText("An episode happens.")).toBeInTheDocument();
-    // The machine-readable value, not the rendered text: formatDate parses a
-    // date-only string as UTC and formats it locally, so the visible day shifts
-    // with the runner's timezone.
-    expect(within(rows[0]).getByText(/2024/, { selector: "time" }))
-      .toHaveAttribute("datetime", "2024-03-08");
+    // formatDate builds a date-only value as a local date, so the visible day
+    // is stable whatever timezone the runner sits in.
+    expect(
+      within(rows[0]).getByText("March 8, 2024", { selector: "time" }),
+    ).toHaveAttribute("datetime", "2024-03-08");
   });
 
   it("names the season in its empty state", async () => {

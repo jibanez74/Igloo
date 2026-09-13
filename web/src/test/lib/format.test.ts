@@ -6,7 +6,25 @@ import {
   formatSpokenTime,
   formatTimecode,
   formatTrackDuration,
+  parseCatalogDate,
 } from "@/lib/format";
+
+// format.ts keeps its own month names; mirror them here so a test expectation
+// is built the same way the formatter builds its output.
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 describe("formatTrackDuration", () => {
   it("returns an empty string for missing or invalid durations", () => {
@@ -131,6 +149,34 @@ describe("formatDate", () => {
   });
 
   it("still formats a timestamp that carries a time", () => {
-    expect(formatDate("2024-03-01T18:30:00Z")).toMatch(/^(February|March) \d{1,2}, 2024$/);
+    // A timestamp is zone-aware, so the calendar day depends on the runner's
+    // offset. Derive the expected day from the same instant rather than
+    // loosening the assertion to a month range.
+    const timestamp = "2024-03-01T18:30:00Z";
+    const d = new Date(timestamp);
+    const expected = `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+
+    expect(formatDate(timestamp)).toBe(expected);
+  });
+});
+
+describe("parseCatalogDate", () => {
+  it("reads a date-only value as a local calendar date", () => {
+    // The year, not just the day, is at stake: "2024-01-01" parsed at UTC
+    // midnight reports 2023 anywhere west of UTC, so a show's air range
+    // started a year early.
+    const d = parseCatalogDate("2024-01-01");
+
+    expect(d.getFullYear()).toBe(2024);
+    expect(d.getMonth()).toBe(0);
+    expect(d.getDate()).toBe(1);
+  });
+
+  it("leaves a value carrying a time to the normal parser", () => {
+    const timestamp = "2024-03-01T18:30:00Z";
+
+    expect(parseCatalogDate(timestamp).getTime()).toBe(
+      new Date(timestamp).getTime(),
+    );
   });
 });

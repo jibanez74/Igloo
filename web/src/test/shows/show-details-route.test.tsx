@@ -48,6 +48,12 @@ function mockShowDetailsFetch({ detailsStatus, detailsBody }: MockOptions = {}) 
       /^\/api\/shows\/(\d+)\/seasons\/(\d+)\/episodes$/,
     );
     if (episodesMatch) {
+      // Validate the show id too: a season fixture served for any id would
+      // hide an episode URL built against the wrong show.
+      if (Number.parseInt(episodesMatch[1], 10) !== SHOW_ID) {
+        return jsonResponse({ error: true, message: "show not found" }, 404);
+      }
+
       const seasonNumber = Number.parseInt(episodesMatch[2], 10);
       return jsonResponse({
         error: false,
@@ -129,7 +135,9 @@ describe("show details route", () => {
       await screen.findByRole("heading", { level: 1, name: /Frost Harbor/ }),
     ).toBeInTheDocument();
 
-    const historyDepthBefore = window.history.length;
+    // renderRoute builds the router on createMemoryHistory, so window.history
+    // never moves; the router's own history is what records push vs replace.
+    const historyDepthBefore = router.history.length;
 
     await user.click(screen.getByRole("tab", { name: "Season 2" }));
 
@@ -140,7 +148,36 @@ describe("show details route", () => {
     ).toBeInTheDocument();
 
     expect(router.state.location.search).toEqual({ season: 2 });
-    expect(window.history.length).toBe(historyDepthBefore);
+    expect(router.history.length).toBe(historyDepthBefore);
+  });
+
+  it("carries the selected season into the trailer return link", async () => {
+    const user = userEvent.setup();
+    mockShowDetailsFetch();
+
+    await renderRoute(`/tv-shows/${SHOW_ID}`);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Frost Harbor/ }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Season 2" }));
+
+    expect(
+      await screen.findByRole("list", {
+        name: /Season 2 episodes, 1 in this library/,
+      }),
+    ).toBeInTheDocument();
+
+    // Without the season the trailer would return the viewer to season one.
+    expect(
+      screen.getByRole("link", { name: /Frost Harbor Trailer/ }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        `returnTo=${encodeURIComponent(`/tv-shows/${SHOW_ID}?season=2`)}`,
+      ),
+    );
   });
 
   it("renders the three-stage entrance stagger", async () => {

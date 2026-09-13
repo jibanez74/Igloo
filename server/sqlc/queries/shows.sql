@@ -277,10 +277,10 @@ INSERT INTO show_episode_guest_cast (episode_id, artist_id, character, cast_orde
 -- ============================================================================
 -- Show details page reads.
 --
--- Everything above this line serves the scanner. These are the only queries a
--- client payload is built from: explicit projections that never expose
--- directory_path or local_name, and that address a season by its number rather
--- than by an internal row id.
+-- The queries below build the show details payload. Like GetLatestShows above,
+-- they are explicit projections that never expose directory_path or local_name,
+-- and they address a season by its number rather than by an internal row id;
+-- the rest of the queries above serve the scanner.
 -- ============================================================================
 
 -- name: GetShowDetails :one
@@ -380,6 +380,11 @@ ORDER BY e.episode_number;
 -- Aggregate cast with artist name and profile. show_cast has no row id, so
 -- credit_id is the stable identity; TMDB can credit one artist with several
 -- roles, which is why the artist id alone will not do.
+--
+-- Capped at 100 rows. TMDB aggregate credits for a long-running show reach into
+-- the thousands, while the details page bills a few dozen; the cap follows
+-- cast_order, so the billing TMDB considers most relevant is what survives it.
+-- The cap is part of the HTTP contract - see docs/openapi.json.
 SELECT
   sc.credit_id,
   sc.artist_id,
@@ -394,11 +399,12 @@ INNER JOIN artist AS a
 WHERE sc.show_id = ?
 ORDER BY
   sc.cast_order,
-  a.name;
+  a.name
+LIMIT 100;
 
 -- name: GetCrewByShowID :many
 -- Aggregate crew with artist name. credit_id is the stable identity, as in
--- GetCastByShowID.
+-- GetCastByShowID, and the same 100-row cap applies for the same reason.
 SELECT
   sc.credit_id,
   sc.artist_id,
@@ -414,7 +420,8 @@ WHERE sc.show_id = ?
 ORDER BY
   sc.department,
   sc.job,
-  a.name;
+  a.name
+LIMIT 100;
 
 -- name: GetCreatorsByShowID :many
 -- Series creators, billed ahead of the aggregate crew on the details page.

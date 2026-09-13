@@ -1,7 +1,7 @@
 import { Calendar, CalendarRange, Film, Layers, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
-import { formatDate } from "@/lib/format";
+import { formatDate, parseCatalogDate } from "@/lib/format";
 import { criticRatingClass } from "@/lib/rating";
 
 type ShowDetailsMetadataChipsProps = {
@@ -50,8 +50,14 @@ export default function ShowDetailsMetadataChips({
     ? `${availableEpisodeCount} of ${pluralize(tmdbEpisodeCount, "episode")}`
     : pluralize(availableEpisodeCount, "episode");
 
-  const firstYear = firstAirDate ? new Date(firstAirDate).getFullYear() : null;
-  const lastYear = lastAirDate ? new Date(lastAirDate).getFullYear() : null;
+  // parseCatalogDate, not `new Date`: a stored date-only value parses at UTC
+  // midnight, so a January air date reports the previous year west of UTC.
+  const firstYear = firstAirDate
+    ? parseCatalogDate(firstAirDate).getFullYear()
+    : null;
+  const lastYear = lastAirDate
+    ? parseCatalogDate(lastAirDate).getFullYear()
+    : null;
   const airRange =
     firstYear != null
       ? lastYear != null && lastYear !== firstYear

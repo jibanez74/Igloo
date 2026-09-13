@@ -10,6 +10,7 @@ import {
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { showDetailsSearchSchema } from "@/lib/route-search";
+import { parseRouteId } from "@/lib/route-id";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
@@ -32,8 +33,8 @@ export const Route = createFileRoute("/_auth/tv-shows/$id")({
   validateSearch: showDetailsSearchSchema,
   loaderDeps: ({ search: { season } }) => ({ season }),
   loader: async ({ context, params, deps: { season } }) => {
-    const showId = parseInt(params.id, 10);
-    if (Number.isNaN(showId) || showId <= 0) return;
+    const showId = parseRouteId(params.id);
+    if (showId == null) return;
 
     const details = await context.queryClient.ensureQueryData(
       showDetailsQueryOpts(showId),
@@ -75,12 +76,27 @@ function showCastToCastSection(
 
 function ShowDetailsPage() {
   const { id } = Route.useParams();
-  const showId = parseInt(id, 10);
+  const showId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery(showDetailsQueryOpts(showId));
+  const { data, isPending, isError } = useQuery({
+    ...showDetailsQueryOpts(showId ?? 0),
+    enabled: showId != null,
+  });
 
   const payload = data?.data;
   const show = payload?.show;
+
+  // A malformed id never reaches the API: the query stays disabled and the
+  // page goes straight to not-found rather than sitting on a skeleton.
+  if (showId == null) {
+    return (
+      <MediaNotFound
+        message="That show link is not valid."
+        backTo="/"
+        backLabel="Back to Home"
+      />
+    );
+  }
 
   if (isError || (data && data.error)) {
     return (
@@ -239,7 +255,13 @@ function ShowDetailsContent({
 
         <ExtraVideosSection
           videos={youtubeExtraVideos}
-          returnTo={`/tv-shows/${showId}`}
+          // Carry the season back, or returning from a trailer would reset a
+          // viewer who had paged to season four down to season one.
+          returnTo={
+            seasons.length > 0
+              ? `/tv-shows/${showId}?season=${selectedSeason}`
+              : `/tv-shows/${showId}`
+          }
         />
 
         <ShowAboutSection

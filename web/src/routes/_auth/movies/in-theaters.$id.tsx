@@ -9,8 +9,10 @@ import {
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { pickTmdbCertification } from "@/lib/tmdb-certification";
+import { parseRouteId } from "@/lib/route-id";
 import {
   formatRuntimeMinutes,
+  parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import MediaNotFound from "@/components/shared/MediaNotFound";
@@ -89,10 +91,25 @@ function tmdbProductionCompaniesToLibrary(
 
 function MovieDetailsPage() {
   const { id } = Route.useParams();
-  const movieId = parseInt(id, 10);
+  const movieId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery(movieDetailsQueryOpts(movieId));
+  const { data, isPending, isError } = useQuery({
+    ...movieDetailsQueryOpts(movieId ?? 0),
+    enabled: movieId != null,
+  });
   const movie = data?.data?.movie;
+
+  // A malformed id never reaches TMDB: the query stays disabled and the page
+  // goes straight to not-found rather than sitting on a skeleton.
+  if (movieId == null) {
+    return (
+      <MediaNotFound
+        message="That movie link is not valid."
+        backTo="/"
+        backLabel="Back to Home"
+      />
+    );
+  }
 
   if (isError || (data && data.error)) {
     return (
@@ -136,7 +153,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
 
   const releaseDateStr = movie.release_date || null;
   const releaseYear = releaseDateStr
-    ? new Date(releaseDateStr).getFullYear()
+    ? parseCatalogDate(releaseDateStr).getFullYear()
     : null;
 
   const pageTitle = releaseYear

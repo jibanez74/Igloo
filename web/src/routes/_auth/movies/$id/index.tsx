@@ -17,8 +17,10 @@ import {
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
   formatRuntimeMinutes,
+  parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
+import { parseRouteId } from "@/lib/route-id";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
@@ -48,8 +50,8 @@ import type { CastSectionItem } from "@/components/shared/CastSection";
 
 export const Route = createFileRoute("/_auth/movies/$id/")({
   loader: async ({ context, params }) => {
-    const movieId = parseInt(params.id, 10);
-    if (!Number.isNaN(movieId) && movieId > 0) {
+    const movieId = parseRouteId(params.id);
+    if (movieId != null) {
       await Promise.all([
         context.queryClient.ensureQueryData(
           libraryMovieDetailsQueryOpts(movieId),
@@ -82,14 +84,27 @@ function libraryCastToCastSection(
 
 function MovieDetailsPage() {
   const { id } = Route.useParams();
-  const movieId = parseInt(id, 10);
+  const movieId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery(
-    libraryMovieDetailsQueryOpts(movieId),
-  );
+  const { data, isPending, isError } = useQuery({
+    ...libraryMovieDetailsQueryOpts(movieId ?? 0),
+    enabled: movieId != null,
+  });
 
   const payload = data?.data;
   const movie = payload?.movie;
+
+  // A malformed id never reaches the API: the query stays disabled and the
+  // page goes straight to not-found rather than sitting on a skeleton.
+  if (movieId == null) {
+    return (
+      <MediaNotFound
+        message="That movie link is not valid."
+        backTo="/movies"
+        backLabel="Back to Movies"
+      />
+    );
+  }
 
   if (isError || (data && data.error)) {
     return (
@@ -215,7 +230,8 @@ function LibraryMovieDetailsContent({
   const backdropUrl = buildTmdbImageUrl(backdropPath, TMDB_BACKDROP_SIZE);
 
   const releaseYear =
-    year ?? (releaseDateStr ? new Date(releaseDateStr).getFullYear() : null);
+    year ??
+    (releaseDateStr ? parseCatalogDate(releaseDateStr).getFullYear() : null);
   const pageTitle = releaseYear
     ? `${movie.title} (${releaseYear}) - Igloo`
     : `${movie.title} - Igloo`;
