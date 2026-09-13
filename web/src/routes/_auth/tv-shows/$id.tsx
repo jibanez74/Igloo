@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Tv } from "lucide-react";
 import {
   showDetailsQueryOpts,
   showSeasonEpisodesQueryOpts,
@@ -13,17 +14,24 @@ import { showDetailsSearchSchema } from "@/lib/route-search";
 import { parseRouteId } from "@/lib/route-id";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
-import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
+import {
+  trimmedOrNull,
+  unwrapFloat,
+  unwrapInt,
+  unwrapString,
+} from "@/lib/nullable";
 import { cn } from "@/lib/utils";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import CastSection from "@/components/shared/CastSection";
 import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
-import ShowDetailsSkeleton from "@/components/shows/ShowDetailsSkeleton";
-import ShowDetailsSkipLinks from "@/components/shows/ShowDetailsSkipLinks";
-import ShowDetailsHero from "@/components/shows/ShowDetailsHero";
+import DetailSkeleton from "@/components/shared/DetailSkeleton";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
+import DetailHero from "@/components/shared/DetailHero";
+import OverviewSection from "@/components/shared/OverviewSection";
 import ShowDetailsMetadataChips from "@/components/shows/ShowDetailsMetadataChips";
-import ShowOverviewSection from "@/components/shows/ShowOverviewSection";
-import ShowSeasonsSection from "@/components/shows/ShowSeasonsSection";
+import ShowSeasonsSection, {
+  ShowSeasonsSectionPlaceholder,
+} from "@/components/shows/ShowSeasonsSection";
 import ShowCrewSection from "@/components/shows/ShowCrewSection";
 import ShowAboutSection from "@/components/shows/ShowAboutSection";
 import type { CastSectionItem } from "@/components/shared/CastSection";
@@ -78,22 +86,22 @@ function ShowDetailsPage() {
   const { id } = Route.useParams();
   const showId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery({
-    ...showDetailsQueryOpts(showId ?? 0),
-    enabled: showId != null,
-  });
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the page goes straight to
+  // not-found rather than sitting on a skeleton.
+  const { data, isPending, isError } = useQuery(
+    showDetailsQueryOpts(showId ?? 0),
+  );
 
   const payload = data?.data;
   const show = payload?.show;
 
-  // A malformed id never reaches the API: the query stays disabled and the
-  // page goes straight to not-found rather than sitting on a skeleton.
   if (showId == null) {
     return (
       <MediaNotFound
         message="That show link is not valid."
-        backTo="/"
-        backLabel="Back to Home"
+        backTo="/tv-shows"
+        backLabel="Back to TV Shows"
       />
     );
   }
@@ -104,23 +112,27 @@ function ShowDetailsPage() {
         message={
           data?.message || "Failed to load show details. Please try again later."
         }
-        backTo="/"
-        backLabel="Back to Home"
+        backTo="/tv-shows"
+        backLabel="Back to TV Shows"
       />
     );
   }
 
   if (isPending) {
-    return <ShowDetailsSkeleton />;
+    return (
+      <DetailSkeleton label="Loading show details" withActions={false}>
+        <ShowSeasonsSectionPlaceholder />
+      </DetailSkeleton>
+    );
   }
 
   if (!show || !payload) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Show not found
-        </h2>
-      </div>
+      <MediaNotFound
+        message="Show not found."
+        backTo="/tv-shows"
+        backLabel="Back to TV Shows"
+      />
     );
   }
 
@@ -163,7 +175,7 @@ function ShowDetailsContent({
   const firstAirDate = unwrapString(show.first_air_date);
   const lastAirDate = unwrapString(show.last_air_date);
   const premiereYear = unwrapInt(show.premiere_year);
-  const certification = unwrapString(show.certification);
+  const certificationLabel = trimmedOrNull(unwrapString(show.certification));
   const voteAverage = unwrapFloat(show.vote_average);
 
   const posterUrl = buildTmdbImageUrl(posterPath, TMDB_POSTER_SIZE);
@@ -188,29 +200,45 @@ function ShowDetailsContent({
     0,
   );
 
-  const certificationLabel =
-    certification != null && certification.trim() !== ""
-      ? certification.trim()
-      : null;
-
   return (
     <article aria-labelledby="show-title" className="w-full min-w-0 pb-6 sm:pb-10">
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-      <ShowDetailsSkipLinks
-        seasonsNonEmpty={seasons.length > 0}
-        crewNonEmpty={creators.length > 0 || crew.length > 0}
-        castNonEmpty={castForSection.length > 0}
-        extrasNonEmpty={youtubeExtraVideos.length > 0}
+      <DetailSkipLinks
+        titleHref="#show-title"
+        titleLabel="Skip to show info"
+        sections={[
+          { href: "#overview-heading", label: "Skip to overview" },
+          seasons.length > 0 && {
+            href: "#seasons-heading",
+            label: "Skip to seasons",
+          },
+          (creators.length > 0 || crew.length > 0) && {
+            href: "#crew-heading",
+            label: "Skip to key crew",
+          },
+          castForSection.length > 0 && {
+            href: "#cast-heading",
+            label: "Skip to cast",
+          },
+          youtubeExtraVideos.length > 0 && {
+            href: "#extra-videos-heading",
+            label: "Skip to extra videos",
+          },
+          { href: "#details-heading", label: "Skip to about" },
+        ]}
       />
 
-      <ShowDetailsHero
+      <DetailHero
         backdropUrl={backdropUrl}
         posterUrl={posterUrl}
-        name={show.name}
-        premiereYear={premiereYear}
-        firstAirDate={firstAirDate}
+        posterAlt={`Poster for ${show.name}`}
+        placeholderIcon={Tv}
+        titleId="show-title"
+        title={show.name}
+        year={premiereYear}
+        dateTime={firstAirDate}
         tagline={tagline}
         genres={genres}
         metadataSlot={
@@ -234,7 +262,7 @@ function ShowDetailsContent({
           "delay-150 motion-reduce:delay-0",
         )}
       >
-        <ShowOverviewSection overview={overview} />
+        <OverviewSection overview={overview} />
 
         <ShowSeasonsSection
           showId={showId}

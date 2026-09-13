@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Play } from "lucide-react";
+import { Film, Play } from "lucide-react";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -16,12 +16,12 @@ import {
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import MediaNotFound from "@/components/shared/MediaNotFound";
-import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
+import DetailSkeleton from "@/components/shared/DetailSkeleton";
 import CastSection from "@/components/shared/CastSection";
-import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
-import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
+import DetailHero from "@/components/shared/DetailHero";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
-import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
+import OverviewSection from "@/components/shared/OverviewSection";
 import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
 import MovieAboutSection from "@/components/movies/MovieAboutSection";
 import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
@@ -125,7 +125,7 @@ function MovieDetailsPage() {
   }
 
   if (isPending) {
-    return <MovieDetailsSkeleton />;
+    return <DetailSkeleton label="Loading movie details" withActions />;
   }
 
   if (!movie) {
@@ -189,7 +189,6 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const genresForList =
     movie.genres?.map(g => ({ id: g.id, tag: g.name })) ?? [];
 
-  const showCrewSection = crewForSection.length > 0;
   const trailerReturnPath = `/movies/in-theaters/${movie.id}`;
 
   return (
@@ -200,20 +199,34 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-      <MovieDetailsSkipLinks
-        showCrewSection={showCrewSection}
-        castNonEmpty={castList.length > 0}
-        chaptersNonEmpty={false}
-        extrasNonEmpty={youtubeExtraVideos.length > 0}
+      <DetailSkipLinks
+        titleHref="#movie-title"
+        titleLabel="Skip to movie info"
+        sections={[
+          { href: "#overview-heading", label: "Skip to overview" },
+          crewForSection.length > 0 && {
+            href: "#crew-heading",
+            label: "Skip to key crew",
+          },
+          castList.length > 0 && { href: "#cast-heading", label: "Skip to cast" },
+          youtubeExtraVideos.length > 0 && {
+            href: "#extra-videos-heading",
+            label: "Skip to extra videos",
+          },
+          { href: "#details-heading", label: "Skip to about" },
+        ]}
       />
 
-      <MovieDetailsHero
+      <DetailHero
         backdropUrl={backdropUrl}
         posterUrl={posterUrl}
-        movieTitle={movie.title}
-        releaseYear={releaseYear}
-        releaseDateStr={releaseDateStr}
-        tagLine={movie.tagline || null}
+        posterAlt={`Movie poster for ${movie.title}`}
+        placeholderIcon={Film}
+        titleId="movie-title"
+        title={movie.title}
+        year={releaseYear}
+        dateTime={releaseDateStr}
+        tagline={movie.tagline || null}
         genres={genresForList}
         metadataSlot={
           <MovieDetailsMetadataChips
@@ -261,7 +274,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           "delay-150 motion-reduce:delay-0",
         )}
       >
-        <MovieOverviewSection overview={movie.overview || null} />
+        <OverviewSection overview={movie.overview || null} />
         <MovieKeyCrewSection crew={crewForSection} />
 
         {castList.length > 0 && <CastSection cast={castList} />}

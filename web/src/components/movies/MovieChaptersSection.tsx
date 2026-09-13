@@ -1,6 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { formatTimecode } from "@/lib/format";
-import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
+import {
+  DETAIL_RAIL_HEADING_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
+} from "@/lib/constants";
 import { playbackSettingsToPlaySearch } from "@/lib/route-search";
 import { cn } from "@/lib/utils";
 import type { ChapterType } from "@/types/movies";
@@ -24,7 +27,7 @@ export default function MovieChaptersSection({
       <h2
         id="chapters-heading"
         tabIndex={-1}
-        className="mb-4 text-xl font-semibold text-foreground outline-hidden sm:text-2xl"
+        className={DETAIL_RAIL_HEADING_CLASS}
       >
         Chapters
       </h2>

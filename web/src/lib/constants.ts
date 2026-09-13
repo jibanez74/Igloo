@@ -482,8 +482,8 @@ export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
 /**
  * Detail-page hero scrims (design-system §1.2 over-media exception: literal
  * black for text legibility on the backdrop; the fade tracks the theme so the
- * hero blends into the page canvas). Shared by MovieDetailsBackdrop and
- * MovieDetailsSkeleton. Static gradients — no motion involved.
+ * hero blends into the page canvas). Shared by DetailBackdrop and
+ * DetailSkeleton. Static gradients — no motion involved.
  */
 export const DETAIL_HERO_SCRIM_SIDE_CLASS =
   "absolute inset-0 hidden bg-linear-to-r from-black/70 via-black/35 to-transparent lg:block";
@@ -492,8 +492,8 @@ export const DETAIL_HERO_SCRIM_BOTTOM_CLASS =
 export const DETAIL_HERO_SCRIM_FADE_CLASS =
   "absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-background to-transparent";
 /**
- * Detail-page hero geometry, shared by MovieDetailsHero and
- * MovieDetailsSkeleton so the skeleton matches the real layout exactly
+ * Detail-page hero geometry, shared by DetailHero and DetailSkeleton so the
+ * skeleton matches the real layout exactly
  * (design-system §3.4). Full-bleed backdrop shell + bottom-anchored content.
  */
 export const DETAIL_HERO_SHELL_CLASS =
@@ -551,6 +551,18 @@ export const HOME_ALBUM_GRID_CLASS =
  */
 export const FOCUS_VISIBLE_RING_CLASS =
   "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden";
+
+/**
+ * Detail-page section headings (design-system §1.4, §1.7). They are skip-link
+ * targets (`tabIndex={-1}`), so they carry the shared focus ring rather than a
+ * bare `outline-hidden`: a keyboard user who follows a skip link must see
+ * where focus landed. The rail variant is the larger heading used above the
+ * cast, extras, and seasons rails.
+ */
+export const DETAIL_SECTION_HEADING_CLASS = `mb-3 rounded-sm text-lg font-semibold text-foreground sm:text-xl ${FOCUS_VISIBLE_RING_CLASS}`;
+export const DETAIL_RAIL_HEADING_CLASS = `mb-4 rounded-sm text-xl font-semibold text-foreground sm:text-2xl ${FOCUS_VISIBLE_RING_CLASS}`;
+/** Per-page section skip links (`DetailSkipLinks`), on the same ring recipe. */
+export const SKIP_LINK_CLASS = `rounded-sm px-2 py-1 text-primary underline ${FOCUS_VISIBLE_RING_CLASS}`;
 
 /**
  * Circular icon button in the audio player chrome (design-system §1.7, §2.3).

@@ -267,9 +267,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   regions so repeated messages re-announce) for async state changes; sections
   announce their load/empty/error summaries.
 - **Skip links**: a global "Skip to content" in `AppShell` targeting `#main`,
-  plus per-page section skip navs on long pages
-  (`MovieDetailsSkipLinks` / `ShowDetailsSkipLinks` pattern, `sr-only
-  focus-within:not-sr-only`).
+  plus per-page section skip navs on long pages (the shared
+  `DetailSkipLinks`, `sr-only focus-within:not-sr-only`, links on
+  `SKIP_LINK_CLASS`). Their targets are the page `h1` and the section
+  headings (`tabIndex={-1}`), which carry the focus ring via
+  `DETAIL_SECTION_HEADING_CLASS` / `DETAIL_RAIL_HEADING_CLASS` so a keyboard
+  user sees where a skip link landed.
 - **Labels everywhere**: icon-only buttons get `aria-label`; decorative
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses
@@ -353,7 +356,9 @@ facto token layer above Tailwind. Key families:
   reveal).
 - `MOTION_*` — page/section/media-overlay/player-chrome/track/settings
   enter-exit classes and loading/spinner states (§1.5).
-- `FOCUS_VISIBLE_RING_CLASS` (§1.7).
+- `FOCUS_VISIBLE_RING_CLASS` (§1.7); `DETAIL_SECTION_HEADING_CLASS`,
+  `DETAIL_RAIL_HEADING_CLASS` and `SKIP_LINK_CLASS` compose it for the
+  detail-page headings and skip links.
 - `LIBRARY_TABS_LIST_CLASS` / `LIBRARY_TAB_TRIGGER_CLASS`,
   `TRACK_LIST_CONTAINER_CLASS` (library/search lists) and
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
@@ -474,14 +479,23 @@ shared `HomeMediaSection` wrapper (heading + count pill + announced summary +
 pending/error/empty/grid states). True horizontal rails (cast, chapters,
 extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars; the
 cast and extras rails are the shared `CastSection` and `ExtraVideosSection`,
-used by both the movie and show detail pages.
-A long control strip scrolls the same way rather than wrapping:
-`ShowSeasonSelector` is a shadcn `Tabs` list on `LIBRARY_TAB_TRIGGER_CLASS`
-with `overflow-x-auto` and fully named triggers ("Season 3", "Specials"), and
-`ShowSeasonEpisodeList` renders the selected season as divided rows in the
+used by both the movie and show detail pages. The detail pages themselves are
+built from shared parts — `DetailHero` (+ `DetailTitleHeading`,
+`DetailGenresList`, `DetailBackdrop`), `DetailSkipLinks`, `DetailSkeleton`,
+`OverviewSection`, `AboutSection`/`AboutRow`, `CrewDisclosure`,
+`TmdbScoreBadge` — with each media type supplying only its own metadata
+chips, key-crew summary, and about rows.
+A long control strip scrolls on the same bleed rather than wrapping:
+`ShowSeasonsSection` is a full shadcn `Tabs` pair — a `TabsList` of fully
+named triggers ("Season 3", "Specials") on `LIBRARY_TAB_TRIGGER_CLASS`
+inside an `overflow-x-auto` rail, and one `TabsContent` panel holding
+`ShowSeasonEpisodeList`, so every tab's `aria-controls` resolves to a real
+`tabpanel`. The list renders the selected season as divided rows in the
 album track-list idiom inside `DETAIL_TRACK_LIST_CONTAINER_CLASS`, owning its
 own skeleton, empty, and error states because its query is separate from its
-page's.
+page's, and announces each resolution through `LiveAnnouncer` since the tab
+change itself says nothing. The TMDB community score is always the labelled
+`TmdbScoreBadge`, never a tiered rating chip: it is a different metric.
 
 ### 3.3 Images
 
@@ -512,8 +526,9 @@ page's.
   screen (`RouterPending` → `AppLoadingScreen`, `role="status"`). Within a
   page, each query renders a **skeleton that matches the real layout's grid
   geometry exactly** (same columns, same aspect boxes) so content arrival
-  causes no layout shift — see `AllMoviesTabSkeleton`, `MovieDetailsSkeleton`,
-  `ShowDetailsSkeleton`.
+  causes no layout shift — see `AllMoviesTabSkeleton` and the shared
+  `DetailSkeleton` (`withActions` mirrors whether the real hero has an
+  actions row; pages append their own below-the-fold geometry as children).
   Skeleton geometry is authored directly in each loading layout with muted
   boxes and the shared `MOTION_LOADING_STATE_CLASS`; this keeps the placeholder
   beside the real layout it must mirror. `ui/spinner.tsx` (`role="status"`)

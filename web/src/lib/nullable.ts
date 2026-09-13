@@ -79,3 +79,13 @@ export function unwrapFloatOrUndefined(
   if (typeof value === "number") return value;
   return value.Valid ? value.Float64 : undefined;
 }
+
+/**
+ * Trims a free-text catalog field and returns null when nothing is left, so a
+ * blank certification, status, or language never renders an empty row.
+ */
+export function trimmedOrNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}

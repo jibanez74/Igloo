@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { buttonVariants } from "@/components/ui/button";
+import CrewDisclosure from "@/components/shared/CrewDisclosure";
+import { DETAIL_SECTION_HEADING_CLASS } from "@/lib/constants";
 import { sortLibraryCrewForDisplay } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { LibraryMovieCrewType } from "@/types/movies";
 
 type MovieKeyCrewSectionProps = {
@@ -11,8 +10,6 @@ type MovieKeyCrewSectionProps = {
 const KEY_CREW_WRITERS_CAP = 3;
 
 export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) {
-  const [crewExpanded, setCrewExpanded] = useState(false);
-
   const director = crew.find(c => c.job === "Director");
   const writers = crew
     .filter(c => c.department === "Writing")
@@ -26,18 +23,16 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
     .filter(c => !keyCrewRowIds.has(c.id))
     .sort(sortLibraryCrewForDisplay);
 
-  const hasMoreCrew = remainingCrew.length > 0;
   const showKeyCrewSummary = Boolean(director || writers.length > 0);
-  const showCrewSection = crew.length > 0;
 
-  if (!showCrewSection) return null;
+  if (crew.length === 0) return null;
 
   return (
     <section className="mt-6 text-left" aria-labelledby="crew-heading">
       <h2
         id="crew-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-foreground outline-hidden sm:text-xl"
+        className={DETAIL_SECTION_HEADING_CLASS}
       >
         Key Crew
       </h2>
@@ -61,50 +56,14 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
           ))}
         </div>
       )}
-      {hasMoreCrew && (
-        <div className="mt-4">
-          <button
-            type="button"
-            aria-expanded={crewExpanded}
-            aria-controls="crew-full-list"
-            onClick={() => setCrewExpanded(v => !v)}
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "touch-manipulation",
-            )}
-          >
-            {crewExpanded ? "Show less" : "Show all crew"}
-          </button>
-          {crewExpanded && (
-            <div
-              id="crew-full-list"
-              aria-label={`Full crew list, ${remainingCrew.length} credits`}
-              className="mt-3 max-h-96 overflow-y-auto rounded-lg border border-primary/15 bg-card/40 px-3 py-2 sm:px-4"
-            >
-              <ul className="list-none space-y-3">
-                {remainingCrew.map(c => (
-                  <li key={c.id}>
-                    <p className="text-sm">
-                      <span className="block text-muted-foreground">
-                        {c.job}
-                        {c.department ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · {c.department}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {c.artist_name}
-                      </span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+      <CrewDisclosure
+        credits={remainingCrew.map(c => ({
+          key: String(c.id),
+          job: c.job,
+          department: c.department,
+          name: c.artist_name,
+        }))}
+      />
     </section>
   );
 }

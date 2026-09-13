@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 // Widen the union when a new call site needs another destination — keeping it
 // a literal union preserves TanStack Router's typed `to`.
-type BackDestination = "/" | "/movies" | "/music";
+type BackDestination = "/" | "/movies" | "/music" | "/tv-shows";
 
 export default function MediaNotFound({
   message,

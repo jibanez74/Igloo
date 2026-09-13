@@ -1,13 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { Tv } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import {
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   MOTION_LOADING_STATE_CLASS,
   TMDB_STILL_SIZE,
 } from "@/lib/constants";
-import { formatDate, formatRuntimeMinutes, seasonLabel } from "@/lib/format";
+import {
+  formatDate,
+  formatRuntimeMinutes,
+  pluralize,
+  seasonLabel,
+} from "@/lib/format";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import { showSeasonEpisodesQueryOpts } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -19,8 +25,13 @@ type ShowSeasonEpisodeListProps = {
   seasonNumber: number;
 };
 
+const LIST_CLASS = cn(
+  DETAIL_TRACK_LIST_CONTAINER_CLASS,
+  "list-none divide-y divide-border/60",
+);
 const ROW_CLASS = "flex gap-3 p-3 sm:gap-4 sm:p-4";
-const STILL_CLASS = "aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-muted sm:w-40";
+const STILL_CLASS =
+  "aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-muted sm:w-40";
 
 function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
   const stillPath = unwrapString(episode.still_path);
@@ -28,9 +39,10 @@ function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
   const overview = unwrapString(episode.overview);
   const airDate = unwrapString(episode.air_date);
   const runtime = formatRuntimeMinutes(unwrapInt(episode.tmdb_runtime));
+  const headingId = `episode-${episode.id}-title`;
 
   return (
-    <article className={ROW_CLASS}>
+    <article className={ROW_CLASS} aria-labelledby={headingId}>
       <div className={STILL_CLASS}>
         {stillUrl !== "" ? (
           <img
@@ -48,10 +60,14 @@ function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-semibold text-foreground sm:text-base">
+        {/* h4: the season heading above this list is the h3. */}
+        <h4
+          id={headingId}
+          className="text-sm font-semibold wrap-break-word text-foreground sm:text-base"
+        >
           <span className="text-muted-foreground">{episode.episode_number}.</span>{" "}
           {episode.name}
-        </h3>
+        </h4>
 
         {(runtime || airDate) && (
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -71,34 +87,31 @@ function EpisodeRow({ episode }: { episode: ShowEpisodeType }) {
   );
 }
 
-/** Skeleton rows reuse the real row geometry, so arrival shifts nothing. */
-function EpisodeListSkeleton() {
+/**
+ * Three placeholder rows on the real row geometry, so arrival shifts nothing.
+ * Also used by the page-level skeleton, which supplies its own status label.
+ */
+export function EpisodeRowsPlaceholder() {
   return (
-    <div
-      className={MOTION_LOADING_STATE_CLASS}
-      role="status"
-      aria-label="Loading episodes"
-    >
-      <span className="sr-only">Loading episodes...</span>
-      <ul className={cn(DETAIL_TRACK_LIST_CONTAINER_CLASS, "list-none divide-y divide-border/60")}>
-        {[0, 1, 2].map(row => (
-          <li key={row} className={ROW_CLASS} aria-hidden="true">
-            <div className={cn(STILL_CLASS, "bg-muted")} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-4 w-2/3 rounded-sm bg-muted" />
-              <div className="h-3 w-1/3 rounded-sm bg-muted" />
-              <div className="h-3 w-full rounded-sm bg-muted" />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className={LIST_CLASS} aria-hidden="true">
+      {[0, 1, 2].map(row => (
+        <li key={row} className={ROW_CLASS}>
+          <div className={cn(STILL_CLASS, "bg-muted")} />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-2/3 rounded-sm bg-muted" />
+            <div className="h-3 w-1/3 rounded-sm bg-muted" />
+            <div className="h-3 w-full rounded-sm bg-muted" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 /**
  * Owns its own loading, empty, and error states: its query is separate from the
- * page's, so switching seasons must not blank the whole page.
+ * page's, so switching seasons must not blank the whole page. Each resolution
+ * is announced, since the tab change that triggers it says nothing by itself.
  */
 export default function ShowSeasonEpisodeList({
   showId,
@@ -111,15 +124,26 @@ export default function ShowSeasonEpisodeList({
   const label = seasonLabel(seasonNumber);
 
   let body;
+  let announcement = "";
   if (isPending) {
-    body = <EpisodeListSkeleton />;
+    body = (
+      <div
+        className={MOTION_LOADING_STATE_CLASS}
+        role="status"
+        aria-label="Loading episodes"
+      >
+        <span className="sr-only">Loading episodes...</span>
+        <EpisodeRowsPlaceholder />
+      </div>
+    );
   } else if (isError || data.error) {
+    const message =
+      (data?.error ? data.message : null) ||
+      "Failed to load episodes. Please try again.";
+    announcement = `${label}: ${message}`;
     body = (
       <MoviesLoadError
-        message={
-          (data && data.error ? data.message : null) ||
-          "Failed to load episodes. Please try again."
-        }
+        message={message}
         onRetry={() => {
           refetch();
         }}
@@ -127,6 +151,10 @@ export default function ShowSeasonEpisodeList({
     );
   } else {
     const episodes = data.data?.episodes ?? [];
+    announcement =
+      episodes.length === 0
+        ? `${label}: no episodes in this library`
+        : `${label}: ${pluralize(episodes.length, "episode")} in this library`;
 
     body =
       episodes.length === 0 ? (
@@ -138,10 +166,7 @@ export default function ShowSeasonEpisodeList({
         />
       ) : (
         <ul
-          className={cn(
-            DETAIL_TRACK_LIST_CONTAINER_CLASS,
-            "list-none divide-y divide-border/60",
-          )}
+          className={LIST_CLASS}
           aria-label={`${label} episodes, ${episodes.length} in this library`}
         >
           {episodes.map(episode => (
@@ -158,6 +183,7 @@ export default function ShowSeasonEpisodeList({
       <h3 id="episodes-heading" className="sr-only">
         {label} episodes
       </h3>
+      <LiveAnnouncer message={announcement} />
       {body}
     </section>
   );

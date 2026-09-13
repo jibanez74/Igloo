@@ -347,9 +347,18 @@ test("season tabs are reachable and operable from the keyboard", async ({
 
   // Radix tabs move selection with the arrow keys.
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "Season 2" })).toBeFocused();
+  const season2 = page.getByRole("tab", { name: "Season 2" });
+  await expect(season2).toBeFocused();
+
+  // The episode list is the tabpanel the selected tab controls.
+  const panel = page.getByRole("tabpanel");
+  await expect(panel).toBeVisible();
+  await expect(season2).toHaveAttribute(
+    "aria-controls",
+    (await panel.getAttribute("id")) ?? "",
+  );
   await expect(
-    page.getByRole("list", { name: /Season 2 episodes/ }),
+    panel.getByRole("list", { name: /Season 2 episodes/ }),
   ).toBeVisible();
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);

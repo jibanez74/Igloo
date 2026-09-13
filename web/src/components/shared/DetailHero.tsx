@@ -1,8 +1,8 @@
-import type { ReactNode } from "react";
-import { Film } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
+import type { LucideProps } from "lucide-react";
 import DetailBackdrop from "@/components/shared/DetailBackdrop";
-import MovieDetailsTitleHeading from "@/components/movies/MovieDetailsTitleHeading";
-import MovieDetailsGenresList from "@/components/movies/MovieDetailsGenresList";
+import DetailTitleHeading from "@/components/shared/DetailTitleHeading";
+import DetailGenresList from "@/components/shared/DetailGenresList";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   DETAIL_HERO_CONTENT_CLASS,
@@ -11,33 +11,44 @@ import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { LibraryMovieGenreType } from "@/types/movies";
 
-type MovieDetailsHeroProps = {
+type DetailHeroProps = {
   backdropUrl: string | null;
   posterUrl: string | null;
-  movieTitle: string;
-  releaseYear: number | null;
-  releaseDateStr: string | null;
-  tagLine: string | null;
-  genres: LibraryMovieGenreType[];
+  posterAlt: string;
+  /** Lucide icon shown in the poster box when there is no poster. */
+  placeholderIcon: ComponentType<LucideProps>;
+  titleId: string;
+  title: string;
+  year: number | null;
+  /** Machine-readable date behind the year, when the catalog has one. */
+  dateTime: string | null;
+  tagline: string | null;
+  genres: { id: number; tag: string }[];
   metadataSlot: ReactNode;
   progressSlot?: ReactNode;
+  /**
+   * Without an actions slot the content takes extra bottom padding so the
+   * last text line stays clear of the hero's fade gradient.
+   */
   actionsSlot?: ReactNode;
 };
 
-export default function MovieDetailsHero({
+export default function DetailHero({
   backdropUrl,
   posterUrl,
-  movieTitle,
-  releaseYear,
-  releaseDateStr,
-  tagLine,
+  posterAlt,
+  placeholderIcon: PlaceholderIcon,
+  titleId,
+  title,
+  year,
+  dateTime,
+  tagline,
   genres,
   metadataSlot,
   progressSlot,
   actionsSlot,
-}: MovieDetailsHeroProps) {
+}: DetailHeroProps) {
   const { showPoster, onError } = usePosterFallback(posterUrl ?? "");
 
   return (
@@ -62,7 +73,7 @@ export default function MovieDetailsHero({
             {showPoster ? (
               <img
                 src={posterUrl ?? ""}
-                alt={`Movie poster for ${movieTitle}`}
+                alt={posterAlt}
                 width={500}
                 height={750}
                 className="block aspect-2/3 w-full object-cover"
@@ -74,7 +85,7 @@ export default function MovieDetailsHero({
                 role="img"
                 aria-label="No poster available"
               >
-                <Film
+                <PlaceholderIcon
                   className="size-8 text-muted-foreground"
                   aria-hidden="true"
                 />
@@ -82,21 +93,22 @@ export default function MovieDetailsHero({
             )}
           </figure>
 
-          <MovieDetailsTitleHeading
-            title={movieTitle}
-            releaseYear={releaseYear}
-            releaseDateStr={releaseDateStr}
+          <DetailTitleHeading
+            id={titleId}
+            title={title}
+            year={year}
+            dateTime={dateTime}
           />
 
-          {tagLine && (
+          {tagline && (
             <p className="mt-2 max-w-full text-base wrap-break-word text-white/85 italic drop-shadow-md sm:text-lg">
-              <q>{tagLine}</q>
+              <q>{tagline}</q>
             </p>
           )}
 
           {metadataSlot}
 
-          <MovieDetailsGenresList genres={genres} />
+          <DetailGenresList genres={genres} />
 
           {progressSlot}
 

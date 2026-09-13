@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import ShowSeasonEpisodeList from "@/components/shows/ShowSeasonEpisodeList";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { renderWithQueryClient } from "../helpers/render";
-import { SHOW_ID, seasonEpisodes } from "./show-details-fixtures";
+import { SHOW_ID, seasonEpisodes } from "../helpers/show-details";
 
 describe("ShowSeasonEpisodeList", () => {
   it("renders episode rows with number, runtime, air date, and overview", async () => {
@@ -54,6 +54,30 @@ describe("ShowSeasonEpisodeList", () => {
     expect(
       screen.getByText(/No episodes of Season 1 are in this library/),
     ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Season 1: no episodes in this library", {
+        selector: "[role='status']",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("names each episode row after its heading", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => jsonResponse({ error: false, data: seasonEpisodes(1) })),
+    );
+
+    renderWithQueryClient(
+      <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
+    );
+
+    const row = await screen.findByRole("article", {
+      name: /1\.\s*S1 Episode 1/,
+    });
+    // Episode titles sit one level under the season heading (h3).
+    expect(
+      within(row).getByRole("heading", { level: 4 }),
+    ).toHaveTextContent(/S1 Episode 1/);
   });
 
   it("calls specials by name rather than by number", async () => {

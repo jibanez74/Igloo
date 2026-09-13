@@ -6,6 +6,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import SectionErrorAlert from "@/components/shared/SectionErrorAlert";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type HomeMediaSectionProps<T> = {
@@ -41,7 +42,7 @@ export default function HomeMediaSection<T>({
   renderItem,
 }: HomeMediaSectionProps<T>) {
   const sectionSummaryId = `${headingId}-summary`;
-  const countLabel = `${items.length} ${countNoun}${items.length === 1 ? "" : "s"}`;
+  const countLabel = pluralize(items.length, countNoun);
   let sectionSummary = "";
 
   if (isPending) {

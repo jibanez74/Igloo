@@ -1,5 +1,6 @@
 import { Star, Clock, Calendar, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
 import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
 import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
 import { audienceRatingClass, criticRatingClass } from "@/lib/rating";
@@ -35,17 +36,7 @@ export default function MovieDetailsMetadataChips({
     >
       {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
         <li>
-          <Badge variant="outline" className={OVER_MEDIA_BADGE_CLASS}>
-            <span className="sr-only">
-              {`TMDB user score: ${tmdbVoteAverage.toFixed(1)} out of 10`}
-            </span>
-            <span aria-hidden="true" className="text-white/70">
-              TMDB
-            </span>
-            <span aria-hidden="true" className="font-semibold">
-              {tmdbVoteAverage.toFixed(1)}
-            </span>
-          </Badge>
+          <TmdbScoreBadge score={tmdbVoteAverage} />
         </li>
       )}
       {criticRating != null && criticRating > 0 && (

@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import CrewDisclosure from "@/components/shared/CrewDisclosure";
+import { DETAIL_SECTION_HEADING_CLASS } from "@/lib/constants";
 import type { ShowCrewCreditType, ShowPersonType } from "@/types";
 
 type ShowCrewSectionProps = {
@@ -14,8 +13,6 @@ export default function ShowCrewSection({
   creators,
   crew,
 }: ShowCrewSectionProps) {
-  const [crewExpanded, setCrewExpanded] = useState(false);
-
   if (creators.length === 0 && crew.length === 0) return null;
 
   return (
@@ -23,7 +20,7 @@ export default function ShowCrewSection({
       <h2
         id="crew-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-foreground outline-hidden sm:text-xl"
+        className={DETAIL_SECTION_HEADING_CLASS}
       >
         Key Crew
       </h2>
@@ -43,50 +40,14 @@ export default function ShowCrewSection({
         </div>
       )}
 
-      {crew.length > 0 && (
-        <div className="mt-4">
-          <button
-            type="button"
-            aria-expanded={crewExpanded}
-            aria-controls="crew-full-list"
-            onClick={() => setCrewExpanded(v => !v)}
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "touch-manipulation",
-            )}
-          >
-            {crewExpanded ? "Show less" : "Show all crew"}
-          </button>
-          {crewExpanded && (
-            <div
-              id="crew-full-list"
-              aria-label={`Full crew list, ${crew.length} credits`}
-              className="mt-3 max-h-96 overflow-y-auto rounded-lg border border-primary/15 bg-card/40 px-3 py-2 sm:px-4"
-            >
-              <ul className="list-none space-y-3">
-                {crew.map(c => (
-                  <li key={c.credit_id}>
-                    <p className="text-sm">
-                      <span className="block text-muted-foreground">
-                        {c.job}
-                        {c.department ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · {c.department}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {c.artist_name}
-                      </span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+      <CrewDisclosure
+        credits={crew.map(c => ({
+          key: c.credit_id,
+          job: c.job,
+          department: c.department,
+          name: c.artist_name,
+        }))}
+      />
     </section>
   );
 }

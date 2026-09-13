@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Tabs as TabsPrimitive } from "radix-ui"
 
+import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 
 function Tabs({
@@ -58,7 +59,9 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 outline-hidden", className)}
+      // Radix makes the panel a tab stop, so it shows the shared ring rather
+      // than a bare outline-hidden (design-system §1.7).
+      className={cn("flex-1 rounded-sm", FOCUS_VISIBLE_RING_CLASS, className)}
       {...props}
     />
   )
