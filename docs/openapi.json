@@ -9543,6 +9543,95 @@
         },
         "additionalProperties": false
       },
+      "MovieCastCredit": {
+        "type": "object",
+        "required": [
+          "id",
+          "character",
+          "cast_order",
+          "artist_name",
+          "artist_profile"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "character": {
+            "type": "string"
+          },
+          "cast_order": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "artist_name": {
+            "type": "string"
+          },
+          "artist_profile": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MovieCrewCredit": {
+        "type": "object",
+        "required": [
+          "id",
+          "job",
+          "department",
+          "artist_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "job": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string"
+          },
+          "artist_name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MovieGenre": {
+        "type": "object",
+        "required": [
+          "id",
+          "tag"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MovieProductionCompany": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "MovieDetailsEnvelope": {
         "allOf": [
           {
@@ -9571,36 +9660,31 @@
                   "cast": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/MovieCastCredit"
                     }
                   },
                   "crew": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/MovieCrewCredit"
                     }
                   },
                   "genres": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/MovieGenre"
                     }
                   },
                   "production_companies": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/MovieProductionCompany"
                     }
                   },
                   "extra_videos": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/ExtraVideo"
                     }
                   }
                 },
@@ -9849,7 +9933,43 @@
             "$ref": "#/components/schemas/SqlNullString"
           },
           "movie_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MovieTechnicalFile": {
+        "type": "object",
+        "description": "The playback-relevant subset of the movie file. Filesystem locations are never exposed.",
+        "required": [
+          "file_name",
+          "size",
+          "container",
+          "mime_type",
+          "run_time",
+          "duration"
+        ],
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "container": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "The container media type the client direct-play gate reads, normalized from the stored value; the watch-room handler validates against this same value."
+          },
+          "run_time": {
             "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "duration": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
           }
         },
         "additionalProperties": false
@@ -9876,8 +9996,7 @@
                 ],
                 "properties": {
                   "movie": {
-                    "type": "object",
-                    "additionalProperties": true
+                    "$ref": "#/components/schemas/MovieTechnicalFile"
                   },
                   "video_streams": {
                     "type": "array",
@@ -12176,6 +12295,45 @@
           }
         ]
       },
+      "AlbumArtist": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "thumb"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "thumb": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AlbumTrackGenre": {
+        "type": "object",
+        "description": "One genre tag carried by one track of the album; a track with several genres contributes several rows.",
+        "required": [
+          "track_id",
+          "tag"
+        ],
+        "properties": {
+          "track_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "AlbumDetailsEnvelope": {
         "allOf": [
           {
@@ -12210,15 +12368,13 @@
                   "artists": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/AlbumArtist"
                     }
                   },
                   "track_genres": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/AlbumTrackGenre"
                     }
                   },
                   "album_genres": {
@@ -12287,6 +12443,133 @@
           }
         ]
       },
+      "Musician": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "sort_name",
+          "summary",
+          "spotify_id",
+          "spotify_popularity",
+          "spotify_followers",
+          "thumb",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sort_name": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "spotify_id": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "spotify_popularity": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "spotify_followers": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "thumb": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MusicianAlbum": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "cover",
+          "year",
+          "release_date",
+          "track_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "release_date": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "track_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MusicianTrack": {
+        "type": "object",
+        "description": "A track of this musician. It carries no musician columns, unlike TrackListItem, because the musician is the resource being read.",
+        "required": [
+          "id",
+          "title",
+          "duration",
+          "codec",
+          "bit_rate",
+          "album_id",
+          "album_title",
+          "album_cover"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codec": {
+            "type": "string"
+          },
+          "bit_rate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "album_title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "album_cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
       "MusicianDetailsEnvelope": {
         "allOf": [
           {
@@ -12309,21 +12592,18 @@
                 ],
                 "properties": {
                   "musician": {
-                    "type": "object",
-                    "additionalProperties": true
+                    "$ref": "#/components/schemas/Musician"
                   },
                   "albums": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/MusicianAlbum"
                     }
                   },
                   "tracks": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/MusicianTrack"
                     }
                   },
                   "genres": {
@@ -13241,8 +13521,186 @@
           }
         ]
       },
+      "TopTrack": {
+        "type": "object",
+        "required": [
+          "play_count",
+          "total_time_played",
+          "last_played_at",
+          "id",
+          "title",
+          "duration",
+          "album_id",
+          "album_title",
+          "album_cover",
+          "musician_id",
+          "musician_name"
+        ],
+        "properties": {
+          "play_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_time_played": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_played_at": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "album_title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "album_cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "musician_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "musician_name": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RecentlyPlayedTrack": {
+        "type": "object",
+        "required": [
+          "played_at",
+          "duration_played",
+          "id",
+          "title",
+          "duration",
+          "album_id",
+          "album_title",
+          "album_cover",
+          "musician_id",
+          "musician_name"
+        ],
+        "properties": {
+          "played_at": {
+            "type": "string"
+          },
+          "duration_played": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "album_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "album_title": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "album_cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "musician_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "musician_name": {
+            "$ref": "#/components/schemas/SqlNullString"
+          }
+        },
+        "additionalProperties": false
+      },
       "TopTracksEnvelope": {
-        "$ref": "#/components/schemas/TracksWithLimitOffsetEnvelope"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "tracks",
+                  "limit",
+                  "offset"
+                ],
+                "properties": {
+                  "tracks": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TopTrack"
+                    }
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "format": "int64"
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TopMusician": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "thumb",
+          "total_play_count",
+          "total_time_listened",
+          "unique_tracks_played"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "thumb": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "total_play_count": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "total_time_listened": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "unique_tracks_played": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "TopMusiciansEnvelope": {
         "allOf": [
@@ -13266,8 +13724,7 @@
                   "musicians": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/TopMusician"
                     }
                   },
                   "limit": {
@@ -13284,6 +13741,36 @@
             }
           }
         ]
+      },
+      "TopGenre": {
+        "type": "object",
+        "required": [
+          "id",
+          "tag",
+          "total_play_count",
+          "total_time_listened",
+          "unique_tracks_played"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "total_play_count": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "total_time_listened": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "unique_tracks_played": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "TopGenresEnvelope": {
         "allOf": [
@@ -13306,8 +13793,7 @@
                   "genres": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/TopGenre"
                     }
                   },
                   "limit": {
@@ -13320,6 +13806,48 @@
             }
           }
         ]
+      },
+      "TopAlbum": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "cover",
+          "musician",
+          "year",
+          "total_play_count",
+          "total_time_listened",
+          "unique_tracks_played"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "musician": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "total_play_count": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "total_time_listened": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "unique_tracks_played": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
       },
       "TopAlbumsEnvelope": {
         "allOf": [
@@ -13343,8 +13871,7 @@
                   "albums": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/TopAlbum"
                     }
                   },
                   "limit": {
@@ -13363,9 +13890,6 @@
         ]
       },
       "RecentlyPlayedEnvelope": {
-        "$ref": "#/components/schemas/TracksWithLimitOffsetEnvelope"
-      },
-      "TracksWithLimitOffsetEnvelope": {
         "allOf": [
           {
             "$ref": "#/components/schemas/JsonSuccess"
@@ -13387,8 +13911,7 @@
                   "tracks": {
                     "type": "array",
                     "items": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/RecentlyPlayedTrack"
                     }
                   },
                   "limit": {
@@ -13406,7 +13929,7 @@
           }
         ]
       },
-      "SearchSection": {
+      "MovieSearchSection": {
         "type": "object",
         "required": [
           "results",
@@ -13416,8 +13939,67 @@
           "results": {
             "type": "array",
             "items": {
-              "type": "object",
-              "additionalProperties": true
+              "$ref": "#/components/schemas/MovieLibraryItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AlbumSearchSection": {
+        "type": "object",
+        "required": [
+          "results",
+          "total"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleAlbum"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MusicianSearchSection": {
+        "type": "object",
+        "required": [
+          "results",
+          "total"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMusician"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TrackSearchSection": {
+        "type": "object",
+        "required": [
+          "results",
+          "total"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackListItem"
             }
           },
           "total": {
@@ -13452,16 +14034,16 @@
                     "type": "string"
                   },
                   "movies": {
-                    "$ref": "#/components/schemas/SearchSection"
+                    "$ref": "#/components/schemas/MovieSearchSection"
                   },
                   "albums": {
-                    "$ref": "#/components/schemas/SearchSection"
+                    "$ref": "#/components/schemas/AlbumSearchSection"
                   },
                   "musicians": {
-                    "$ref": "#/components/schemas/SearchSection"
+                    "$ref": "#/components/schemas/MusicianSearchSection"
                   },
                   "tracks": {
-                    "$ref": "#/components/schemas/SearchSection"
+                    "$ref": "#/components/schemas/TrackSearchSection"
                   }
                 },
                 "additionalProperties": false
@@ -13470,7 +14052,7 @@
           }
         ]
       },
-      "PaginatedSearchData": {
+      "MovieSearchData": {
         "type": "object",
         "required": [
           "query",
@@ -13487,8 +14069,124 @@
           "results": {
             "type": "array",
             "items": {
-              "type": "object",
-              "additionalProperties": true
+              "$ref": "#/components/schemas/MovieLibraryItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AlbumSearchData": {
+        "type": "object",
+        "required": [
+          "query",
+          "results",
+          "total",
+          "page",
+          "per_page",
+          "total_pages"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleAlbum"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MusicianSearchData": {
+        "type": "object",
+        "required": [
+          "query",
+          "results",
+          "total",
+          "page",
+          "per_page",
+          "total_pages"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMusician"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TrackSearchData": {
+        "type": "object",
+        "required": [
+          "query",
+          "results",
+          "total",
+          "page",
+          "per_page",
+          "total_pages"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackListItem"
             }
           },
           "total": {
@@ -13511,18 +14209,6 @@
         "additionalProperties": false
       },
       "SearchMoviesEnvelope": {
-        "$ref": "#/components/schemas/PaginatedSearchEnvelope"
-      },
-      "SearchAlbumsEnvelope": {
-        "$ref": "#/components/schemas/PaginatedSearchEnvelope"
-      },
-      "SearchMusiciansEnvelope": {
-        "$ref": "#/components/schemas/PaginatedSearchEnvelope"
-      },
-      "SearchTracksEnvelope": {
-        "$ref": "#/components/schemas/PaginatedSearchEnvelope"
-      },
-      "PaginatedSearchEnvelope": {
         "allOf": [
           {
             "$ref": "#/components/schemas/JsonSuccess"
@@ -13534,7 +14220,61 @@
             ],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/PaginatedSearchData"
+                "$ref": "#/components/schemas/MovieSearchData"
+              }
+            }
+          }
+        ]
+      },
+      "SearchAlbumsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AlbumSearchData"
+              }
+            }
+          }
+        ]
+      },
+      "SearchMusiciansEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MusicianSearchData"
+              }
+            }
+          }
+        ]
+      },
+      "SearchTracksEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TrackSearchData"
               }
             }
           }
