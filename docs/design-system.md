@@ -591,7 +591,20 @@ require the full playback test pass.
   `ResumeDialog` offers resume vs. start-over; announcements via five
   `LiveAnnouncer`s (play/pause state, capacity waiting, chapter jumps,
   direct-play fallback, and HLS session recovery — the watch room announces
-  recovery the same way). Fatal playback errors self-announce: the status
+  recovery the same way). When a TV episode ends and the header names a
+  `next_episode`, an **up-next card** (`UpNextOverlay.tsx`, a `section`
+  labelled "Up next" anchored to the bottom of the video so it survives
+  fullscreen) shows the episode still, "S1 E4 · Name", a `tabular-nums`
+  "Playing in Ns" countdown (`UP_NEXT_COUNTDOWN_SEC`) and two buttons:
+  primary "Play now" / "Resume now" (focused on appear; Enter activates it,
+  Space still toggles playback per the player keyboard contract) and outline
+  "Cancel", which keeps the finished player and returns focus to the player
+  region. The card announces itself once (polite), never per tick. The
+  hand-off navigates (push) to the next episode's play route with
+  `start` at its saved position and `autoplay=true`, which the player treats
+  like a rebase resume: it plays on the first `canplay`; if the browser
+  refuses, the viewer sees the paused player and presses Play. Movies never
+  show the card. Fatal playback errors self-announce: the status
   screen's non-loading variants and the watch-room error box carry
   `role="alert"` because the player subtree (and its live regions) unmounts
   before they appear.

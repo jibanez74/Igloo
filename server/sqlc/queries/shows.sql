@@ -411,6 +411,63 @@ INNER JOIN shows AS sh
 WHERE e.id = ?
 LIMIT 1;
 
+-- name: GetShowNextEpisode :one
+-- The episode the player advances to when one ends: the first episode of the
+-- same show that sorts after the current one in the order the season listing
+-- uses (specials last, then season, then episode number). Episodes backed by
+-- the file that just played are skipped, because a combined file plays whole
+-- and its other episodes have already been seen. The requesting user's
+-- progress rides along so the player can resume the next episode where it
+-- was left.
+SELECT
+  n.id,
+  ns.season_number,
+  n.episode_number,
+  n.name,
+  n.still_path,
+  wp.progress_sec,
+  wp.duration_sec,
+  CAST((wp.watched IS NOT NULL AND wp.watched) AS BOOLEAN) AS watched
+FROM show_episodes AS c
+INNER JOIN show_seasons AS cs
+  ON cs.id = c.season_id
+INNER JOIN show_seasons AS ns
+  ON ns.show_id = cs.show_id
+INNER JOIN show_episodes AS n
+  ON n.season_id = ns.id
+LEFT JOIN show_episode_watch_progress AS wp
+  ON wp.episode_id = n.id
+  AND wp.user_id = sqlc.arg(user_id)
+WHERE c.id = sqlc.arg(episode_id)
+  AND (
+    (ns.season_number = 0) > (cs.season_number = 0)
+    OR (
+      (ns.season_number = 0) = (cs.season_number = 0)
+      AND (
+        ns.season_number > cs.season_number
+        OR (
+          ns.season_number = cs.season_number
+          AND n.episode_number > c.episode_number
+        )
+      )
+    )
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM show_episode_files AS nl
+    WHERE nl.episode_id = n.id
+      AND nl.file_id = (
+        SELECT MIN(cl.file_id)
+        FROM show_episode_files AS cl
+        WHERE cl.episode_id = c.id
+      )
+  )
+ORDER BY
+  ns.season_number = 0,
+  ns.season_number,
+  n.episode_number
+LIMIT 1;
+
 -- name: GetShowFileForEpisode :one
 -- The physical file behind an episode. An episode may be linked to more than
 -- one file (duplicate copies), so the lowest file id is the deterministic

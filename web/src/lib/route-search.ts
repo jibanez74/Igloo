@@ -118,6 +118,11 @@ export const playSearchSchema = z.object({
     z.catch(z.coerce.number().check(z.minimum(0)), 0),
     0,
   ),
+  /**
+   * Set by the up-next hand-off between episodes: the player starts as soon
+   * as the stream can play, without a click.
+   */
+  autoplay: z.catch(z.optional(z.boolean()), undefined),
 });
 
 export type PlaySearchParams = z.infer<typeof playSearchSchema>;

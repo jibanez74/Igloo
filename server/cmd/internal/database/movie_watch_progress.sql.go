@@ -55,7 +55,7 @@ type GetContinueWatchingMoviesRow struct {
 }
 
 // The 30-second floor must match the web client's
-// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
+// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 func (q *Queries) GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error) {
 	rows, err := q.query(ctx, q.getContinueWatchingMoviesStmt, getContinueWatchingMovies, userID)
 	if err != nil {

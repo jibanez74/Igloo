@@ -147,3 +147,71 @@ test("an unknown episode lands on the player's not-found screen", async ({
     page.getByRole("button", { name: "Back to previous page" }),
   ).toBeVisible();
 });
+
+// The mock server hands 70103 off to 70104 (S1 E4). Playback never really
+// runs here, so the end of the episode is the media element's own `ended`
+// event, exactly the signal the player listens for.
+const nextEpisodeId = 70104;
+const nextPlayPath = `/tv-shows/${showId}/episodes/${nextEpisodeId}/play`;
+
+async function endEpisode(page: Page) {
+  await page.evaluate(() => {
+    document.querySelector("video")?.dispatchEvent(new Event("ended"));
+  });
+}
+
+test("a finished episode offers the next one and hands off with autoplay", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  await openEpisodePlayer(
+    page,
+    "mode=direct&audio_track=0&subtitle_track=off&start=0",
+  );
+  await expect(page.getByRole("region", { name: "Up next" })).toHaveCount(0);
+
+  await endEpisode(page);
+
+  const card = page.getByRole("region", { name: "Up next" });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("S1 E4 · The Long Night");
+  const playNow = page.getByRole("button", { name: "Play now" });
+  await expect(playNow).toBeFocused();
+  await playNow.click();
+
+  // The loader resolves the new file's defaults with a redirect that keeps
+  // the hand-off's own params.
+  await expect(page).toHaveURL(new RegExp(`${nextPlayPath}\\?.*mode=direct`));
+  const url = new URL(page.url());
+  expect(url.searchParams.get("autoplay")).toBe("true");
+  expect(url.searchParams.get("start")).toBe("0");
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Frost Harbor · S1 E4 · The Long Night",
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Up next" })).toHaveCount(0);
+
+  browserIssues.assertClean();
+});
+
+test("cancelling the up-next card keeps the finished episode", async ({
+  page,
+}) => {
+  await openEpisodePlayer(
+    page,
+    "mode=direct&audio_track=0&subtitle_track=off&start=0",
+  );
+
+  await endEpisode(page);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.getByRole("region", { name: "Up next" })).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`${playPath}\\?`));
+  await expect(
+    page.getByRole("region", {
+      name: "Video player for Frost Harbor · S1 E3 · The Thaw",
+    }),
+  ).toBeFocused();
+});

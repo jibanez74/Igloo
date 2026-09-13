@@ -8,6 +8,7 @@ import VideoPlayer from "@/components/playback/VideoPlayer";
 import ResumeDialog from "@/components/playback/ResumeDialog";
 import PlayerControls from "@/components/playback/PlayerControls";
 import PlaybackStatusView from "@/components/playback/PlaybackStatus";
+import UpNextOverlay from "@/components/playback/UpNextOverlay";
 import { effectiveModeLabel } from "@/lib/playback";
 import { deleteMediaWatchProgress } from "@/lib/api";
 import { mediaKey } from "@/lib/media-ref";
@@ -38,6 +39,7 @@ import {
   MOVIE_VOLUME_STEP,
   SHOW_SEASON_EPISODES_KEY,
   STREAM_MODES,
+  UP_NEXT_COUNTDOWN_SEC,
 } from "@/lib/constants";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,7 @@ import {
   type PlaySearchParams,
 } from "@/lib/route-search";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
@@ -57,7 +60,7 @@ import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
-import type { PlaybackMediaRef } from "@/types/playback";
+import type { PlaybackMediaRef, UpNextItem } from "@/types/playback";
 
 type ChapterAnnouncement = {
   key: number;
@@ -83,6 +86,8 @@ type VideoPlaybackPageProps = {
   notFound: boolean;
   /** Duration known before technical details resolve, when the header has one. */
   fallbackDurationSec?: number;
+  /** What to offer once playback ends; nothing for a movie or a last episode. */
+  upNext?: UpNextItem | null;
 };
 
 /**
@@ -102,6 +107,7 @@ export default function VideoPlaybackPage({
   detailsPending,
   notFound,
   fallbackDurationSec,
+  upNext,
 }: VideoPlaybackPageProps) {
   const { start } = search;
   const mode = search.mode ?? "direct";
@@ -117,7 +123,9 @@ export default function VideoPlaybackPage({
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
-  const pendingAutoPlayOnLoadRef = useRef(false);
+  // Seeded from the URL so the up-next hand-off starts the next episode the
+  // way a rebase resumes the current one: on the first canplay.
+  const pendingAutoPlayOnLoadRef = useRef(search.autoplay === true);
   // VideoPlayer calls onNativeError then synchronously onError; when a
   // fallback consumed the native error, the paired onError must not raise
   // the error screen.
@@ -133,6 +141,8 @@ export default function VideoPlaybackPage({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [ended, setEnded] = useState(false);
+  const [upNextDismissed, setUpNextDismissed] = useState(false);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   // Tagged with the session it describes rather than cleared by an effect, so
@@ -230,6 +240,7 @@ export default function VideoPlaybackPage({
     modeUnavailable,
     playbackError,
   });
+  const playerMounted = status.kind === "ready";
 
   useEffect(() => {
     if (!isHlsPlayback) return;
@@ -345,7 +356,7 @@ export default function VideoPlaybackPage({
       resolvedMode,
       techLoaded,
       directAvailable: directPlayAvailable,
-      playerMounted: status.kind === "ready",
+      playerMounted,
       onFallback: () => {
         const remuxLabel =
           STREAM_MODES.find((m) => m.id === "remux")?.label ?? "remux";
@@ -470,7 +481,7 @@ export default function VideoPlaybackPage({
     });
 
   useHlsSessionKeepalive({
-    enabled: isHlsPlayback && status.kind === "ready",
+    enabled: isHlsPlayback && playerMounted,
     streamUrl,
   });
 
@@ -520,8 +531,9 @@ export default function VideoPlaybackPage({
     };
     // Keyed on the stream window, not streamUrl: the direct-play URL is a
     // constant, so a fallback navigation would never re-fire this otherwise
-    // (audit D12).
-  }, [sessionWindowKey]);
+    // (audit D12). Also on the player mounting: an up-next hand-off arrives
+    // with its window already final, before the video element exists.
+  }, [sessionWindowKey, playerMounted]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(mediaDurationSec && mediaDurationSec > 0)) return;
@@ -545,7 +557,7 @@ export default function VideoPlaybackPage({
     }
   };
 
-  const keyboardShortcutsEnabled = status.kind === "ready" && !resumeDialogOpen;
+  const keyboardShortcutsEnabled = playerMounted && !resumeDialogOpen;
 
   useVideoPlaybackKeyboard({
     containerRef,
@@ -624,13 +636,18 @@ export default function VideoPlaybackPage({
         }
         setPlaybackError(msg);
       }}
-      onPlay={() => setPlaying(true)}
+      onPlay={() => {
+        setPlaying(true);
+        setEnded(false);
+        setUpNextDismissed(false);
+      }}
       onPause={() => {
         setPlaying(false);
         void handlePauseSave();
       }}
       onEnded={() => {
         setPlaying(false);
+        setEnded(true);
         void handleEndedSave();
       }}
       onTimeUpdate={(time) => {
@@ -682,6 +699,19 @@ export default function VideoPlaybackPage({
       </div>
     </div>
   ) : null;
+
+  const upNextOverlay =
+    ended && upNext && !upNextDismissed ? (
+      <UpNextOverlay
+        item={upNext}
+        countdownSec={UP_NEXT_COUNTDOWN_SEC}
+        onPlay={upNext.onPlay}
+        onCancel={() => {
+          setUpNextDismissed(true);
+          focusDialogRestoreTarget(containerRef.current);
+        }}
+      />
+    ) : null;
 
   if (status.kind !== "ready") {
     return (
@@ -799,11 +829,13 @@ export default function VideoPlaybackPage({
         >
           {videoPlayer}
           {capacityOverlay}
+          {upNextOverlay}
         </div>
       ) : (
         <div className="relative flex min-h-0 flex-1 flex-col">
           {videoPlayer}
           {capacityOverlay}
+          {upNextOverlay}
         </div>
       )}
 

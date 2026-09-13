@@ -23,7 +23,7 @@ type PlayRouteLoaderArgs = {
   media: PlaybackMediaRef;
   /** Warms the media's own header query alongside the playback ones. */
   ensureDetails: () => Promise<unknown>;
-  deps: Pick<PlaySearchParams, "mode" | "start">;
+  deps: Pick<PlaySearchParams, "mode" | "start" | "autoplay">;
 };
 
 /**
@@ -97,5 +97,6 @@ export async function loadPlayRoute({
   return {
     ...playbackSettingsToPlaySearch(resolved),
     start: deps.start ?? 0,
+    autoplay: deps.autoplay,
   };
 }
