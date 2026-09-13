@@ -211,7 +211,8 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 		{ShowID: show.ID, ArtistID: guestArtist, Character: "Navigator", CastOrder: 2, CreditID: "credit-guest-1", EpisodeCount: 4},
 	}
 	for _, row := range castRows {
-		if err := q.CreateShowCast(ctx, row); err != nil {
+		err = q.CreateShowCast(ctx, row)
+		if err != nil {
 			t.Fatalf("create cast %s: %v", row.CreditID, err)
 		}
 	}
@@ -221,7 +222,8 @@ func seedContractShow(t *testing.T, app *Application) int64 {
 		{ShowID: show.ID, ArtistID: guestArtist, Department: "Writing", Job: "Writer", CreditID: "crew-2", EpisodeCount: 10},
 	}
 	for _, row := range crewRows {
-		if err := q.CreateShowCrew(ctx, row); err != nil {
+		err = q.CreateShowCrew(ctx, row)
+		if err != nil {
 			t.Fatalf("create crew %s: %v", row.CreditID, err)
 		}
 	}
@@ -352,7 +354,8 @@ func TestGetShowDetails_ConformsToOpenAPI(t *testing.T) {
 	// Every collection is asserted non-empty: an empty array validates against
 	// the contract vacuously, so a seeding failure would pass silently.
 	var body showDetailsBody
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+	err := json.Unmarshal(response.Body.Bytes(), &body)
+	if err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
 
@@ -517,7 +520,8 @@ func TestGetShowSeasonEpisodes_ConformsToOpenAPI(t *testing.T) {
 	}
 
 	var body showSeasonEpisodesBody
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+	err := json.Unmarshal(response.Body.Bytes(), &body)
+	if err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
 
@@ -561,7 +565,8 @@ func TestGetShowSeasonEpisodes_SpecialsAreSeasonZero(t *testing.T) {
 	}
 
 	var body showSeasonEpisodesBody
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+	err := json.Unmarshal(response.Body.Bytes(), &body)
+	if err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
 
@@ -571,6 +576,8 @@ func TestGetShowSeasonEpisodes_SpecialsAreSeasonZero(t *testing.T) {
 	if len(body.Data.Episodes) != 1 {
 		t.Fatalf("episodes length = %d, want 1", len(body.Data.Episodes))
 	}
+
+	assertOpenAPIExchange(t, "getShowSeasonEpisodes", request, response)
 }
 
 func TestGetShowSeasonEpisodes_UnknownSeasonIsNotFound(t *testing.T) {
@@ -616,6 +623,8 @@ func TestGetShowSeasonEpisodes_UnknownShowIsNotFound(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusNotFound, response.Body.String())
 	}
+
+	assertOpenAPIExchange(t, "getShowSeasonEpisodes", request, response)
 }
 
 func TestGetShowSeasonEpisodes_RejectsUnparsableSeasonNumber(t *testing.T) {
@@ -630,6 +639,31 @@ func TestGetShowSeasonEpisodes_RejectsUnparsableSeasonNumber(t *testing.T) {
 	cookie := newAuthSessionCookie(t, app, user.ID)
 
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/%d/seasons/not-a-number/episodes", showID), nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	app.Router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusBadRequest, response.Body.String())
+	}
+
+	assertOpenAPIResponse(t, "getShowSeasonEpisodes", request, response)
+}
+
+// A negative season parses, but the contract's SeasonNumberPath starts at zero,
+// so it is rejected as invalid rather than looked up and reported missing.
+func TestGetShowSeasonEpisodes_RejectsNegativeSeasonNumber(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Negative Season User", "negative-season@example.com", false)
+	showID := seedContractShow(t, app)
+
+	app.InitSession()
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, user.ID)
+
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/%d/seasons/-1/episodes", showID), nil)
 	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
 	app.Router.ServeHTTP(response, request)

@@ -66,18 +66,7 @@ export type AlbumDetailsResponseType = {
 };
 
 // Track item for paginated track lists (denormalized with album/artist info)
-export type TrackListItemType = {
-  id: number;
-  title: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: NullableInt64;
-  album_title: NullableString;
-  album_cover: NullableString;
-  musician_id: NullableInt64;
-  musician_name: NullableString;
-};
+export type TrackListItemType = components["schemas"]["TrackListItem"];
 
 // Paginated response for track listings
 export type TracksListResponseType = {

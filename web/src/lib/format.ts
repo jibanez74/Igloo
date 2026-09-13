@@ -1,7 +1,4 @@
-import type {
-  LibraryMovieCrewType,
-  LibraryMovieExtraVideoType,
-} from "@/types/movies";
+import type { LibraryMovieCrewType } from "@/types/movies";
 
 const months = [
   "January",
@@ -242,10 +239,14 @@ function extraVideoTypeSortRank(type: string): number {
   }
 }
 
-/** YouTube-only extras, sorted: trailers → special features → others, then title. */
-export function prepareYouTubeExtrasForDisplay(
-  videos: LibraryMovieExtraVideoType[],
-): LibraryMovieExtraVideoType[] {
+/**
+ * YouTube-only extras, sorted: trailers → special features → others, then
+ * title. Structural so movie, in-theaters, and show extras all pass through
+ * and keep their own element type.
+ */
+export function prepareYouTubeExtrasForDisplay<
+  T extends { title: string; type: string; site: string },
+>(videos: T[]): T[] {
   return videos.filter(v => isYouTubeExtraVideoSite(v.site)).sort(
     (a, b) => {
       const byType =
@@ -277,4 +278,9 @@ export function sortLibraryCrewForDisplay(
  */
 export function seasonLabel(seasonNumber: number): string {
   return seasonNumber === 0 ? "Specials" : `Season ${seasonNumber}`;
+}
+
+/** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */
+export function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }

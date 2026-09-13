@@ -151,7 +151,13 @@ func (app *Application) GetShowSeasonEpisodes(w http.ResponseWriter, r *http.Req
 
 	seasonParam := chi.URLParam(r, "seasonNumber")
 	seasonNumber, err := strconv.ParseInt(seasonParam, 10, 64)
-	if err != nil || seasonNumber < 0 {
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid season number"), http.StatusBadRequest)
+		return
+	}
+
+	isNegativeSeason := seasonNumber < 0
+	if isNegativeSeason {
 		helpers.ErrorJSON(w, errors.New("invalid season number"), http.StatusBadRequest)
 		return
 	}

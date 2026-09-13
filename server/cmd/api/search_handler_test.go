@@ -428,6 +428,14 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	userID := createSearchUser(t, app)
+
+	// Search scans into the same row types as the list endpoints, so a hit in
+	// every category is what validates those item schemas here.
+	createSearchMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
+	musicianID := createSearchMusician(t, app, "Contract Artist")
+	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
+	createSearchTrack(t, app, "Contract Track", "/music/search-contract.flac", albumID, musicianID)
+
 	app.InitSession()
 	app.InitRouter()
 	cookies := authSessionCookies(t, app, userID)
@@ -435,12 +443,13 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	tests := []struct {
 		operationID string
 		path        string
+		dataKeys    []string
 	}{
 		{operationID: "searchAll", path: "/api/search?q=contract"},
-		{operationID: "searchMovies", path: "/api/search/movies?q=contract"},
-		{operationID: "searchAlbums", path: "/api/search/albums?q=contract"},
-		{operationID: "searchMusicians", path: "/api/search/musicians?q=contract"},
-		{operationID: "searchTracks", path: "/api/search/tracks?q=contract"},
+		{operationID: "searchMovies", path: "/api/search/movies?q=contract", dataKeys: []string{"results"}},
+		{operationID: "searchAlbums", path: "/api/search/albums?q=contract", dataKeys: []string{"results"}},
+		{operationID: "searchMusicians", path: "/api/search/musicians?q=contract", dataKeys: []string{"results"}},
+		{operationID: "searchTracks", path: "/api/search/tracks?q=contract", dataKeys: []string{"results"}},
 	}
 	for _, test := range tests {
 		t.Run(test.operationID, func(t *testing.T) {
@@ -453,8 +462,44 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 			if response.Code != http.StatusOK {
 				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 			}
+			if test.operationID == "searchAll" {
+				assertSearchAllSectionsNotEmpty(t, response.Body.Bytes())
+			}
+			assertResponseListNotEmpty(t, test.operationID, response.Body.Bytes(), test.dataKeys...)
 			assertOpenAPIExchange(t, test.operationID, req, response)
 		})
+	}
+}
+
+// searchAll nests its results one level deeper than the category endpoints, so
+// it needs its own non-empty check for the four section item schemas.
+func assertSearchAllSectionsNotEmpty(t *testing.T, body []byte) {
+	t.Helper()
+
+	type section struct {
+		Results []json.RawMessage `json:"results"`
+	}
+	var envelope struct {
+		Data struct {
+			Movies    section `json:"movies"`
+			Albums    section `json:"albums"`
+			Musicians section `json:"musicians"`
+			Tracks    section `json:"tracks"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(body, &envelope)
+	if err != nil {
+		t.Fatalf("searchAll: decode body: %v", err)
+	}
+	for name, results := range map[string][]json.RawMessage{
+		"movies":    envelope.Data.Movies.Results,
+		"albums":    envelope.Data.Albums.Results,
+		"musicians": envelope.Data.Musicians.Results,
+		"tracks":    envelope.Data.Tracks.Results,
+	} {
+		if len(results) == 0 {
+			t.Fatalf("searchAll returned an empty %s section, so its item schema would not be validated: %s", name, body)
+		}
 	}
 }
 

@@ -2645,41 +2645,57 @@ export interface components {
             id: number;
             title: string;
             adult: boolean;
-            tmdb_id?: components["schemas"]["SqlNullInt64"];
-            imdb_id?: components["schemas"]["SqlNullString"];
-            poster_path?: components["schemas"]["SqlNullString"];
-            backdrop_path?: components["schemas"]["SqlNullString"];
-            language?: components["schemas"]["SqlNullString"];
-            year?: components["schemas"]["SqlNullInt64"];
-            release_date?: components["schemas"]["SqlNullString"];
-            overview?: components["schemas"]["SqlNullString"];
-            tag_line?: components["schemas"]["SqlNullString"];
-            certification?: components["schemas"]["SqlNullString"];
-            critic_rating?: components["schemas"]["SqlNullFloat64"];
-            audience_rating?: components["schemas"]["SqlNullFloat64"];
-            revenue?: components["schemas"]["SqlNullFloat64"];
-            budget?: components["schemas"]["SqlNullFloat64"];
-            run_time?: components["schemas"]["SqlNullInt64"];
+            tmdb_id: components["schemas"]["SqlNullInt64"];
+            imdb_id: components["schemas"]["SqlNullString"];
+            poster_path: components["schemas"]["SqlNullString"];
+            backdrop_path: components["schemas"]["SqlNullString"];
+            language: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
+            release_date: components["schemas"]["SqlNullString"];
+            overview: components["schemas"]["SqlNullString"];
+            tag_line: components["schemas"]["SqlNullString"];
+            certification: components["schemas"]["SqlNullString"];
+            critic_rating: components["schemas"]["SqlNullFloat64"];
+            audience_rating: components["schemas"]["SqlNullFloat64"];
+            revenue: components["schemas"]["SqlNullFloat64"];
+            budget: components["schemas"]["SqlNullFloat64"];
+            run_time: components["schemas"]["SqlNullInt64"];
             duration: components["schemas"]["SqlNullFloat64"];
+        };
+        MovieCastCredit: {
+            /** Format: int64 */
+            id: number;
+            character: string;
+            /** Format: int64 */
+            cast_order: number;
+            artist_name: string;
+            artist_profile: components["schemas"]["SqlNullString"];
+        };
+        MovieCrewCredit: {
+            /** Format: int64 */
+            id: number;
+            job: string;
+            department: string;
+            artist_name: string;
+        };
+        MovieGenre: {
+            /** Format: int64 */
+            id: number;
+            tag: string;
+        };
+        MovieProductionCompany: {
+            /** Format: int64 */
+            id: number;
+            name: string;
         };
         MovieDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 movie: components["schemas"]["Movie"];
-                cast: {
-                    [key: string]: unknown;
-                }[];
-                crew: {
-                    [key: string]: unknown;
-                }[];
-                genres: {
-                    [key: string]: unknown;
-                }[];
-                production_companies: {
-                    [key: string]: unknown;
-                }[];
-                extra_videos: {
-                    [key: string]: unknown;
-                }[];
+                cast: components["schemas"]["MovieCastCredit"][];
+                crew: components["schemas"]["MovieCrewCredit"][];
+                genres: components["schemas"]["MovieGenre"][];
+                production_companies: components["schemas"]["MovieProductionCompany"][];
+                extra_videos: components["schemas"]["ExtraVideo"][];
             };
         };
         VideoStream: {
@@ -2753,13 +2769,23 @@ export interface components {
             /** Format: int64 */
             start_time: number;
             thumb: components["schemas"]["SqlNullString"];
-            movie_id: components["schemas"]["SqlNullInt64"];
+            /** Format: int64 */
+            movie_id: number;
+        };
+        /** @description The playback-relevant subset of the movie file. Filesystem locations are never exposed. */
+        MovieTechnicalFile: {
+            file_name: string;
+            /** Format: int64 */
+            size: number;
+            container: string;
+            /** @description The container media type the client direct-play gate reads, normalized from the stored value; the watch-room handler validates against this same value. */
+            mime_type: string;
+            run_time: components["schemas"]["SqlNullInt64"];
+            duration: components["schemas"]["SqlNullFloat64"];
         };
         MovieTechnicalDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                movie: {
-                    [key: string]: unknown;
-                };
+                movie: components["schemas"]["MovieTechnicalFile"];
                 video_streams: components["schemas"]["VideoStream"][];
                 audio_streams: components["schemas"]["AudioStream"][];
                 subtitles: components["schemas"]["Subtitle"][];
@@ -3261,10 +3287,16 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
+            /** Format: int64 */
             duration: number;
             codec: string;
             /** Format: int64 */
             bit_rate: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            album_title: components["schemas"]["SqlNullString"];
+            album_cover: components["schemas"]["SqlNullString"];
+            musician_id: components["schemas"]["SqlNullInt64"];
+            musician_name: components["schemas"]["SqlNullString"];
         };
         SimpleMusician: {
             /** Format: int64 */
@@ -3302,16 +3334,24 @@ export interface components {
                 total_pages: number;
             };
         };
+        AlbumArtist: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            thumb: components["schemas"]["SqlNullString"];
+        };
+        /** @description One genre tag carried by one track of the album; a track with several genres contributes several rows. */
+        AlbumTrackGenre: {
+            /** Format: int64 */
+            track_id: number;
+            tag: string;
+        };
         AlbumDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 album: components["schemas"]["Album"];
                 tracks: components["schemas"]["AlbumTrack"][];
-                artists: {
-                    [key: string]: unknown;
-                }[];
-                track_genres: {
-                    [key: string]: unknown;
-                }[];
+                artists: components["schemas"]["AlbumArtist"][];
+                track_genres: components["schemas"]["AlbumTrackGenre"][];
                 album_genres: string[];
                 total_duration: number;
             };
@@ -3329,17 +3369,48 @@ export interface components {
                 total_pages: number;
             };
         };
+        Musician: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            sort_name: string;
+            summary: components["schemas"]["SqlNullString"];
+            spotify_id: components["schemas"]["SqlNullString"];
+            spotify_popularity: components["schemas"]["SqlNullFloat64"];
+            spotify_followers: components["schemas"]["SqlNullInt64"];
+            thumb: components["schemas"]["SqlNullString"];
+            created_at: string;
+            updated_at: string;
+        };
+        MusicianAlbum: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            cover: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
+            release_date: components["schemas"]["SqlNullString"];
+            /** Format: int64 */
+            track_count: number;
+        };
+        /** @description A track of this musician. It carries no musician columns, unlike TrackListItem, because the musician is the resource being read. */
+        MusicianTrack: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            /** Format: int64 */
+            duration: number;
+            codec: string;
+            /** Format: int64 */
+            bit_rate: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            album_title: components["schemas"]["SqlNullString"];
+            album_cover: components["schemas"]["SqlNullString"];
+        };
         MusicianDetailsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                musician: {
-                    [key: string]: unknown;
-                };
-                albums: {
-                    [key: string]: unknown;
-                }[];
-                tracks: {
-                    [key: string]: unknown;
-                }[];
+                musician: components["schemas"]["Musician"];
+                albums: components["schemas"]["MusicianAlbum"][];
+                tracks: components["schemas"]["MusicianTrack"][];
                 genres: string[];
                 total_duration: number;
             };
@@ -3418,6 +3489,9 @@ export interface components {
             description: components["schemas"]["SqlNullString"];
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
+            movie_id: components["schemas"]["SqlNullInt64"];
+            /** @constant */
+            content_type: "track";
             created_at: string;
             updated_at: string;
             /** Format: int64 */
@@ -3557,71 +3631,144 @@ export interface components {
                 liked_tracks_count: number;
             };
         };
-        TopTracksEnvelope: components["schemas"]["TracksWithLimitOffsetEnvelope"];
-        TopMusiciansEnvelope: components["schemas"]["JsonSuccess"] & {
+        TopTrack: {
+            /** Format: int64 */
+            play_count: number;
+            /** Format: int64 */
+            total_time_played: number;
+            last_played_at: components["schemas"]["SqlNullString"];
+            /** Format: int64 */
+            id: number;
+            title: string;
+            /** Format: int64 */
+            duration: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            album_title: components["schemas"]["SqlNullString"];
+            album_cover: components["schemas"]["SqlNullString"];
+            musician_id: components["schemas"]["SqlNullInt64"];
+            musician_name: components["schemas"]["SqlNullString"];
+        };
+        RecentlyPlayedTrack: {
+            played_at: string;
+            /** Format: int64 */
+            duration_played: number;
+            /** Format: int64 */
+            id: number;
+            title: string;
+            /** Format: int64 */
+            duration: number;
+            album_id: components["schemas"]["SqlNullInt64"];
+            album_title: components["schemas"]["SqlNullString"];
+            album_cover: components["schemas"]["SqlNullString"];
+            musician_id: components["schemas"]["SqlNullInt64"];
+            musician_name: components["schemas"]["SqlNullString"];
+        };
+        TopTracksEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                musicians: {
-                    [key: string]: unknown;
-                }[];
+                tracks: components["schemas"]["TopTrack"][];
                 /** Format: int64 */
                 limit: number;
                 /** Format: int64 */
                 offset: number;
             };
+        };
+        TopMusician: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            thumb: components["schemas"]["SqlNullString"];
+            total_play_count: components["schemas"]["SqlNullFloat64"];
+            total_time_listened: components["schemas"]["SqlNullFloat64"];
+            /** Format: int64 */
+            unique_tracks_played: number;
+        };
+        TopMusiciansEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: {
+                musicians: components["schemas"]["TopMusician"][];
+                /** Format: int64 */
+                limit: number;
+                /** Format: int64 */
+                offset: number;
+            };
+        };
+        TopGenre: {
+            /** Format: int64 */
+            id: number;
+            tag: string;
+            total_play_count: components["schemas"]["SqlNullFloat64"];
+            total_time_listened: components["schemas"]["SqlNullFloat64"];
+            /** Format: int64 */
+            unique_tracks_played: number;
         };
         TopGenresEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                genres: {
-                    [key: string]: unknown;
-                }[];
+                genres: components["schemas"]["TopGenre"][];
                 /** Format: int64 */
                 limit: number;
             };
+        };
+        TopAlbum: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            cover: components["schemas"]["SqlNullString"];
+            musician: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
+            total_play_count: components["schemas"]["SqlNullFloat64"];
+            total_time_listened: components["schemas"]["SqlNullFloat64"];
+            /** Format: int64 */
+            unique_tracks_played: number;
         };
         TopAlbumsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                albums: {
-                    [key: string]: unknown;
-                }[];
+                albums: components["schemas"]["TopAlbum"][];
                 /** Format: int64 */
                 limit: number;
                 /** Format: int64 */
                 offset: number;
             };
         };
-        RecentlyPlayedEnvelope: components["schemas"]["TracksWithLimitOffsetEnvelope"];
-        TracksWithLimitOffsetEnvelope: components["schemas"]["JsonSuccess"] & {
+        RecentlyPlayedEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                tracks: {
-                    [key: string]: unknown;
-                }[];
+                tracks: components["schemas"]["RecentlyPlayedTrack"][];
                 /** Format: int64 */
                 limit: number;
                 /** Format: int64 */
                 offset: number;
             };
         };
-        SearchSection: {
-            results: {
-                [key: string]: unknown;
-            }[];
+        MovieSearchSection: {
+            results: components["schemas"]["MovieLibraryItem"][];
+            /** Format: int64 */
+            total: number;
+        };
+        AlbumSearchSection: {
+            results: components["schemas"]["SimpleAlbum"][];
+            /** Format: int64 */
+            total: number;
+        };
+        MusicianSearchSection: {
+            results: components["schemas"]["SimpleMusician"][];
+            /** Format: int64 */
+            total: number;
+        };
+        TrackSearchSection: {
+            results: components["schemas"]["TrackListItem"][];
             /** Format: int64 */
             total: number;
         };
         SearchAllEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 query: string;
-                movies: components["schemas"]["SearchSection"];
-                albums: components["schemas"]["SearchSection"];
-                musicians: components["schemas"]["SearchSection"];
-                tracks: components["schemas"]["SearchSection"];
+                movies: components["schemas"]["MovieSearchSection"];
+                albums: components["schemas"]["AlbumSearchSection"];
+                musicians: components["schemas"]["MusicianSearchSection"];
+                tracks: components["schemas"]["TrackSearchSection"];
             };
         };
-        PaginatedSearchData: {
+        MovieSearchData: {
             query: string;
-            results: {
-                [key: string]: unknown;
-            }[];
+            results: components["schemas"]["MovieLibraryItem"][];
             /** Format: int64 */
             total: number;
             /** Format: int64 */
@@ -3631,12 +3778,53 @@ export interface components {
             /** Format: int64 */
             total_pages: number;
         };
-        SearchMoviesEnvelope: components["schemas"]["PaginatedSearchEnvelope"];
-        SearchAlbumsEnvelope: components["schemas"]["PaginatedSearchEnvelope"];
-        SearchMusiciansEnvelope: components["schemas"]["PaginatedSearchEnvelope"];
-        SearchTracksEnvelope: components["schemas"]["PaginatedSearchEnvelope"];
-        PaginatedSearchEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: components["schemas"]["PaginatedSearchData"];
+        AlbumSearchData: {
+            query: string;
+            results: components["schemas"]["SimpleAlbum"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        MusicianSearchData: {
+            query: string;
+            results: components["schemas"]["SimpleMusician"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        TrackSearchData: {
+            query: string;
+            results: components["schemas"]["TrackListItem"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        SearchMoviesEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["MovieSearchData"];
+        };
+        SearchAlbumsEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["AlbumSearchData"];
+        };
+        SearchMusiciansEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["MusicianSearchData"];
+        };
+        SearchTracksEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["TrackSearchData"];
         };
         QuickConnectInitiateRequest: {
             /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */

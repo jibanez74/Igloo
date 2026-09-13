@@ -1,8 +1,8 @@
-import { Calendar, CalendarRange, Film, Layers, Star } from "lucide-react";
+import { CalendarRange, Film, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
 import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
-import { formatDate, parseCatalogDate } from "@/lib/format";
-import { criticRatingClass } from "@/lib/rating";
+import { parseCatalogDate, pluralize } from "@/lib/format";
 
 type ShowDetailsMetadataChipsProps = {
   tmdbVoteAverage: number | null;
@@ -15,10 +15,6 @@ type ShowDetailsMetadataChipsProps = {
   availableEpisodeCount: number;
   tmdbEpisodeCount: number | null;
 };
-
-function pluralize(count: number, noun: string) {
-  return `${count} ${count === 1 ? noun : `${noun}s`}`;
-}
 
 /**
  * Follows the established chip recipe (design-system §1.7): the spoken value
@@ -58,18 +54,16 @@ export default function ShowDetailsMetadataChips({
   const lastYear = lastAirDate
     ? parseCatalogDate(lastAirDate).getFullYear()
     : null;
+  const spansYears = lastYear != null && lastYear !== firstYear;
   const airRange =
     firstYear != null
-      ? lastYear != null && lastYear !== firstYear
+      ? spansYears
         ? `${firstYear}–${lastYear}`
         : String(firstYear)
       : null;
-  const spokenAirRange =
-    firstYear != null
-      ? lastYear != null && lastYear !== firstYear
-        ? `Aired ${firstYear} to ${lastYear}`
-        : `Aired ${firstYear}`
-      : null;
+  const spokenAirRange = spansYears
+    ? `Aired ${firstYear} to ${lastYear}`
+    : `Aired ${firstYear}`;
 
   return (
     <ul
@@ -77,14 +71,8 @@ export default function ShowDetailsMetadataChips({
       aria-label="Show details"
     >
       {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
-        <li
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${criticRatingClass(tmdbVoteAverage)}`}
-        >
-          <Star className="size-3.5 fill-current" aria-hidden="true" />
-          <span className="sr-only">
-            {`TMDB user score: ${tmdbVoteAverage.toFixed(1)} out of 10`}
-          </span>
-          <span aria-hidden="true">{tmdbVoteAverage.toFixed(1)}</span>
+        <li>
+          <TmdbScoreBadge score={tmdbVoteAverage} />
         </li>
       )}
       {certificationLabel && (
@@ -129,12 +117,6 @@ export default function ShowDetailsMetadataChips({
           <CalendarRange className="size-4" aria-hidden="true" />
           <span className="sr-only">{spokenAirRange}</span>
           <span aria-hidden="true">{airRange}</span>
-        </li>
-      )}
-      {firstAirDate && !airRange && (
-        <li className="flex items-center gap-1.5 text-white/80">
-          <Calendar className="size-4" aria-hidden="true" />
-          <time dateTime={firstAirDate}>{formatDate(firstAirDate)}</time>
         </li>
       )}
     </ul>

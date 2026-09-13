@@ -9,7 +9,7 @@ import {
   getHeroMotionWrapper,
   getLowerMotionWrapper,
 } from "../helpers/motion";
-import { SHOW_ID, seasonEpisodes, showDetails } from "./show-details-fixtures";
+import { SHOW_ID, seasonEpisodes, showDetails } from "../helpers/show-details";
 
 type MockOptions = {
   detailsStatus?: number;
@@ -224,7 +224,7 @@ describe("show details route", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the not-found state with a link back to Home", async () => {
+  it("renders the not-found state with a link back to the TV library", async () => {
     mockShowDetailsFetch({
       detailsBody: { error: true, message: "show not found" },
       detailsStatus: 404,
@@ -238,8 +238,44 @@ describe("show details route", () => {
       await screen.findByText(/The resource you requested was not found/),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Back to Home/i }),
-    ).toHaveAttribute("href", "/");
+      screen.getByRole("link", { name: /Back to TV Shows/i }),
+    ).toHaveAttribute("href", "/tv-shows");
+  });
+
+  it("wires each season tab to the episode list as its tabpanel", async () => {
+    mockShowDetailsFetch();
+
+    await renderRoute(`/tv-shows/${SHOW_ID}`);
+
+    const season1Tab = await screen.findByRole("tab", { name: "Season 1" });
+    const panel = screen.getByRole("tabpanel");
+
+    // A tab must control a panel that exists, or screen readers announce a
+    // tab with nowhere to go.
+    expect(season1Tab).toHaveAttribute("aria-controls", panel.id);
+    expect(
+      within(panel).getByRole("list", { name: /Season 1 episodes/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("announces the episodes of the season that was just selected", async () => {
+    const user = userEvent.setup();
+    mockShowDetailsFetch();
+
+    await renderRoute(`/tv-shows/${SHOW_ID}`);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Frost Harbor/ }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Season 2" }));
+
+    // The tab change itself says nothing; the list announces its resolution.
+    expect(
+      await screen.findByText("Season 2: 1 episode in this library", {
+        selector: "[role='status']",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("keys duplicate roles for one artist without a React key collision", async () => {

@@ -107,6 +107,18 @@ describe("ShowDetailsMetadataChips", () => {
     }
   });
 
+  it("renders the TMDB score as the labelled badge, not a tiered rating chip", () => {
+    render(<ShowDetailsMetadataChips {...baseProps} tmdbVoteAverage={8.4} />);
+
+    expect(
+      screen.getByText("TMDB user score: 8.4 out of 10"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("TMDB")).toBeInTheDocument();
+    // The critic/audience chips are the only tiered ones; a different metric
+    // must not borrow their look.
+    expect(document.querySelector(".bg-aurora")).toBeNull();
+  });
+
   it("omits the TMDB score when there is none", () => {
     render(<ShowDetailsMetadataChips {...baseProps} tmdbVoteAverage={0} />);
 

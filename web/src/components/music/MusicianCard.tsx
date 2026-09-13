@@ -10,15 +10,13 @@ import {
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SimpleMusicianType } from "@/types";
 
 type MusicianCardProps = {
   musician: SimpleMusicianType;
 };
-
-const pluralize = (count: number, noun: string) =>
-  `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 export default function MusicianCard({ musician }: MusicianCardProps) {
   const { id, name, thumb, album_count, track_count } = musician;

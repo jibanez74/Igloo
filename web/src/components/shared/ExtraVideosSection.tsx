@@ -4,6 +4,7 @@ import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
+  DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
  * What this section renders, structurally: movie and show payloads both satisfy
  * it, so neither media type's named contract type leaks into shared code.
  */
-export type ExtraVideoItem = {
+type ExtraVideoItem = {
   id: number;
   title: string;
   key: string;
@@ -108,7 +109,7 @@ export default function ExtraVideosSection({
       <h2
         id="extra-videos-heading"
         tabIndex={-1}
-        className="mb-4 text-xl font-semibold text-foreground outline-hidden sm:text-2xl"
+        className={DETAIL_RAIL_HEADING_CLASS}
       >
         Extra Videos
       </h2>

@@ -8,7 +8,7 @@ import {
   nullableFloat64,
   nullableInt64,
   nullableString,
-} from "../helpers/fixtures";
+} from "./fixtures";
 
 export const SHOW_ID = 401;
 

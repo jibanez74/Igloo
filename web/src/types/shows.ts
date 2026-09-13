@@ -17,13 +17,10 @@ export type ShowDetailsDataType = Schema["ShowDetailsData"];
 // `data` payload of GET /api/shows/{id}/seasons/{seasonNumber}/episodes.
 export type ShowSeasonEpisodesDataType = Schema["ShowSeasonEpisodesData"];
 
-export type ShowType = Schema["Show"];
 export type ShowSeasonSummaryType = Schema["ShowSeasonSummary"];
 export type ShowEpisodeType = Schema["ShowEpisode"];
-export type ShowCastCreditType = Schema["ShowCastCredit"];
 export type ShowCrewCreditType = Schema["ShowCrewCredit"];
 export type ShowPersonType = Schema["ShowPerson"];
 export type ShowGenreType = Schema["ShowGenre"];
 export type ShowNetworkType = Schema["ShowNetwork"];
 export type ShowProductionCompanyType = Schema["ShowProductionCompany"];
-export type ExtraVideoType = Schema["ExtraVideo"];

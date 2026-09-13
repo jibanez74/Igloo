@@ -57,6 +57,36 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 	assertOpenAPIHTTPExchange(t, operationID, request, response, true)
 }
 
+// A list operation validated against an empty array proves nothing about its
+// item schema, so seeded contract tests assert the named data arrays actually
+// carried a row before validating the exchange.
+func assertResponseListNotEmpty(t *testing.T, operationID string, body []byte, dataKeys ...string) {
+	t.Helper()
+
+	var envelope struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	err := json.Unmarshal(body, &envelope)
+	if err != nil {
+		t.Fatalf("%s: decode body: %v", operationID, err)
+	}
+
+	for _, key := range dataKeys {
+		raw, ok := envelope.Data[key]
+		if !ok {
+			t.Fatalf("%s: response has no data.%s: %s", operationID, key, body)
+		}
+		var list []json.RawMessage
+		err = json.Unmarshal(raw, &list)
+		if err != nil {
+			t.Fatalf("%s: data.%s is not an array: %v", operationID, key, err)
+		}
+		if len(list) == 0 {
+			t.Fatalf("%s returned an empty data.%s, so the item schema would not be validated: %s", operationID, key, body)
+		}
+	}
+}
+
 // Rejection and lenient-query tests deliberately send requests outside the
 // request schema. They still validate the actual response against the contract.
 func assertOpenAPIResponse(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {

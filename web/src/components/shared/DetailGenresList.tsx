@@ -1,12 +1,8 @@
-import type { LibraryMovieGenreType } from "@/types/movies";
-
-type MovieDetailsGenresListProps = {
-  genres: LibraryMovieGenreType[];
+type DetailGenresListProps = {
+  genres: { id: number; tag: string }[];
 };
 
-export default function MovieDetailsGenresList({
-  genres,
-}: MovieDetailsGenresListProps) {
+export default function DetailGenresList({ genres }: DetailGenresListProps) {
   if (genres.length === 0) return null;
 
   return (

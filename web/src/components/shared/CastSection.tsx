@@ -1,9 +1,11 @@
 import { User } from "lucide-react";
 import {
+  DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   TMDB_PROFILE_SIZE,
 } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 
@@ -41,7 +43,7 @@ export default function CastSection({
     <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-xl font-semibold text-foreground outline-hidden sm:text-2xl"
+        className={DETAIL_RAIL_HEADING_CLASS}
         tabIndex={-1}
       >
         Cast
@@ -66,7 +68,7 @@ export default function CastSection({
         {displayedCast.map(actor => {
           const episodeLabel =
             actor.episodeCount != null && actor.episodeCount > 0
-              ? `${actor.episodeCount} ${actor.episodeCount === 1 ? "episode" : "episodes"}`
+              ? pluralize(actor.episodeCount, "episode")
               : null;
 
           return (
@@ -85,9 +87,11 @@ export default function CastSection({
                 }
               >
                 {actor.profilePath ? (
+                  // The article already speaks the name; a named photo would
+                  // read it twice.
                   <img
                     src={buildTmdbImageUrl(actor.profilePath, TMDB_PROFILE_SIZE)}
-                    alt={actor.name}
+                    alt=""
                     className="aspect-2/3 w-full object-cover"
                     loading="lazy"
                   />

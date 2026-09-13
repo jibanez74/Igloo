@@ -74,8 +74,6 @@ export const showDetailsSearchSchema = z.object({
   ),
 });
 
-export type ShowDetailsSearchParams = z.infer<typeof showDetailsSearchSchema>;
-
 export const musicSearchSchema = z.object({
   tab: z._default(
     z.catch(z.enum(["musicians", "albums", "tracks", "playlists"]), "albums"),

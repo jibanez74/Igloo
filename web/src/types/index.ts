@@ -90,16 +90,13 @@ export type {
   LatestShowsDataType,
   ShowDetailsDataType,
   ShowSeasonEpisodesDataType,
-  ShowType,
   ShowSeasonSummaryType,
   ShowEpisodeType,
-  ShowCastCreditType,
   ShowCrewCreditType,
   ShowPersonType,
   ShowGenreType,
   ShowNetworkType,
   ShowProductionCompanyType,
-  ExtraVideoType,
 } from "./shows";
 
 // Audio player types

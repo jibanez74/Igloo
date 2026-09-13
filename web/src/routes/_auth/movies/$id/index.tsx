@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Film } from "lucide-react";
 import {
   authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
@@ -21,16 +22,21 @@ import {
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import { parseRouteId } from "@/lib/route-id";
-import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
+import {
+  trimmedOrNull,
+  unwrapFloat,
+  unwrapInt,
+  unwrapString,
+} from "@/lib/nullable";
 import MediaNotFound from "@/components/shared/MediaNotFound";
-import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
+import DetailSkeleton from "@/components/shared/DetailSkeleton";
 import CastSection from "@/components/shared/CastSection";
-import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
-import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
+import DetailHero from "@/components/shared/DetailHero";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
 import MovieDetailsHeroActions from "@/components/movies/MovieDetailsHeroActions";
 import MovieDetailsResumeProgress from "@/components/movies/MovieDetailsResumeProgress";
-import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
+import OverviewSection from "@/components/shared/OverviewSection";
 import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
 import MovieAboutSection from "@/components/movies/MovieAboutSection";
 import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
@@ -86,16 +92,16 @@ function MovieDetailsPage() {
   const { id } = Route.useParams();
   const movieId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery({
-    ...libraryMovieDetailsQueryOpts(movieId ?? 0),
-    enabled: movieId != null,
-  });
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the page goes straight to
+  // not-found rather than sitting on a skeleton.
+  const { data, isPending, isError } = useQuery(
+    libraryMovieDetailsQueryOpts(movieId ?? 0),
+  );
 
   const payload = data?.data;
   const movie = payload?.movie;
 
-  // A malformed id never reaches the API: the query stays disabled and the
-  // page goes straight to not-found rather than sitting on a skeleton.
   if (movieId == null) {
     return (
       <MediaNotFound
@@ -120,16 +126,16 @@ function MovieDetailsPage() {
   }
 
   if (isPending) {
-    return <MovieDetailsSkeleton />;
+    return <DetailSkeleton label="Loading movie details" withActions />;
   }
 
   if (!movie || !payload) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Movie not found
-        </h2>
-      </div>
+      <MediaNotFound
+        message="Movie not found."
+        backTo="/movies"
+        backLabel="Back to Movies"
+      />
     );
   }
 
@@ -243,12 +249,7 @@ function LibraryMovieDetailsContent({
 
   const castForSection = libraryCastToCastSection(cast);
 
-  const certificationLabel =
-    certification != null && certification.trim() !== ""
-      ? certification.trim()
-      : null;
-
-  const showCrewSection = crew.length > 0;
+  const certificationLabel = trimmedOrNull(certification);
 
   const capabilityBadges = deriveMediaCapabilityBadges(techData?.data);
 
@@ -260,20 +261,38 @@ function LibraryMovieDetailsContent({
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-      <MovieDetailsSkipLinks
-        showCrewSection={showCrewSection}
-        castNonEmpty={castForSection.length > 0}
-        chaptersNonEmpty={chapters.length > 0}
-        extrasNonEmpty={youtubeExtraVideos.length > 0}
+      <DetailSkipLinks
+        titleHref="#movie-title"
+        titleLabel="Skip to movie info"
+        sections={[
+          { href: "#overview-heading", label: "Skip to overview" },
+          crew.length > 0 && { href: "#crew-heading", label: "Skip to key crew" },
+          castForSection.length > 0 && {
+            href: "#cast-heading",
+            label: "Skip to cast",
+          },
+          chapters.length > 0 && {
+            href: "#chapters-heading",
+            label: "Skip to chapters",
+          },
+          youtubeExtraVideos.length > 0 && {
+            href: "#extra-videos-heading",
+            label: "Skip to extra videos",
+          },
+          { href: "#details-heading", label: "Skip to about" },
+        ]}
       />
 
-      <MovieDetailsHero
+      <DetailHero
         backdropUrl={backdropUrl}
         posterUrl={posterUrl}
-        movieTitle={movie.title}
-        releaseYear={releaseYear}
-        releaseDateStr={releaseDateStr}
-        tagLine={tagLine}
+        posterAlt={`Movie poster for ${movie.title}`}
+        placeholderIcon={Film}
+        titleId="movie-title"
+        title={movie.title}
+        year={releaseYear}
+        dateTime={releaseDateStr}
+        tagline={tagLine}
         genres={genres}
         metadataSlot={
           <MovieDetailsMetadataChips
@@ -313,7 +332,7 @@ function LibraryMovieDetailsContent({
           "delay-150 motion-reduce:delay-0",
         )}
       >
-        <MovieOverviewSection overview={overview} />
+        <OverviewSection overview={overview} />
         <MovieKeyCrewSection crew={crew} />
 
         {castForSection.length > 0 && <CastSection cast={castForSection} />}

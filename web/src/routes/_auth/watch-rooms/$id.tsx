@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
+import { parseRouteId } from "@/lib/route-id";
 import {
   WatchRoomPage,
   WatchRoomUnavailable,
@@ -8,7 +9,7 @@ import {
 export const Route = createFileRoute("/_auth/watch-rooms/$id")({
   params: {
     parse: params => ({
-      id: parseWatchRoomId(params.id),
+      id: parseRouteId(params.id),
     }),
     stringify: params => ({
       id: String(params.id),
@@ -20,15 +21,6 @@ export const Route = createFileRoute("/_auth/watch-rooms/$id")({
   },
   component: WatchRoomRoute,
 });
-
-function parseWatchRoomId(value: string) {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) {
-    return null;
-  }
-
-  return parsed;
-}
 
 function WatchRoomRoute() {
   const { id } = Route.useParams();

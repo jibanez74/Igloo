@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -40,14 +39,16 @@ func TestMovieListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 	operations := []struct {
 		operationID string
 		path        string
+		dataKey     string
 	}{
-		{operationID: "getLatestMovies", path: "/api/movies/latest"},
-		{operationID: "getMoviesLibrary", path: "/api/movies/library"},
-		{operationID: "getLikedMovies", path: "/api/movies/liked"},
-		{operationID: "getMoviesByGenreLibrary", path: "/api/movies/genres/" + strconv.FormatInt(genreID, 10) + "/movies"},
-		{operationID: "getMoviePlaylistMovies", path: "/api/movies/playlists/" + strconv.FormatInt(playlistID, 10) + "/movies"},
-		{operationID: "getContinueWatchingMovies", path: "/api/movies/continue-watching"},
-		{operationID: "getMoviePlaylists", path: "/api/movies/playlists"},
+		{operationID: "getLatestMovies", path: "/api/movies/latest", dataKey: "movies"},
+		{operationID: "getMoviesLibrary", path: "/api/movies/library", dataKey: "movies"},
+		{operationID: "getLikedMovies", path: "/api/movies/liked", dataKey: "movies"},
+		{operationID: "getMoviesByGenreLibrary", path: "/api/movies/genres/" + strconv.FormatInt(genreID, 10) + "/movies", dataKey: "movies"},
+		{operationID: "getMoviePlaylistMovies", path: "/api/movies/playlists/" + strconv.FormatInt(playlistID, 10) + "/movies", dataKey: "movies"},
+		{operationID: "getContinueWatchingMovies", path: "/api/movies/continue-watching", dataKey: "movies"},
+		{operationID: "getMoviePlaylists", path: "/api/movies/playlists", dataKey: "playlists"},
+		{operationID: "getMovieGenresList", path: "/api/movies/genres", dataKey: "genres"},
 	}
 
 	for _, operation := range operations {
@@ -61,29 +62,9 @@ func TestMovieListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 				t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
 			}
 
-			assertResponseListNotEmpty(t, operation.operationID, response.Body.Bytes())
+			assertResponseListNotEmpty(t, operation.operationID, response.Body.Bytes(), operation.dataKey)
 			assertOpenAPIExchange(t, operation.operationID, request, response)
 		})
-	}
-}
-
-// A list operation validated against an empty array proves nothing about its item
-// schema, so every case here asserts it actually returned a row first.
-func assertResponseListNotEmpty(t *testing.T, operationID string, body []byte) {
-	t.Helper()
-
-	var envelope struct {
-		Data struct {
-			Movies    []json.RawMessage `json:"movies"`
-			Playlists []json.RawMessage `json:"playlists"`
-		} `json:"data"`
-	}
-	err := json.Unmarshal(body, &envelope)
-	if err != nil {
-		t.Fatalf("%s: decode body: %v", operationID, err)
-	}
-	if len(envelope.Data.Movies)+len(envelope.Data.Playlists) == 0 {
-		t.Fatalf("%s returned an empty list, so the item schema would not be validated: %s", operationID, body)
 	}
 }
 

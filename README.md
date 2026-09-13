@@ -138,7 +138,7 @@ Set `SHOWS_DIR` on first launch or save the TV path in library Settings. Startup
 
 Use `Show Name (optional year)/Season N/filename.mkv`, or `Show Name/Specials/filename.mkv` for season zero. Filename numbering accepts `S01E02`, `S01E02-E04`, `S01E02E03`, and `1x02`, case-insensitively. The filename season must match its directory. Hidden backups, hidden files, nested extras, NFO files, and subtitle sidecars are excluded. Show folders remain separate identities even if TMDB matches the same show.
 
-Files must be quiet for 60 seconds. TMDB is optional: local imports remain in the catalog, and later scans retry pending enrichment without probing unchanged files. Combined files link separate episodes to one physical file and retain its complete duration without guessed episode boundaries. See [media scanning](docs/ffmpeg.md#tv-show-scanning) and the [show details page specification](docs/tv-shows.md).
+Files must be quiet for 60 seconds. TMDB is optional: local imports remain in the catalog, and later scans retry pending enrichment without probing unchanged files. Combined files link separate episodes to one physical file and retain its complete duration without guessed episode boundaries. See [media scanning](docs/ffmpeg.md#tv-show-scanning).
 
 ### Playback and hardware acceleration
 
