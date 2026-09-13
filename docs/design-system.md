@@ -265,7 +265,9 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   use `aria-disabled` + guards if needed.
 - **Announcements**: `LiveAnnouncer` (double-buffered dual `role="status"`
   regions so repeated messages re-announce) for async state changes; sections
-  announce their load/empty/error summaries.
+  announce their loaded and empty summaries. Errors are the exception:
+  `MoviesLoadError` is a `role="alert"` and announces itself, so never repeat
+  a failure through `LiveAnnouncer` as well.
 - **Skip links**: a global "Skip to content" in `AppShell` targeting `#main`,
   plus per-page section skip navs on long pages (the shared
   `DetailSkipLinks`, `sr-only focus-within:not-sr-only`, links on
@@ -493,8 +495,8 @@ inside an `overflow-x-auto` rail, and one `TabsContent` panel holding
 `tabpanel`. The list renders the selected season as divided rows in the
 album track-list idiom inside `DETAIL_TRACK_LIST_CONTAINER_CLASS`, owning its
 own skeleton, empty, and error states because its query is separate from its
-page's, and announces each resolution through `LiveAnnouncer` since the tab
-change itself says nothing. The TMDB community score is always the labelled
+page's, and announces the loaded and empty ones through `LiveAnnouncer` since
+the tab change itself says nothing; the error state is left to its alert. The TMDB community score is always the labelled
 `TmdbScoreBadge`, never a tiered rating chip: it is a different metric.
 
 ### 3.3 Images

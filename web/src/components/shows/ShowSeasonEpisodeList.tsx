@@ -140,7 +140,8 @@ export default function ShowSeasonEpisodeList({
     const message =
       (data?.error ? data.message : null) ||
       "Failed to load episodes. Please try again.";
-    announcement = `${label}: ${message}`;
+    // MoviesLoadError is a role="alert", so it announces itself; adding the
+    // failure to LiveAnnouncer as well would announce it twice.
     body = (
       <MoviesLoadError
         message={message}
