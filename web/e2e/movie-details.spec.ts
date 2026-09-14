@@ -645,10 +645,16 @@ test("movie details page renders eligible resume progress", async ({ page }) => 
 
   await page.goto(`/movies/${movieId}`);
 
-  const minutesLeft = page.getByText("95 min left", { exact: true });
-  await expect(minutesLeft).toBeVisible();
+  // 5670 seconds still to go, so the strip reads it as hours and minutes; the
+  // abbreviated text is aria-hidden beside an sr-only span holding the words.
+  const timeLeft = page.getByText("1 hr 35 min left", { exact: true });
+  await expect(timeLeft).toBeVisible();
+  await expect(
+    page.getByText("1 hour 35 minutes left", { exact: true }),
+  ).toHaveCount(1);
 
-  const progressFill = minutesLeft
+  const progressFill = timeLeft
+    .locator("..")
     .locator("..")
     .locator(":scope > div[aria-hidden='true'] > div");
   await expect(progressFill).toHaveAttribute("style", /width:\s*25%/);
@@ -693,7 +699,9 @@ for (const { state, watchProgress, watchedButtonName } of [
     await expect(
       page.getByRole("button", { name: watchedButtonName }),
     ).toBeEnabled();
-    await expect(page.getByText(/^\d+ min left$/)).toHaveCount(0);
+    await expect(
+      page.getByText(/\b(hr|min|sec|hours?|minutes?|seconds?) left$/),
+    ).toHaveCount(0);
 
     assertMockSuiteClean(browserIssues, unexpectedApiRequests);
   });

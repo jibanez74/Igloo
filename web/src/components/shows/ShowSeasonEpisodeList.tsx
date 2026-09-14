@@ -18,8 +18,8 @@ import { episodeResumeProgress } from "@/lib/episode-playback";
 import {
   episodeCode,
   formatDate,
-  formatMinutesLeft,
   formatRuntimeMinutes,
+  formatTimeLeft,
   pluralize,
   seasonLabel,
 } from "@/lib/format";
@@ -51,9 +51,10 @@ type EpisodeRowProps = {
 /**
  * One episode: still, title, metadata, and the two actions the row offers —
  * Play (a link to the episode player) and the watched toggle. Resume state
- * shows as a progress strip over the still plus a "N min left" note; a
- * watched episode shows a chip instead. Everything is keyed off the season
- * payload, which carries the viewer's own progress per episode.
+ * shows as a progress strip over the still plus a "1 hr 35 min left" note
+ * (paired with its spoken `sr-only` twin); a watched episode shows a chip
+ * instead. Everything is keyed off the season payload, which carries the
+ * viewer's own progress per episode.
  */
 function EpisodeRow({ showId, seasonNumber, episode }: EpisodeRowProps) {
   const stillPath = unwrapString(episode.still_path);
@@ -73,9 +74,15 @@ function EpisodeRow({ showId, seasonNumber, episode }: EpisodeRowProps) {
     });
   }
   if (resume) {
+    const timeLeft = formatTimeLeft(resume.progressSec, resume.durationSec);
     metaParts.push({
       key: "left",
-      node: formatMinutesLeft(resume.progressSec, resume.durationSec),
+      node: (
+        <>
+          <span className="sr-only">{timeLeft.spoken}</span>
+          <span aria-hidden="true">{timeLeft.text}</span>
+        </>
+      ),
     });
   }
 

@@ -5,6 +5,7 @@ import {
   formatSpokenRuntimeMinutes,
   formatSpokenTime,
   formatTimecode,
+  formatTimeLeft,
   formatTrackDuration,
   parseCatalogDate,
 } from "@/lib/format";
@@ -135,6 +136,66 @@ describe("formatSpokenRuntimeMinutes", () => {
   it("floors fractional runtimes before formatting words", () => {
     expect(formatSpokenRuntimeMinutes(116.75)).toBe("1 hour 56 minutes");
     expect(formatSpokenRuntimeMinutes(0.75)).toBeNull();
+  });
+});
+
+describe("formatTimeLeft", () => {
+  it("splits the remainder into hours and minutes", () => {
+    expect(formatTimeLeft(1890, 7560)).toEqual({
+      text: "1 hr 35 min left",
+      spoken: "1 hour 35 minutes left",
+    });
+    expect(formatTimeLeft(0, 8107)).toEqual({
+      text: "2 hr 16 min left",
+      spoken: "2 hours 16 minutes left",
+    });
+  });
+
+  it("drops zero-valued fields", () => {
+    expect(formatTimeLeft(0, 3600)).toEqual({
+      text: "1 hr left",
+      spoken: "1 hour left",
+    });
+    expect(formatTimeLeft(0, 7200)).toEqual({
+      text: "2 hr left",
+      spoken: "2 hours left",
+    });
+    expect(formatTimeLeft(0, 750)).toEqual({
+      text: "13 min left",
+      spoken: "13 minutes left",
+    });
+  });
+
+  it("rounds up to the next whole minute", () => {
+    expect(formatTimeLeft(0, 3601).text).toBe("1 hr 1 min left");
+    expect(formatTimeLeft(0, 61)).toEqual({
+      text: "2 min left",
+      spoken: "2 minutes left",
+    });
+  });
+
+  // Rounding the seconds first keeps a near-minute remainder out of the
+  // seconds field, where it would read "60 sec left".
+  it("only reaches seconds inside the last minute", () => {
+    expect(formatTimeLeft(0, 59.5)).toEqual({
+      text: "1 min left",
+      spoken: "1 minute left",
+    });
+    expect(formatTimeLeft(0, 45)).toEqual({
+      text: "45 sec left",
+      spoken: "45 seconds left",
+    });
+    expect(formatTimeLeft(0, 1)).toEqual({
+      text: "1 sec left",
+      spoken: "1 second left",
+    });
+  });
+
+  it("never reports less than one second", () => {
+    expect(formatTimeLeft(7560, 7560).text).toBe("1 sec left");
+    expect(formatTimeLeft(9000, 7560).text).toBe("1 sec left");
+    expect(formatTimeLeft(0, Number.NaN).text).toBe("1 sec left");
+    expect(formatTimeLeft(0, Number.POSITIVE_INFINITY).text).toBe("1 sec left");
   });
 });
 

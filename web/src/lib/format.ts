@@ -135,33 +135,44 @@ export function formatSpokenTime(seconds: number) {
   return parts.join(" ");
 }
 
+/**
+ * "1 hr 35 min" / "45 min" — the abbreviated shape shared by the runtime chip
+ * and the resume note. Zero-valued fields are dropped; callers guarantee at
+ * least one whole minute.
+ */
+function hourMinuteText(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} hr`);
+  if (minutes > 0) parts.push(`${minutes} min`);
+
+  return parts.join(" ");
+}
+
+/** "1 hour 35 minutes" / "45 minutes" — the spoken twin of `hourMinuteText`. */
+function hourMinuteSpoken(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
+  if (minutes > 0) {
+    parts.push(`${minutes} ${minutes === 1 ? "minute" : "minutes"}`);
+  }
+
+  return parts.join(" ");
+}
+
 export function formatRuntimeMinutes(
   minutes: number | null | undefined,
 ): string | null {
   if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
   const totalMinutes = Math.floor(minutes);
   if (totalMinutes <= 0) return null;
-  const hours = Math.floor(totalMinutes / 60);
-  const remainingMinutes = totalMinutes % 60;
 
-  const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} hr`);
-  if (remainingMinutes > 0) parts.push(`${remainingMinutes} min`);
-
-  return parts.join(" ");
-}
-
-/**
- * Remaining watch time for the details-page resume bar, e.g. "43 min left".
- * Rounds up and never reports less than 1 minute.
- */
-export function formatMinutesLeft(
-  progressSec: number,
-  durationSec: number,
-): string {
-  const remaining = Math.max(durationSec - progressSec, 0);
-  const minutes = Math.max(1, Math.ceil(remaining / 60));
-  return `${minutes} min left`;
+  return hourMinuteText(totalMinutes);
 }
 
 export function formatSpokenRuntimeMinutes(
@@ -170,20 +181,49 @@ export function formatSpokenRuntimeMinutes(
   if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
   const totalMinutes = Math.floor(minutes);
   if (totalMinutes <= 0) return null;
-  const hours = Math.floor(totalMinutes / 60);
-  const remainingMinutes = totalMinutes % 60;
 
-  const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
-  if (remainingMinutes > 0) {
-    parts.push(
-      `${remainingMinutes} ${
-        remainingMinutes === 1 ? "minute" : "minutes"
-      }`,
-    );
+  return hourMinuteSpoken(totalMinutes);
+}
+
+/** A remaining-time label: the compact text shown, plus the words spoken. */
+export type TimeLeftLabel = { text: string; spoken: string };
+
+/**
+ * Remaining watch time for the movie hero's resume strip and the episode rows,
+ * e.g. `{ text: "1 hr 35 min left", spoken: "1 hour 35 minutes left" }`. The
+ * abbreviated text is rendered `aria-hidden` next to an `sr-only` span holding
+ * the spoken form, since screen readers read "hr"/"min" inconsistently.
+ *
+ * Rounds up and drops zero-valued fields. Seconds appear only inside the last
+ * minute: both surfaces read the position once when they mount, so a seconds
+ * field above that would only ever be a stale number.
+ */
+export function formatTimeLeft(
+  progressSec: number,
+  durationSec: number,
+): TimeLeftLabel {
+  const remaining = durationSec - progressSec;
+  const totalSeconds = Number.isFinite(remaining)
+    ? Math.max(0, Math.ceil(remaining))
+    : 0;
+
+  // Rounding up before the branch keeps 59.5s out of the seconds field: it
+  // reads "1 min left" rather than "60 sec left".
+  if (totalSeconds < 60) {
+    const seconds = Math.max(1, totalSeconds);
+
+    return {
+      text: `${seconds} sec left`,
+      spoken: `${seconds} ${seconds === 1 ? "second" : "seconds"} left`,
+    };
   }
 
-  return parts.join(" ");
+  const totalMinutes = Math.ceil(totalSeconds / 60);
+
+  return {
+    text: `${hourMinuteText(totalMinutes)} left`,
+    spoken: `${hourMinuteSpoken(totalMinutes)} left`,
+  };
 }
 
 // Format currency for budget/revenue (movie details)

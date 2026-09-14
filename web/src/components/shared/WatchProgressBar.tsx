@@ -14,7 +14,7 @@ type WatchProgressBarProps = {
 /**
  * Thin "how far in" strip shared by the movie hero, the episode rows and the
  * poster cards. It is decoration for sighted users; callers pair it with text
- * ("12 min left", "25% watched") that carries the same information for
+ * ("1 hr 35 min left", "25% watched") that carries the same information for
  * everyone else.
  */
 export default function WatchProgressBar({
