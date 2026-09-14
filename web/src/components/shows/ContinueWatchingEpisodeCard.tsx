@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Tv } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
-import { episodeCode } from "@/lib/format";
+import { episodeCode, watchProgressPercent } from "@/lib/format";
 import { showDetailsQueryOpts } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { ContinueWatchingEpisodeItemType } from "@/types";
@@ -27,12 +27,9 @@ export default function ContinueWatchingEpisodeCard({
 
   const code = episodeCode(episode.season_number, episode.episode_number);
   const subtitle = `${code} · ${episode.episode_name}`;
-  const progressPct = Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round((episode.progress_sec / episode.duration_sec) * 100),
-    ),
+  const progressPct = watchProgressPercent(
+    episode.progress_sec,
+    episode.duration_sec,
   );
 
   const posterUrl =
@@ -52,7 +49,6 @@ export default function ContinueWatchingEpisodeCard({
           id: String(episode.show_id),
           episodeId: String(episode.id),
         },
-        search: { start: 0, audio_track: 0 },
       }}
       posterUrl={posterUrl}
       fallbackIcon={Tv}

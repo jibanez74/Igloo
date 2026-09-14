@@ -43,8 +43,13 @@ WHERE mwp.user_id = ?
   AND mwp.duration_sec > 0
   AND mwp.progress_sec < mwp.duration_sec
 ORDER BY mwp.updated_at DESC
-LIMIT 12
+LIMIT ?
 `
+
+type GetContinueWatchingMoviesParams struct {
+	UserID int64 `json:"user_id"`
+	Limit  int64 `json:"limit"`
+}
 
 type GetContinueWatchingMoviesRow struct {
 	ID          int64          `json:"id"`
@@ -57,9 +62,11 @@ type GetContinueWatchingMoviesRow struct {
 }
 
 // The 30-second floor must match the web client's
-// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
-func (q *Queries) GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error) {
-	rows, err := q.query(ctx, q.getContinueWatchingMoviesStmt, getContinueWatchingMovies, userID)
+// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor. The caller passes the
+// limit so the movie half, the episode half and the merged row all cap at the
+// handler's continueWatchingLimit.
+func (q *Queries) GetContinueWatchingMovies(ctx context.Context, arg GetContinueWatchingMoviesParams) ([]GetContinueWatchingMoviesRow, error) {
+	rows, err := q.query(ctx, q.getContinueWatchingMoviesStmt, getContinueWatchingMovies, arg.UserID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

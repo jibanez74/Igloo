@@ -299,3 +299,18 @@ export function episodeTitle(
 export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
+
+/**
+ * How far into a title the viewer is, as a whole percent clamped to 0-100. One
+ * definition for every surface that shows it: the card progress bars, the bars
+ * on the movie hero and the episode rows, and the "N% watched" announced in a
+ * card's link label. An unknown duration reads as 0 rather than NaN.
+ */
+export function watchProgressPercent(
+  progressSec: number,
+  durationSec: number,
+): number {
+  if (!(durationSec > 0)) return 0;
+
+  return Math.min(100, Math.max(0, Math.round((progressSec / durationSec) * 100)));
+}

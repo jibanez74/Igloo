@@ -511,7 +511,7 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 		t.Fatalf("failed to backdate at-floor progress row: %v", err)
 	}
 
-	rows, err := app.Queries.GetContinueWatchingMovies(ctx, user.ID)
+	rows, err := app.Queries.GetContinueWatchingMovies(ctx, database.GetContinueWatchingMoviesParams{UserID: user.ID, Limit: continueWatchingLimit})
 	if err != nil {
 		t.Fatalf("GetContinueWatchingMovies failed: %v", err)
 	}
@@ -540,7 +540,7 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 		t.Errorf("expected duration_sec 7200.0, got %f", rows[0].DurationSec)
 	}
 
-	otherRows, err := app.Queries.GetContinueWatchingMovies(ctx, otherUser.ID)
+	otherRows, err := app.Queries.GetContinueWatchingMovies(ctx, database.GetContinueWatchingMoviesParams{UserID: otherUser.ID, Limit: continueWatchingLimit})
 	if err != nil {
 		t.Fatalf("GetContinueWatchingMovies for other user failed: %v", err)
 	}
@@ -1053,6 +1053,15 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	seedEpisodeWatchProgress(t, app, user.ID, fixture.Episode1, 900.0, 1)
 	backdateProgress(t, app, "movie_watch_progress", "movie_id", user.ID, movieID, "-1 hour")
 
+	// Another account watching the same movie and the same episode. Both halves
+	// of the merged row are per-user, and the handler runs them off the session
+	// user, so neither may leak into this response.
+	otherUser := createTestUser(t, app, "Other", "continue-watching-other@example.com", false)
+	otherMovieID := createSearchMovie(t, app, "Other Movie", "/movies/other-continue.mkv")
+	seedWatchProgress(t, app, otherUser.ID, otherMovieID)
+	seedWatchProgress(t, app, otherUser.ID, movieID)
+	seedEpisodeWatchProgress(t, app, otherUser.ID, fixture.Episode2, 900.0, 1)
+
 	app.InitRouter()
 	cookie := newAuthSessionCookie(t, app, user.ID)
 
@@ -1090,7 +1099,15 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 
 	items := payload.Data.Items
 	if len(items) != 2 {
-		t.Fatalf("expected the movie and the episode, got %d items: %s", len(items), response.Body.String())
+		t.Fatalf("expected only this user's movie and episode, got %d items: %s", len(items), response.Body.String())
+	}
+	for _, item := range items {
+		if item.Kind == "movie" && item.ID == otherMovieID {
+			t.Fatalf("another user's movie reached the row: %+v", item)
+		}
+		if item.Kind == "episode" && item.ID == fixture.Episode2 {
+			t.Fatalf("another user's episode reached the row: %+v", item)
+		}
 	}
 
 	episode := items[0]
@@ -1147,7 +1164,7 @@ func TestGetContinueWatchingEpisodes_OnePerShowAndOnlyWhatCanBeResumed(t *testin
 	backdateProgress(t, app, "show_episode_watch_progress", "episode_id", user.ID, fixture.Episode1, "-1 hour")
 	backdateProgress(t, app, "show_episode_watch_progress", "episode_id", user.ID, otherShow, "-2 hours")
 
-	rows, err := app.Queries.GetContinueWatchingEpisodes(ctx, user.ID)
+	rows, err := app.Queries.GetContinueWatchingEpisodes(ctx, database.GetContinueWatchingEpisodesParams{UserID: user.ID, Limit: continueWatchingLimit})
 	if err != nil {
 		t.Fatalf("GetContinueWatchingEpisodes failed: %v", err)
 	}
@@ -1181,7 +1198,7 @@ func TestGetContinueWatchingEpisodes_OnePerShowAndOnlyWhatCanBeResumed(t *testin
 	}
 	seedEpisodeWatchProgress(t, app, user.ID, fixture.Episode1, 29.0, 2)
 
-	rows, err = app.Queries.GetContinueWatchingEpisodes(ctx, user.ID)
+	rows, err = app.Queries.GetContinueWatchingEpisodes(ctx, database.GetContinueWatchingEpisodesParams{UserID: user.ID, Limit: continueWatchingLimit})
 	if err != nil {
 		t.Fatalf("GetContinueWatchingEpisodes after watching failed: %v", err)
 	}

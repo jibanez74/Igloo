@@ -55,8 +55,13 @@ WHERE wp.user_id = ?
   )
 GROUP BY sh.id
 ORDER BY updated_at DESC
-LIMIT 12
+LIMIT ?
 `
+
+type GetContinueWatchingEpisodesParams struct {
+	UserID int64 `json:"user_id"`
+	Limit  int64 `json:"limit"`
+}
 
 type GetContinueWatchingEpisodesRow struct {
 	UpdatedAt        string         `json:"updated_at"`
@@ -79,9 +84,11 @@ type GetContinueWatchingEpisodesRow struct {
 // GetShowNextEpisode uses skips it. And a show contributes one card rather than
 // one per episode: the GROUP BY relies on SQLite's bare-column rule, where a
 // single MAX() aggregate makes every other column come from the row it picked,
-// so each show returns its most recently watched in-progress episode.
-func (q *Queries) GetContinueWatchingEpisodes(ctx context.Context, userID int64) ([]GetContinueWatchingEpisodesRow, error) {
-	rows, err := q.query(ctx, q.getContinueWatchingEpisodesStmt, getContinueWatchingEpisodes, userID)
+// so each show returns its most recently watched in-progress episode. The CAST
+// is for sqlc, which types a bare MAX() as interface{}. The limit comes from
+// the caller, as GetContinueWatchingMovies' does.
+func (q *Queries) GetContinueWatchingEpisodes(ctx context.Context, arg GetContinueWatchingEpisodesParams) ([]GetContinueWatchingEpisodesRow, error) {
+	rows, err := q.query(ctx, q.getContinueWatchingEpisodesStmt, getContinueWatchingEpisodes, arg.UserID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

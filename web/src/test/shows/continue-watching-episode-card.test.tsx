@@ -42,14 +42,16 @@ describe("ContinueWatchingEpisodeCard", () => {
     expect(screen.getByText("S1 E4 · Thin Ice")).toBeInTheDocument();
   });
 
-  it("plays the episode from the start and lets the player offer the resume", () => {
+  it("plays the episode and lets the play route resolve where it starts", () => {
     renderWithQueryClient(<ContinueWatchingEpisodeCard episode={episodeItem()} />);
 
     const play = screen.getByRole("link", {
       name: "Resume Frost Harbor S1 E4 · Thin Ice",
     });
     expect(play).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
-    expect(linkSearch(play)).toEqual({ start: 0, audio_track: 0 });
+    // No search params: playSearchSchema defaults start and audio_track to 0,
+    // and the movie card's play link is bare for the same reason.
+    expect(linkSearch(play)).toBeNull();
   });
 
   it("falls back to the show icon when the show has no poster", () => {

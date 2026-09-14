@@ -1,3 +1,4 @@
+import { watchProgressPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type WatchProgressBarProps = {
@@ -6,23 +7,24 @@ type WatchProgressBarProps = {
   /** Track colour; defaults suit a muted surface, heroes pass a light one. */
   trackClassName?: string;
   className?: string;
+  /** Fill shape; poster cards sit flush on an edge and drop the rounding. */
+  fillClassName?: string;
 };
 
 /**
- * Thin "how far in" strip shared by the movie hero and the episode rows. It is
- * decoration for sighted users; callers pair it with text ("12 min left") that
- * carries the same information for everyone else.
+ * Thin "how far in" strip shared by the movie hero, the episode rows and the
+ * poster cards. It is decoration for sighted users; callers pair it with text
+ * ("12 min left", "25% watched") that carries the same information for
+ * everyone else.
  */
 export default function WatchProgressBar({
   progressSec,
   durationSec,
   trackClassName = "bg-muted",
   className,
+  fillClassName = "rounded-full",
 }: WatchProgressBarProps) {
-  const progressPct =
-    durationSec > 0
-      ? Math.min(100, Math.max(0, (progressSec / durationSec) * 100))
-      : 0;
+  const progressPct = watchProgressPercent(progressSec, durationSec);
 
   return (
     <div
@@ -34,7 +36,7 @@ export default function WatchProgressBar({
       aria-hidden="true"
     >
       <div
-        className="h-full rounded-full bg-primary"
+        className={cn("h-full bg-primary", fillClassName)}
         style={{ width: `${progressPct}%` }}
       />
     </div>

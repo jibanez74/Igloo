@@ -1,6 +1,8 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Play } from "lucide-react";
+import WatchProgressBar from "@/components/shared/WatchProgressBar";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   CARD_ACTION_REVEAL_CLASS,
@@ -30,15 +32,19 @@ type PosterCardProps = {
   detailsLabel: string;
   playLabel?: string;
   watchProgress?: PosterCardWatchProgress;
+  /** Decorative corner slot over the poster - a rating badge, say. */
+  badge?: ReactNode;
   /** Warms the details query on hover and focus. */
   onPrefetch?: () => void;
 };
 
 /**
  * The 2:3 media card used across the home rows and library grids: poster,
- * hover overlay, optional watch-progress bar, and an optional play action that
- * bypasses the details page. The percent is announced through the poster
- * link's label, so the bar itself stays decorative.
+ * optional corner badge, optional watch-progress bar, and an optional play
+ * action that bypasses the details page. The hover wash and the play control
+ * travel together - a card with nothing single to play (a show, an unreleased
+ * title) renders neither. The percent is announced through the poster link's
+ * label, so the bar itself stays decorative.
  */
 export default function PosterCard({
   detailsLink,
@@ -50,22 +56,13 @@ export default function PosterCard({
   detailsLabel,
   playLabel,
   watchProgress,
+  badge,
   onPrefetch,
 }: PosterCardProps) {
   const { showPoster, onError } = usePosterFallback(posterUrl);
 
-  const hasProgress = watchProgress !== undefined && watchProgress.durationSec > 0;
-  const progressPct = hasProgress
-    ? Math.min(
-        100,
-        Math.max(
-          0,
-          Math.round(
-            (watchProgress.progressSec / watchProgress.durationSec) * 100,
-          ),
-        ),
-      )
-    : null;
+  const hasProgress =
+    watchProgress !== undefined && watchProgress.durationSec > 0;
 
   return (
     <article
@@ -101,27 +98,30 @@ export default function PosterCard({
                 />
               </div>
             )}
-            {/* Overlay - appears on hover/focus */}
-            <div
-              className={cn(
-                CARD_OVERLAY_REVEAL_CLASS,
-                "absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
-              )}
-              aria-hidden="true"
-            />
+            {/* Overlay - appears on hover/focus behind the play action. A
+                card with nothing to play omits it rather than washing out on
+                hover for no reason. */}
+            {playLink && (
+              <div
+                className={cn(
+                  CARD_OVERLAY_REVEAL_CLASS,
+                  "absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
+                )}
+                aria-hidden="true"
+              />
+            )}
+            {badge}
             {/* Gradient overlay for text readability */}
             <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
             {/* Watch progress bar - percent is announced via the link label */}
-            {progressPct !== null && (
-              <div
-                aria-hidden="true"
-                className="absolute inset-x-0 bottom-0 h-1 bg-white/25"
-              >
-                <div
-                  className="h-full bg-primary"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
+            {hasProgress && (
+              <WatchProgressBar
+                progressSec={watchProgress.progressSec}
+                durationSec={watchProgress.durationSec}
+                trackClassName="bg-white/25"
+                className="absolute inset-x-0 bottom-0 rounded-none"
+                fillClassName=""
+              />
             )}
           </div>
           {/* Title block */}

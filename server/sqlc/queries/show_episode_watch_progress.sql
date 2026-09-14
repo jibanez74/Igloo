@@ -112,7 +112,8 @@ SELECT
 -- one per episode: the GROUP BY relies on SQLite's bare-column rule, where a
 -- single MAX() aggregate makes every other column come from the row it picked,
 -- so each show returns its most recently watched in-progress episode. The CAST
--- is for sqlc, which types a bare MAX() as interface{}.
+-- is for sqlc, which types a bare MAX() as interface{}. The limit comes from
+-- the caller, as GetContinueWatchingMovies' does.
 SELECT
   CAST(MAX(wp.updated_at) AS TEXT) AS updated_at,
   e.id,
@@ -141,4 +142,4 @@ WHERE wp.user_id = ?
   )
 GROUP BY sh.id
 ORDER BY updated_at DESC
-LIMIT 12;
+LIMIT ?;

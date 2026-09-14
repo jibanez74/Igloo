@@ -250,10 +250,7 @@ describe("home continue watching section", () => {
       screen.getByRole("link", {
         name: "Resume Frost Harbor S1 E4 · Thin Ice",
       }),
-    ).toHaveAttribute(
-      "href",
-      "/tv-shows/301/episodes/70103/play?start=0&audio_track=0",
-    );
+    ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
     // Both kinds share one row, counted with a neutral noun.
     expect(
       screen.getByText("2 titles available in continue watching."),

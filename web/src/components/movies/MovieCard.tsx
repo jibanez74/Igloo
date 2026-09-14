@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Film } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
+import { watchProgressPercent } from "@/lib/format";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -20,20 +21,10 @@ export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
 
   const ariaTitle = year.Valid ? `${title} ${year.Int64}` : title;
 
-  const progressPct =
-    watchProgress && watchProgress.durationSec > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            Math.round(
-              (watchProgress.progressSec / watchProgress.durationSec) * 100,
-            ),
-          ),
-        )
-      : null;
   const detailsLabel =
-    progressPct !== null ? `${ariaTitle}, ${progressPct}% watched` : ariaTitle;
+    watchProgress && watchProgress.durationSec > 0
+      ? `${ariaTitle}, ${watchProgressPercent(watchProgress.progressSec, watchProgress.durationSec)}% watched`
+      : ariaTitle;
 
   const posterUrl =
     poster_path.Valid && poster_path.String !== ""

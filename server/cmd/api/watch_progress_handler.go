@@ -1,13 +1,14 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"math"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"igloo/cmd/internal/database"
@@ -242,8 +243,9 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-// continueWatchingLimit caps the merged row. Each query already returns at most
-// this many rows, so the cap only bites once movies and episodes are combined.
+// continueWatchingLimit caps the merged row, and is also the limit handed to
+// each half's query, so the three caps cannot drift apart. It only bites twice:
+// once per query, then again once movies and episodes are combined.
 const continueWatchingLimit = 12
 
 // continueWatchingItem is one card in the home row. Movies and episodes come
@@ -276,14 +278,20 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	movies, err := app.Queries.GetContinueWatchingMovies(r.Context(), userID)
+	movies, err := app.Queries.GetContinueWatchingMovies(r.Context(), database.GetContinueWatchingMoviesParams{
+		UserID: userID,
+		Limit:  continueWatchingLimit,
+	})
 	if err != nil {
 		app.Logger.Error("failed to get continue watching movies", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch continue watching"))
 		return
 	}
 
-	episodes, err := app.Queries.GetContinueWatchingEpisodes(r.Context(), userID)
+	episodes, err := app.Queries.GetContinueWatchingEpisodes(r.Context(), database.GetContinueWatchingEpisodesParams{
+		UserID: userID,
+		Limit:  continueWatchingLimit,
+	})
 	if err != nil {
 		app.Logger.Error("failed to get continue watching episodes", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch continue watching"))
@@ -323,9 +331,19 @@ func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Reque
 	}
 
 	// updated_at is "YYYY-MM-DD HH:MM:SS" text, so comparing the strings
-	// compares the instants.
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].updatedAt > items[j].updatedAt
+	// compares the instants. CURRENT_TIMESTAMP only has second resolution and
+	// the two halves arrive from separate queries, so ties are broken on kind
+	// then id: without that the order of two rows saved in the same second
+	// would depend on which slice happened to be appended first, and the row
+	// could reshuffle between refetches.
+	slices.SortStableFunc(items, func(a, b continueWatchingItem) int {
+		if order := cmp.Compare(b.updatedAt, a.updatedAt); order != 0 {
+			return order
+		}
+		if order := cmp.Compare(a.Kind, b.Kind); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.ID, b.ID)
 	})
 
 	if len(items) > continueWatchingLimit {

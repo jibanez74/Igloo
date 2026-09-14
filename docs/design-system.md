@@ -439,10 +439,12 @@ collapse, while the mobile trigger controls the sheet.
 ### 3.2 Media cards
 
 One anatomy, shared by `MovieCard`, `ShowCard`, `InTheatersCard`, `AlbumCard`,
-`MusicianCard`, `PlaylistCard`, `WatchRoomCard`. The 2:3 poster variant with a
-play action is implemented once in `components/shared/PosterCard.tsx` —
-`MovieCard` and `ContinueWatchingEpisodeCard` pass it their links, labels and
-watch progress rather than repeating the markup:
+`MusicianCard`, `PlaylistCard`, `WatchRoomCard`. Every 2:3 poster card is
+implemented once in `components/shared/PosterCard.tsx` — `MovieCard`,
+`ContinueWatchingEpisodeCard`, `ShowCard` and `InTheatersCard` pass it their
+links, labels, badge and watch progress rather than repeating the markup. A new
+poster card belongs there too; reach for a fresh `<article>` only when the
+anatomy genuinely differs (square covers, circular thumbs):
 
 ```
 <article class={CARD_SURFACE_CLASS}>
@@ -463,10 +465,14 @@ watch progress rather than repeating the markup:
 
 Rules: 2:3 posters, square covers, circular musician thumbs; titles clamp at
 2 lines, with an optional muted second line under them (a year, or an episode's
-`S1 E4 · Name`); the hover overlay must also reveal on `group-focus-within`; cards
-with no secondary play action (`ShowCard`, `InTheatersCard`, `MusicianCard`)
-omit the overlay and play control entirely rather than rendering an empty
-wash; cards prefetch their detail query on `onMouseEnter`/`onFocus`
+`S1 E4 · Name`); the hover overlay must also reveal on `group-focus-within`; the
+wash and the play control travel together, so cards with no secondary play
+action (`ShowCard`, `InTheatersCard`, `MusicianCard`) render neither rather than
+washing out for nothing — in `PosterCard` that is one `playLink` prop, omitted;
+the progress strip is always `WatchProgressBar`, and the percent it shows comes
+from `watchProgressPercent` in `lib/format.ts` — the one definition shared by
+the bars and the `"N% watched"` in a card's link label; cards prefetch their
+detail query on `onMouseEnter`/`onFocus`
 (`queryClient.prefetchQuery`) once a detail query exists — as `ShowCard` now
 does; rating chips tier
 via the shared `criticRatingClass`/`audienceRatingClass` helpers in

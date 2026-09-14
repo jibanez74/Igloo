@@ -460,7 +460,7 @@ test("continue watching section announces progress", async ({ page }) => {
     watchingRegion.getByRole("link", {
       name: "Resume Frost Harbor S1 E4 · Thin Ice",
     }),
-  ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play?start=0&audio_track=0");
+  ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
 
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();

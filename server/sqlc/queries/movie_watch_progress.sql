@@ -79,7 +79,9 @@ WHERE movie_watch_progress.save_session_id <> excluded.save_session_id
 
 -- name: GetContinueWatchingMovies :many
 -- The 30-second floor must match the web client's
--- WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
+-- WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor. The caller passes the
+-- limit so the movie half, the episode half and the merged row all cap at the
+-- handler's continueWatchingLimit.
 SELECT
   m.id,
   m.title,
@@ -96,7 +98,7 @@ WHERE mwp.user_id = ?
   AND mwp.duration_sec > 0
   AND mwp.progress_sec < mwp.duration_sec
 ORDER BY mwp.updated_at DESC
-LIMIT 12;
+LIMIT ?;
 
 -- name: MarkMovieUnwatched :exec
 INSERT INTO movie_watch_progress (
