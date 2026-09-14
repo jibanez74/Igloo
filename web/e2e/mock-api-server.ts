@@ -1242,12 +1242,15 @@ async function handleSettingsRoutes(
   return false;
 }
 
-// One mocked episode is enough for the episode player specs: its header
-// names a show and season, and its file mirrors the movie technical fixture
-// keyed by file_id instead of movie_id.
+// Two mocked episodes serve the episode player specs: the header names a
+// show and season, the file mirrors the movie technical fixture keyed by
+// file_id instead of movie_id, and the first episode hands off to the second
+// so the up-next flow has somewhere to go.
 const mockEpisodeId = 70103;
+const mockNextEpisodeId = 70104;
 
 function showEpisodePlayback(episodeId: number) {
+  const isNext = episodeId === mockNextEpisodeId;
   return {
     show: {
       id: 401,
@@ -1258,8 +1261,8 @@ function showEpisodePlayback(episodeId: number) {
     season: { season_number: 1, name: "Season 1" },
     episode: {
       id: episodeId,
-      episode_number: 3,
-      name: "The Thaw",
+      episode_number: isNext ? 4 : 3,
+      name: isNext ? "The Long Night" : "The Thaw",
       overview: nullableString("The ice gives way."),
       air_date: nullableString("2026-03-22"),
       still_path: nullableString("/still.jpg"),
@@ -1267,6 +1270,18 @@ function showEpisodePlayback(episodeId: number) {
       vote_average: nullableFloat(8.1),
       vote_count: nullableInt(220),
     },
+    next_episode: isNext
+      ? null
+      : {
+          id: mockNextEpisodeId,
+          season_number: 1,
+          episode_number: 4,
+          name: "The Long Night",
+          still_path: nullableString("/next-still.jpg"),
+          progress_sec: nullableFloat(null),
+          duration_sec: nullableFloat(null),
+          watched: false,
+        },
   };
 }
 
@@ -1308,7 +1323,7 @@ function handleShowsRoutes(
   const episodeMatch = url.pathname.match(/^\/api\/shows\/episodes\/(\d+)$/);
   if (episodeMatch && method === "GET") {
     const episodeId = Number(episodeMatch[1]);
-    if (episodeId !== mockEpisodeId) {
+    if (episodeId !== mockEpisodeId && episodeId !== mockNextEpisodeId) {
       sendJSON(response, 404, { error: true, message: "episode not found" });
       return true;
     }

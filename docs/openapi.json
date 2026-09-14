@@ -1615,7 +1615,7 @@
           "TV Shows"
         ],
         "summary": "Get the playback header for a TV episode",
-        "description": "Returns the episode with its season number and show identity, for the episode player's title and back navigation. Stream and track metadata come from the episode's technical details.",
+        "description": "Returns the episode with its season number and show identity, for the episode player's title and back navigation, plus the episode the player advances to when this one ends (with the caller's progress on it, or null after the last episode). Stream and track metadata come from the episode's technical details.",
         "operationId": "getShowEpisode",
         "parameters": [
           {
@@ -16019,13 +16019,58 @@
         },
         "additionalProperties": false
       },
+      "ShowEpisodeUpNext": {
+        "type": "object",
+        "description": "The episode the player advances to when the current one ends: the first episode of the show that follows it in listing order (regular seasons by number, specials last), skipping episodes backed by the file that just played since a combined file plays whole. Carries the requesting user's progress so the player can resume it where it was left.",
+        "required": [
+          "id",
+          "season_number",
+          "episode_number",
+          "name",
+          "still_path",
+          "progress_sec",
+          "duration_sec",
+          "watched"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "season_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "still_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "progress_sec": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "duration_sec": {
+            "$ref": "#/components/schemas/SqlNullFloat64"
+          },
+          "watched": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "ShowEpisodePlaybackData": {
         "type": "object",
-        "description": "What the episode player needs to title itself and navigate back: the episode, its season number, and its show.",
+        "description": "What the episode player needs to title itself, navigate back, and advance: the episode, its season number, its show, and the episode that follows it (null after the show's last episode).",
         "required": [
           "show",
           "season",
-          "episode"
+          "episode",
+          "next_episode"
         ],
         "properties": {
           "show": {
@@ -16036,6 +16081,16 @@
           },
           "episode": {
             "$ref": "#/components/schemas/ShowEpisodeSummary"
+          },
+          "next_episode": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ShowEpisodeUpNext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false

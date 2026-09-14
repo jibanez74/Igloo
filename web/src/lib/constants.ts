@@ -231,6 +231,8 @@ export const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
 /** Window in which visibilitychange(hidden) + pagehide keepalive saves at the same position collapse into one PUT. */
 export const WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS = 2_000;
 export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
+/** Seconds the up-next card counts down before starting the next episode. */
+export const UP_NEXT_COUNTDOWN_SEC = 10;
 /** Floor for persisting/offering resume; the server's continue-watching query uses the same 30s floor. */
 export const WATCH_PROGRESS_MIN_SECONDS = 30;
 export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;

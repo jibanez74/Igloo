@@ -14,9 +14,9 @@ import (
 
 // GetShowEpisode serves the player header for one episode: the episode row
 // plus the season number and the show identity the page titles itself with
-// and navigates back to. Playable media is described by
-// GetShowEpisodeTechnicalDetails, exactly as movies split details from
-// technical details.
+// and navigates back to, and the episode the player advances to when this
+// one ends. Playable media is described by GetShowEpisodeTechnicalDetails,
+// exactly as movies split details from technical details.
 func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 	media, err := parseMediaID(chi.URLParam(r, "id"), mediaKindEpisode)
 	if err != nil {
@@ -35,6 +35,23 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The next episode belongs to the caller: its progress decides where the
+	// player resumes it, and the row itself is nil after the show's last
+	// episode.
+	var nextEpisode any
+	next, err := app.Queries.GetShowNextEpisode(r.Context(), database.GetShowNextEpisodeParams{
+		UserID:    app.userIDFromRequest(r),
+		EpisodeID: media.ID,
+	})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		app.Logger.Error("failed to get next episode", "error", err, "media", media.String())
+		helpers.ErrorJSON(w, errors.New("failed to fetch episode from server"))
+		return
+	}
+	if err == nil {
+		nextEpisode = next
+	}
+
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
@@ -44,6 +61,7 @@ func (app *Application) GetShowEpisode(w http.ResponseWriter, r *http.Request) {
 				"poster_path":   row.ShowPosterPath,
 				"backdrop_path": row.ShowBackdropPath,
 			},
+			"next_episode": nextEpisode,
 			"season": map[string]any{
 				"season_number": row.SeasonNumber,
 				"name":          row.SeasonName,

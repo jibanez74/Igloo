@@ -31,6 +31,12 @@ describe("play route search conversion", () => {
     });
   });
 
+  it("parses the up-next autoplay flag and leaves it out otherwise", () => {
+    expect(playSearchSchema.parse({}).autoplay).toBeUndefined();
+    expect(playSearchSchema.parse({ autoplay: true }).autoplay).toBe(true);
+    expect(playSearchSchema.parse({ autoplay: "yes" }).autoplay).toBeUndefined();
+  });
+
   it("keeps omitted and numeric subtitle selections distinct", () => {
     const omitted = playSearchSchema.parse({});
     const numeric = playSearchSchema.parse({ subtitle_track: "2" });

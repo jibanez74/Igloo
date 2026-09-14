@@ -1,6 +1,9 @@
-import { unwrapFloat } from "@/lib/nullable";
+import { TMDB_STILL_SIZE } from "@/lib/constants";
+import { episodeCode } from "@/lib/format";
+import { unwrapFloat, unwrapString } from "@/lib/nullable";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { hasEligibleResumeProgress } from "@/lib/video-playback";
-import type { ShowEpisodeType } from "@/types/shows";
+import type { ShowEpisodeType, ShowEpisodeUpNextType } from "@/types/shows";
 
 export type EpisodeResumeProgress = {
   progressSec: number;
@@ -28,6 +31,37 @@ export function episodeResumeProgress(
   }
 
   return { progressSec, durationSec };
+}
+
+export type EpisodeUpNextPresentation = {
+  /** "S1 E4 · Episode name" */
+  title: string;
+  stillUrl: string | null;
+  /** True when the next episode continues from a saved position. */
+  resume: boolean;
+  /** Whole seconds the hand-off should start the next episode at. */
+  startSec: number;
+};
+
+/**
+ * How the up-next card names the next episode and where the hand-off starts
+ * it. Split from the route so the navigation stays the route's business and
+ * this mapping can be read — and tested — on its own.
+ */
+export function episodeUpNextPresentation(
+  episode: ShowEpisodeUpNextType,
+): EpisodeUpNextPresentation {
+  const resume = episodeResumeProgress(episode);
+
+  return {
+    title: `${episodeCode(episode.season_number, episode.episode_number)} · ${episode.name}`,
+    stillUrl: buildTmdbImageUrl(
+      unwrapString(episode.still_path),
+      TMDB_STILL_SIZE,
+    ),
+    resume: resume !== null,
+    startSec: Math.floor(resume?.progressSec ?? 0),
+  };
 }
 
 export type SeasonPlayTarget = {

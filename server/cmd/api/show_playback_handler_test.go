@@ -168,6 +168,7 @@ func TestGetShowEpisode_ConformsToOpenAPI(t *testing.T) {
 
 	user := createTestUser(t, app, "Episode User", "episode@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
+	chain := seedNextEpisodeChain(t, app, fixture)
 
 	app.InitSession()
 	app.InitRouter()
@@ -196,6 +197,9 @@ func TestGetShowEpisode_ConformsToOpenAPI(t *testing.T) {
 				EpisodeNumber int64  `json:"episode_number"`
 				Name          string `json:"name"`
 			} `json:"episode"`
+			NextEpisode *struct {
+				ID int64 `json:"id"`
+			} `json:"next_episode"`
 		} `json:"data"`
 	}
 	err := json.Unmarshal(response.Body.Bytes(), &body)
@@ -209,7 +213,260 @@ func TestGetShowEpisode_ConformsToOpenAPI(t *testing.T) {
 		t.Fatalf("season/episode = %+v / %+v", body.Data.Season, body.Data.Episode)
 	}
 
+	// S1E2 shares S1E1's file and has already played with it, so S1E3 is next.
+	if body.Data.NextEpisode == nil || body.Data.NextEpisode.ID != chain.S1E3 {
+		t.Fatalf("next_episode = %+v, want episode %d", body.Data.NextEpisode, chain.S1E3)
+	}
+
 	assertOpenAPIExchange(t, "getShowEpisode", request, response)
+}
+
+// nextEpisodeChain extends the playback fixture (S1E1+S1E2 in one file) with
+// S1E3, S2E1 and the special S0E1, each in its own file, so every "next"
+// rule has an episode to answer with.
+type nextEpisodeChain struct {
+	S1E3 int64
+	S2E1 int64
+	S0E1 int64
+}
+
+func seedNextEpisodeChain(t *testing.T, app *Application, fixture playbackEpisodeFixture) nextEpisodeChain {
+	t.Helper()
+	ctx := context.Background()
+	q := app.Queries
+
+	addEpisode := func(seasonNumber, episodeNumber int64) int64 {
+		season, err := q.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{
+			ShowID:       fixture.ShowID,
+			SeasonNumber: seasonNumber,
+			Name:         fmt.Sprintf("Season %d", seasonNumber),
+		})
+		if err != nil {
+			t.Fatalf("upsert season %d: %v", seasonNumber, err)
+		}
+		path := fmt.Sprintf("/tmp/%s-S%02dE%02d.mkv", sanitizeTestPathComponent(t.Name()), seasonNumber, episodeNumber)
+		file, err := q.UpsertShowFile(ctx, database.UpsertShowFileParams{
+			SeasonID:  season.ID,
+			FilePath:  path,
+			FileName:  filepath.Base(path),
+			Size:      1_000_000,
+			Container: "mkv",
+			MimeType:  helpers.VideoMimeTypes["mkv"],
+			Duration:  sql.NullFloat64{Float64: 2700, Valid: true},
+		})
+		if err != nil {
+			t.Fatalf("upsert file S%dE%d: %v", seasonNumber, episodeNumber, err)
+		}
+		episode, err := q.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{
+			SeasonID:      season.ID,
+			EpisodeNumber: episodeNumber,
+			Name:          fmt.Sprintf("S%dE%d", seasonNumber, episodeNumber),
+		})
+		if err != nil {
+			t.Fatalf("upsert episode S%dE%d: %v", seasonNumber, episodeNumber, err)
+		}
+		err = q.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
+			EpisodeID:    episode.ID,
+			FileID:       file.ID,
+			SeasonID:     season.ID,
+			EpisodeOrder: 0,
+		})
+		if err != nil {
+			t.Fatalf("link episode S%dE%d: %v", seasonNumber, episodeNumber, err)
+		}
+		return episode.ID
+	}
+
+	// Seeded out of listing order so the query, not insertion order, sorts.
+	s0e1 := addEpisode(0, 1)
+	s2e1 := addEpisode(2, 1)
+	s1e3 := addEpisode(1, 3)
+	return nextEpisodeChain{S1E3: s1e3, S2E1: s2e1, S0E1: s0e1}
+}
+
+func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Next User", "next@example.com", false)
+	other := createTestUser(t, app, "Other User", "other@example.com", false)
+	fixture := seedPlaybackEpisode(t, app)
+	chain := seedNextEpisodeChain(t, app, fixture)
+
+	ctx := context.Background()
+	err := app.Queries.UpsertShowEpisodeWatchProgress(ctx, database.UpsertShowEpisodeWatchProgressParams{
+		UserID:        user.ID,
+		EpisodeID:     chain.S1E3,
+		ProgressSec:   600,
+		DurationSec:   2700,
+		SaveSessionID: "11111111-1111-4111-8111-111111111111",
+		SaveSequence:  1,
+	})
+	if err != nil {
+		t.Fatalf("seed progress: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		userID  int64
+		current int64
+		want    int64
+		wantSec float64
+	}{
+		// S1E2 shares S1E1's file, so the whole file has already played.
+		{"combined file skips its sibling", user.ID, fixture.Episode1, chain.S1E3, 600},
+		{"other users see no progress", other.ID, fixture.Episode1, chain.S1E3, 0},
+		{"last of a season rolls into the next season", user.ID, chain.S1E3, chain.S2E1, 0},
+		{"specials follow the last regular season", user.ID, chain.S2E1, chain.S0E1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			next, err := app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{UserID: tc.userID, EpisodeID: tc.current})
+			if err != nil {
+				t.Fatalf("next episode: %v", err)
+			}
+			if next.ID != tc.want {
+				t.Fatalf("next of %d = %d, want %d", tc.current, next.ID, tc.want)
+			}
+			if next.ProgressSec.Float64 != tc.wantSec || next.Watched {
+				t.Fatalf("progress = %+v / watched %v, want %v / false", next.ProgressSec, next.Watched, tc.wantSec)
+			}
+		})
+	}
+
+	_, err = app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{UserID: user.ID, EpisodeID: chain.S0E1})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("next of the last special = %v, want no rows", err)
+	}
+
+	// The header route serves null after the last episode.
+	app.InitSession()
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, user.ID)
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d", chain.S0E1), nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	app.Router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"next_episode":null`) {
+		t.Fatalf("last episode header = %d %s, want next_episode null", response.Code, response.Body.String())
+	}
+	assertOpenAPIExchange(t, "getShowEpisode", request, response)
+}
+
+func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Gap User", "gap@example.com", false)
+	fixture := seedPlaybackEpisode(t, app)
+	chain := seedNextEpisodeChain(t, app, fixture)
+
+	ctx := context.Background()
+	season, err := app.Queries.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{
+		ShowID:       fixture.ShowID,
+		SeasonNumber: 1,
+		Name:         "Season 1",
+	})
+	if err != nil {
+		t.Fatalf("upsert season 1: %v", err)
+	}
+	// TMDB knows S1E4, but the library holds no file for it: the episode row
+	// exists with nothing to play, so the hand-off has to step over it.
+	gap, err := app.Queries.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{
+		SeasonID:      season.ID,
+		EpisodeNumber: 4,
+		Name:          "S1E4",
+	})
+	if err != nil {
+		t.Fatalf("upsert metadata-only episode: %v", err)
+	}
+
+	next, err := app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{
+		UserID:    user.ID,
+		EpisodeID: chain.S1E3,
+	})
+	if err != nil {
+		t.Fatalf("next episode: %v", err)
+	}
+	if next.ID == gap.ID {
+		t.Fatalf("next of S1E3 = the metadata-only episode %d, want a playable one", gap.ID)
+	}
+	if next.ID != chain.S2E1 {
+		t.Fatalf("next of S1E3 = %d, want S2E1 %d", next.ID, chain.S2E1)
+	}
+
+	// The gap is not a dead end either: the episode after it still answers.
+	next, err = app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{
+		UserID:    user.ID,
+		EpisodeID: gap.ID,
+	})
+	if err != nil {
+		t.Fatalf("next of the metadata-only episode: %v", err)
+	}
+	if next.ID != chain.S2E1 {
+		t.Fatalf("next of the metadata-only episode = %d, want S2E1 %d", next.ID, chain.S2E1)
+	}
+}
+
+func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Dupe User", "dupe@example.com", false)
+	fixture := seedPlaybackEpisode(t, app)
+	chain := seedNextEpisodeChain(t, app, fixture)
+
+	ctx := context.Background()
+	// The library also holds a standalone copy of S1E2. Scanned after the
+	// combined file, it carries the higher file id and so loses the
+	// lowest-id race GetShowFileForEpisode runs: owning a file of its own
+	// does not make S1E2 playable as anything but the file that just ended.
+	path := fmt.Sprintf("/tmp/%s-S01E02.mkv", sanitizeTestPathComponent(t.Name()))
+	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
+		SeasonID:  fixture.SeasonID,
+		FilePath:  path,
+		FileName:  filepath.Base(path),
+		Size:      1_000_000,
+		Container: "mkv",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
+		Duration:  sql.NullFloat64{Float64: 2700, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("upsert duplicate file: %v", err)
+	}
+	if duplicate.ID <= fixture.FileID {
+		t.Fatalf("duplicate file id = %d, want one above the combined file %d", duplicate.ID, fixture.FileID)
+	}
+	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
+		EpisodeID:    fixture.Episode2,
+		FileID:       duplicate.ID,
+		SeasonID:     fixture.SeasonID,
+		EpisodeOrder: 0,
+	})
+	if err != nil {
+		t.Fatalf("link duplicate file: %v", err)
+	}
+
+	selected, err := app.Queries.GetShowFileForEpisode(ctx, fixture.Episode2)
+	if err != nil {
+		t.Fatalf("selected file for S1E2: %v", err)
+	}
+	if selected.ID != fixture.FileID {
+		t.Fatalf("S1E2 plays file %d, want the combined file %d", selected.ID, fixture.FileID)
+	}
+
+	next, err := app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{
+		UserID:    user.ID,
+		EpisodeID: fixture.Episode1,
+	})
+	if err != nil {
+		t.Fatalf("next episode: %v", err)
+	}
+	if next.ID == fixture.Episode2 {
+		t.Fatalf("next of S1E1 = S1E2 %d, which would replay the combined file", fixture.Episode2)
+	}
+	if next.ID != chain.S1E3 {
+		t.Fatalf("next of S1E1 = %d, want S1E3 %d", next.ID, chain.S1E3)
+	}
 }
 
 func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {

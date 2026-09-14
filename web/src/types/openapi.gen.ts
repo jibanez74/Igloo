@@ -801,7 +801,7 @@ export interface paths {
         };
         /**
          * Get the playback header for a TV episode
-         * @description Returns the episode with its season number and show identity, for the episode player's title and back navigation. Stream and track metadata come from the episode's technical details.
+         * @description Returns the episode with its season number and show identity, for the episode player's title and back navigation, plus the episode the player advances to when this one ends (with the caller's progress on it, or null after the last episode). Stream and track metadata come from the episode's technical details.
          */
         get: operations["getShowEpisode"];
         put?: never;
@@ -4278,11 +4278,26 @@ export interface components {
             season_number: number;
             name: string;
         };
-        /** @description What the episode player needs to title itself and navigate back: the episode, its season number, and its show. */
+        /** @description The episode the player advances to when the current one ends: the first episode of the show that follows it in listing order (regular seasons by number, specials last), skipping episodes backed by the file that just played since a combined file plays whole. Carries the requesting user's progress so the player can resume it where it was left. */
+        ShowEpisodeUpNext: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            season_number: number;
+            /** Format: int64 */
+            episode_number: number;
+            name: string;
+            still_path: components["schemas"]["SqlNullString"];
+            progress_sec: components["schemas"]["SqlNullFloat64"];
+            duration_sec: components["schemas"]["SqlNullFloat64"];
+            watched: boolean;
+        };
+        /** @description What the episode player needs to title itself, navigate back, and advance: the episode, its season number, its show, and the episode that follows it (null after the show's last episode). */
         ShowEpisodePlaybackData: {
             show: components["schemas"]["ShowEpisodePlaybackShow"];
             season: components["schemas"]["ShowEpisodePlaybackSeason"];
             episode: components["schemas"]["ShowEpisodeSummary"];
+            next_episode: components["schemas"]["ShowEpisodeUpNext"] | null;
         };
         ShowEpisodePlaybackEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["ShowEpisodePlaybackData"];

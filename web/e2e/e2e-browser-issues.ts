@@ -15,7 +15,9 @@ export function isIgnorableFailedRequest(request: Request) {
     return true;
   }
 
-  return ["font", "image", "script", "stylesheet"].includes(
+  // A media fetch is aborted whenever its element is torn down or reloaded,
+  // e.g. the episode hand-off unmounting a player whose stream was pending.
+  return ["font", "image", "media", "script", "stylesheet"].includes(
     request.resourceType(),
   );
 }

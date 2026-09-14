@@ -166,7 +166,7 @@ type Querier interface {
 	// Chapters for a movie (for technical details display).
 	GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error)
 	// The 30-second floor must match the web client's
-	// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
+	// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)
 	// Series creators, billed ahead of the aggregate crew on the details page.
 	GetCreatorsByShowID(ctx context.Context, showID int64) ([]GetCreatorsByShowIDRow, error)
@@ -338,6 +338,16 @@ type Querier interface {
 	// Persisted keyframe index for one video stream of a show file; the caller
 	// compares the stored fingerprint and treats a mismatch as a miss.
 	GetShowKeyframeIndex(ctx context.Context, arg GetShowKeyframeIndexParams) (GetShowKeyframeIndexRow, error)
+	// The episode the player advances to when one ends: the first episode of the
+	// same show that sorts after the current one in the order the season listing
+	// uses (specials last, then season, then episode number). A candidate has to
+	// own a file, and the file playback would pick for it has to be one other than
+	// the file that just played: that skips both metadata-only episodes the
+	// scanner knows but has no media for and the siblings of a combined file,
+	// since that file plays whole and they have already been seen. The requesting
+	// user's progress rides along so the player can resume the next episode where
+	// it was left.
+	GetShowNextEpisode(ctx context.Context, arg GetShowNextEpisodeParams) (GetShowNextEpisodeRow, error)
 	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
 	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
 	// Persisted remux-safety verdict for one video stream of a show file; the

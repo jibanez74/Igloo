@@ -68,3 +68,17 @@ export type PlaybackStatus =
   | { kind: "loading"; message: string }
   | { kind: "modeUnavailable"; modeLabel: string }
   | { kind: "error"; message: string };
+
+/**
+ * What the player offers when the current media ends. The route resolves it
+ * (for TV, the episode that follows) and owns the navigation; the player only
+ * renders the card and runs the countdown.
+ */
+export type UpNextItem = {
+  /** "S1 E4 · Episode name" */
+  title: string;
+  stillUrl: string | null;
+  /** True when the next item continues from a saved position. */
+  resume: boolean;
+  onPlay: () => void;
+};

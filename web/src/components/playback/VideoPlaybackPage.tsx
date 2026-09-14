@@ -1,4 +1,10 @@
-import { useRef, useEffect, useState, type ComponentType } from "react";
+import {
+  useRef,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type ComponentType,
+} from "react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, type LucideProps } from "lucide-react";
@@ -8,6 +14,7 @@ import VideoPlayer from "@/components/playback/VideoPlayer";
 import ResumeDialog from "@/components/playback/ResumeDialog";
 import PlayerControls from "@/components/playback/PlayerControls";
 import PlaybackStatusView from "@/components/playback/PlaybackStatus";
+import UpNextOverlay from "@/components/playback/UpNextOverlay";
 import { effectiveModeLabel } from "@/lib/playback";
 import { deleteMediaWatchProgress } from "@/lib/api";
 import { mediaKey } from "@/lib/media-ref";
@@ -38,6 +45,7 @@ import {
   MOVIE_VOLUME_STEP,
   SHOW_SEASON_EPISODES_KEY,
   STREAM_MODES,
+  UP_NEXT_COUNTDOWN_SEC,
 } from "@/lib/constants";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -46,6 +54,7 @@ import {
   type PlaySearchParams,
 } from "@/lib/route-search";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
@@ -57,7 +66,7 @@ import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
-import type { PlaybackMediaRef } from "@/types/playback";
+import type { PlaybackMediaRef, UpNextItem } from "@/types/playback";
 
 type ChapterAnnouncement = {
   key: number;
@@ -83,6 +92,8 @@ type VideoPlaybackPageProps = {
   notFound: boolean;
   /** Duration known before technical details resolve, when the header has one. */
   fallbackDurationSec?: number;
+  /** What to offer once playback ends; nothing for a movie or a last episode. */
+  upNext?: UpNextItem | null;
 };
 
 /**
@@ -102,6 +113,7 @@ export default function VideoPlaybackPage({
   detailsPending,
   notFound,
   fallbackDurationSec,
+  upNext,
 }: VideoPlaybackPageProps) {
   const { start } = search;
   const mode = search.mode ?? "direct";
@@ -117,7 +129,9 @@ export default function VideoPlaybackPage({
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
-  const pendingAutoPlayOnLoadRef = useRef(false);
+  // Seeded from the URL so the up-next hand-off starts the next episode the
+  // way a rebase resumes the current one: on the first canplay.
+  const pendingAutoPlayOnLoadRef = useRef(search.autoplay === true);
   // VideoPlayer calls onNativeError then synchronously onError; when a
   // fallback consumed the native error, the paired onError must not raise
   // the error screen.
@@ -133,6 +147,8 @@ export default function VideoPlaybackPage({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [ended, setEnded] = useState(false);
+  const [upNextDismissed, setUpNextDismissed] = useState(false);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   // Tagged with the session it describes rather than cleared by an effect, so
@@ -230,6 +246,15 @@ export default function VideoPlaybackPage({
     modeUnavailable,
     playbackError,
   });
+  const playerMounted = status.kind === "ready";
+  // The offer stands while the media sits at its end and the viewer has not
+  // waved it away; anything that puts playback back in motion retracts it.
+  const upNextOpen = ended && !!upNext && !upNextDismissed;
+
+  const retractUpNext = () => {
+    setEnded(false);
+    setUpNextDismissed(false);
+  };
 
   useEffect(() => {
     if (!isHlsPlayback) return;
@@ -345,7 +370,7 @@ export default function VideoPlaybackPage({
       resolvedMode,
       techLoaded,
       directAvailable: directPlayAvailable,
-      playerMounted: status.kind === "ready",
+      playerMounted,
       onFallback: () => {
         const remuxLabel =
           STREAM_MODES.find((m) => m.id === "remux")?.label ?? "remux";
@@ -432,6 +457,10 @@ export default function VideoPlaybackPage({
       currentVideoTimeSec: currentVideoTime,
     });
 
+    // Seeking away from the end is the viewer choosing to stay on this media,
+    // so the up-next countdown must not fire out from under them.
+    retractUpNext();
+
     if (rebase) {
       navigateToPlaybackPosition(t);
       return;
@@ -470,7 +499,7 @@ export default function VideoPlaybackPage({
     });
 
   useHlsSessionKeepalive({
-    enabled: isHlsPlayback && status.kind === "ready",
+    enabled: isHlsPlayback && playerMounted,
     streamUrl,
   });
 
@@ -494,6 +523,15 @@ export default function VideoPlaybackPage({
     },
   });
 
+  // The hand-off's autoplay flag is a one-shot instruction, not player state:
+  // left in the URL it would re-arm on every reload, so a viewer who paused
+  // and refreshed would be played at. Dropping it is a replace, so the
+  // history entry the hand-off pushed stays put.
+  const clearConsumedAutoplay = useEffectEvent(() => {
+    if (search.autoplay === undefined) return;
+    onNavigateSearch((prev) => ({ ...prev, autoplay: undefined }));
+  });
+
   useEffect(() => {
     if (!pendingAutoPlayOnLoadRef.current) return;
     const video = videoRef.current;
@@ -507,6 +545,7 @@ export default function VideoPlaybackPage({
       }
 
       pendingAutoPlayOnLoadRef.current = false;
+      clearConsumedAutoplay();
     };
 
     if (video.readyState >= 2) {
@@ -520,8 +559,9 @@ export default function VideoPlaybackPage({
     };
     // Keyed on the stream window, not streamUrl: the direct-play URL is a
     // constant, so a fallback navigation would never re-fire this otherwise
-    // (audit D12).
-  }, [sessionWindowKey]);
+    // (audit D12). Also on the player mounting: an up-next hand-off arrives
+    // with its window already final, before the video element exists.
+  }, [sessionWindowKey, playerMounted]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(mediaDurationSec && mediaDurationSec > 0)) return;
@@ -545,7 +585,12 @@ export default function VideoPlaybackPage({
     }
   };
 
-  const keyboardShortcutsEnabled = status.kind === "ready" && !resumeDialogOpen;
+  // The up-next card owns the keyboard while it stands, exactly as the resume
+  // dialog does: its buttons are the only sensible targets, and the player's
+  // own Space/K binding would otherwise swallow the activation key of the
+  // focused "Play now".
+  const keyboardShortcutsEnabled =
+    playerMounted && !resumeDialogOpen && !upNextOpen;
 
   useVideoPlaybackKeyboard({
     containerRef,
@@ -624,13 +669,17 @@ export default function VideoPlaybackPage({
         }
         setPlaybackError(msg);
       }}
-      onPlay={() => setPlaying(true)}
+      onPlay={() => {
+        setPlaying(true);
+        retractUpNext();
+      }}
       onPause={() => {
         setPlaying(false);
         void handlePauseSave();
       }}
       onEnded={() => {
         setPlaying(false);
+        setEnded(true);
         void handleEndedSave();
       }}
       onTimeUpdate={(time) => {
@@ -682,6 +731,24 @@ export default function VideoPlaybackPage({
       </div>
     </div>
   ) : null;
+
+  const upNextOverlay =
+    upNextOpen && upNext ? (
+      <UpNextOverlay
+        item={upNext}
+        countdownSec={UP_NEXT_COUNTDOWN_SEC}
+        onPlay={upNext.onPlay}
+        onCancel={() => {
+          // The card outlives the fullscreen idle timeout, so the chrome it
+          // yielded the bottom edge to is already hidden. A pointer cancel
+          // revives it through the surface's mousemove; a keyboard one brings
+          // no pointer event, and the footer would stay gone until one came.
+          showControlsAndResetIdle();
+          setUpNextDismissed(true);
+          focusDialogRestoreTarget(containerRef.current);
+        }}
+      />
+    ) : null;
 
   if (status.kind !== "ready") {
     return (
@@ -753,6 +820,9 @@ export default function VideoPlaybackPage({
         {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
         {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
         fullscreen, Escape to exit fullscreen, Back button to go back.
+        {upNext
+          ? " When the episode ends, the up next card takes the keyboard: Enter or Space activates the focused button."
+          : ""}
       </p>
 
       <header
@@ -788,28 +858,28 @@ export default function VideoPlaybackPage({
         </button>
       </header>
 
-      {chromeFullscreenMode ? (
-        // Click-to-toggle is a pointer convenience only; the same toggle is
-        // reachable from the footer play button and Space/K, so the surface
-        // carries no button role (audit D14).
-        // react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions
-        <div
-          className="relative flex min-h-0 flex-1 flex-col"
-          onClick={handlePlaybackSurfaceClick}
-        >
-          {videoPlayer}
-          {capacityOverlay}
-        </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          {videoPlayer}
-          {capacityOverlay}
-        </div>
-      )}
+      {/*
+        Click-to-toggle is a pointer convenience only, and only in fullscreen;
+        the same toggle is reachable from the footer play button and Space/K,
+        so the surface carries no button role (audit D14).
+      */}
+      {/* react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions */}
+      <div
+        className="relative flex min-h-0 flex-1 flex-col"
+        onClick={chromeFullscreenMode ? handlePlaybackSurfaceClick : undefined}
+      >
+        {videoPlayer}
+        {capacityOverlay}
+        {upNextOverlay}
+      </div>
 
       <PlayerControls
         chromeFullscreenMode={chromeFullscreenMode}
-        controlsVisible={controlsVisible}
+        // In fullscreen the transport bar is absolutely positioned over the
+        // bottom of the video, exactly where the up-next card sits, and it
+        // paints on top. Yield the bottom edge while the card stands; Cancel
+        // (or any seek) retracts it and the chrome comes back.
+        controlsVisible={controlsVisible && !upNextOpen}
         isFullscreen={isFullscreen}
         isImmersiveViewport={isImmersiveViewport}
         currentTime={currentTime}

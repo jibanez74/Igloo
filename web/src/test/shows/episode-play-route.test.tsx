@@ -1,6 +1,8 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
+import { MOVIE_CONTROLS_IDLE_MS } from "@/lib/constants";
+import { stubMediaElement } from "../helpers/dom";
 import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
@@ -16,6 +18,22 @@ function renderEpisodeRoute(path: string) {
 }
 
 const EPISODE_ID = 70103;
+const NEXT_EPISODE_ID = 70104;
+
+function nextEpisode(
+  progress: { progress_sec: number; duration_sec: number } | null = null,
+) {
+  return {
+    id: NEXT_EPISODE_ID,
+    season_number: 1,
+    episode_number: 4,
+    name: "The Long Night",
+    still_path: nullableString("/next-still.jpg"),
+    progress_sec: nullableFloat64(progress?.progress_sec ?? null),
+    duration_sec: nullableFloat64(progress?.duration_sec ?? null),
+    watched: false,
+  };
+}
 
 const episodePayload = {
   show: {
@@ -36,6 +54,7 @@ const episodePayload = {
     vote_average: nullableFloat64(8.1),
     vote_count: nullableInt64(220),
   },
+  next_episode: nextEpisode(),
 };
 
 const technicalDetails = {
@@ -98,11 +117,14 @@ type EpisodeApiOptions = {
   episodeStatus?: number;
   /** A saved position for the episode; omitted means never watched. */
   progress?: { progress_sec: number; duration_sec: number };
+  /** The header's next_episode; undefined keeps the fixture's, null ends the show. */
+  nextEpisode?: ReturnType<typeof nextEpisode> | null;
 };
 
 function mockEpisodeApi(options: EpisodeApiOptions = {}) {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
+    const method = init?.method ?? "GET";
 
     if (url === "/api/auth/user") return jsonResponse(authUser());
     if (url === "/api/notifications/unread-count") {
@@ -121,10 +143,34 @@ function mockEpisodeApi(options: EpisodeApiOptions = {}) {
           options.episodeStatus,
         );
       }
-      return jsonResponse({ error: false, data: episodePayload });
+      return jsonResponse({
+        error: false,
+        data: {
+          ...episodePayload,
+          next_episode:
+            options.nextEpisode === undefined
+              ? episodePayload.next_episode
+              : options.nextEpisode,
+        },
+      });
     }
-    if (url === `/api/shows/episodes/${EPISODE_ID}/technical-details`) {
+    // The next episode is only ever reached by the hand-off, so its header
+    // and file mirror the fixture's.
+    if (url === `/api/shows/episodes/${NEXT_EPISODE_ID}`) {
+      return jsonResponse({
+        error: false,
+        data: {
+          ...episodePayload,
+          episode: { ...episodePayload.episode, id: NEXT_EPISODE_ID, episode_number: 4, name: "The Long Night" },
+          next_episode: null,
+        },
+      });
+    }
+    if (/^\/api\/shows\/episodes\/\d+\/technical-details$/.test(url)) {
       return jsonResponse({ error: false, data: technicalDetails });
+    }
+    if (/^\/api\/shows\/episodes\/\d+\/watch-progress$/.test(url) && method === "PUT") {
+      return jsonResponse({ error: false, data: { watched: true } });
     }
     if (url === `/api/shows/episodes/${EPISODE_ID}/watch-progress`) {
       return jsonResponse({
@@ -139,6 +185,12 @@ function mockEpisodeApi(options: EpisodeApiOptions = {}) {
             },
       });
     }
+    if (url === `/api/shows/episodes/${NEXT_EPISODE_ID}/watch-progress`) {
+      return jsonResponse({
+        error: false,
+        data: { progress_sec: null, duration_sec: null, watched: false, updated_at: null },
+      });
+    }
 
     return jsonResponse(
       { error: true, message: `Unexpected request: ${url}` },
@@ -151,6 +203,13 @@ function mockEpisodeApi(options: EpisodeApiOptions = {}) {
 }
 
 describe("episode play route", () => {
+  // The up-next hand-off is the one flow that actually drives the media
+  // element, so the transport methods jsdom lacks have to be stubs the tests
+  // can read back. `restoreMocks` puts them back after each test.
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
   it("titles the player after the show, episode code, and episode name", async () => {
     mockEpisodeApi();
 
@@ -210,6 +269,174 @@ describe("episode play route", () => {
       expect(router.state.location.pathname).toBe(`/tv-shows/${SHOW_ID}`),
     );
     expect(router.state.location.search).toEqual({ season: 1 });
+  });
+
+  it("offers the next episode when playback ends and hands off with autoplay", async () => {
+    mockEpisodeApi();
+
+    const { router } = await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+    expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+
+    fireEvent.ended(player.querySelector("video")!);
+
+    const card = await screen.findByRole("region", { name: "Up next" });
+    expect(card).toHaveTextContent("S1 E4 · The Long Night");
+    fireEvent.click(screen.getByRole("button", { name: "Play now" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(
+        `/tv-shows/${SHOW_ID}/episodes/${NEXT_EPISODE_ID}/play`,
+      ),
+    );
+    const search = router.state.location.search as Record<string, unknown>;
+    expect(search.autoplay).toBe(true);
+    expect(search.start).toBe(0);
+    // The loader resolved the new file's defaults and kept the flag.
+    await waitFor(() =>
+      expect((router.state.location.search as Record<string, unknown>).mode).toBe("direct"),
+    );
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Frost Harbor · S1 E4 · The Long Night" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+
+    // The point of the flag: the next episode starts on its own, and the
+    // spent flag is dropped so a later reload does not replay it.
+    const nextPlayer = await screen.findByRole("region", { name: /Video player for/ });
+    fireEvent.canPlay(nextPlayer.querySelector("video")!);
+    await waitFor(() =>
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(
+        (router.state.location.search as Record<string, unknown>).autoplay,
+      ).toBeUndefined(),
+    );
+  });
+
+  it("does not start playing on its own without the autoplay flag", async () => {
+    mockEpisodeApi();
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+
+    fireEvent.canPlay(player.querySelector("video")!);
+
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  });
+
+  it("resumes a partly watched next episode from its saved position", async () => {
+    mockEpisodeApi({ nextEpisode: nextEpisode({ progress_sec: 600, duration_sec: 2700 }) });
+
+    const { router } = await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+
+    fireEvent.ended(player.querySelector("video")!);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume now" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(
+        `/tv-shows/${SHOW_ID}/episodes/${NEXT_EPISODE_ID}/play`,
+      ),
+    );
+    expect((router.state.location.search as Record<string, unknown>).start).toBe(600);
+  });
+
+  it("keeps the finished player when the up-next card is cancelled", async () => {
+    mockEpisodeApi();
+
+    const { router } = await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+    fireEvent.ended(player.querySelector("video")!);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play`,
+    );
+  });
+
+  it("brings the fullscreen chrome back when the card is cancelled", async () => {
+    mockEpisodeApi();
+    // The idle timeout is shorter than the countdown, so the chrome always
+    // goes dark under the card. `shouldAdvanceTime` keeps the router's own
+    // awaits moving while the test owns the clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      await renderEpisodeRoute(
+        `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+      );
+      const player = await screen.findByRole("region", { name: /Video player for/ });
+
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: document.body,
+      });
+      fireEvent(document, new Event("fullscreenchange"));
+
+      const controls = player.querySelector("footer")!;
+      expect(controls.className).toContain("opacity-100");
+
+      fireEvent.ended(player.querySelector("video")!);
+      await screen.findByRole("region", { name: "Up next" });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(MOVIE_CONTROLS_IDLE_MS);
+      });
+
+      // A click with no pointer movement behind it is what the keyboard
+      // sends: nothing else is left to revive the chrome.
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+      expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+      expect(controls.className).toContain("opacity-100");
+    } finally {
+      vi.useRealTimers();
+      delete (document as unknown as Record<string, unknown>).fullscreenElement;
+    }
+  });
+
+  it("offers nothing after the show's last episode", async () => {
+    mockEpisodeApi({ nextEpisode: null });
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+    fireEvent.ended(player.querySelector("video")!);
+
+    expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+  });
+
+  it("retracts the offer when the viewer seeks back into the episode", async () => {
+    mockEpisodeApi();
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+    const video = player.querySelector("video")!;
+    fireEvent.durationChange(video);
+    fireEvent.ended(video);
+    await screen.findByRole("region", { name: "Up next" });
+
+    // Scrubbing back is the viewer choosing to stay; the countdown must not
+    // then navigate away underneath them.
+    fireEvent.click(screen.getByRole("button", { name: /Seek backward/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument(),
+    );
   });
 
   it("reports an unknown episode in the player's not-found copy", async () => {

@@ -579,6 +579,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getShowKeyframeIndexStmt, err = db.PrepareContext(ctx, getShowKeyframeIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowKeyframeIndex: %w", err)
 	}
+	if q.getShowNextEpisodeStmt, err = db.PrepareContext(ctx, getShowNextEpisode); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowNextEpisode: %w", err)
+	}
 	if q.getShowPendingEpisodeIDsStmt, err = db.PrepareContext(ctx, getShowPendingEpisodeIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowPendingEpisodeIDs: %w", err)
 	}
@@ -1992,6 +1995,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getShowKeyframeIndexStmt: %w", cerr)
 		}
 	}
+	if q.getShowNextEpisodeStmt != nil {
+		if cerr := q.getShowNextEpisodeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowNextEpisodeStmt: %w", cerr)
+		}
+	}
 	if q.getShowPendingEpisodeIDsStmt != nil {
 		if cerr := q.getShowPendingEpisodeIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowPendingEpisodeIDsStmt: %w", cerr)
@@ -3021,6 +3029,7 @@ type Queries struct {
 	getShowFileEpisodeIDsStmt                   *sql.Stmt
 	getShowFileForEpisodeStmt                   *sql.Stmt
 	getShowKeyframeIndexStmt                    *sql.Stmt
+	getShowNextEpisodeStmt                      *sql.Stmt
 	getShowPendingEpisodeIDsStmt                *sql.Stmt
 	getShowPendingSeasonIDsStmt                 *sql.Stmt
 	getShowRemuxSafetyVerdictStmt               *sql.Stmt
@@ -3373,6 +3382,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowFileEpisodeIDsStmt:                   q.getShowFileEpisodeIDsStmt,
 		getShowFileForEpisodeStmt:                   q.getShowFileForEpisodeStmt,
 		getShowKeyframeIndexStmt:                    q.getShowKeyframeIndexStmt,
+		getShowNextEpisodeStmt:                      q.getShowNextEpisodeStmt,
 		getShowPendingEpisodeIDsStmt:                q.getShowPendingEpisodeIDsStmt,
 		getShowPendingSeasonIDsStmt:                 q.getShowPendingSeasonIDsStmt,
 		getShowRemuxSafetyVerdictStmt:               q.getShowRemuxSafetyVerdictStmt,

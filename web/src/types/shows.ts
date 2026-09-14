@@ -23,8 +23,9 @@ export type ShowEpisodeType = Schema["ShowEpisode"];
 export type ShowEpisodeSummaryType = Schema["ShowEpisodeSummary"];
 
 // `data` payload of GET /api/shows/episodes/{id}: the player's title and
-// back-navigation context.
+// back-navigation context, plus the episode that follows it.
 export type ShowEpisodePlaybackDataType = Schema["ShowEpisodePlaybackData"];
+export type ShowEpisodeUpNextType = Schema["ShowEpisodeUpNext"];
 
 // `data` payload of GET /api/shows/episodes/{id}/technical-details. Stream
 // rows are the show file's own (file_id), column-identical to the movie ones.
