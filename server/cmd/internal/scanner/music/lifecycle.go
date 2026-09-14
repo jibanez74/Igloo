@@ -33,7 +33,12 @@ func (s *Scanner) runMusicScan(directory string) {
 		stopProgressLog()
 		contextErr := ctx.Err()
 		if contextErr != nil {
-			s.logger.Info("music library scan interrupted", "phase", report.status.Phase, "error", contextErr)
+			// Warn, not Info: an interrupted run leaves the tail of the job
+			// list undispatched, so whole albums can be missing from the
+			// catalog with no other sign. Warn also rides the logger's severe-
+			// record flush, which is what gets this line onto disk when the
+			// cancellation came from shutdown.
+			s.logger.Warn("music library scan interrupted", "phase", report.status.Phase, "processed", report.status.Processed, "total", report.status.Total, "error", contextErr)
 		}
 		report.Finish(&report.status.Progress, contextErr != nil)
 		s.publish(report)

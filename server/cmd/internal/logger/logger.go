@@ -27,7 +27,11 @@ type LoggerConfig struct {
 }
 
 // New creates a configured logger and cleanup function.
-// Production file logging requires an existing LogDir.
+// Debug selects the level; Stdout selects the sink. They are independent, so
+// an explicit LOG_TO_STDOUT=false keeps file logging even with DEBUG=true --
+// which is what .env.example documents, and the only way a debug-level record
+// ever survives the process that wrote it. Production file logging requires an
+// existing LogDir.
 func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("logger config is required")
@@ -35,18 +39,20 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 
 	closer := func() error { return nil }
 
+	level := slog.LevelInfo
 	if cfg.Debug {
-		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		})
-
-		return slog.New(handler), closer, nil
+		level = slog.LevelDebug
 	}
 
 	if cfg.Stdout {
-		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		})
+		// Debug runs are read by a person in a terminal, so they get text;
+		// everything else stays machine-readable.
+		var handler slog.Handler
+		if cfg.Debug {
+			handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		} else {
+			handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		}
 
 		return slog.New(handler), closer, nil
 	}
@@ -57,7 +63,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	}
 
 	if cfg.LogDir == "" {
-		return nil, nil, fmt.Errorf("log directory is required when debug mode is disabled")
+		return nil, nil, fmt.Errorf("log directory is required when stdout logging is disabled")
 	}
 
 	info, err := os.Stat(cfg.LogDir)
@@ -83,7 +89,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	closer = rw.Close
 
 	handler := slog.NewJSONHandler(rw, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: level,
 	})
 
 	return slog.New(flushOnSevereHandler{Handler: handler, flush: rw.Flush}), closer, nil

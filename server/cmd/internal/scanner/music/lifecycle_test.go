@@ -74,16 +74,18 @@ func TestRunMusicScanLogsCancellationFromFinalPartialBatch(t *testing.T) {
 	}
 
 	foundCancellation := false
-	for _, entry := range logger.InfoEntries {
+	for _, entry := range logger.WarnEntries {
 		if entry.Msg == "music library scan interrupted" {
 			foundCancellation = true
 		}
+	}
+	for _, entry := range logger.InfoEntries {
 		if strings.HasPrefix(entry.Msg, "music scanner completed:") {
 			t.Fatalf("canceled scan logged completion: %q", entry.Msg)
 		}
 	}
 	if !foundCancellation {
-		t.Fatalf("missing cancellation log; info entries = %+v", logger.InfoEntries)
+		t.Fatalf("missing cancellation log; warn entries = %+v", logger.WarnEntries)
 	}
 }
 
@@ -336,15 +338,17 @@ func assertMusicInterrupted(t *testing.T, s *Scanner) {
 	t.Helper()
 	logs := s.logger.(*scannertest.Logger)
 	interrupted := 0
-	for _, entry := range logs.InfoEntries {
+	for _, entry := range logs.WarnEntries {
 		if entry.Msg == "music library scan interrupted" {
 			interrupted++
 		}
+	}
+	for _, entry := range logs.InfoEntries {
 		if strings.Contains(entry.Msg, "completed:") {
 			t.Errorf("interrupted scan logged completion: %s", entry.Msg)
 		}
 	}
-	if interrupted != 1 || len(logs.WarnEntries) != 0 || len(logs.ErrorEntries) != 0 {
+	if interrupted != 1 || len(logs.WarnEntries) != interrupted || len(logs.ErrorEntries) != 0 {
 		t.Fatalf("interrupted=%d warnings=%+v errors=%+v", interrupted, logs.WarnEntries, logs.ErrorEntries)
 	}
 }

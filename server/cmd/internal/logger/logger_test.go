@@ -134,6 +134,32 @@ func TestNewFileLogger(t *testing.T) {
 		}
 	})
 
+	t.Run("debug mode keeps file logging and records debug", func(t *testing.T) {
+		dir := t.TempDir()
+
+		logger, closer, err := New(&LoggerConfig{Debug: true, LogDir: dir, LogFile: "test.log"})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+
+		logger.Info("info message")
+		logger.Debug("debug message")
+
+		err = closer()
+		if err != nil {
+			t.Fatalf("closer: %v", err)
+		}
+
+		lines := readLogLines(t, filepath.Join(dir, "test.log"))
+		if len(lines) != 2 {
+			t.Fatalf("got %d lines, want the info and debug records: %q", len(lines), lines)
+		}
+
+		if !strings.Contains(lines[1], `"level":"DEBUG"`) || !strings.Contains(lines[1], `"msg":"debug message"`) {
+			t.Errorf("line = %q, want the debug record as json", lines[1])
+		}
+	})
+
 	t.Run("closer reports a repeated close", func(t *testing.T) {
 		_, closer, err := New(&LoggerConfig{LogDir: t.TempDir(), LogFile: "test.log"})
 		if err != nil {
@@ -160,17 +186,11 @@ func TestNewStdoutLogger(t *testing.T) {
 		wantDebug bool
 	}{
 		{
-			name:      "debug mode writes text records at debug level",
-			config:    LoggerConfig{Debug: true},
-			wantText:  true,
-			wantDebug: true,
-		},
-		{
 			name:   "stdout mode writes json records at info level",
 			config: LoggerConfig{Stdout: true},
 		},
 		{
-			name:      "debug mode wins over stdout mode",
+			name:      "debug mode writes text records at debug level",
 			config:    LoggerConfig{Debug: true, Stdout: true},
 			wantText:  true,
 			wantDebug: true,
