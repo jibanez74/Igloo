@@ -739,6 +739,11 @@ export default function VideoPlaybackPage({
         countdownSec={UP_NEXT_COUNTDOWN_SEC}
         onPlay={upNext.onPlay}
         onCancel={() => {
+          // The card outlives the fullscreen idle timeout, so the chrome it
+          // yielded the bottom edge to is already hidden. A pointer cancel
+          // revives it through the surface's mousemove; a keyboard one brings
+          // no pointer event, and the footer would stay gone until one came.
+          showControlsAndResetIdle();
           setUpNextDismissed(true);
           focusDialogRestoreTarget(containerRef.current);
         }}

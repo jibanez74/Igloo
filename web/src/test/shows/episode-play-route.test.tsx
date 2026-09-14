@@ -1,6 +1,7 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
+import { MOVIE_CONTROLS_IDLE_MS } from "@/lib/constants";
 import { stubMediaElement } from "../helpers/dom";
 import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
@@ -363,6 +364,46 @@ describe("episode play route", () => {
     expect(router.state.location.pathname).toBe(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play`,
     );
+  });
+
+  it("brings the fullscreen chrome back when the card is cancelled", async () => {
+    mockEpisodeApi();
+    // The idle timeout is shorter than the countdown, so the chrome always
+    // goes dark under the card. `shouldAdvanceTime` keeps the router's own
+    // awaits moving while the test owns the clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      await renderEpisodeRoute(
+        `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+      );
+      const player = await screen.findByRole("region", { name: /Video player for/ });
+
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: document.body,
+      });
+      fireEvent(document, new Event("fullscreenchange"));
+
+      const controls = player.querySelector("footer")!;
+      expect(controls.className).toContain("opacity-100");
+
+      fireEvent.ended(player.querySelector("video")!);
+      await screen.findByRole("region", { name: "Up next" });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(MOVIE_CONTROLS_IDLE_MS);
+      });
+
+      // A click with no pointer movement behind it is what the keyboard
+      // sends: nothing else is left to revive the chrome.
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+      expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+      expect(controls.className).toContain("opacity-100");
+    } finally {
+      vi.useRealTimers();
+      delete (document as unknown as Record<string, unknown>).fullscreenElement;
+    }
   });
 
   it("offers nothing after the show's last episode", async () => {
