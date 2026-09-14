@@ -38,11 +38,11 @@ import {
 import {
   CONTINUE_WATCHING_KEY,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-  MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
+  PLAYER_ICON_BUTTON_CLASS,
   SHOW_SEASON_EPISODES_KEY,
   STREAM_MODES,
   UP_NEXT_COUNTDOWN_SEC,
@@ -849,8 +849,8 @@ export default function VideoPlaybackPage({
           ref={backButtonRef}
           onClick={handleBack}
           className={cn(
-            MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
+            PLAYER_ICON_BUTTON_CLASS,
+            "size-10 hover:bg-accent",
           )}
           aria-label="Back to previous page"
         >

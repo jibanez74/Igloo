@@ -46,7 +46,7 @@ import type {
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import AlbumDetailsBackdrop from "@/components/music/AlbumDetailsBackdrop";
 import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
-import AlbumDetailsSkipLinks from "@/components/music/AlbumDetailsSkipLinks";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
   ALBUM_DETAILS_KEY,
@@ -376,7 +376,14 @@ function AlbumDetailsContent({
         {pageAnnouncement}
       </span>
 
-      <AlbumDetailsSkipLinks />
+      <DetailSkipLinks
+        titleHref="#album-title"
+        titleLabel="Skip to album info"
+        sections={[
+          { href: "#tracklist-heading", label: "Skip to track list" },
+          { href: "#details-heading", label: "Skip to album details" },
+        ]}
+      />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
         <AlbumDetailsBackdrop coverUrl={coverUrl} albumTitle={album.title} />

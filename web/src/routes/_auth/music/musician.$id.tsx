@@ -18,7 +18,7 @@ import { parseRouteId } from "@/lib/route-id";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MediaNotFound from "@/components/shared/MediaNotFound";
-import MusicianDetailsSkipLinks from "@/components/music/MusicianDetailsSkipLinks";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
 import {
   SpotifyGlyph,
@@ -310,9 +310,19 @@ function MusicianDetailsContent({
         {pageAnnouncement}
       </span>
 
-      <MusicianDetailsSkipLinks
-        hasDiscography={albums.length > 0}
-        hasTracks={tracks.length > 0}
+      <DetailSkipLinks
+        titleHref="#musician-name"
+        titleLabel="Skip to musician info"
+        sections={[
+          albums.length > 0 && {
+            href: "#discography-heading",
+            label: "Skip to discography",
+          },
+          tracks.length > 0 && {
+            href: "#tracks-heading",
+            label: "Skip to all tracks",
+          },
+        ]}
       />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>

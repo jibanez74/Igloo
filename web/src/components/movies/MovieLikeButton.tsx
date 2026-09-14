@@ -5,6 +5,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { toggleLikeMovie } from "@/lib/api";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOVIES_LIKED_KEY,
   MOVIE_LIKE_STATUS_KEY,
@@ -146,7 +147,8 @@ export default function MovieLikeButton({
       disabled={mutation.isPending || isLoading}
       className={cn(
         MOTION_MICRO_COLORS_CLASS,
-        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:ring-2 focus:ring-ring focus:outline-hidden disabled:opacity-60",
+        FOCUS_VISIBLE_RING_CLASS,
+        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 disabled:opacity-60",
         className,
       )}
       aria-label={label}

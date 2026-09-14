@@ -10,6 +10,7 @@ import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -73,7 +74,10 @@ export default function PosterCard({
       <div className="relative">
         <Link
           {...detailsLink}
-          className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className={cn(
+            "block rounded-xl outline-hidden",
+            FOCUS_VISIBLE_RING_CLASS,
+          )}
           aria-label={detailsLabel}
         >
           {/* Poster with 2:3 aspect ratio (standard poster) */}
@@ -144,7 +148,8 @@ export default function PosterCard({
           {...playLink}
           className={cn(
             CARD_ACTION_REVEAL_CLASS,
-            "absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 outline-hidden group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            FOCUS_VISIBLE_RING_CLASS,
+            "absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 outline-hidden group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus-visible:scale-100 focus-visible:opacity-100",
           )}
           aria-label={playLabel}
         >

@@ -3,6 +3,7 @@ import { ListMusic } from "lucide-react";
 import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -26,7 +27,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
       <Link
         to="/music/playlist/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-ring focus:outline-hidden focus:ring-inset"
+        className={cn("block", FOCUS_VISIBLE_RING_CLASS, "focus-visible:ring-inset")}
         aria-label={`${name}, ${track_count} tracks, ${formatDuration(total_duration)}`}
       >
         {/* Playlist cover - square with aspect-square to prevent CLS */}

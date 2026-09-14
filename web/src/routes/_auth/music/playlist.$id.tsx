@@ -45,6 +45,7 @@ import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { formatDuration } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
@@ -442,7 +443,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 onClick={() => setShowEditDialog(true)}
                 className={cn(
                   MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary focus:text-primary focus:outline-hidden sm:gap-2 sm:text-sm",
+                  FOCUS_VISIBLE_RING_CLASS,
+                  "inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-primary focus-visible:text-primary sm:gap-2 sm:text-sm",
                 )}
                 aria-label="Edit playlist"
               >
@@ -457,7 +459,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 disabled={deleteMutation.isPending}
                 className={cn(
                   MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive focus:text-destructive focus:outline-hidden disabled:opacity-50 sm:gap-2 sm:text-sm",
+                  FOCUS_VISIBLE_RING_CLASS,
+                  "inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-destructive focus-visible:text-destructive disabled:opacity-50 sm:gap-2 sm:text-sm",
                 )}
                 aria-label="Delete playlist"
               >
@@ -521,7 +524,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           search={{ tab: "playlists" }}
           className={cn(
             MOTION_MICRO_COLORS_CLASS,
-            "inline-flex items-center gap-2 text-muted-foreground hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-hidden",
+            FOCUS_VISIBLE_RING_CLASS,
+            "inline-flex items-center gap-2 rounded-sm text-muted-foreground hover:text-foreground focus-visible:text-primary",
           )}
           aria-label="Back to Playlists"
         >

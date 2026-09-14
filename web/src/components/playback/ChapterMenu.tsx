@@ -6,8 +6,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
+  PLAYER_ICON_BUTTON_CLASS,
 } from "@/lib/constants";
 import { formatSpokenTime, formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -61,8 +61,8 @@ export default function ChapterMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
+          PLAYER_ICON_BUTTON_CLASS,
+          "size-10 hover:bg-accent",
         )}
         aria-label={`Chapters, ${chapters.length} ${
           chapters.length === 1 ? "chapter" : "chapters"

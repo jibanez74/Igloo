@@ -2,8 +2,10 @@ import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Film, Trash2, Users } from "lucide-react";
 import {
+  CARD_FOCUS_WITHIN_RING_CLASS,
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
@@ -47,7 +49,8 @@ export default function WatchRoomCard({ room }: Props) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group flex gap-4 rounded-2xl border border-border bg-card/95 p-4 focus-within:border-ring/40 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20",
+        CARD_FOCUS_WITHIN_RING_CLASS,
+        "group flex gap-4 rounded-2xl border border-border bg-card/95 p-4 focus-within:border-ring/40 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20",
       )}
       aria-label={`Watch room: ${room.movie_title}`}
     >
@@ -143,7 +146,8 @@ export default function WatchRoomCard({ room }: Props) {
             params={{ id: room.id }}
             className={cn(
               MOTION_MICRO_COLORS_CLASS,
-              "inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-hidden",
+              FOCUS_VISIBLE_RING_CLASS,
+              "inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90",
             )}
             aria-label={`Join watch room for ${room.movie_title}`}
           >

@@ -1,14 +1,14 @@
 # Igloo Web Design System — UI Development Guideline
 
-This document is the development guideline for the Igloo web client (`web/`). It
-describes the visual system as implemented, the conventions every new UI change
-must follow, and the July 2026 audit findings (§4) with the fixes that were
-applied (§5) — all resolved 2026-07-10 except the deliberately accepted §4
-item 7.
+This document is the development guideline for the Igloo web client (`web/`).
+It describes the visual system **as implemented** and the conventions every new
+UI change must follow. Where it states a rule, the rule is binding; where the
+code disagrees, that is a bug in one of them, to be reconciled rather than
+ignored.
 
-Scope: the web client only. (An earlier revision of this document doubled as an
-Android TV / Jetpack Compose port guide; that content was removed deliberately —
-recover it from git history if a TV port resumes.)
+Scope: the web client only. Two earlier revisions were removed deliberately and
+are recoverable from git history — an Android TV / Jetpack Compose port guide,
+and the 2026-07-10 audit log (findings and fixes, all closed).
 
 **How to use this doc**
 
@@ -23,13 +23,14 @@ this doc, prefer adding a guard too.
 
 | Rule | Guarded by |
 |---|---|
-| Token contrast: body text ≥ 7:1 (AAA), all other fg/surface pairs ≥ 4.5:1 (AA), plus `text-success` on `background`/`card`, both themes | `web/src/test/contrast.test.ts` |
-| Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/theme-drift.test.ts` |
-| Every shared motion constant carries a `motion-reduce:` escape; every `src/` file with an inline transition/animation has the matching `motion-reduce:` escape | `web/src/test/motion-contracts.test.ts` |
-| No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (error) in `web/eslint.config.js` |
-| Class order, duplicates, unknown/conflicting classes | `eslint-plugin-better-tailwindcss` |
-| Input styling contracts | `web/src/test/input-styles.test.ts` |
-| Shared class-string constants keep their contracts, incl. the single focus-ring recipe | `web/src/test/constants-contracts.test.ts` |
+| Token contrast: body text ≥ 7:1 (AAA), all other fg/surface pairs ≥ 4.5:1 (AA), plus `text-success` on `background`/`card`, both themes | `web/src/test/shared/contrast.test.ts` |
+| Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/shared/theme-drift.test.ts` |
+| Every shared motion constant carries a `motion-reduce:` escape; every `src/` file with an inline transition/animation has the matching `motion-reduce:` escape | `web/src/test/shared/motion-contracts.test.ts` |
+| Every `src/` file composes a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
+| Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
+| Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
+| No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
+| Class order, duplicates, unknown classes | `eslint-plugin-better-tailwindcss` (**warn**; `bun run lint` runs `--max-warnings 0`, so warnings still fail CI) |
 
 ---
 
@@ -93,9 +94,11 @@ Rules:
 - **Use semantic tokens, never raw palette classes.** `bg-red-500`,
   `text-slate-400`, `bg-emerald-900` are banned at ESLint error level. The
   sanctioned exceptions are `src/lib/input-styles.ts` and
-  `src/routes/login.lazy.tsx` (the intentionally light "frosted glass" input
+  `src/routes/login.tsx` (the intentionally light "frosted glass" input
   treatment that stays light-on-dark in both themes, plus the login backdrop's
-  theme-aware photo scrim and frosted-card edge — see the over-media note below).
+  theme-aware photo scrim and frosted-card edge — see the over-media note
+  below). Both are allowlisted by name in `eslint.config.js`; `src/test/**` is
+  exempt wholesale so the contract tests can assert on raw shades.
 - `aurora` is identical in both themes and is deliberately **sparing**: rating
   badges and rare highlights, not a general accent.
 - Alpha is applied at the call site with the `/NN` modifier
@@ -107,7 +110,7 @@ Rules:
   with the theme); keep them literal, don't hunt for tokens. The one exception
   is the **login backdrop**, which swaps between a bright (`login-bg-light.webp`)
   and dark (`login-bg-dark.webp`) photo by theme, so its frost/darkening scrim
-  gradient and frosted-card border in `login.lazy.tsx` are deliberately
+  gradient and frosted-card border in `login.tsx` are deliberately
   `dark:`-variant, literal white/slate in light and `background`-token in dark.
 - One deliberate brand exception exists: the `SPOTIFY_BRAND_*` constants in
   `lib/constants.ts` (Spotify green, documented there, carried past the lint
@@ -141,15 +144,21 @@ Rules:
   Aliases: `rounded-sm` = radius−4px, `md` = −2px, `lg` = radius, `xl` = +4px.
   Convention: cards `rounded-xl`, buttons/inputs `rounded-md`, chips/pills
   `rounded-full`.
-- **Spacing**: the standard Tailwind 4px scale as utility literals (not
-  tokenized). Rhythm in practice: `gap-4` in poster grids, `gap-6` between
-  card blocks, page sections `mt-6 md:mt-8`, shell content padding
+- **Spacing and type stay deliberately untokenized.** Both are the standard
+  Tailwind scales as utility literals. Tokenizing them was considered and
+  rejected: the values are already consistent in practice, and a token layer
+  over a scale that every developer already knows buys indirection, not
+  safety. Radius is the lone non-color token because it is the one value
+  shadcn's primitives read. This rule is enforced by review, not a test.
+  Rhythm in practice: `gap-4` in poster grids, `gap-6` between card blocks,
+  page sections `mt-6 md:mt-8`, shell content padding
   `px-4 py-6 sm:px-6 lg:px-8`.
-- **Aspect ratios are part of the design vocabulary**: `aspect-2/3` movie
-  posters, `aspect-square` album covers and musician thumbs, `aspect-21/9`
-  detail-page backdrops (clamped `max-h-[min(42vh,22rem)]` at `md+`; the
-  shared `DetailBackdrop` owns the scrims),
-  `aspect-video` trailers/extras.
+- **Aspect ratios are part of the design vocabulary**: `aspect-2/3` movie and
+  show posters, `aspect-square` album covers, musician thumbs and playlist
+  covers, `aspect-21/9` detail-page backdrops (clamped
+  `max-h-[min(42vh,22rem)]` at `md+`; the shared `DetailBackdrop` owns the
+  scrims), `aspect-video` trailers, extras, episode stills and the up-next
+  thumbnail.
 - **Elevation**: `shadow-xs`–`shadow-2xl`. Interactive media cards add a
   glacier glow on hover (`hover:shadow-xl hover:shadow-primary/20`); the
   EmptyState orb uses `shadow-primary/5`.
@@ -172,11 +181,15 @@ constant exists — and when you create a new recurring one, add it there so
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
-- **Enter/exit animations** come from `tw-animate-css`:
-  `animate-in fade-in slide-in-from-bottom-2 fill-mode-both` for page/section
-  entrances (`MOTION_PAGE_ENTER_CLASS`, `MOTION_SECTION_ENTER_CLASS`, and the
-  `delay-75` staggered `MOTION_SECTION_ENTER_DELAYED_CLASS`), `animate-out` +
-  `fade-out-0` for exits. There are no custom `@keyframes` in `styles.css`.
+- **Enter/exit animations** come from `tw-animate-css`. A page entrance both
+  fades and lifts (`MOTION_PAGE_ENTER_CLASS`:
+  `animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300`); a
+  section entrance only fades (`MOTION_SECTION_ENTER_CLASS` and its `delay-75`
+  staggered twin `MOTION_SECTION_ENTER_DELAYED_CLASS`:
+  `animate-in fade-in-0 fill-mode-both duration-200`) — the split is
+  deliberate, since a page full of independently sliding sections reads as
+  jitter. Exits use `animate-out` + `fade-out-0`. There are no custom
+  `@keyframes` in `styles.css`.
 - **The motion-reduce contract (hard rule)**: every animation/transition ships
   a `motion-reduce:` escape — `motion-reduce:transition-none`,
   `motion-reduce:animate-none`, plus end-state resets
@@ -201,12 +214,14 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 `aria-invalid` styling, a property-scoped 150ms transition with
 `motion-reduce:transition-none`, and stamps `data-variant`/`data-size`.
 
-- **`accent-pill` and `size` don't compose.** cva emits base → variant → size →
-  `className`, and `cn` is `twMerge`, so the last conflicting class wins:
-  `size` re-declares `rounded-md` and silently squares off the pill. Pass no
-  `size` with `accent-pill` (what every call site does), or re-assert
-  `rounded-full` in `className`. Watch for this whenever two sibling buttons
-  are meant to match — one picking up a `size` is enough to break the pair.
+- **`accent-pill` and the `sm`/`lg` sizes don't compose.** cva emits
+  base → variant → size → `className`, and `cn` is `twMerge`, so the last
+  conflicting class wins: `sm` and `lg` re-declare `rounded-md` and silently
+  square off the pill (`default`, `icon` and `icon-sm` declare no radius and
+  leave it alone). Pass no `size` with `accent-pill` (what every call site
+  does), or re-assert `rounded-full` in `className`. Watch for this whenever
+  two sibling buttons are meant to match — one picking up a `size` is enough
+  to break the pair.
 - **Tabs share one look** (`web/src/components/ui/tabs.tsx`): a bordered
   `bg-muted/50` list; the active trigger is a glacier primary-fill pill
   (`data-[state=active]:bg-primary … shadow-primary/20`). Library pages layer
@@ -241,17 +256,30 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 
 ### 1.7 Accessibility — non-negotiable
 
-- **One focus recipe.** `--ring` is glacier in both themes, and there is one
-  ring recipe: the shadcn `focus-visible:ring-[3px] ring-ring/50 border-ring`
-  style, shipped by the primitives and exported for inline (non-shadcn)
-  controls as `FOCUS_VISIBLE_RING_CLASS` in `constants.ts` (pinned by
-  `constants-contracts.test.ts`). Media cards keep `focus-within:ring-2` on
-  the `<article>` (`CARD_FOCUS_WITHIN_RING_CLASS` in `constants.ts`) — the
-  intentional whole-card variant — so the card shows focus wherever it lands
-  inside. When suppressing the browser outline in
-  favor of a ring, always use `outline-hidden`, never `outline-none`: rings
-  are box-shadows, which forced-colors mode strips, and `outline-hidden`
-  keeps a transparent outline the OS makes visible there.
+- **One focus recipe, in three prefixes.** `--ring` is glacier in both themes,
+  and every focus indicator in the app is the shadcn
+  `focus-visible:ring-[3px] ring-ring/50 border-ring` style. It reaches the
+  page three ways, all exported from `constants.ts`:
+  - `FOCUS_VISIBLE_RING_CLASS` — the default, for any inline (non-shadcn)
+    control. The vendored primitives ship the same string in their own base
+    classes.
+  - `CARD_FOCUS_WITHIN_RING_CLASS` — the whole-card variant, on a media card's
+    `<article>`, so the card shows focus wherever it lands inside.
+  - `PEER_FOCUS_VISIBLE_RING_CLASS` — for a rich `<Label>` standing in for an
+    `sr-only` radio (the TMDB and Spotify pickers), where the ring must follow
+    the peer input's focus rather than the label's.
+
+  Never hand-write a ring. `focus-contracts.test.ts` parses every file under
+  `src/` and fails on a literal declaring its own ring width, a
+  `ring-offset-*`, or a `focus:` (rather than `focus-visible:`) prefix — a
+  `focus:` ring shows on mouse click, which is noise for pointer users. The
+  only allowlisted file is `ui/sidebar.tsx`, which rings on the sidebar's own
+  `--sidebar-ring` token set.
+
+  When suppressing the browser outline in favor of a ring, always use
+  `outline-hidden`, never `outline-none`: rings are box-shadows, which
+  forced-colors mode strips, and `outline-hidden` keeps a transparent outline
+  the OS makes visible there.
 - **Hover/focus parity.** Every `group-hover` reveal pairs with
   `group-focus-within` (cards) or `focus-visible` (rows) so keyboard users get
   the same affordances. Never gate an action behind hover alone.
@@ -265,16 +293,19 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   use `aria-disabled` + guards if needed.
 - **Announcements**: `LiveAnnouncer` (double-buffered dual `role="status"`
   regions so repeated messages re-announce) for async state changes; sections
-  announce their loaded and empty summaries. Errors are the exception:
-  `MoviesLoadError` is a `role="alert"` and announces itself, so never repeat
-  a failure through `LiveAnnouncer` as well.
-- **Skip links**: a global "Skip to content" in `AppShell` targeting `#main`,
-  plus per-page section skip navs on long pages (the shared
-  `DetailSkipLinks`, `sr-only focus-within:not-sr-only`, links on
-  `SKIP_LINK_CLASS`). Their targets are the page `h1` and the section
-  headings (`tabIndex={-1}`), which carry the focus ring via
-  `DETAIL_SECTION_HEADING_CLASS` / `DETAIL_RAIL_HEADING_CLASS` so a keyboard
-  user sees where a skip link landed.
+  announce their loaded and empty summaries. Errors are the exception — they
+  announce themselves through `role="alert"` (§3.4).
+- **Skip links**: a global "Skip to page content" in `AppShell` targeting
+  `#main`, plus per-page section skip navs on long pages. Every detail page —
+  movie, show, in-theaters, album, musician — uses the one shared
+  `DetailSkipLinks` (`sr-only focus-within:not-sr-only`, links on
+  `SKIP_LINK_CLASS`); it takes the page title anchor plus a `sections` list
+  where a section that is not rendered passes `false`, so the list reads
+  exactly what is on the page. Do not write a page-specific variant.
+  Their targets are the page `h1` and the section headings (`tabIndex={-1}`),
+  which carry the focus ring via `DETAIL_SECTION_HEADING_CLASS` /
+  `DETAIL_RAIL_HEADING_CLASS` so a keyboard user sees where a skip link
+  landed.
 - **Labels everywhere**: icon-only buttons get `aria-label`; decorative
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses
@@ -285,7 +316,7 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `<time>`, or plain `<span>`/`<div>`; browsers and screen readers inconsistently
   ignore it there. For those, put the spoken text *in the content* as an `sr-only`
   span and mark the visually-formatted value `aria-hidden="true"`
-  (`MovieDetailsMetadataChips` pattern):
+  (the `MovieDetailsMetadataChips` / `ShowDetailsMetadataChips` pattern):
 
   ```tsx
   <li>
@@ -315,9 +346,11 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 - Scrollbar styling uses the v4 core utilities (`scrollbar-thin`,
   `scrollbar-thumb-primary/50`) on horizontal media rails; the lint plugin
   recognizes them natively (no allowlist entry needed).
-- `eslint-plugin-better-tailwindcss` enforces class order, duplicates, and
-  unknown classes; write class lists in its canonical order (the lint
-  autofixes).
+- `eslint-plugin-better-tailwindcss` checks class order, duplicates, and
+  unknown classes. It reports at **warn**, but `bun run lint` runs
+  `--max-warnings 0`, so a warning still fails the build; write class lists in
+  its canonical order (the lint autofixes). Line wrapping is explicitly
+  disabled — Prettier owns that.
 
 ### 2.2 shadcn/ui usage
 
@@ -325,10 +358,11 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   (`web/components.json`). Components import from the consolidated
   **`radix-ui`** package (`import { Slot } from "radix-ui"`), not
   `@radix-ui/react-*`.
-- 21 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
+- 20 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
   badge, button, card, checkbox, dialog, dropdown-menu, input, label,
-  pagination, popover, select, separator, sheet, sidebar
-  (+ `sidebar-context.tsx`), sonner, spinner, tabs.
+  pagination, popover, select, separator, sheet, sidebar, sonner, spinner,
+  tabs — plus `sidebar-context.tsx`, which holds the sidebar's context so the
+  primitive and `AppSidebar` can both read it.
 - Their exported subcomponents are intentionally limited to production use.
   Portal, overlay, and Select scroll helpers stay private to their owning
   primitive. Sheet is the left mobile-navigation surface, and Sidebar exports
@@ -343,34 +377,45 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 - **No new dependencies** without explicit approval (project rule). Before
   adding a primitive, check whether an existing one + a constant covers it.
 
-### 2.3 The styling hub: `web/src/lib/constants.ts`
+### 2.3 Shared constants: `web/src/lib/constants.ts`
 
-Cross-component class strings are exported, documented constants — the de
-facto token layer above Tailwind. Key families:
+One module holds every shared frontend constant — query keys, protocol
+records, page sizes, TMDB image sizes, playback timings — and, in its second
+half, the cross-component class strings that act as the de facto token layer
+above Tailwind. Those are what this section is about; each carries a comment
+explaining what it owns. The styling families:
 
-- `CARD_SURFACE_CLASS` — the media-card chrome: `group relative
-  overflow-hidden rounded-xl border bg-card`, hover lift + primary border +
-  glacier glow, with the property-scoped 200ms transition and motion-reduce
-  fallbacks embedded (via `CARD_INTERACTIVE_SURFACE_CLASS`, which stays
-  exported for bespoke card shells that bring their own hover styles).
-- `CARD_MEDIA_HOVER_CLASS` (poster zoom), `CARD_OVERLAY_REVEAL_CLASS` /
-  `CARD_ACTION_REVEAL_CLASS` (hover/focus-within overlay + scaled action
-  reveal).
-- `MOTION_*` — page/section/media-overlay/player-chrome/track/settings
-  enter-exit classes and loading/spinner states (§1.5).
-- `FOCUS_VISIBLE_RING_CLASS` (§1.7); `DETAIL_SECTION_HEADING_CLASS`,
-  `DETAIL_RAIL_HEADING_CLASS` and `SKIP_LINK_CLASS` compose it for the
-  detail-page headings and skip links.
-- `LIBRARY_TABS_LIST_CLASS` / `LIBRARY_TAB_TRIGGER_CLASS`,
-  `TRACK_LIST_CONTAINER_CLASS` (library/search lists) and
+- **Cards** — `CARD_SURFACE_CLASS`, the media-card chrome: `group relative
+  overflow-hidden rounded-xl border border-border bg-card`, hover lift +
+  primary border + glacier glow, with the property-scoped 200ms transition and
+  motion-reduce fallbacks embedded (via `CARD_INTERACTIVE_SURFACE_CLASS`,
+  which stays exported for bespoke card shells that bring their own hover
+  styles). Plus `CARD_MEDIA_HOVER_CLASS` (poster zoom),
+  `CARD_OVERLAY_REVEAL_CLASS` / `CARD_ACTION_REVEAL_CLASS` (hover/focus-within
+  overlay + scaled action reveal), `CARD_FOCUS_WITHIN_RING_CLASS` (§1.7) and
+  `OVER_MEDIA_BADGE_CLASS` (the corner chip over a poster).
+- **Motion** — `MOTION_*`: page/section, media-overlay and -dialog,
+  player-chrome, track-row, settings-surface and decorative classes, plus the
+  loading/spinner states and the three `MOTION_DURATION_*_MS` numbers (§1.5).
+- **Focus** — the three ring recipes (§1.7). `DETAIL_SECTION_HEADING_CLASS`,
+  `DETAIL_RAIL_HEADING_CLASS`, `SKIP_LINK_CLASS`, `PLAYER_ICON_BUTTON_CLASS`
+  and `PLAYER_PRIMARY_BUTTON_CLASS` all compose `FOCUS_VISIBLE_RING_CLASS`
+  rather than restating it.
+- **Page chrome** — `DETAIL_HERO_*` (hero shell, content, and the three
+  literal over-media scrims), `LIBRARY_TABS_LIST_CLASS` /
+  `LIBRARY_TAB_TRIGGER_CLASS`, `HOME_POSTER_GRID_CLASS` /
+  `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
+  reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, input,
+  select and reset-button chrome for the Settings pages, §3.7).
+- **Lists** — `TRACK_LIST_CONTAINER_CLASS` (library/search lists),
   `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
-  by the album and musician detail pages and the show episode list),
-  playback-settings select classes, virtual-list row heights
-  (`VIRTUAL_LIST_*`).
+  by the album and musician detail pages and the show episode list), and the
+  `VIRTUAL_LIST_*` row heights.
 
 **Promotion rule**: a class string used by ≥2 components, or containing
 motion/focus behavior, moves here (where the contracts tests can see it)
-rather than being copy-pasted.
+rather than being copy-pasted. A string used once stays local unless naming it
+adds meaning.
 
 ### 2.4 Theme system
 
@@ -406,7 +451,8 @@ backdrop).
 `theme-drift.test.ts` re-renders each generated block and diffs it against
 the file, and checks every token's OKLCH value round-trips to its declared
 hex — so hand edits and module typos both fail CI. OKLCH values in the module
-carry enough decimals to round-trip exactly through `src/test/color.ts`; keep
+carry enough decimals to round-trip exactly through
+`src/test/helpers/color.ts`; keep
 that property when editing. Live-verified: toggling updates class, storage,
 and meta correctly, and a hard reload shows no theme flash.
 
@@ -426,113 +472,156 @@ collapse, while the mobile trigger controls the sheet.
   / Music / Photos / Settings with lucide icons (active =
   `bg-sidebar-accent` + `text-primary` icon); footer Logout. `SidebarRail`
   gives a click-to-collapse handle.
-- Header: sticky `h-14 bg-background/95 backdrop-blur`, border-b. Mobile-only
-  `SidebarTrigger`, a `role="search"` form (submits to
-  `/search?q=…&tab=all&page=1`), `NotificationBell`, `ThemeToggle`. The search
-  input uses the light "frosted" treatment from `lib/input-styles.ts` (an
-  allowlisted raw-color exception, §1.2).
-- Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is
-  visible the shell reserves `pb-28 sm:pb-24` so content never hides behind
-  it. **Scrolling happens on the window** — virtual lists must use
-  `useWindowVirtualizer` (§3.4), never a nested scroll container.
+- Header: sticky `h-14 bg-background/95 backdrop-blur-sm`, border-b.
+  Mobile-only `SidebarTrigger`, then `app/Header.tsx` — a `role="search"` form
+  (submits to `/search?q=…&tab=all&page=1`), `NotificationBell`,
+  `ThemeToggle`. The search input uses the light "frosted" treatment from
+  `lib/input-styles.ts` (an allowlisted raw-color exception, §1.2).
+- Content: `px-4 py-6 sm:px-6 lg:px-8`; when the mini audio player is visible
+  the shell adds `MINI_PLAYER_CLEARANCE_PADDING_CLASS` (`pb-28 sm:pb-24`) so
+  content never hides behind it. **Scrolling happens on the window** — virtual
+  lists must use `useWindowVirtualizer` (§3.4), never a nested scroll
+  container. For the same reason the content column clips with
+  `overflow-x-clip`, not `overflow-x-hidden`/`auto`: those create a scroll
+  container, and sticky children inside pages then stop sticking to the
+  window.
 
-### 3.2 Media cards
+**The home page** is the shell's canonical composition: a hero heading, then
+six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
+`LatestShows`, `LatestAlbums`, `MoviesInTheaters`. All but `WatchRooms` render
+through the shared `HomeMediaSection` (heading + count pill + announced summary
++ pending/error/empty/grid states), and the route loader `ensureQueryData`s
+every one of their queries, so the page arrives complete rather than popping in
+section by section. A new home row is a `HomeMediaSection` with one of the
+`HOME_*_GRID_CLASS` grids (§3.2) and its query added to the loader.
 
-One anatomy, shared by `MovieCard`, `ShowCard`, `InTheatersCard`, `AlbumCard`,
-`MusicianCard`, `PlaylistCard`, `WatchRoomCard`. Every 2:3 poster card is
-implemented once in `components/shared/PosterCard.tsx` — `MovieCard`,
-`ContinueWatchingEpisodeCard`, `ShowCard` and `InTheatersCard` pass it their
-links, labels, badge and watch progress rather than repeating the markup. A new
-poster card belongs there too; reach for a fresh `<article>` only when the
-anatomy genuinely differs (square covers, circular thumbs):
+### 3.2 Media cards and library pages
+
+#### Poster cards
+
+Every 2:3 poster card is `components/shared/PosterCard.tsx`, implemented once.
+`MovieCard`, `ShowCard`, `InTheatersCard` and `ContinueWatchingEpisodeCard`
+pass it their links, labels, badge and watch progress rather than repeating the
+markup; a new poster card belongs there too. Reach for a fresh `<article>` only
+when the anatomy genuinely differs — square covers (`AlbumCard`,
+`PlaylistCard`, `MoviePlaylistCard`), circular thumbs (`MusicianCard`), or the
+horizontal `WatchRoomCard`. All of them wear `CARD_SURFACE_CLASS`.
 
 ```
-<article class={CARD_SURFACE_CLASS}>
-  <Link aria-label="Uncut Gems 2019" …>            ← whole-card link, full label
+<article class={cn(CARD_SURFACE_CLASS, CARD_FOCUS_WITHIN_RING_CLASS)}>
+  <Link aria-label="Uncut Gems 2019" …>       ← whole-card link, full label
     <div class="aspect-2/3 bg-muted">              ← fixed-ratio box (no CLS)
       <img loading="lazy" decoding="async" fetchPriority="low"
            width={500} height={750} class="size-full object-cover" … />
       … onError → centered muted lucide icon (usePosterFallback)
+      {playLink && <div class={CARD_OVERLAY_REVEAL_CLASS} … bg-black/30 />}
+      {badge}                                      ← optional corner chip
+      <div class="… bg-linear-to-t from-black/90 to-transparent" />
+      {progress && <WatchProgressBar … />}
     </div>
-    <div class="… bg-linear-to-t from-black/90 via-black/50 to-transparent">
-      <h3 class="line-clamp-2 text-sm font-semibold text-white">…</h3>
+    <div class="absolute inset-x-0 bottom-0 p-3"> ← sibling of the wash
+      <h3 class="line-clamp-2 text-sm/tight font-semibold text-white">…</h3>
+      {subtitle && <p class="text-xs text-white/80">…</p>}
     </div>
   </Link>
-  overlay: opacity-0 group-hover:opacity-100 group-focus-within:opacity-100
-           bg-black/30 + centered rounded-full bg-primary Play link/button
+  {playLink && <Link … rounded-full bg-primary Play …>}
 </article>
 ```
 
-Rules: 2:3 posters, square covers, circular musician thumbs; titles clamp at
-2 lines, with an optional muted second line under them (a year, or an episode's
-`S1 E4 · Name`); the hover overlay must also reveal on `group-focus-within`; the
-wash and the play control travel together, so cards with no secondary play
-action (`ShowCard`, `InTheatersCard`, `MusicianCard`) render neither rather than
-washing out for nothing — in `PosterCard` that is one `playLink` prop, omitted;
-the progress strip is always `WatchProgressBar`, and the percent it shows comes
-from `watchProgressPercent` in `lib/format.ts` — the one definition shared by
-the bars and the `"N% watched"` in a card's link label; cards prefetch their
-detail query on `onMouseEnter`/`onFocus`
-(`queryClient.prefetchQuery`) once a detail query exists — as `ShowCard` now
-does; rating chips tier
-via the shared `criticRatingClass`/`audienceRatingClass` helpers in
-`lib/rating.ts` (`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`), rendered
-with the `Badge` primitive where no list semantics are needed (§1.6).
+The contract:
 
-Grids: the canonical poster grid is
-`grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`; home
-sections use the shared auto-fill grid constants (`HOME_POSTER_GRID_CLASS` /
-`HOME_ALBUM_GRID_CLASS` in `lib/constants.ts` —
-`grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))]`; **auto-fill,
-not auto-fit**, so sparse sections keep cards near the track min width
-instead of stretching one poster across the content column; pinned by
-`constants-contracts.test.ts`) inside the
-shared `HomeMediaSection` wrapper (heading + count pill + announced summary +
-pending/error/empty/grid states). True horizontal rails (cast, chapters,
-extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars; the
-cast and extras rails are the shared `CastSection` and `ExtraVideosSection`,
-used by both the movie and show detail pages. The detail pages themselves are
-built from shared parts — `DetailHero` (+ `DetailTitleHeading`,
-`DetailGenresList`, `DetailBackdrop`), `DetailSkipLinks`, `DetailSkeleton`,
-`OverviewSection`, `AboutSection`/`AboutRow`, `CrewDisclosure`,
-`TmdbScoreBadge` — with each media type supplying only its own metadata
-chips, key-crew summary, and about rows.
-A long control strip scrolls on the same bleed rather than wrapping:
+- Titles clamp at 2 lines, with an optional muted second line under them — a
+  year, or an episode's `S1 E4 · Name`.
+- **The wash and the play control travel together.** In `PosterCard` that is
+  one `playLink` prop: a card with nothing single to play (`ShowCard`,
+  `InTheatersCard`, `MusicianCard`) omits it and renders neither, rather than
+  washing out on hover for nothing.
+- Every hover reveal also fires on `group-focus-within` (§1.7).
+- Progress is always `WatchProgressBar`, and the percent comes from
+  `watchProgressPercent` in `lib/format.ts` — the one definition shared by the
+  bar and the `"N% watched"` in the card's link label, so the bar itself stays
+  decorative.
+- **Prefetch on hover**: the `onMouseEnter`/`onFocus` wiring lives in
+  `PosterCard` behind an `onPrefetch` prop; each card supplies the query
+  (`MovieCard` the movie details, `ShowCard` and `ContinueWatchingEpisodeCard`
+  the show details). `InTheatersCard` passes none — an unreleased title has no
+  detail query to warm.
+- Rating chips tier via `criticRatingClass` / `audienceRatingClass` in
+  `lib/rating.ts` (`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`),
+  rendered with the `Badge` primitive where no list semantics are needed
+  (§1.6). The
+  TMDB community score is always the labelled `TmdbScoreBadge`, never a tiered
+  chip: it is a different metric.
+
+#### Grids and rails
+
+The canonical library poster grid is
+`grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`. Home
+sections instead use the shared auto-fill grids (`HOME_POSTER_GRID_CLASS` /
+`HOME_ALBUM_GRID_CLASS`, both
+`grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))]`) —
+**auto-fill, not auto-fit**, so a sparse section keeps its cards near the
+track's minimum width instead of stretching one poster across the whole content
+column; pinned by `constants-contracts.test.ts`.
+
+True horizontal rails (cast, chapters, extras, the seasons tab strip) are
+`-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars, bleeding to the
+viewport edge at each breakpoint. The cast and extras rails are the shared
+`CastSection` and `ExtraVideosSection`, used by both the movie and show detail
+pages.
+
+#### Detail pages
+
+Movie, show and in-theaters detail pages are built from shared parts —
+`DetailHero` (+ `DetailTitleHeading`, `DetailGenresList`, `DetailBackdrop`),
+`DetailSkipLinks`, `DetailSkeleton`, `OverviewSection`,
+`AboutSection`/`AboutRow`, `CrewDisclosure`, `TmdbScoreBadge` — with each
+media type supplying only its own metadata chips, key-crew summary, and about
+rows.
+Adding a media type means supplying those three, not building a fourth page.
+
+#### Seasons and episode rows
+
+A long control strip scrolls on the rail bleed rather than wrapping.
 `ShowSeasonsSection` is a full shadcn `Tabs` pair — a `TabsList` of fully
-named triggers ("Season 3", "Specials") on `LIBRARY_TAB_TRIGGER_CLASS`
-inside an `overflow-x-auto` rail, and one `TabsContent` panel holding
-`ShowSeasonEpisodeList`, so every tab's `aria-controls` resolves to a real
-`tabpanel`. The list renders the selected season as divided rows in the
-album track-list idiom inside `DETAIL_TRACK_LIST_CONTAINER_CLASS`, owning its
-own skeleton, empty, and error states because its query is separate from its
-page's, and announces the loaded and empty ones through `LiveAnnouncer` since
-the tab change itself says nothing; the error state is left to its alert.
+named triggers ("Season 3", "Specials") on `LIBRARY_TAB_TRIGGER_CLASS` inside an
+`overflow-x-auto` rail, and one `TabsContent` panel holding
+`ShowSeasonEpisodeList` — so every tab's `aria-controls` resolves to a real
+`tabpanel`.
+
+The list renders the selected season as divided rows in the album track-list
+idiom inside `DETAIL_TRACK_LIST_CONTAINER_CLASS`. It owns its own skeleton,
+empty and error states because its query is separate from its page's, and
+announces the loaded and empty ones through `LiveAnnouncer` since the tab
+change itself says nothing; the error state is left to its alert (§3.4).
+
 Each episode row is playable: a round accent `Play` icon link
-(`buttonVariants({ variant: "accent", size: "icon" })`, min 40px) named in
-full — "Play S1 E3 The Thaw", or "Resume …" when a position is saved — leads
+(`buttonVariants({ variant: "accent", size: "icon" })`, min 40px) named in full
+— "Play S1 E3 The Thaw", or "Resume …" when a position is saved — leading
 to `/tv-shows/$id/episodes/$episodeId/play`, and a ghost `Check` toggle
 (`aria-pressed`, "Mark S1 E3 as watched/unwatched", `text-success` when on)
-flips watched state optimistically on the season query
-(`EpisodeWatchedToggle`). Resume state is the shared `WatchProgressBar`
-strip over the still plus a "12 min left" note in the metadata line, so the
-position is never conveyed by colour alone; a watched episode swaps the
-strip for an outline `Badge` reading "Watched". The show hero's
-`actionsSlot` is `ShowDetailsHeroActions`, one accent button that reads the
-same season query and picks its target for the viewer: "Resume S1 E3" for
-the first partly watched episode, else "Play S1 E4" for the first unwatched,
-else the season's first episode; it renders nothing while the season is
-unknown or empty. The TMDB community score is always the labelled
-`TmdbScoreBadge`, never a tiered rating chip: it is a different metric.
+that flips watched state optimistically on the season query
+(`EpisodeWatchedToggle`). Resume state is the shared `WatchProgressBar` strip
+over the still plus a "12 min left" note in the metadata line, so the position
+is never conveyed by colour alone; a watched episode swaps the strip for an
+outline `Badge` reading "Watched".
+
+The show hero's `actionsSlot` is `ShowDetailsHeroActions`: one accent button
+that reads the same season query and picks its target for the viewer — "Resume
+S1 E3" for the first partly watched episode, else "Play S1 E4" for the first
+unwatched, else the season's first episode. It renders nothing while the season
+is unknown or empty.
 
 ### 3.3 Images
 
 - **Movie/TMDB images are same-origin proxied**: build URLs with
   `buildTmdbImageUrl(path, size)` (`lib/tmdb-image-url.ts`) →
-  `/api/tmdb/images/{size}{path}`; sizes are the exported constants
-  (`w500` posters and episode stills, `w1280` backdrops, `w185` profiles,
-  `w92` network logos). Music
-  images go through `getMediaImageUrl()` (`lib/media-image-url.ts`). Never
-  hit `image.tmdb.org` directly from the client.
+  `/api/tmdb/images/{size}{path}`. Sizes are the `TMDB_*_SIZE` constants in
+  `lib/constants.ts` — `w500` posters and episode stills, `w1280` backdrops,
+  `w185` profiles, `w92` network logos; the proxy accepts only those plus
+  `original`. Music images go through `getMediaImageUrl()`
+  (`lib/media-image-url.ts`). Never hit `image.tmdb.org` directly from the
+  client.
 - **Standard `<img>` recipe**: `loading="lazy" decoding="async"
   fetchPriority="low"`, explicit `width`/`height`, `object-cover`, inside an
   aspect-ratio `bg-muted` box. Add responsive `sizes` on dense grids
@@ -550,32 +639,50 @@ unknown or empty. The TMDB community score is always the labelled
 
 - **Loading, two tiers.** Route navigations suspend in loaders
   (`ensureQueryData` + `defaultPreload: "intent"`) with one app-wide pending
-  screen (`RouterPending` → `AppLoadingScreen`, `role="status"`). Within a
-  page, each query renders a **skeleton that matches the real layout's grid
-  geometry exactly** (same columns, same aspect boxes) so content arrival
-  causes no layout shift — see `AllMoviesTabSkeleton` and the shared
-  `DetailSkeleton` (`withActions` mirrors whether the real hero has an
-  actions row; pages append their own below-the-fold geometry as children).
-  Skeleton geometry is authored directly in each loading layout with muted
-  boxes and the shared `MOTION_LOADING_STATE_CLASS`; this keeps the placeholder
-  beside the real layout it must mirror. `ui/spinner.tsx` (`role="status"`)
-  uses `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
+  screen — `defaultPendingComponent: AppLoadingScreen` in `src/App.tsx`
+  (`role="status"`). Within a page, each query renders a **skeleton that
+  matches the real layout's grid geometry exactly** (same columns, same aspect
+  boxes) so content arrival causes no layout shift — see the shared
+  `DetailSkeleton` (`withActions` mirrors whether the real hero has an actions
+  row; pages append their own below-the-fold geometry as children), and the
+  library tabs' own local skeletons. Skeleton geometry is authored directly in
+  each loading layout with muted boxes and the shared
+  `MOTION_LOADING_STATE_CLASS`; keeping it beside the layout it must mirror is
+  why it is not extracted. `ui/spinner.tsx` (`role="status"`) uses
+  `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
   `aria-hidden` under a single `role="status"` + `sr-only` label.
+- **A section whose query the loader awaits renders nothing instead of a
+  skeleton.** `ContinueWatching` is the case: the home loader has already
+  resolved the query by the time the section mounts, so a skeleton would only
+  add a block that collapses a frame later. It returns `null` while pending
+  and when empty. This applies only to loader-awaited sections — a query that
+  can genuinely still be in flight gets a skeleton.
 - **Empty, two variants.** Minimal: centered `text-muted-foreground` with a
   large faded lucide icon and one sentence (search no-results, empty tabs).
   Rich CTA: the shared `EmptyState.tsx` — gradient icon orb
   (`size-20 rounded-full bg-linear-to-br from-muted via-muted to-primary/30`),
   title, description, optional pill CTA, optional `bordered` wrapper. Empty
   states announce via `LiveAnnouncer`.
-- **Error.** Detection is uniform: `isError || isApiFailure(data)` (the API
-  envelope `{ error, message, data }`). Inline query errors use
-  `MoviesLoadError` (`role="alert"`, `border-destructive/25 bg-destructive/10
-  text-destructive`, "Try again" → `refetch()`); missing resources use
-  `MediaNotFound` (destructive `Alert` + a required "Back to
-  Movies/Music/Home" outline link so the page never dead-ends); mutation
-  failures **toast** via
-  `toast-helpers.ts` instead of rendering inline. Placeholder sections
-  (`ComingSoon`) reuse the EmptyState language.
+- **Error, by shape.** Detection is uniform:
+  `isError || isApiFailure(data)` (`lib/is-api-failure.ts`, reading the API
+  envelope `{ error, message, data }`). Which component renders it depends on
+  what failed:
+  - A query inside a page → `MoviesLoadError` (`role="alert"`,
+    `border-destructive/25 bg-destructive/10 text-destructive`, "Try again" →
+    `refetch()`).
+  - A home section's query → `SectionErrorAlert`, the same destructive tint as
+    a shadcn `Alert`, rendered for you by `HomeMediaSection`.
+  - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
+    pending state), so the card keeps its place in the page.
+  - A missing resource → `MediaNotFound`: a destructive `Alert` plus a
+    **required** "Back to Movies/Music/Home" outline link, so the page never
+    dead-ends.
+  - A mutation → **toast** via `toast-helpers.ts`, never inline.
+
+  Because the erroring subtree often unmounts its own live region, error
+  surfaces carry `role="alert"` and announce themselves — never repeat one
+  through `LiveAnnouncer` as well. Placeholder sections (`ComingSoon`) reuse
+  the EmptyState language.
 
 ### 3.5 Playback surfaces
 
@@ -601,30 +708,33 @@ require the full playback test pass.
   `ResumeDialog` offers resume vs. start-over; announcements via five
   `LiveAnnouncer`s (play/pause state, capacity waiting, chapter jumps,
   direct-play fallback, and HLS session recovery — the watch room announces
-  recovery the same way). When a TV episode ends and the header names a
-  `next_episode`, an **up-next card** (`UpNextOverlay.tsx`, a `section`
-  labelled "Up next" anchored to the bottom of the video) shows the episode
-  still, "S1 E4 · Name", a `tabular-nums` "Playing in Ns" /
-  "Resuming in Ns" countdown (`UP_NEXT_COUNTDOWN_SEC`) and two buttons:
-  primary "Play now" / "Resume now" (focused on appear) and outline "Cancel",
-  which keeps the finished player and returns focus to the player region. The
-  card announces itself once (polite), never per tick. While it stands it
-  **owns the player's keyboard**, exactly as `ResumeDialog` does, so Enter and
-  Space activate the focused button instead of toggling playback; and in
-  fullscreen the transport chrome yields the bottom edge to it, because both
-  are absolutely positioned there and the chrome paints on top. The card also
-  stops pointer events reaching the fullscreen click-to-toggle surface, which
-  would otherwise restart the episode that just ended. Cancelling, or seeking
-  back into the episode, retracts the card and restores the chrome. The
-  hand-off navigates (push) to the next episode's play route with
-  `start` at its saved position and `autoplay=true`, which the player treats
-  like a rebase resume: it plays on the first `canplay`, then drops the spent
-  flag from the URL (replace) so a reload does not replay it; if the browser
-  refuses, the viewer sees the paused player and presses Play. Movies never
-  show the card. Fatal playback errors self-announce: the status
+  recovery the same way). Fatal playback errors self-announce: the status
   screen's non-loading variants and the watch-room error box carry
   `role="alert"` because the player subtree (and its live regions) unmounts
   before they appear.
+
+  **The up-next card** (`UpNextOverlay.tsx`) appears when a TV episode ends and
+  the header names a `next_episode`; movies never show it. It is a `section`
+  labelled "Up next", anchored to the bottom of the video, holding the episode
+  still, "S1 E4 · Name", a `tabular-nums` "Playing in Ns" / "Resuming in Ns"
+  countdown (`UP_NEXT_COUNTDOWN_SEC`) and two buttons: primary "Play now" /
+  "Resume now" (focused on appear) and outline "Cancel". It announces itself
+  once, politely, never per tick.
+
+  While it stands, the card **owns the player's keyboard**, exactly as
+  `ResumeDialog` does, so Enter and Space activate the focused button instead
+  of toggling playback. In fullscreen the transport chrome yields the bottom
+  edge to it — both are absolutely positioned there and the chrome would paint
+  on top — and the card stops pointer events reaching the click-to-toggle
+  surface, which would otherwise restart the episode that just ended.
+  Cancelling, or seeking back into the episode, retracts the card, restores the
+  chrome, and returns focus to the player region.
+
+  The hand-off pushes to the next episode's play route with `start` at its
+  saved position and `autoplay=true`, which the player treats like a rebase
+  resume: it plays on the first `canplay`, then drops the spent flag from the
+  URL (replace) so a reload does not replay it. If the browser refuses
+  autoplay, the viewer sees the paused player and presses Play.
 - **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`;
   chrome split into `NowPlayingDialog`, `MiniPlayerBar`, and the shared
   `PlayerTransportControls`, with `useAudioPlaybackKeyboard` and
@@ -643,9 +753,10 @@ require the full playback test pass.
   rewind to 0:00 even when their first track is the one already playing).
   Sliders are native ranges (§1.7). Global keyboard map (mirrors the video
   player's aliases): Space/K toggle, J/L and ←/→ seek ±10s, ↑/↓ volume
-  (unmuting as it goes), N/P next/previous, R/Home/0 restart, M mute. Inside the player's own chrome
-  these keys always control playback — Space pauses even when a player
-  button holds focus (Enter still activates it); outside the player, Space
+  (unmuting as it goes), N/P (and the `MediaTrackNext`/`MediaTrackPrevious`
+  media keys) next/previous, R/Home/0 restart, M mute. Inside the player's
+  own chrome these keys always control playback — Space pauses even when a
+  player button holds focus (Enter still activates it); outside the player, Space
   and navigation keys are left to the focused control (buttons, tabs,
   radios), and the player's native sliders keep their own arrow/Home
   handling.
@@ -668,18 +779,24 @@ require the full playback test pass.
 
 ### 3.7 Forms & inputs
 
-- Settings pages are shadcn Cards (`border-border/50 bg-muted/30` recipe)
-  with labeled inputs, helper text below (`text-muted-foreground text-xs`),
-  and per-field or per-card Save buttons; destructive areas get the tinted
-  "Danger Zone" card (`border-destructive/*` + destructive text + outline
-  destructive actions). **Card section titles are real headings**: render
-  `CardTitle` with `asChild` wrapping an `<h2>` (login's is the page `<h1>`)
-  so card-sectioned pages are navigable by heading.
+- Settings pages are shadcn Cards on `SETTINGS_CARD_SURFACE_CLASS`
+  (`border-border/50 bg-muted/30`) with a `SettingsCardHeader` (glacier lucide
+  icon + title + description), labeled inputs on `SETTINGS_INPUT_CLASS`,
+  helper text below (`text-muted-foreground text-xs`), and per-field or
+  per-card Save buttons; destructive areas get the tinted "Danger Zone" card
+  (`border-destructive/*` + destructive text + outline destructive actions).
+  A card's own loading and error states are `SettingsLoadingCard` and
+  `SettingsErrorCard` (§3.4), so the card keeps its place in the page.
+- **Card section titles are real headings**: render `CardTitle` with `asChild`
+  wrapping an `<h2>` (login's is the page `<h1>`) so card-sectioned pages are
+  navigable by heading.
 - The header search + login inputs use the frosted light treatment from
   `lib/input-styles.ts` — the sanctioned raw-color exception (§1.2); its
-  contract is pinned by `input-styles.test.ts`.
+  contract is pinned by `shared/input-styles.test.ts`.
 - File inputs, checkboxes, selects: use the vendored primitives; selects in
-  dialogs rely on the `data-slot` contract (§1.6).
+  dialogs rely on the `data-slot` contract (§1.6). Destructive confirmations
+  go through the shared `ConfirmDialog`, and paged lists through
+  `LibraryPagination` — neither is re-implemented per page.
 - Form-level failures toast; field-level validation renders inline with
   `aria-invalid` (styled by the Button/Input base classes).
 - **Device-scoped settings apply instantly and carry no Save bar.** Settings
@@ -697,84 +814,3 @@ require the full playback test pass.
   it lasts. Do not mix the two models inside one card — split by ownership,
   as Settings → Playback does (two "this device" cards, one admin-only
   "Server" card with the only Save bar).
-
----
-
-## 4. Audit findings (2026-07-10) — resolved 2026-07-10
-
-Combined static audit + live inspection (real library: 402 movies, 211
-albums / 2,267 tracks; Chrome, both themes, 1440/768/390 viewports). Console
-was clean on every page visited. P1 = user-visible/a11y, P2 = maintainability
-hazard, P3 = polish. **All items except #7 (deliberately accepted) were fixed
-the same day** — resolutions in the table; details in §5.
-
-| # | P | Finding | Status |
-|---|---|---------|--------|
-| 1 | P2 | **Inter was named but never loaded** — the app silently rendered in the OS system font. | FIXED (2026-07-10): self-hosted `InterVariable.woff2` (§1.3). |
-| 2 | P2 | **Four-way theme duplication** (styles.css / boot.css / index.html / theme.ts) with no single machine-readable token source. | FIXED (2026-07-10): `src/lib/theme-tokens.ts` + `bun run generate:theme` (§2.4). |
-| 3 | P2 | **ESLint raw-color ban only covered `slate/amber/red/emerald`** — other families would slip through. | FIXED (2026-07-10): ban widened to all 22 families; Spotify green carries inline eslint-disables; the one purple offender migrated to `accent-teal`. |
-| 4 | P2 | **Settings card titles were not headings** — screen-reader users couldn't navigate settings by heading. | FIXED (2026-07-10): `CardTitle asChild` + `<h2>` on all card-sectioned pages; login card title is the page `<h1>` (§3.7). |
-| 5 | P3 | **Two coexisting focus-ring styles** (`ring-2`+offset constant vs shadcn `ring-[3px]/50` base). | FIXED (2026-07-10): the shadcn recipe won; `FOCUS_VISIBLE_RING_CLASS` now matches the primitives and is pinned (§1.7). |
-| 6 | P3 | **No `badge.tsx` primitive**; aurora rating-tier logic duplicated in `InTheatersCard` and `MovieDetailsMetadataChips` (with a `/80` vs `/90` mid-tier drift). | FIXED (2026-07-10): `ui/badge.tsx` + `lib/rating.ts` helpers, adopted for rating badges and the home count pill (§1.6, §3.2). |
-| 7 | P3 | **Spacing/typography not tokenized** — utility literals only (radius is the lone non-color token). Consistent in practice (§1.4 rhythm). | OPEN — **accepted**; document-and-enforce-by-review. |
-| 8 | P1 | **Light-theme `text-success` on `background` ≈ 3.5:1** — below AA for small text, and unguarded. | FIXED (2026-07-10): light `--success` → `#167050` (5.6:1 canvas / 6.1:1 card / 4.6:1 on `success/15` tints), fg → white; pairs pinned in `contrast.test.ts` (§1.2). |
-| 9 | P3 | **`MediaNotFound` was terse and dead-ended.** | FIXED (2026-07-10): required `backTo`/`backLabel` props render an outline back link (§3.4). |
-| 10 | P3 | **Stale `scrollbar-*` lint comment** ("tailwind-scrollbar plugin" — the classes are Tailwind v4 core). | FIXED (2026-07-10): the allowlist entry was removable entirely; lint passes without it (§2.1). |
-| 11 | P3 | **Mobile hero-actions wrap** — the ⋮ button wrapped alone to a second row at 390px. | FIXED (2026-07-10): `flex-1 sm:flex-none` on Play/Watch/Like (+ `px-3 sm:px-6`) keeps all four controls on one row. |
-| 12 | — | **Verified strengths (don't churn)**: token discipline in `ui/` (no raw palette hits), airtight `motion-reduce` coverage, hover/focus parity on cards, skip links, anti-flash boot, image fallbacks, TMDB proxying, window-scrolled virtualization (26 rendered rows of 2,267), no horizontal overflow at 390px anywhere visited, clean console. | — |
-
-Items fixed in earlier rounds (toaster tokens, raw red/emerald sweep,
-`*-foreground` accent tokens, theme-drift test, poster fallbacks) remain in
-place — re-verified during this audit.
-
-## 5. Suggestions & improvements — applied 2026-07-10
-
-Each item maps to a §4 finding; the chosen resolution is recorded here.
-
-1. **Light-theme `text-success` (§4.8) — done.** Darkened light `--success` to
-   `oklch(0.487 0.097 163.5)` `#167050` (a deep glacier green: 5.62:1 on
-   canvas, 6.06:1 on card, 4.56:1 as text on `bg-success/15` tints) and
-   flipped light `--success-foreground` to white (6.06:1), mirroring the
-   light `destructive` pattern. Light `--chart-4` tracks it.
-   `contrast.test.ts` now pins `--success` on `--background` and `--card` in
-   both themes.
-2. **Inter (§4.1) — self-hosted.** `web/public/fonts/InterVariable.woff2`
-   (variable, 100–900) + `@font-face` with `font-display: swap` in `boot.css`
-   + a `<link rel="preload">` in `index.html`. No CDN, no npm package; the
-   font stack was already correct.
-3. **Single token source (§4.2) — generated.** `src/lib/theme-tokens.ts` is
-   the machine-readable source; `scripts/generate-theme.ts`
-   (`bun run generate:theme`, `--check` for CI) renders the marked blocks in
-   `styles.css` / `boot.css` / `index.html`; `theme.ts` imports the module
-   directly; `theme-drift.test.ts` became a regenerate-and-diff + OKLCH↔hex
-   round-trip guard. See §2.4.
-4. **Heading semantics in Settings (§4.4) — done.** `CardTitle` gained
-   `asChild` (radix `Slot`); all settings cards, `DevicesCard`, and
-   `QuickConnectApproveCard` render `<h2>` titles; the old
-   `role="heading"` hack in playback settings was removed; the login card
-   title became the page `<h1>`.
-5. **ESLint color ban (§4.3) — widened** to all 22 Tailwind families (Literal
-   + TemplateElement selectors). The Spotify-green constants carry inline
-   `eslint-disable` comments; the input-styles/login allowlist block is
-   unchanged; the TV Shows library card's purple moved to `accent-teal`.
-6. **`Badge` primitive (§4.6) — added** (`ui/badge.tsx`, non-interactive;
-   subsequently narrowed to the production-used `default`/`outline` record).
-   Rating tiers folded into `lib/rating.ts`
-   (`criticRatingClass`/`audienceRatingClass`, mid tier standardized on
-   `/80`). Adopted where it consolidates: both rating badges and the
-   `HomeMediaSection` count pill. Deliberately left: `ComingSoon` chip
-   (`role="status"`, bespoke), `NotificationBell` micro-badge
-   (positioning-critical), genre pills (`<li>` semantics).
-7. **Focus ring (§4.5) — unified on the shadcn recipe.**
-   `FOCUS_VISIBLE_RING_CLASS` =
-   `focus-visible:border-ring focus-visible:ring-[3px]
-   focus-visible:ring-ring/50 focus-visible:outline-hidden`, pinned by
-   `constants-contracts.test.ts`. Card `focus-within:ring-2` stays as the
-   whole-card variant.
-8. **`MediaNotFound` (§4.9) — done.** Required `backTo` (`"/" | "/movies" |
-   "/music"`) + `backLabel` props; all four call sites updated (in-theaters
-   details go back to Home, where the rail lives).
-9. **Housekeeping (§4.10, §4.11) — done.** The `scrollbar-.*` lint allowlist
-   entry was dropped outright (the plugin knows the v4 core utilities), and
-   the hero actions row uses `flex-1 sm:flex-none` + tighter mobile padding
-   so Play/Watch/Like/⋮ share one row at 390px.
