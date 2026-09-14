@@ -414,11 +414,12 @@ LIMIT 1;
 -- name: GetShowNextEpisode :one
 -- The episode the player advances to when one ends: the first episode of the
 -- same show that sorts after the current one in the order the season listing
--- uses (specials last, then season, then episode number). Episodes backed by
--- the file that just played are skipped, because a combined file plays whole
--- and its other episodes have already been seen. The requesting user's
--- progress rides along so the player can resume the next episode where it
--- was left.
+-- uses (specials last, then season, then episode number). A candidate has to
+-- own a playable file other than the one that just played, which skips both
+-- metadata-only episodes the scanner knows but has no media for and the
+-- siblings of a combined file, since that file plays whole and they have
+-- already been seen. The requesting user's progress rides along so the player
+-- can resume the next episode where it was left.
 SELECT
   n.id,
   ns.season_number,
@@ -452,11 +453,14 @@ WHERE c.id = sqlc.arg(episode_id)
       )
     )
   )
-  AND NOT EXISTS (
+  AND EXISTS (
     SELECT 1
     FROM show_episode_files AS nl
     WHERE nl.episode_id = n.id
-      AND nl.file_id = (
+      -- IS NOT, not <>, so a current episode with no file of its own (a
+      -- metadata-only row the player cannot reach anyway) still names a next
+      -- episode instead of comparing against NULL and matching nothing.
+      AND nl.file_id IS NOT (
         SELECT MIN(cl.file_id)
         FROM show_episode_files AS cl
         WHERE cl.episode_id = c.id

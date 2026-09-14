@@ -49,6 +49,15 @@ export default function UpNextOverlay({
     onPlay();
   }, [remainingSec, onPlay]);
 
+  // Playing now spends the same single hand-off the countdown would have, so
+  // it takes the latch with it: the card stays mounted while the next episode
+  // loads, and an expiring countdown must not hand off a second time.
+  function handlePlayNow() {
+    if (countdownFiredRef.current) return;
+    countdownFiredRef.current = true;
+    onPlay();
+  }
+
   return (
     // The card sits on the player's click-to-toggle surface (fullscreen only),
     // where a click on the still or the title would otherwise restart the
@@ -98,7 +107,12 @@ export default function UpNextOverlay({
           >
             Cancel
           </Button>
-          <Button ref={playButtonRef} type="button" size="sm" onClick={onPlay}>
+          <Button
+            ref={playButtonRef}
+            type="button"
+            size="sm"
+            onClick={handlePlayNow}
+          >
             {playLabel}
           </Button>
         </div>

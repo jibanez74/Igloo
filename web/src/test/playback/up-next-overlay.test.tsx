@@ -123,6 +123,14 @@ describe("UpNextOverlay", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Resume now" }));
     expect(onPlay).toHaveBeenCalledTimes(1);
+
+    // Playing now spends the one hand-off: the card stays mounted while the
+    // next episode loads, and the countdown behind it must not fire again.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Resume now" }));
+    expect(onPlay).toHaveBeenCalledTimes(1);
   });
 
   it("cancels without playing and stops the countdown on unmount", async () => {

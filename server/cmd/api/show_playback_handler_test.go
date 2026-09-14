@@ -352,6 +352,61 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 	assertOpenAPIExchange(t, "getShowEpisode", request, response)
 }
 
+func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Gap User", "gap@example.com", false)
+	fixture := seedPlaybackEpisode(t, app)
+	chain := seedNextEpisodeChain(t, app, fixture)
+
+	ctx := context.Background()
+	season, err := app.Queries.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{
+		ShowID:       fixture.ShowID,
+		SeasonNumber: 1,
+		Name:         "Season 1",
+	})
+	if err != nil {
+		t.Fatalf("upsert season 1: %v", err)
+	}
+	// TMDB knows S1E4, but the library holds no file for it: the episode row
+	// exists with nothing to play, so the hand-off has to step over it.
+	gap, err := app.Queries.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{
+		SeasonID:      season.ID,
+		EpisodeNumber: 4,
+		Name:          "S1E4",
+	})
+	if err != nil {
+		t.Fatalf("upsert metadata-only episode: %v", err)
+	}
+
+	next, err := app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{
+		UserID:    user.ID,
+		EpisodeID: chain.S1E3,
+	})
+	if err != nil {
+		t.Fatalf("next episode: %v", err)
+	}
+	if next.ID == gap.ID {
+		t.Fatalf("next of S1E3 = the metadata-only episode %d, want a playable one", gap.ID)
+	}
+	if next.ID != chain.S2E1 {
+		t.Fatalf("next of S1E3 = %d, want S2E1 %d", next.ID, chain.S2E1)
+	}
+
+	// The gap is not a dead end either: the episode after it still answers.
+	next, err = app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{
+		UserID:    user.ID,
+		EpisodeID: gap.ID,
+	})
+	if err != nil {
+		t.Fatalf("next of the metadata-only episode: %v", err)
+	}
+	if next.ID != chain.S2E1 {
+		t.Fatalf("next of the metadata-only episode = %d, want S2E1 %d", next.ID, chain.S2E1)
+	}
+}
+
 func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
