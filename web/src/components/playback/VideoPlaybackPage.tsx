@@ -1,4 +1,10 @@
-import { useRef, useEffect, useState, type ComponentType } from "react";
+import {
+  useRef,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type ComponentType,
+} from "react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, type LucideProps } from "lucide-react";
@@ -241,6 +247,14 @@ export default function VideoPlaybackPage({
     playbackError,
   });
   const playerMounted = status.kind === "ready";
+  // The offer stands while the media sits at its end and the viewer has not
+  // waved it away; anything that puts playback back in motion retracts it.
+  const upNextOpen = ended && !!upNext && !upNextDismissed;
+
+  const retractUpNext = () => {
+    setEnded(false);
+    setUpNextDismissed(false);
+  };
 
   useEffect(() => {
     if (!isHlsPlayback) return;
@@ -443,6 +457,10 @@ export default function VideoPlaybackPage({
       currentVideoTimeSec: currentVideoTime,
     });
 
+    // Seeking away from the end is the viewer choosing to stay on this media,
+    // so the up-next countdown must not fire out from under them.
+    retractUpNext();
+
     if (rebase) {
       navigateToPlaybackPosition(t);
       return;
@@ -505,6 +523,15 @@ export default function VideoPlaybackPage({
     },
   });
 
+  // The hand-off's autoplay flag is a one-shot instruction, not player state:
+  // left in the URL it would re-arm on every reload, so a viewer who paused
+  // and refreshed would be played at. Dropping it is a replace, so the
+  // history entry the hand-off pushed stays put.
+  const clearConsumedAutoplay = useEffectEvent(() => {
+    if (search.autoplay === undefined) return;
+    onNavigateSearch((prev) => ({ ...prev, autoplay: undefined }));
+  });
+
   useEffect(() => {
     if (!pendingAutoPlayOnLoadRef.current) return;
     const video = videoRef.current;
@@ -518,6 +545,7 @@ export default function VideoPlaybackPage({
       }
 
       pendingAutoPlayOnLoadRef.current = false;
+      clearConsumedAutoplay();
     };
 
     if (video.readyState >= 2) {
@@ -557,7 +585,12 @@ export default function VideoPlaybackPage({
     }
   };
 
-  const keyboardShortcutsEnabled = playerMounted && !resumeDialogOpen;
+  // The up-next card owns the keyboard while it stands, exactly as the resume
+  // dialog does: its buttons are the only sensible targets, and the player's
+  // own Space/K binding would otherwise swallow the activation key of the
+  // focused "Play now".
+  const keyboardShortcutsEnabled =
+    playerMounted && !resumeDialogOpen && !upNextOpen;
 
   useVideoPlaybackKeyboard({
     containerRef,
@@ -638,8 +671,7 @@ export default function VideoPlaybackPage({
       }}
       onPlay={() => {
         setPlaying(true);
-        setEnded(false);
-        setUpNextDismissed(false);
+        retractUpNext();
       }}
       onPause={() => {
         setPlaying(false);
@@ -701,7 +733,7 @@ export default function VideoPlaybackPage({
   ) : null;
 
   const upNextOverlay =
-    ended && upNext && !upNextDismissed ? (
+    upNextOpen && upNext ? (
       <UpNextOverlay
         item={upNext}
         countdownSec={UP_NEXT_COUNTDOWN_SEC}
@@ -783,6 +815,9 @@ export default function VideoPlaybackPage({
         {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
         {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
         fullscreen, Escape to exit fullscreen, Back button to go back.
+        {upNext
+          ? " When the episode ends, the up next card takes the keyboard: Enter or Space activates the focused button."
+          : ""}
       </p>
 
       <header
@@ -818,30 +853,28 @@ export default function VideoPlaybackPage({
         </button>
       </header>
 
-      {chromeFullscreenMode ? (
-        // Click-to-toggle is a pointer convenience only; the same toggle is
-        // reachable from the footer play button and Space/K, so the surface
-        // carries no button role (audit D14).
-        // react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions
-        <div
-          className="relative flex min-h-0 flex-1 flex-col"
-          onClick={handlePlaybackSurfaceClick}
-        >
-          {videoPlayer}
-          {capacityOverlay}
-          {upNextOverlay}
-        </div>
-      ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          {videoPlayer}
-          {capacityOverlay}
-          {upNextOverlay}
-        </div>
-      )}
+      {/*
+        Click-to-toggle is a pointer convenience only, and only in fullscreen;
+        the same toggle is reachable from the footer play button and Space/K,
+        so the surface carries no button role (audit D14).
+      */}
+      {/* react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions */}
+      <div
+        className="relative flex min-h-0 flex-1 flex-col"
+        onClick={chromeFullscreenMode ? handlePlaybackSurfaceClick : undefined}
+      >
+        {videoPlayer}
+        {capacityOverlay}
+        {upNextOverlay}
+      </div>
 
       <PlayerControls
         chromeFullscreenMode={chromeFullscreenMode}
-        controlsVisible={controlsVisible}
+        // In fullscreen the transport bar is absolutely positioned over the
+        // bottom of the video, exactly where the up-next card sits, and it
+        // paints on top. Yield the bottom edge while the card stands; Cancel
+        // (or any seek) retracts it and the chrome comes back.
+        controlsVisible={controlsVisible && !upNextOpen}
         isFullscreen={isFullscreen}
         isImmersiveViewport={isImmersiveViewport}
         currentTime={currentTime}

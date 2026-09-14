@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
+import { stubMediaElement } from "../helpers/dom";
 import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
@@ -201,6 +202,13 @@ function mockEpisodeApi(options: EpisodeApiOptions = {}) {
 }
 
 describe("episode play route", () => {
+  // The up-next hand-off is the one flow that actually drives the media
+  // element, so the transport methods jsdom lacks have to be stubs the tests
+  // can read back. `restoreMocks` puts them back after each test.
+  beforeEach(() => {
+    stubMediaElement();
+  });
+
   it("titles the player after the show, episode code, and episode name", async () => {
     mockEpisodeApi();
 
@@ -293,6 +301,32 @@ describe("episode play route", () => {
       await screen.findByRole("heading", { level: 1, name: "Frost Harbor · S1 E4 · The Long Night" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+
+    // The point of the flag: the next episode starts on its own, and the
+    // spent flag is dropped so a later reload does not replay it.
+    const nextPlayer = await screen.findByRole("region", { name: /Video player for/ });
+    fireEvent.canPlay(nextPlayer.querySelector("video")!);
+    await waitFor(() =>
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(
+        (router.state.location.search as Record<string, unknown>).autoplay,
+      ).toBeUndefined(),
+    );
+  });
+
+  it("does not start playing on its own without the autoplay flag", async () => {
+    mockEpisodeApi();
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+
+    fireEvent.canPlay(player.querySelector("video")!);
+
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
   });
 
   it("resumes a partly watched next episode from its saved position", async () => {
@@ -315,10 +349,10 @@ describe("episode play route", () => {
     expect((router.state.location.search as Record<string, unknown>).start).toBe(600);
   });
 
-  it("keeps the finished player when the up-next card is cancelled or there is no next episode", async () => {
+  it("keeps the finished player when the up-next card is cancelled", async () => {
     mockEpisodeApi();
 
-    const { router, unmount } = await renderEpisodeRoute(
+    const { router } = await renderEpisodeRoute(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
     );
     const player = await screen.findByRole("region", { name: /Video player for/ });
@@ -329,15 +363,39 @@ describe("episode play route", () => {
     expect(router.state.location.pathname).toBe(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play`,
     );
-    unmount();
+  });
 
+  it("offers nothing after the show's last episode", async () => {
     mockEpisodeApi({ nextEpisode: null });
+
     await renderEpisodeRoute(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
     );
-    const lastPlayer = await screen.findByRole("region", { name: /Video player for/ });
-    fireEvent.ended(lastPlayer.querySelector("video")!);
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+    fireEvent.ended(player.querySelector("video")!);
+
     expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument();
+  });
+
+  it("retracts the offer when the viewer seeks back into the episode", async () => {
+    mockEpisodeApi();
+
+    await renderEpisodeRoute(
+      `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+    );
+    const player = await screen.findByRole("region", { name: /Video player for/ });
+    const video = player.querySelector("video")!;
+    fireEvent.durationChange(video);
+    fireEvent.ended(video);
+    await screen.findByRole("region", { name: "Up next" });
+
+    // Scrubbing back is the viewer choosing to stay; the countdown must not
+    // then navigate away underneath them.
+    fireEvent.click(screen.getByRole("button", { name: /Seek backward/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Up next" })).not.toBeInTheDocument(),
+    );
   });
 
   it("reports an unknown episode in the player's not-found copy", async () => {

@@ -156,7 +156,11 @@ const nextPlayPath = `/tv-shows/${showId}/episodes/${nextEpisodeId}/play`;
 
 async function endEpisode(page: Page) {
   await page.evaluate(() => {
-    document.querySelector("video")?.dispatchEvent(new Event("ended"));
+    const video = document.querySelector("video");
+    if (!video) {
+      throw new Error("no video element to end");
+    }
+    video.dispatchEvent(new Event("ended"));
   });
 }
 
@@ -199,6 +203,7 @@ test("a finished episode offers the next one and hands off with autoplay", async
 test("cancelling the up-next card keeps the finished episode", async ({
   page,
 }) => {
+  const browserIssues = trackBrowserIssues(page);
   await openEpisodePlayer(
     page,
     "mode=direct&audio_track=0&subtitle_track=off&start=0",
@@ -214,4 +219,9 @@ test("cancelling the up-next card keeps the finished episode", async ({
       name: "Video player for Frost Harbor · S1 E3 · The Thaw",
     }),
   ).toBeFocused();
+  // The transport chrome, which yields the bottom edge while the card
+  // stands, is back.
+  await expect(page.getByRole("button", { name: "Play (Space or K)" })).toBeVisible();
+
+  browserIssues.assertClean();
 });

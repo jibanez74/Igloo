@@ -593,16 +593,23 @@ require the full playback test pass.
   direct-play fallback, and HLS session recovery — the watch room announces
   recovery the same way). When a TV episode ends and the header names a
   `next_episode`, an **up-next card** (`UpNextOverlay.tsx`, a `section`
-  labelled "Up next" anchored to the bottom of the video so it survives
-  fullscreen) shows the episode still, "S1 E4 · Name", a `tabular-nums`
-  "Playing in Ns" countdown (`UP_NEXT_COUNTDOWN_SEC`) and two buttons:
-  primary "Play now" / "Resume now" (focused on appear; Enter activates it,
-  Space still toggles playback per the player keyboard contract) and outline
-  "Cancel", which keeps the finished player and returns focus to the player
-  region. The card announces itself once (polite), never per tick. The
+  labelled "Up next" anchored to the bottom of the video) shows the episode
+  still, "S1 E4 · Name", a `tabular-nums` "Playing in Ns" /
+  "Resuming in Ns" countdown (`UP_NEXT_COUNTDOWN_SEC`) and two buttons:
+  primary "Play now" / "Resume now" (focused on appear) and outline "Cancel",
+  which keeps the finished player and returns focus to the player region. The
+  card announces itself once (polite), never per tick. While it stands it
+  **owns the player's keyboard**, exactly as `ResumeDialog` does, so Enter and
+  Space activate the focused button instead of toggling playback; and in
+  fullscreen the transport chrome yields the bottom edge to it, because both
+  are absolutely positioned there and the chrome paints on top. The card also
+  stops pointer events reaching the fullscreen click-to-toggle surface, which
+  would otherwise restart the episode that just ended. Cancelling, or seeking
+  back into the episode, retracts the card and restores the chrome. The
   hand-off navigates (push) to the next episode's play route with
   `start` at its saved position and `autoplay=true`, which the player treats
-  like a rebase resume: it plays on the first `canplay`; if the browser
+  like a rebase resume: it plays on the first `canplay`, then drops the spent
+  flag from the URL (replace) so a reload does not replay it; if the browser
   refuses, the viewer sees the paused player and presses Play. Movies never
   show the card. Fatal playback errors self-announce: the status
   screen's non-loading variants and the watch-room error box carry

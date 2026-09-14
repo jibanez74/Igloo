@@ -30,6 +30,7 @@ export default function UpNextOverlay({
   // after the countdown hit zero would start the hand-off a second time.
   const countdownFiredRef = useRef(false);
   const playLabel = item.resume ? "Resume now" : "Play now";
+  const countdownVerb = item.resume ? "Resuming" : "Playing";
 
   useEffect(() => {
     playButtonRef.current?.focus({ preventScroll: true });
@@ -49,15 +50,21 @@ export default function UpNextOverlay({
   }, [remainingSec, onPlay]);
 
   return (
+    // The card sits on the player's click-to-toggle surface (fullscreen only),
+    // where a click on the still or the title would otherwise restart the
+    // episode that just ended and take the card down with it. The two buttons
+    // are the card's only actions.
+    // react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions
     <section
       aria-label="Up next"
+      onClick={(event) => event.stopPropagation()}
       className={cn(
         MOTION_MEDIA_OVERLAY_ENTER_CLASS,
         "absolute inset-x-0 bottom-0 z-10 flex justify-center p-4 sm:justify-end sm:p-6",
       )}
     >
       <LiveAnnouncer
-        message={`Up next: ${item.title}. Playing in ${countdownSec} seconds.`}
+        message={`Up next: ${item.title}. ${countdownVerb} in ${countdownSec} seconds.`}
         politeness="polite"
       />
       <div className="flex w-full max-w-sm flex-col gap-3 rounded-lg border border-border bg-background/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-lg">
@@ -77,7 +84,7 @@ export default function UpNextOverlay({
               {item.title}
             </p>
             <p className="text-sm text-muted-foreground tabular-nums">
-              {item.resume ? "Resuming" : "Playing"} in {remainingSec}s
+              {countdownVerb} in {remainingSec}s
             </p>
           </div>
         </div>

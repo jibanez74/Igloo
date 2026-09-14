@@ -48,9 +48,60 @@ describe("UpNextOverlay", () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
     expect(onPlay).toHaveBeenCalledTimes(1);
+
+    // The latch: the interval keeps ticking at zero and the parent hands a
+    // fresh onPlay down on every render, but the hand-off starts once.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(onPlay).toHaveBeenCalledTimes(1);
   });
 
-  it("labels a resumable episode and plays it on click", () => {
+  it("announces the offer once, without a tick-by-tick countdown", async () => {
+    render(
+      <UpNextOverlay
+        item={item()}
+        countdownSec={3}
+        onPlay={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    const announcement =
+      "Up next: S1 E4 · The Long Night. Playing in 3 seconds.";
+    // LiveAnnouncer holds the message back one beat before posting it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(screen.getByText(announcement)).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    // Still the mount-time wording: the live region never restates the ticks.
+    expect(screen.getByText(announcement)).toBeInTheDocument();
+  });
+
+  it("keeps a click on the card off the player's toggle surface", () => {
+    const onSurfaceClick = vi.fn();
+    render(
+      // Stands in for the player's fullscreen click-to-toggle surface.
+      // react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions
+      <div onClick={onSurfaceClick}>
+        <UpNextOverlay
+          item={item()}
+          countdownSec={10}
+          onPlay={() => {}}
+          onCancel={() => {}}
+        />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByText("S1 E4 · The Long Night"));
+    expect(onSurfaceClick).not.toHaveBeenCalled();
+  });
+
+  it("labels a resumable episode and plays it on click", async () => {
     const onPlay = vi.fn();
     render(
       <UpNextOverlay
@@ -62,6 +113,14 @@ describe("UpNextOverlay", () => {
     );
 
     expect(screen.getByText("Resuming in 10s")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(
+      screen.getByText(
+        "Up next: S1 E4 · The Long Night. Resuming in 10 seconds.",
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Resume now" }));
     expect(onPlay).toHaveBeenCalledTimes(1);
   });

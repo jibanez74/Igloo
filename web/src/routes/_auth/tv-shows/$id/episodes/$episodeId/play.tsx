@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Tv } from "lucide-react";
 import VideoPlaybackPage from "@/components/playback/VideoPlaybackPage";
-import { TMDB_POSTER_SIZE, TMDB_STILL_SIZE } from "@/lib/constants";
-import { episodeResumeProgress } from "@/lib/episode-playback";
-import { episodeCode, episodeTitle } from "@/lib/format";
+import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { episodeUpNextPresentation } from "@/lib/episode-playback";
+import { episodeTitle } from "@/lib/format";
 import { episodeMediaRef } from "@/lib/media-ref";
 import { unwrapString } from "@/lib/nullable";
 import { loadPlayRoute } from "@/lib/play-route-loader";
@@ -71,26 +71,26 @@ function PlayEpisodePage() {
   // new file's default mode and tracks. A push, not a replace: Back returns
   // to the episode that just ended.
   const nextEpisode = payload?.next_episode ?? null;
-  const nextResume = nextEpisode ? episodeResumeProgress(nextEpisode) : null;
-  const upNext: UpNextItem | null = nextEpisode
-    ? {
-        title: `${episodeCode(nextEpisode.season_number, nextEpisode.episode_number)} · ${nextEpisode.name}`,
-        stillUrl: buildTmdbImageUrl(
-          unwrapString(nextEpisode.still_path),
-          TMDB_STILL_SIZE,
-        ),
-        resume: nextResume !== null,
-        onPlay: () =>
-          void navigate({
-            to: "/tv-shows/$id/episodes/$episodeId/play",
-            params: { id, episodeId: String(nextEpisode.id) },
-            search: {
-              start: Math.floor(nextResume?.progressSec ?? 0),
-              autoplay: true,
-            },
-          }),
-      }
+  const nextPresentation = nextEpisode
+    ? episodeUpNextPresentation(nextEpisode)
     : null;
+  const upNext: UpNextItem | null =
+    nextEpisode && nextPresentation
+      ? {
+          title: nextPresentation.title,
+          stillUrl: nextPresentation.stillUrl,
+          resume: nextPresentation.resume,
+          onPlay: () =>
+            void navigate({
+              to: "/tv-shows/$id/episodes/$episodeId/play",
+              params: { id, episodeId: String(nextEpisode.id) },
+              search: {
+                start: nextPresentation.startSec,
+                autoplay: true,
+              },
+            }),
+        }
+      : null;
 
   return (
     // Keyed on the episode: the player's refs and state belong to one media
