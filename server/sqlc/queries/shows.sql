@@ -6,6 +6,51 @@ SELECT * FROM shows WHERE id = ?;
 -- CURRENT_TIMESTAMP only has second resolution, so id breaks the ties a bulk scan creates.
 SELECT id, name, poster_path, premiere_year FROM shows ORDER BY created_at DESC, id DESC LIMIT 12;
 
+-- name: GetShowsCount :one
+SELECT COUNT(*) FROM shows;
+
+-- name: GetShowsLibraryAsc :many
+-- Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when names match).
+SELECT id, name, poster_path, premiere_year, certification
+FROM shows
+ORDER BY LOWER(name) ASC, id ASC
+LIMIT ? OFFSET ?;
+
+-- name: GetShowsLibraryDesc :many
+-- Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when names match).
+SELECT id, name, poster_path, premiere_year, certification
+FROM shows
+ORDER BY LOWER(name) DESC, id DESC
+LIMIT ? OFFSET ?;
+
+-- name: GetShowGenresWithCounts :many
+-- Show genres with counts per tag (genre_type show only).
+SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(sg.show_id) AS show_count
+FROM genres AS g
+INNER JOIN show_genres AS sg ON sg.genre_id = g.id
+WHERE g.genre_type = 'show'
+GROUP BY g.id, g.tag
+ORDER BY LOWER(g.tag) ASC;
+
+-- name: CountShowsForGenre :one
+SELECT COUNT(*) FROM show_genres WHERE genre_id = ?;
+
+-- name: GetShowsByGenreAsc :many
+SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
+FROM shows AS s
+INNER JOIN show_genres AS sg ON sg.show_id = s.id
+WHERE sg.genre_id = ?
+ORDER BY LOWER(s.name) ASC, s.id ASC
+LIMIT ? OFFSET ?;
+
+-- name: GetShowsByGenreDesc :many
+SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
+FROM shows AS s
+INNER JOIN show_genres AS sg ON sg.show_id = s.id
+WHERE sg.genre_id = ?
+ORDER BY LOWER(s.name) DESC, s.id DESC
+LIMIT ? OFFSET ?;
+
 -- name: UpsertLocalShow :one
 INSERT INTO shows (directory_path, local_name, premiere_year, name) VALUES (?, ?, ?, ?) ON CONFLICT (directory_path) DO UPDATE SET id = shows.id RETURNING *;
 

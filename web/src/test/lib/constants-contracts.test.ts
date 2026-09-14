@@ -24,6 +24,9 @@ import {
   PLAYLIST_TRACKS_PAGE_SIZE,
   SEARCH_MOVIES_KEY,
   SEARCH_PER_PAGE,
+  SHOWS_BY_GENRE_KEY,
+  SHOWS_LIBRARY_KEY,
+  SHOWS_PER_PAGE,
   STREAM_MODE_IDS,
   STREAM_MODES,
   TRACKS_INFINITE_KEY,
@@ -40,6 +43,8 @@ import {
   musiciansPaginatedQueryOpts,
   playlistTracksInfiniteQueryOpts,
   searchMoviesQueryOpts,
+  showsByGenreQueryOpts,
+  showsLibraryQueryOpts,
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
 
@@ -126,6 +131,19 @@ describe("constants contracts", () => {
       MOVIES_LIKED_KEY,
       1,
       MOVIES_PER_PAGE,
+      "asc",
+    ]);
+    expect(showsLibraryQueryOpts(1).queryKey).toEqual([
+      SHOWS_LIBRARY_KEY,
+      1,
+      SHOWS_PER_PAGE,
+      "asc",
+    ]);
+    expect(showsByGenreQueryOpts(7, 1).queryKey).toEqual([
+      SHOWS_BY_GENRE_KEY,
+      7,
+      1,
+      SHOWS_PER_PAGE,
       "asc",
     ]);
     expect(albumsPaginatedQueryOpts(1).queryKey).toEqual([

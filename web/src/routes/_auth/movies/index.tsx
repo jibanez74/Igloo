@@ -7,38 +7,40 @@ import {
   type RefObject,
 } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowDownAZ,
-  ArrowUpAZ,
   Film,
   Grid3X3,
   Heart,
   ListVideo,
-  MoreHorizontal,
   Plus,
-  RefreshCw,
-  X,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Spinner } from "@/components/ui/spinner";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/movies/MovieCard";
 import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
+import LibraryAllTab, {
+  LibraryAllTabSkeleton,
+  type LibraryNoun,
+} from "@/components/shared/LibraryAllTab";
+import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
+import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
+import LibraryMoreMenu, {
+  RefreshLibraryMenuItem,
+} from "@/components/shared/LibraryMoreMenu";
 import LibraryPagination from "@/components/shared/LibraryPagination";
+import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
+import LibraryStats from "@/components/shared/LibraryStats";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
   FOCUS_VISIBLE_RING_CLASS,
+  LIBRARY_MENU_ITEM_CLASS,
+  LIBRARY_POSTER_GRID_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -58,7 +60,6 @@ import {
 } from "@/lib/query-opts";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
-import { refreshLibraryWithToasts } from "@/lib/library-refresh";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
@@ -117,6 +118,8 @@ export const Route = createFileRoute("/_auth/movies/")({
   },
   component: MoviesPage,
 });
+
+const MOVIE_NOUN: LibraryNoun = { singular: "movie", plural: "movies" };
 
 type PlaylistsFocusIntent =
   | "enter-liked-from-toolbar"
@@ -244,7 +247,13 @@ function MoviesPage() {
           MOTION_SECTION_ENTER_DELAYED_CLASS,
         )}
       >
-        <MoviesStats />
+        <LibraryStats
+          queryOpts={moviesStatsQueryOpts()}
+          getTotal={data => data.total_movies}
+          icon={Film}
+          label="Movies"
+          noun={MOVIE_NOUN}
+        />
         <MoreMenu
           onOpenLikedMovies={handleOpenLikedMovies}
           onOpenMoviePlaylists={handleOpenMoviePlaylists}
@@ -302,50 +311,7 @@ function MoviesPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Stats row
-// ---------------------------------------------------------------------------
-
-function MoviesStats() {
-  const { data, isError, isLoading, refetch } = useQuery(
-    moviesStatsQueryOpts(),
-  );
-
-  if (isError || isApiFailure(data)) {
-    return (
-      <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t load library statistics. Check your connection and try again."
-        }
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  const total = data?.error === false ? data.data.total_movies : 0;
-  const label = isLoading
-    ? "Library statistics: loading"
-    : `Library statistics: ${total} movies`;
-
-  return (
-    <section
-      className="flex flex-wrap gap-6"
-      aria-label={label}
-    >
-      <div className="flex items-center gap-2" aria-hidden="true">
-        <Film className="size-4 text-primary" />
-        <span className="font-medium text-foreground">
-          {isLoading ? "—" : total}
-        </span>
-        <span className="text-muted-foreground">Movies</span>
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// More dropdown (placeholders only)
+// More dropdown
 // ---------------------------------------------------------------------------
 
 type MoreMenuProps = {
@@ -357,10 +323,8 @@ function MoreMenu({
   onOpenLikedMovies,
   onOpenMoviePlaylists,
 }: MoreMenuProps) {
-  const queryClient = useQueryClient();
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const [requestMovieOpen, setRequestMovieOpen] = useState(false);
   const { data: tmdbStatusData, isLoading: tmdbStatusLoading } = useQuery(
     tmdbStatusQueryOpts(),
@@ -372,94 +336,56 @@ function MoreMenu({
     ? "TMDB search status is still loading."
     : "TMDB search is unavailable on this server.";
 
-  const handleRefreshLibrary = async () => {
-    if (refreshingLibrary) return;
-
-    setRefreshingLibrary(true);
-    await refreshLibraryWithToasts(queryClient, refreshMovieLibraryCache, "Movie");
-    // refreshLibraryWithToasts owns the try/catch and never throws, precisely so
-    // this reset can be plain sequential code (see its doc comment).
-    // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
-    setRefreshingLibrary(false);
-    setMenuOpen(false);
-  };
-
   return (
     <>
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger
-          ref={moreOptionsButtonRef}
-          className={cn(
-            "inline-flex items-center justify-center rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground",
-            MOTION_MICRO_CONTROL_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-          )}
-          aria-label="More options"
+      <LibraryMoreMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        triggerRef={moreOptionsButtonRef}
+      >
+        <DropdownMenuItem
+          className={LIBRARY_MENU_ITEM_CLASS}
+          onClick={onOpenLikedMovies}
         >
-          <MoreHorizontal className="size-5" aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className="border-border bg-muted"
+          <Heart className="mr-2 size-4" aria-hidden="true" />
+          Liked movies
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className={LIBRARY_MENU_ITEM_CLASS}
+          onClick={onOpenMoviePlaylists}
         >
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            onClick={onOpenLikedMovies}
-          >
-            <Heart className="mr-2 size-4" aria-hidden="true" />
-            Liked movies
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            onClick={onOpenMoviePlaylists}
-          >
-            <ListVideo className="mr-2 size-4" aria-hidden="true" />
-            Movie playlists
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            disabled={refreshingLibrary}
-            onSelect={(event) => {
-              // Keep the menu open while the async refresh runs so the
-              // spinner/disabled state stays perceivable; it closes when the
-              // refresh settles (see handleRefreshLibrary).
+          <ListVideo className="mr-2 size-4" aria-hidden="true" />
+          Movie playlists
+        </DropdownMenuItem>
+        <RefreshLibraryMenuItem
+          refresh={refreshMovieLibraryCache}
+          libraryNoun="Movie"
+          onSettled={() => setMenuOpen(false)}
+        />
+        <DropdownMenuItem
+          className={LIBRARY_MENU_ITEM_CLASS}
+          disabled={requestMovieDisabled}
+          aria-label={
+            requestMovieDisabled
+              ? `Request Movie unavailable. ${requestMovieDescription}`
+              : "Request Movie"
+          }
+          title={requestMovieDisabled ? requestMovieDescription : undefined}
+          onSelect={(event) => {
+            if (requestMovieDisabled) {
               event.preventDefault();
-              if (refreshingLibrary) return;
-              void handleRefreshLibrary();
-            }}
-          >
-            {refreshingLibrary ? (
-              <Spinner className="mr-2 size-4 text-primary" />
-            ) : (
-              <RefreshCw className="mr-2 size-4" aria-hidden="true" />
-            )}
-            Refresh Library
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            disabled={requestMovieDisabled}
-            aria-label={
-              requestMovieDisabled
-                ? `Request Movie unavailable. ${requestMovieDescription}`
-                : "Request Movie"
+              return;
             }
-            title={requestMovieDisabled ? requestMovieDescription : undefined}
-            onSelect={(event) => {
-              if (requestMovieDisabled) {
-                event.preventDefault();
-                return;
-              }
-              setRequestMovieOpen(true);
-            }}
-          >
-            <Plus className="mr-2 size-4" aria-hidden="true" />
-            Request Movie
-            {requestMovieDisabled && (
-              <span className="sr-only"> {requestMovieDescription}</span>
-            )}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            setRequestMovieOpen(true);
+          }}
+        >
+          <Plus className="mr-2 size-4" aria-hidden="true" />
+          Request Movie
+          {requestMovieDisabled && (
+            <span className="sr-only"> {requestMovieDescription}</span>
+          )}
+        </DropdownMenuItem>
+      </LibraryMoreMenu>
 
       {requestMovieOpen && (
         <RequestMovieDialog
@@ -484,159 +410,38 @@ type AllMoviesTabContentProps = {
 function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
   const navigate = Route.useNavigate();
 
-  const { data, isLoading, isError, refetch } = useQuery(
-    moviesLibraryQueryOpts(currentPage, MOVIES_PER_PAGE, sort),
-  );
-
-  const movies = data?.error === false ? data.data.movies : [];
-  const totalPages = data?.error === false ? data.data.total_pages : 0;
-  const hasMultiplePages = totalPages > 1;
-
-  const getAnnouncement = () => {
-    if (isLoading) return undefined;
-    if (movies.length === 0) return "No movies found";
-    return `Showing ${movies.length} movies, page ${currentPage} of ${totalPages}`;
-  };
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        allPage: newPage,
-      }),
-      replace: true,
-    });
-    scrollWindowToTop();
-  };
-
-  const handleSortToggle = () =>
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        sort: prev.sort === "asc" ? "desc" : "asc",
-        allPage: 1,
-      }),
-      replace: true,
-    });
-
-  if (isLoading) {
-    return <AllMoviesTabSkeleton />;
-  }
-
-  if (isError || isApiFailure(data)) {
-    return (
-      <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t load movies. Check your connection and try again."
-        }
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  if (movies.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <Film className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
-        <p>No movies found in your library.</p>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <LiveAnnouncer message={getAnnouncement()} />
-
-      {/* Header with count, page info, and sort toggle */}
-      <div
-        className={
-          hasMultiplePages
-            ? "mb-5 flex items-center justify-between gap-2"
-            : "mb-5 flex justify-end"
-        }
-      >
-        {hasMultiplePages && (
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
-        )}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={handleSortToggle}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
-              MOTION_MICRO_CONTROL_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
-            aria-label={
-              sort === "asc"
-                ? "Sorted A to Z, click to sort Z to A"
-                : "Sorted Z to A, click to sort A to Z"
-            }
-          >
-            {sort === "asc" ? (
-              <>
-                <ArrowDownAZ className="size-4" aria-hidden="true" />
-                A–Z
-              </>
-            ) : (
-              <>
-                <ArrowUpAZ className="size-4" aria-hidden="true" />
-                Z–A
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Movie grid */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {movies.map(movie => (
-          <MovieCard key={movie.id} movie={movie} />
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <LibraryPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      )}
-    </div>
-  );
-}
-
-function AllMoviesTabSkeleton() {
-  return (
-    <div>
-      <div className="mb-5 flex justify-end">
-        <div className={cn("h-8 w-16 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
-      </div>
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {Array.from({ length: MOVIES_PER_PAGE }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "overflow-hidden rounded-xl border border-border bg-card",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          >
-            <div className="aspect-2/3 bg-muted" />
-            <div className="p-3">
-              <div className="h-4 w-3/4 rounded-sm bg-muted" />
-              <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <LibraryAllTab
+      queryOpts={moviesLibraryQueryOpts(currentPage, MOVIES_PER_PAGE, sort)}
+      getItems={data => data.movies}
+      renderCard={movie => <MovieCard movie={movie} />}
+      currentPage={currentPage}
+      sort={sort}
+      perPage={MOVIES_PER_PAGE}
+      noun={MOVIE_NOUN}
+      emptyIcon={Film}
+      onPageChange={newPage =>
+        navigate({
+          to: "/movies",
+          search: (prev: MoviesSearchParams) => ({
+            ...prev,
+            allPage: newPage,
+          }),
+          replace: true,
+        })
+      }
+      onSortToggle={() =>
+        navigate({
+          to: "/movies",
+          search: (prev: MoviesSearchParams) => ({
+            ...prev,
+            sort: prev.sort === "asc" ? "desc" : "asc",
+            allPage: 1,
+          }),
+          replace: true,
+        })
+      }
+    />
   );
 }
 
@@ -658,302 +463,77 @@ function GenresTabContent({
   fallbackFocusRef,
 }: GenresTabContentProps) {
   const navigate = Route.useNavigate();
-  const genreButtonRefs = useRef<Map<number, HTMLButtonElement> | null>(null);
-  const pendingRestoreGenreIdRef = useRef<number | null>(null);
-
-  const {
-    data: genresRes,
-    isError: genresError,
-    isLoading: genresLoading,
-    refetch: refetchGenres,
-  } = useQuery(moviesGenresQueryOpts());
-
-  const genres = genresRes?.error === false ? genresRes.data.genres : [];
-
-  const {
-    data: moviesRes,
-    isError: moviesError,
-    isLoading: moviesLoading,
-    refetch: refetchMovies,
-  } = useQuery({
-    ...moviesByGenreQueryOpts(genreId ?? 0, genresPage, MOVIES_PER_PAGE, sort),
-  });
-
-  const movies = moviesRes?.error === false ? moviesRes.data.movies : [];
-  const totalPages =
-    moviesRes?.error === false ? moviesRes.data.total_pages : 0;
-  const total = moviesRes?.error === false ? moviesRes.data.total : 0;
-  const hasMultiplePages = totalPages > 1;
-  const hasSelectedGenre = genreId != null;
-
-  const selectedGenreTag =
-    genreId != null
-      ? genres.find(g => g.genre_id === genreId)?.genre_tag
-      : undefined;
-
-  useEffect(() => {
-    const restoreGenreId = pendingRestoreGenreIdRef.current;
-    if (genreId != null || restoreGenreId == null) return;
-
-    pendingRestoreGenreIdRef.current = null;
-    focusDialogRestoreTarget(
-      genreButtonRefs.current?.get(restoreGenreId),
-      fallbackFocusRef.current,
-    );
-  }, [fallbackFocusRef, genreId]);
-
-  const getAnnouncement = () => {
-    if (!hasSelectedGenre) return undefined;
-    if (moviesLoading) return undefined;
-    if (movies.length === 0) return "No movies in this genre";
-    return `Showing ${movies.length} movies, page ${genresPage} of ${totalPages}`;
-  };
-
-  const handleSelectGenre = (id: number) => {
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        genreId: id,
-        genresPage: 1,
-      }),
-      replace: true,
-    });
-  };
-
-  const handleClearGenre = () => {
-    pendingRestoreGenreIdRef.current = genreId ?? null;
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        genreId: undefined,
-        genresPage: 1,
-      }),
-      replace: true,
-    });
-  };
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        genresPage: newPage,
-      }),
-      replace: true,
-    });
-    scrollWindowToTop();
-  };
-
-  const handleSortToggle = () =>
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        sort: prev.sort === "asc" ? "desc" : "asc",
-        genresPage: 1,
-      }),
-      replace: true,
-    });
-
-  if (genresLoading) {
-    return <GenresTabSkeleton />;
-  }
-
-  if (genresError || isApiFailure(genresRes)) {
-    return (
-      <MoviesLoadError
-        message={
-          isApiFailure(genresRes)
-            ? genresRes.message
-            : "Couldn’t load genres. Check your connection and try again."
-        }
-        onRetry={() => void refetchGenres()}
-      />
-    );
-  }
-
-  if (genres.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <Film className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
-        <p>No genres with movies in your library yet.</p>
-      </div>
-    );
-  }
 
   return (
-    <div>
-      <ul
-        className={
-          hasSelectedGenre
-            ? "mb-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7"
-            : "mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-        }
-        aria-label="Movie genres"
-      >
-        {genres.map(g => {
-          const selected = genreId === g.genre_id;
-          return (
-            <li key={g.genre_id} className="min-w-0">
-              <button
-                type="button"
-                ref={node => {
-                  if (genreButtonRefs.current === null) {
-                    genreButtonRefs.current = new Map();
-                  }
-                  if (node) {
-                    genreButtonRefs.current.set(g.genre_id, node);
-                    return;
-                  }
-                  genreButtonRefs.current.delete(g.genre_id);
-                }}
-                onClick={() => handleSelectGenre(g.genre_id)}
-                className={cn(
-                  "flex w-full min-w-0 flex-col justify-between rounded-lg border text-left",
-                  MOTION_MICRO_CONTROL_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                  hasSelectedGenre ? "min-h-14 p-2" : "min-h-20 p-3",
-                  selected
-                    ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/15"
-                    : "border-border bg-muted/70 text-foreground hover:border-primary/40 hover:bg-muted",
-                )}
-                aria-pressed={selected}
-              >
-                <span className="line-clamp-2 text-sm font-semibold">
-                  {g.genre_tag}
-                </span>
-                <span
-                  className={`${hasSelectedGenre ? "mt-1" : "mt-3"} text-xs ${
-                    selected ? "text-primary-foreground/70" : "text-muted-foreground"
-                  }`}
-                >
-                  {g.movie_count} {g.movie_count === 1 ? "movie" : "movies"}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      {hasSelectedGenre && (
-        <>
-          <LiveAnnouncer message={getAnnouncement()} />
-
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-foreground">
-                {selectedGenreTag ?? "Genre"}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {total.toLocaleString()} movies
-              </span>
-              <button
-                type="button"
-                onClick={handleClearGenre}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
-                  MOTION_MICRO_CONTROL_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                )}
-                aria-label="Clear genre filter"
-              >
-                <X className="size-3.5" aria-hidden="true" />
-                Clear
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              {hasMultiplePages && (
-                <span className="text-sm text-muted-foreground">
-                  Page {genresPage} of {totalPages}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={handleSortToggle}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
-                  MOTION_MICRO_CONTROL_CLASS,
-                  FOCUS_VISIBLE_RING_CLASS,
-                )}
-                aria-label={
-                  sort === "asc"
-                    ? "Sorted A to Z, click to sort Z to A"
-                    : "Sorted Z to A, click to sort A to Z"
-                }
-              >
-                {sort === "asc" ? (
-                  <>
-                    <ArrowDownAZ className="size-4" aria-hidden="true" />
-                    A–Z
-                  </>
-                ) : (
-                  <>
-                    <ArrowUpAZ className="size-4" aria-hidden="true" />
-                    Z–A
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {moviesError || isApiFailure(moviesRes) ? (
-            <MoviesLoadError
-              message={
-                isApiFailure(moviesRes)
-                  ? moviesRes.message
-                  : "Couldn’t load movies for this genre. Check your connection and try again."
-              }
-              onRetry={() => void refetchMovies()}
-            />
-          ) : moviesLoading ? (
-            <AllMoviesTabSkeleton />
-          ) : movies.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">
-              <Film
-                className="mx-auto mb-4 size-10 opacity-50"
-                aria-hidden="true"
-              />
-              <p>No movies found for this genre.</p>
-            </div>
-          ) : (
-            <>
-              <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {movies.map(movie => (
-                  <MovieCard key={movie.id} movie={movie} />
-                ))}
-              </div>
-              {totalPages > 1 && (
-                <LibraryPagination
-                  currentPage={genresPage}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
-              )}
-            </>
-          )}
-        </>
+    <LibraryGenresTab
+      genresQueryOpts={moviesGenresQueryOpts()}
+      getGenres={data =>
+        data.genres.map(g => ({
+          genre_id: g.genre_id,
+          genre_tag: g.genre_tag,
+          count: g.movie_count,
+        }))
+      }
+      genresListLabel="Movie genres"
+      itemsQueryOpts={moviesByGenreQueryOpts(
+        genreId ?? 0,
+        genresPage,
+        MOVIES_PER_PAGE,
+        sort,
       )}
-    </div>
-  );
-}
-
-function GenresTabSkeleton() {
-  return (
-    <div>
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "min-h-20 rounded-lg border border-border bg-card",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          />
-        ))}
-      </div>
-    </div>
+      getItems={data => data.movies}
+      renderCard={movie => <MovieCard movie={movie} />}
+      genreId={genreId}
+      genresPage={genresPage}
+      sort={sort}
+      perPage={MOVIES_PER_PAGE}
+      noun={MOVIE_NOUN}
+      emptyIcon={Film}
+      fallbackFocusRef={fallbackFocusRef}
+      onSelectGenre={id =>
+        navigate({
+          to: "/movies",
+          search: (prev: MoviesSearchParams) => ({
+            ...prev,
+            genreId: id,
+            genresPage: 1,
+          }),
+          replace: true,
+        })
+      }
+      onClearGenre={() =>
+        navigate({
+          to: "/movies",
+          search: (prev: MoviesSearchParams) => ({
+            ...prev,
+            genreId: undefined,
+            genresPage: 1,
+          }),
+          replace: true,
+        })
+      }
+      onPageChange={newPage =>
+        navigate({
+          to: "/movies",
+          search: (prev: MoviesSearchParams) => ({
+            ...prev,
+            genresPage: newPage,
+          }),
+          replace: true,
+        })
+      }
+      onSortToggle={() =>
+        navigate({
+          to: "/movies",
+          search: (prev: MoviesSearchParams) => ({
+            ...prev,
+            sort: prev.sort === "asc" ? "desc" : "asc",
+            genresPage: 1,
+          }),
+          replace: true,
+        })
+      }
+    />
   );
 }
 
@@ -1173,7 +753,7 @@ function LikedMoviesInPlaylistsTab({
     });
 
   if (isLoading) {
-    return <AllMoviesTabSkeleton />;
+    return <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />;
   }
 
   if (isError || isApiFailure(data)) {
@@ -1205,13 +785,10 @@ function LikedMoviesInPlaylistsTab({
             Back to playlists
           </button>
         </div>
-        <div className="py-12 text-center text-muted-foreground">
-          <Heart
-            className="mx-auto mb-4 size-10 opacity-50"
-            aria-hidden="true"
-          />
-          <p>You have not liked any movies yet.</p>
-        </div>
+        <LibraryEmptyState
+          icon={Heart}
+          message="You have not liked any movies yet."
+        />
       </div>
     );
   }
@@ -1241,36 +818,11 @@ function LikedMoviesInPlaylistsTab({
           <span className="text-sm text-muted-foreground">
             Page {playlistsPage} of {totalPages}
           </span>
-          <button
-            type="button"
-            onClick={handleSortToggle}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground",
-              MOTION_MICRO_CONTROL_CLASS,
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
-            aria-label={
-              sort === "asc"
-                ? "Sorted A to Z, click to sort Z to A"
-                : "Sorted Z to A, click to sort A to Z"
-            }
-          >
-            {sort === "asc" ? (
-              <>
-                <ArrowDownAZ className="size-4" aria-hidden="true" />
-                A–Z
-              </>
-            ) : (
-              <>
-                <ArrowUpAZ className="size-4" aria-hidden="true" />
-                Z–A
-              </>
-            )}
-          </button>
+          <LibrarySortToggle sort={sort} onToggle={handleSortToggle} />
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      <div className={`mb-8 ${LIBRARY_POSTER_GRID_CLASS}`}>
         {movies.map(movie => (
           <MovieCard key={movie.id} movie={movie} />
         ))}

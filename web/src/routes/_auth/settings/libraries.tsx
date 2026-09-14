@@ -32,6 +32,7 @@ import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, triggerShowScan, updateLibrarySettings } from "@/lib/api";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
+import { invalidateShowLibraryQueries } from "@/lib/show-library-cache";
 import {
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
@@ -84,9 +85,7 @@ const SCAN_LIBRARIES: Record<ImplementedScan, ScanLibrary> = {
     title: "TV Shows",
     statusKey: SHOW_SCAN_STATUS_KEY,
     trigger: triggerShowScan,
-    // TV browsing is not implemented, so a scan has no catalog queries to
-    // invalidate; the scan status query refreshes on its own.
-    invalidateLibrary: () => {},
+    invalidateLibrary: invalidateShowLibraryQueries,
   },
 };
 

@@ -20,6 +20,10 @@ import {
   getLatestMovies,
   getLatestShows,
   getShowDetails,
+  getShowsLibrary,
+  getShowGenresWithCounts,
+  getShowsByGenre,
+  getShowsStats,
   getShowSeasonEpisodes,
   getShowEpisode,
   getShowEpisodeTechnicalDetails,
@@ -81,6 +85,10 @@ import {
   LATEST_SHOWS_KEY,
   SHOW_DETAILS_KEY,
   SHOW_SEASON_EPISODES_KEY,
+  SHOWS_LIBRARY_KEY,
+  SHOWS_GENRES_KEY,
+  SHOWS_BY_GENRE_KEY,
+  SHOWS_STATS_KEY,
   CONTINUE_WATCHING_KEY,
   SPOTIFY_STATUS_KEY,
   TMDB_STATUS_KEY,
@@ -101,6 +109,7 @@ import {
   MOVIES_LIKED_KEY,
   MOVIE_LIKE_STATUS_KEY,
   MOVIES_PER_PAGE,
+  SHOWS_PER_PAGE,
   MOVIES_STATS_KEY,
   MOVIE_SCAN_STATUS_KEY,
   MUSIC_SCAN_STATUS_KEY,
@@ -266,6 +275,52 @@ export function showSeasonEpisodesQueryOpts(
     queryKey: [SHOW_SEASON_EPISODES_KEY, showId, seasonNumber],
     queryFn: () => getShowSeasonEpisodes(showId, seasonNumber),
     enabled: showId > 0 && seasonNumber >= 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function showsLibraryQueryOpts(
+  page: number,
+  perPage: number = SHOWS_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [SHOWS_LIBRARY_KEY, page, perPage, sort],
+    queryFn: () => getShowsLibrary(page, perPage, sort),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function showsGenresQueryOpts() {
+  return queryOptions({
+    queryKey: [SHOWS_GENRES_KEY],
+    queryFn: getShowGenresWithCounts,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function showsByGenreQueryOpts(
+  genreId: number,
+  page: number,
+  perPage: number = SHOWS_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [SHOWS_BY_GENRE_KEY, genreId, page, perPage, sort],
+    queryFn: () => getShowsByGenre(genreId, page, perPage, sort),
+    enabled: genreId > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function showsStatsQueryOpts() {
+  return queryOptions({
+    queryKey: [SHOWS_STATS_KEY],
+    queryFn: getShowsStats,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });

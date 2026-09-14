@@ -418,8 +418,9 @@ explaining what it owns. The styling families:
   rather than restating it.
 - **Page chrome** — `DETAIL_HERO_*` (hero shell, content, and the three
   literal over-media scrims), `LIBRARY_TABS_LIST_CLASS` /
-  `LIBRARY_TAB_TRIGGER_CLASS`, `HOME_POSTER_GRID_CLASS` /
-  `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
+  `LIBRARY_TAB_TRIGGER_CLASS`, `LIBRARY_POSTER_GRID_CLASS` (the fixed-column
+  library grid) and `LIBRARY_MENU_ITEM_CLASS` (items in a library page's More
+  menu), `HOME_POSTER_GRID_CLASS` / `HOME_ALBUM_GRID_CLASS` (§3.2), `MINI_PLAYER_CLEARANCE_*` (the shell's
   reserved space under the mini bar, §3.1), `SETTINGS_*` (card surface, input,
   select and reset-button chrome for the Settings pages, §3.7).
 - **Lists** — `TRACK_LIST_CONTAINER_CLASS` (library/search lists),
@@ -570,8 +571,8 @@ The contract:
 
 #### Grids and rails
 
-The canonical library poster grid is
-`grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`. Home
+The canonical library poster grid is `LIBRARY_POSTER_GRID_CLASS`
+(`grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`). Home
 sections instead use the shared auto-fill grids (`HOME_POSTER_GRID_CLASS` /
 `HOME_ALBUM_GRID_CLASS`, both
 `grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))]`) —
@@ -584,6 +585,23 @@ True horizontal rails (cast, chapters, extras, the seasons tab strip) are
 viewport edge at each breakpoint. The cast and extras rails are the shared
 `CastSection` and `ExtraVideosSection`, used by both the movie and show detail
 pages.
+
+#### Library pages
+
+The Movies and TV Shows pages are the same page with different nouns, so the
+page-level pieces are shared components in `components/shared/`, each a
+`Library*`: `LibraryStats` (the labelled count region beside the header),
+`LibraryMoreMenu` with `RefreshLibraryMenuItem` (the "More options" dropdown;
+every library has at least Refresh Library, which refetches the page's cached
+queries and toasts), `LibraryAllTab` (the paginated, sortable grid and its
+skeleton), `LibraryGenresTab` (the genre-chip facet with focus restoration
+after Clear, and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A
+button) and `LibraryEmptyState` (the minimal empty variant, §3.4). A page
+supplies what differs: the card renderer, the lowercase nouns for copy and
+announcements, its prepared `queryOptions()`, the tab triggers, and navigation
+callbacks — the page keeps the typed `navigate({ to, search })`, so the shared
+tabs never learn a route. Liked movies and movie playlists stay local to the
+movies page; a new library page composes the same parts.
 
 #### Detail pages
 
@@ -664,10 +682,11 @@ is unknown or empty.
   boxes) so content arrival causes no layout shift — see the shared
   `DetailSkeleton` (`withActions` mirrors whether the real hero has an actions
   row; pages append their own below-the-fold geometry as children), and the
-  library tabs' own local skeletons. Skeleton geometry is authored directly in
+  `LibraryAllTabSkeleton` / `LibraryGenresTabSkeleton` that live in the same
+  files as the grids they mirror. Skeleton geometry is authored directly in
   each loading layout with muted boxes and the shared
-  `MOTION_LOADING_STATE_CLASS`; keeping it beside the layout it must mirror is
-  why it is not extracted. `ui/spinner.tsx` (`role="status"`) uses
+  `MOTION_LOADING_STATE_CLASS`, always beside the layout it must mirror — a
+  skeleton moves with its layout, never on its own. `ui/spinner.tsx` (`role="status"`) uses
   `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
   `aria-hidden` under a single `role="status"` + `sr-only` label.
 - **A section whose query the loader awaits renders nothing instead of a
@@ -694,8 +713,8 @@ is unknown or empty.
   - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
     pending state), so the card keeps its place in the page.
   - A missing resource → `MediaNotFound`: a destructive `Alert` plus a
-    **required** "Back to Movies/Music/Home" outline link, so the page never
-    dead-ends.
+    **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
+    page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
 
   Because the erroring subtree often unmounts its own live region, error

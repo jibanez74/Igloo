@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	moviesLibraryDefaultPerPage = 24
-	moviesLibraryMaxPerPage     = 48
+	libraryDefaultPerPage = 24
+	libraryMaxPerPage     = 48
 )
 
 // moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
@@ -106,7 +106,7 @@ func (app *Application) logNormalizedChapterStartTimes(
 	}
 }
 
-func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
+func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
 	page = 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		parsed, err := strconv.ParseInt(p, 10, 64)
@@ -115,15 +115,15 @@ func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string)
 		}
 	}
 
-	perPage = int64(moviesLibraryDefaultPerPage)
+	perPage = int64(libraryDefaultPerPage)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
 		if err == nil && parsed > 0 {
 			perPage = parsed
 		}
 	}
-	if perPage > moviesLibraryMaxPerPage {
-		perPage = moviesLibraryMaxPerPage
+	if perPage > libraryMaxPerPage {
+		perPage = libraryMaxPerPage
 	}
 
 	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
@@ -134,7 +134,7 @@ func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string)
 }
 
 func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request) {
-	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	page, perPage, sortParam := parseLibraryQuery(r)
 
 	offset := (page - 1) * perPage
 	ctx := r.Context()
@@ -242,7 +242,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	page, perPage, sortParam := parseLibraryQuery(r)
 	offset := (page - 1) * perPage
 	ctx := r.Context()
 
@@ -303,7 +303,7 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	page, perPage, sortParam := parseLibraryQuery(r)
 	offset := (page - 1) * perPage
 	ctx := r.Context()
 

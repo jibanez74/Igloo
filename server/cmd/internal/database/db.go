@@ -72,6 +72,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countShowRetriesStmt, err = db.PrepareContext(ctx, countShowRetries); err != nil {
 		return nil, fmt.Errorf("error preparing query CountShowRetries: %w", err)
 	}
+	if q.countShowsForGenreStmt, err = db.PrepareContext(ctx, countShowsForGenre); err != nil {
+		return nil, fmt.Errorf("error preparing query CountShowsForGenre: %w", err)
+	}
 	if q.countUnreadNotificationsForUserStmt, err = db.PrepareContext(ctx, countUnreadNotificationsForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUnreadNotificationsForUser: %w", err)
 	}
@@ -579,6 +582,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getShowFileForEpisodeStmt, err = db.PrepareContext(ctx, getShowFileForEpisode); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowFileForEpisode: %w", err)
 	}
+	if q.getShowGenresWithCountsStmt, err = db.PrepareContext(ctx, getShowGenresWithCounts); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowGenresWithCounts: %w", err)
+	}
 	if q.getShowKeyframeIndexStmt, err = db.PrepareContext(ctx, getShowKeyframeIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowKeyframeIndex: %w", err)
 	}
@@ -620,6 +626,21 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getShowVideoStreamsByFileIDStmt, err = db.PrepareContext(ctx, getShowVideoStreamsByFileID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetShowVideoStreamsByFileID: %w", err)
+	}
+	if q.getShowsByGenreAscStmt, err = db.PrepareContext(ctx, getShowsByGenreAsc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsByGenreAsc: %w", err)
+	}
+	if q.getShowsByGenreDescStmt, err = db.PrepareContext(ctx, getShowsByGenreDesc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsByGenreDesc: %w", err)
+	}
+	if q.getShowsCountStmt, err = db.PrepareContext(ctx, getShowsCount); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsCount: %w", err)
+	}
+	if q.getShowsLibraryAscStmt, err = db.PrepareContext(ctx, getShowsLibraryAsc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsLibraryAsc: %w", err)
+	}
+	if q.getShowsLibraryDescStmt, err = db.PrepareContext(ctx, getShowsLibraryDesc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetShowsLibraryDesc: %w", err)
 	}
 	if q.getSubtitlesByMovieIDStmt, err = db.PrepareContext(ctx, getSubtitlesByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSubtitlesByMovieID: %w", err)
@@ -1151,6 +1172,11 @@ func (q *Queries) Close() error {
 	if q.countShowRetriesStmt != nil {
 		if cerr := q.countShowRetriesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countShowRetriesStmt: %w", cerr)
+		}
+	}
+	if q.countShowsForGenreStmt != nil {
+		if cerr := q.countShowsForGenreStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countShowsForGenreStmt: %w", cerr)
 		}
 	}
 	if q.countUnreadNotificationsForUserStmt != nil {
@@ -1998,6 +2024,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getShowFileForEpisodeStmt: %w", cerr)
 		}
 	}
+	if q.getShowGenresWithCountsStmt != nil {
+		if cerr := q.getShowGenresWithCountsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowGenresWithCountsStmt: %w", cerr)
+		}
+	}
 	if q.getShowKeyframeIndexStmt != nil {
 		if cerr := q.getShowKeyframeIndexStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowKeyframeIndexStmt: %w", cerr)
@@ -2066,6 +2097,31 @@ func (q *Queries) Close() error {
 	if q.getShowVideoStreamsByFileIDStmt != nil {
 		if cerr := q.getShowVideoStreamsByFileIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getShowVideoStreamsByFileIDStmt: %w", cerr)
+		}
+	}
+	if q.getShowsByGenreAscStmt != nil {
+		if cerr := q.getShowsByGenreAscStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsByGenreAscStmt: %w", cerr)
+		}
+	}
+	if q.getShowsByGenreDescStmt != nil {
+		if cerr := q.getShowsByGenreDescStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsByGenreDescStmt: %w", cerr)
+		}
+	}
+	if q.getShowsCountStmt != nil {
+		if cerr := q.getShowsCountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsCountStmt: %w", cerr)
+		}
+	}
+	if q.getShowsLibraryAscStmt != nil {
+		if cerr := q.getShowsLibraryAscStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsLibraryAscStmt: %w", cerr)
+		}
+	}
+	if q.getShowsLibraryDescStmt != nil {
+		if cerr := q.getShowsLibraryDescStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getShowsLibraryDescStmt: %w", cerr)
 		}
 	}
 	if q.getSubtitlesByMovieIDStmt != nil {
@@ -2868,6 +2924,7 @@ type Queries struct {
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
 	countShowRetriesStmt                        *sql.Stmt
+	countShowsForGenreStmt                      *sql.Stmt
 	countUnreadNotificationsForUserStmt         *sql.Stmt
 	countUserLikedMoviesStmt                    *sql.Stmt
 	countUserLikedTracksStmt                    *sql.Stmt
@@ -3037,6 +3094,7 @@ type Queries struct {
 	getShowFileByPathStmt                       *sql.Stmt
 	getShowFileEpisodeIDsStmt                   *sql.Stmt
 	getShowFileForEpisodeStmt                   *sql.Stmt
+	getShowGenresWithCountsStmt                 *sql.Stmt
 	getShowKeyframeIndexStmt                    *sql.Stmt
 	getShowNextEpisodeStmt                      *sql.Stmt
 	getShowPendingEpisodeIDsStmt                *sql.Stmt
@@ -3051,6 +3109,11 @@ type Queries struct {
 	getShowSeasonsStmt                          *sql.Stmt
 	getShowSubtitlesByFileIDStmt                *sql.Stmt
 	getShowVideoStreamsByFileIDStmt             *sql.Stmt
+	getShowsByGenreAscStmt                      *sql.Stmt
+	getShowsByGenreDescStmt                     *sql.Stmt
+	getShowsCountStmt                           *sql.Stmt
+	getShowsLibraryAscStmt                      *sql.Stmt
+	getShowsLibraryDescStmt                     *sql.Stmt
 	getSubtitlesByMovieIDStmt                   *sql.Stmt
 	getTrackStmt                                *sql.Stmt
 	getTrackForDirectStreamStmt                 *sql.Stmt
@@ -3222,6 +3285,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
 		countShowRetriesStmt:                        q.countShowRetriesStmt,
+		countShowsForGenreStmt:                      q.countShowsForGenreStmt,
 		countUnreadNotificationsForUserStmt:         q.countUnreadNotificationsForUserStmt,
 		countUserLikedMoviesStmt:                    q.countUserLikedMoviesStmt,
 		countUserLikedTracksStmt:                    q.countUserLikedTracksStmt,
@@ -3391,6 +3455,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowFileByPathStmt:                       q.getShowFileByPathStmt,
 		getShowFileEpisodeIDsStmt:                   q.getShowFileEpisodeIDsStmt,
 		getShowFileForEpisodeStmt:                   q.getShowFileForEpisodeStmt,
+		getShowGenresWithCountsStmt:                 q.getShowGenresWithCountsStmt,
 		getShowKeyframeIndexStmt:                    q.getShowKeyframeIndexStmt,
 		getShowNextEpisodeStmt:                      q.getShowNextEpisodeStmt,
 		getShowPendingEpisodeIDsStmt:                q.getShowPendingEpisodeIDsStmt,
@@ -3405,6 +3470,11 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getShowSeasonsStmt:                          q.getShowSeasonsStmt,
 		getShowSubtitlesByFileIDStmt:                q.getShowSubtitlesByFileIDStmt,
 		getShowVideoStreamsByFileIDStmt:             q.getShowVideoStreamsByFileIDStmt,
+		getShowsByGenreAscStmt:                      q.getShowsByGenreAscStmt,
+		getShowsByGenreDescStmt:                     q.getShowsByGenreDescStmt,
+		getShowsCountStmt:                           q.getShowsCountStmt,
+		getShowsLibraryAscStmt:                      q.getShowsLibraryAscStmt,
+		getShowsLibraryDescStmt:                     q.getShowsLibraryDescStmt,
 		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                                q.getTrackStmt,
 		getTrackForDirectStreamStmt:                 q.getTrackForDirectStreamStmt,

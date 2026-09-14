@@ -47,6 +47,10 @@ export const LATEST_MOVIES_KEY = "latest-movies";
 export const LATEST_SHOWS_KEY = "latest-shows";
 export const SHOW_DETAILS_KEY = "show-details";
 export const SHOW_SEASON_EPISODES_KEY = "show-season-episodes";
+export const SHOWS_LIBRARY_KEY = "shows-library";
+export const SHOWS_GENRES_KEY = "shows-genres";
+export const SHOWS_BY_GENRE_KEY = "shows-by-genre";
+export const SHOWS_STATS_KEY = "shows-stats";
 export const CONTINUE_WATCHING_KEY = "continue-watching";
 export const MOVIE_DETAILS_KEY = "movie-details";
 export const LIBRARY_MOVIE_DETAILS_KEY = "library-movie-details";
@@ -110,6 +114,7 @@ export const SEARCH_PER_PAGE = 24;
 export const ALBUMS_PER_PAGE = 24;
 export const MUSICIANS_PER_PAGE = 24;
 export const MOVIES_PER_PAGE = 24;
+export const SHOWS_PER_PAGE = 24;
 export const TRACKS_INFINITE_PAGE_SIZE = 50;
 export const PLAYLIST_TRACKS_PAGE_SIZE = 50;
 export const LIKED_TRACKS_PER_PAGE = 50;
@@ -132,6 +137,13 @@ export const MOVIES_INDEX_DEFAULT_SEARCH = {
 export const MOVIES_PLAYLISTS_TAB_SEARCH = {
   ...MOVIES_INDEX_DEFAULT_SEARCH,
   tab: "playlists" as const,
+};
+
+export const SHOWS_INDEX_DEFAULT_SEARCH = {
+  tab: "all" as const,
+  allPage: 1,
+  sort: "asc" as const,
+  genresPage: 1,
 };
 
 // TMDB image proxy settings. API responses provide paths only; the frontend
@@ -563,6 +575,15 @@ export const CARD_FOCUS_WITHIN_RING_CLASS =
  */
 export const HOME_POSTER_GRID_CLASS =
   "grid grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4";
+/**
+ * The canonical library poster grid (design-system §3.2): fixed columns per
+ * breakpoint so a full page of cards lines up, unlike the auto-fill Home rows.
+ */
+export const LIBRARY_POSTER_GRID_CLASS =
+  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
+/** Items in a library page's "More options" dropdown. */
+export const LIBRARY_MENU_ITEM_CLASS =
+  "cursor-pointer text-foreground focus:bg-accent focus:text-foreground";
 export const HOME_ALBUM_GRID_CLASS =
   "grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]";
 
