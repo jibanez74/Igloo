@@ -82,6 +82,10 @@ describe("ShowSeasonEpisodeList", () => {
       name: /1\.\s*S1 Episode 1/,
     });
     expect(within(inProgress).getByText("25 min left")).toBeInTheDocument();
+    // The abbreviated note is aria-hidden; the sr-only twin speaks it in full.
+    expect(
+      within(inProgress).getByText("25 minutes left"),
+    ).toHaveClass("sr-only");
     expect(
       within(inProgress).getByRole("link", { name: /^Resume S1 E1/ }),
     ).toBeInTheDocument();

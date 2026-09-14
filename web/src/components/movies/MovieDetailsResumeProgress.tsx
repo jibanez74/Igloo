@@ -2,17 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import WatchProgressBar from "@/components/shared/WatchProgressBar";
 import { hasEligibleResumeProgress } from "@/lib/video-playback";
-import { formatMinutesLeft } from "@/lib/format";
+import { formatTimeLeft } from "@/lib/format";
 
 type MovieDetailsResumeProgressProps = {
   movieId: number;
 };
 
 /**
- * Thin watch-progress strip under the hero metadata (Netflix-style "X min
- * left"). Renders nothing when the movie is unwatched, finished, or marked
- * watched — Play behavior is unchanged (the in-player ResumeDialog still
- * offers resume vs start over).
+ * Thin watch-progress strip under the hero metadata (Netflix-style
+ * "1 hr 35 min left"). Renders nothing when the movie is unwatched, finished,
+ * or marked watched — Play behavior is unchanged (the in-player ResumeDialog
+ * still offers resume vs start over).
  */
 export default function MovieDetailsResumeProgress({
   movieId,
@@ -31,6 +31,8 @@ export default function MovieDetailsResumeProgress({
     return null;
   }
 
+  const timeLeft = formatTimeLeft(progress_sec, duration_sec);
+
   return (
     <div className="mx-auto mt-5 flex w-full max-w-md flex-col items-center gap-1.5 lg:mx-0 lg:items-start">
       <WatchProgressBar
@@ -39,7 +41,8 @@ export default function MovieDetailsResumeProgress({
         trackClassName="bg-white/25"
       />
       <p className="text-xs text-white/80">
-        {formatMinutesLeft(progress_sec, duration_sec)}
+        <span className="sr-only">{timeLeft.spoken}</span>
+        <span aria-hidden="true">{timeLeft.text}</span>
       </p>
     </div>
   );

@@ -617,9 +617,13 @@ to `/tv-shows/$id/episodes/$episodeId/play`, and a ghost `Check` toggle
 (`aria-pressed`, "Mark S1 E3 as watched/unwatched", `text-success` when on)
 that flips watched state optimistically on the season query
 (`EpisodeWatchedToggle`). Resume state is the shared `WatchProgressBar` strip
-over the still plus a "12 min left" note in the metadata line, so the position
-is never conveyed by colour alone; a watched episode swaps the strip for an
-outline `Badge` reading "Watched".
+over the still plus a "1 hr 35 min left" note in the metadata line, so the
+position is never conveyed by colour alone; a watched episode swaps the strip
+for an outline `Badge` reading "Watched". Remaining time reaches seconds only
+inside the last minute ("45 sec left"), and — like every other abbreviated
+readout (§1.7) — the note is `aria-hidden` beside an `sr-only` span speaking it
+in full ("1 hour 35 minutes left"). The movie hero's resume strip is the same
+pair.
 
 The show hero's `actionsSlot` is `ShowDetailsHeroActions`: one accent button
 that reads the same season query and picks its target for the viewer — "Resume
