@@ -35,7 +35,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
           {coverUrl ? (
             <img
               src={coverUrl}
-              alt={name}
+              alt=""
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (

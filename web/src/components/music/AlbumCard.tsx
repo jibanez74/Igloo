@@ -86,7 +86,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
           {showCover ? (
             <img
               src={coverUrl}
-              alt={`Album cover for ${title}`}
+              alt=""
               width={640}
               height={640}
               loading="lazy"

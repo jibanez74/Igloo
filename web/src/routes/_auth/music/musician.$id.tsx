@@ -31,6 +31,7 @@ import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  DETAIL_RAIL_HEADING_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -372,7 +373,10 @@ function MusicianDetailsContent({
               <h1
                 id="musician-name"
                 tabIndex={-1}
-                className="max-w-full min-w-0 text-2xl font-bold text-balance wrap-break-word text-foreground outline-hidden sm:text-3xl md:text-4xl lg:text-5xl"
+                className={cn(
+                  "max-w-full min-w-0 rounded-sm text-2xl font-bold text-balance wrap-break-word text-foreground sm:text-3xl md:text-4xl lg:text-5xl",
+                  FOCUS_VISIBLE_RING_CLASS,
+                )}
                 title={musician.name}
               >
                 {musician.name}
@@ -524,7 +528,7 @@ function MusicianDetailsContent({
               <h2
                 id="discography-heading"
                 tabIndex={-1}
-                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground outline-hidden"
+                className={cn(DETAIL_RAIL_HEADING_CLASS, "flex items-center gap-2")}
               >
                 <Disc3 className="size-5 text-primary" aria-hidden="true" />
                 Discography
@@ -554,7 +558,7 @@ function MusicianDetailsContent({
               <h2
                 id="tracks-heading"
                 tabIndex={-1}
-                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground outline-hidden"
+                className={cn(DETAIL_RAIL_HEADING_CLASS, "flex items-center gap-2")}
               >
                 <ListOrdered
                   className="size-5 text-primary"

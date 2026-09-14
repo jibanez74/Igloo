@@ -304,8 +304,19 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   exactly what is on the page. Do not write a page-specific variant.
   Their targets are the page `h1` and the section headings (`tabIndex={-1}`),
   which carry the focus ring via `DETAIL_SECTION_HEADING_CLASS` /
-  `DETAIL_RAIL_HEADING_CLASS` so a keyboard user sees where a skip link
-  landed.
+  `DETAIL_RAIL_HEADING_CLASS` (or compose `FOCUS_VISIBLE_RING_CLASS` directly,
+  where a hero `h1` keeps its own type scale) so a keyboard user sees where a
+  skip link landed.
+- **A skip-link target rings; a programmatic focus move does not.** The
+  distinction is who moved focus. A skip link is a deliberate keyboard
+  navigation, so its landing must be visible — a `tabIndex={-1}` target with a
+  bare `outline-hidden` and no ring is a bug, and one no test catches
+  (`outline-hidden` alone is not a ring declaration, so
+  `focus-contracts.test.ts` sees nothing). Focus that the *app* moves so a
+  screen reader announces a change the user did not navigate to —
+  `QuickConnectApproveCard`'s wizard-step headings, `AppShell`'s `#main` — is
+  correctly left un-ringed: a ring on a non-interactive element the user never
+  focused is visual noise. Don't "fix" those.
 - **Labels everywhere**: icon-only buttons get `aria-label`; decorative
   icons/images get `aria-hidden="true"`/`alt=""`; cards carry a full
   `aria-label` ("Play Uncut Gems 2019"); toggles use `aria-pressed`; nav uses

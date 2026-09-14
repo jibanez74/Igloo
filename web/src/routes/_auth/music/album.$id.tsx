@@ -52,6 +52,7 @@ import {
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  DETAIL_SECTION_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   LATEST_ALBUMS_KEY,
   MUSIC_STATS_KEY,
@@ -406,7 +407,10 @@ function AlbumDetailsContent({
               <h1
                 id="album-title"
                 tabIndex={-1}
-                className="flex w-full max-w-full min-w-0 flex-col gap-1 text-2xl font-bold wrap-break-word text-foreground outline-hidden sm:text-3xl lg:text-4xl xl:text-5xl"
+                className={cn(
+                  "flex w-full max-w-full min-w-0 flex-col gap-1 rounded-sm text-2xl font-bold wrap-break-word text-foreground sm:text-3xl lg:text-4xl xl:text-5xl",
+                  FOCUS_VISIBLE_RING_CLASS,
+                )}
               >
                 <span className="min-w-0 text-balance">{album.title}</span>
               </h1>
@@ -627,7 +631,10 @@ function AlbumDetailsContent({
             <h2
               id="tracklist-heading"
               tabIndex={-1}
-              className="mb-4 flex items-center justify-center gap-2 text-lg font-semibold text-foreground outline-hidden sm:text-xl lg:justify-start"
+              className={cn(
+                DETAIL_SECTION_HEADING_CLASS,
+                "mb-4 flex items-center justify-center gap-2 lg:justify-start",
+              )}
             >
               <ListOrdered
                 className="size-5 shrink-0 text-primary"
@@ -688,7 +695,7 @@ function AlbumDetailsContent({
             <h2
               id="details-heading"
               tabIndex={-1}
-              className="mb-4 text-lg font-semibold text-foreground outline-hidden"
+              className={cn(DETAIL_SECTION_HEADING_CLASS, "mb-4")}
             >
               Album Details
             </h2>
