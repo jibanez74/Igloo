@@ -61,6 +61,10 @@
       "description": "Library search"
     },
     {
+      "name": "Home",
+      "description": "Cross-library home screen rows."
+    },
+    {
       "name": "Movies",
       "description": "Movie library, metadata, playback, and watch progress"
     },
@@ -2248,17 +2252,17 @@
         }
       }
     },
-    "/api/movies/continue-watching": {
+    "/api/continue-watching": {
       "get": {
         "tags": [
-          "Movies"
+          "Home"
         ],
-        "summary": "List movies the current user is watching",
-        "description": "Returns up to 12 movies the current user has started watching but not finished or marked watched, most recently watched first.",
-        "operationId": "getContinueWatchingMovies",
+        "summary": "List what the current user is watching",
+        "description": "Returns up to 12 movies and TV episodes the current user has started watching but not finished or marked watched, most recently watched first. A show contributes at most one entry: its most recently watched in-progress episode.",
+        "operationId": "getContinueWatching",
         "responses": {
           "200": {
-            "$ref": "#/components/responses/ContinueWatchingMoviesResponse"
+            "$ref": "#/components/responses/ContinueWatchingResponse"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -6895,12 +6899,12 @@
           }
         }
       },
-      "ContinueWatchingMoviesResponse": {
-        "description": "Continue watching movies response.",
+      "ContinueWatchingResponse": {
+        "description": "Continue watching response.",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ContinueWatchingMoviesEnvelope"
+              "$ref": "#/components/schemas/ContinueWatchingEnvelope"
             }
           }
         }
@@ -9244,9 +9248,10 @@
         },
         "additionalProperties": false
       },
-      "ContinueWatchingMovie": {
+      "ContinueWatchingMovieItem": {
         "type": "object",
         "required": [
+          "kind",
           "id",
           "title",
           "poster_path",
@@ -9255,6 +9260,12 @@
           "duration_sec"
         ],
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "movie"
+            ]
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -9275,6 +9286,100 @@
           "duration_sec": {
             "type": "number",
             "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinueWatchingEpisodeItem": {
+        "type": "object",
+        "description": "An in-progress episode. title, poster_path and year describe the show the episode belongs to.",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "poster_path",
+          "year",
+          "progress_sec",
+          "duration_sec",
+          "show_id",
+          "season_number",
+          "episode_number",
+          "episode_name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "episode"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "poster_path": {
+            "$ref": "#/components/schemas/SqlNullString"
+          },
+          "year": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "progress_sec": {
+            "type": "number",
+            "format": "double"
+          },
+          "duration_sec": {
+            "type": "number",
+            "format": "double"
+          },
+          "show_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "season_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinueWatchingItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ContinueWatchingMovieItem"
+          },
+          {
+            "$ref": "#/components/schemas/ContinueWatchingEpisodeItem"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "movie": "#/components/schemas/ContinueWatchingMovieItem",
+            "episode": "#/components/schemas/ContinueWatchingEpisodeItem"
+          }
+        }
+      },
+      "ContinueWatchingData": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinueWatchingItem"
+            }
           }
         },
         "additionalProperties": false
@@ -9953,7 +10058,7 @@
           }
         ]
       },
-      "ContinueWatchingMoviesEnvelope": {
+      "ContinueWatchingEnvelope": {
         "allOf": [
           {
             "$ref": "#/components/schemas/JsonSuccess"
@@ -9965,19 +10070,7 @@
             ],
             "properties": {
               "data": {
-                "type": "object",
-                "required": [
-                  "movies"
-                ],
-                "properties": {
-                  "movies": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/ContinueWatchingMovie"
-                    }
-                  }
-                },
-                "additionalProperties": false
+                "$ref": "#/components/schemas/ContinueWatchingData"
               }
             }
           }

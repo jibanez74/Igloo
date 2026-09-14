@@ -3,6 +3,7 @@ import { ListVideo } from "lucide-react";
 import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -25,7 +26,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
       <Link
         to="/movies/playlist/$id"
         params={{ id: id.toString() }}
-        className="block focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden focus-visible:ring-inset"
+        className={cn("block", FOCUS_VISIBLE_RING_CLASS, "focus-visible:ring-inset")}
         aria-label={`${name}, ${movie_count} ${movieNoun}`}
       >
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">

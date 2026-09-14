@@ -69,6 +69,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 		app.registerYouTubeRoutes(r)
 		app.registerSpotifyRoutes(r)
 		app.registerSearchRoutes(r)
+		r.Get("/continue-watching", app.GetContinueWatching)
 		app.registerMovieRoutes(r)
 		app.registerShowRoutes(r)
 		r.Get("/users", app.GetUsers)
@@ -160,7 +161,6 @@ func (app *Application) registerSearchRoutes(r chi.Router) {
 func (app *Application) registerMovieRoutes(r chi.Router) {
 	r.Route("/movies", func(r chi.Router) {
 		r.Get("/latest", app.GetLatestMovies)
-		r.Get("/continue-watching", app.GetContinueWatchingMovies)
 		r.Get("/library", app.GetMoviesLibrary)
 		r.Get("/stats", app.GetMoviesStats)
 		r.Get("/liked", app.GetLikedMovies)

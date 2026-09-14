@@ -19,25 +19,28 @@ type PlaybackExitSyncOptions = {
   onSaveError: () => void;
 };
 
-// Both watch-related caches must refresh on exit: the media's own
+// The lists that show this media's progress alongside it, and so must not keep
+// the pre-playback position. Home's continue-watching row carries both kinds;
+// an episode also sits in its season's episode rows. Every caller that
+// refreshes or clears watch progress reads the set from here - a reset that
+// skipped continue-watching left an episode resumable on Home.
+export function watchListQueryKeys(media: PlaybackMediaRef) {
+  return media.kind === "movie"
+    ? [[CONTINUE_WATCHING_KEY]]
+    : [[CONTINUE_WATCHING_KEY], [SHOW_SEASON_EPISODES_KEY]];
+}
+
+// Every watch-related cache must refresh on exit: the media's own
 // watch-progress entry (staleTime 30s) feeds the Resume dialog when the play
-// page is reopened right away, and the list that shows progress alongside it
-// (continue-watching on Home for movies, the season's episode rows for TV)
-// must not keep the pre-playback position.
+// page is reopened right away, plus the lists above.
 export function refreshWatchQueries(
   queryClient: QueryClient,
   media: PlaybackMediaRef,
 ) {
-  const listKey =
-    media.kind === "movie"
-      ? [CONTINUE_WATCHING_KEY]
-      : [SHOW_SEASON_EPISODES_KEY];
-
   return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: listKey,
-      refetchType: "all",
-    }),
+    ...watchListQueryKeys(media).map(queryKey =>
+      queryClient.invalidateQueries({ queryKey, refetchType: "all" }),
+    ),
     queryClient.invalidateQueries({
       queryKey: mediaWatchProgressQueryKey(media),
     }),

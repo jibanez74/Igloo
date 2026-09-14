@@ -306,12 +306,30 @@ export const AUDIO_TRACK_MODE_NOTE_ID = "audio-track-mode-note";
 export const AUDIO_TRACK_MODE_NOTE =
   "Direct play always uses the first audio track, so playback switched to “Original video, adjusted audio.” The picture is untouched.";
 /**
+ * The one focus ring, per design-system §1.7 — the shadcn
+ * `ring-[3px] ring-ring/50` recipe, so inline (non-shadcn) controls match the
+ * primitives exactly. Only shows for keyboard users (`focus-visible`, not
+ * `focus`). Pinned by src/test/lib/constants-contracts.test.ts.
+ */
+export const FOCUS_VISIBLE_RING_CLASS =
+  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden";
+
+/**
+ * The same ring, driven by a `peer` input rather than the element itself
+ * (design-system §1.7). Used where a visually rich `<Label>` stands in for an
+ * `sr-only` radio — the TMDB and Spotify pickers — so the label shows the
+ * focus the radio actually holds.
+ */
+export const PEER_FOCUS_VISIBLE_RING_CLASS =
+  "peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50";
+
+/**
  * Radix Select content uses `data-slot="select-content"` in components/ui/select.tsx.
  * Used to avoid closing a dialog when interacting with a portaled select.
  */
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
-  "w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+  `w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-hidden disabled:opacity-50 ${FOCUS_VISIBLE_RING_CLASS}`;
 export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
   "w-full min-w-0 border-border bg-muted text-foreground";
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
@@ -547,15 +565,6 @@ export const HOME_POSTER_GRID_CLASS =
   "grid grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4";
 export const HOME_ALBUM_GRID_CLASS =
   "grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]";
-
-/**
- * The one focus ring, per design-system §1.7 — the shadcn
- * `ring-[3px] ring-ring/50` recipe, so inline (non-shadcn) controls match the
- * primitives exactly. Only shows for keyboard users (`focus-visible`, not
- * `focus`). Pinned by src/test/lib/constants-contracts.test.ts.
- */
-export const FOCUS_VISIBLE_RING_CLASS =
-  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden";
 
 /**
  * Detail-page section headings (design-system §1.4, §1.7). They are skip-link

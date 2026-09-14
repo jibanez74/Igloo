@@ -47,10 +47,17 @@ export type {
   UpdatePlaylistRequest,
 } from "./music";
 
+// Home types
+export type {
+  ContinueWatchingDataType,
+  ContinueWatchingItemType,
+  ContinueWatchingMovieItemType,
+  ContinueWatchingEpisodeItemType,
+} from "./home";
+
 // Movie types
 export type {
   LatestMovieType,
-  ContinueWatchingMovieType,
   CastMemberType,
   CrewMemberType,
   TheaterMovieType,

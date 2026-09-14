@@ -88,7 +88,7 @@ export function browse() {
   ensureLogin();
 
   get("/api/movies/latest");
-  get("/api/movies/continue-watching");
+  get("/api/continue-watching");
   const lib = get("/api/movies/library?page=1&per_page=24");
   get("/api/music/albums/latest");
   get("/api/music/tracks?page=1&per_page=50");

@@ -20,13 +20,14 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { createPlaylist, updatePlaylist } from "@/lib/api";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   PLAYLIST_DESCRIPTION_MAX_LENGTH,
   PLAYLIST_DETAILS_KEY,
   PLAYLIST_NAME_MAX_LENGTH,
   PLAYLISTS_KEY,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
-import { codePointLength } from "@/lib/utils";
+import { cn, codePointLength } from "@/lib/utils";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
@@ -253,7 +254,7 @@ function PlaylistForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="My Playlist"
-            className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-ring"
+            className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
             disabled={mutation.isPending}
             autoFocus
           />
@@ -275,7 +276,10 @@ function PlaylistForm({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description..."
             rows={3}
-            className="w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring focus:outline-hidden disabled:opacity-50"
+            className={cn(
+              "w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-50",
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
             disabled={mutation.isPending}
           />
         </div>

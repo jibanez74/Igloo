@@ -46,7 +46,9 @@ describe("light input styles", () => {
       "utf8",
     );
 
-    expect(source).toContain("focus-visible:ring-ring");
+    // The card composes the shared recipe rather than spelling a ring out, so
+    // it cannot drift from the primitives (design-system §1.7).
+    expect(source).toContain("FOCUS_VISIBLE_RING_CLASS");
     expect(source).not.toContain("ring-primary-foreground");
   });
 });

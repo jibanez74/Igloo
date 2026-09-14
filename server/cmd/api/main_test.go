@@ -28,7 +28,8 @@ func setupTestLogger(t *testing.T, app *Application) {
 	t.Helper()
 
 	logger, _, err := applogger.New(&applogger.LoggerConfig{
-		Debug: true,
+		Debug:  true,
+		Stdout: true,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create test logger: %v", err)

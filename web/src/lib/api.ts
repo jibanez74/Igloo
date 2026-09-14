@@ -18,7 +18,7 @@ import type {
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,
   JoinWatchRoomResponseType,
-  ContinueWatchingMovieType,
+  ContinueWatchingDataType,
   LatestMovieType,
   LatestShowsDataType,
   ShowDetailsDataType,
@@ -347,10 +347,8 @@ export const getShowEpisodeTechnicalDetails = (episodeId: number) =>
     `/api/shows/episodes/${episodeId}/technical-details`,
   );
 
-export const getContinueWatchingMovies = () =>
-  apiRequest<{ movies: ContinueWatchingMovieType[] }>(
-    "/api/movies/continue-watching",
-  );
+export const getContinueWatching = () =>
+  apiRequest<ContinueWatchingDataType>("/api/continue-watching");
 
 export const getMoviesInTheaters = () =>
   apiRequest<{ movies: TheaterMovieType[] }>("/api/tmdb/movies/in-theaters");

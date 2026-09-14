@@ -11,6 +11,7 @@ import {
   refreshWatchQueries,
   staysOnCurrentPlayback,
   synchronizePlaybackExit,
+  watchListQueryKeys,
 } from "@/lib/video-playback-exit";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
@@ -129,6 +130,19 @@ describe("playback exit synchronization", () => {
     refresh.resolve();
   });
 
+  it("names every list a reset must clear, for both media kinds", () => {
+    // The Resume dialog's "start from the beginning" clears these by the same
+    // list, so an episode reset has to drop Home's row as well as the season's
+    // — dropping only the season left the episode resumable on Home.
+    expect(watchListQueryKeys(movieMediaRef(7))).toEqual([
+      [CONTINUE_WATCHING_KEY],
+    ]);
+    expect(watchListQueryKeys(episodeMediaRef(9))).toEqual([
+      [CONTINUE_WATCHING_KEY],
+      [SHOW_SEASON_EPISODES_KEY],
+    ]);
+  });
+
   it("invalidates continue watching and the movie's watch progress", async () => {
     const queryClient = new QueryClient();
     const movieId = 7;
@@ -155,9 +169,13 @@ describe("playback exit synchronization", () => {
     queryClient.clear();
   });
 
-  it("invalidates the season list and the episode's watch progress", async () => {
+  it("invalidates continue watching, the season list, and the episode's watch progress", async () => {
     const queryClient = new QueryClient();
     const episodeId = 9;
+    await queryClient.prefetchQuery({
+      queryKey: [CONTINUE_WATCHING_KEY],
+      queryFn: () => Promise.resolve("continue-watching"),
+    });
     await queryClient.prefetchQuery({
       queryKey: [SHOW_SEASON_EPISODES_KEY, 401, 1],
       queryFn: () => Promise.resolve("episodes"),
@@ -169,6 +187,10 @@ describe("playback exit synchronization", () => {
 
     await refreshWatchQueries(queryClient, episodeMediaRef(episodeId));
 
+    // An episode shows up in Home's merged row too, so both lists refetch.
+    expect(
+      queryClient.getQueryState([CONTINUE_WATCHING_KEY])?.dataUpdateCount,
+    ).toBe(2);
     expect(
       queryClient.getQueryState([SHOW_SEASON_EPISODES_KEY, 401, 1])
         ?.dataUpdateCount,

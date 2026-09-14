@@ -30,8 +30,9 @@ type MockHomeFetchOptions = {
   continueWatching?: unknown[];
 };
 
-const defaultContinueWatchingMovies = [
+const defaultContinueWatchingItems = [
   {
+    kind: "movie",
     id: 104,
     title: "Ember Line",
     poster_path: { String: "", Valid: false },
@@ -39,11 +40,24 @@ const defaultContinueWatchingMovies = [
     progress_sec: 1830,
     duration_sec: 5400,
   },
+  {
+    kind: "episode",
+    id: 70103,
+    title: "Frost Harbor",
+    poster_path: { String: "", Valid: false },
+    year: { Int64: 2025, Valid: true },
+    progress_sec: 600,
+    duration_sec: 2400,
+    show_id: 301,
+    season_number: 1,
+    episode_number: 4,
+    episode_name: "Thin Ice",
+  },
 ];
 
 function mockHomeFetch(options: MockHomeFetchOptions = {}) {
   const continueWatching =
-    options.continueWatching ?? defaultContinueWatchingMovies;
+    options.continueWatching ?? defaultContinueWatchingItems;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
     const method = init?.method ?? "GET";
@@ -86,10 +100,10 @@ function mockHomeFetch(options: MockHomeFetchOptions = {}) {
       });
     }
 
-    if (url === "/api/movies/continue-watching") {
+    if (url === "/api/continue-watching") {
       return jsonResponse({
         error: false,
-        data: { movies: continueWatching },
+        data: { items: continueWatching },
       });
     }
 
@@ -223,7 +237,27 @@ describe("home continue watching section", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not render when there are no in-progress movies", async () => {
+  it("shows in-progress episodes beside the movies", async () => {
+    await renderHomeRoute();
+
+    // 600 / 2400 is 25%.
+    expect(
+      await screen.findByRole("link", {
+        name: "Frost Harbor, S1 E4 · Thin Ice, 25% watched",
+      }),
+    ).toHaveAttribute("href", "/tv-shows/301");
+    expect(
+      screen.getByRole("link", {
+        name: "Resume Frost Harbor S1 E4 · Thin Ice",
+      }),
+    ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
+    // Both kinds share one row, counted with a neutral noun.
+    expect(
+      screen.getByText("2 titles available in continue watching."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render when nothing is in progress", async () => {
     await renderHomeRoute({ continueWatching: [] });
 
     expect(

@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { formatBitRate, formatRuntimeMinutes } from "@/lib/format";
+import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type {
   VideoStreamType,
   AudioStreamType,
@@ -256,7 +258,7 @@ export default function TechnicalDetailsDialog({
             ref={titleRef}
             id="technical-details-dialog-title"
             tabIndex={-1}
-            className="text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className={cn("text-foreground outline-hidden", FOCUS_VISIBLE_RING_CLASS)}
           >
             Technical details
           </DialogTitle>

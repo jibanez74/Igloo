@@ -13,6 +13,7 @@ import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -77,7 +78,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
       <Link
         to="/music/album/$id"
         params={{ id: id.toString() }}
-        className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className={cn("block rounded-xl outline-hidden", FOCUS_VISIBLE_RING_CLASS)}
         aria-label={cardLabel}
       >
         {/* Album cover: local /api/static/albums/... or external URL; fallback on load error */}
@@ -85,7 +86,7 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
           {showCover ? (
             <img
               src={coverUrl}
-              alt={`Album cover for ${title}`}
+              alt=""
               width={640}
               height={640}
               loading="lazy"
@@ -131,7 +132,8 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
         aria-disabled={isLoading}
         className={cn(
           CARD_ACTION_REVEAL_CLASS,
-          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 outline-hidden group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-disabled:opacity-50",
+          FOCUS_VISIBLE_RING_CLASS,
+          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 outline-hidden group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus-visible:scale-100 focus-visible:opacity-100 aria-disabled:opacity-50",
         )}
         aria-label={`Play ${cardLabel}`}
       >

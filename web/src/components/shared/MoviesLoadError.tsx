@@ -1,3 +1,6 @@
+import { FOCUS_VISIBLE_RING_CLASS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+
 export function MoviesLoadError({
   message,
   onRetry,
@@ -14,7 +17,10 @@ export function MoviesLoadError({
       <button
         type="button"
         onClick={onRetry}
-        className="mt-2 rounded-sm text-sm font-medium text-primary underline hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+        className={cn(
+          "mt-2 rounded-sm text-sm font-medium text-primary underline hover:text-primary/80",
+          FOCUS_VISIBLE_RING_CLASS,
+        )}
       >
         Try again
       </button>

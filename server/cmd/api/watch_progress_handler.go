@@ -1,12 +1,14 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 
 	"igloo/cmd/internal/database"
@@ -241,23 +243,117 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-func (app *Application) GetContinueWatchingMovies(w http.ResponseWriter, r *http.Request) {
+// continueWatchingLimit caps the merged row, and is also the limit handed to
+// each half's query, so the three caps cannot drift apart. It only bites twice:
+// once per query, then again once movies and episodes are combined.
+const continueWatchingLimit = 12
+
+// continueWatchingItem is one card in the home row. Movies and episodes come
+// from different queries with different columns, so this is the one read path
+// here that shapes a response instead of returning sqlc rows verbatim. The
+// episode fields are pointers so a movie omits them entirely, which is what the
+// contract's discriminated oneOf expects.
+type continueWatchingItem struct {
+	Kind          string         `json:"kind"`
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	Year          sql.NullInt64  `json:"year"`
+	ProgressSec   float64        `json:"progress_sec"`
+	DurationSec   float64        `json:"duration_sec"`
+	ShowID        *int64         `json:"show_id,omitempty"`
+	SeasonNumber  *int64         `json:"season_number,omitempty"`
+	EpisodeNumber *int64         `json:"episode_number,omitempty"`
+	EpisodeName   *string        `json:"episode_name,omitempty"`
+
+	// updatedAt orders the merge and is never serialized.
+	updatedAt string
+}
+
+// GetContinueWatching lists what the current user has started and not finished,
+// movies and episodes together, most recently watched first.
+func (app *Application) GetContinueWatching(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
 
-	movies, err := app.Queries.GetContinueWatchingMovies(r.Context(), userID)
+	movies, err := app.Queries.GetContinueWatchingMovies(r.Context(), database.GetContinueWatchingMoviesParams{
+		UserID: userID,
+		Limit:  continueWatchingLimit,
+	})
 	if err != nil {
 		app.Logger.Error("failed to get continue watching movies", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+		helpers.ErrorJSON(w, errors.New("failed to fetch continue watching"))
 		return
+	}
+
+	episodes, err := app.Queries.GetContinueWatchingEpisodes(r.Context(), database.GetContinueWatchingEpisodesParams{
+		UserID: userID,
+		Limit:  continueWatchingLimit,
+	})
+	if err != nil {
+		app.Logger.Error("failed to get continue watching episodes", "error", err, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch continue watching"))
+		return
+	}
+
+	items := make([]continueWatchingItem, 0, len(movies)+len(episodes))
+
+	for _, movie := range movies {
+		items = append(items, continueWatchingItem{
+			Kind:        string(mediaKindMovie),
+			ID:          movie.ID,
+			Title:       movie.Title,
+			PosterPath:  movie.PosterPath,
+			Year:        movie.Year,
+			ProgressSec: movie.ProgressSec,
+			DurationSec: movie.DurationSec,
+			updatedAt:   movie.UpdatedAt,
+		})
+	}
+
+	for _, episode := range episodes {
+		items = append(items, continueWatchingItem{
+			Kind:          string(mediaKindEpisode),
+			ID:            episode.ID,
+			Title:         episode.ShowName,
+			PosterPath:    episode.ShowPosterPath,
+			Year:          episode.ShowPremiereYear,
+			ProgressSec:   episode.ProgressSec,
+			DurationSec:   episode.DurationSec,
+			ShowID:        &episode.ShowID,
+			SeasonNumber:  &episode.SeasonNumber,
+			EpisodeNumber: &episode.EpisodeNumber,
+			EpisodeName:   &episode.Name,
+			updatedAt:     episode.UpdatedAt,
+		})
+	}
+
+	// updated_at is "YYYY-MM-DD HH:MM:SS" text, so comparing the strings
+	// compares the instants. CURRENT_TIMESTAMP only has second resolution and
+	// the two halves arrive from separate queries, so ties are broken on kind
+	// then id: without that the order of two rows saved in the same second
+	// would depend on which slice happened to be appended first, and the row
+	// could reshuffle between refetches.
+	slices.SortStableFunc(items, func(a, b continueWatchingItem) int {
+		if order := cmp.Compare(b.updatedAt, a.updatedAt); order != 0 {
+			return order
+		}
+		if order := cmp.Compare(a.Kind, b.Kind); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+
+	if len(items) > continueWatchingLimit {
+		items = items[:continueWatchingLimit]
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"movies": movies,
+			"items": items,
 		},
 	})
 }

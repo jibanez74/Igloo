@@ -966,7 +966,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/movies/continue-watching": {
+    "/api/continue-watching": {
         parameters: {
             query?: never;
             header?: never;
@@ -974,10 +974,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List movies the current user is watching
-         * @description Returns up to 12 movies the current user has started watching but not finished or marked watched, most recently watched first.
+         * List what the current user is watching
+         * @description Returns up to 12 movies and TV episodes the current user has started watching but not finished or marked watched, most recently watched first. A show contributes at most one entry: its most recently watched in-progress episode.
          */
-        get: operations["getContinueWatchingMovies"];
+        get: operations["getContinueWatching"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2598,7 +2598,12 @@ export interface components {
             poster_path: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
         };
-        ContinueWatchingMovie: {
+        ContinueWatchingMovieItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "movie";
             /** Format: int64 */
             id: number;
             title: string;
@@ -2608,6 +2613,34 @@ export interface components {
             progress_sec: number;
             /** Format: double */
             duration_sec: number;
+        };
+        /** @description An in-progress episode. title, poster_path and year describe the show the episode belongs to. */
+        ContinueWatchingEpisodeItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "episode";
+            /** Format: int64 */
+            id: number;
+            title: string;
+            poster_path: components["schemas"]["SqlNullString"];
+            year: components["schemas"]["SqlNullInt64"];
+            /** Format: double */
+            progress_sec: number;
+            /** Format: double */
+            duration_sec: number;
+            /** Format: int64 */
+            show_id: number;
+            /** Format: int64 */
+            season_number: number;
+            /** Format: int64 */
+            episode_number: number;
+            episode_name: string;
+        };
+        ContinueWatchingItem: components["schemas"]["ContinueWatchingMovieItem"] | components["schemas"]["ContinueWatchingEpisodeItem"];
+        ContinueWatchingData: {
+            items: components["schemas"]["ContinueWatchingItem"][];
         };
         MovieLibraryItem: {
             /** Format: int64 */
@@ -2780,10 +2813,8 @@ export interface components {
         ShowSeasonEpisodesEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["ShowSeasonEpisodesData"];
         };
-        ContinueWatchingMoviesEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                movies: components["schemas"]["ContinueWatchingMovie"][];
-            };
+        ContinueWatchingEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ContinueWatchingData"];
         };
         MoviesLibraryEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MoviesLibraryData"];
@@ -4573,13 +4604,13 @@ export interface components {
                 "application/json": components["schemas"]["ShowSeasonEpisodesEnvelope"];
             };
         };
-        /** @description Continue watching movies response. */
-        ContinueWatchingMoviesResponse: {
+        /** @description Continue watching response. */
+        ContinueWatchingResponse: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["ContinueWatchingMoviesEnvelope"];
+                "application/json": components["schemas"]["ContinueWatchingEnvelope"];
             };
         };
         /** @description Paginated movie library response. */
@@ -7017,7 +7048,7 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
-    getContinueWatchingMovies: {
+    getContinueWatching: {
         parameters: {
             query?: never;
             header?: never;
@@ -7026,7 +7057,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["ContinueWatchingMoviesResponse"];
+            200: components["responses"]["ContinueWatchingResponse"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
         };

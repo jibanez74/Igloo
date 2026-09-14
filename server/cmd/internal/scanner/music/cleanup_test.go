@@ -108,7 +108,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 			if len(logs.ErrorEntries) != 1 || logs.ErrorEntries[0].Msg != "music scan failed" {
 				t.Fatalf("cleanup error logs=%+v", logs.ErrorEntries)
 			}
-			for _, entry := range logs.InfoEntries {
+			for _, entry := range append(append([]scannertest.LogEntry{}, logs.InfoEntries...), logs.WarnEntries...) {
 				if entry.Msg == "music library scan interrupted" || strings.Contains(entry.Msg, "completed:") {
 					t.Errorf("failed cleanup logged %q", entry.Msg)
 				}

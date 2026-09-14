@@ -5,7 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { searchSpotifyTracks } from "@/lib/api";
-import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
+import {
+  MOTION_MICRO_COLORS_CLASS,
+  PEER_FOCUS_VISIBLE_RING_CLASS,
+} from "@/lib/constants";
 import { formatTrackDuration } from "@/lib/format";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -256,7 +259,10 @@ function SpotifyTrackResultCard({
       <Label
         id={labelId}
         htmlFor={inputId}
-        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-ring/60"
+        className={cn(
+          "mb-0 flex cursor-pointer gap-3 rounded-lg p-2",
+          PEER_FOCUS_VISIBLE_RING_CLASS,
+        )}
       >
         {result.cover_url ? (
           <img

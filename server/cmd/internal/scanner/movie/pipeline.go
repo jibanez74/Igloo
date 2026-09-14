@@ -104,18 +104,28 @@ func (s *Scanner) runMovieScan(directory string) {
 	})
 	defer func() {
 		stopProgressLog()
-		report.Finish(&report.status.Progress, ctx.Err() != nil)
+		contextErr := ctx.Err()
+		if contextErr != nil {
+			// Warn, not Info: an interrupted run leaves the tail of the job
+			// list undispatched, so whole movies can be missing from the
+			// catalog with no other sign. Warn also rides the logger's severe-
+			// record flush, which is what gets this line onto disk when the
+			// cancellation came from shutdown.
+			s.logger.Warn("movie scan interrupted", "phase", report.status.Phase, "processed", report.status.Processed, "total", report.status.Total, "error", contextErr)
+		}
+		report.Finish(&report.status.Progress, contextErr != nil)
 		s.publish(report)
 		now := *report.status.FinishedAt
 		s.logger.Info("movie scan finished", "run", report.status.RunID, "state", report.status.State, "elapsed", now.Sub(*report.status.StartedAt), "processed", report.status.Processed, "total", report.status.Total, "imported", report.status.Imported, "updated", report.status.Updated, "unchanged", report.status.Unchanged, "failed", report.status.Failed, "deferred", report.status.Deferred, "deleted", report.status.Deleted, "enriched", report.status.Enriched, "pending", report.status.PendingEnrichment)
 	}()
+	// fail marks a fatal error; a cancellation is reported once by the deferred
+	// finish instead.
 	fail := func(err error, reason string) {
 		contextErr := ctx.Err()
 		if contextErr != nil {
-			s.logger.Info("movie scan interrupted", "phase", report.status.Phase, "error", contextErr)
 			return
 		}
-		s.logger.Error("movie scan interrupted", "phase", report.status.Phase, "error", err)
+		s.logger.Error("movie scan failed", "phase", report.status.Phase, "error", err)
 		report.status.State = scanner.StateFailed
 		report.Issue("", report.status.Phase, reason)
 	}

@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/scanner"
 )
 
 func realProbe(t *testing.T) ffprobe.FfprobeInterface {
@@ -97,6 +99,8 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 	if firstProbes < len(rows) {
 		t.Fatalf("imported %d files with only %d real probes", len(rows), firstProbes)
 	}
+	assertEveryDiscoveredFileReachedTheCatalog(t, s.Status(), len(rows))
+	logShowDirectoryCounts(t, root, rows)
 	for _, row := range rows {
 		episodes := fileEpisodes(t, s.DB, row.ID)
 		numbers := make([]int64, 0, len(episodes))
@@ -116,6 +120,51 @@ func TestSampleLibraryReadOnly(t *testing.T) {
 		if !unchanged {
 			t.Errorf("unchanged scan changed catalog table %s", table)
 		}
+	}
+}
+
+// assertEveryDiscoveredFileReachedTheCatalog is the check the counters alone
+// never make. Total is stamped during discovery and is never reduced, so a run
+// that rejects, defers, or simply never dispatches part of its job list still
+// finishes and still reports a run -- and a show whose every file went missing
+// that way vanishes from the catalog with nothing to show for it. A walk error
+// that skipped a whole subtree lands here too, as completed-with-issues.
+func assertEveryDiscoveredFileReachedTheCatalog(t *testing.T, status Status, catalogFiles int) {
+	t.Helper()
+	if status.State != scanner.StateCompleted {
+		t.Fatalf("scan state = %q, want %q (issues: %+v)", status.State, scanner.StateCompleted, status.Issues)
+	}
+	if status.Failed != 0 || status.Deferred != 0 {
+		t.Fatalf("scan reported failed=%d deferred=%d, want 0 of each (issues: %+v)", status.Failed, status.Deferred, status.Issues)
+	}
+	if status.Total != catalogFiles {
+		t.Fatalf("discovered %d files but only %d reached the catalog", status.Total, catalogFiles)
+	}
+}
+
+// logShowDirectoryCounts prints one line per show directory so a short or
+// missing show is legible without counting 300 catalog lines by hand.
+func logShowDirectoryCounts(t *testing.T, root string, rows []database.GetShowScanIndexRow) {
+	t.Helper()
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := make(map[string]int)
+	for _, row := range rows {
+		relative, err := filepath.Rel(absolute, row.FilePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		counts[strings.Split(relative, string(filepath.Separator))[0]]++
+	}
+	directories := make([]string, 0, len(counts))
+	for directory := range counts {
+		directories = append(directories, directory)
+	}
+	sort.Strings(directories)
+	for _, directory := range directories {
+		t.Logf("show directory %q: %d files", directory, counts[directory])
 	}
 }
 
