@@ -407,6 +407,68 @@ func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
 	}
 }
 
+func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Dupe User", "dupe@example.com", false)
+	fixture := seedPlaybackEpisode(t, app)
+	chain := seedNextEpisodeChain(t, app, fixture)
+
+	ctx := context.Background()
+	// The library also holds a standalone copy of S1E2. Scanned after the
+	// combined file, it carries the higher file id and so loses the
+	// lowest-id race GetShowFileForEpisode runs: owning a file of its own
+	// does not make S1E2 playable as anything but the file that just ended.
+	path := fmt.Sprintf("/tmp/%s-S01E02.mkv", sanitizeTestPathComponent(t.Name()))
+	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
+		SeasonID:  fixture.SeasonID,
+		FilePath:  path,
+		FileName:  filepath.Base(path),
+		Size:      1_000_000,
+		Container: "mkv",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
+		Duration:  sql.NullFloat64{Float64: 2700, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("upsert duplicate file: %v", err)
+	}
+	if duplicate.ID <= fixture.FileID {
+		t.Fatalf("duplicate file id = %d, want one above the combined file %d", duplicate.ID, fixture.FileID)
+	}
+	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
+		EpisodeID:    fixture.Episode2,
+		FileID:       duplicate.ID,
+		SeasonID:     fixture.SeasonID,
+		EpisodeOrder: 0,
+	})
+	if err != nil {
+		t.Fatalf("link duplicate file: %v", err)
+	}
+
+	selected, err := app.Queries.GetShowFileForEpisode(ctx, fixture.Episode2)
+	if err != nil {
+		t.Fatalf("selected file for S1E2: %v", err)
+	}
+	if selected.ID != fixture.FileID {
+		t.Fatalf("S1E2 plays file %d, want the combined file %d", selected.ID, fixture.FileID)
+	}
+
+	next, err := app.Queries.GetShowNextEpisode(ctx, database.GetShowNextEpisodeParams{
+		UserID:    user.ID,
+		EpisodeID: fixture.Episode1,
+	})
+	if err != nil {
+		t.Fatalf("next episode: %v", err)
+	}
+	if next.ID == fixture.Episode2 {
+		t.Fatalf("next of S1E1 = S1E2 %d, which would replay the combined file", fixture.Episode2)
+	}
+	if next.ID != chain.S1E3 {
+		t.Fatalf("next of S1E1 = %d, want S1E3 %d", next.ID, chain.S1E3)
+	}
+}
+
 func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

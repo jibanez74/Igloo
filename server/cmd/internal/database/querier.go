@@ -341,11 +341,12 @@ type Querier interface {
 	// The episode the player advances to when one ends: the first episode of the
 	// same show that sorts after the current one in the order the season listing
 	// uses (specials last, then season, then episode number). A candidate has to
-	// own a playable file other than the one that just played, which skips both
-	// metadata-only episodes the scanner knows but has no media for and the
-	// siblings of a combined file, since that file plays whole and they have
-	// already been seen. The requesting user's progress rides along so the player
-	// can resume the next episode where it was left.
+	// own a file, and the file playback would pick for it has to be one other than
+	// the file that just played: that skips both metadata-only episodes the
+	// scanner knows but has no media for and the siblings of a combined file,
+	// since that file plays whole and they have already been seen. The requesting
+	// user's progress rides along so the player can resume the next episode where
+	// it was left.
 	GetShowNextEpisode(ctx context.Context, arg GetShowNextEpisodeParams) (GetShowNextEpisodeRow, error)
 	GetShowPendingEpisodeIDs(ctx context.Context, showID int64) ([]int64, error)
 	GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]int64, error)
