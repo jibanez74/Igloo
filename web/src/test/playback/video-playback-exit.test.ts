@@ -155,9 +155,13 @@ describe("playback exit synchronization", () => {
     queryClient.clear();
   });
 
-  it("invalidates the season list and the episode's watch progress", async () => {
+  it("invalidates continue watching, the season list, and the episode's watch progress", async () => {
     const queryClient = new QueryClient();
     const episodeId = 9;
+    await queryClient.prefetchQuery({
+      queryKey: [CONTINUE_WATCHING_KEY],
+      queryFn: () => Promise.resolve("continue-watching"),
+    });
     await queryClient.prefetchQuery({
       queryKey: [SHOW_SEASON_EPISODES_KEY, 401, 1],
       queryFn: () => Promise.resolve("episodes"),
@@ -169,6 +173,10 @@ describe("playback exit synchronization", () => {
 
     await refreshWatchQueries(queryClient, episodeMediaRef(episodeId));
 
+    // An episode shows up in Home's merged row too, so both lists refetch.
+    expect(
+      queryClient.getQueryState([CONTINUE_WATCHING_KEY])?.dataUpdateCount,
+    ).toBe(2);
     expect(
       queryClient.getQueryState([SHOW_SEASON_EPISODES_KEY, 401, 1])
         ?.dataUpdateCount,

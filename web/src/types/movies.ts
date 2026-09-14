@@ -14,12 +14,6 @@ export type LatestMovieType = {
   year: NullableInt64;
 };
 
-/** Row from GET /api/movies/continue-watching (home "Watching" section). */
-export type ContinueWatchingMovieType = LatestMovieType & {
-  progress_sec: number;
-  duration_sec: number;
-};
-
 /** Rows from GET /api/movies/library, /liked, and playlist movie pages (includes certification). Compatible with MovieCard. */
 export type MoviesLibraryListItemType = LatestMovieType & {
   certification: NullableString;

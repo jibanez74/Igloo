@@ -165,6 +165,15 @@ type Querier interface {
 	GetCastByShowID(ctx context.Context, showID int64) ([]GetCastByShowIDRow, error)
 	// Chapters for a movie (for technical details display).
 	GetChaptersByMovieID(ctx context.Context, movieID int64) ([]Chapter, error)
+	// The episode half of the home "Continue Watching" row. Mirrors
+	// GetContinueWatchingMovies, including the 30-second floor that must match the
+	// web client's WATCH_PROGRESS_MIN_SECONDS, with two differences. An episode the
+	// scanner knows but has no file for cannot be resumed, so the same EXISTS guard
+	// GetShowNextEpisode uses skips it. And a show contributes one card rather than
+	// one per episode: the GROUP BY relies on SQLite's bare-column rule, where a
+	// single MAX() aggregate makes every other column come from the row it picked,
+	// so each show returns its most recently watched in-progress episode.
+	GetContinueWatchingEpisodes(ctx context.Context, userID int64) ([]GetContinueWatchingEpisodesRow, error)
 	// The 30-second floor must match the web client's
 	// WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)

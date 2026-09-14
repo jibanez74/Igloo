@@ -86,7 +86,8 @@ SELECT
   m.poster_path,
   m.year,
   mwp.progress_sec,
-  mwp.duration_sec
+  mwp.duration_sec,
+  mwp.updated_at
 FROM movie_watch_progress AS mwp
 JOIN movies AS m ON m.id = mwp.movie_id
 WHERE mwp.user_id = ?

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,7 +75,6 @@ func TestWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 
 	progressPath := fmt.Sprintf("/api/movies/%d/watch-progress", movieID)
 	assertRequest("getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
-	assertRequest("getContinueWatchingMovies", httptest.NewRequest(http.MethodGet, "/api/movies/continue-watching", nil))
 	updateBody := `{"progress_sec":120,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`
 	assertRequest("updateMovieWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody))
 	watchedPath := fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID)
@@ -1006,4 +1006,248 @@ func TestReadJSON_WatchProgressRequest_DisallowUnknownFields(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown field")
 	}
+}
+
+// backdateProgress forces a distinct, older updated_at so recency ordering is
+// deterministic: CURRENT_TIMESTAMP only has second resolution.
+func backdateProgress(t *testing.T, app *Application, table, column string, userID, mediaID int64, offset string) {
+	t.Helper()
+
+	query := fmt.Sprintf("UPDATE %s SET updated_at = datetime('now', ?) WHERE user_id = ? AND %s = ?", table, column)
+	_, err := app.DB.Exec(query, offset, userID, mediaID)
+	if err != nil {
+		t.Fatalf("backdate %s row: %v", table, err)
+	}
+}
+
+// saveSequence orders writes within a playback session: a later write to the
+// same episode has to advance it or the upsert's guard discards it.
+func seedEpisodeWatchProgress(t *testing.T, app *Application, userID, episodeID int64, progressSec float64, saveSequence int64) {
+	t.Helper()
+
+	err := app.Queries.UpsertShowEpisodeWatchProgress(context.Background(), database.UpsertShowEpisodeWatchProgressParams{
+		UserID:        userID,
+		EpisodeID:     episodeID,
+		ProgressSec:   progressSec,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  saveSequence,
+	})
+	if err != nil {
+		t.Fatalf("seed episode watch progress for episode %d: %v", episodeID, err)
+	}
+}
+
+// The merged row is the only place a movie and an episode share a payload, so
+// it is validated with both kinds present: an empty or single-kind list would
+// leave one branch of the contract's oneOf unexercised.
+func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
+	app := setupSessionTestApp(t)
+	defer app.DB.Close()
+
+	user := createTestUser(t, app, "Watcher", "continue-watching@example.com", false)
+	movieID := createSearchMovie(t, app, "Contract Movie", "/movies/contract-continue.mkv")
+	seedWatchProgress(t, app, user.ID, movieID)
+
+	fixture := seedPlaybackEpisode(t, app)
+	seedEpisodeWatchProgress(t, app, user.ID, fixture.Episode1, 900.0, 1)
+	backdateProgress(t, app, "movie_watch_progress", "movie_id", user.ID, movieID, "-1 hour")
+
+	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, user.ID)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/continue-watching", nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	app.Router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	assertResponseListNotEmpty(t, "getContinueWatching", response.Body.Bytes(), "items")
+	assertOpenAPIExchange(t, "getContinueWatching", request, response)
+
+	var payload struct {
+		Data struct {
+			Items []struct {
+				Kind          string  `json:"kind"`
+				ID            int64   `json:"id"`
+				Title         string  `json:"title"`
+				ProgressSec   float64 `json:"progress_sec"`
+				DurationSec   float64 `json:"duration_sec"`
+				ShowID        int64   `json:"show_id"`
+				SeasonNumber  int64   `json:"season_number"`
+				EpisodeNumber int64   `json:"episode_number"`
+				EpisodeName   string  `json:"episode_name"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(response.Body.Bytes(), &payload)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	items := payload.Data.Items
+	if len(items) != 2 {
+		t.Fatalf("expected the movie and the episode, got %d items: %s", len(items), response.Body.String())
+	}
+
+	episode := items[0]
+	if episode.Kind != "episode" || episode.ID != fixture.Episode1 {
+		t.Fatalf("expected the just-watched episode first, got %+v", episode)
+	}
+	if episode.Title != "Playback Show" || episode.ShowID != fixture.ShowID {
+		t.Errorf("episode item should carry the show's identity, got %+v", episode)
+	}
+	if episode.SeasonNumber != 1 || episode.EpisodeNumber != 1 || episode.EpisodeName != "Pilot" {
+		t.Errorf("episode item season/episode/name = %d/%d/%q", episode.SeasonNumber, episode.EpisodeNumber, episode.EpisodeName)
+	}
+	if episode.ProgressSec != 900.0 || episode.DurationSec != 7200.0 {
+		t.Errorf("episode progress = %f/%f, want 900/7200", episode.ProgressSec, episode.DurationSec)
+	}
+
+	movie := items[1]
+	if movie.Kind != "movie" || movie.ID != movieID {
+		t.Fatalf("expected the older movie second, got %+v", movie)
+	}
+	if movie.ShowID != 0 || movie.EpisodeName != "" {
+		t.Errorf("movie item must omit the episode fields, got %+v", movie)
+	}
+}
+
+func TestGetContinueWatchingEpisodes_OnePerShowAndOnlyWhatCanBeResumed(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	user := createTestUser(t, app, "Watcher", "episode-continue@example.com", false)
+	otherUser := createTestUser(t, app, "Other", "episode-continue-other@example.com", false)
+
+	fixture := seedPlaybackEpisode(t, app)
+
+	// A third episode the scanner knows but has no file for: nothing to resume.
+	fileless, err := app.Queries.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{
+		SeasonID:      fixture.SeasonID,
+		EpisodeNumber: 3,
+		Name:          "Fileless",
+	})
+	if err != nil {
+		t.Fatalf("upsert fileless episode: %v", err)
+	}
+
+	otherShow := seedSecondShowEpisode(t, app)
+
+	seedEpisodeWatchProgress(t, app, user.ID, fixture.Episode1, 300.0, 1)
+	seedEpisodeWatchProgress(t, app, user.ID, fixture.Episode2, 1200.0, 1)
+	seedEpisodeWatchProgress(t, app, user.ID, fileless.ID, 600.0, 1)
+	seedEpisodeWatchProgress(t, app, user.ID, otherShow, 900.0, 1)
+	seedEpisodeWatchProgress(t, app, otherUser.ID, fixture.Episode1, 900.0, 1)
+
+	backdateProgress(t, app, "show_episode_watch_progress", "episode_id", user.ID, fixture.Episode1, "-1 hour")
+	backdateProgress(t, app, "show_episode_watch_progress", "episode_id", user.ID, otherShow, "-2 hours")
+
+	rows, err := app.Queries.GetContinueWatchingEpisodes(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetContinueWatchingEpisodes failed: %v", err)
+	}
+
+	if len(rows) != 2 {
+		t.Fatalf("expected one row per show, got %d: %+v", len(rows), rows)
+	}
+	if rows[0].ID != fixture.Episode2 {
+		t.Errorf("expected the show's most recent in-progress episode %d, got %d", fixture.Episode2, rows[0].ID)
+	}
+	if rows[0].ShowID != fixture.ShowID || rows[0].ShowName != "Playback Show" {
+		t.Errorf("row should carry the show identity, got %+v", rows[0])
+	}
+	if rows[1].ID != otherShow {
+		t.Errorf("expected the older show's episode %d second, got %d", otherShow, rows[1].ID)
+	}
+	for _, row := range rows {
+		if row.ID == fileless.ID {
+			t.Error("an episode with no file cannot be resumed and must be excluded")
+		}
+	}
+
+	// Finishing the surviving episode drops the show out of the row entirely:
+	// the sibling is only hidden by the one-per-show collapse.
+	err = app.Queries.MarkShowEpisodeWatched(ctx, database.MarkShowEpisodeWatchedParams{
+		UserID:    user.ID,
+		EpisodeID: fixture.Episode2,
+	})
+	if err != nil {
+		t.Fatalf("mark episode watched: %v", err)
+	}
+	seedEpisodeWatchProgress(t, app, user.ID, fixture.Episode1, 29.0, 2)
+
+	rows, err = app.Queries.GetContinueWatchingEpisodes(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetContinueWatchingEpisodes after watching failed: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != otherShow {
+		t.Fatalf("watched and below-floor episodes must be excluded, got %+v", rows)
+	}
+}
+
+// seedSecondShowEpisode adds a second show with one season, one file and one
+// episode linked to it, and returns that episode's id.
+func seedSecondShowEpisode(t *testing.T, app *Application) int64 {
+	t.Helper()
+	ctx := context.Background()
+	q := app.Queries
+
+	show, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{
+		DirectoryPath: "/shows/Second Show (2022)",
+		LocalName:     "Second Show",
+		PremiereYear:  sql.NullInt64{Int64: 2022, Valid: true},
+		Name:          "Second Show",
+	})
+	if err != nil {
+		t.Fatalf("upsert second show: %v", err)
+	}
+
+	season, err := q.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{
+		ShowID:       show.ID,
+		SeasonNumber: 2,
+		Name:         "Season 2",
+	})
+	if err != nil {
+		t.Fatalf("upsert second show season: %v", err)
+	}
+
+	path := fmt.Sprintf("/tmp/%s-second-S02E01.mkv", sanitizeTestPathComponent(t.Name()))
+	file, err := q.UpsertShowFile(ctx, database.UpsertShowFileParams{
+		SeasonID:  season.ID,
+		FilePath:  path,
+		FileName:  filepath.Base(path),
+		Size:      1_000_000,
+		Container: "mkv",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
+		Duration:  sql.NullFloat64{Float64: 7200, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("upsert second show file: %v", err)
+	}
+
+	episode, err := q.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{
+		SeasonID:      season.ID,
+		EpisodeNumber: 1,
+		Name:          "Second Pilot",
+	})
+	if err != nil {
+		t.Fatalf("upsert second show episode: %v", err)
+	}
+
+	err = q.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
+		EpisodeID:    episode.ID,
+		FileID:       file.ID,
+		SeasonID:     season.ID,
+		EpisodeOrder: 0,
+	})
+	if err != nil {
+		t.Fatalf("link second show episode: %v", err)
+	}
+
+	return episode.ID
 }

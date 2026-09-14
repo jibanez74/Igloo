@@ -33,7 +33,8 @@ SELECT
   m.poster_path,
   m.year,
   mwp.progress_sec,
-  mwp.duration_sec
+  mwp.duration_sec,
+  mwp.updated_at
 FROM movie_watch_progress AS mwp
 JOIN movies AS m ON m.id = mwp.movie_id
 WHERE mwp.user_id = ?
@@ -52,6 +53,7 @@ type GetContinueWatchingMoviesRow struct {
 	Year        sql.NullInt64  `json:"year"`
 	ProgressSec float64        `json:"progress_sec"`
 	DurationSec float64        `json:"duration_sec"`
+	UpdatedAt   string         `json:"updated_at"`
 }
 
 // The 30-second floor must match the web client's
@@ -72,6 +74,7 @@ func (q *Queries) GetContinueWatchingMovies(ctx context.Context, userID int64) (
 			&i.Year,
 			&i.ProgressSec,
 			&i.DurationSec,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

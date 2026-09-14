@@ -1396,6 +1396,8 @@ CREATE TABLE IF NOT EXISTS show_episode_watch_progress (
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (episode_id) REFERENCES show_episodes (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_show_episode_watch_progress_user_updated_at ON show_episode_watch_progress (user_id, updated_at DESC)
+WHERE watched = false;
 CREATE INDEX IF NOT EXISTS idx_show_episode_watch_progress_episode ON show_episode_watch_progress (episode_id);
 CREATE TABLE IF NOT EXISTS networks (
  id INTEGER PRIMARY KEY AUTOINCREMENT,

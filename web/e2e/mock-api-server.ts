@@ -1402,6 +1402,46 @@ function handleShowsRoutes(
   return false;
 }
 
+// The home "Continue Watching" row mixes both libraries, so it is its own
+// route rather than part of the movie or show group.
+function handleContinueWatchingRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const method = request.method ?? "GET";
+  if (url.pathname !== "/api/continue-watching" || method !== "GET") {
+    return false;
+  }
+
+  const movies = libraryMovies.slice(0, 2).map((movie, index) => ({
+    kind: "movie",
+    ...movie,
+    progress_sec: 900 * (index + 1),
+    duration_sec: 5400,
+  }));
+
+  sendSuccess(response, {
+    items: [
+      {
+        kind: "episode",
+        id: mockEpisodeId,
+        title: latestShows[0].name,
+        poster_path: latestShows[0].poster_path,
+        year: latestShows[0].premiere_year,
+        progress_sec: 600,
+        duration_sec: 2400,
+        show_id: latestShows[0].id,
+        season_number: 1,
+        episode_number: 3,
+        episode_name: "The Thaw",
+      },
+      ...movies,
+    ],
+  });
+  return true;
+}
+
 function handleMoviesRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1411,17 +1451,6 @@ function handleMoviesRoutes(
 
   if (url.pathname === "/api/movies/latest" && method === "GET") {
     sendSuccess(response, { movies: libraryMovies.slice(0, 3) });
-    return true;
-  }
-
-  if (url.pathname === "/api/movies/continue-watching" && method === "GET") {
-    sendSuccess(response, {
-      movies: libraryMovies.slice(0, 2).map((movie, index) => ({
-        ...movie,
-        progress_sec: 900 * (index + 1),
-        duration_sec: 5400,
-      })),
-    });
     return true;
   }
 
@@ -1741,6 +1770,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       }
 
       if (await handleSettingsRoutes(request, response, url, user)) return;
+      if (handleContinueWatchingRoute(request, response, url)) return;
       if (handleMoviesRoutes(request, response, url)) return;
       if (handleShowsRoutes(request, response, url)) return;
       if (handleMusicRoutes(request, response, url)) return;

@@ -439,7 +439,10 @@ collapse, while the mobile trigger controls the sheet.
 ### 3.2 Media cards
 
 One anatomy, shared by `MovieCard`, `ShowCard`, `InTheatersCard`, `AlbumCard`,
-`MusicianCard`, `PlaylistCard`, `WatchRoomCard`:
+`MusicianCard`, `PlaylistCard`, `WatchRoomCard`. The 2:3 poster variant with a
+play action is implemented once in `components/shared/PosterCard.tsx` —
+`MovieCard` and `ContinueWatchingEpisodeCard` pass it their links, labels and
+watch progress rather than repeating the markup:
 
 ```
 <article class={CARD_SURFACE_CLASS}>
@@ -459,7 +462,8 @@ One anatomy, shared by `MovieCard`, `ShowCard`, `InTheatersCard`, `AlbumCard`,
 ```
 
 Rules: 2:3 posters, square covers, circular musician thumbs; titles clamp at
-2 lines; the hover overlay must also reveal on `group-focus-within`; cards
+2 lines, with an optional muted second line under them (a year, or an episode's
+`S1 E4 · Name`); the hover overlay must also reveal on `group-focus-within`; cards
 with no secondary play action (`ShowCard`, `InTheatersCard`, `MusicianCard`)
 omit the overlay and play control entirely rather than rendering an empty
 wash; cards prefetch their detail query on `onMouseEnter`/`onFocus`

@@ -360,6 +360,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getChaptersByMovieIDStmt, err = db.PrepareContext(ctx, getChaptersByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChaptersByMovieID: %w", err)
 	}
+	if q.getContinueWatchingEpisodesStmt, err = db.PrepareContext(ctx, getContinueWatchingEpisodes); err != nil {
+		return nil, fmt.Errorf("error preparing query GetContinueWatchingEpisodes: %w", err)
+	}
 	if q.getContinueWatchingMoviesStmt, err = db.PrepareContext(ctx, getContinueWatchingMovies); err != nil {
 		return nil, fmt.Errorf("error preparing query GetContinueWatchingMovies: %w", err)
 	}
@@ -1628,6 +1631,11 @@ func (q *Queries) Close() error {
 	if q.getChaptersByMovieIDStmt != nil {
 		if cerr := q.getChaptersByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getChaptersByMovieIDStmt: %w", cerr)
+		}
+	}
+	if q.getContinueWatchingEpisodesStmt != nil {
+		if cerr := q.getContinueWatchingEpisodesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getContinueWatchingEpisodesStmt: %w", cerr)
 		}
 	}
 	if q.getContinueWatchingMoviesStmt != nil {
@@ -2956,6 +2964,7 @@ type Queries struct {
 	getCastByMovieIDStmt                        *sql.Stmt
 	getCastByShowIDStmt                         *sql.Stmt
 	getChaptersByMovieIDStmt                    *sql.Stmt
+	getContinueWatchingEpisodesStmt             *sql.Stmt
 	getContinueWatchingMoviesStmt               *sql.Stmt
 	getCreatorsByShowIDStmt                     *sql.Stmt
 	getCrewByMovieIDStmt                        *sql.Stmt
@@ -3309,6 +3318,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
 		getCastByShowIDStmt:                         q.getCastByShowIDStmt,
 		getChaptersByMovieIDStmt:                    q.getChaptersByMovieIDStmt,
+		getContinueWatchingEpisodesStmt:             q.getContinueWatchingEpisodesStmt,
 		getContinueWatchingMoviesStmt:               q.getContinueWatchingMoviesStmt,
 		getCreatorsByShowIDStmt:                     q.getCreatorsByShowIDStmt,
 		getCrewByMovieIDStmt:                        q.getCrewByMovieIDStmt,

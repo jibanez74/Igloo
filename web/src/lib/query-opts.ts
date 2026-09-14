@@ -12,7 +12,7 @@ import {
   getAlbumDetails,
   getAlbumsPaginated,
   getAuthUser,
-  getContinueWatchingMovies,
+  getContinueWatching,
   getDevices,
   getGeneralSettings,
   getPlaybackSettings,
@@ -272,11 +272,12 @@ export function showSeasonEpisodesQueryOpts(
 }
 
 // Progress changes with every playback session, so keep this as fresh as the
-// per-movie watch-progress query (STALE_30S).
+// per-movie watch-progress query (STALE_30S). Movies and episodes arrive
+// together, already merged and ordered by the server.
 export function continueWatchingQueryOpts() {
   return queryOptions({
     queryKey: [CONTINUE_WATCHING_KEY],
-    queryFn: getContinueWatchingMovies,
+    queryFn: getContinueWatching,
     staleTime: STALE_30S,
     gcTime: GC_DEFAULT,
   });

@@ -41,8 +41,9 @@ type MockHomeApiOptions = {
   continueWatching?: unknown[];
 };
 
-const defaultContinueWatchingMovies = [
+const defaultContinueWatchingItems = [
   {
+    kind: "movie",
     id: 104,
     title: "Ember Line",
     poster_path: nullableString("/ember-line.jpg"),
@@ -51,6 +52,20 @@ const defaultContinueWatchingMovies = [
     duration_sec: 5400,
   },
   {
+    kind: "episode",
+    id: 70103,
+    title: "Frost Harbor",
+    poster_path: nullableString("/frost-harbor.jpg"),
+    year: nullableInt64(2025),
+    progress_sec: 600,
+    duration_sec: 2400,
+    show_id: 301,
+    season_number: 1,
+    episode_number: 4,
+    episode_name: "Thin Ice",
+  },
+  {
+    kind: "movie",
     id: 105,
     title: "Quiet Orbit",
     poster_path: nullableString(),
@@ -62,7 +77,7 @@ const defaultContinueWatchingMovies = [
 
 async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
   const continueWatching =
-    options.continueWatching ?? defaultContinueWatchingMovies;
+    options.continueWatching ?? defaultContinueWatchingItems;
   const unexpectedApiRequests: string[] = [];
 
   await page.route("**/api/**", async route => {
@@ -152,8 +167,8 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
       return;
     }
 
-    if (pathname === "/api/movies/continue-watching") {
-      await fulfillJSON(route, apiResponse({ movies: continueWatching }));
+    if (pathname === "/api/continue-watching") {
+      await fulfillJSON(route, apiResponse({ items: continueWatching }));
       return;
     }
 
@@ -435,11 +450,23 @@ test("continue watching section announces progress", async ({ page }) => {
   expect(box).not.toBeNull();
   expect(box!.width).toBeLessThan(300);
 
+  // Episodes share the row with the movies, ordered by the server.
+  await expect(
+    watchingRegion.getByRole("link", {
+      name: "Frost Harbor, S1 E4 · Thin Ice, 25% watched",
+    }),
+  ).toBeVisible();
+  await expect(
+    watchingRegion.getByRole("link", {
+      name: "Resume Frost Harbor S1 E4 · Thin Ice",
+    }),
+  ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play?start=0&audio_track=0");
+
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();
 });
 
-test("continue watching section is hidden when there are no in-progress movies", async ({
+test("continue watching section is hidden when nothing is in progress", async ({
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);

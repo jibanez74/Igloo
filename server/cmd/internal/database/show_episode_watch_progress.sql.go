@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteShowEpisodeWatchProgress = `-- name: DeleteShowEpisodeWatchProgress :exec
@@ -23,6 +24,95 @@ type DeleteShowEpisodeWatchProgressParams struct {
 func (q *Queries) DeleteShowEpisodeWatchProgress(ctx context.Context, arg DeleteShowEpisodeWatchProgressParams) error {
 	_, err := q.exec(ctx, q.deleteShowEpisodeWatchProgressStmt, deleteShowEpisodeWatchProgress, arg.UserID, arg.EpisodeID)
 	return err
+}
+
+const getContinueWatchingEpisodes = `-- name: GetContinueWatchingEpisodes :many
+SELECT
+  CAST(MAX(wp.updated_at) AS TEXT) AS updated_at,
+  e.id,
+  e.name,
+  e.episode_number,
+  ss.season_number,
+  sh.id AS show_id,
+  sh.name AS show_name,
+  sh.poster_path AS show_poster_path,
+  sh.premiere_year AS show_premiere_year,
+  wp.progress_sec,
+  wp.duration_sec
+FROM show_episode_watch_progress AS wp
+INNER JOIN show_episodes AS e ON e.id = wp.episode_id
+INNER JOIN show_seasons AS ss ON ss.id = e.season_id
+INNER JOIN shows AS sh ON sh.id = ss.show_id
+WHERE wp.user_id = ?
+  AND wp.watched = false
+  AND wp.progress_sec >= 30
+  AND wp.duration_sec > 0
+  AND wp.progress_sec < wp.duration_sec
+  AND EXISTS (
+    SELECT 1
+    FROM show_episode_files AS f
+    WHERE f.episode_id = e.id
+  )
+GROUP BY sh.id
+ORDER BY updated_at DESC
+LIMIT 12
+`
+
+type GetContinueWatchingEpisodesRow struct {
+	UpdatedAt        string         `json:"updated_at"`
+	ID               int64          `json:"id"`
+	Name             string         `json:"name"`
+	EpisodeNumber    int64          `json:"episode_number"`
+	SeasonNumber     int64          `json:"season_number"`
+	ShowID           int64          `json:"show_id"`
+	ShowName         string         `json:"show_name"`
+	ShowPosterPath   sql.NullString `json:"show_poster_path"`
+	ShowPremiereYear sql.NullInt64  `json:"show_premiere_year"`
+	ProgressSec      float64        `json:"progress_sec"`
+	DurationSec      float64        `json:"duration_sec"`
+}
+
+// The episode half of the home "Continue Watching" row. Mirrors
+// GetContinueWatchingMovies, including the 30-second floor that must match the
+// web client's WATCH_PROGRESS_MIN_SECONDS, with two differences. An episode the
+// scanner knows but has no file for cannot be resumed, so the same EXISTS guard
+// GetShowNextEpisode uses skips it. And a show contributes one card rather than
+// one per episode: the GROUP BY relies on SQLite's bare-column rule, where a
+// single MAX() aggregate makes every other column come from the row it picked,
+// so each show returns its most recently watched in-progress episode.
+func (q *Queries) GetContinueWatchingEpisodes(ctx context.Context, userID int64) ([]GetContinueWatchingEpisodesRow, error) {
+	rows, err := q.query(ctx, q.getContinueWatchingEpisodesStmt, getContinueWatchingEpisodes, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetContinueWatchingEpisodesRow{}
+	for rows.Next() {
+		var i GetContinueWatchingEpisodesRow
+		if err := rows.Scan(
+			&i.UpdatedAt,
+			&i.ID,
+			&i.Name,
+			&i.EpisodeNumber,
+			&i.SeasonNumber,
+			&i.ShowID,
+			&i.ShowName,
+			&i.ShowPosterPath,
+			&i.ShowPremiereYear,
+			&i.ProgressSec,
+			&i.DurationSec,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getShowEpisodeWatchProgress = `-- name: GetShowEpisodeWatchProgress :one

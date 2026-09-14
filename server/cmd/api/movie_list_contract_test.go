@@ -31,7 +31,6 @@ func TestMovieListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 	genreID := createMovieGenre(t, app, movieID, "Contract Genre")
 	playlistID := createMoviePlaylist(t, app, user.ID, movieID)
 	likeMovieForUser(t, app, user.ID, movieID)
-	seedWatchProgress(t, app, user.ID, movieID)
 
 	app.InitRouter()
 	cookie := newAuthSessionCookie(t, app, user.ID)
@@ -46,7 +45,6 @@ func TestMovieListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 		{operationID: "getLikedMovies", path: "/api/movies/liked", dataKey: "movies"},
 		{operationID: "getMoviesByGenreLibrary", path: "/api/movies/genres/" + strconv.FormatInt(genreID, 10) + "/movies", dataKey: "movies"},
 		{operationID: "getMoviePlaylistMovies", path: "/api/movies/playlists/" + strconv.FormatInt(playlistID, 10) + "/movies", dataKey: "movies"},
-		{operationID: "getContinueWatchingMovies", path: "/api/movies/continue-watching", dataKey: "movies"},
 		{operationID: "getMoviePlaylists", path: "/api/movies/playlists", dataKey: "playlists"},
 		{operationID: "getMovieGenresList", path: "/api/movies/genres", dataKey: "genres"},
 	}
