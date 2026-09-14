@@ -11,6 +11,7 @@ import {
   refreshWatchQueries,
   staysOnCurrentPlayback,
   synchronizePlaybackExit,
+  watchListQueryKeys,
 } from "@/lib/video-playback-exit";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
@@ -127,6 +128,19 @@ describe("playback exit synchronization", () => {
     expect(onSettled).toHaveBeenCalledOnce();
 
     refresh.resolve();
+  });
+
+  it("names every list a reset must clear, for both media kinds", () => {
+    // The Resume dialog's "start from the beginning" clears these by the same
+    // list, so an episode reset has to drop Home's row as well as the season's
+    // — dropping only the season left the episode resumable on Home.
+    expect(watchListQueryKeys(movieMediaRef(7))).toEqual([
+      [CONTINUE_WATCHING_KEY],
+    ]);
+    expect(watchListQueryKeys(episodeMediaRef(9))).toEqual([
+      [CONTINUE_WATCHING_KEY],
+      [SHOW_SEASON_EPISODES_KEY],
+    ]);
   });
 
   it("invalidates continue watching and the movie's watch progress", async () => {

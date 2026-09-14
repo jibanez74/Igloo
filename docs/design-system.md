@@ -26,7 +26,7 @@ this doc, prefer adding a guard too.
 | Token contrast: body text ≥ 7:1 (AAA), all other fg/surface pairs ≥ 4.5:1 (AA), plus `text-success` on `background`/`card`, both themes | `web/src/test/shared/contrast.test.ts` |
 | Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/shared/theme-drift.test.ts` |
 | Every shared motion constant carries a `motion-reduce:` escape; every `src/` file with an inline transition/animation has the matching `motion-reduce:` escape | `web/src/test/shared/motion-contracts.test.ts` |
-| Every `src/` file composes a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
+| Every focus indicator in `src/` uses a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
@@ -273,7 +273,8 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   `src/` and fails on a literal declaring its own ring width, a
   `ring-offset-*`, or a `focus:` (rather than `focus-visible:`) prefix — a
   `focus:` ring shows on mouse click, which is noise for pointer users. The
-  only allowlisted file is `ui/sidebar.tsx`, which rings on the sidebar's own
+  only allowlisted files are `lib/constants.ts`, which declares the recipes
+  themselves, and `ui/sidebar.tsx`, which rings on the sidebar's own
   `--sidebar-ring` token set.
 
   When suppressing the browser outline in favor of a ring, always use
@@ -292,9 +293,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   Don't put `disabled` on media transport buttons (breaks VoiceOver focus);
   use `aria-disabled` + guards if needed.
 - **Announcements**: `LiveAnnouncer` (double-buffered dual `role="status"`
-  regions so repeated messages re-announce) for async state changes; sections
-  announce their loaded and empty summaries. Errors are the exception — they
-  announce themselves through `role="alert"` (§3.4).
+  regions so repeated messages re-announce) for async state changes; a section
+  announces its empty state. A *loaded* summary is not announced — it is
+  visible under the heading and tied to the section through
+  `aria-describedby`, so it is there on demand rather than interrupting a
+  reader four times as a page's rows resolve. Errors announce themselves
+  through `role="alert"` (§3.4).
 - **Skip links**: a global "Skip to page content" in `AppShell` targeting
   `#main`, plus per-page section skip navs on long pages. Every detail page —
   movie, show, in-theaters, album, musician — uses the one shared

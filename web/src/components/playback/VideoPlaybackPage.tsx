@@ -34,16 +34,15 @@ import {
   refreshWatchQueries,
   staysOnCurrentPlayback,
   synchronizePlaybackExit,
+  watchListQueryKeys,
 } from "@/lib/video-playback-exit";
 import {
-  CONTINUE_WATCHING_KEY,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
   PLAYER_ICON_BUTTON_CLASS,
-  SHOW_SEASON_EPISODES_KEY,
   STREAM_MODES,
   UP_NEXT_COUNTDOWN_SEC,
 } from "@/lib/constants";
@@ -629,12 +628,9 @@ export default function VideoPlaybackPage({
       return;
     }
 
-    queryClient.removeQueries({
-      queryKey:
-        media.kind === "movie"
-          ? [CONTINUE_WATCHING_KEY]
-          : [SHOW_SEASON_EPISODES_KEY],
-    });
+    for (const queryKey of watchListQueryKeys(media)) {
+      queryClient.removeQueries({ queryKey });
+    }
     queryClient.removeQueries({
       queryKey: mediaWatchProgressQueryKey(media),
     });

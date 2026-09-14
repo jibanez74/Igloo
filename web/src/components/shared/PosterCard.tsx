@@ -19,11 +19,25 @@ export type PosterCardWatchProgress = {
   durationSec: number;
 };
 
+/**
+ * The play action travels with its label: the button is an icon alone, so
+ * without `playLabel` it would reach a screen reader unnamed. A card with
+ * nothing single to play (a show, an unreleased title) passes neither.
+ */
+type PosterCardPlayProps =
+  | {
+      /** The revealed play action, bypassing the details page. */
+      playLink: LinkProps;
+      playLabel: string;
+    }
+  | {
+      playLink?: undefined;
+      playLabel?: never;
+    };
+
 type PosterCardProps = {
   /** Where the poster itself navigates - the media's details page. */
   detailsLink: LinkProps;
-  /** The revealed play action. Omitted by cards with nothing single to play. */
-  playLink?: LinkProps;
   /** TMDB poster URL, or "" to show the fallback icon. */
   posterUrl: string;
   fallbackIcon: LucideIcon;
@@ -31,13 +45,12 @@ type PosterCardProps = {
   /** Second line under the title - a year, or an episode code and name. */
   subtitle?: string;
   detailsLabel: string;
-  playLabel?: string;
   watchProgress?: PosterCardWatchProgress;
   /** Decorative corner slot over the poster - a rating badge, say. */
   badge?: ReactNode;
   /** Warms the details query on hover and focus. */
   onPrefetch?: () => void;
-};
+} & PosterCardPlayProps;
 
 /**
  * The 2:3 media card used across the home rows and library grids: poster,
