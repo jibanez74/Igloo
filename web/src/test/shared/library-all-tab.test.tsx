@@ -18,9 +18,15 @@ type Payload = {
 
 const NOUN = { singular: "show", plural: "shows" };
 
-function renderTab(queryFn: () => Promise<ApiResponseType<Payload>>) {
+function renderTab(
+  queryFn: () => Promise<ApiResponseType<Payload>>,
+  {
+    currentPage = 1,
+    onPageChange = () => {},
+  }: { currentPage?: number; onPageChange?: (page: number) => void } = {},
+) {
   const opts = queryOptions({
-    queryKey: ["library-all-tab-test", 1],
+    queryKey: ["library-all-tab-test", currentPage],
     queryFn,
   });
 
@@ -29,12 +35,12 @@ function renderTab(queryFn: () => Promise<ApiResponseType<Payload>>) {
       queryOpts={opts}
       getItems={data => data.items}
       renderCard={item => <article>{item.name}</article>}
-      currentPage={1}
+      currentPage={currentPage}
       sort="asc"
       perPage={24}
       noun={NOUN}
       emptyIcon={Tv}
-      onPageChange={() => {}}
+      onPageChange={onPageChange}
       onSortToggle={() => {}}
     />,
   );
@@ -85,5 +91,38 @@ describe("LibraryAllTab", () => {
     expect(
       screen.queryByRole("button", { name: /Sorted A to Z/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("walks back to the last page when the requested page is out of range", async () => {
+    const onPageChange = vi.fn();
+
+    renderTab(
+      async () => ({
+        error: false,
+        data: { items: [], total: 25, page: 5, per_page: 24, total_pages: 2 },
+      }),
+      { currentPage: 5, onPageChange },
+    );
+
+    await waitFor(() => {
+      expect(onPageChange).toHaveBeenCalledWith(2);
+    });
+  });
+
+  it("stays on the empty state when the library itself is empty", async () => {
+    const onPageChange = vi.fn();
+
+    renderTab(
+      async () => ({
+        error: false,
+        data: { items: [], total: 0, page: 1, per_page: 24, total_pages: 0 },
+      }),
+      { onPageChange },
+    );
+
+    expect(
+      await screen.findByText("No shows found in your library."),
+    ).toBeInTheDocument();
+    expect(onPageChange).not.toHaveBeenCalled();
   });
 });

@@ -318,6 +318,32 @@ test("all shows tab renders accessible show cards and URL-backed pagination", as
     )
     .toBe(true);
   await expect(page.getByRole("link", { name: "Verdant Coast 2025", exact: true })).toBeVisible();
+
+  // The grid does not order anything itself: it hands `sort` to the API and
+  // renders what comes back. So the contract worth asserting is that the toggle
+  // flips the URL, returns to page one, and reaches the server.
+  await page
+    .getByRole("button", { name: "Sorted A to Z, click to sort Z to A" })
+    .click();
+
+  await expect(page).toHaveURL(/sort=desc/);
+  await expect(page).toHaveURL(/allPage=1/);
+  await expect
+    .poll(() =>
+      requestedLibraryRequests.some(requestPath => {
+        const parsed = new URL(`http://localhost${requestPath}`);
+        return (
+          parsed.pathname === "/api/shows/library" &&
+          parsed.searchParams.get("page") === "1" &&
+          parsed.searchParams.get("sort") === "desc"
+        );
+      }),
+    )
+    .toBe(true);
+  await expect(
+    page.getByRole("button", { name: "Sorted Z to A, click to sort A to Z" }),
+  ).toBeVisible();
+
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
@@ -374,6 +400,26 @@ test("genres tab renders accessible counts, filtering, and URL-backed pagination
     )
     .toBe(true);
   await expect(page.getByRole("link", { name: "Afterglow 2020", exact: true })).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Sorted A to Z, click to sort Z to A" })
+    .click();
+
+  await expect(page).toHaveURL(/sort=desc/);
+  await expect(page).toHaveURL(/genresPage=1/);
+  await expect(page).toHaveURL(/genreId=10/);
+  await expect
+    .poll(() =>
+      requestedGenreRequests.some(requestPath => {
+        const parsed = new URL(`http://localhost${requestPath}`);
+        return (
+          parsed.pathname === "/api/shows/genres/10/shows" &&
+          parsed.searchParams.get("page") === "1" &&
+          parsed.searchParams.get("sort") === "desc"
+        );
+      }),
+    )
+    .toBe(true);
 
   await clearGenreFilterButton.click();
 

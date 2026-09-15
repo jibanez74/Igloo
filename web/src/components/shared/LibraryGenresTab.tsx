@@ -131,6 +131,15 @@ export default function LibraryGenresTab<
     );
   }, [fallbackFocusRef, genreId]);
 
+  // Same guard as LibraryAllTab: the API does not clamp the page, so an
+  // out-of-range genresPage answers with no items but a positive total, and the
+  // empty state below carries no pagination to escape from.
+  useEffect(() => {
+    if (totalPages > 0 && genresPage > totalPages) {
+      onPageChange(totalPages);
+    }
+  }, [genresPage, totalPages, onPageChange]);
+
   const getAnnouncement = () => {
     if (!hasSelectedGenre) return undefined;
     if (itemsLoading) return undefined;

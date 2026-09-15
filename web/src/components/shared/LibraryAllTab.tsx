@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, type ReactNode } from "react";
 import {
   useQuery,
   type QueryKey,
@@ -86,6 +86,16 @@ export default function LibraryAllTab<
   const items = data?.error === false ? getItems(data.data) : [];
   const totalPages = data?.error === false ? data.data.total_pages : 0;
   const hasMultiplePages = totalPages > 1;
+
+  // The API does not clamp the page, so an out-of-range page (a hand-edited URL,
+  // or a scan that shrank the library underneath us) answers with no items but a
+  // positive total. The empty state below has no pagination to escape from, so
+  // walk the reader back to the last real page instead of stranding them.
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      onPageChange(totalPages);
+    }
+  }, [currentPage, totalPages, onPageChange]);
 
   const getAnnouncement = () => {
     if (isLoading) return undefined;

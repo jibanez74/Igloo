@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { movieScanStatusQueryOpts, musicScanStatusQueryOpts, showScanStatusQueryOpts } from "@/lib/query-opts";
 import type { ScanStatusQueryOpts } from "@/lib/query-opts";
-import { MOVIES_STATS_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
+import { MOVIES_STATS_KEY, MUSIC_STATS_KEY, SHOWS_STATS_KEY } from "@/lib/constants";
 import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
+import { invalidateShowLibraryQueries } from "@/lib/show-library-cache";
 import type { MovieScanStatus, MusicScanStatus, ShowScanStatus } from "@/types/settings";
 
 const subscribeVisibility = (onChange: () => void) => {
@@ -83,11 +84,10 @@ const MUSIC_SCAN: ScanStatusConfig<MusicScanStatus> = {
   invalidateLibrary: invalidateMusicLibraryQueries,
 };
 
-// TV browsing is not implemented, so a show scan has no library statistics or
-// catalog lists to refresh; only the report itself updates.
 const SHOW_SCAN: ScanStatusConfig<ShowScanStatus> = {
   queryOptions: showScanStatusQueryOpts,
-  invalidateLibrary: () => {},
+  statsKey: SHOWS_STATS_KEY,
+  invalidateLibrary: invalidateShowLibraryQueries,
 };
 
 export function useMovieScanStatus(options: ScanStatusOptions = {}) {
