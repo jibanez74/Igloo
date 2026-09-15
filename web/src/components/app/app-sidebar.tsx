@@ -28,6 +28,7 @@ import { logout } from "@/lib/api";
 import {
   MOTION_MICRO_OPACITY_CLASS,
   MOVIES_INDEX_DEFAULT_SEARCH,
+  SHOWS_INDEX_DEFAULT_SEARCH,
 } from "@/lib/constants";
 import { showError } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,13 @@ type NavItem = {
   url: string;
   icon: LucideIcon;
   exact?: boolean;
+};
+
+// Library routes carry required search params; linking with their defaults
+// keeps the sidebar href identical to what the loader would redirect to.
+const NAV_DEFAULT_SEARCH: Partial<Record<string, object>> = {
+  "/movies": MOVIES_INDEX_DEFAULT_SEARCH,
+  "/tv-shows": SHOWS_INDEX_DEFAULT_SEARCH,
 };
 
 const navItems: NavItem[] = [
@@ -159,11 +167,7 @@ export default function AppSidebar({
                       <Link
                         to={item.url}
                         preload={item.url === "/" ? false : undefined}
-                        search={
-                          item.url === "/movies"
-                            ? MOVIES_INDEX_DEFAULT_SEARCH
-                            : undefined
-                        }
+                        search={NAV_DEFAULT_SEARCH[item.url]}
                         onClick={handleNavClick}
                         aria-label={item.title}
                         aria-current={active ? "page" : undefined}

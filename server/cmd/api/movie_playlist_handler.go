@@ -355,7 +355,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	page, perPage, sortParam := parseLibraryQuery(r)
 	offset := (page - 1) * perPage
 	ctx := r.Context()
 

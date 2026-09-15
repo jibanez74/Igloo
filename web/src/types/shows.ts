@@ -36,3 +36,15 @@ export type ShowPersonType = Schema["ShowPerson"];
 export type ShowGenreType = Schema["ShowGenre"];
 export type ShowNetworkType = Schema["ShowNetwork"];
 export type ShowProductionCompanyType = Schema["ShowProductionCompany"];
+
+// GET /api/shows/library and /api/shows/genres/{genreId}/shows. The item is a
+// structural superset of LatestShow, so ShowCard renders both.
+export type ShowLibraryItemType = Schema["ShowLibraryItem"];
+export type ShowsLibraryDataType = Schema["ShowsLibraryData"];
+
+// `data` payload of GET /api/shows/stats.
+export type ShowsStatsDataType = Schema["ShowsStatsData"];
+
+// GET /api/shows/genres.
+export type ShowGenreWithCountType = Schema["ShowGenreWithCount"];
+export type ShowGenresDataType = Schema["ShowGenresData"];

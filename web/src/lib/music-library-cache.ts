@@ -13,7 +13,10 @@ import {
   PLAYLISTS_KEY,
   TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
-import { isApiFailure } from "@/lib/is-api-failure";
+import {
+  invalidateLibraryQueryKeys,
+  refreshLibraryQueryKeys,
+} from "@/lib/library-refresh";
 
 const MUSIC_LIBRARY_QUERY_KEYS = [
   MUSIC_STATS_KEY,
@@ -31,30 +34,9 @@ const MUSIC_LIBRARY_QUERY_KEYS = [
 ] as const;
 
 export function invalidateMusicLibraryQueries(queryClient: QueryClient) {
-  for (const key of MUSIC_LIBRARY_QUERY_KEYS) {
-    void queryClient.invalidateQueries({ queryKey: [key] });
-  }
+  invalidateLibraryQueryKeys(queryClient, MUSIC_LIBRARY_QUERY_KEYS);
 }
 
 export async function refreshMusicLibraryCache(queryClient: QueryClient) {
-  await Promise.all(
-    MUSIC_LIBRARY_QUERY_KEYS.map(async key => {
-      queryClient.removeQueries({ queryKey: [key], type: "inactive" });
-      await queryClient.refetchQueries(
-        { queryKey: [key], type: "active" },
-        { throwOnError: true },
-      );
-
-      const refreshedQueries = queryClient.getQueriesData({
-        queryKey: [key],
-        type: "active",
-      });
-
-      for (const [, data] of refreshedQueries) {
-        if (isApiFailure(data)) {
-          throw new Error(data.message);
-        }
-      }
-    }),
-  );
+  await refreshLibraryQueryKeys(queryClient, MUSIC_LIBRARY_QUERY_KEYS);
 }

@@ -30,6 +30,7 @@ type Querier interface {
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	CountShowRetries(ctx context.Context) (int64, error)
+	CountShowsForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
@@ -348,6 +349,8 @@ type Querier interface {
 	// playback target; a combined file is returned whole, playback never seeks to
 	// a guessed episode offset.
 	GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error)
+	// Show genres with counts per tag (genre_type show only).
+	GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresWithCountsRow, error)
 	// Persisted keyframe index for one video stream of a show file; the caller
 	// compares the stored fingerprint and treats a mismatch as a miss.
 	GetShowKeyframeIndex(ctx context.Context, arg GetShowKeyframeIndexParams) (GetShowKeyframeIndexRow, error)
@@ -382,6 +385,13 @@ type Querier interface {
 	GetShowSubtitlesByFileID(ctx context.Context, fileID int64) ([]GetShowSubtitlesByFileIDRow, error)
 	// Video streams of a show file, in the same order the movie twin uses.
 	GetShowVideoStreamsByFileID(ctx context.Context, fileID int64) ([]GetShowVideoStreamsByFileIDRow, error)
+	GetShowsByGenreAsc(ctx context.Context, arg GetShowsByGenreAscParams) ([]GetShowsByGenreAscRow, error)
+	GetShowsByGenreDesc(ctx context.Context, arg GetShowsByGenreDescParams) ([]GetShowsByGenreDescRow, error)
+	GetShowsCount(ctx context.Context) (int64, error)
+	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when names match).
+	GetShowsLibraryAsc(ctx context.Context, arg GetShowsLibraryAscParams) ([]GetShowsLibraryAscRow, error)
+	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when names match).
+	GetShowsLibraryDesc(ctx context.Context, arg GetShowsLibraryDescParams) ([]GetShowsLibraryDescRow, error)
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (GetTrackRow, error)

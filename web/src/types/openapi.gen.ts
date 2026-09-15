@@ -752,6 +752,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shows/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List TV shows in the local library */
+        get: operations["getShowsLibrary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get TV show library statistics */
+        get: operations["getShowsStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List TV show genres with show counts */
+        get: operations["getShowGenresList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shows/genres/{genreId}/shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List TV shows for a genre */
+        get: operations["getShowsByGenreLibrary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shows/details/{id}": {
         parameters: {
             query?: never;
@@ -2681,6 +2749,50 @@ export interface components {
         LatestShowsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["LatestShowsData"];
         };
+        ShowLibraryItem: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            poster_path: components["schemas"]["SqlNullString"];
+            premiere_year: components["schemas"]["SqlNullInt64"];
+            certification: components["schemas"]["SqlNullString"];
+        };
+        ShowsLibraryData: {
+            shows: components["schemas"]["ShowLibraryItem"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
+            /** @enum {string} */
+            sort: "asc" | "desc";
+        };
+        ShowsLibraryEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowsLibraryData"];
+        };
+        ShowsStatsData: {
+            /** Format: int64 */
+            total_shows: number;
+        };
+        ShowsStatsEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowsStatsData"];
+        };
+        ShowGenreWithCount: {
+            /** Format: int64 */
+            genre_id: number;
+            genre_tag: string;
+            /** Format: int64 */
+            show_count: number;
+        };
+        ShowGenresData: {
+            genres: components["schemas"]["ShowGenreWithCount"][];
+        };
+        ShowGenresEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowGenresData"];
+        };
         Show: {
             /** Format: int64 */
             id: number;
@@ -4586,6 +4698,33 @@ export interface components {
                 "application/json": components["schemas"]["LatestShowsEnvelope"];
             };
         };
+        /** @description Paginated TV show library response. */
+        ShowsLibraryResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowsLibraryEnvelope"];
+            };
+        };
+        /** @description TV show statistics response. */
+        ShowsStatsResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowsStatsEnvelope"];
+            };
+        };
+        /** @description TV show genres response. */
+        ShowGenresResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ShowGenresEnvelope"];
+            };
+        };
         /** @description TV show details response. */
         ShowDetailsResponse: {
             headers: {
@@ -5563,7 +5702,7 @@ export interface components {
         SeasonNumberPath: number;
         PageQuery: number;
         PerPageQuery: number;
-        MoviePerPageQuery: number;
+        LibraryPerPageQuery: number;
         MusicPerPageQuery: number;
         SortQuery: "asc" | "desc";
         LimitQuery: number;
@@ -6621,6 +6760,73 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    getShowsLibrary: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["PageQuery"];
+                per_page?: components["parameters"]["LibraryPerPageQuery"];
+                sort?: components["parameters"]["SortQuery"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowsLibraryResponse"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowsStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowsStatsResponse"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowGenresList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowGenresResponse"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getShowsByGenreLibrary: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["PageQuery"];
+                per_page?: components["parameters"]["LibraryPerPageQuery"];
+                sort?: components["parameters"]["SortQuery"];
+            };
+            header?: never;
+            path: {
+                genreId: components["parameters"]["GenreIdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ShowsLibraryResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
     getShowDetails: {
         parameters: {
             query?: never;
@@ -7066,7 +7272,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: components["parameters"]["PageQuery"];
-                per_page?: components["parameters"]["MoviePerPageQuery"];
+                per_page?: components["parameters"]["LibraryPerPageQuery"];
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7098,7 +7304,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: components["parameters"]["PageQuery"];
-                per_page?: components["parameters"]["MoviePerPageQuery"];
+                per_page?: components["parameters"]["LibraryPerPageQuery"];
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7147,7 +7353,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: components["parameters"]["PageQuery"];
-                per_page?: components["parameters"]["MoviePerPageQuery"];
+                per_page?: components["parameters"]["LibraryPerPageQuery"];
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7168,7 +7374,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: components["parameters"]["PageQuery"];
-                per_page?: components["parameters"]["MoviePerPageQuery"];
+                per_page?: components["parameters"]["LibraryPerPageQuery"];
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;

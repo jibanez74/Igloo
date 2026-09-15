@@ -106,6 +106,11 @@ export type {
   ShowGenreType,
   ShowNetworkType,
   ShowProductionCompanyType,
+  ShowLibraryItemType,
+  ShowsLibraryDataType,
+  ShowsStatsDataType,
+  ShowGenreWithCountType,
+  ShowGenresDataType,
 } from "./shows";
 
 // Audio player types

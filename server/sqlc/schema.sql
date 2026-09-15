@@ -1206,6 +1206,8 @@ CREATE TABLE IF NOT EXISTS shows (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- Keep this expression and tie-breaker aligned with GetShowsLibraryAsc/Desc.
+CREATE INDEX IF NOT EXISTS idx_shows_name ON shows (LOWER(name), id);
 -- attempts counts definitive TMDB misses; last_attempt_at (unix seconds) drives
 -- the miss backoff shared with movies.
 CREATE TABLE IF NOT EXISTS show_tmdb_retries (

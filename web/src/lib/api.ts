@@ -21,6 +21,9 @@ import type {
   ContinueWatchingDataType,
   LatestMovieType,
   LatestShowsDataType,
+  ShowsLibraryDataType,
+  ShowsStatsDataType,
+  ShowGenresDataType,
   ShowDetailsDataType,
   ShowSeasonEpisodesDataType,
   LibraryMovieDetailsResponse,
@@ -79,6 +82,7 @@ import {
   ALBUMS_PER_PAGE,
   LIKED_TRACKS_PER_PAGE,
   MOVIES_PER_PAGE,
+  SHOWS_PER_PAGE,
   MUSICIANS_PER_PAGE,
   SEARCH_PER_PAGE,
   SHUFFLE_TRACKS_LIMIT,
@@ -346,6 +350,39 @@ export const getShowEpisodeTechnicalDetails = (episodeId: number) =>
   apiRequest<ShowEpisodeTechnicalDetailsDataType>(
     `/api/shows/episodes/${episodeId}/technical-details`,
   );
+
+export const getShowsLibrary = (
+  page: number,
+  perPage: number = SHOWS_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) =>
+  apiRequest<ShowsLibraryDataType>(
+    withQuery("/api/shows/library", {
+      page,
+      per_page: perPage,
+      sort,
+    }),
+  );
+
+export const getShowGenresWithCounts = () =>
+  apiRequest<ShowGenresDataType>("/api/shows/genres");
+
+export const getShowsByGenre = (
+  genreId: number,
+  page: number,
+  perPage: number = SHOWS_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) =>
+  apiRequest<ShowsLibraryDataType>(
+    withQuery(`/api/shows/genres/${genreId}/shows`, {
+      page,
+      per_page: perPage,
+      sort,
+    }),
+  );
+
+export const getShowsStats = () =>
+  apiRequest<ShowsStatsDataType>("/api/shows/stats");
 
 export const getContinueWatching = () =>
   apiRequest<ContinueWatchingDataType>("/api/continue-watching");

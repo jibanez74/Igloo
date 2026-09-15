@@ -28,6 +28,7 @@
     "test:e2e:user-settings": "playwright test e2e/user-settings.spec.ts",
     "test:e2e:movies": "playwright test e2e/movies.spec.ts",
     "test:e2e:movies:index": "playwright test e2e/movies-index.spec.ts",
+    "test:e2e:tv-shows:index": "playwright test e2e/tv-shows-index.spec.ts",
     "test:e2e:movie-extra-videos": "playwright test e2e/movie-extra-videos.spec.ts",
     "test:e2e:movie-player": "playwright test e2e/movie-player.spec.ts",
     "test:e2e:episode-player": "playwright test e2e/episode-player.spec.ts",

@@ -18,12 +18,6 @@ const comingSoonPages: ComingSoonPage[] = [
     description:
       "Your personal photo gallery is coming soon. Organize, browse, and share your memories all in one place.",
   },
-  {
-    path: "/tv-shows",
-    title: "TV Shows",
-    description:
-      "Your TV show library is coming soon. Track episodes, discover new series, and never miss a premiere.",
-  },
 ];
 
 async function expectDecorativeAnimationsStopped(page: Page) {

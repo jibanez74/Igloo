@@ -48,6 +48,17 @@ func (q *Queries) CountShowRetries(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
+const countShowsForGenre = `-- name: CountShowsForGenre :one
+SELECT COUNT(*) FROM show_genres WHERE genre_id = ?
+`
+
+func (q *Queries) CountShowsForGenre(ctx context.Context, genreID int64) (int64, error) {
+	row := q.queryRow(ctx, q.countShowsForGenreStmt, countShowsForGenre, genreID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createShowCast = `-- name: CreateShowCast :exec
 INSERT INTO show_cast (show_id, artist_id, character, cast_order, credit_id, episode_count) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
 `
@@ -1520,6 +1531,45 @@ func (q *Queries) GetShowFileForEpisode(ctx context.Context, episodeID int64) (G
 	return i, err
 }
 
+const getShowGenresWithCounts = `-- name: GetShowGenresWithCounts :many
+SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(sg.show_id) AS show_count
+FROM genres AS g
+INNER JOIN show_genres AS sg ON sg.genre_id = g.id
+WHERE g.genre_type = 'show'
+GROUP BY g.id, g.tag
+ORDER BY LOWER(g.tag) ASC
+`
+
+type GetShowGenresWithCountsRow struct {
+	GenreID   int64  `json:"genre_id"`
+	GenreTag  string `json:"genre_tag"`
+	ShowCount int64  `json:"show_count"`
+}
+
+// Show genres with counts per tag (genre_type show only).
+func (q *Queries) GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresWithCountsRow, error) {
+	rows, err := q.query(ctx, q.getShowGenresWithCountsStmt, getShowGenresWithCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowGenresWithCountsRow{}
+	for rows.Next() {
+		var i GetShowGenresWithCountsRow
+		if err := rows.Scan(&i.GenreID, &i.GenreTag, &i.ShowCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getShowNextEpisode = `-- name: GetShowNextEpisode :one
 SELECT
   n.id,
@@ -2119,6 +2169,221 @@ func (q *Queries) GetShowVideoStreamsByFileID(ctx context.Context, fileID int64)
 			&i.Rotation,
 			&i.Language,
 			&i.Title,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowsByGenreAsc = `-- name: GetShowsByGenreAsc :many
+SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
+FROM shows AS s
+INNER JOIN show_genres AS sg ON sg.show_id = s.id
+WHERE sg.genre_id = ?
+ORDER BY LOWER(s.name) ASC, s.id ASC
+LIMIT ? OFFSET ?
+`
+
+type GetShowsByGenreAscParams struct {
+	GenreID int64 `json:"genre_id"`
+	Limit   int64 `json:"limit"`
+	Offset  int64 `json:"offset"`
+}
+
+type GetShowsByGenreAscRow struct {
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	PremiereYear  sql.NullInt64  `json:"premiere_year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+func (q *Queries) GetShowsByGenreAsc(ctx context.Context, arg GetShowsByGenreAscParams) ([]GetShowsByGenreAscRow, error) {
+	rows, err := q.query(ctx, q.getShowsByGenreAscStmt, getShowsByGenreAsc, arg.GenreID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowsByGenreAscRow{}
+	for rows.Next() {
+		var i GetShowsByGenreAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PremiereYear,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowsByGenreDesc = `-- name: GetShowsByGenreDesc :many
+SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
+FROM shows AS s
+INNER JOIN show_genres AS sg ON sg.show_id = s.id
+WHERE sg.genre_id = ?
+ORDER BY LOWER(s.name) DESC, s.id DESC
+LIMIT ? OFFSET ?
+`
+
+type GetShowsByGenreDescParams struct {
+	GenreID int64 `json:"genre_id"`
+	Limit   int64 `json:"limit"`
+	Offset  int64 `json:"offset"`
+}
+
+type GetShowsByGenreDescRow struct {
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	PremiereYear  sql.NullInt64  `json:"premiere_year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+func (q *Queries) GetShowsByGenreDesc(ctx context.Context, arg GetShowsByGenreDescParams) ([]GetShowsByGenreDescRow, error) {
+	rows, err := q.query(ctx, q.getShowsByGenreDescStmt, getShowsByGenreDesc, arg.GenreID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowsByGenreDescRow{}
+	for rows.Next() {
+		var i GetShowsByGenreDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PremiereYear,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowsCount = `-- name: GetShowsCount :one
+SELECT COUNT(*) FROM shows
+`
+
+func (q *Queries) GetShowsCount(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getShowsCountStmt, getShowsCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getShowsLibraryAsc = `-- name: GetShowsLibraryAsc :many
+SELECT id, name, poster_path, premiere_year, certification
+FROM shows
+ORDER BY LOWER(name) ASC, id ASC
+LIMIT ? OFFSET ?
+`
+
+type GetShowsLibraryAscParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetShowsLibraryAscRow struct {
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	PremiereYear  sql.NullInt64  `json:"premiere_year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when names match).
+func (q *Queries) GetShowsLibraryAsc(ctx context.Context, arg GetShowsLibraryAscParams) ([]GetShowsLibraryAscRow, error) {
+	rows, err := q.query(ctx, q.getShowsLibraryAscStmt, getShowsLibraryAsc, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowsLibraryAscRow{}
+	for rows.Next() {
+		var i GetShowsLibraryAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PremiereYear,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getShowsLibraryDesc = `-- name: GetShowsLibraryDesc :many
+SELECT id, name, poster_path, premiere_year, certification
+FROM shows
+ORDER BY LOWER(name) DESC, id DESC
+LIMIT ? OFFSET ?
+`
+
+type GetShowsLibraryDescParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetShowsLibraryDescRow struct {
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	PremiereYear  sql.NullInt64  `json:"premiere_year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when names match).
+func (q *Queries) GetShowsLibraryDesc(ctx context.Context, arg GetShowsLibraryDescParams) ([]GetShowsLibraryDescRow, error) {
+	rows, err := q.query(ctx, q.getShowsLibraryDescStmt, getShowsLibraryDesc, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetShowsLibraryDescRow{}
+	for rows.Next() {
+		var i GetShowsLibraryDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PosterPath,
+			&i.PremiereYear,
+			&i.Certification,
 		); err != nil {
 			return nil, err
 		}

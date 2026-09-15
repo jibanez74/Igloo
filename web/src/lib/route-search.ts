@@ -63,6 +63,27 @@ export const moviesSearchSchema = z.object({
 
 export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
 
+// The TV show library mirrors the movie one minus playlists: two tabs, a page
+// per tab, one shared sort, and the selected genre.
+export const showsSearchSchema = z.object({
+  tab: z._default(z.catch(z.enum(["all", "genres"]), "all"), "all"),
+  allPage: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
+  sort: z._default(z.catch(z.enum(["asc", "desc"]), "asc"), "asc"),
+  genresPage: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
+  genreId: z.catch(
+    z.optional(z.number().check(z.int(), z.positive())),
+    undefined,
+  ),
+});
+
+export type ShowsSearchParams = z.infer<typeof showsSearchSchema>;
+
 // The selected season on a show details page is URL state, never component
 // state. Wrapped in z.catch so a malformed season in the URL degrades to the
 // default season instead of failing the route. Specials are season zero, so the

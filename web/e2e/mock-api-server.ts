@@ -1308,6 +1308,24 @@ function episodeTechnicalDetails(episodeId: number) {
   };
 }
 
+// The library rows carry a certification the latest-shows rows do not.
+const libraryShows = latestShows.map(show => ({
+  ...show,
+  certification: nullableString("TV-14"),
+}));
+
+const showGenres = [
+  { genre_id: 30, genre_tag: "Drama", show_count: 2 },
+  { genre_id: 40, genre_tag: "Sci-Fi", show_count: 1 },
+];
+
+function sortedShows(sort: SortDirection) {
+  return [...libraryShows].sort((a, b) => {
+    const value = a.name.localeCompare(b.name);
+    return sort === "asc" ? value : -value;
+  });
+}
+
 function handleShowsRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1317,6 +1335,49 @@ function handleShowsRoutes(
 
   if (url.pathname === "/api/shows/latest" && method === "GET") {
     sendSuccess(response, { shows: latestShows });
+    return true;
+  }
+
+  if (url.pathname === "/api/shows/stats" && method === "GET") {
+    sendSuccess(response, { total_shows: libraryShows.length });
+    return true;
+  }
+
+  if (url.pathname === "/api/shows/library" && method === "GET") {
+    const { page, perPage, sort } = paginationParams(url);
+    const { items, total, total_pages } = paginate(sortedShows(sort), page, perPage);
+    sendSuccess(response, {
+      shows: items,
+      total,
+      page,
+      per_page: perPage,
+      total_pages,
+      sort,
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/shows/genres" && method === "GET") {
+    sendSuccess(response, { genres: showGenres });
+    return true;
+  }
+
+  const showsByGenreMatch = url.pathname.match(/^\/api\/shows\/genres\/(\d+)\/shows$/);
+  if (showsByGenreMatch && method === "GET") {
+    const genreId = Number(showsByGenreMatch[1]);
+    const { page, perPage, sort } = paginationParams(url);
+    const shows = sortedShows(sort).filter(
+      show => genreId === 30 || (genreId === 40 && show.id === 401),
+    );
+    const { items, total, total_pages } = paginate(shows, page, perPage);
+    sendSuccess(response, {
+      shows: items,
+      total,
+      page,
+      per_page: perPage,
+      total_pages,
+      sort,
+    });
     return true;
   }
 
