@@ -60,7 +60,8 @@ ORDER BY
     ELSE 2
   END,
   bm25(movies_fts, 10.0, 1.0, 3.0),
-  m.title
+  m.title,
+  m.id
 LIMIT ? OFFSET ?`
 
 const searchMoviesCountSQL = `
@@ -78,7 +79,8 @@ ORDER BY
     ELSE 2
   END,
   bm25(shows_fts, 10.0, 1.0, 3.0),
-  s.name
+  s.name,
+  s.id
 LIMIT ? OFFSET ?`
 
 const searchShowsCountSQL = `
@@ -98,7 +100,8 @@ ORDER BY
     ELSE 4
   END,
   bm25(albums_fts, 10.0, 4.0),
-  a.title
+  a.title,
+  a.id
 LIMIT ? OFFSET ?`
 
 const searchAlbumsCountSQL = `
@@ -137,7 +140,8 @@ ORDER BY
     ELSE 2
   END,
   bm25(musicians_fts, 10.0, 5.0),
-  m.sort_name
+  m.sort_name,
+  m.id
 LIMIT ? OFFSET ?`
 
 const searchMusiciansCountSQL = `
@@ -165,7 +169,8 @@ ORDER BY
     ELSE 4
   END,
   bm25(tracks_search_fts, 10.0, 4.0, 4.0),
-  t.title
+  t.title,
+  t.id
 LIMIT ? OFFSET ?`
 
 // searchEntity describes one searchable category: its SQL, the fts5vocab
