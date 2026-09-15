@@ -1,10 +1,11 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
-import { Search, Film, Disc3, User, Music } from "lucide-react";
+import { Search, Film, Tv, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LibraryPagination from "@/components/shared/LibraryPagination";
 import MovieCard from "@/components/movies/MovieCard";
+import ShowCard from "@/components/shows/ShowCard";
 import AlbumCard from "@/components/music/AlbumCard";
 import MusicianCard from "@/components/music/MusicianCard";
 import TrackItem from "@/components/music/TrackItem";
@@ -22,6 +23,7 @@ import {
   searchAllQueryOpts,
   searchMoviesQueryOpts,
   searchMusiciansQueryOpts,
+  searchShowsQueryOpts,
   searchTracksQueryOpts,
 } from "@/lib/query-opts";
 import {
@@ -45,6 +47,7 @@ import type {
   MoviesLibraryListItemType,
   PaginatedSearchResponse,
   SearchTab,
+  ShowLibraryItemType,
   SimpleAlbumType,
   SimpleMusicianType,
   TrackListItemType,
@@ -97,17 +100,21 @@ export const Route = createFileRoute("/_auth/search/")({
         ? await queryClient.ensureQueryData(
             searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE),
           )
-        : tab === "albums"
+        : tab === "shows"
           ? await queryClient.ensureQueryData(
-              searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+              searchShowsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
             )
-          : tab === "musicians"
+          : tab === "albums"
             ? await queryClient.ensureQueryData(
-                searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+                searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
               )
-            : await queryClient.ensureQueryData(
-                searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE),
-              );
+            : tab === "musicians"
+              ? await queryClient.ensureQueryData(
+                  searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+                )
+              : await queryClient.ensureQueryData(
+                  searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+                );
 
     if (result.error === false) {
       redirectToLastSearchPage({
@@ -162,8 +169,8 @@ function SearchPage() {
             <span>Search</span>
           </h1>
           <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
-            Type a query in the search bar above to find movies, albums,
-            musicians, and tracks in your library.
+            Type a query in the search bar above to find movies, shows,
+            albums, musicians, and tracks in your library.
           </p>
         </header>
       </div>
@@ -183,6 +190,24 @@ function SearchPage() {
           <div className={SEARCH_GRID_CLASS}>
             {items.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
+        )}
+      />
+    );
+  }
+
+  if (tab === "shows") {
+    topLevelTabContent = (
+      <CategoryResultsTab
+        label="shows"
+        q={trimmed}
+        page={page}
+        queryOpts={searchShowsQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
+        renderGrid={(items: ShowLibraryItemType[]) => (
+          <div className={SEARCH_GRID_CLASS}>
+            {items.map((show) => (
+              <ShowCard key={show.id} show={show} />
             ))}
           </div>
         )}
@@ -272,12 +297,12 @@ function SearchPage() {
         className={MOTION_SECTION_ENTER_DELAYED_CLASS}
       >
         <TabsList
-          className={cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2 sm:grid-cols-5")}
+          className={cn(
+            LIBRARY_TABS_LIST_CLASS,
+            "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
+          )}
         >
-          <TabsTrigger
-            value="all"
-            className={cn(LIBRARY_TAB_TRIGGER_CLASS, "max-sm:col-span-2")}
-          >
+          <TabsTrigger value="all" className={LIBRARY_TAB_TRIGGER_CLASS}>
             <Search
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
               aria-hidden="true"
@@ -290,6 +315,13 @@ function SearchPage() {
               aria-hidden="true"
             />
             Movies
+          </TabsTrigger>
+          <TabsTrigger value="shows" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <Tv
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
+            Shows
           </TabsTrigger>
           <TabsTrigger value="albums" className={LIBRARY_TAB_TRIGGER_CLASS}>
             <Disc3
@@ -357,14 +389,14 @@ function AllResultsTab({ q }: { q: string }) {
     return null;
   }
 
-  const { movies, albums, musicians, tracks } = data.data;
+  const { movies, shows, albums, musicians, tracks } = data.data;
   const totalAll =
-    movies.total + albums.total + musicians.total + tracks.total;
+    movies.total + shows.total + albums.total + musicians.total + tracks.total;
 
   const announcement =
     totalAll === 0
       ? `No results for ${q}`
-      : `${totalAll.toLocaleString()} results for ${q}: ${movies.total} movies, ${albums.total} albums, ${musicians.total} musicians, ${tracks.total} tracks`;
+      : `${totalAll.toLocaleString()} results for ${q}: ${movies.total} movies, ${shows.total} shows, ${albums.total} albums, ${musicians.total} musicians, ${tracks.total} tracks`;
 
   if (totalAll === 0) {
     return (
@@ -391,6 +423,23 @@ function AllResultsTab({ q }: { q: string }) {
           <div className={SEARCH_GRID_CLASS}>
             {movies.results.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
+        </AllSection>
+      )}
+
+      {shows.total > 0 && (
+        <AllSection
+          icon={<Tv className="size-5 text-primary" aria-hidden="true" />}
+          title="Shows"
+          total={shows.total}
+          resultCount={shows.results.length}
+          tab="shows"
+          q={q}
+        >
+          <div className={SEARCH_GRID_CLASS}>
+            {shows.results.map((show) => (
+              <ShowCard key={show.id} show={show} />
             ))}
           </div>
         </AllSection>
@@ -501,7 +550,7 @@ function AllSection({
 // ---------------------------------------------------------------------------
 
 type CategoryResultsTabProps<T> = {
-  label: Exclude<SearchTab, "all">;
+  label: PagedSearchTab;
   q: string;
   page: number;
   queryOpts: UseQueryOptions<
@@ -556,7 +605,7 @@ function CategoryResultsTab<T>({
 // ---------------------------------------------------------------------------
 
 type CategoryTabFrameProps<T> = {
-  label: "movies" | "albums" | "musicians" | "tracks";
+  label: PagedSearchTab;
   q: string;
   page: number;
   isLoading: boolean;

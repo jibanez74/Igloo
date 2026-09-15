@@ -993,6 +993,8 @@ func TestInitTables_Idempotent(t *testing.T) {
 	_, err = db.Exec(`
 		INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult)
 		VALUES (1, 'Moonrise', '/movies/moonrise.mkv', 'moonrise.mkv', 1, 'mkv', 'video/x-matroska', false);
+		INSERT INTO shows (id, directory_path, local_name, name, overview)
+		VALUES (1, '/shows/Nightfall', 'Nightfall', 'Nightfall', 'Dusk falls on a quiet town.');
 		INSERT INTO musicians (id, name, sort_name) VALUES (1, 'Aurora', 'aurora');
 		INSERT INTO albums (id, title, sort_title, musician) VALUES (1, 'Daylight', 'daylight', 'Aurora');
 		INSERT INTO tracks (
@@ -1037,10 +1039,11 @@ func TestInitTables_Idempotent(t *testing.T) {
 		{"sort contribution", `SELECT track_id || ':' || musician_id || ':' || sort_name FROM music_credit_metadata`, "1:1:aurora"},
 		{"match cache", `SELECT entity_type || ':' || entity_id || ':' || status FROM music_spotify_matches`, "album:1:unmatched"},
 		{"movie search", `SELECT group_concat(rowid) FROM movies_fts WHERE movies_fts MATCH 'moonrise'`, "1"},
+		{"show search", `SELECT group_concat(rowid) FROM shows_fts WHERE shows_fts MATCH 'nightfall dusk'`, "1"},
 		{"album search", `SELECT group_concat(rowid) FROM albums_fts WHERE albums_fts MATCH 'daylight aurora'`, "1"},
 		{"musician search", `SELECT group_concat(rowid) FROM musicians_fts WHERE musicians_fts MATCH 'aurora'`, "1"},
 		{"track search", `SELECT group_concat(rowid) FROM tracks_search_fts WHERE tracks_search_fts MATCH 'sunrise daylight aurora'`, "1"},
-		{"vocabulary generations", `SELECT group_concat(vocab_table || ':' || generation) FROM (SELECT * FROM search_vocab_generations ORDER BY vocab_table)`, "albums_fts_vocab:1,movies_fts_vocab:1,musicians_fts_vocab:1,tracks_search_fts_vocab:1"},
+		{"vocabulary generations", `SELECT group_concat(vocab_table || ':' || generation) FROM (SELECT * FROM search_vocab_generations ORDER BY vocab_table)`, "albums_fts_vocab:1,movies_fts_vocab:1,musicians_fts_vocab:1,shows_fts_vocab:1,tracks_search_fts_vocab:1"},
 		{"foreign key integrity", `SELECT COUNT(*) FROM pragma_foreign_key_check`, "0"},
 	}
 

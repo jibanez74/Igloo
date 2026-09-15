@@ -1,6 +1,7 @@
 import type {
   MoviesLibraryListItemType,
 } from "./movies";
+import type { ShowLibraryItemType } from "./shows";
 import type {
   SimpleAlbumType,
   SimpleMusicianType,
@@ -15,6 +16,7 @@ export type SearchSection<T> = {
 export type SearchAllResponseType = {
   query: string;
   movies: SearchSection<MoviesLibraryListItemType>;
+  shows: SearchSection<ShowLibraryItemType>;
   albums: SearchSection<SimpleAlbumType>;
   musicians: SearchSection<SimpleMusicianType>;
   tracks: SearchSection<TrackListItemType>;
@@ -30,8 +32,15 @@ export type PaginatedSearchResponse<T> = {
 };
 
 export type SearchMoviesResponseType = PaginatedSearchResponse<MoviesLibraryListItemType>;
+export type SearchShowsResponseType = PaginatedSearchResponse<ShowLibraryItemType>;
 export type SearchAlbumsResponseType = PaginatedSearchResponse<SimpleAlbumType>;
 export type SearchMusiciansResponseType = PaginatedSearchResponse<SimpleMusicianType>;
 export type SearchTracksResponseType = PaginatedSearchResponse<TrackListItemType>;
 
-export type SearchTab = "all" | "movies" | "albums" | "musicians" | "tracks";
+export type SearchTab =
+  | "all"
+  | "movies"
+  | "shows"
+  | "albums"
+  | "musicians"
+  | "tracks";

@@ -25,6 +25,7 @@ type searchSection[T any] struct {
 type searchAllData struct {
 	Query     string                                              `json:"query"`
 	Movies    searchSection[database.GetMoviesLibraryAscRow]      `json:"movies"`
+	Shows     searchSection[database.GetShowsLibraryAscRow]       `json:"shows"`
 	Albums    searchSection[database.GetAlbumsAlphabeticalRow]    `json:"albums"`
 	Musicians searchSection[database.GetMusiciansAlphabeticalRow] `json:"musicians"`
 	Tracks    searchSection[database.GetTracksAlphabeticalRow]    `json:"tracks"`
@@ -64,6 +65,24 @@ LIMIT ? OFFSET ?`
 
 const searchMoviesCountSQL = `
 SELECT COUNT(*) FROM movies_fts WHERE movies_fts MATCH ?`
+
+const searchShowsSQL = `
+SELECT s.id, s.name, s.poster_path, s.premiere_year, s.certification
+FROM shows_fts
+INNER JOIN shows AS s ON s.id = shows_fts.rowid
+WHERE shows_fts MATCH ?
+ORDER BY
+  CASE
+    WHEN LOWER(s.name) = LOWER(?) THEN 0
+    WHEN LOWER(s.name) LIKE ? ESCAPE '\' THEN 1
+    ELSE 2
+  END,
+  bm25(shows_fts, 10.0, 1.0, 3.0),
+  s.name
+LIMIT ? OFFSET ?`
+
+const searchShowsCountSQL = `
+SELECT COUNT(*) FROM shows_fts WHERE shows_fts MATCH ?`
 
 const searchAlbumsSQL = `
 SELECT a.id, a.title, a.cover, a.musician, a.year
@@ -172,6 +191,21 @@ var movieSearchEntity = searchEntity[database.GetMoviesLibraryAscRow]{
 	scan: func(rows *sql.Rows) (database.GetMoviesLibraryAscRow, error) {
 		var row database.GetMoviesLibraryAscRow
 		err := rows.Scan(&row.ID, &row.Title, &row.PosterPath, &row.Year, &row.Certification)
+		return row, err
+	},
+}
+
+var showSearchEntity = searchEntity[database.GetShowsLibraryAscRow]{
+	name:       "shows",
+	pageSQL:    searchShowsSQL,
+	countSQL:   searchShowsCountSQL,
+	vocabTable: "shows_fts_vocab",
+	rankArgs: func(exact, prefix string) []any {
+		return []any{exact, prefix}
+	},
+	scan: func(rows *sql.Rows) (database.GetShowsLibraryAscRow, error) {
+		var row database.GetShowsLibraryAscRow
+		err := rows.Scan(&row.ID, &row.Name, &row.PosterPath, &row.PremiereYear, &row.Certification)
 		return row, err
 	},
 }
@@ -355,6 +389,13 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shows, err := searchEntityTopN(ctx, app, showSearchEntity, q, limit)
+	if err != nil {
+		app.Logger.Error("search failed", "entity", showSearchEntity.name, "error", err)
+		helpers.ErrorJSON(w, errors.New("search failed"))
+		return
+	}
+
 	albums, err := searchEntityTopN(ctx, app, albumSearchEntity, q, limit)
 	if err != nil {
 		app.Logger.Error("search failed", "entity", albumSearchEntity.name, "error", err)
@@ -381,6 +422,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 		Data: searchAllData{
 			Query:     q,
 			Movies:    movies,
+			Shows:     shows,
 			Albums:    albums,
 			Musicians: musicians,
 			Tracks:    tracks,
@@ -443,6 +485,10 @@ func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.Res
 
 func (app *Application) SearchMovies(w http.ResponseWriter, r *http.Request) {
 	handleSearchCategory(app, movieSearchEntity, w, r)
+}
+
+func (app *Application) SearchShows(w http.ResponseWriter, r *http.Request) {
+	handleSearchCategory(app, showSearchEntity, w, r)
 }
 
 func (app *Application) SearchAlbums(w http.ResponseWriter, r *http.Request) {

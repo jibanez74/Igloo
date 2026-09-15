@@ -84,6 +84,7 @@ export const LIKED_TRACK_IDS_KEY = "liked-track-ids";
 
 export const SEARCH_ALL_KEY = "search-all";
 export const SEARCH_MOVIES_KEY = "search-movies";
+export const SEARCH_SHOWS_KEY = "search-shows";
 export const SEARCH_ALBUMS_KEY = "search-albums";
 export const SEARCH_MUSICIANS_KEY = "search-musicians";
 export const SEARCH_TRACKS_KEY = "search-tracks";

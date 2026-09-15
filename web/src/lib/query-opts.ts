@@ -66,6 +66,7 @@ import {
   searchAlbums,
   searchMovies,
   searchMusicians,
+  searchShows,
   searchTracks,
 } from "@/lib/api";
 import {
@@ -132,6 +133,7 @@ import {
   WATCH_ROOMS_KEY,
   SEARCH_ALL_KEY,
   SEARCH_MOVIES_KEY,
+  SEARCH_SHOWS_KEY,
   SEARCH_ALBUMS_KEY,
   SEARCH_MUSICIANS_KEY,
   SEARCH_TRACKS_KEY,
@@ -783,6 +785,21 @@ export function searchMoviesQueryOpts(
   return queryOptions({
     queryKey: [SEARCH_MOVIES_KEY, trimmed, page, perPage],
     queryFn: () => searchMovies(trimmed, page, perPage),
+    enabled: trimmed.length > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function searchShowsQueryOpts(
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) {
+  const trimmed = q.trim();
+  return queryOptions({
+    queryKey: [SEARCH_SHOWS_KEY, trimmed, page, perPage],
+    queryFn: () => searchShows(trimmed, page, perPage),
     enabled: trimmed.length > 0,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,

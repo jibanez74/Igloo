@@ -664,6 +664,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search/shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search TV shows */
+        get: operations["searchShows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/albums": {
         parameters: {
             query?: never;
@@ -4064,6 +4081,11 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        ShowSearchSection: {
+            results: components["schemas"]["ShowLibraryItem"][];
+            /** Format: int64 */
+            total: number;
+        };
         AlbumSearchSection: {
             results: components["schemas"]["SimpleAlbum"][];
             /** Format: int64 */
@@ -4083,6 +4105,7 @@ export interface components {
             data: {
                 query: string;
                 movies: components["schemas"]["MovieSearchSection"];
+                shows: components["schemas"]["ShowSearchSection"];
                 albums: components["schemas"]["AlbumSearchSection"];
                 musicians: components["schemas"]["MusicianSearchSection"];
                 tracks: components["schemas"]["TrackSearchSection"];
@@ -4091,6 +4114,18 @@ export interface components {
         MovieSearchData: {
             query: string;
             results: components["schemas"]["MovieLibraryItem"][];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            per_page: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        ShowSearchData: {
+            query: string;
+            results: components["schemas"]["ShowLibraryItem"][];
             /** Format: int64 */
             total: number;
             /** Format: int64 */
@@ -4138,6 +4173,9 @@ export interface components {
         };
         SearchMoviesEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["MovieSearchData"];
+        };
+        SearchShowsEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["ShowSearchData"];
         };
         SearchAlbumsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["AlbumSearchData"];
@@ -5423,6 +5461,15 @@ export interface components {
                 "application/json": components["schemas"]["SearchMoviesEnvelope"];
             };
         };
+        /** @description TV show search response. */
+        SearchShowsResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SearchShowsEnvelope"];
+            };
+        };
         /** @description Album search response. */
         SearchAlbumsResponse: {
             headers: {
@@ -6674,6 +6721,24 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["SearchMoviesResponse"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    searchShows: {
+        parameters: {
+            query?: {
+                q?: components["parameters"]["SearchQuery"];
+                page?: components["parameters"]["PageQuery"];
+                per_page?: components["parameters"]["PerPageQuery"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SearchShowsResponse"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
         };
