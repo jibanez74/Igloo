@@ -105,6 +105,127 @@ func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
 	}
 }
 
+func TestSearchShowsStagedMatching(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	createSearchShow(t, app, "Breaking Bad", "/shows/Breaking Bad", "", "")
+	createSearchShow(t, app, "Breaking Point", "/shows/Breaking Point", "", "")
+	createSearchShow(t, app, "Better Call Saul", "/shows/Better Call Saul", "", "")
+
+	// Stage 1 (AND) keeps a well-spelled multi-token query narrow.
+	results := searchEntityResults(t, app, showSearchEntity, "Breaking Bad")
+	if len(results) != 1 {
+		t.Fatalf("expected AND matching to return 1 show, got %d", len(results))
+	}
+	if results[0].Name != "Breaking Bad" {
+		t.Fatalf("expected Breaking Bad, got %q", results[0].Name)
+	}
+
+	// A token with no co-occurrence and no near-spelled vocabulary term falls
+	// through to the stage-3 OR query.
+	results = searchEntityResults(t, app, showSearchEntity, "Breaking Zzzqx")
+	if len(results) != 2 {
+		t.Fatalf("expected OR fallback to return 2 Breaking shows, got %d", len(results))
+	}
+}
+
+func TestSearchShowsMatchesOverviewAndTagline(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	createSearchShow(
+		t, app,
+		"Severance",
+		"/shows/Severance (2024)",
+		"Lumon employees split their memories between work and home.",
+		"The work is mysterious and important.",
+	)
+
+	// The indexed text arrives through UpdateShowMetadata, so these two also
+	// prove the shows_au trigger reindexes on a metadata write.
+	for _, query := range []string{"Lumon", "mysterious"} {
+		t.Run(query, func(t *testing.T) {
+			results := searchEntityResults(t, app, showSearchEntity, query)
+			if len(results) != 1 {
+				t.Fatalf("expected 1 show for %q, got %d", query, len(results))
+			}
+			if results[0].Name != "Severance" {
+				t.Fatalf("expected Severance, got %q", results[0].Name)
+			}
+		})
+	}
+}
+
+func TestSearchShowsTypoInOneTokenRanksTargetFirst(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
+	createSearchShow(t, app, "Deliverance Bay", "/shows/Deliverance Bay", "", "")
+
+	results := searchEntityResults(t, app, showSearchEntity, "Severence")
+	if len(results) == 0 {
+		t.Fatal("expected typo-corrected show search to return results")
+	}
+	if results[0].Name != "Severance" {
+		t.Fatalf("expected Severance first, got %q", results[0].Name)
+	}
+}
+
+// The show index ships after the shows table, so schema.sql backfills it once
+// for libraries scanned before it existed.
+func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	// Simulate a database whose shows predate the index.
+	_, err := app.DB.Exec("DROP TRIGGER shows_ai; DROP TRIGGER shows_au")
+	if err != nil {
+		t.Fatalf("drop show index triggers: %v", err)
+	}
+	createSearchShow(t, app, "Legacy Show", "/shows/Legacy Show", "", "")
+
+	var terms int
+	err = app.DB.QueryRow("SELECT COUNT(*) FROM shows_fts_vocab").Scan(&terms)
+	if err != nil {
+		t.Fatalf("count vocabulary terms: %v", err)
+	}
+	if terms != 0 {
+		t.Fatalf("expected an empty index before the backfill, got %d terms", terms)
+	}
+
+	// Reapplying the schema is exactly what the next startup does; it restores
+	// the triggers and runs the guarded rebuild.
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("reapply schema: %v", err)
+	}
+
+	results := searchEntityResults(t, app, showSearchEntity, "Legacy")
+	if len(results) != 1 {
+		t.Fatalf("expected the backfill to make 1 show searchable, got %d", len(results))
+	}
+
+	// The guard is monotonic: a second startup must not touch the index.
+	err = app.DB.QueryRow("SELECT COUNT(*) FROM shows_fts_vocab").Scan(&terms)
+	if err != nil {
+		t.Fatalf("count vocabulary terms: %v", err)
+	}
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("reapply schema again: %v", err)
+	}
+	var termsAfter int
+	err = app.DB.QueryRow("SELECT COUNT(*) FROM shows_fts_vocab").Scan(&termsAfter)
+	if err != nil {
+		t.Fatalf("count vocabulary terms: %v", err)
+	}
+	if termsAfter != terms {
+		t.Fatalf("second startup changed the index: %d terms, want %d", termsAfter, terms)
+	}
+}
+
 func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -326,6 +447,37 @@ func createSearchUser(t *testing.T, app *Application) int64 {
 	return user.ID
 }
 
+// createSearchShow seeds a show the way the scanner does: UpsertLocalShow
+// writes the local name, and the TMDB text the index actually searches only
+// arrives with UpdateShowMetadata.
+func createSearchShow(t *testing.T, app *Application, name, directory, overview, tagline string) int64 {
+	t.Helper()
+
+	ctx := context.Background()
+	show, err := app.Queries.UpsertLocalShow(ctx, database.UpsertLocalShowParams{
+		DirectoryPath: directory,
+		LocalName:     name,
+		PremiereYear:  sql.NullInt64{Int64: 2024, Valid: true},
+		Name:          name,
+	})
+	if err != nil {
+		t.Fatalf("create show %q: %v", name, err)
+	}
+
+	err = app.Queries.UpdateShowMetadata(ctx, database.UpdateShowMetadataParams{
+		Name:          name,
+		Overview:      sql.NullString{String: overview, Valid: overview != ""},
+		Tagline:       sql.NullString{String: tagline, Valid: tagline != ""},
+		PosterPath:    sql.NullString{String: "/" + directory + ".jpg", Valid: true},
+		Certification: sql.NullString{String: "TV-14", Valid: true},
+		ID:            show.ID,
+	})
+	if err != nil {
+		t.Fatalf("update show metadata %q: %v", name, err)
+	}
+	return show.ID
+}
+
 func createSearchMovie(t *testing.T, app *Application, title, filePath string) int64 {
 	t.Helper()
 
@@ -432,6 +584,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	// Search scans into the same row types as the list endpoints, so a hit in
 	// every category is what validates those item schemas here.
 	createSearchMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
+	createSearchShow(t, app, "Contract Show", "/shows/Contract Show (2024)", "A contract show.", "Contract taglines.")
 	musicianID := createSearchMusician(t, app, "Contract Artist")
 	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
 	createSearchTrack(t, app, "Contract Track", "/music/search-contract.flac", albumID, musicianID)
@@ -447,6 +600,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	}{
 		{operationID: "searchAll", path: "/api/search?q=contract"},
 		{operationID: "searchMovies", path: "/api/search/movies?q=contract", dataKeys: []string{"results"}},
+		{operationID: "searchShows", path: "/api/search/shows?q=contract", dataKeys: []string{"results"}},
 		{operationID: "searchAlbums", path: "/api/search/albums?q=contract", dataKeys: []string{"results"}},
 		{operationID: "searchMusicians", path: "/api/search/musicians?q=contract", dataKeys: []string{"results"}},
 		{operationID: "searchTracks", path: "/api/search/tracks?q=contract", dataKeys: []string{"results"}},
@@ -472,7 +626,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 }
 
 // searchAll nests its results one level deeper than the category endpoints, so
-// it needs its own non-empty check for the four section item schemas.
+// it needs its own non-empty check for the section item schemas.
 func assertSearchAllSectionsNotEmpty(t *testing.T, body []byte) {
 	t.Helper()
 
@@ -482,6 +636,7 @@ func assertSearchAllSectionsNotEmpty(t *testing.T, body []byte) {
 	var envelope struct {
 		Data struct {
 			Movies    section `json:"movies"`
+			Shows     section `json:"shows"`
 			Albums    section `json:"albums"`
 			Musicians section `json:"musicians"`
 			Tracks    section `json:"tracks"`
@@ -493,6 +648,7 @@ func assertSearchAllSectionsNotEmpty(t *testing.T, body []byte) {
 	}
 	for name, results := range map[string][]json.RawMessage{
 		"movies":    envelope.Data.Movies.Results,
+		"shows":     envelope.Data.Shows.Results,
 		"albums":    envelope.Data.Albums.Results,
 		"musicians": envelope.Data.Musicians.Results,
 		"tracks":    envelope.Data.Tracks.Results,

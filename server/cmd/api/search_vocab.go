@@ -236,7 +236,7 @@ func (cache *searchVocabCache) set(vocabTable string, generation int64, index *s
 
 func searchVocabSelectSQL(vocabTable string) (string, error) {
 	switch vocabTable {
-	case "movies_fts_vocab", "albums_fts_vocab", "musicians_fts_vocab", "tracks_search_fts_vocab":
+	case "movies_fts_vocab", "shows_fts_vocab", "albums_fts_vocab", "musicians_fts_vocab", "tracks_search_fts_vocab":
 		return "SELECT term, doc FROM " + vocabTable + " LIMIT ?", nil
 	default:
 		return "", fmt.Errorf("unsupported search vocabulary table %q", vocabTable)

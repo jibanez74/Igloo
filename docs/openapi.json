@@ -1412,6 +1412,37 @@
         }
       }
     },
+    "/api/search/shows": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search TV shows",
+        "operationId": "searchShows",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SearchQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PageQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PerPageQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SearchShowsResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/search/albums": {
       "get": {
         "tags": [
@@ -8052,6 +8083,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/SearchMoviesEnvelope"
+            }
+          }
+        }
+      },
+      "SearchShowsResponse": {
+        "description": "TV show search response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SearchShowsEnvelope"
             }
           }
         }
@@ -15039,6 +15080,26 @@
         },
         "additionalProperties": false
       },
+      "ShowSearchSection": {
+        "type": "object",
+        "required": [
+          "results",
+          "total"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowLibraryItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "AlbumSearchSection": {
         "type": "object",
         "required": [
@@ -15115,6 +15176,7 @@
                 "required": [
                   "query",
                   "movies",
+                  "shows",
                   "albums",
                   "musicians",
                   "tracks"
@@ -15125,6 +15187,9 @@
                   },
                   "movies": {
                     "$ref": "#/components/schemas/MovieSearchSection"
+                  },
+                  "shows": {
+                    "$ref": "#/components/schemas/ShowSearchSection"
                   },
                   "albums": {
                     "$ref": "#/components/schemas/AlbumSearchSection"
@@ -15160,6 +15225,45 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MovieLibraryItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShowSearchData": {
+        "type": "object",
+        "required": [
+          "query",
+          "results",
+          "total",
+          "page",
+          "per_page",
+          "total_pages"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShowLibraryItem"
             }
           },
           "total": {
@@ -15311,6 +15415,24 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/MovieSearchData"
+              }
+            }
+          }
+        ]
+      },
+      "SearchShowsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShowSearchData"
               }
             }
           }

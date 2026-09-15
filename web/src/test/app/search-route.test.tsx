@@ -73,6 +73,18 @@ function mockSearchFetch() {
             ],
             total: 1,
           },
+          shows: {
+            results: [
+              {
+                id: 55,
+                name: "Casino Nights",
+                poster_path: { String: "", Valid: false },
+                premiere_year: { Int64: 2001, Valid: true },
+                certification: { String: "TV-MA", Valid: true },
+              },
+            ],
+            total: 1,
+          },
           albums: {
             results: [],
             total: 0,
@@ -107,6 +119,28 @@ function mockSearchFetch() {
           page: 3,
           per_page: SEARCH_PER_PAGE,
           total_pages: 3,
+        },
+      });
+    }
+
+    if (url === `/api/search/shows?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`) {
+      return jsonResponse({
+        error: false,
+        data: {
+          query: "Casino",
+          results: [
+            {
+              id: 55,
+              name: "Casino Nights",
+              poster_path: { String: "", Valid: false },
+              premiere_year: { Int64: 2001, Valid: true },
+              certification: { String: "TV-MA", Valid: true },
+            },
+          ],
+          total: 1,
+          page: 1,
+          per_page: SEARCH_PER_PAGE,
+          total_pages: 1,
         },
       });
     }
@@ -210,6 +244,17 @@ describe("search route", () => {
         page: 3,
       });
     });
+  });
+
+  it("links show results to the show details route", async () => {
+    await renderSearchRoute("/search/?q=Casino&tab=shows");
+
+    const showLink = await screen.findByRole("link", {
+      name: "Casino Nights 2001",
+    });
+
+    expect(showLink).toHaveAttribute("href", "/tv-shows/55");
+    expect(screen.getByText("1 shows")).toBeInTheDocument();
   });
 
   it("delays swapping from all results to albums until the fade-out completes", async () => {

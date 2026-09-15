@@ -757,6 +757,7 @@ CREATE TABLE IF NOT EXISTS search_vocab_generations (
 
 INSERT OR IGNORE INTO search_vocab_generations (vocab_table) VALUES
   ('movies_fts_vocab'),
+  ('shows_fts_vocab'),
   ('albums_fts_vocab'),
   ('musicians_fts_vocab'),
   ('tracks_search_fts_vocab');
@@ -1208,6 +1209,81 @@ CREATE TABLE IF NOT EXISTS shows (
 );
 -- Keep this expression and tie-breaker aligned with GetShowsLibraryAsc/Desc.
 CREATE INDEX IF NOT EXISTS idx_shows_name ON shows (LOWER(name), id);
+
+-- Show search infrastructure
+-- This mirrors the movies index in the Search infrastructure section above but
+-- lives here because CREATE TRIGGER ... ON shows resolves the table at creation
+-- time, and the schema is applied top to bottom. Its vocabulary generation row
+-- is seeded with the others up there.
+
+CREATE VIRTUAL TABLE IF NOT EXISTS shows_fts USING fts5 (
+  name,
+  overview,
+  tagline,
+  content = 'shows',
+  content_rowid = 'id',
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS shows_fts_vocab USING fts5vocab (shows_fts, 'row');
+
+CREATE TRIGGER IF NOT EXISTS shows_ai
+AFTER INSERT ON shows
+BEGIN
+  INSERT INTO shows_fts (rowid, name, overview, tagline)
+  VALUES (new.id, new.name, new.overview, new.tagline);
+END;
+
+CREATE TRIGGER IF NOT EXISTS shows_ad
+AFTER DELETE ON shows
+BEGIN
+  INSERT INTO shows_fts (shows_fts, rowid, name, overview, tagline)
+  VALUES ('delete', old.id, old.name, old.overview, old.tagline);
+END;
+
+CREATE TRIGGER IF NOT EXISTS shows_au
+AFTER UPDATE OF name, overview, tagline ON shows
+BEGIN
+  INSERT INTO shows_fts (shows_fts, rowid, name, overview, tagline)
+  VALUES ('delete', old.id, old.name, old.overview, old.tagline);
+  INSERT INTO shows_fts (rowid, name, overview, tagline)
+  VALUES (new.id, new.name, new.overview, new.tagline);
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_shows_ai
+AFTER INSERT ON shows
+BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'shows_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_shows_ad
+AFTER DELETE ON shows
+BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'shows_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_shows_au
+AFTER UPDATE OF name, overview, tagline ON shows
+BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'shows_fts_vocab';
+END;
+
+-- Shows predate this index and the triggers above only see later writes, so an
+-- existing database would keep an empty index. The guard reads the vocabulary
+-- rather than shows_fts: a bare scan of an external-content FTS table reads the
+-- content table, so it reports rows even when the index holds nothing. fts5vocab
+-- reads the index itself. One rebuild makes the guard false for good.
+INSERT INTO shows_fts (shows_fts)
+SELECT 'rebuild'
+WHERE EXISTS (SELECT 1 FROM shows)
+  AND NOT EXISTS (SELECT 1 FROM shows_fts_vocab);
+
 -- attempts counts definitive TMDB misses; last_attempt_at (unix seconds) drives
 -- the miss backoff shared with movies.
 CREATE TABLE IF NOT EXISTS show_tmdb_retries (

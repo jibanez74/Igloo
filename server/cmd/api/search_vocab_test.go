@@ -162,6 +162,71 @@ func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
 	}
 }
 
+func TestVocabCorrectionsRefreshesAfterShowChanges(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	showID := createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
+	corrections, err := testVocabCorrections(app, ctx, "shows_fts_vocab", "severence")
+	if err != nil {
+		t.Fatalf("initial vocabCorrections failed: %v", err)
+	}
+	if !slices.Contains(corrections, "severance") {
+		t.Fatalf("expected initial correction, got %#v", corrections)
+	}
+
+	var initialGeneration int64
+	err = app.DB.QueryRow(`
+		SELECT generation FROM search_vocab_generations
+		WHERE vocab_table = 'shows_fts_vocab'
+	`).Scan(&initialGeneration)
+	if err != nil {
+		t.Fatalf("read initial generation: %v", err)
+	}
+	initialIndex, ok := app.SearchVocab.get("shows_fts_vocab", initialGeneration)
+	if !ok {
+		t.Fatal("expected initial show vocabulary index to be cached")
+	}
+
+	_, err = app.DB.Exec("UPDATE shows SET name = ? WHERE id = ?", "Andor", showID)
+	if err != nil {
+		t.Fatalf("update show name: %v", err)
+	}
+	corrections, err = testVocabCorrections(app, ctx, "shows_fts_vocab", "andorr")
+	if err != nil {
+		t.Fatalf("updated vocabCorrections failed: %v", err)
+	}
+	if !slices.Contains(corrections, "andor") {
+		t.Fatalf("expected updated correction, got %#v", corrections)
+	}
+
+	var updatedGeneration int64
+	err = app.DB.QueryRow(`
+		SELECT generation FROM search_vocab_generations
+		WHERE vocab_table = 'shows_fts_vocab'
+	`).Scan(&updatedGeneration)
+	if err != nil {
+		t.Fatalf("read updated generation: %v", err)
+	}
+	updatedIndex, ok := app.SearchVocab.get("shows_fts_vocab", updatedGeneration)
+	if !ok || updatedIndex == initialIndex {
+		t.Fatal("expected show vocabulary update to replace the cached index")
+	}
+
+	_, err = app.DB.Exec("DELETE FROM shows WHERE id = ?", showID)
+	if err != nil {
+		t.Fatalf("delete show: %v", err)
+	}
+	corrections, err = testVocabCorrections(app, ctx, "shows_fts_vocab", "andorr")
+	if err != nil {
+		t.Fatalf("deleted vocabCorrections failed: %v", err)
+	}
+	if slices.Contains(corrections, "andor") {
+		t.Fatalf("deleted term remained cached: %#v", corrections)
+	}
+}
+
 func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

@@ -152,6 +152,7 @@ func (app *Application) registerSearchRoutes(r chi.Router) {
 	r.Route("/search", func(r chi.Router) {
 		r.Get("/", app.SearchAll)
 		r.Get("/movies", app.SearchMovies)
+		r.Get("/shows", app.SearchShows)
 		r.Get("/albums", app.SearchAlbums)
 		r.Get("/musicians", app.SearchMusicians)
 		r.Get("/tracks", app.SearchTracks)

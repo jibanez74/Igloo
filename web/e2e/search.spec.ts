@@ -9,6 +9,7 @@ import type {
   SearchAllResponseType,
   SearchMoviesResponseType,
   SearchMusiciansResponseType,
+  SearchShowsResponseType,
   SearchTracksResponseType,
 } from "../src/types/search";
 import { SEARCH_PER_PAGE } from "../src/lib/constants";
@@ -38,6 +39,14 @@ const movieResult = {
   year: nullableInt64(2006),
   certification: nullableString("PG-13"),
 } satisfies SearchAllResponseType["movies"]["results"][number];
+
+const showResult = {
+  id: 55,
+  name: "Casino Nights",
+  poster_path: nullableString(),
+  premiere_year: nullableInt64(2001),
+  certification: nullableString("TV-MA"),
+} satisfies SearchAllResponseType["shows"]["results"][number];
 
 const albumResult = {
   id: 12,
@@ -74,6 +83,10 @@ const allResults = apiResponse<SearchAllResponseType>({
     results: [movieResult],
     total: 1,
   },
+  shows: {
+    results: [showResult],
+    total: 1,
+  },
   albums: {
     results: [albumResult],
     total: 1,
@@ -91,6 +104,15 @@ const allResults = apiResponse<SearchAllResponseType>({
 const movieResults = apiResponse<SearchMoviesResponseType>({
   query: "Casino",
   results: [movieResult],
+  total: 1,
+  page: 1,
+  per_page: SEARCH_PER_PAGE,
+  total_pages: 1,
+});
+
+const showResults = apiResponse<SearchShowsResponseType>({
+  query: "Casino",
+  results: [showResult],
   total: 1,
   page: 1,
   per_page: SEARCH_PER_PAGE,
@@ -168,6 +190,12 @@ async function mockSearchApi(page: Page) {
       return;
     }
 
+    if (url.pathname === "/api/search/shows") {
+      requestedSearchRequests.push(`${url.pathname}${url.search}`);
+      await fulfillJSON(route, showResults);
+      return;
+    }
+
     if (url.pathname === "/api/search/albums") {
       requestedSearchRequests.push(`${url.pathname}${url.search}`);
       await fulfillJSON(route, albumResults);
@@ -229,7 +257,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
 
   const tablist = page.getByRole("tablist");
   await expect(tablist).toBeVisible();
-  await expect(page.getByRole("tab")).toHaveCount(5);
+  await expect(page.getByRole("tab")).toHaveCount(6);
   await expectPageHasNoHorizontalScroll(page);
   await expectNoHorizontalOverflow(
     page.getByRole("main"),
@@ -241,6 +269,13 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
   await expect(page).toHaveURL(/tab=movies/);
   await expect(page.getByRole("tabpanel", { name: "Movies" })).toBeVisible();
   await expect(page.getByText("1 movies")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Shows" }).click();
+  await expect(page).toHaveURL(/tab=shows/);
+  await expect(page.getByRole("tabpanel", { name: "Shows" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Casino Nights 2001", exact: true }),
+  ).toBeVisible();
 
   await page.getByRole("tab", { name: "Albums" }).click();
   await expect(page).toHaveURL(/tab=albums/);
@@ -275,6 +310,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
   expect(requestedSearchRequests).toEqual([
     "/api/search?q=Casino",
     `/api/search/movies?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
+    `/api/search/shows?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
     `/api/search/albums?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
     `/api/search/musicians?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
     `/api/search/tracks?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,

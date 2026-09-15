@@ -25,7 +25,10 @@ export const trailerSearchSchema = z.object({
 export const searchSearchSchema = z.object({
   q: z._default(z.catch(z.string(), ""), ""),
   tab: z._default(
-    z.catch(z.enum(["all", "movies", "albums", "musicians", "tracks"]), "all"),
+    z.catch(
+      z.enum(["all", "movies", "shows", "albums", "musicians", "tracks"]),
+      "all",
+    ),
     "all",
   ),
   page: z._default(

@@ -186,6 +186,7 @@ export type {
   PaginatedSearchResponse,
   SearchAllResponseType,
   SearchMoviesResponseType,
+  SearchShowsResponseType,
   SearchAlbumsResponseType,
   SearchMusiciansResponseType,
   SearchTracksResponseType,

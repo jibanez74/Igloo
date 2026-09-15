@@ -69,6 +69,7 @@ import type {
   WatchRoomType,
   SearchAllResponseType,
   SearchMoviesResponseType,
+  SearchShowsResponseType,
   SearchAlbumsResponseType,
   SearchMusiciansResponseType,
   SearchTracksResponseType,
@@ -835,7 +836,8 @@ export const adminResetUserPassword = (id: number, password: string) =>
   });
 
 // ============================================================================
-// Search (FTS5-backed library search across movies, albums, musicians, tracks)
+// Search (FTS5-backed library search across movies, shows, albums, musicians,
+// tracks)
 // ============================================================================
 
 export const searchAll = (q: string) =>
@@ -850,6 +852,19 @@ export const searchMovies = (
 ) =>
   apiRequest<SearchMoviesResponseType>(
     withQuery("/api/search/movies", {
+      q,
+      page,
+      per_page: perPage,
+    }),
+  );
+
+export const searchShows = (
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) =>
+  apiRequest<SearchShowsResponseType>(
+    withQuery("/api/search/shows", {
       q,
       page,
       per_page: perPage,
