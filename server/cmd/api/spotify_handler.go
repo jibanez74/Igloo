@@ -12,7 +12,7 @@ import (
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
-type spotifyAlbumSearchPayload struct {
+type spotifyAlbumSearchRequest struct {
 	Title string `json:"title"`
 }
 
@@ -43,7 +43,7 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var payload spotifyAlbumSearchPayload
+	var payload spotifyAlbumSearchRequest
 
 	err := helpers.ReadJSON(w, r, &payload, 0)
 	if err != nil {
@@ -79,7 +79,7 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-type spotifyTrackSearchPayload struct {
+type spotifyTrackSearchRequest struct {
 	Title string `json:"title"`
 }
 
@@ -102,7 +102,7 @@ func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var payload spotifyTrackSearchPayload
+	var payload spotifyTrackSearchRequest
 
 	err := helpers.ReadJSON(w, r, &payload, 0)
 	if err != nil {

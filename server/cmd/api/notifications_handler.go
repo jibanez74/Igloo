@@ -14,15 +14,20 @@ import (
 
 // notificationListLimit caps how many notifications a single list request
 // returns. The bell panel only shows the most recent ones.
+const notificationListLimit = 50
+
+// notificationTitle is the request category a notification carries. The values
+// mirror the title enum in docs/openapi.json and are stored verbatim.
+type notificationTitle string
+
 const (
-	notificationListLimit         = 50
-	notificationTitleMovieRequest = "movie_request"
-	notificationTitleAlbumRequest = "album_request"
-	notificationTitleTrackRequest = "track_request"
-	notificationTitleOther        = "other"
+	notificationTitleMovieRequest notificationTitle = "movie_request"
+	notificationTitleAlbumRequest notificationTitle = "album_request"
+	notificationTitleTrackRequest notificationTitle = "track_request"
+	notificationTitleOther        notificationTitle = "other"
 )
 
-type CreateNotificationReq struct {
+type CreateNotificationRequest struct {
 	Title   string `json:"title"`
 	Message string `json:"message"`
 	IsAdmin bool   `json:"isAdmin"`
@@ -93,7 +98,7 @@ func parseNotificationID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Request) {
-	var req CreateNotificationReq
+	var req CreateNotificationRequest
 
 	err := helpers.ReadJSON(w, r, &req, 0)
 	if err != nil {
@@ -104,7 +109,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	req.Title = strings.TrimSpace(req.Title)
 	req.Message = strings.TrimSpace(req.Message)
 
-	if !isValidNotificationTitle(req.Title) {
+	if !isValidNotificationTitle(notificationTitle(req.Title)) {
 		helpers.ErrorJSON(w, errors.New("invalid notification title"), http.StatusBadRequest)
 		return
 	}
@@ -144,7 +149,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func isValidNotificationTitle(title string) bool {
+func isValidNotificationTitle(title notificationTitle) bool {
 	switch title {
 	case notificationTitleMovieRequest,
 		notificationTitleAlbumRequest,

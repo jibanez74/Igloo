@@ -26,7 +26,7 @@ const (
 	tmdbMaxItems     = 12
 )
 
-type tmdbSearchPayload struct {
+type tmdbSearchRequest struct {
 	Title  string `json:"title"`
 	Year   int    `json:"year"`
 	TmdbID int    `json:"tmdb_id"`
@@ -82,7 +82,7 @@ func (app *Application) handleTmdbMovieSearch(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
-	var payload tmdbSearchPayload
+	var payload tmdbSearchRequest
 
 	err := helpers.ReadJSON(w, r, &payload, 0)
 	if err != nil {
@@ -208,7 +208,7 @@ func isSafeTmdbImageFile(file string) bool {
 	return true
 }
 
-func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearchPayload) ([]tmdbSearchResult, error) {
+func (app *Application) searchTmdbMovies(ctx context.Context, payload tmdbSearchRequest) ([]tmdbSearchResult, error) {
 	if payload.TmdbID > 0 {
 		movie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
 

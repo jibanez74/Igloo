@@ -17,7 +17,7 @@ import (
 func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -49,7 +49,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error("failed to begin transaction", "error", err)
+		app.Logger.Error(beginTransactionLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to process request"))
 		return
 	}
@@ -60,7 +60,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	movie, err := qtx.GetMovieByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("failed to get movie", "error", err, "id", id)
@@ -93,7 +93,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error("failed to begin transaction", "error", err, "id", id)
+		app.Logger.Error(beginTransactionLogMessage, "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to update movie"))
 		return
 	}
@@ -129,7 +129,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 	movie, err := qtx.GetMovieByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("failed to get movie", "error", err, "id", id)
@@ -213,7 +213,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	movie, err := app.Queries.GetMovieByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("failed to get movie for deletion", "error", err, "id", id)

@@ -56,6 +56,17 @@ const (
 	userEmailMaxLength = 255
 )
 
+// Said by both the self-service and the admin user handlers.
+const (
+	userNotFoundMessage  = "user not found"
+	nameRequiredMessage  = "name is required"
+	emailRequiredMessage = "email is required"
+
+	// The fragment SQLite puts in the error when an insert or update collides
+	// with a unique index, which is how a taken email is detected.
+	uniqueConstraintErrorFragment = "UNIQUE constraint"
+)
+
 // validateUserName enforces the shared name length bound in characters
 // (runes), matching the web client's validation.
 func validateUserName(name string) error {
@@ -82,7 +93,7 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("name is required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(nameRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -130,7 +141,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 	req.Email = strings.TrimSpace(req.Email)
 
 	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New("email is required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -144,7 +155,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 		ID:    userID,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
+		if strings.Contains(err.Error(), uniqueConstraintErrorFragment) {
 			helpers.ErrorJSON(w, errors.New("that email address is already in use"), http.StatusConflict)
 			return
 		}
@@ -203,7 +214,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 
 	match, err := helpers.PasswordMatches(req.CurrentPassword, user.Password)
 	if err != nil {
-		app.Logger.Error("failed to compare password hash", "error", err, "user_id", userID)
+		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}

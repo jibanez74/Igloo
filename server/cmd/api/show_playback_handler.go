@@ -106,7 +106,7 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error("failed to begin transaction", "error", err)
+		app.Logger.Error(beginTransactionLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
 		return
 	}
@@ -141,8 +141,8 @@ func (app *Application) GetShowEpisodeTechnicalDetails(w http.ResponseWriter, r 
 
 	subtitles, err := qtx.GetShowSubtitlesByFileID(ctx, file.ID)
 	if err != nil {
-		app.Logger.Error("failed to get subtitles", "error", err, "media", media.String(), "file_id", file.ID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
+		app.Logger.Error(getSubtitlesLogMessage, "error", err, "media", media.String(), "file_id", file.ID)
+		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
 		return
 	}
 

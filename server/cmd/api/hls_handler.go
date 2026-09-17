@@ -40,13 +40,16 @@ const (
 	hlsSegmentHTTPContentType = "video/mp4"
 	// The extension FFmpeg's hls muxer appends while writing a file under
 	// -hls_flags temp_file, before the rename to the final name.
-	hlsTempFileSuffix              = ".tmp"
-	hlsEffectiveProfileHeader      = "X-Igloo-Effective-Profile"
-	hlsActualStartHeader           = "X-Igloo-Actual-Start"
-	hlsEffectiveAudioCodecHeader   = "X-Igloo-Effective-Audio-Codec"
-	hlsEffectiveAudioChannelsHdr   = "X-Igloo-Effective-Audio-Channels"
-	hlsEffectiveAudioBitrateHeader = "X-Igloo-Effective-Audio-Bitrate"
+	hlsTempFileSuffix               = ".tmp"
+	hlsEffectiveProfileHeader       = "X-Igloo-Effective-Profile"
+	hlsActualStartHeader            = "X-Igloo-Actual-Start"
+	hlsEffectiveAudioCodecHeader    = "X-Igloo-Effective-Audio-Codec"
+	hlsEffectiveAudioChannelsHeader = "X-Igloo-Effective-Audio-Channels"
+	hlsEffectiveAudioBitrateHeader  = "X-Igloo-Effective-Audio-Bitrate"
 )
+
+// Said by the personal segment handler and the watch-room one alike.
+const hlsSessionNotFoundMessage = "session not found; request the manifest first"
 
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
@@ -192,7 +195,7 @@ func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
 	if audio != nil {
 		w.Header().Set(hlsEffectiveAudioCodecHeader, string(audio.Codec))
 		if audio.Channels > 0 {
-			w.Header().Set(hlsEffectiveAudioChannelsHdr, strconv.Itoa(audio.Channels))
+			w.Header().Set(hlsEffectiveAudioChannelsHeader, strconv.Itoa(audio.Channels))
 		}
 		if audio.Bitrate != "" {
 			w.Header().Set(hlsEffectiveAudioBitrateHeader, audio.Bitrate)
@@ -231,22 +234,22 @@ func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, 
 	key := HLSSessionKey(params.Media, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec, userID)
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 	session, ok := raw.(*HLSSession)
 	if !ok || session == nil {
 		app.removePersonalHLSSession(key)
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 	if !canAccessPersonalHLSSession(session, params.Media, userID) {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 	refreshed := app.RefreshHLSSessionTTL(key, session)
 	if !refreshed {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 

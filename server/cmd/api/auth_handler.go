@@ -14,6 +14,10 @@ import (
 const (
 	cookieUserID              = "user_id"
 	invalidCredentialsMessage = "invalid email or password provided"
+
+	// Logged wherever a stored hash is compared: login, device login, and the
+	// password change in user_handler.go.
+	comparePasswordHashLogMessage = "failed to compare password hash"
 )
 
 type AuthRequest struct {
@@ -50,7 +54,7 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 
 	match, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
-		app.Logger.Error("failed to compare password hash", "error", err, "email", request.Email)
+		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "email", request.Email)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
@@ -129,7 +133,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 
 	match, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
-		app.Logger.Error("failed to compare password hash", "error", err, "email", request.Email)
+		app.Logger.Error(comparePasswordHashLogMessage, "error", err, "email", request.Email)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}

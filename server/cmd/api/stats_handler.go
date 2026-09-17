@@ -49,7 +49,7 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		trackOK, existsErr := app.Queries.TrackExists(ctx, req.TrackID)
 		if existsErr == nil && !trackOK {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(trackNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("failed to record play event", "error", err, "track_id", req.TrackID, "user_id", userID)

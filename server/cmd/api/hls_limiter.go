@@ -26,9 +26,11 @@ func (e *hlsStorageCapacityError) Error() string {
 }
 
 const (
-	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
-	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"
 	hlsCPUTranscodeDefaultDivisor = 4
+
+	// hlsMaxPersonalSessionsPerUserDefault caps concurrent personal sessions per
+	// user so abandoned clients cannot pile up ffmpeg processes and temp dirs.
+	hlsMaxPersonalSessionsPerUserDefault = 3
 )
 
 // hlsTranscodeAcquireWait bounds how long a session start parks for a transcode

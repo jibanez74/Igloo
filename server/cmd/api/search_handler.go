@@ -11,11 +11,7 @@ import (
 	"strings"
 )
 
-const (
-	searchDefaultPerPage = 24
-	searchMaxPerPage     = 48
-	searchAllTopN        = 8
-)
+const searchAllTopN = 8
 
 type searchSection[T any] struct {
 	Results []T   `json:"results"`
@@ -291,15 +287,15 @@ func parseSearchPagination(r *http.Request) (page, perPage int64) {
 		}
 	}
 
-	perPage = int64(searchDefaultPerPage)
+	perPage = int64(libraryDefaultPerPage)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
 		if err == nil && parsed > 0 {
 			perPage = parsed
 		}
 	}
-	if perPage > searchMaxPerPage {
-		perPage = searchMaxPerPage
+	if perPage > libraryMaxPerPage {
+		perPage = libraryMaxPerPage
 	}
 	return page, perPage
 }

@@ -20,7 +20,7 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	perPage := int64(24)
+	perPage := int64(libraryDefaultPerPage)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
 		if err == nil && parsed > 0 {
@@ -28,8 +28,8 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if perPage > 48 {
-		perPage = 48
+	if perPage > libraryMaxPerPage {
+		perPage = libraryMaxPerPage
 	}
 
 	offset := (page - 1) * perPage
@@ -102,7 +102,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error("failed to begin transaction", "error", err)
+		app.Logger.Error(beginTransactionLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch album from server"))
 		return
 	}

@@ -15,6 +15,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Said by every handler that resolves a track by id.
+const (
+	trackNotFoundMessage  = "track not found"
+	invalidTrackIDMessage = "invalid track id"
+)
+
 func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
@@ -24,7 +30,7 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 	idParam := chi.URLParam(r, "id")
 	trackID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid track id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -37,7 +43,7 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		trackOK, existsErr := app.Queries.TrackExists(ctx, trackID)
 		if existsErr == nil && !trackOK {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(trackNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("failed to toggle track like", "error", err, "trackID", trackID, "userID", userID)
@@ -192,14 +198,14 @@ func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid track id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	track, err := app.Queries.GetTrack(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(trackNotFoundMessage), http.StatusNotFound)
 			return
 		}
 
@@ -227,14 +233,14 @@ func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid track id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidTrackIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	track, err := app.trackStreamFile(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("track not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(trackNotFoundMessage), http.StatusNotFound)
 			return
 		}
 

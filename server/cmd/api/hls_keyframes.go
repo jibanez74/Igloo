@@ -7,10 +7,17 @@ import (
 	"errors"
 	"os"
 	"sort"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/keyframeindex"
 )
+
+// hlsStartProbeTimeout is the budget each of the two stages that resolve a
+// session's real start second gets: the keyframe extraction, and the ffprobe
+// fallback after it. Both are advisory, so exceeding it costs the session
+// nothing but an unknown start.
+const hlsStartProbeTimeout = 15 * time.Second
 
 // keyframeIndexFingerprint keys the persisted keyframe index. The index
 // depends only on the file's bytes, so unlike remuxSafetyFingerprint no

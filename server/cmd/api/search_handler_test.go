@@ -427,8 +427,8 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode cap response: %v", err)
 	}
-	if resp.Data.PerPage != searchMaxPerPage {
-		t.Fatalf("per_page = %d, want cap %d", resp.Data.PerPage, searchMaxPerPage)
+	if resp.Data.PerPage != libraryMaxPerPage {
+		t.Fatalf("per_page = %d, want cap %d", resp.Data.PerPage, libraryMaxPerPage)
 	}
 }
 

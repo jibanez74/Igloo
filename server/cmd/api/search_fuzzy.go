@@ -18,13 +18,13 @@ import (
 // Stages 2 and 3 only run when the previous stage matched nothing, so the
 // common well-spelled case costs the same single count query as before.
 
-// searchVocabMaxCorrections caps how many near-spelled vocabulary terms a
-// single query token can expand into.
-const searchVocabMaxCorrections = 3
+// searchVocabMaxVisited bounds how many vocabulary nodes one token's
+// correction lookup may walk before it settles for what it has found.
+const searchVocabMaxVisited = 512
 
 // Fuzzy expansion is deliberately capped independently of the raw FTS query.
 // Prefix and OR matching still use every sanitized token.
-const searchVocabMaxTypoTokens = 8
+const searchFuzzyMaxTypoTokens = 8
 
 // searchTokens converts a user-supplied query into lowercase FTS-safe tokens.
 // Characters that are not letters, digits, or whitespace are dropped so the
@@ -175,7 +175,7 @@ func (app *Application) resolveSearchMatch(ctx context.Context, countSQL, vocabT
 	var vocabIndex *searchVocabIndex
 	for i, t := range tokens {
 		maxDist := searchTypoMaxDist(len([]rune(t)))
-		if maxDist == 0 || correctableTokens >= searchVocabMaxTypoTokens {
+		if maxDist == 0 || correctableTokens >= searchFuzzyMaxTypoTokens {
 			continue
 		}
 		correctableTokens++

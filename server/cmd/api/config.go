@@ -11,23 +11,36 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+// Defaults for the bootstrap administrator created when no admin exists.
 const (
 	defaultAdminName  = "Admin"
 	defaultAdminEmail = "admin@sample.com"
+)
 
+// Defaults for the paths and port used when the environment says nothing.
+const (
 	defaultAppPort      = 8080
 	defaultDBPath       = "db/igloo.db"
 	defaultStaticDir    = "static"
 	defaultLogsDir      = "logs"
 	defaultTranscodeDir = "transcode"
+)
 
+// Every environment variable the process reads. Settings-owned values here are
+// first-run seeds only — once the settings row exists the database wins and the
+// value is edited from the Settings UI; the rest stay startup-driven.
+const (
 	envDBPath                     = "DB_PATH"
 	envStaticDir                  = "STATIC_DIR"
 	envLogsDir                    = "LOGS_DIR"
 	envTranscodeDir               = "TRANSCODE_DIR"
-	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
-	envLogToStdout                = "LOG_TO_STDOUT"
 	envPort                       = "PORT"
+	envDebug                      = "DEBUG"
+	envLogToStdout                = "LOG_TO_STDOUT"
+	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
+	envViteDevServer              = "VITE_DEV_SERVER"
+	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
+	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"
 	envDefaultAdminName           = "DEFAULT_ADMIN_NAME"
 	envDefaultAdminEmail          = "DEFAULT_ADMIN_EMAIL"
 	envDefaultAdminPassword       = "DEFAULT_ADMIN_PASSWORD"
@@ -81,7 +94,7 @@ func LoadRuntimeEnvFile() (string, bool, error) {
 }
 
 func NewRuntimeConfig() (RuntimeConfig, error) {
-	debug := envBool("DEBUG", false)
+	debug := envBool(envDebug, false)
 
 	port, err := configuredPort()
 	if err != nil {

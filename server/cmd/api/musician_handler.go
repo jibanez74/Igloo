@@ -20,7 +20,7 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 		}
 	}
 
-	perPage := int64(24)
+	perPage := int64(libraryDefaultPerPage)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
 		if err == nil && parsed > 0 {
@@ -28,8 +28,8 @@ func (app *Application) GetMusiciansAlphabetical(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if perPage > 48 {
-		perPage = 48
+	if perPage > libraryMaxPerPage {
+		perPage = libraryMaxPerPage
 	}
 
 	offset := (page - 1) * perPage

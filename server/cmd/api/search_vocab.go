@@ -11,8 +11,11 @@ import (
 
 const (
 	searchVocabMaxTerms      = 100_000
-	searchVocabMaxVisited    = 512
 	searchVocabMaxTokenRunes = 64
+
+	// searchVocabMaxCorrections caps how many near-spelled vocabulary terms a
+	// single query token can expand into.
+	searchVocabMaxCorrections = 3
 )
 
 type searchVocabTerm struct {
