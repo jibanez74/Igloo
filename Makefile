@@ -17,6 +17,12 @@ LOG_FILE := $(DIST_DIR)/$(BINARY_NAME).log
 DEADCODE_TOOL := golang.org/x/tools/cmd/deadcode@v0.49.0
 DEADCODE_REPORT_REL := dist/deadcode.txt
 DEADCODE_REPORT := $(SERVER_DIR)/$(DEADCODE_REPORT_REL)
+DEADCODE_MAIN_REPORT_REL := dist/deadcode-main.txt
+DEADCODE_MAIN_REPORT := $(SERVER_DIR)/$(DEADCODE_MAIN_REPORT_REL)
+# mediabin keeps both build configurations in one package and documents that
+# each tag set reports the other half as unreachable, so the release half is
+# expected output here rather than dead code. See mediabin.go's package comment.
+DEADCODE_MAIN_ALLOW := ^cmd/internal/mediabin/
 
 GO_TAGS := sqlite_fts5
 DEV_TAGS := externalbin sqlite_fts5
@@ -127,7 +133,7 @@ help:
 	@echo "  make check         Run contract checks, backend lint and tests, web lint, web tests, and web build"
 	@echo "  make test          Run backend and web unit tests"
 	@echo "  make test-server   Run backend tests with required build tags"
-	@echo "  make lint-server   Run go vet and the dead-code reachability check"
+	@echo "  make lint-server   Run go vet and the dead-code reachability checks"
 	@echo "  make test-tmdb-integration Run live TMDB API tests (requires TMDB_API_KEY)"
 	@echo "  make test-web      Run frontend unit tests"
 	@echo "  make lint-web      Run frontend lint"
@@ -151,12 +157,23 @@ test-server: check-server-test-tools prepare-webdist-placeholder
 # configuration can be checked here — the release build needs the ffmpeg/ffprobe
 # payloads, which are gitignored. deadcode exits 0 whether or not it finds
 # anything, so the emptiness of its output is what fails the target.
+#
+# The second pass closes that trade-off: it roots at main alone, so a handler no
+# route registers is caught even when a test still calls it. That is the only
+# way a dead sqlc query surfaces here. deadcode cannot flag the query method
+# itself — RTA puts every (*Queries) method in the reflection-reachable set, so
+# -generated buys nothing — but a query is only ever reachable through a caller,
+# and dead callers do get reported. Verify with -whylive before deleting.
 lint-server: check-server-test-tools prepare-webdist-placeholder
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go vet -tags "$(TEST_TAGS)" ./...
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -test -tags "$(TEST_TAGS)" ./... > $(DEADCODE_REPORT_REL)
 	@test ! -s $(DEADCODE_REPORT) || (echo "unreachable code:"; cat $(DEADCODE_REPORT); rm -f $(DEADCODE_REPORT); exit 1)
 	@rm -f $(DEADCODE_REPORT)
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -tags "$(TEST_TAGS)" ./cmd/api \
+		| grep -Ev '$(DEADCODE_MAIN_ALLOW)' > $(DEADCODE_MAIN_REPORT_REL) || true
+	@test ! -s $(DEADCODE_MAIN_REPORT) || (echo "unreachable from main (reached only by tests, if at all):"; cat $(DEADCODE_MAIN_REPORT); rm -f $(DEADCODE_MAIN_REPORT); exit 1)
+	@rm -f $(DEADCODE_MAIN_REPORT)
 
 test-tmdb-integration: check-go-tools
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS) integration" ./cmd/internal/tmdb/
