@@ -14,14 +14,10 @@ const (
 	HARDWARE_ACCELERATION_DEVICE_INTEL  = "intel"
 )
 
-const TMDB_HTTP_TIMEOUT = 10 * time.Second
-
-// READ_JSON_TIMEOUT bounds how long a handler will wait for a request body.
-// http.MaxBytesReader caps the body's size but not the time taken to send it,
-// so a slow client could otherwise hold a goroutine open indefinitely. This is
-// applied per request in ReadJSON rather than as http.Server.ReadTimeout,
-// which would also apply to the hijacked watch-room WebSocket.
-const READ_JSON_TIMEOUT = 15 * time.Second
+// PROVIDER_HTTP_TIMEOUT bounds a single request to an external metadata provider.
+// It is shared by the TMDB client and the YouTube thumbnail fetcher; Spotify keeps
+// its own longer timeout.
+const PROVIDER_HTTP_TIMEOUT = 10 * time.Second
 
 // HLS profile identifiers are URL-visible values accepted by hls_profiles.go.
 const (

@@ -10,6 +10,29 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// Match reasons are the values carried by MatchDebugInfo.Reason. The music
+// scanner branches on them to decide whether a failed match is "unmatched"
+// (definitive) or "failed" (retry later), and they are persisted verbatim to
+// music_spotify_matches.reason, so they are exported rather than re-spelled.
+const (
+	MatchReasonAccepted            = "accepted"
+	MatchReasonNoResults           = "no_results"
+	MatchReasonScoreBelowThreshold = "score_below_threshold"
+	MatchReasonEmptyQuery          = "empty_query"
+	MatchReasonSearchFailed        = "search_failed"
+	MatchReasonDetailsFailed       = "details_failed"
+)
+
+// Lookup and strategy names describe which Spotify query produced a match.
+// They are diagnostic only; nothing outside this package branches on them.
+const (
+	lookupArtist             = "artist"
+	lookupAlbum              = "album"
+	strategyArtistSearch     = "artist_search"
+	strategyAlbumFieldSearch = "album_field_search"
+	strategyAlbumFallback    = "album_fallback_search"
+)
+
 const (
 	spotifyArtistSearchLimit       = 5
 	spotifyAlbumSearchLimit        = 5
@@ -378,12 +401,12 @@ func sanitizeSpotifySearchQueryValue(value string) string {
 
 func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strategy string) (*spotifylib.FullArtist, MatchDebugInfo) {
 	info := MatchDebugInfo{
-		Lookup:      "artist",
+		Lookup:      lookupArtist,
 		Input:       query,
 		SearchQuery: query,
 		Strategy:    strategy,
 		Threshold:   spotifyArtistThreshold,
-		Reason:      "no_results",
+		Reason:      MatchReasonNoResults,
 	}
 
 	if len(artists) == 0 {
@@ -407,23 +430,23 @@ func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strate
 	info.Score = bestScore
 
 	if bestScore < spotifyArtistThreshold {
-		info.Reason = "score_below_threshold"
+		info.Reason = MatchReasonScoreBelowThreshold
 		return nil, info
 	}
 
-	info.Reason = "accepted"
+	info.Reason = MatchReasonAccepted
 
 	return &artists[bestIndex], info
 }
 
 func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
 	info := MatchDebugInfo{
-		Lookup:      "album",
+		Lookup:      lookupAlbum,
 		Input:       title,
 		SearchQuery: searchQuery,
 		Strategy:    strategy,
 		Threshold:   spotifyAlbumThreshold,
-		Reason:      "no_results",
+		Reason:      MatchReasonNoResults,
 	}
 
 	if len(albums) == 0 {
@@ -463,11 +486,11 @@ func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum,
 	info.Score = bestScore
 
 	if bestScore < spotifyAlbumThreshold {
-		info.Reason = "score_below_threshold"
+		info.Reason = MatchReasonScoreBelowThreshold
 		return nil, info
 	}
 
-	info.Reason = "accepted"
+	info.Reason = MatchReasonAccepted
 
 	return &albums[bestIndex], info
 }
@@ -477,7 +500,7 @@ func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {
 		return candidate
 	}
 
-	if candidate.Score == current.Score && current.Reason == "no_results" {
+	if candidate.Score == current.Score && current.Reason == MatchReasonNoResults {
 		return candidate
 	}
 

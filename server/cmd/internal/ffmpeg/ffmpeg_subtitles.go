@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+// subtitleStderrTailBytes caps the FFmpeg stderr tail carried in an extraction
+// error, matching the hlsStderrScanner* caps in ffmpeg_hls.go.
+const subtitleStderrTailBytes = 4096
+
 // ExtractSubtitleAsWebVTT converts one subtitle stream to WebVTT via ffmpeg.
 // streamIndex is the absolute ffprobe index; the caller must reject bitmap codecs.
 func (f *ffmpeg) ExtractSubtitleAsWebVTT(
@@ -36,8 +40,8 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 			commandErr = contextErr
 		}
 		tail := strings.TrimSpace(stderr.String())
-		if len(tail) > 4096 {
-			tail = tail[len(tail)-4096:]
+		if len(tail) > subtitleStderrTailBytes {
+			tail = tail[len(tail)-subtitleStderrTailBytes:]
 			for len(tail) > 0 && tail[0]&0xC0 == 0x80 {
 				tail = tail[1:]
 			}

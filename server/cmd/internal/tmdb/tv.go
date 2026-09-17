@@ -129,7 +129,7 @@ func (s *TVShow) Certification() string {
 		if rating == "" {
 			continue
 		}
-		if r.Country == "US" {
+		if r.Country == tmdbCertificationCountry {
 			return rating
 		}
 		if first == "" {
@@ -146,7 +146,7 @@ func (t *tmdbClient) getTV(ctx context.Context, path string, params url.Values, 
 	if err != nil {
 		return err
 	}
-	params.Set("language", "en-US")
+	params.Set("language", tmdbRequestLanguage)
 	key := "tv:" + path + "?" + params.Encode()
 	var body []byte
 	cached, found := t.movieCache.Get(key)

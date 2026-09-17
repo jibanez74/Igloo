@@ -61,7 +61,9 @@ var movieReleaseNoiseTokens = map[string]bool{
 	"yts": true, "ytsmx": true, "mx": true,
 }
 
-func isReasonableYear(n int) bool {
+// IsReasonableYear reports whether n is a plausible movie release year, used to
+// tell a year token in a filename apart from any other four-digit number.
+func IsReasonableYear(n int) bool {
 	return n >= 1900 && n <= 2100
 }
 
@@ -87,7 +89,7 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 			close += open
 			yearStr := strings.TrimSpace(s[open+1 : close])
 			if len(yearStr) == 4 {
-				if y, err := strconv.Atoi(yearStr); err == nil && isReasonableYear(y) {
+				if y, err := strconv.Atoi(yearStr); err == nil && IsReasonableYear(y) {
 					title := strings.TrimSpace(s[:open])
 					title = strings.ReplaceAll(title, ".", " ")
 					if title != "" {
@@ -108,7 +110,7 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 			continue
 		}
 		y, err := strconv.Atoi(tok)
-		if err != nil || !isReasonableYear(y) {
+		if err != nil || !IsReasonableYear(y) {
 			continue
 		}
 		titleParts := parts[:i]
@@ -122,7 +124,7 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 	if len(words) >= 2 {
 		last := words[len(words)-1]
 		if len(last) == 4 {
-			if y, err := strconv.Atoi(last); err == nil && isReasonableYear(y) {
+			if y, err := strconv.Atoi(last); err == nil && IsReasonableYear(y) {
 				title := strings.TrimSpace(strings.Join(words[:len(words)-1], " "))
 				if title != "" {
 					return &TitleYearResponse{Title: title, Year: y}, nil

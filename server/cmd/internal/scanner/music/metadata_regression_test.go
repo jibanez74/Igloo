@@ -67,7 +67,7 @@ func TestArtistSortPersistenceAndSpotifyReconciliation(t *testing.T) {
 				}
 				scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "track"), 1, ffprobe.FormatTags{Title: "Track", Artist: artist, SortArtist: tc.sorts})
 				if retry {
-					s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: musicSpotifyReasonNoResults}}}
+					s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}}}
 					err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
 					if err != nil {
 						t.Fatal(err)

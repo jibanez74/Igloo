@@ -267,7 +267,7 @@ func ambiguousFullTitle(path string, year int) string {
 	count := 0
 	for _, token := range strings.Fields(full) {
 		number, err := strconv.Atoi(token)
-		if err == nil && len(token) == 4 && number >= 1900 && number <= 2100 {
+		if err == nil && len(token) == 4 && helpers.IsReasonableYear(number) {
 			count++
 		}
 	}

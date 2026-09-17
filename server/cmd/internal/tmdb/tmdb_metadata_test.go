@@ -47,8 +47,8 @@ func TestNew(t *testing.T) {
 	if concrete.httpClient == nil {
 		t.Fatal("expected shared http client to be configured")
 	}
-	if concrete.httpClient.Timeout != helpers.TMDB_HTTP_TIMEOUT {
-		t.Fatalf("expected timeout %s, got %s", helpers.TMDB_HTTP_TIMEOUT, concrete.httpClient.Timeout)
+	if concrete.httpClient.Timeout != helpers.PROVIDER_HTTP_TIMEOUT {
+		t.Fatalf("expected timeout %s, got %s", helpers.PROVIDER_HTTP_TIMEOUT, concrete.httpClient.Timeout)
 	}
 	if concrete.maxRetries != tmdbHTTPMaxRetries {
 		t.Fatalf("expected max retries %d, got %d", tmdbHTTPMaxRetries, concrete.maxRetries)

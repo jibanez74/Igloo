@@ -87,7 +87,7 @@ func TestMusicScanStatusDeferredFilesStayIssues(t *testing.T) {
 	if status.State != scanner.StateCompletedWithIssues || status.Deferred != 3 || status.Processed != 3 || status.IssueCount != 3 || probe.calls != 0 {
 		t.Fatalf("deferred scan: %+v probes=%d", status, probe.calls)
 	}
-	if status.Issues[0].Reason != reasonDeferred {
+	if status.Issues[0].Reason != scanner.ReasonFileDeferredNextScan {
 		t.Fatalf("deferred issue reason = %q", status.Issues[0].Reason)
 	}
 }
@@ -151,7 +151,7 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	defer s.tx.DB.Close()
 	probe.failingPath = ""
 	s.spotify = &musicScannerSpotifyStub{
-		artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: musicSpotifyReasonNoResults}},
+		artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}},
 		albumErr:  errors.New("temporary"),
 	}
 

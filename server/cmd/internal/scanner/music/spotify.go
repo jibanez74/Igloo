@@ -15,14 +15,11 @@ import (
 )
 
 const (
-	musicSpotifyEntityAlbum               = "album"
-	musicSpotifyEntityMusician            = "musician"
-	musicSpotifyStatusMatched             = "matched"
-	musicSpotifyStatusFailed              = "failed"
-	musicSpotifyStatusUnmatched           = "unmatched"
-	musicSpotifyReasonNoResults           = "no_results"
-	musicSpotifyReasonScoreBelowThreshold = "score_below_threshold"
-	musicSpotifyReasonEmpty               = "empty_query"
+	musicSpotifyEntityAlbum     = "album"
+	musicSpotifyEntityMusician  = "musician"
+	musicSpotifyStatusMatched   = "matched"
+	musicSpotifyStatusFailed    = "failed"
+	musicSpotifyStatusUnmatched = "unmatched"
 )
 
 type resolvedSpotifyMatch struct {
@@ -83,11 +80,13 @@ func musicSpotifyMatchStatusIsFinal(status string) bool {
 }
 
 func musicSpotifyReasonIsUnmatched(reason string) bool {
-	return reason == musicSpotifyReasonNoResults || reason == musicSpotifyReasonScoreBelowThreshold || reason == musicSpotifyReasonEmpty
+	return reason == spotifyapi.MatchReasonNoResults ||
+		reason == spotifyapi.MatchReasonScoreBelowThreshold ||
+		reason == spotifyapi.MatchReasonEmptyQuery
 }
 
 func musicSpotifyReasonSplitsCompound(reason string) bool {
-	return reason == musicSpotifyReasonNoResults || reason == musicSpotifyReasonScoreBelowThreshold
+	return reason == spotifyapi.MatchReasonNoResults || reason == spotifyapi.MatchReasonScoreBelowThreshold
 }
 
 func generateMusicianSummary(artist *spotifylib.FullArtist) string {

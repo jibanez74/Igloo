@@ -11,10 +11,10 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 	artistName = strings.TrimSpace(artistName)
 	if artistName == "" {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:    "artist",
+			Lookup:    lookupArtist,
 			Input:     artistName,
-			Strategy:  "artist_search",
-			Reason:    "empty_query",
+			Strategy:  strategyArtistSearch,
+			Reason:    MatchReasonEmptyQuery,
 			Threshold: spotifyArtistThreshold,
 		}, nil)
 	}
@@ -31,27 +31,27 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(spotifyArtistSearchLimit))
 	if err != nil {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:      "artist",
+			Lookup:      lookupArtist,
 			Input:       artistName,
 			SearchQuery: artistName,
-			Strategy:    "artist_search",
-			Reason:      "search_failed",
+			Strategy:    strategyArtistSearch,
+			Reason:      MatchReasonSearchFailed,
 			Threshold:   spotifyArtistThreshold,
 		}, err)
 	}
 
 	if results.Artists == nil {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:      "artist",
+			Lookup:      lookupArtist,
 			Input:       artistName,
 			SearchQuery: artistName,
-			Strategy:    "artist_search",
-			Reason:      "no_results",
+			Strategy:    strategyArtistSearch,
+			Reason:      MatchReasonNoResults,
 			Threshold:   spotifyArtistThreshold,
 		}, nil)
 	}
 
-	returned, info := selectBestArtistMatch(artistName, results.Artists.Artists, "artist_search")
+	returned, info := selectBestArtistMatch(artistName, results.Artists.Artists, strategyArtistSearch)
 	if returned == nil {
 		return nil, newMatchError(info, nil)
 	}

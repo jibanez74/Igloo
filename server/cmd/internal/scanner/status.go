@@ -32,9 +32,19 @@ const (
 	PhaseEnrichment ScanPhase = "enrichment"
 )
 
-// ReasonDiscoveryEntry is the safe issue text for a library entry the walk
-// could not inspect.
-const ReasonDiscoveryEntry = "A library entry could not be inspected. Existing records are preserved."
+// Issue texts published by more than one scanner. They are user-facing and
+// contain no directory paths or raw errors. A scanner that needs to say
+// something different keeps its own local constant instead.
+//
+// ReasonFileDeferredNextScan states the quiet period in words; it must be kept
+// in step with FileQuietPeriod.
+const (
+	ReasonDiscoveryEntry       = "A library entry could not be inspected. Existing records are preserved."
+	ReasonLibraryUnavailable   = "The library directory is unavailable."
+	ReasonDiscoveryInterrupted = "Library discovery was interrupted; missing files were not removed."
+	ReasonCleanupUnsafe        = "Cleanup stopped because the library could not be safely checked."
+	ReasonFileDeferredNextScan = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
+)
 
 // MaxPublishedIssues caps the issue summaries carried by a status; IssueCount
 // still reports every outstanding issue.
@@ -188,6 +198,10 @@ func (r *Report) Finish(progress *Progress, canceled bool) {
 	now := time.Now().UTC()
 	progress.FinishedAt = &now
 }
+
+// ProgressLogInterval is how often a running scan logs its progress. All three
+// scanners pass it to StartProgressLog.
+const ProgressLogInterval = 10 * time.Second
 
 // StartProgressLog calls log every interval until the returned stop function
 // is called; stop waits for an in-flight log call to return.
