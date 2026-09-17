@@ -327,7 +327,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 		var fallback sql.NullString
 		hasDate := !date.IsZero()
 		if hasDate {
-			fallback = helpers.NullString(date.Format("2006-01-02"))
+			fallback = helpers.NullString(date.Format(releaseDateLayout))
 		}
 		err = qtx.SaveMusicAlbumDate(ctx, database.SaveMusicAlbumDateParams{AlbumID: album.ID, SpotifyDate: fallback})
 		if err != nil {

@@ -84,7 +84,7 @@ func applyShow(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVSho
 func applySeason(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVSeason) error {
 	name := strings.TrimSpace(m.Name)
 	if name == "" {
-		name = fmt.Sprintf("Season %d", m.SeasonNumber)
+		name = fmt.Sprintf(seasonPlaceholderNameFormat, m.SeasonNumber)
 	}
 	err := q.UpdateShowSeasonMetadata(ctx, database.UpdateShowSeasonMetadataParams{ID: id, Name: name, TmdbID: helpers.NullInt64(int64(m.ID)), Overview: helpers.NullString(m.Overview), AirDate: helpers.NullString(m.AirDate), PosterPath: helpers.NullString(m.PosterPath), VoteAverage: sql.NullFloat64{Float64: m.VoteAverage, Valid: true}, TmdbEpisodeCount: sql.NullInt64{Int64: int64(len(m.Episodes)), Valid: true}})
 	if err != nil {
@@ -104,7 +104,7 @@ func applySeason(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVS
 func applyEpisode(ctx context.Context, q *database.Queries, id int64, m tmdb.TVEpisode) error {
 	name := strings.TrimSpace(m.Name)
 	if name == "" {
-		name = fmt.Sprintf("Episode %d", m.EpisodeNumber)
+		name = fmt.Sprintf(episodePlaceholderNameFormat, m.EpisodeNumber)
 	}
 	err := q.UpdateShowEpisodeMetadata(ctx, database.UpdateShowEpisodeMetadataParams{ID: id, Name: name, TmdbID: helpers.NullInt64(int64(m.ID)), Overview: helpers.NullString(m.Overview), AirDate: helpers.NullString(m.AirDate), StillPath: helpers.NullString(m.StillPath), ProductionCode: helpers.NullString(m.ProductionCode), TmdbRuntime: helpers.NullInt64(int64(m.Runtime)), VoteAverage: sql.NullFloat64{Float64: m.VoteAverage, Valid: true}, VoteCount: sql.NullInt64{Int64: int64(m.VoteCount), Valid: true}})
 	if err != nil {

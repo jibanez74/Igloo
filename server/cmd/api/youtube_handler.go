@@ -46,7 +46,7 @@ func (app *Application) ProxyYouTubeThumbnail(w http.ResponseWriter, r *http.Req
 
 	client := app.YouTubeThumbHTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: helpers.TMDB_HTTP_TIMEOUT}
+		client = &http.Client{Timeout: helpers.PROVIDER_HTTP_TIMEOUT}
 	}
 
 	resp, err := client.Do(req)

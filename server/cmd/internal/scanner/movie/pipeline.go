@@ -15,9 +15,20 @@ const (
 	// needs a TMDB rate limiter first.
 	scanWorkers         = 2
 	slowOperation       = 5 * time.Second
-	progressLogInterval = 10 * time.Second
 	deferredRetryWindow = 120 * time.Second
 	maxDeferredRetries  = 2
+)
+
+// Issue texts specific to the movie scanner. The shared ones live in
+// scanner/status.go; these say something only this scanner can say.
+const (
+	// Movie retries a deferred file within the run, so it does not promise the
+	// next scan the way scanner.ReasonFileDeferredNextScan does.
+	reasonDeferredInRun = "The file is still changing or has not been quiet for 60 seconds. It remains deferred until a later attempt."
+	reasonFailed        = "Unable to inspect, probe, or save this movie. Any previous record was preserved."
+	reasonEnrichment    = "Descriptions could not be updated. Local movie data remains available; enrichment will retry later."
+	reasonUnmatched     = "TMDB returned no matching movie. You can use Identify or retry on a later scan."
+	reasonStopped       = "TMDB enrichment stopped after provider failures. Pending movies will retry on a later scan."
 )
 
 type fileState uint8
@@ -98,7 +109,7 @@ func (s *Scanner) prepareFile(ctx context.Context, job probeJob) probeResult {
 func (s *Scanner) runMovieScan(directory string) {
 	report := newScanReport(s.Status())
 	ctx := s.scanContext
-	stopProgressLog := scanner.StartProgressLog(progressLogInterval, func() {
+	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
 		status := s.Status()
 		s.logger.Info("movie scan progress", "run", status.RunID, "phase", status.Phase, "processed", status.Processed, "total", status.Total, "enriched", status.Enriched)
 	})
@@ -139,7 +150,7 @@ func (s *Scanner) runMovieScan(directory string) {
 	report.scan = scan
 	reconciliation, err := scanner.NewReconciliation(ctx, directory, catalog)
 	if err != nil {
-		fail(err, "The library directory is unavailable.")
+		fail(err, scanner.ReasonLibraryUnavailable)
 		return
 	}
 	files := make([]localFile, 0)
@@ -159,7 +170,7 @@ func (s *Scanner) runMovieScan(directory string) {
 			return nil
 		})
 	if err != nil {
-		fail(err, "Library discovery was interrupted; missing files were not removed.")
+		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
 	}
 	s.phase(report, scanner.PhaseLocal)
@@ -180,7 +191,7 @@ func (s *Scanner) runMovieScan(directory string) {
 	s.phase(report, scanner.PhaseCleanup)
 	report.status.Deleted, err = s.cleanupMissingMovie(ctx, scan, reconciliation)
 	if err != nil {
-		fail(err, "Cleanup stopped because the library could not be safely checked.")
+		fail(err, scanner.ReasonCleanupUnsafe)
 		return
 	}
 	s.phase(report, scanner.PhaseEnrichment)
@@ -239,7 +250,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 	case result.err != nil:
 		file.state = fileFailed
 		report.status.Failed++
-		report.Issue(file.file.Path, scanner.PhaseLocal, "Unable to inspect, probe, or save this movie. Any previous record was preserved.")
+		report.Issue(file.file.Path, scanner.PhaseLocal, reasonFailed)
 		s.logger.Warn("failed to process movie", "path", file.file.Path, "error", result.err)
 	case result.inspection.Outcome == scanner.FileDeferred:
 		file.state, file.eligible = fileDeferred, result.inspection.EligibleAt
@@ -259,7 +270,7 @@ func (s *Scanner) recordLocal(report *scanReport, file *localFile, result probeR
 		if file.eligible.IsZero() {
 			file.eligible = s.now().Add(scanner.FileQuietPeriod)
 		}
-		report.Issue(file.file.Path, scanner.PhaseLocal, "The file is still changing or has not been quiet for 60 seconds. It remains deferred until a later attempt.")
+		report.Issue(file.file.Path, scanner.PhaseLocal, reasonDeferredInRun)
 		s.logger.Info("deferred movie", "path", file.file.Path, "eligible_at", file.eligible)
 	}
 }

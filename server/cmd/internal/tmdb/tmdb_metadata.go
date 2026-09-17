@@ -137,7 +137,7 @@ func (m *TmdbMovie) Certification() string {
 			if firstCert == "" {
 				firstCert = c
 			}
-			if r.ISO3166_1 == "US" {
+			if r.ISO3166_1 == tmdbCertificationCountry {
 				usCert = c
 				break
 			}
@@ -223,9 +223,9 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 
 func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error) {
 	params := url.Values{}
-	params.Add("language", "en-US")
+	params.Add("language", tmdbRequestLanguage)
 	params.Add("page", "1")
-	params.Add("region", "US")
+	params.Add("region", tmdbRequestRegion)
 
 	results, err := t.getMovieList(ctx, "/movie/now_playing", params, "unable to get movies in theaters from tmdb")
 	if err != nil {

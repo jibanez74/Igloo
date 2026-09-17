@@ -11,8 +11,15 @@ import (
 )
 
 const (
-	mp4TestBoxHeaderSize     = 8
-	mp4TestNonSyncSampleFlag = 0x00000001
+	mp4TestBoxHeaderSize = 8
+
+	// mp4TestNonIDRSampleFlags marks a sample whose first VCL NAL is not an IDR.
+	// It deliberately leaves the sample_is_non_sync bit (0x00010000, see
+	// isSyncSample in remux_validator.go) clear, so the validator reads these
+	// samples as sync samples and rejects the fixture for starting a sync sample
+	// on a non-IDR NAL. Setting the real non-sync bit would make the unsafe
+	// fixture produce no sync samples at all and test a different path.
+	mp4TestNonIDRSampleFlags = 0x00000001
 )
 
 type Fixture struct {
@@ -244,14 +251,14 @@ func mp4TestVideoSampleFlags(sample []byte) uint32 {
 	offset := 0
 	for offset < len(sample) {
 		if offset+4 > len(sample) {
-			return mp4TestNonSyncSampleFlag
+			return mp4TestNonIDRSampleFlags
 		}
 
 		naluLen := int(binary.BigEndian.Uint32(sample[offset : offset+4]))
 		offset += 4
 
 		if naluLen == 0 || offset+naluLen > len(sample) {
-			return mp4TestNonSyncSampleFlag
+			return mp4TestNonIDRSampleFlags
 		}
 
 		nalType := sample[offset] & 0x1F
@@ -262,7 +269,7 @@ func mp4TestVideoSampleFlags(sample []byte) uint32 {
 		offset += naluLen
 	}
 
-	return mp4TestNonSyncSampleFlag
+	return mp4TestNonIDRSampleFlags
 }
 
 func mp4TestTRUN(samples []sampleSpec) []byte {

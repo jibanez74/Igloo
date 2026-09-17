@@ -147,7 +147,7 @@ func (app *Application) ProxyTmdbImage(w http.ResponseWriter, r *http.Request) {
 
 	client := app.TmdbImageHTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: helpers.TMDB_HTTP_TIMEOUT}
+		client = &http.Client{Timeout: helpers.PROVIDER_HTTP_TIMEOUT}
 	}
 
 	resp, err := client.Do(req)

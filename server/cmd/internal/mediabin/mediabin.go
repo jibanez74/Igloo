@@ -19,6 +19,9 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
+// extractedBinaryMode is the permission an extracted media binary is given.
+const extractedBinaryMode = 0o755
+
 func ResolveExternal(binaryName, envVar string) (string, error) {
 	if path := strings.TrimSpace(os.Getenv(envVar)); path != "" {
 		return path, nil
@@ -142,7 +145,7 @@ func decompressToFile(path string, compressed []byte, digest io.Writer) error {
 	}
 	defer reader.Close()
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, extractedBinaryMode)
 	if err != nil {
 		return err
 	}
@@ -150,7 +153,7 @@ func decompressToFile(path string, compressed []byte, digest io.Writer) error {
 	_, copyErr := reader.WriteTo(io.MultiWriter(f, digest))
 	// O_CREATE's mode is ignored when the file pre-exists (the cache path
 	// hands us an os.CreateTemp file), so set it explicitly.
-	chmodErr := f.Chmod(0o755)
+	chmodErr := f.Chmod(extractedBinaryMode)
 	closeErr := f.Close()
 	for _, err := range []error{copyErr, chmodErr, closeErr} {
 		if err != nil {

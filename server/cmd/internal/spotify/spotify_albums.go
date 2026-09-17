@@ -34,10 +34,10 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	artist = strings.TrimSpace(artist)
 	if title == "" {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:    "album",
+			Lookup:    lookupAlbum,
 			Input:     title,
-			Strategy:  "album_field_search",
-			Reason:    "empty_query",
+			Strategy:  strategyAlbumFieldSearch,
+			Reason:    MatchReasonEmptyQuery,
 			Threshold: spotifyAlbumThreshold,
 		}, nil)
 	}
@@ -65,37 +65,37 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	results, err := s.client.Search(ctx, query, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumSearchLimit))
 	if err != nil {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:      "album",
+			Lookup:      lookupAlbum,
 			Input:       title,
 			SearchQuery: query,
-			Strategy:    "album_field_search",
-			Reason:      "search_failed",
+			Strategy:    strategyAlbumFieldSearch,
+			Reason:      MatchReasonSearchFailed,
 			Threshold:   spotifyAlbumThreshold,
 		}, err)
 	}
 
 	bestInfo := MatchDebugInfo{
-		Lookup:      "album",
+		Lookup:      lookupAlbum,
 		Input:       title,
 		SearchQuery: query,
-		Strategy:    "album_field_search",
+		Strategy:    strategyAlbumFieldSearch,
 		Threshold:   spotifyAlbumThreshold,
-		Reason:      "no_results",
+		Reason:      MatchReasonNoResults,
 	}
 
 	if results.Albums != nil {
-		returned, info := selectBestAlbumMatch(title, artist, results.Albums.Albums, query, "album_field_search")
+		returned, info := selectBestAlbumMatch(title, artist, results.Albums.Albums, query, strategyAlbumFieldSearch)
 		bestInfo = chooseBetterMatchInfo(bestInfo, info)
 		if returned != nil {
 			album, err := s.client.GetAlbum(ctx, returned.ID)
 			if err != nil {
 				return nil, newMatchError(MatchDebugInfo{
-					Lookup:        "album",
+					Lookup:        lookupAlbum,
 					Input:         title,
 					SearchQuery:   query,
-					Strategy:      "album_field_search",
+					Strategy:      strategyAlbumFieldSearch,
 					CandidateName: returned.Name,
-					Reason:        "details_failed",
+					Reason:        MatchReasonDetailsFailed,
 					Threshold:     spotifyAlbumThreshold,
 				}, err)
 			}
@@ -116,11 +116,11 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	results, err = s.client.Search(ctx, fallback, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumSearchLimit))
 	if err != nil {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:      "album",
+			Lookup:      lookupAlbum,
 			Input:       title,
 			SearchQuery: fallback,
-			Strategy:    "album_fallback_search",
-			Reason:      "search_failed",
+			Strategy:    strategyAlbumFallback,
+			Reason:      MatchReasonSearchFailed,
 			Threshold:   spotifyAlbumThreshold,
 		}, err)
 	}
@@ -129,7 +129,7 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 		return nil, newMatchError(bestInfo, nil)
 	}
 
-	returned, info := selectBestAlbumMatch(title, artist, results.Albums.Albums, fallback, "album_fallback_search")
+	returned, info := selectBestAlbumMatch(title, artist, results.Albums.Albums, fallback, strategyAlbumFallback)
 	bestInfo = chooseBetterMatchInfo(bestInfo, info)
 	if returned == nil {
 		return nil, newMatchError(bestInfo, nil)
@@ -138,12 +138,12 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	album, err := s.client.GetAlbum(ctx, returned.ID)
 	if err != nil {
 		return nil, newMatchError(MatchDebugInfo{
-			Lookup:        "album",
+			Lookup:        lookupAlbum,
 			Input:         title,
 			SearchQuery:   fallback,
-			Strategy:      "album_fallback_search",
+			Strategy:      strategyAlbumFallback,
 			CandidateName: returned.Name,
-			Reason:        "details_failed",
+			Reason:        MatchReasonDetailsFailed,
 			Threshold:     spotifyAlbumThreshold,
 		}, err)
 	}

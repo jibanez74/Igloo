@@ -216,7 +216,7 @@ func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
 	defer s.tx.DB.Close()
 	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/one", 1, ffprobe.FormatTags{Title: "Track", Artist: "One & Two", Album: "Album", Genre: "Rock", SortArtist: "First & Second"})
 	probe := s.ffprobe.(*countingMusicScannerFfprobe)
-	s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: musicSpotifyReasonNoResults}}, albumErr: errors.New("temporary")}
+	s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}}, albumErr: errors.New("temporary")}
 	err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)

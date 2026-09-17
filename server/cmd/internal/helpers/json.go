@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// readJSONTimeout bounds how long a handler will wait for a request body.
+// http.MaxBytesReader caps the body's size but not the time taken to send it,
+// so a slow client could otherwise hold a goroutine open indefinitely. This is
+// applied per request in ReadJSON rather than as http.Server.ReadTimeout,
+// which would also apply to the hijacked watch-room WebSocket.
+const readJSONTimeout = 15 * time.Second
+
 // setReadDeadline bounds (deadline) or clears (zero deadline) the time allowed
 // to read the rest of the request. Responses that do not support deadlines —
 // httptest.ResponseRecorder in the handler tests — are left alone; nothing else
@@ -53,7 +60,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, data any, maxBytes int64) 
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	defer setReadDeadline(w, time.Time{})
-	setReadDeadline(w, time.Now().Add(READ_JSON_TIMEOUT))
+	setReadDeadline(w, time.Now().Add(readJSONTimeout))
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

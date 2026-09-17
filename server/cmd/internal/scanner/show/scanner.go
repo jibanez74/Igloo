@@ -39,14 +39,15 @@ type Dependencies struct {
 
 const (
 	// scanWorkers bounds concurrent ffprobe runs.
-	scanWorkers         = 2
-	progressLogInterval = 10 * time.Second
-	// TV defers a changing file for the run; the next scan retries it.
-	reasonDeferred   = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
+	scanWorkers      = 2
 	reasonRejected   = "The file could not be read or its name does not identify a season and episode. Existing records are preserved."
 	reasonEnrichment = "TMDB metadata could not be applied. The local entry is usable and the next scan retries it."
 	reasonUnmatched  = "TMDB returned no matching show. Rename the folder or wait for a later scan; repeated misses back off."
 	reasonStopped    = "TMDB enrichment stopped after provider failures. Pending shows will retry on a later scan."
+
+	// Placeholder names written to the catalog before TMDB supplies real ones.
+	seasonPlaceholderNameFormat  = "Season %d"
+	episodePlaceholderNameFormat = "Episode %d"
 )
 
 // errStaleCatalogRow aborts a persistence transaction without reporting a
@@ -98,7 +99,7 @@ func (s *Scanner) Start() scanner.StartResult {
 func (s *Scanner) runShowScan(directory string) {
 	report := newScanReport(s.Status())
 	ctx := s.ScanContext
-	stopProgressLog := scanner.StartProgressLog(progressLogInterval, func() {
+	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
 		status := s.Status()
 		s.Logger.Info("show scan progress", "run", status.RunID, "phase", status.Phase, "processed", status.Processed, "total", status.Total, "enriched", status.Enriched)
 	})
@@ -132,7 +133,7 @@ func (s *Scanner) runShowScan(directory string) {
 
 	root, err := filepath.Abs(directory)
 	if err != nil {
-		fail(err, "The library directory is unavailable.")
+		fail(err, scanner.ReasonLibraryUnavailable)
 		return
 	}
 	s.Logger.Info("show scan phase", "run", report.status.RunID, "phase", scanner.PhaseDiscovery, "directory", root)
@@ -147,7 +148,7 @@ func (s *Scanner) runShowScan(directory string) {
 
 	reconciliation, err := scanner.NewReconciliation(ctx, root, catalog)
 	if err != nil {
-		fail(err, "The library directory is unavailable.")
+		fail(err, scanner.ReasonLibraryUnavailable)
 		return
 	}
 
@@ -332,7 +333,7 @@ func (s *Scanner) recordLocal(report *scanReport, scan *showScanContext, result 
 	switch {
 	case deferred:
 		report.status.Deferred++
-		report.Issue(path, scanner.PhaseLocal, reasonDeferred)
+		report.Issue(path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
 		s.Logger.Debug("deferred show file", "path", path, "reason", deferral.Reason)
 	case errors.Is(result.err, errStaleCatalogRow):
 	case result.err != nil:
@@ -367,7 +368,7 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 		if err != nil {
 			return err
 		}
-		season, err := q.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{ShowID: show.ID, SeasonNumber: int64(local.season), Name: fmt.Sprintf("Season %d", local.season)})
+		season, err := q.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{ShowID: show.ID, SeasonNumber: int64(local.season), Name: fmt.Sprintf(seasonPlaceholderNameFormat, local.season)})
 		if err != nil {
 			return err
 		}
@@ -406,7 +407,7 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 		// re-queueing it would rewrite every descriptive row. Only entities
 		// without an identity are queued.
 		for order, number := range local.episodes {
-			ep, err := q.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{SeasonID: season.ID, EpisodeNumber: int64(number), Name: fmt.Sprintf("Episode %d", number)})
+			ep, err := q.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{SeasonID: season.ID, EpisodeNumber: int64(number), Name: fmt.Sprintf(episodePlaceholderNameFormat, number)})
 			if err != nil {
 				return err
 			}

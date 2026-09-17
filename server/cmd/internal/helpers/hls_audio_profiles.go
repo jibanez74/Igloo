@@ -23,8 +23,12 @@ const (
 	// AC-3/E-AC-3 encodes. Legacy AAC output never sets a sample rate.
 	HLS_EXPLICIT_AUDIO_SAMPLE_RATE = 48000
 
-	// HLS_LEGACY_AUDIO_BITRATE is the legacy stereo AAC fallback bitrate. It is
+	// HLS_LEGACY_AUDIO_ENCODER and HLS_LEGACY_AUDIO_BITRATE describe the legacy
+	// stereo AAC fallback output. FFmpeg is driven from them in ffmpeg_hls.go and
+	// the X-Igloo-Effective-Audio-* headers are built from them in the API, so the
+	// two descriptions of the same output cannot drift apart. The bitrate is
 	// deliberately not part of the explicit bitrate table below.
+	HLS_LEGACY_AUDIO_ENCODER = "aac"
 	HLS_LEGACY_AUDIO_BITRATE = "320k"
 )
 
@@ -105,9 +109,9 @@ func HLSAudioBitrate(codec HLSAudioCodec, channels int) string {
 	}
 }
 
-// hlsDefaultChannelLayoutName names the standard layout for a channel count,
+// HLSDefaultChannelLayoutName names the standard layout for a channel count,
 // used when the source row stored no layout or the output is a downmix.
-func hlsDefaultChannelLayoutName(channels int) string {
+func HLSDefaultChannelLayoutName(channels int) string {
 	switch channels {
 	case 1:
 		return "mono"
@@ -146,7 +150,7 @@ func ResolveHLSAudioProfile(
 	layout := strings.TrimSpace(sourceChannelLayout)
 	downmixed := channels != sourceChannels
 	if downmixed || layout == "" {
-		layout = hlsDefaultChannelLayoutName(channels)
+		layout = HLSDefaultChannelLayoutName(channels)
 	}
 
 	return HLSResolvedAudioProfile{

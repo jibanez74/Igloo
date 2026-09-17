@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"time"
 
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 )
 
 const (
-	progressLogInterval = 10 * time.Second
-	// Music never retries a deferred file within a run; the next scan does.
-	reasonDeferred = "The file is still changing or has not been quiet for 60 seconds. It is retried on the next scan."
+	reasonFailed = "Unable to inspect, probe, or save this track. Any previous record was preserved."
+
+	// releaseDateLayout is how a catalog release date is stored.
+	releaseDateLayout = "2006-01-02"
 )
 
 // Start launches a scan asynchronously when configured and no music scan is running.
@@ -25,7 +25,7 @@ func (s *Scanner) Start() scanner.StartResult {
 func (s *Scanner) runMusicScan(directory string) {
 	report := newScanReport(s.Status())
 	ctx := s.scanContext
-	stopProgressLog := scanner.StartProgressLog(progressLogInterval, func() {
+	stopProgressLog := scanner.StartProgressLog(scanner.ProgressLogInterval, func() {
 		status := s.Status()
 		s.logger.Info("music scan progress", "run", status.RunID, "phase", status.Phase, "processed", status.Processed, "total", status.Total, "enriched", status.Enriched)
 	})
@@ -66,7 +66,7 @@ func (s *Scanner) runMusicScan(directory string) {
 	report.scan = scan
 	reconciliation, err := scanner.NewReconciliation(ctx, directory, files)
 	if err != nil {
-		fail(err, "The library directory is unavailable.")
+		fail(err, scanner.ReasonLibraryUnavailable)
 		return
 	}
 	batch := make([]scanner.ScanFile, 0, scanner.BatchSize)
@@ -99,7 +99,7 @@ func (s *Scanner) runMusicScan(directory string) {
 		},
 	)
 	if err != nil {
-		fail(err, "Library discovery was interrupted; missing files were not removed.")
+		fail(err, scanner.ReasonDiscoveryInterrupted)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (s *Scanner) runMusicScan(directory string) {
 	s.phase(report, scanner.PhaseCleanup)
 	report.status.Deleted, err = s.cleanupMissingMusic(ctx, scan, reconciliation)
 	if err != nil {
-		fail(err, "Cleanup stopped because the library could not be safely checked.")
+		fail(err, scanner.ReasonCleanupUnsafe)
 		return
 	}
 
@@ -141,15 +141,15 @@ func (s *Scanner) processMusicBatch(ctx context.Context, scan *musicScanContext,
 		switch {
 		case isDeferred:
 			report.status.Deferred++
-			report.Issue(file.Path, scanner.PhaseLocal, reasonDeferred)
+			report.Issue(file.Path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
 			s.logger.Debug("deferred track", "path", file.Path, "reason", deferred.Reason, "eligible_at", deferred.EligibleAt)
 		case err != nil:
 			report.status.Failed++
-			report.Issue(file.Path, scanner.PhaseLocal, "Unable to inspect, probe, or save this track. Any previous record was preserved.")
+			report.Issue(file.Path, scanner.PhaseLocal, reasonFailed)
 			s.logger.Warn("failed to process track", "path", file.Path, "error", err)
 		case outcome == scanner.FileDeferred:
 			report.status.Deferred++
-			report.Issue(file.Path, scanner.PhaseLocal, reasonDeferred)
+			report.Issue(file.Path, scanner.PhaseLocal, scanner.ReasonFileDeferredNextScan)
 		case outcome == scanner.FileUnchanged, outcome == scanner.FileFingerprintOnly:
 			report.status.Unchanged++
 		case existed:

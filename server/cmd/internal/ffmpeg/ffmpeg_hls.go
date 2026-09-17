@@ -282,7 +282,11 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		case p.CopyAudio:
 			args = append(args, "-c:a", "copy")
 		default:
-			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "320k")
+			args = append(args,
+				"-c:a", helpers.HLS_LEGACY_AUDIO_ENCODER,
+				"-ac", fmt.Sprintf("%d", helpers.HLS_AUDIO_MAX_CHANNELS_STEREO),
+				"-b:a", helpers.HLS_LEGACY_AUDIO_BITRATE,
+			)
 		}
 	}
 

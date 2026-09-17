@@ -311,9 +311,9 @@ func legacyEffectiveHLSAudio(stream *database.AudioStream, copyAudio bool) *help
 
 	return &helpers.HLSResolvedAudioProfile{
 		Codec:         helpers.HLSAudioCodecAAC,
-		Encoder:       "aac",
-		Channels:      2,
-		ChannelLayout: "stereo",
+		Encoder:       helpers.HLS_LEGACY_AUDIO_ENCODER,
+		Channels:      helpers.HLS_AUDIO_MAX_CHANNELS_STEREO,
+		ChannelLayout: helpers.HLSDefaultChannelLayoutName(helpers.HLS_AUDIO_MAX_CHANNELS_STEREO),
 		Bitrate:       helpers.HLS_LEGACY_AUDIO_BITRATE,
 	}
 }

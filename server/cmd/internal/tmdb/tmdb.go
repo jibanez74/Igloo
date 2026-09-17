@@ -10,6 +10,14 @@ import (
 	cache "github.com/patrickmn/go-cache"
 )
 
+// TMDB request locale. The catalog is English-language and certifications are
+// taken from the US rating board; the region only scopes the now-playing list.
+const (
+	tmdbRequestLanguage      = "en-US"
+	tmdbRequestRegion        = "US"
+	tmdbCertificationCountry = "US"
+)
+
 const (
 	tmdbBaseAPIURL         = "https://api.themoviedb.org/3"
 	tmdbHTTPMaxRetries     = 3
@@ -46,7 +54,7 @@ func New(apiKey string) (TmdbInterface, error) {
 	client := tmdbClient{
 		key:            apiKey,
 		baseURL:        tmdbBaseAPIURL,
-		httpClient:     &http.Client{Timeout: helpers.TMDB_HTTP_TIMEOUT},
+		httpClient:     &http.Client{Timeout: helpers.PROVIDER_HTTP_TIMEOUT},
 		maxRetries:     tmdbHTTPMaxRetries,
 		retryBaseDelay: tmdbHTTPRetryBaseDelay,
 		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
