@@ -637,7 +637,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search all library media */
+        /**
+         * Search all library media
+         * @description Backs the search-bar dropdown: returns the top 8 rows of each of the five categories together with each category's full match count, and takes no pagination. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens under 3 runes are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Within each category rows are ordered by exact title or name match, then prefix match, then bm25 with the name and title columns weighted highest, then title and id so ties stay stable. A section's total is its full match count, not the number of rows returned.
+         */
         get: operations["searchAll"];
         put?: never;
         post?: never;
@@ -654,7 +657,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search movies */
+        /**
+         * Search movies
+         * @description Paginated movie search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens under 3 runes are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         */
         get: operations["searchMovies"];
         put?: never;
         post?: never;
@@ -671,7 +677,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search TV shows */
+        /**
+         * Search TV shows
+         * @description Paginated TV show search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens under 3 runes are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact name match, then name prefix, then bm25 weighted toward the name, then name and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         */
         get: operations["searchShows"];
         put?: never;
         post?: never;
@@ -688,7 +697,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search albums */
+        /**
+         * Search albums
+         * @description Paginated album search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens under 3 runes are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then exact album-artist match, then album-artist prefix, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         */
         get: operations["searchAlbums"];
         put?: never;
         post?: never;
@@ -705,7 +717,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search musicians */
+        /**
+         * Search musicians
+         * @description Paginated musician search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens under 3 runes are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by an exact match on either the name or the sort name, then a prefix match on either, then bm25 weighted toward the name, then sort name and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         */
         get: operations["searchMusicians"];
         put?: never;
         post?: never;
@@ -722,7 +737,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search tracks */
+        /**
+         * Search tracks
+         * @description Paginated track search. q is lowercased and reduced to letter, digit and whitespace tokens, so FTS5 operators cannot be injected; a blank or punctuation-only q returns no results rather than an error. Matching runs in up to three stages: every token as a prefix joined by AND; if that finds nothing, tokens are expanded with vocabulary-derived spelling corrections (edit distance 1 for 3-5 rune tokens and 2 for longer ones, while tokens under 3 runes are never corrected and at most 8 tokens are corrected per query) and retried; then a final OR pass. Zero results is a normal response, not an error. Rows are ordered by exact title match, then title prefix, then an exact match on the album title or either artist name, then a prefix match on those, then bm25 weighted toward the title, then title and id so ties stay stable across pages. total is the full match count and results is one page of it. A page past the last page is clamped to the last page, so the page in the response can differ from the request. When nothing matches, total and total_pages are 0 and page is 1, except when q held no usable tokens, in which case the requested page is echoed back. per_page reports the effective value after clamping.
+         */
         get: operations["searchTracks"];
         put?: never;
         post?: never;
@@ -4101,15 +4119,16 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        SearchAllData: {
+            query: string;
+            movies: components["schemas"]["MovieSearchSection"];
+            shows: components["schemas"]["ShowSearchSection"];
+            albums: components["schemas"]["AlbumSearchSection"];
+            musicians: components["schemas"]["MusicianSearchSection"];
+            tracks: components["schemas"]["TrackSearchSection"];
+        };
         SearchAllEnvelope: components["schemas"]["JsonSuccess"] & {
-            data: {
-                query: string;
-                movies: components["schemas"]["MovieSearchSection"];
-                shows: components["schemas"]["ShowSearchSection"];
-                albums: components["schemas"]["AlbumSearchSection"];
-                musicians: components["schemas"]["MusicianSearchSection"];
-                tracks: components["schemas"]["TrackSearchSection"];
-            };
+            data: components["schemas"]["SearchAllData"];
         };
         MovieSearchData: {
             query: string;
@@ -5748,6 +5767,7 @@ export interface components {
         TrackIndexPath: number;
         SeasonNumberPath: number;
         PageQuery: number;
+        /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
         PerPageQuery: number;
         LibraryPerPageQuery: number;
         MusicPerPageQuery: number;
@@ -6712,6 +6732,7 @@ export interface operations {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
@@ -6730,6 +6751,7 @@ export interface operations {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
@@ -6748,6 +6770,7 @@ export interface operations {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
@@ -6766,6 +6789,7 @@ export interface operations {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
@@ -6784,6 +6808,7 @@ export interface operations {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
@@ -8698,6 +8723,7 @@ export interface operations {
             200: components["responses"]["MusicScanStatusResponse"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     triggerMusicScan: {
@@ -8728,6 +8754,7 @@ export interface operations {
             200: components["responses"]["MovieScanStatusResponse"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     triggerMovieScan: {
@@ -8758,6 +8785,7 @@ export interface operations {
             200: components["responses"]["ShowScanStatusResponse"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     triggerShowScan: {
@@ -8794,6 +8822,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
@@ -8862,6 +8891,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
             };
             header?: never;
