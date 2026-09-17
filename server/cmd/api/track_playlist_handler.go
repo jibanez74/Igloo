@@ -55,7 +55,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 			return
 		}
 		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
 		return
 	}
 
@@ -201,8 +201,8 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
-		app.Logger.Error("failed to create playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to create playlist"))
+		app.Logger.Error(createPlaylistMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(createPlaylistMessage))
 		return
 	}
 
@@ -246,7 +246,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
 
@@ -280,8 +280,8 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
-		app.Logger.Error("failed to update playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		app.Logger.Error(updatePlaylistMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
 
@@ -317,8 +317,8 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		app.Logger.Error(getPlaylistLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}
 
@@ -336,8 +336,8 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error("failed to delete playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		app.Logger.Error(deletePlaylistMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}
 
@@ -435,7 +435,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 
 	timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
 	if timestampErr != nil {
-		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistId)
+		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistId)
 		helpers.ErrorJSON(w, errors.New("failed to add tracks"))
 		return
 	}
@@ -513,8 +513,8 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 
 	timestampErr := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
 	if timestampErr != nil {
-		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistId)
-		helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"))
+		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistId)
+		helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage))
 		return
 	}
 
@@ -602,7 +602,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 
 	timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
 	if timestampErr != nil {
-		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistId)
+		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistId)
 		helpers.ErrorJSON(w, errors.New("failed to reorder tracks"))
 		return
 	}
@@ -722,7 +722,7 @@ func (app *Application) addCollaborator(
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get playlist", "error", err)
+		app.Logger.Error(getPlaylistLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to add collaborator"))
 		return
 	}
@@ -821,7 +821,7 @@ func (app *Application) removeCollaborator(
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get playlist", "error", err)
+		app.Logger.Error(getPlaylistLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to remove collaborator"))
 		return
 	}

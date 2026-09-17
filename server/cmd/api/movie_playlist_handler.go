@@ -115,7 +115,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		app.Logger.Error("failed to create movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to create playlist"))
+		helpers.ErrorJSON(w, errors.New(createPlaylistMessage))
 		return
 	}
 
@@ -150,7 +150,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
 		return
 	}
 
@@ -212,7 +212,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
 
@@ -271,7 +271,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		app.Logger.Error("failed to update movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
 
@@ -305,8 +305,8 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		app.Logger.Error(getPlaylistLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}
 
@@ -325,7 +325,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		app.Logger.Error("failed to delete movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}
 
@@ -357,7 +357,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 			return
 		}
 		app.Logger.Error(playlistPermissionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
 		return
 	}
 
@@ -529,8 +529,8 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	if addedCount > 0 {
 		timestampErr := qtx.UpdatePlaylistTimestamp(ctx, playlistID)
 		if timestampErr != nil {
-			app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistID)
-			helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+			app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -604,8 +604,8 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 
 	timestampErr := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistID)
 	if timestampErr != nil {
-		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistID)
-		helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage), http.StatusInternalServerError)
 		return
 	}
 

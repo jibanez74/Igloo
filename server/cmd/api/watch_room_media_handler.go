@@ -194,7 +194,7 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		}
 
 		app.Logger.Error("failed to get watch room movie for streaming", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
+		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
 		return
 	}
 

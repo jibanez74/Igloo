@@ -9,6 +9,9 @@ const (
 	invalidRequestBodyMessage  = "invalid request body"
 	accessDeniedMessage        = "access denied"
 	tooManyAttemptsMessage     = "too many attempts, please try again later"
+
+	// Said by the movie and the episode technical-details endpoints.
+	fetchTechnicalDetailsMessage = "failed to fetch technical details"
 )
 
 // Log lines repeated across handlers that share no feature file.

@@ -32,6 +32,14 @@ const (
 	playlistNotFoundMessage      = "playlist not found"
 	invalidPlaylistIDMessage     = "invalid playlist id"
 	playlistPermissionLogMessage = "failed to check playlist permission"
+
+	getPlaylistLogMessage             = "failed to get playlist"
+	fetchPlaylistMessage              = "failed to fetch playlist"
+	createPlaylistMessage             = "failed to create playlist"
+	updatePlaylistMessage             = "failed to update playlist"
+	deletePlaylistMessage             = "failed to delete playlist"
+	updatePlaylistTimestampLogMessage = "failed to update playlist timestamp"
+	finalizePlaylistUpdateMessage     = "failed to finalize playlist update"
 )
 
 func validatePlaylistMetadata(name, description string) error {

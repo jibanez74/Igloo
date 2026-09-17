@@ -63,7 +63,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie", "error", err, "id", id)
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
 		return
 	}
@@ -132,7 +132,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie", "error", err, "id", id)
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
 		return
 	}

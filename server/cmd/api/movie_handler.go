@@ -25,6 +25,8 @@ const (
 const (
 	movieNotFoundMessage  = "movie not found"
 	invalidMovieIDMessage = "invalid movie id"
+	getMovieLogMessage    = "failed to get movie"
+	fetchMovieMessage     = "failed to fetch movie from server"
 )
 
 // moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
@@ -529,7 +531,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
+		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
 		return
 	}
 	defer tx.Rollback()
@@ -543,8 +545,8 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		app.Logger.Error("failed to get movie", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
 		return
 	}
 
@@ -611,7 +613,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		app.Logger.Error(beginTransactionLogMessage, "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
 		return
 	}
 	defer tx.Rollback()
@@ -624,8 +626,8 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
 		return
 	}
 
