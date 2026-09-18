@@ -43,8 +43,12 @@ func (ref mediaRef) String() string {
 }
 
 // notFoundMessage is the public 404 text for this kind of media.
+func (kind mediaKind) notFoundMessage() string {
+	return string(kind) + " not found"
+}
+
 func (ref mediaRef) notFoundMessage() string {
-	return string(ref.Kind) + " not found"
+	return ref.Kind.notFoundMessage()
 }
 
 // invalidMediaIDMessage is the public 400 text for a malformed id of this

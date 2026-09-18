@@ -143,7 +143,7 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 	room, err := app.loadAuthorizedWatchRoom(r.Context(), roomID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+			helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 			return database.WatchRoom{}, 0, false
 		}
 		app.Logger.Error("failed to authorize watch room", "error", err, "room_id", roomID, "user_id", userID)

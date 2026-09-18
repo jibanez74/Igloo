@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -472,7 +471,7 @@ func isLocalWatchRoomDevHost(host string) bool {
 }
 
 func isAllowedWatchRoomDevOrigin(originURL *url.URL) bool {
-	viteURL := strings.TrimSpace(os.Getenv("VITE_DEV_SERVER"))
+	viteURL := viteDevServerURL()
 	if viteURL == "" {
 		return false
 	}
@@ -565,7 +564,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+			helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 			return
 		}
 		app.Logger.Error("failed to authorize watch room websocket", "error", err, "room_id", roomID, "user_id", userID)

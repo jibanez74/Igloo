@@ -164,7 +164,7 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !found {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 
@@ -189,12 +189,12 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 	movie, err := app.movieStreamFile(r.Context(), room.MovieID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
 
 		app.Logger.Error("failed to get watch room movie for streaming", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
+		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
 		return
 	}
 

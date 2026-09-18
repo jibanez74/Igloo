@@ -14,13 +14,7 @@ export type { NullableFloat64, NullableInt64, NullableString } from "./nullable"
 export type TrackItemVariant = "album" | "musician" | "library" | "playlist";
 
 // Simplified album type for list views and cards
-export type SimpleAlbumType = {
-  id: number;
-  title: string;
-  cover: NullableString;
-  musician: NullableString;
-  year: NullableInt64;
-};
+export type SimpleAlbumType = components["schemas"]["SimpleAlbum"];
 
 // Full album details including Spotify metadata
 export type AlbumType = {

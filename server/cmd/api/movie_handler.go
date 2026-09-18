@@ -13,9 +13,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// The page size every paginated library listing answers with — movies, shows,
+// albums, musicians, playlist movies and search alike. Track listings page
+// differently; see track_handler.go.
 const (
 	libraryDefaultPerPage = 24
 	libraryMaxPerPage     = 48
+)
+
+// Said by every handler that resolves a movie by id. The first two are built
+// from the mediaRef helpers in playback_source.go rather than spelled again:
+// the playback routes answer the same two conditions through those, and the
+// REST routes must not say it differently.
+var (
+	movieNotFoundMessage  = mediaKindMovie.notFoundMessage()
+	invalidMovieIDMessage = invalidMediaIDMessage(mediaKindMovie)
+)
+
+const (
+	getMovieLogMessage = "failed to get movie"
+	fetchMovieMessage  = "failed to fetch movie from server"
 )
 
 // moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
@@ -106,7 +123,11 @@ func (app *Application) logNormalizedChapterStartTimes(
 	}
 }
 
-func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
+// parsePageAndPerPage reads the page and per_page query parameters every
+// paginated listing shares. Missing, unparseable and nonpositive values fall
+// back to the defaults rather than failing the request, and per_page above the
+// cap is clamped; docs/openapi.json documents that on PerPageQuery.
+func parsePageAndPerPage(r *http.Request) (page, perPage int64) {
 	page = 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		parsed, err := strconv.ParseInt(p, 10, 64)
@@ -125,6 +146,11 @@ func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
 	if perPage > libraryMaxPerPage {
 		perPage = libraryMaxPerPage
 	}
+	return page, perPage
+}
+
+func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
+	page, perPage = parsePageAndPerPage(r)
 
 	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
 	if sort != "desc" {
@@ -364,7 +390,7 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 	idParam := chi.URLParam(r, "id")
 	movieID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil || movieID <= 0 {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -437,7 +463,7 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 	idParam := chi.URLParam(r, "id")
 	movieID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -450,7 +476,7 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if !movieOK {
-		helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 		return
 	}
 
@@ -511,7 +537,7 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -519,8 +545,8 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error("failed to begin transaction", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
+		app.Logger.Error(beginTransactionLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
 		return
 	}
 	defer tx.Rollback()
@@ -530,12 +556,12 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 	movie, err := qtx.GetMovieDetails(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
 
-		app.Logger.Error("failed to get movie", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch movie from server"))
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New(fetchMovieMessage))
 		return
 	}
 
@@ -593,7 +619,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -601,8 +627,8 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 
 	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		app.Logger.Error("failed to begin transaction", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		app.Logger.Error(beginTransactionLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
 		return
 	}
 	defer tx.Rollback()
@@ -612,11 +638,11 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 	movie, err := qtx.GetMovieByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get movie", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New(fetchTechnicalDetailsMessage))
 		return
 	}
 
@@ -636,8 +662,8 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 
 	subtitles, err := qtx.GetSubtitlesByMovieID(ctx, id)
 	if err != nil {
-		app.Logger.Error("failed to get subtitles", "error", err, "movie_id", id)
-		helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
+		app.Logger.Error(getSubtitlesLogMessage, "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
 		return
 	}
 

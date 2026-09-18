@@ -81,7 +81,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	req.Email = strings.TrimSpace(req.Email)
 
 	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("name is required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(nameRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -91,7 +91,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New("email is required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -115,7 +115,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		Avatar:   sql.NullString{},
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
+		if strings.Contains(err.Error(), uniqueConstraintErrorFragment) {
 			helpers.ErrorJSON(w, errors.New("a user with that email already exists"), http.StatusConflict)
 			return
 		}
@@ -161,7 +161,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	req.Email = strings.TrimSpace(req.Email)
 
 	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("name is required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(nameRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if req.Email == "" {
-		helpers.ErrorJSON(w, errors.New("email is required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(emailRequiredMessage), http.StatusBadRequest)
 		return
 	}
 
@@ -195,7 +195,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		_ = tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("admin: failed to fetch user for update", "error", err, "target_id", targetID)
@@ -228,7 +228,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		_ = tx.Rollback()
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
+		if strings.Contains(err.Error(), uniqueConstraintErrorFragment) {
 			helpers.ErrorJSON(w, errors.New("a user with that email already exists"), http.StatusConflict)
 			return
 		}
@@ -284,7 +284,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		_ = tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("admin: failed to fetch user for deletion", "error", err, "target_id", targetID)

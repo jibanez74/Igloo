@@ -37,13 +37,9 @@ const (
 	hlsStartClampTailSec = 5
 	hdrTransferPQ        = "smpte2084"
 	hdrTransferHLG       = "arib-std-b67"
-	// hlsMaxPersonalSessionsPerUserDefault caps concurrent personal sessions per
-	// user so abandoned clients cannot pile up ffmpeg processes and temp dirs.
-	hlsMaxPersonalSessionsPerUserDefault = 3
 	// hlsUnknownActualStart marks a session whose real media start has not been
 	// measured; callers fall back to the requested start.
 	hlsUnknownActualStart = -1.0
-	hlsStartProbeTimeout  = 15 * time.Second
 	// A session generates the whole remaining file, so it needs real headroom.
 	// This is a floor that keeps a home server from filling its disk mid-film,
 	// not an estimate of any particular session's output size.
@@ -312,8 +308,8 @@ func legacyEffectiveHLSAudio(stream *database.AudioStream, copyAudio bool) *help
 	return &helpers.HLSResolvedAudioProfile{
 		Codec:         helpers.HLSAudioCodecAAC,
 		Encoder:       helpers.HLS_LEGACY_AUDIO_ENCODER,
-		Channels:      helpers.HLS_AUDIO_MAX_CHANNELS_STEREO,
-		ChannelLayout: helpers.HLSDefaultChannelLayoutName(helpers.HLS_AUDIO_MAX_CHANNELS_STEREO),
+		Channels:      helpers.HLS_LEGACY_AUDIO_CHANNELS,
+		ChannelLayout: helpers.HLSDefaultChannelLayoutName(helpers.HLS_LEGACY_AUDIO_CHANNELS),
 		Bitrate:       helpers.HLS_LEGACY_AUDIO_BITRATE,
 	}
 }

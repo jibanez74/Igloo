@@ -994,12 +994,12 @@ func TestMoviePickerRankingAndEmptySentinel(t *testing.T) {
 		{TmdbID: 2, Title: "Unrelated", ReleaseDate: "2016-01-01", Popularity: 1e9, VoteAverage: 10},
 	}}
 	app.Tmdb = client
-	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchPayload{Title: "Arrival", Year: 2016})
+	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival", Year: 2016})
 	if err != nil || len(results) != 2 || results[0].TmdbID != 1 {
 		t.Fatalf("picker ranking=%+v %v", results, err)
 	}
 	client.searchErr = fmt.Errorf("wrapped: %w", tmdb.ErrNoMoviesFound)
-	results, err = app.searchTmdbMovies(context.Background(), tmdbSearchPayload{Title: "Arrival"})
+	results, err = app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival"})
 	if err != nil || len(results) != 0 {
 		t.Fatalf("no-result sentinel=%+v %v", results, err)
 	}

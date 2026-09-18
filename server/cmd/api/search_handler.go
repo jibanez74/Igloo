@@ -7,15 +7,10 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
-const (
-	searchDefaultPerPage = 24
-	searchMaxPerPage     = 48
-	searchAllTopN        = 8
-)
+const searchAllTopN = 8
 
 type searchSection[T any] struct {
 	Results []T   `json:"results"`
@@ -282,28 +277,6 @@ func searchRankArgs(raw string) (exact, prefix string) {
 	return exact, prefix
 }
 
-func parseSearchPagination(r *http.Request) (page, perPage int64) {
-	page = 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		parsed, err := strconv.ParseInt(p, 10, 64)
-		if err == nil && parsed > 0 {
-			page = parsed
-		}
-	}
-
-	perPage = int64(searchDefaultPerPage)
-	if pp := r.URL.Query().Get("per_page"); pp != "" {
-		parsed, err := strconv.ParseInt(pp, 10, 64)
-		if err == nil && parsed > 0 {
-			perPage = parsed
-		}
-	}
-	if perPage > searchMaxPerPage {
-		perPage = searchMaxPerPage
-	}
-	return page, perPage
-}
-
 func totalPages(total, perPage int64) int64 {
 	pages := total / perPage
 	if total%perPage > 0 {
@@ -440,7 +413,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 // OpenAPI coverage keep stable handler names.
 func handleSearchCategory[T any](app *Application, e searchEntity[T], w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	page, perPage := parseSearchPagination(r)
+	page, perPage := parsePageAndPerPage(r)
 	ctx := r.Context()
 
 	match, total, ok, err := app.resolveSearchMatch(ctx, e.countSQL, e.vocabTable, q)

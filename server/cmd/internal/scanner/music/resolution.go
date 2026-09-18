@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -142,7 +143,7 @@ func (s *Scanner) resolveTrackFile(ctx context.Context, scan *musicScanContext, 
 	if tags.Date != "" {
 		date, parseErr := helpers.ParseDate(tags.Date)
 		if parseErr == nil {
-			params.ReleaseDate = sql.NullString{String: date.Format(releaseDateLayout), Valid: true}
+			params.ReleaseDate = sql.NullString{String: date.Format(time.DateOnly), Valid: true}
 			params.Year = sql.NullInt64{Int64: int64(date.Year()), Valid: true}
 		} else {
 			s.logTagParse(file.Path, "date", tags.Date, parseErr)

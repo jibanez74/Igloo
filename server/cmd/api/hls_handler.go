@@ -35,18 +35,23 @@ const (
 	hlsRemuxPreflightPoll = 250 * time.Millisecond
 	// Copy-video manifests are read back from FFmpeg rather than synthesized,
 	// so the first request for one waits for FFmpeg to publish a segment.
-	hlsLivePlaylistWait       = 30 * time.Second
-	hlsPlaylistContentType    = "application/vnd.apple.mpegurl"
-	hlsSegmentHTTPContentType = "video/mp4"
+	hlsLivePlaylistWait    = 30 * time.Second
+	hlsPlaylistContentType = "application/vnd.apple.mpegurl"
+	// fMP4 segments and init segments are MP4 containers, so they are served
+	// as the same type an MP4 file is, named once in movie_media.go.
+	hlsSegmentHTTPContentType = mp4ContentType
 	// The extension FFmpeg's hls muxer appends while writing a file under
 	// -hls_flags temp_file, before the rename to the final name.
-	hlsTempFileSuffix              = ".tmp"
-	hlsEffectiveProfileHeader      = "X-Igloo-Effective-Profile"
-	hlsActualStartHeader           = "X-Igloo-Actual-Start"
-	hlsEffectiveAudioCodecHeader   = "X-Igloo-Effective-Audio-Codec"
-	hlsEffectiveAudioChannelsHdr   = "X-Igloo-Effective-Audio-Channels"
-	hlsEffectiveAudioBitrateHeader = "X-Igloo-Effective-Audio-Bitrate"
+	hlsTempFileSuffix               = ".tmp"
+	hlsEffectiveProfileHeader       = "X-Igloo-Effective-Profile"
+	hlsActualStartHeader            = "X-Igloo-Actual-Start"
+	hlsEffectiveAudioCodecHeader    = "X-Igloo-Effective-Audio-Codec"
+	hlsEffectiveAudioChannelsHeader = "X-Igloo-Effective-Audio-Channels"
+	hlsEffectiveAudioBitrateHeader  = "X-Igloo-Effective-Audio-Bitrate"
 )
+
+// Said by the personal segment handler and the watch-room one alike.
+const hlsSessionNotFoundMessage = "session not found; request the manifest first"
 
 var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
@@ -192,7 +197,7 @@ func writeHLSPlaylistHeaders(w http.ResponseWriter, session *HLSSession) {
 	if audio != nil {
 		w.Header().Set(hlsEffectiveAudioCodecHeader, string(audio.Codec))
 		if audio.Channels > 0 {
-			w.Header().Set(hlsEffectiveAudioChannelsHdr, strconv.Itoa(audio.Channels))
+			w.Header().Set(hlsEffectiveAudioChannelsHeader, strconv.Itoa(audio.Channels))
 		}
 		if audio.Bitrate != "" {
 			w.Header().Set(hlsEffectiveAudioBitrateHeader, audio.Bitrate)
@@ -231,22 +236,22 @@ func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, 
 	key := HLSSessionKey(params.Media, params.Profile, params.AudioTrack, params.AudioProfile, params.PlaybackSession, params.StartSec, userID)
 	raw, ok := app.HLSSessionCache.Get(key)
 	if !ok {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 	session, ok := raw.(*HLSSession)
 	if !ok || session == nil {
 		app.removePersonalHLSSession(key)
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 	if !canAccessPersonalHLSSession(session, params.Media, userID) {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 	refreshed := app.RefreshHLSSessionTTL(key, session)
 	if !refreshed {
-		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
 		return
 	}
 

@@ -63,6 +63,13 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+type CreateMoviePlaylistRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IsPublic    bool   `json:"is_public"`
+	MovieID     *int64 `json:"movie_id"`
+}
+
 func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
@@ -70,7 +77,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req CreateMoviePlaylistRequest
-	readErr := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize)
+	readErr := helpers.ReadJSON(w, r, &req, 0)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -92,7 +99,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		if !movieOK {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
 			return
 		}
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
@@ -108,7 +115,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		app.Logger.Error("failed to create movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to create playlist"))
+		helpers.ErrorJSON(w, errors.New(createPlaylistMessage))
 		return
 	}
 
@@ -132,23 +139,23 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to check playlist permission", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		app.Logger.Error(playlistPermissionLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
 		return
 	}
 
 	if permission == PermissionNone {
-		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 		return
 	}
 
@@ -177,6 +184,14 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+type UpdateMoviePlaylistRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CoverImage  string `json:"cover_image"`
+	IsPublic    bool   `json:"is_public"`
+	MovieID     *int64 `json:"movie_id"`
+}
+
 func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
@@ -186,18 +201,18 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	existing, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to check playlist permission", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		app.Logger.Error(playlistPermissionLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
 
@@ -211,7 +226,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req UpdateMoviePlaylistRequest
-	readErr := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize)
+	readErr := helpers.ReadJSON(w, r, &req, 0)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -233,7 +248,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		if !movieOK {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
 			return
 		}
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
@@ -252,11 +267,11 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
 		app.Logger.Error("failed to update movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
 
@@ -280,18 +295,18 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to get playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		app.Logger.Error(getPlaylistLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}
 
@@ -310,7 +325,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		app.Logger.Error("failed to delete movie playlist", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}
 
@@ -331,23 +346,23 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to check playlist permission", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		app.Logger.Error(playlistPermissionLogMessage, "error", err)
+		helpers.ErrorJSON(w, errors.New(fetchPlaylistMessage))
 		return
 	}
 
 	if permission == PermissionNone {
-		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 		return
 	}
 
@@ -413,6 +428,10 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+type AddMoviesRequest struct {
+	MovieIds []int64 `json:"movie_ids"`
+}
+
 func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
@@ -422,17 +441,17 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	idParam := chi.URLParam(r, "id")
 	playlistID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to check playlist permission", "error", err)
+		app.Logger.Error(playlistPermissionLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to add movies"))
 		return
 	}
@@ -447,7 +466,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	}
 
 	var req AddMoviesRequest
-	readErr := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize)
+	readErr := helpers.ReadJSON(w, r, &req, 0)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -510,8 +529,8 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	if addedCount > 0 {
 		timestampErr := qtx.UpdatePlaylistTimestamp(ctx, playlistID)
 		if timestampErr != nil {
-			app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistID)
-			helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+			app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -543,23 +562,23 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 
 	playlistID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidPlaylistIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	movieID, err := strconv.ParseInt(chi.URLParam(r, "movieId"), 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(invalidMovieIDMessage), http.StatusBadRequest)
 		return
 	}
 
 	playlist, permission, err := app.getPlaylistAccess(r.Context(), playlistID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			helpers.ErrorJSON(w, errors.New(playlistNotFoundMessage), http.StatusNotFound)
 			return
 		}
-		app.Logger.Error("failed to check playlist permission", "error", err)
+		app.Logger.Error(playlistPermissionLogMessage, "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
 		return
 	}
@@ -585,8 +604,8 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 
 	timestampErr := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistID)
 	if timestampErr != nil {
-		app.Logger.Error("failed to update playlist timestamp", "error", timestampErr, "playlist_id", playlistID)
-		helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New(finalizePlaylistUpdateMessage), http.StatusInternalServerError)
 		return
 	}
 

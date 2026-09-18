@@ -13,10 +13,9 @@ import (
 
 const (
 	quickConnectInvalidCodeMessage = "invalid or expired code"
-	tooManyAttemptsMessage         = "too many attempts, please try again later"
 	quickConnectBusyMessage        = "quick connect is busy, please try again later"
 
-	maxDeviceNameLength = 100
+	quickConnectPollSeconds = 2
 )
 
 type InitiateQuickConnectRequest struct {

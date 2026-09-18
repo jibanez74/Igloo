@@ -14,15 +14,19 @@ import (
 
 // notificationListLimit caps how many notifications a single list request
 // returns. The bell panel only shows the most recent ones.
+const notificationListLimit = 50
+
+// The request category a notification carries. The values mirror the title
+// enum in docs/openapi.json and are stored verbatim, so they stay plain
+// strings: the column, the contract and the request field are all strings.
 const (
-	notificationListLimit         = 50
 	notificationTitleMovieRequest = "movie_request"
 	notificationTitleAlbumRequest = "album_request"
 	notificationTitleTrackRequest = "track_request"
 	notificationTitleOther        = "other"
 )
 
-type CreateNotificationReq struct {
+type CreateNotificationRequest struct {
 	Title   string `json:"title"`
 	Message string `json:"message"`
 	IsAdmin bool   `json:"isAdmin"`
@@ -93,7 +97,7 @@ func parseNotificationID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 }
 
 func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Request) {
-	var req CreateNotificationReq
+	var req CreateNotificationRequest
 
 	err := helpers.ReadJSON(w, r, &req, 0)
 	if err != nil {

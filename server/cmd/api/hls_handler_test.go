@@ -1882,7 +1882,7 @@ func TestWriteHLSPlaylistHeaders_EffectiveAudio(t *testing.T) {
 			if got := recorder.Header().Get(hlsEffectiveAudioCodecHeader); got != tt.wantCodec {
 				t.Errorf("audio codec header = %q, want %q", got, tt.wantCodec)
 			}
-			if got := recorder.Header().Get(hlsEffectiveAudioChannelsHdr); got != tt.wantChannels {
+			if got := recorder.Header().Get(hlsEffectiveAudioChannelsHeader); got != tt.wantChannels {
 				t.Errorf("audio channels header = %q, want %q", got, tt.wantChannels)
 			}
 			if got := recorder.Header().Get(hlsEffectiveAudioBitrateHeader); got != tt.wantBitrate {
@@ -1949,7 +1949,7 @@ func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 	if got := manifestRecorder.Header().Get(hlsEffectiveAudioCodecHeader); got != "eac3" {
 		t.Fatalf("audio codec header = %q, want eac3", got)
 	}
-	if got := manifestRecorder.Header().Get(hlsEffectiveAudioChannelsHdr); got != "6" {
+	if got := manifestRecorder.Header().Get(hlsEffectiveAudioChannelsHeader); got != "6" {
 		t.Fatalf("audio channels header = %q, want 6", got)
 	}
 	if got := manifestRecorder.Header().Get(hlsEffectiveAudioBitrateHeader); got != "768k" {
@@ -2019,7 +2019,7 @@ func TestHLSManifest_LegacyAssetsOmitAudioProfileParams(t *testing.T) {
 	if got := recorder.Header().Get(hlsEffectiveAudioCodecHeader); got != "aac" {
 		t.Fatalf("audio codec header = %q, want aac", got)
 	}
-	if got := recorder.Header().Get(hlsEffectiveAudioChannelsHdr); got != "2" {
+	if got := recorder.Header().Get(hlsEffectiveAudioChannelsHeader); got != "2" {
 		t.Fatalf("audio channels header = %q, want 2", got)
 	}
 	assertOpenAPIExchange(t, "hlsManifest", request, recorder)

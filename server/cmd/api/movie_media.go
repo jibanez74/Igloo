@@ -1,18 +1,21 @@
 package main
 
 import (
-	"strings"
-
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
 
+// mp4ContentType is what an MP4 container resolves to. Direct playback is
+// offered for MP4 alone, so a watch room compares videoContentType's answer
+// against it.
+const mp4ContentType = "video/mp4"
+
 // videoContentType resolves the single MIME type a video file is described by:
 // served as Content-Type on the direct stream endpoints, reported to the web
-// client by the technical-details endpoints, and compared against "video/mp4"
-// when a watch room asks for direct playback. Every caller must use this
-// function — the client's direct-play decision and the server's validation of
-// it are only in agreement while they read the same string.
+// client by the technical-details endpoints, and compared against
+// mp4ContentType when a watch room asks for direct playback. Every caller must
+// use this function — the client's direct-play decision and the server's
+// validation of it are only in agreement while they read the same string.
 //
 // The pinned container map wins so the answer stays correct for rows scanned
 // before the map existed (audit D1); the stored mime_type is the fallback for
@@ -23,15 +26,6 @@ func videoContentType(container string, storedMimeType string) string {
 		return storedMimeType
 	}
 	return contentType
-}
-
-// coverArtVideoCodecs are the still-image codecs ffprobe reports as video
-// streams for embedded poster/thumbnail attachments.
-var coverArtVideoCodecs = map[string]bool{
-	"mjpeg": true,
-	"png":   true,
-	"gif":   true,
-	"bmp":   true,
 }
 
 // primaryVideoStream returns the first real video stream, skipping embedded
@@ -45,7 +39,7 @@ func primaryVideoStream(streams []database.VideoStream) *database.VideoStream {
 	}
 
 	for i := range streams {
-		if !coverArtVideoCodecs[strings.ToLower(strings.TrimSpace(streams[i].Codec))] {
+		if !helpers.IsPlaybackCoverArtVideoCodec(streams[i].Codec) {
 			return &streams[i]
 		}
 	}

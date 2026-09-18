@@ -11,23 +11,40 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+// Defaults for the bootstrap administrator created when no admin exists.
 const (
 	defaultAdminName  = "Admin"
 	defaultAdminEmail = "admin@sample.com"
+)
 
+// Defaults for the paths and port used when the environment says nothing.
+const (
 	defaultAppPort      = 8080
 	defaultDBPath       = "db/igloo.db"
 	defaultStaticDir    = "static"
 	defaultLogsDir      = "logs"
 	defaultTranscodeDir = "transcode"
+)
 
+// Every environment variable this package reads. Settings-owned values here are
+// first-run seeds only — once the settings row exists the database wins and the
+// value is edited from the Settings UI; the rest stay startup-driven.
+//
+// Two more are read outside it: the externalbin builds of the ffmpeg and ffprobe
+// packages each pass IGLOO_FFMPEG_PATH / IGLOO_FFPROBE_PATH to
+// mediabin.ResolveExternal, beside the binary name they override.
+const (
 	envDBPath                     = "DB_PATH"
 	envStaticDir                  = "STATIC_DIR"
 	envLogsDir                    = "LOGS_DIR"
 	envTranscodeDir               = "TRANSCODE_DIR"
-	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
-	envLogToStdout                = "LOG_TO_STDOUT"
 	envPort                       = "PORT"
+	envDebug                      = "DEBUG"
+	envLogToStdout                = "LOG_TO_STDOUT"
+	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
+	envViteDevServer              = "VITE_DEV_SERVER"
+	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
+	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"
 	envDefaultAdminName           = "DEFAULT_ADMIN_NAME"
 	envDefaultAdminEmail          = "DEFAULT_ADMIN_EMAIL"
 	envDefaultAdminPassword       = "DEFAULT_ADMIN_PASSWORD"
@@ -80,8 +97,17 @@ func LoadRuntimeEnvFile() (string, bool, error) {
 	return helpers.ENV_FILE, true, nil
 }
 
+// viteDevServerURL returns the configured Vite dev server origin, trimmed and
+// without a trailing slash, or "" when the process is not in dev mode. Both
+// readers — the SPA fallback in static_handler.go and the watch-room origin
+// check in watch_room_ws.go — must normalize identically or one will accept a
+// value the other mangles.
+func viteDevServerURL() string {
+	return strings.TrimSuffix(strings.TrimSpace(os.Getenv(envViteDevServer)), "/")
+}
+
 func NewRuntimeConfig() (RuntimeConfig, error) {
-	debug := envBool("DEBUG", false)
+	debug := envBool(envDebug, false)
 
 	port, err := configuredPort()
 	if err != nil {

@@ -9,12 +9,7 @@ import (
 	"igloo/cmd/internal/scanner"
 )
 
-const (
-	reasonFailed = "Unable to inspect, probe, or save this track. Any previous record was preserved."
-
-	// releaseDateLayout is how a catalog release date is stored.
-	releaseDateLayout = "2006-01-02"
-)
+const reasonFailed = "Unable to inspect, probe, or save this track. Any previous record was preserved."
 
 // Start launches a scan asynchronously when configured and no music scan is running.
 func (s *Scanner) Start() scanner.StartResult {

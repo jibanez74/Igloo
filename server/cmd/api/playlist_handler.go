@@ -25,53 +25,22 @@ const (
 	playlistContentTypeMovie     = "movie"
 	playlistNameMaxLength        = 255
 	playlistDescriptionMaxLength = 1000
-	maxPlaylistRequestSize       = 1024 * 1024 // 1 MB
 )
 
-type CreatePlaylistRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IsPublic    bool   `json:"is_public"`
-}
+// Said by both the track and the movie playlist handlers.
+const (
+	playlistNotFoundMessage      = "playlist not found"
+	invalidPlaylistIDMessage     = "invalid playlist id"
+	playlistPermissionLogMessage = "failed to check playlist permission"
 
-type UpdatePlaylistRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CoverImage  string `json:"cover_image"`
-	IsPublic    bool   `json:"is_public"`
-}
-
-type AddTracksRequest struct {
-	TrackIds []int64 `json:"track_ids"`
-}
-
-type ReorderTracksRequest struct {
-	TrackIds []int64 `json:"track_ids"`
-}
-
-type AddCollaboratorRequest struct {
-	UserId  int64 `json:"user_id"`
-	CanEdit bool  `json:"can_edit"`
-}
-
-type CreateMoviePlaylistRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IsPublic    bool   `json:"is_public"`
-	MovieID     *int64 `json:"movie_id"`
-}
-
-type UpdateMoviePlaylistRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CoverImage  string `json:"cover_image"`
-	IsPublic    bool   `json:"is_public"`
-	MovieID     *int64 `json:"movie_id"`
-}
-
-type AddMoviesRequest struct {
-	MovieIds []int64 `json:"movie_ids"`
-}
+	getPlaylistLogMessage             = "failed to get playlist"
+	fetchPlaylistMessage              = "failed to fetch playlist"
+	createPlaylistMessage             = "failed to create playlist"
+	updatePlaylistMessage             = "failed to update playlist"
+	deletePlaylistMessage             = "failed to delete playlist"
+	updatePlaylistTimestampLogMessage = "failed to update playlist timestamp"
+	finalizePlaylistUpdateMessage     = "failed to finalize playlist update"
+)
 
 func validatePlaylistMetadata(name, description string) error {
 	if name == "" {

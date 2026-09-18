@@ -14,10 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const (
-	watchRoomPlaybackModeDirect = "direct"
-	maxWatchRoomRequestSize     = 1024 * 1024 // 1 MB
-)
+const watchRoomPlaybackModeDirect = "direct"
 
 // background is a package-level background context used for operations that must
 // outlive the originating HTTP request (e.g. HLS warm-up after room creation).
@@ -305,7 +302,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req createWatchRoomRequest
-	if err := helpers.ReadJSON(w, r, &req, maxWatchRoomRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -338,7 +335,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	movie, err := app.Queries.GetMovieByID(r.Context(), req.MovieID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
 			return
 		}
 		app.Logger.Error("failed to verify movie for watch room", "error", err, "movie_id", req.MovieID)
@@ -408,7 +405,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	// only direct-play MP4 containers, and 10-bit / 4:2:2 / 4:4:4 H.264 does
 	// not decode even though the codec name passes.
 	if req.Mode == watchRoomPlaybackModeDirect {
-		if videoContentType(movie.Container, movie.MimeType) != "video/mp4" {
+		if videoContentType(movie.Container, movie.MimeType) != mp4ContentType {
 			helpers.ErrorJSON(w, errors.New("direct playback is only available for MP4 movies; choose another playback mode"), http.StatusBadRequest)
 			return
 		}
@@ -590,7 +587,7 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !isMember {
-		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+		helpers.ErrorJSON(w, errors.New(accessDeniedMessage), http.StatusForbidden)
 		return
 	}
 

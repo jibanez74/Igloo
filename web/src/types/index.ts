@@ -182,7 +182,6 @@ export type {
 
 // Search types
 export type {
-  SearchSection,
   PaginatedSearchResponse,
   SearchAllResponseType,
   SearchMoviesResponseType,

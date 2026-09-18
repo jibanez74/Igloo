@@ -23,6 +23,13 @@ const (
 	subtitleCacheCleanup      = 10 * time.Minute
 )
 
+// Said by the subtitle endpoint and by the movie and episode detail handlers
+// that embed the same list.
+const (
+	getSubtitlesLogMessage = "failed to get subtitles"
+	fetchSubtitlesMessage  = "failed to fetch subtitles"
+)
+
 // invalidateSubtitleVTTCache drops every extracted track of one file; the
 // cache is keyed on the physical file, so a combined TV file is cleared for
 // all of its episodes at once.
@@ -83,8 +90,8 @@ func (app *Application) serveSubtitleWebVTT(w http.ResponseWriter, r *http.Reque
 
 	subtitles, err := loadPlaybackSubtitles(r.Context(), app.Queries, source)
 	if err != nil {
-		app.Logger.Error("failed to get subtitles", "error", err, "media", media.String())
-		helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
+		app.Logger.Error(getSubtitlesLogMessage, "error", err, "media", media.String())
+		helpers.ErrorJSON(w, errors.New(fetchSubtitlesMessage))
 		return
 	}
 

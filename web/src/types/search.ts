@@ -1,27 +1,19 @@
-import type {
-  MoviesLibraryListItemType,
-} from "./movies";
-import type { ShowLibraryItemType } from "./shows";
-import type {
-  SimpleAlbumType,
-  SimpleMusicianType,
-  TrackListItemType,
-} from "./music";
+import type { components } from "./openapi.gen";
 
-export type SearchSection<T> = {
-  results: T[];
-  total: number;
-};
+type Schema = components["schemas"];
 
-export type SearchAllResponseType = {
-  query: string;
-  movies: SearchSection<MoviesLibraryListItemType>;
-  shows: SearchSection<ShowLibraryItemType>;
-  albums: SearchSection<SimpleAlbumType>;
-  musicians: SearchSection<SimpleMusicianType>;
-  tracks: SearchSection<TrackListItemType>;
-};
+// `data` payloads of the /api/search/* endpoints. Aliased from the named *Data
+// schemas, never from the envelopes: an envelope inherits JsonSuccess.data's
+// open index signature, which silently disables property checking.
+export type SearchAllResponseType = Schema["SearchAllData"];
+export type SearchMoviesResponseType = Schema["MovieSearchData"];
+export type SearchShowsResponseType = Schema["ShowSearchData"];
+export type SearchAlbumsResponseType = Schema["AlbumSearchData"];
+export type SearchMusiciansResponseType = Schema["MusicianSearchData"];
+export type SearchTracksResponseType = Schema["TrackSearchData"];
 
+// The shape the five paginated payloads share, for components that render any
+// category generically (see routes/_auth/search/index.tsx).
 export type PaginatedSearchResponse<T> = {
   query: string;
   results: T[];
@@ -30,12 +22,6 @@ export type PaginatedSearchResponse<T> = {
   per_page: number;
   total_pages: number;
 };
-
-export type SearchMoviesResponseType = PaginatedSearchResponse<MoviesLibraryListItemType>;
-export type SearchShowsResponseType = PaginatedSearchResponse<ShowLibraryItemType>;
-export type SearchAlbumsResponseType = PaginatedSearchResponse<SimpleAlbumType>;
-export type SearchMusiciansResponseType = PaginatedSearchResponse<SimpleMusicianType>;
-export type SearchTracksResponseType = PaginatedSearchResponse<TrackListItemType>;
 
 export type SearchTab =
   | "all"

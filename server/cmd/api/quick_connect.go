@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"sync"
 	"time"
@@ -14,9 +13,8 @@ import (
 var errQuickConnectCapacityReached = errors.New("quick connect pending-code capacity reached")
 
 const (
-	quickConnectCodeTTL     = 5 * time.Minute
-	quickConnectPollSeconds = 2
-	quickConnectCodeLength  = 6
+	quickConnectCodeTTL    = 5 * time.Minute
+	quickConnectCodeLength = 6
 
 	// Hard ceiling on pending codes so the public initiate endpoint cannot
 	// grow the map unbounded from many source IPs. Legitimate use is a
@@ -25,32 +23,7 @@ const (
 
 	// No I, L, O, 0 or 1 so codes are unambiguous on a TV screen.
 	quickConnectCodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-
-	deviceTokenPrefix = "igd_"
-
-	deviceLastSeenTTL = 5 * time.Minute
-
-	// Bearer tokens are resolved on every request, including each HLS segment
-	// a TV client fetches, so the lookup is cached. Revocation evicts
-	// explicitly; the TTL only bounds paths that delete a device without going
-	// through a handler, such as the stale-device sweep.
-	deviceAuthCacheTTL = 30 * time.Second
-
-	// Devices whose last_used_at is older than this are revoked automatically,
-	// both lazily at auth time and by the daily sweep.
-	deviceInactivityTTL = 90 * 24 * time.Hour
-
-	// Format produced by SQLite's CURRENT_TIMESTAMP (UTC, zero-padded).
-	sqliteTimeLayout = "2006-01-02 15:04:05"
 )
-
-// deviceInactivityCutoff returns the oldest last_used_at still considered
-// active, in SQLite CURRENT_TIMESTAMP format. Both sides are zero-padded
-// "YYYY-MM-DD HH:MM:SS" UTC strings, so plain string comparison orders
-// chronologically.
-func deviceInactivityCutoff(now time.Time) string {
-	return now.UTC().Add(-deviceInactivityTTL).Format(sqliteTimeLayout)
-}
 
 type quickConnectEntry struct {
 	secretHash     [32]byte
@@ -264,22 +237,4 @@ func generateQuickConnectCode() (string, error) {
 	}
 
 	return string(code), nil
-}
-
-// generateDeviceToken returns a new bearer token and the hex-encoded SHA-256
-// hash that is stored in the database. The plaintext token is never persisted.
-func generateDeviceToken() (string, string, error) {
-	buf := make([]byte, 32)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return "", "", err
-	}
-
-	token := deviceTokenPrefix + base64.RawURLEncoding.EncodeToString(buf)
-	return token, hashDeviceToken(token), nil
-}
-
-func hashDeviceToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
 }

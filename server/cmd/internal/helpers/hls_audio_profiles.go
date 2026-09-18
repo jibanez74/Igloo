@@ -23,13 +23,16 @@ const (
 	// AC-3/E-AC-3 encodes. Legacy AAC output never sets a sample rate.
 	HLS_EXPLICIT_AUDIO_SAMPLE_RATE = 48000
 
-	// HLS_LEGACY_AUDIO_ENCODER and HLS_LEGACY_AUDIO_BITRATE describe the legacy
-	// stereo AAC fallback output. FFmpeg is driven from them in ffmpeg_hls.go and
-	// the X-Igloo-Effective-Audio-* headers are built from them in the API, so the
-	// two descriptions of the same output cannot drift apart. The bitrate is
-	// deliberately not part of the explicit bitrate table below.
-	HLS_LEGACY_AUDIO_ENCODER = "aac"
-	HLS_LEGACY_AUDIO_BITRATE = "320k"
+	// The HLS_LEGACY_AUDIO_* values describe the legacy stereo AAC fallback
+	// output. FFmpeg is driven from them in ffmpeg_hls.go and the
+	// X-Igloo-Effective-Audio-* headers are built from them in the API, so the
+	// two descriptions of the same output cannot drift apart. They are the
+	// output's own values, not the request ceilings above: changing what
+	// audio_channels accepts must not silently restyle this fallback. The
+	// bitrate is deliberately not part of the explicit bitrate table below.
+	HLS_LEGACY_AUDIO_ENCODER  = string(HLSAudioCodecAAC)
+	HLS_LEGACY_AUDIO_CHANNELS = 2
+	HLS_LEGACY_AUDIO_BITRATE  = "320k"
 )
 
 // HLSAudioProfileRequest is the validated audio_codec/audio_channels query

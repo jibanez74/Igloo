@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -284,7 +285,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		default:
 			args = append(args,
 				"-c:a", helpers.HLS_LEGACY_AUDIO_ENCODER,
-				"-ac", fmt.Sprintf("%d", helpers.HLS_AUDIO_MAX_CHANNELS_STEREO),
+				"-ac", strconv.Itoa(helpers.HLS_LEGACY_AUDIO_CHANNELS),
 				"-b:a", helpers.HLS_LEGACY_AUDIO_BITRATE,
 			)
 		}
