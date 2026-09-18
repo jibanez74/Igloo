@@ -26,9 +26,13 @@ const (
 	defaultTranscodeDir = "transcode"
 )
 
-// Every environment variable the process reads. Settings-owned values here are
+// Every environment variable this package reads. Settings-owned values here are
 // first-run seeds only — once the settings row exists the database wins and the
 // value is edited from the Settings UI; the rest stay startup-driven.
+//
+// Two more are read outside it: the externalbin builds of the ffmpeg and ffprobe
+// packages each pass IGLOO_FFMPEG_PATH / IGLOO_FFPROBE_PATH to
+// mediabin.ResolveExternal, beside the binary name they override.
 const (
 	envDBPath                     = "DB_PATH"
 	envStaticDir                  = "STATIC_DIR"
@@ -91,6 +95,15 @@ func LoadRuntimeEnvFile() (string, bool, error) {
 	}
 
 	return helpers.ENV_FILE, true, nil
+}
+
+// viteDevServerURL returns the configured Vite dev server origin, trimmed and
+// without a trailing slash, or "" when the process is not in dev mode. Both
+// readers — the SPA fallback in static_handler.go and the watch-room origin
+// check in watch_room_ws.go — must normalize identically or one will accept a
+// value the other mangles.
+func viteDevServerURL() string {
+	return strings.TrimSuffix(strings.TrimSpace(os.Getenv(envViteDevServer)), "/")
 }
 
 func NewRuntimeConfig() (RuntimeConfig, error) {

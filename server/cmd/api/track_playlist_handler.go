@@ -201,7 +201,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
-		app.Logger.Error(createPlaylistMessage, "error", err)
+		app.Logger.Error("failed to create playlist", "error", err)
 		helpers.ErrorJSON(w, errors.New(createPlaylistMessage))
 		return
 	}
@@ -280,7 +280,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		IsPublic:    req.IsPublic,
 	})
 	if err != nil {
-		app.Logger.Error(updatePlaylistMessage, "error", err)
+		app.Logger.Error("failed to update playlist", "error", err)
 		helpers.ErrorJSON(w, errors.New(updatePlaylistMessage))
 		return
 	}
@@ -336,7 +336,7 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	})
 	if err != nil {
-		app.Logger.Error(deletePlaylistMessage, "error", err)
+		app.Logger.Error("failed to delete playlist", "error", err)
 		helpers.ErrorJSON(w, errors.New(deletePlaylistMessage))
 		return
 	}

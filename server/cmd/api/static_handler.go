@@ -170,9 +170,8 @@ func serveFrontendAsset(w http.ResponseWriter, r *http.Request, asset *frontendA
 // ServeFrontend serves the React SPA from embedded files, or redirects to the Vite dev
 // server when VITE_DEV_SERVER is set (e.g. VITE_DEV_SERVER=http://localhost:3000 for make dev).
 func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
-	viteURL := os.Getenv(envViteDevServer)
+	viteURL := viteDevServerURL()
 	if viteURL != "" {
-		viteURL = strings.TrimSuffix(viteURL, "/")
 		target := viteURL + r.URL.Path
 		if r.URL.RawQuery != "" {
 			target += "?" + r.URL.RawQuery

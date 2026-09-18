@@ -21,12 +21,18 @@ const (
 	libraryMaxPerPage     = 48
 )
 
-// Said by every handler that resolves a movie by id.
+// Said by every handler that resolves a movie by id. The first two are built
+// from the mediaRef helpers in playback_source.go rather than spelled again:
+// the playback routes answer the same two conditions through those, and the
+// REST routes must not say it differently.
+var (
+	movieNotFoundMessage  = mediaKindMovie.notFoundMessage()
+	invalidMovieIDMessage = invalidMediaIDMessage(mediaKindMovie)
+)
+
 const (
-	movieNotFoundMessage  = "movie not found"
-	invalidMovieIDMessage = "invalid movie id"
-	getMovieLogMessage    = "failed to get movie"
-	fetchMovieMessage     = "failed to fetch movie from server"
+	getMovieLogMessage = "failed to get movie"
+	fetchMovieMessage  = "failed to fetch movie from server"
 )
 
 // moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
@@ -117,7 +123,11 @@ func (app *Application) logNormalizedChapterStartTimes(
 	}
 }
 
-func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
+// parsePageAndPerPage reads the page and per_page query parameters every
+// paginated listing shares. Missing, unparseable and nonpositive values fall
+// back to the defaults rather than failing the request, and per_page above the
+// cap is clamped; docs/openapi.json documents that on PerPageQuery.
+func parsePageAndPerPage(r *http.Request) (page, perPage int64) {
 	page = 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		parsed, err := strconv.ParseInt(p, 10, 64)
@@ -136,6 +146,11 @@ func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
 	if perPage > libraryMaxPerPage {
 		perPage = libraryMaxPerPage
 	}
+	return page, perPage
+}
+
+func parseLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
+	page, perPage = parsePageAndPerPage(r)
 
 	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
 	if sort != "desc" {

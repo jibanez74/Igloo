@@ -9,7 +9,9 @@ import (
 )
 
 // subtitleStderrTailBytes caps the FFmpeg stderr tail carried in an extraction
-// error, matching the hlsStderrScanner* caps in ffmpeg_hls.go.
+// error, which is surfaced to the caller and logged. It is unrelated to the
+// hlsStderrScanner* sizes in ffmpeg_hls.go — those bound one scanner token, not
+// a tail kept after the fact.
 const subtitleStderrTailBytes = 4096
 
 // ExtractSubtitleAsWebVTT converts one subtitle stream to WebVTT via ffmpeg.

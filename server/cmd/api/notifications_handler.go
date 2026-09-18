@@ -16,15 +16,14 @@ import (
 // returns. The bell panel only shows the most recent ones.
 const notificationListLimit = 50
 
-// notificationTitle is the request category a notification carries. The values
-// mirror the title enum in docs/openapi.json and are stored verbatim.
-type notificationTitle string
-
+// The request category a notification carries. The values mirror the title
+// enum in docs/openapi.json and are stored verbatim, so they stay plain
+// strings: the column, the contract and the request field are all strings.
 const (
-	notificationTitleMovieRequest notificationTitle = "movie_request"
-	notificationTitleAlbumRequest notificationTitle = "album_request"
-	notificationTitleTrackRequest notificationTitle = "track_request"
-	notificationTitleOther        notificationTitle = "other"
+	notificationTitleMovieRequest = "movie_request"
+	notificationTitleAlbumRequest = "album_request"
+	notificationTitleTrackRequest = "track_request"
+	notificationTitleOther        = "other"
 )
 
 type CreateNotificationRequest struct {
@@ -109,7 +108,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	req.Title = strings.TrimSpace(req.Title)
 	req.Message = strings.TrimSpace(req.Message)
 
-	if !isValidNotificationTitle(notificationTitle(req.Title)) {
+	if !isValidNotificationTitle(req.Title) {
 		helpers.ErrorJSON(w, errors.New("invalid notification title"), http.StatusBadRequest)
 		return
 	}
@@ -149,7 +148,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func isValidNotificationTitle(title notificationTitle) bool {
+func isValidNotificationTitle(title string) bool {
 	switch title {
 	case notificationTitleMovieRequest,
 		notificationTitleAlbumRequest,

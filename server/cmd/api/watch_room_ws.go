@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -472,7 +471,7 @@ func isLocalWatchRoomDevHost(host string) bool {
 }
 
 func isAllowedWatchRoomDevOrigin(originURL *url.URL) bool {
-	viteURL := strings.TrimSpace(os.Getenv(envViteDevServer))
+	viteURL := viteDevServerURL()
 	if viteURL == "" {
 		return false
 	}

@@ -53,7 +53,7 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if creatorID != user.ID || notificationTitle(title) != notificationTitleMovieRequest || message != "Requester: requester@example.com" || !isAdmin {
+	if creatorID != user.ID || title != notificationTitleMovieRequest || message != "Requester: requester@example.com" || !isAdmin {
 		t.Fatalf("stored notification = %d/%q/%q/%t", creatorID, title, message, isAdmin)
 	}
 }
@@ -173,7 +173,7 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 	t.Helper()
 	err := app.Queries.CreateNotification(context.Background(), database.CreateNotificationParams{
 		CreatedByUserID: requesterID,
-		Title:           string(notificationTitleMovieRequest),
+		Title:           notificationTitleMovieRequest,
 		Message:         message,
 		IsAdmin:         true,
 	})

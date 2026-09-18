@@ -35,9 +35,11 @@ const (
 	hlsRemuxPreflightPoll = 250 * time.Millisecond
 	// Copy-video manifests are read back from FFmpeg rather than synthesized,
 	// so the first request for one waits for FFmpeg to publish a segment.
-	hlsLivePlaylistWait       = 30 * time.Second
-	hlsPlaylistContentType    = "application/vnd.apple.mpegurl"
-	hlsSegmentHTTPContentType = "video/mp4"
+	hlsLivePlaylistWait    = 30 * time.Second
+	hlsPlaylistContentType = "application/vnd.apple.mpegurl"
+	// fMP4 segments and init segments are MP4 containers, so they are served
+	// as the same type an MP4 file is, named once in movie_media.go.
+	hlsSegmentHTTPContentType = mp4ContentType
 	// The extension FFmpeg's hls muxer appends while writing a file under
 	// -hls_flags temp_file, before the rename to the final name.
 	hlsTempFileSuffix               = ".tmp"

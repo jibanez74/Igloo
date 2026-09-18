@@ -7,17 +7,10 @@ import type { PlaylistCollaboratorType } from "./music";
 import type { components } from "./openapi.gen";
 
 // Movie from our library (scanned) - used for Latest Movies on home (API returns poster_path; frontend builds URL)
-export type LatestMovieType = {
-  id: number;
-  title: string;
-  poster_path: NullableString;
-  year: NullableInt64;
-};
+export type LatestMovieType = components["schemas"]["LatestMovie"];
 
 /** Rows from GET /api/movies/library, /liked, and playlist movie pages (includes certification). Compatible with MovieCard. */
-export type MoviesLibraryListItemType = LatestMovieType & {
-  certification: NullableString;
-};
+export type MoviesLibraryListItemType = components["schemas"]["MovieLibraryItem"];
 
 /** Paginated movie list payload (library, liked, playlist items). */
 export type MoviesLibraryPaginatedDataType = {

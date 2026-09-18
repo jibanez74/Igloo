@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -327,7 +328,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 		var fallback sql.NullString
 		hasDate := !date.IsZero()
 		if hasDate {
-			fallback = helpers.NullString(date.Format(releaseDateLayout))
+			fallback = helpers.NullString(date.Format(time.DateOnly))
 		}
 		err = qtx.SaveMusicAlbumDate(ctx, database.SaveMusicAlbumDateParams{AlbumID: album.ID, SpotifyDate: fallback})
 		if err != nil {

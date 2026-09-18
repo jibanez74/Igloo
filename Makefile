@@ -19,6 +19,8 @@ DEADCODE_REPORT_REL := dist/deadcode.txt
 DEADCODE_REPORT := $(SERVER_DIR)/$(DEADCODE_REPORT_REL)
 DEADCODE_MAIN_REPORT_REL := dist/deadcode-main.txt
 DEADCODE_MAIN_REPORT := $(SERVER_DIR)/$(DEADCODE_MAIN_REPORT_REL)
+DEADCODE_MAIN_RAW_REL := dist/deadcode-main-raw.txt
+DEADCODE_MAIN_RAW := $(SERVER_DIR)/$(DEADCODE_MAIN_RAW_REL)
 # mediabin keeps both build configurations in one package and documents that
 # each tag set reports the other half as unreachable, so the release half is
 # expected output here rather than dead code. See mediabin.go's package comment.
@@ -164,14 +166,20 @@ test-server: check-server-test-tools prepare-webdist-placeholder
 # itself — RTA puts every (*Queries) method in the reflection-reachable set, so
 # -generated buys nothing — but a query is only ever reachable through a caller,
 # and dead callers do get reported. Verify with -whylive before deleting.
+#
+# The allowlist is applied in a separate step rather than in a pipe: sh has no
+# pipefail, so piping deadcode into grep would hand the pipeline grep's status,
+# and the `|| true` that an empty grep result needs would then also swallow a
+# deadcode failure and leave an empty report that passes the emptiness test.
 lint-server: check-server-test-tools prepare-webdist-placeholder
 	@mkdir -p $(DIST_DIR)
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go vet -tags "$(TEST_TAGS)" ./...
 	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -test -tags "$(TEST_TAGS)" ./... > $(DEADCODE_REPORT_REL)
 	@test ! -s $(DEADCODE_REPORT) || (echo "unreachable code:"; cat $(DEADCODE_REPORT); rm -f $(DEADCODE_REPORT); exit 1)
 	@rm -f $(DEADCODE_REPORT)
-	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -tags "$(TEST_TAGS)" ./cmd/api \
-		| grep -Ev '$(DEADCODE_MAIN_ALLOW)' > $(DEADCODE_MAIN_REPORT_REL) || true
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go run $(DEADCODE_TOOL) -tags "$(TEST_TAGS)" ./cmd/api > $(DEADCODE_MAIN_RAW_REL)
+	@cd $(SERVER_DIR) && grep -Ev '$(DEADCODE_MAIN_ALLOW)' $(DEADCODE_MAIN_RAW_REL) > $(DEADCODE_MAIN_REPORT_REL) || true
+	@rm -f $(DEADCODE_MAIN_RAW)
 	@test ! -s $(DEADCODE_MAIN_REPORT) || (echo "unreachable from main (reached only by tests, if at all):"; cat $(DEADCODE_MAIN_REPORT); rm -f $(DEADCODE_MAIN_REPORT); exit 1)
 	@rm -f $(DEADCODE_MAIN_REPORT)
 
