@@ -6,6 +6,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// USER_PASSWORD_MAX_BYTES is bcrypt's own password limit. PasswordMatches
+// rejects anything longer rather than letting bcrypt ignore the excess bytes,
+// and the user handlers reject it at validation time for the same reason.
+const USER_PASSWORD_MAX_BYTES = 72
+
 func HashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

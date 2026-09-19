@@ -99,7 +99,7 @@ func parseNotificationID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Request) {
 	var req CreateNotificationRequest
 
-	err := helpers.ReadJSON(w, r, &req, 0)
+	err := helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

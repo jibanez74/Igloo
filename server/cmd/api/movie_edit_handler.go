@@ -25,7 +25,7 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		TmdbID int `json:"tmdb_id"`
 	}
 
-	if err := helpers.ReadJSON(w, r, &payload, 0); err != nil || payload.TmdbID <= 0 {
+	if err := helpers.ReadJSON(w, r, &payload); err != nil || payload.TmdbID <= 0 {
 		helpers.ErrorJSON(w, errors.New("valid tmdb_id is required"), http.StatusBadRequest)
 		return
 	}
@@ -109,7 +109,7 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		Language      *string `json:"language"`
 	}
 
-	if err := helpers.ReadJSON(w, r, &payload, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &payload); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -221,7 +221,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		DeleteFile bool `json:"delete_file"`
 	}
 	// DELETE may omit the body; delete_file defaults to false.
-	_ = helpers.ReadJSON(w, r, &payload, 0)
+	_ = helpers.ReadJSON(w, r, &payload)
 
 	ctx := r.Context()
 

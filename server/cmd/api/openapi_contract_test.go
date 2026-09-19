@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -513,7 +514,7 @@ func TestOpenAPIExchangeCoverageComparison(t *testing.T) {
 	}
 }
 
-func TestOpenAPIHLSEnumsMatchServerConstants(t *testing.T) {
+func TestOpenAPIEnumsMatchServerConstants(t *testing.T) {
 	document, _ := loadOpenAPIContract(t)
 
 	tests := []struct {
@@ -550,6 +551,16 @@ func TestOpenAPIHLSEnumsMatchServerConstants(t *testing.T) {
 			},
 		},
 		{
+			name:   "hardware acceleration devices",
+			schema: "HardwareAccelerationDevice",
+			want: []any{
+				helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+				helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+				helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+				helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			},
+		},
+		{
 			name:   "audio channel limits",
 			schema: "HLSAudioChannelLimit",
 			want: []any{
@@ -569,6 +580,29 @@ func TestOpenAPIHLSEnumsMatchServerConstants(t *testing.T) {
 				t.Fatalf("OpenAPI %s enum = %#v, want %#v", tt.schema, schema.Value.Enum, tt.want)
 			}
 		})
+	}
+}
+
+// The filename pattern is the spec's copy of the names FFmpeg is told to write
+// and the API serves back, so it has to be built from the same constants.
+func TestOpenAPIHLSFilenamePatternMatchesServerConstants(t *testing.T) {
+	document, _ := loadOpenAPIContract(t)
+
+	parameter := document.Components.Parameters["HLSFilenamePath"]
+	if parameter == nil || parameter.Value == nil || parameter.Value.Schema == nil || parameter.Value.Schema.Value == nil {
+		t.Fatal("OpenAPI parameter \"HLSFilenamePath\" is missing")
+	}
+
+	want := fmt.Sprintf(
+		`^(%s|%s[0-9]+%s)$`,
+		regexp.QuoteMeta(helpers.HLS_INIT_FILENAME),
+		regexp.QuoteMeta(helpers.HLS_SEGMENT_FILENAME_PREFIX),
+		regexp.QuoteMeta(helpers.HLS_SEGMENT_FILENAME_SUFFIX),
+	)
+
+	got := parameter.Value.Schema.Value.Pattern
+	if got != want {
+		t.Fatalf("OpenAPI HLSFilenamePath pattern = %q, want %q", got, want)
 	}
 }
 

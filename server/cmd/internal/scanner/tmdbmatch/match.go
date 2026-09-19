@@ -110,7 +110,7 @@ func Rank(results []tmdb.TmdbMovie, targetTitle string, targetYear int) []*Match
 		scoredMatches = append(scoredMatches, &Match{
 			Movie:      movie,
 			Score:      score,
-			Confidence: clampConfidence(score),
+			Confidence: helpers.ClampFloat64(score, 0, 100),
 		})
 	}
 
@@ -257,17 +257,6 @@ func tokenOverlapScore(a, b string) float64 {
 
 	denominator := max(len(aTokens), len(bTokens))
 	return float64(matches) / float64(denominator)
-}
-
-func clampConfidence(score float64) float64 {
-	switch {
-	case score < 0:
-		return 0
-	case score > 100:
-		return 100
-	default:
-		return score
-	}
 }
 
 func sequelIndicator(title string) string {

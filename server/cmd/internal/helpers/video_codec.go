@@ -1,7 +1,5 @@
 package helpers
 
-import "strings"
-
 // coverArtVideoCodecs are the still-image codecs an import treats as embedded
 // cover art rather than as a video stream.
 var coverArtVideoCodecs = map[string]bool{
@@ -27,20 +25,16 @@ func withPlaybackOnlyCoverArtCodecs(base map[string]bool) map[string]bool {
 	return codecs
 }
 
-func normalizeVideoCodec(codec string) string {
-	return strings.ToLower(strings.TrimSpace(codec))
-}
-
 // IsCoverArtVideoCodec reports still-image video streams used as embedded cover
 // art on import. MJPEG is absent on purpose; withPlaybackOnlyCoverArtCodecs
 // says why.
 func IsCoverArtVideoCodec(codec string) bool {
-	return coverArtVideoCodecs[normalizeVideoCodec(codec)]
+	return coverArtVideoCodecs[normalizeCodec(codec)]
 }
 
 // IsPlaybackCoverArtVideoCodec reports the streams to skip when picking the
 // feature video stream to play, which is a wider question than what an import
 // rejects as artwork.
 func IsPlaybackCoverArtVideoCodec(codec string) bool {
-	return playbackCoverArtVideoCodecs[normalizeVideoCodec(codec)]
+	return playbackCoverArtVideoCodecs[normalizeCodec(codec)]
 }

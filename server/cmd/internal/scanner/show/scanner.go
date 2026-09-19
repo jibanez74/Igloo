@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -376,9 +374,8 @@ func (s *Scanner) persistFile(ctx context.Context, scan *showScanContext, result
 			return errors.New("file season ownership changed")
 		}
 		var duration sql.NullFloat64
-		seconds, parseErr := strconv.ParseFloat(info.Format.Duration, 64)
-		validDuration := parseErr == nil && seconds > 0 && !math.IsInf(seconds, 0) && !math.IsNaN(seconds)
-		if validDuration {
+		seconds, validDuration := helpers.ParseDurationSeconds(info.Format.Duration)
+		if validDuration && seconds > 0 {
 			duration = helpers.NullFloat64(seconds)
 		}
 		stored, err := q.UpsertShowFile(ctx, database.UpsertShowFileParams{SeasonID: season.ID, FilePath: file.Path, FileName: filepath.Base(file.Path), Size: inspection.Fingerprint.Size, Container: file.Ext, MimeType: helpers.VideoMimeTypes[file.Ext], Duration: duration})

@@ -62,7 +62,7 @@ func (app *Application) RenameDevice(w http.ResponseWriter, r *http.Request) {
 
 	var request RenameDeviceRequest
 
-	err := helpers.ReadJSON(w, r, &request, 0)
+	err := helpers.ReadJSON(w, r, &request)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

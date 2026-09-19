@@ -72,7 +72,7 @@ type AdminCreateUserRequest struct {
 
 func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req AdminCreateUserRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -152,7 +152,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req AdminUpdateUserRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -351,7 +351,7 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 	}
 
 	var req AdminResetUserPasswordRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}

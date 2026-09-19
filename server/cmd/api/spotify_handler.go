@@ -45,7 +45,7 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 
 	var payload spotifyAlbumSearchRequest
 
-	err := helpers.ReadJSON(w, r, &payload, 0)
+	err := helpers.ReadJSON(w, r, &payload)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -104,7 +104,7 @@ func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Reque
 
 	var payload spotifyTrackSearchRequest
 
-	err := helpers.ReadJSON(w, r, &payload, 0)
+	err := helpers.ReadJSON(w, r, &payload)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

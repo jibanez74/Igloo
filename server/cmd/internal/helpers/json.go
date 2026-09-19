@@ -51,21 +51,16 @@ func WriteJSON(w http.ResponseWriter, status int, data any, headers ...http.Head
 	return err
 }
 
-// DefaultMaxRequestBytes is the body limit ReadJSON applies when a caller
-// passes 0 for maxBytes, which is what every handler without a reason to
-// differ does. It is a ceiling on one JSON request body, not a payload size
-// any endpoint is expected to approach.
-const DefaultMaxRequestBytes int64 = 1024 * 1024
+// maxRequestBytes is the body limit ReadJSON applies to every request. It is a
+// ceiling on one JSON request body, not a payload size any endpoint is expected
+// to approach. No handler has ever needed a different limit, so ReadJSON does
+// not take one.
+const maxRequestBytes int64 = 1024 * 1024
 
 // ReadJSON decodes JSON from the request body into data.
 // It enforces a maximum body size, a read deadline, and rejects unknown fields.
-// A maxBytes of 0 means DefaultMaxRequestBytes; there is no "unlimited".
-func ReadJSON(w http.ResponseWriter, r *http.Request, data any, maxBytes int64) error {
-	if maxBytes == 0 {
-		maxBytes = DefaultMaxRequestBytes
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+func ReadJSON(w http.ResponseWriter, r *http.Request, data any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBytes)
 	defer setReadDeadline(w, time.Time{})
 	setReadDeadline(w, time.Now().Add(readJSONTimeout))
 

@@ -181,7 +181,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreatePlaylistRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -260,7 +260,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdatePlaylistRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -389,7 +389,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req AddTracksRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -566,7 +566,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 	}
 
 	var req ReorderTracksRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -737,7 +737,7 @@ func (app *Application) addCollaborator(
 	}
 
 	var req AddCollaboratorRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

@@ -1,7 +1,5 @@
 package helpers
 
-import "strings"
-
 // HLSProfileConfig holds encoding parameters for one HLS profile. Scaling
 // uses only Height (`scale=-2:<height>` preserves the source aspect ratio).
 type HLSProfileConfig struct {
@@ -10,6 +8,18 @@ type HLSProfileConfig struct {
 	VideoBitrate string // e.g. "8M", "4M"
 	Bufsize      string // e.g. "16M", "8M"
 }
+
+// HLS profile identifiers are URL-visible values accepted by requests. The
+// transcode ids are the keys of HLSProfileConfigs below; HLS_PROFILE_REMUX has
+// no entry there and is also read by cmd/api and ffmpeg.
+const (
+	HLS_PROFILE_REMUX        = "remux"
+	HLS_PROFILE_2160P_16MBPS = "2160p_16mbps"
+	HLS_PROFILE_1080P_8MBPS  = "1080p_8mbps"
+	HLS_PROFILE_1080P_6MBPS  = "1080p_6mbps"
+	HLS_PROFILE_1080P_4MBPS  = "1080p_4mbps"
+	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
+)
 
 // HLSAllowedProfiles is the ordered list of profile IDs allowed in requests.
 // HLS_PROFILE_REMUX copies the video stream and re-maps the selected audio track,
@@ -53,8 +63,13 @@ func BestFitHLSFallbackProfile(sourceHeight int64) string {
 			continue
 		}
 
-		// Every allowed profile except remux has a config entry.
-		cfg := HLSProfileConfigs[profileID]
+		// A profile id with no configured height would otherwise match every
+		// source, because the zero value satisfies `sourceHeight >= 0`.
+		cfg, ok := HLSProfileConfigs[profileID]
+		if !ok || cfg.Height <= 0 {
+			continue
+		}
+
 		if sourceHeight >= int64(cfg.Height) {
 			return profileID
 		}
@@ -64,7 +79,7 @@ func BestFitHLSFallbackProfile(sourceHeight int64) string {
 }
 
 func IsBrowserCompatibleH264(codec string) bool {
-	switch strings.ToLower(strings.TrimSpace(codec)) {
+	switch normalizeCodec(codec) {
 	case "h264", "h.264", "avc", "avc1":
 		return true
 	default:

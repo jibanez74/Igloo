@@ -84,7 +84,7 @@ func (app *Application) handleTmdbMovieSearch(w http.ResponseWriter, r *http.Req
 
 	var payload tmdbSearchRequest
 
-	err := helpers.ReadJSON(w, r, &payload, 0)
+	err := helpers.ReadJSON(w, r, &payload)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

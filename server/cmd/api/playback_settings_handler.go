@@ -122,7 +122,7 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 // their current value, so a client may send just the one it changed.
 func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Request) {
 	var rawFields map[string]json.RawMessage
-	err := helpers.ReadJSON(w, r, &rawFields, 0)
+	err := helpers.ReadJSON(w, r, &rawFields)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

@@ -28,7 +28,7 @@ type AuthRequest struct {
 func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	var request AuthRequest
 
-	err := helpers.ReadJSON(w, r, &request, 0)
+	err := helpers.ReadJSON(w, r, &request)
 	if err != nil {
 		app.Logger.Error("failed to parse request body in login process", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to parse email and password from request body"), http.StatusBadRequest)
@@ -101,7 +101,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 
 	var request DeviceAuthRequest
 
-	err := helpers.ReadJSON(w, r, &request, 0)
+	err := helpers.ReadJSON(w, r, &request)
 	if err != nil {
 		app.Logger.Error("failed to parse request body in device login", "error", err)
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)

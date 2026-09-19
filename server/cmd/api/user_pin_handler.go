@@ -55,7 +55,7 @@ func (app *Application) UpdateUserPin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateUserPinRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -166,7 +166,7 @@ func (app *Application) VerifyUserPin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req VerifyUserPinRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}

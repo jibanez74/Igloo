@@ -163,8 +163,8 @@ func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile, 
 		params.Year = helpers.NullInt64(int64(titleYear.Year))
 	}
 
-	durationSec, err := strconv.ParseFloat(info.Format.Duration, 64)
-	if err == nil && durationSec > 0 {
+	durationSec, validDuration := helpers.ParseDurationSeconds(info.Format.Duration)
+	if validDuration && durationSec > 0 {
 		params.Duration = helpers.NullFloat64(durationSec)
 		runTimeMinutes := int64(math.Round(durationSec / 60))
 		if runTimeMinutes > 0 {
