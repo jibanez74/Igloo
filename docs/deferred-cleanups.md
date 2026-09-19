@@ -2,17 +2,9 @@
 
 This document records improvements that were identified during code review but deliberately not made at the time, because each one is larger than the task that surfaced it, changes externally observable behavior, or needs a decision that the reviewing task had no mandate to make.
 
-This file is not authoritative. `docs/openapi.json`, `docs/ffmpeg.md`, and `docs/design-system.md` remain the authoritative documents, and nothing here overrides them. Treat the entries below as a backlog: when one is picked up, do the work, update whichever authoritative document it touches, and delete the entry.
+This file is not authoritative. `docs/openapi.json`, `docs/ffmpeg.md`, and `docs/design-system.md` remain the authoritative documents, and nothing here overrides them. Treat any entry added above the last section as a backlog item: when one is picked up, do the work, update whichever authoritative document it touches, and delete the entry. The backlog is currently empty.
 
 The last section records questions that were investigated and answered "leave it alone". It exists so the same suggestions are not re-raised in a future review.
-
-## HLS Fallback Profile Selection Ignores Two Profiles
-
-`BestFitHLSFallbackProfile` in `server/cmd/internal/helpers/hls_profiles.go` walks `HLSAllowedProfiles` in order and returns the first transcode profile whose configured height fits within the source height. Three profiles share `Height: 1080` — `1080p_8mbps`, `1080p_6mbps`, and `1080p_4mbps` — and `1080p_8mbps` comes first in the ordered list. Any source at or above 1080 therefore always selects `1080p_8mbps`, and the 6 Mbps and 4 Mbps profiles are unreachable through this function. They remain reachable when a client requests them explicitly, so this is a gap in automatic fallback selection rather than dead configuration.
-
-The open question is what the fallback should do, and height alone cannot answer it. A 1080p source that failed remux prevalidation on a constrained server is exactly the case where the lower-bitrate profiles would help, which suggests the selection should also consider the source bitrate, the transcode limiter's current load, or the requesting client, rather than resolution alone.
-
-This is a playback behavior change. Read `docs/ffmpeg.md` first, update it in the same task, and add coverage to `server/cmd/internal/helpers/hls_profiles_test.go`, which currently asserts only that the allowed list is ordered by descending height.
 
 ## Settled: Do Not Change These
 

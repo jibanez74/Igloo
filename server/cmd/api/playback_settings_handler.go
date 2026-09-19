@@ -65,34 +65,15 @@ func playbackProfileCatalog() []playbackProfileResponse {
 			continue
 		}
 
-		mbps, err := parseVideoMbps(cfg.VideoBitrate)
-		if err != nil {
-			continue
-		}
-
 		out = append(out, playbackProfileResponse{
 			ID:        cfg.ID,
-			Label:     formatProfileLabel(cfg.Height, mbps),
+			Label:     formatProfileLabel(cfg.Height, cfg.VideoMbps),
 			Height:    cfg.Height,
-			VideoMbps: mbps,
+			VideoMbps: cfg.VideoMbps,
 		})
 	}
 
 	return out
-}
-
-func parseVideoMbps(videoBitrate string) (int, error) {
-	trimmed := strings.TrimSuffix(strings.TrimSpace(videoBitrate), "M")
-	if trimmed == "" {
-		return 0, errors.New("empty video bitrate")
-	}
-
-	n, err := strconv.Atoi(trimmed)
-	if err != nil {
-		return 0, err
-	}
-
-	return n, nil
 }
 
 func formatProfileLabel(height, videoMbps int) string {

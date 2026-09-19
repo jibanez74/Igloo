@@ -1608,7 +1608,7 @@ func (app *Application) createHLSSession(
 
 	requestedProfile := profile
 	effectiveProfile := profile
-	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
+	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height, sourceVideoBitRate(*source, primaryVideo))
 	fingerprint := remuxSafetyFingerprint(*source, primaryVideo, app.FFmpeg.Capabilities().Version)
 	needsRemuxPreflight := false
 
