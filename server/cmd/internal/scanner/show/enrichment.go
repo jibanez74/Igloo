@@ -199,7 +199,7 @@ func (s *Scanner) enrichShow(ctx context.Context, report *scanReport, breaker *p
 			report.status.EnrichmentTotal -= item.entities - 1
 			return err
 		}
-		show.TmdbID = sql.NullInt64{Int64: int64(remote.ID), Valid: true}
+		show.TmdbID = helpers.NullInt64(int64(remote.ID))
 	}
 	for _, season := range item.seasons {
 		if breaker.stopped {
@@ -282,7 +282,7 @@ func (s *Scanner) enrichSeason(ctx context.Context, report *scanReport, breaker 
 			report.status.EnrichmentTotal -= len(pendingEpisodes)
 			return err
 		}
-		season.TmdbID = sql.NullInt64{Int64: int64(remote.ID), Valid: true}
+		season.TmdbID = helpers.NullInt64(int64(remote.ID))
 	}
 	for _, ep := range pendingEpisodes {
 		metadata, found := byNumber[int(ep.EpisodeNumber)]

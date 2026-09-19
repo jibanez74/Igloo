@@ -102,6 +102,9 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 			helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusBadRequest)
 			return
 		}
+		// The request separates an absent movie_id from a present one, which is
+		// what the nil check above tests. helpers.NullInt64 tests for 0 instead
+		// and cannot express that distinction.
 		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
 	}
 

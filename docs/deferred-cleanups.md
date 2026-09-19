@@ -14,16 +14,6 @@ The open question is what the fallback should do, and height alone cannot answer
 
 This is a playback behavior change. Read `docs/ffmpeg.md` first, update it in the same task, and add coverage to `server/cmd/internal/helpers/hls_profiles_test.go`, which currently asserts only that the allowed list is ordered by descending height.
 
-## Inline sql.Null Literals Bypass the helpers Constructors
-
-`server/cmd/internal/helpers/nulls.go` provides `NullString`, `NullInt64`, and `NullFloat64`, and they are used widely. Alongside them, 53 composite literals in non-test code construct `sql.NullString`, `sql.NullInt64`, or `sql.NullFloat64` directly. The heaviest concentrations are `server/cmd/internal/scanner/music/persistence.go`, `server/cmd/internal/scanner/streams.go`, `server/cmd/api/settings_handler.go`, and `server/cmd/api/movie_playlist_handler.go`.
-
-This is not a mechanical substitution, and that is the reason it was deferred. The helpers map a zero value to SQL NULL, whereas `sql.NullInt64{Int64: v, Valid: true}` stores the zero. Replacing one with the other silently changes what lands in the database wherever zero is a meaningful value.
-
-`server/cmd/internal/scanner/show/metadata.go:22` shows why the distinction matters. A single `UpdateShowMetadataParams` literal mixes both styles: `TmdbID` uses `helpers.NullInt64`, while `VoteAverage`, `VoteCount`, `Popularity`, `TmdbSeasonCount`, and `TmdbEpisodeCount` use explicit `Valid: true` literals. For a TMDB vote average, storing a genuine `0.0` rather than NULL is very likely correct and deliberate. The mixture is therefore meaningful, but nothing in the code says so.
-
-The useful work is to decide per call site which semantics are intended, convert only the ones where zero should become NULL, and add a short comment where an explicit `Valid: true` literal is load-bearing. Query-level tests should accompany any conversion, since the failure mode is a wrong value in the database rather than a compile error.
-
 ## Settled: Do Not Change These
 
 Each of the following looks like an inconsistency, was investigated, and is correct as written.
