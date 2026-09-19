@@ -46,8 +46,18 @@ type HLSDeviceDecision struct {
 	Reason     string
 }
 
+// normalizeCapabilityName puts an encoder, filter, hwaccel, muxer, CLI option
+// or filter/encoder option name into the form the capability maps in this file
+// are keyed by. Every read and every write goes through it: a recorder that
+// keys a map differently from the matching Supports* lookup stores a
+// capability the lookup can never find, and a missed hardware capability
+// silently demotes playback to the CPU path.
+func normalizeCapabilityName(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
 func (c Capabilities) SupportsEncoder(name string) bool {
-	return c.Encoders[strings.ToLower(strings.TrimSpace(name))]
+	return c.Encoders[normalizeCapabilityName(name)]
 }
 
 func cloneCapabilities(source Capabilities) Capabilities {
@@ -85,39 +95,39 @@ func cloneNestedBoolMap(source map[string]map[string]bool) map[string]map[string
 }
 
 func (c Capabilities) SupportsFilter(name string) bool {
-	return c.Filters[strings.ToLower(strings.TrimSpace(name))]
+	return c.Filters[normalizeCapabilityName(name)]
 }
 
 func (c Capabilities) SupportsHWAccel(name string) bool {
-	return c.HWAccels[strings.ToLower(strings.TrimSpace(name))]
+	return c.HWAccels[normalizeCapabilityName(name)]
 }
 
 func (c Capabilities) SupportsCLIOption(name string) bool {
-	return c.CLIOptions[strings.ToLower(strings.TrimSpace(name))]
+	return c.CLIOptions[normalizeCapabilityName(name)]
 }
 
 func (c Capabilities) SupportsFilterOption(filter, option string) bool {
-	options := c.FilterOptions[strings.ToLower(strings.TrimSpace(filter))]
+	options := c.FilterOptions[normalizeCapabilityName(filter)]
 	if options == nil {
 		return false
 	}
-	return options[strings.ToLower(strings.TrimSpace(option))]
+	return options[normalizeCapabilityName(option)]
 }
 
 func (c Capabilities) SupportsEncoderOption(encoder, option string) bool {
-	options := c.EncoderOptions[strings.ToLower(strings.TrimSpace(encoder))]
+	options := c.EncoderOptions[normalizeCapabilityName(encoder)]
 	if options == nil {
 		return false
 	}
-	return options[strings.ToLower(strings.TrimSpace(option))]
+	return options[normalizeCapabilityName(option)]
 }
 
 func (c Capabilities) SupportsMuxerFlag(muxer, flag string) bool {
-	flags := c.MuxerFlags[strings.ToLower(strings.TrimSpace(muxer))]
+	flags := c.MuxerFlags[normalizeCapabilityName(muxer)]
 	if flags == nil {
 		return false
 	}
-	return flags[strings.ToLower(strings.TrimSpace(flag))]
+	return flags[normalizeCapabilityName(flag)]
 }
 
 func (c Capabilities) SupportsNvidiaCUDAFilters(tonemap bool) bool {
@@ -155,7 +165,7 @@ func (c Capabilities) SupportsIntelQSVScale() bool {
 }
 
 func ResolveHLSDevice(configured string, caps Capabilities) HLSDeviceDecision {
-	cfg := strings.ToLower(strings.TrimSpace(configured))
+	cfg := normalizeCapabilityName(configured)
 	if cfg == "" {
 		cfg = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	}
@@ -305,7 +315,7 @@ func (c *Capabilities) recordCLIOptions(bin string, options []string) {
 		c.CLIOptions = map[string]bool{}
 	}
 	for _, option := range options {
-		option = strings.ToLower(strings.TrimSpace(option))
+		option = normalizeCapabilityName(option)
 		c.CLIOptions[option] = ffmpegHelpHasOption(output, option)
 	}
 }
@@ -321,12 +331,12 @@ func (c *Capabilities) recordFilterOptions(bin string, filter string, options []
 	if c.FilterOptions == nil {
 		c.FilterOptions = map[string]map[string]bool{}
 	}
-	key := strings.ToLower(filter)
+	key := normalizeCapabilityName(filter)
 	if c.FilterOptions[key] == nil {
 		c.FilterOptions[key] = map[string]bool{}
 	}
 	for _, option := range options {
-		option = strings.ToLower(strings.TrimSpace(option))
+		option = normalizeCapabilityName(option)
 		c.FilterOptions[key][option] = ffmpegHelpHasOption(output, option)
 	}
 }
@@ -342,12 +352,12 @@ func (c *Capabilities) recordEncoderOptions(bin string, encoder string, options 
 	if c.EncoderOptions == nil {
 		c.EncoderOptions = map[string]map[string]bool{}
 	}
-	key := strings.ToLower(encoder)
+	key := normalizeCapabilityName(encoder)
 	if c.EncoderOptions[key] == nil {
 		c.EncoderOptions[key] = map[string]bool{}
 	}
 	for _, option := range options {
-		option = strings.ToLower(strings.TrimSpace(option))
+		option = normalizeCapabilityName(option)
 		c.EncoderOptions[key][option] = ffmpegHelpHasOption(output, option)
 	}
 }
@@ -360,18 +370,18 @@ func (c *Capabilities) recordMuxerFlags(bin string, muxer string, flags []string
 	if c.MuxerFlags == nil {
 		c.MuxerFlags = map[string]map[string]bool{}
 	}
-	key := strings.ToLower(muxer)
+	key := normalizeCapabilityName(muxer)
 	if c.MuxerFlags[key] == nil {
 		c.MuxerFlags[key] = map[string]bool{}
 	}
 	for _, flag := range flags {
-		flag = strings.ToLower(strings.TrimSpace(flag))
+		flag = normalizeCapabilityName(flag)
 		c.MuxerFlags[key][flag] = ffmpegHelpHasOption(output, flag)
 	}
 }
 
 func ffmpegHelpHasOption(output string, option string) bool {
-	option = strings.ToLower(strings.TrimSpace(option))
+	option = normalizeCapabilityName(option)
 	if option == "" {
 		return false
 	}
@@ -542,7 +552,7 @@ func parseFFmpegNamedRows(output string) map[string]bool {
 func parseFFmpegHWAccels(output string) map[string]bool {
 	found := map[string]bool{}
 	for _, line := range strings.Split(output, "\n") {
-		name := strings.ToLower(strings.TrimSpace(line))
+		name := normalizeCapabilityName(line)
 		if name == "" || strings.Contains(name, "hardware acceleration") {
 			continue
 		}

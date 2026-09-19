@@ -38,12 +38,6 @@ The permission modes are also inconsistent: `0755` at the first two, `0o755` at 
 
 Converting the three call sites is small. Deciding whether the avatars and transcode directories genuinely want the stricter validation `GetOrCreateDir` performs, and settling on one octal spelling across the server, is the part that needs a decision.
 
-## Codec and Option Normalization Is Re-typed Across Packages
-
-`server/cmd/internal/helpers/parsing.go` defines an unexported `normalizeCodec`, which lowercases and trims a string. Every codec predicate in the `helpers` package funnels through it, specifically so that two predicates cannot disagree about the same stream. The same `strings.ToLower(strings.TrimSpace(x))` expression is written out 28 more times in non-test code outside the package, concentrated in `server/cmd/internal/ffmpeg/capabilities.go` and `server/cmd/api/hls_session.go`.
-
-This is cosmetic and carries a real risk of over-abstraction, which is why it was not done. Those call sites normalize different kinds of values — encoder names, filter names, CLI options, muxer flags, color transfer characteristics, pixel formats — and folding them behind one exported function named for codecs would be worse than the repetition. If this is picked up, the defensible version is a normalizer local to `capabilities.go`, where a dozen methods normalize the same lookup-key space, rather than a new shared export.
-
 ## Settled: Do Not Change These
 
 Each of the following looks like an inconsistency, was investigated, and is correct as written.
