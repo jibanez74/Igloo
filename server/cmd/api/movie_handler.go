@@ -520,7 +520,7 @@ func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) 
 	movies, err := app.Queries.GetLatestMovies(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to get latest movies", "error", err)
-		helpers.ErrorJSON(w, err)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 

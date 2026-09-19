@@ -1,6 +1,6 @@
 package helpers
 
-import "strings"
+import "maps"
 
 // coverArtVideoCodecs are the still-image codecs an import treats as embedded
 // cover art rather than as a video stream.
@@ -17,30 +17,23 @@ var coverArtVideoCodecs = map[string]bool{
 var playbackCoverArtVideoCodecs = withPlaybackOnlyCoverArtCodecs(coverArtVideoCodecs)
 
 func withPlaybackOnlyCoverArtCodecs(base map[string]bool) map[string]bool {
-	codecs := make(map[string]bool, len(base)+1)
-	for codec, isCoverArt := range base {
-		codecs[codec] = isCoverArt
-	}
+	codecs := maps.Clone(base)
 	// MJPEG is playback-only: docs/ffmpeg.md keeps moving MJPEG an accepted
 	// video codec, so MJPEG alone does not make a stream artwork on import.
 	codecs["mjpeg"] = true
 	return codecs
 }
 
-func normalizeVideoCodec(codec string) string {
-	return strings.ToLower(strings.TrimSpace(codec))
-}
-
 // IsCoverArtVideoCodec reports still-image video streams used as embedded cover
 // art on import. MJPEG is absent on purpose; withPlaybackOnlyCoverArtCodecs
 // says why.
 func IsCoverArtVideoCodec(codec string) bool {
-	return coverArtVideoCodecs[normalizeVideoCodec(codec)]
+	return coverArtVideoCodecs[normalizeCodec(codec)]
 }
 
 // IsPlaybackCoverArtVideoCodec reports the streams to skip when picking the
 // feature video stream to play, which is a wider question than what an import
 // rejects as artwork.
 func IsPlaybackCoverArtVideoCodec(codec string) bool {
-	return playbackCoverArtVideoCodecs[normalizeVideoCodec(codec)]
+	return playbackCoverArtVideoCodecs[normalizeCodec(codec)]
 }

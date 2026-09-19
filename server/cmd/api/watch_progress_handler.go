@@ -377,7 +377,7 @@ func (app *Application) updateWatchProgress(w http.ResponseWriter, r *http.Reque
 	store := app.watchProgressStoreFor(kind)
 
 	var req updateWatchProgressRequest
-	err = helpers.ReadJSON(w, r, &req, 0)
+	err = helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -524,7 +524,7 @@ func (app *Application) setWatched(w http.ResponseWriter, r *http.Request, kind 
 	store := app.watchProgressStoreFor(kind)
 
 	var req setWatchedRequest
-	err = helpers.ReadJSON(w, r, &req, 0)
+	err = helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

@@ -166,7 +166,7 @@ func (app *Application) GetGeneralSettings(w http.ResponseWriter, _ *http.Reques
 
 func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Request) {
 	var req updateGeneralSettingsRequest
-	err := helpers.ReadJSON(w, r, &req, 0)
+	err := helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -289,7 +289,7 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 
 func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Request) {
 	var req updateLibrarySettingsRequest
-	err := helpers.ReadJSON(w, r, &req, 0)
+	err := helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return

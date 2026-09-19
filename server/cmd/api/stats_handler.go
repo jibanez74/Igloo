@@ -24,7 +24,7 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req RecordPlayEventRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}

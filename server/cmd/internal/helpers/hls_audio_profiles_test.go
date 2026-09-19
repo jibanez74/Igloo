@@ -145,3 +145,35 @@ func TestResolveHLSAudioProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestHLSDefaultChannelLayoutName(t *testing.T) {
+	tests := []struct {
+		channels int
+		want     string
+	}{
+		{1, "mono"},
+		{2, "stereo"},
+		{3, "3.0"},
+		{4, "4.0"},
+		{5, "5.0"},
+		{6, "5.1"},
+		{8, "5.1"},
+	}
+
+	for _, tt := range tests {
+		got := HLSDefaultChannelLayoutName(tt.channels)
+		if got != tt.want {
+			t.Errorf("HLSDefaultChannelLayoutName(%d) = %q, want %q", tt.channels, got, tt.want)
+		}
+	}
+}
+
+// The legacy fallback describes one output in two places: the FFmpeg arguments
+// and the X-Igloo-Effective-Audio-* headers. Its channel count must keep naming
+// a real layout.
+func TestLegacyAudioChannelsHaveADefaultLayout(t *testing.T) {
+	layout := HLSDefaultChannelLayoutName(HLS_LEGACY_AUDIO_CHANNELS)
+	if layout != "stereo" {
+		t.Fatalf("HLSDefaultChannelLayoutName(HLS_LEGACY_AUDIO_CHANNELS) = %q, want %q", layout, "stereo")
+	}
+}

@@ -12,9 +12,9 @@ func ChapterStartTimeSeconds(chapter ffprobe.Chapter) int64 {
 	if chapter.StartTime == "" {
 		return 0
 	}
-	durationMs, err := helpers.ParseDurationMs(chapter.StartTime)
-	if err != nil {
+	seconds, ok := helpers.ParseDurationSeconds(chapter.StartTime)
+	if !ok {
 		return 0
 	}
-	return durationMs / 1000
+	return int64(seconds)
 }

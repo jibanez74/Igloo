@@ -21,25 +21,21 @@ func TestVideoMimeTypesCoverValidVideoExtensions(t *testing.T) {
 	}
 }
 
-func TestIsMovieReleaseNoiseToken(t *testing.T) {
-	tests := []struct {
-		token string
-		want  bool
-	}{
-		{"1080p", true},
-		{"WEB-DL", true},
-		{"x265", true},
-		{"remastered", true},
-		{"extended", true},
-		{"mkv", true},
-		{"Moneyball", false},
-		{"2011", false},
+func TestAudioMimeTypesCoverValidAudioExtensions(t *testing.T) {
+	for ext := range ValidAudioExtensions {
+		mimeType, ok := AudioMimeTypes[ext]
+		if !ok {
+			t.Errorf("AudioMimeTypes is missing entry for valid extension %q", ext)
+			continue
+		}
+		if mimeType == "" {
+			t.Errorf("AudioMimeTypes[%q] is empty", ext)
+		}
 	}
 
-	for _, tt := range tests {
-		got := IsMovieReleaseNoiseToken(tt.token)
-		if got != tt.want {
-			t.Errorf("IsMovieReleaseNoiseToken(%q) = %v, want %v", tt.token, got, tt.want)
+	for ext := range AudioMimeTypes {
+		if !ValidAudioExtensions[ext] {
+			t.Errorf("AudioMimeTypes has entry %q that is not a valid audio extension", ext)
 		}
 	}
 }

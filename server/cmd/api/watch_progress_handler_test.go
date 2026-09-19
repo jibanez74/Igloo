@@ -1002,7 +1002,7 @@ func TestReadJSON_WatchProgressRequest_DisallowUnknownFields(t *testing.T) {
 	body := strings.NewReader(`{"progress_sec": 1, "duration_sec": 2, "save_session_id": "11111111-1111-4111-8111-111111111111", "save_sequence": 1, "extra": true}`)
 	r := httptest.NewRequest(http.MethodPut, "/", body)
 	w := httptest.NewRecorder()
-	err := helpers.ReadJSON(w, r, &req, 1024)
+	err := helpers.ReadJSON(w, r, &req)
 	if err == nil {
 		t.Fatal("expected error for unknown field")
 	}

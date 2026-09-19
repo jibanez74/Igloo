@@ -1,9 +1,6 @@
 package helpers
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 const subtitleCacheKeyPrefix = "sub:"
 
@@ -16,7 +13,7 @@ var bitmapSubtitleCodecs = map[string]bool{
 // IsBitmapSubtitleCodec returns true for image-based subtitle codecs
 // (PGS, DVD sub) that cannot be converted to WebVTT.
 func IsBitmapSubtitleCodec(codec string) bool {
-	return bitmapSubtitleCodecs[strings.ToLower(codec)]
+	return bitmapSubtitleCodecs[normalizeCodec(codec)]
 }
 
 // SubtitleCacheKey names one extracted track. kind separates the movie and

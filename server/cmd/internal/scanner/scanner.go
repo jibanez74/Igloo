@@ -199,7 +199,7 @@ func WalkMediaLibraryContext(
 			return nil
 		}
 
-		ext := helpers.GetFileExtension(path)
+		ext := helpers.FileExtension(path)
 		if !validExts[ext] {
 			return nil
 		}

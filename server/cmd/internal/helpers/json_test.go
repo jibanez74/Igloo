@@ -122,7 +122,7 @@ func TestReadJSON(t *testing.T) {
 			Value int    `json:"value"`
 		}
 
-		err := ReadJSON(w, r, &data, 0)
+		err := ReadJSON(w, r, &data)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -144,14 +144,14 @@ func TestReadJSON(t *testing.T) {
 			Name string `json:"name"`
 		}
 
-		err := ReadJSON(w, r, &data, 0)
+		err := ReadJSON(w, r, &data)
 		if err == nil {
 			t.Error("expected error for unknown field, got nil")
 		}
 	})
 
-	t.Run("enforces max bytes limit", func(t *testing.T) {
-		largeBody := `{"data":"` + strings.Repeat("x", 100) + `"}`
+	t.Run("enforces the request body limit", func(t *testing.T) {
+		largeBody := `{"data":"` + strings.Repeat("x", int(maxRequestBytes)+1) + `"}`
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(largeBody))
 		w := httptest.NewRecorder()
 
@@ -159,9 +159,9 @@ func TestReadJSON(t *testing.T) {
 			Data string `json:"data"`
 		}
 
-		err := ReadJSON(w, r, &data, 50)
+		err := ReadJSON(w, r, &data)
 		if err == nil {
-			t.Error("expected error for body exceeding max bytes, got nil")
+			t.Error("expected error for body exceeding the request limit, got nil")
 		}
 	})
 
@@ -174,7 +174,7 @@ func TestReadJSON(t *testing.T) {
 			Name string `json:"name"`
 		}
 
-		err := ReadJSON(w, r, &data, 0)
+		err := ReadJSON(w, r, &data)
 		if err == nil {
 			t.Error("expected error for multiple JSON values, got nil")
 		}
@@ -192,28 +192,9 @@ func TestReadJSON(t *testing.T) {
 			Name string `json:"name"`
 		}
 
-		err := ReadJSON(w, r, &data, 0)
+		err := ReadJSON(w, r, &data)
 		if err == nil {
 			t.Error("expected error for invalid JSON, got nil")
-		}
-	})
-
-	t.Run("uses default max bytes when zero", func(t *testing.T) {
-		body := strings.NewReader(`{"name":"test"}`)
-		r := httptest.NewRequest(http.MethodPost, "/", body)
-		w := httptest.NewRecorder()
-
-		var data struct {
-			Name string `json:"name"`
-		}
-
-		err := ReadJSON(w, r, &data, 0)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if data.Name != "test" {
-			t.Errorf("expected name 'test', got '%s'", data.Name)
 		}
 	})
 
@@ -225,7 +206,7 @@ func TestReadJSON(t *testing.T) {
 			Name string `json:"name"`
 		}
 
-		err := ReadJSON(w, r, &data, 0)
+		err := ReadJSON(w, r, &data)
 		if err == nil {
 			t.Error("expected error for empty body, got nil")
 		}

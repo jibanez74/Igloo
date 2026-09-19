@@ -87,7 +87,7 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateUserNameRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -133,7 +133,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req UpdateUserEmailRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -186,7 +186,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req UpdateUserPasswordRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}
@@ -262,7 +262,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req UpdateUserAvatarRequest
-	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+	if err := helpers.ReadJSON(w, r, &req); err != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
 	}

@@ -77,7 +77,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req CreateMoviePlaylistRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -226,7 +226,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req UpdateMoviePlaylistRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
@@ -466,7 +466,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	}
 
 	var req AddMoviesRequest
-	readErr := helpers.ReadJSON(w, r, &req, 0)
+	readErr := helpers.ReadJSON(w, r, &req)
 	if readErr != nil {
 		helpers.ErrorJSON(w, errors.New(invalidRequestBodyMessage), http.StatusBadRequest)
 		return
