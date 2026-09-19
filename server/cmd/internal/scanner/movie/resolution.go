@@ -180,12 +180,12 @@ func (s *Scanner) resolveLocalMovie(ctx context.Context, file scanner.ScanFile, 
 	}, nil
 }
 
-func movieTitleYear(path string) *helpers.TitleYearResponse {
-	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(path))
+func movieTitleYear(path string) helpers.TitleYear {
+	titleYear, err := helpers.TitleAndYearFromFileName(filepath.Base(path))
 	if err != nil {
 		baseName := filepath.Base(path)
 		ext := filepath.Ext(baseName)
-		titleYear = &helpers.TitleYearResponse{
+		titleYear = helpers.TitleYear{
 			Title: strings.TrimSuffix(baseName, ext),
 			Year:  0,
 		}

@@ -1,5 +1,7 @@
 package helpers
 
+import "slices"
+
 // HLSProfileConfig holds encoding parameters for one HLS profile. Scaling
 // uses only Height (`scale=-2:<height>` preserves the source aspect ratio).
 type HLSProfileConfig struct {
@@ -45,12 +47,7 @@ var HLSProfileConfigs = map[string]HLSProfileConfig{
 
 // IsAllowedHLSProfile returns true if profile is in the allowed list.
 func IsAllowedHLSProfile(profile string) bool {
-	for _, p := range HLSAllowedProfiles {
-		if p == profile {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(HLSAllowedProfiles, profile)
 }
 
 // BestFitHLSFallbackProfile returns the highest transcode profile whose max

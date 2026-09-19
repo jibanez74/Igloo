@@ -20,6 +20,10 @@ func TestParseFrameRate(t *testing.T) {
 		{"invalid fraction three parts", "24000/1001/1", 0},
 		{"invalid decimal", "abc", 0},
 		{"zero denominator", "1/0", 0},
+		{"not a number", "NaN", 0},
+		{"infinite", "Inf", 0},
+		{"negative decimal", "-24", 0},
+		{"negative fraction", "-24000/1001", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

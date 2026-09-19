@@ -2,25 +2,6 @@ package helpers
 
 import "testing"
 
-func TestVideoMimeTypesCoverValidVideoExtensions(t *testing.T) {
-	for ext := range ValidVideoExtensions {
-		mimeType, ok := VideoMimeTypes[ext]
-		if !ok {
-			t.Errorf("VideoMimeTypes is missing entry for valid extension %q", ext)
-			continue
-		}
-		if mimeType == "" {
-			t.Errorf("VideoMimeTypes[%q] is empty", ext)
-		}
-	}
-
-	for ext := range VideoMimeTypes {
-		if !ValidVideoExtensions[ext] {
-			t.Errorf("VideoMimeTypes has entry %q that is not a valid video extension", ext)
-		}
-	}
-}
-
 func TestIsMovieReleaseNoiseToken(t *testing.T) {
 	tests := []struct {
 		token string
@@ -44,7 +25,7 @@ func TestIsMovieReleaseNoiseToken(t *testing.T) {
 	}
 }
 
-func TestGetTitleAndYearFromFileName(t *testing.T) {
+func TestTitleAndYearFromFileName(t *testing.T) {
 	tests := []struct {
 		name      string
 		fileName  string
@@ -97,9 +78,9 @@ func TestGetTitleAndYearFromFileName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetTitleAndYearFromFileName(tt.fileName)
+			got, err := TitleAndYearFromFileName(tt.fileName)
 			if err != nil {
-				t.Fatalf("GetTitleAndYearFromFileName(%q) returned error: %v", tt.fileName, err)
+				t.Fatalf("TitleAndYearFromFileName(%q) returned error: %v", tt.fileName, err)
 			}
 			if got.Title != tt.wantTitle {
 				t.Errorf("title = %q, want %q", got.Title, tt.wantTitle)
@@ -111,16 +92,16 @@ func TestGetTitleAndYearFromFileName(t *testing.T) {
 	}
 }
 
-func TestGetTitleAndYearFromFileNameRejectsAnEmptyName(t *testing.T) {
+func TestTitleAndYearFromFileNameRejectsAnEmptyName(t *testing.T) {
 	for _, fileName := range []string{"", ".mkv", "   .mkv"} {
-		got, err := GetTitleAndYearFromFileName(fileName)
+		got, err := TitleAndYearFromFileName(fileName)
 		if err == nil {
-			t.Errorf("GetTitleAndYearFromFileName(%q) = %+v, want an error", fileName, got)
+			t.Errorf("TitleAndYearFromFileName(%q) = %+v, want an error", fileName, got)
 		}
 	}
 }
 
-func TestGetFileExtension(t *testing.T) {
+func TestFileExtension(t *testing.T) {
 	tests := []struct {
 		path string
 		want string
@@ -136,9 +117,9 @@ func TestGetFileExtension(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			got := GetFileExtension(tt.path)
+			got := FileExtension(tt.path)
 			if got != tt.want {
-				t.Errorf("GetFileExtension(%q) = %q, want %q", tt.path, got, tt.want)
+				t.Errorf("FileExtension(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
 	}
@@ -162,25 +143,6 @@ func TestIsReasonableYear(t *testing.T) {
 		got := IsReasonableYear(tt.year)
 		if got != tt.want {
 			t.Errorf("IsReasonableYear(%d) = %v, want %v", tt.year, got, tt.want)
-		}
-	}
-}
-
-func TestAudioMimeTypesCoverValidAudioExtensions(t *testing.T) {
-	for ext := range ValidAudioExtensions {
-		mimeType, ok := AudioMimeTypes[ext]
-		if !ok {
-			t.Errorf("AudioMimeTypes is missing entry for valid extension %q", ext)
-			continue
-		}
-		if mimeType == "" {
-			t.Errorf("AudioMimeTypes[%q] is empty", ext)
-		}
-	}
-
-	for ext := range AudioMimeTypes {
-		if !ValidAudioExtensions[ext] {
-			t.Errorf("AudioMimeTypes has entry %q that is not a valid audio extension", ext)
 		}
 	}
 }

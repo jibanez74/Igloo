@@ -17,28 +17,38 @@ func normalizeCodec(codec string) string {
 
 // ParseFrameRate parses an FFPROBE-style frame rate string into frames per second.
 // Supports fraction form (e.g. "24000/1001") and decimal form (e.g. "23.976").
-// Returns 0 if the string is empty or cannot be parsed.
+// Returns 0 if the string is empty or cannot be parsed, and for negative, NaN or
+// infinite rates: strconv.ParseFloat accepts "Inf" and "NaN", and callers already
+// read 0 as an unknown rate rather than carrying a value they cannot compute with.
 func ParseFrameRate(s string) float64 {
 	if s == "" {
 		return 0
 	}
-	if strings.Contains(s, "/") {
-		parts := strings.Split(s, "/")
-		if len(parts) != 2 {
+
+	numerator, denominator, isFraction := strings.Cut(s, "/")
+	if !isFraction {
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+		if err != nil {
 			return 0
 		}
-		num, err1 := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
-		den, err2 := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-		if err1 != nil || err2 != nil || den == 0 {
-			return 0
-		}
-		return num / den
+		return finiteFrameRate(parsed)
 	}
-	parsed, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	if err != nil {
+
+	num, numErr := strconv.ParseFloat(strings.TrimSpace(numerator), 64)
+	den, denErr := strconv.ParseFloat(strings.TrimSpace(denominator), 64)
+	if numErr != nil || denErr != nil || den == 0 {
 		return 0
 	}
-	return parsed
+
+	return finiteFrameRate(num / den)
+}
+
+func finiteFrameRate(rate float64) float64 {
+	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < 0 {
+		return 0
+	}
+
+	return rate
 }
 
 // ParseDurationSeconds parses ffprobe's seconds-with-decimals duration string
@@ -81,7 +91,7 @@ func ParseSlashNumber(s string) (int64, error) {
 	}
 
 	parts := strings.Split(s, "/")
-	if len(parts) == 0 || parts[0] == "" {
+	if parts[0] == "" {
 		return 0, fmt.Errorf("invalid format: %s", s)
 	}
 
@@ -100,15 +110,15 @@ func ParseBitRate(bitRateStr string) int64 {
 	return parsed
 }
 
-// ClampFloat64 returns v limited to [min, max]. If min > max, the bounds are swapped.
-// If v, min, or max is NaN, the result follows IEEE 754 (NaN propagates); callers that
+// ClampFloat64 returns v limited to [lo, hi]. If lo > hi, the bounds are swapped.
+// If v, lo, or hi is NaN, the result follows IEEE 754 (NaN propagates); callers that
 // require finite values should validate before calling. It lives beside the parsers as
 // the range guard applied to the values they produce.
-func ClampFloat64(v, min, max float64) float64 {
-	if min > max {
-		min, max = max, min
+func ClampFloat64(v, lo, hi float64) float64 {
+	if lo > hi {
+		lo, hi = hi, lo
 	}
-	return math.Min(math.Max(v, min), max)
+	return min(max(v, lo), hi)
 }
 
 // ParseDate attempts common audio metadata date formats.
