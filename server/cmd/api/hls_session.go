@@ -912,7 +912,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 
 	transcodeRoot := app.hlsTranscodeRoot()
 
-	mkdirErr := os.MkdirAll(transcodeRoot, 0o755)
+	_, mkdirErr := helpers.GetOrCreateDir(transcodeRoot)
 	if mkdirErr != nil {
 		return nil, fmt.Errorf("failed to create transcode directory %s: %w", transcodeRoot, mkdirErr)
 	}

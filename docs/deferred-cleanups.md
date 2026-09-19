@@ -24,20 +24,6 @@ This is not a mechanical substitution, and that is the reason it was deferred. T
 
 The useful work is to decide per call site which semantics are intended, convert only the ones where zero should become NULL, and add a short comment where an explicit `Valid: true` literal is load-bearing. Query-level tests should accompany any conversion, since the failure mode is a wrong value in the database rather than a compile error.
 
-## Directory Creation Is Split Between os.MkdirAll and GetOrCreateDir
-
-`helpers.GetOrCreateDir` creates a directory, reports whether it had to create it, verifies that an existing path is in fact a readable directory, and distinguishes permission failures in its wrapped errors. It is used in `server/cmd/api/startup.go` and `server/cmd/api/settings_handler.go`.
-
-Three non-test call sites still call `os.MkdirAll` directly, two of them in files that use `GetOrCreateDir` elsewhere:
-
-- `server/cmd/api/startup.go:28`
-- `server/cmd/api/user_handler.go:372`, for the avatars directory
-- `server/cmd/api/hls_session.go:915`, for the transcode root
-
-The permission modes are also inconsistent: `0755` at the first two, `0o755` at the third and inside `GetOrCreateDir`, and `0o700` in `server/cmd/internal/mediabin/mediabin.go:106`. The `0o700` is intentional — extracted FFmpeg binaries should not be world-readable — but `0755` and `0o755` are the same value written two ways.
-
-Converting the three call sites is small. Deciding whether the avatars and transcode directories genuinely want the stricter validation `GetOrCreateDir` performs, and settling on one octal spelling across the server, is the part that needs a decision.
-
 ## Settled: Do Not Change These
 
 Each of the following looks like an inconsistency, was investigated, and is correct as written.
