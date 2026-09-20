@@ -190,6 +190,32 @@ func TestCapabilityRecordersTolerateProbeFailuresAndNilMaps(t *testing.T) {
 	}
 }
 
+// The recorders write the outer map key and the Supports* lookups read it. If
+// the two normalize differently, a padded name is stored under a key nothing
+// can ever look up, and the silent result is a hardware capability reported as
+// missing. Every name below is padded and mixed-case on purpose.
+func TestCapabilityRecordersKeyNamesTheSameWayLookupsRead(t *testing.T) {
+	script := writeFakeFFmpeg(t, "probe ffmpeg", "printf '%s\\n' 'format value' '-preset value' '-dash value'\n")
+	caps := Capabilities{
+		Filters:  map[string]bool{"scale_cuda": true},
+		Encoders: map[string]bool{"h264_qsv": true},
+	}
+
+	caps.recordFilterOptions(script, "  Scale_CUDA  ", []string{"  Format  "})
+	caps.recordEncoderOptions(script, "  H264_QSV  ", []string{"  Preset  "})
+	caps.recordMuxerFlags(script, "  MP4  ", []string{"  Dash  "})
+
+	if !caps.SupportsFilterOption("scale_cuda", "format") {
+		t.Fatalf("filter option was stored under an unreadable key: %#v", caps.FilterOptions)
+	}
+	if !caps.SupportsEncoderOption("h264_qsv", "preset") {
+		t.Fatalf("encoder option was stored under an unreadable key: %#v", caps.EncoderOptions)
+	}
+	if !caps.SupportsMuxerFlag("mp4", "dash") {
+		t.Fatalf("muxer flag was stored under an unreadable key: %#v", caps.MuxerFlags)
+	}
+}
+
 func TestRunFFmpegProbeContextTimesOut(t *testing.T) {
 	script := writeFakeFFmpeg(t, "slow ffmpeg", "exec sleep 5\n")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

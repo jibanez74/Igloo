@@ -207,8 +207,8 @@ func TestCreateHLSSession_RemuxUnsafeFallsBackToBestFitTranscode(t *testing.T) {
 	if !calls[0].CopyVideo {
 		t.Fatal("first RunHLS CopyVideo = false, want true")
 	}
-	if calls[1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	if calls[1].Profile != helpers.HLS_PROFILE_1080P_4MBPS {
+		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_4MBPS)
 	}
 	if calls[1].CopyVideo {
 		t.Fatal("second RunHLS CopyVideo = true, want false")
@@ -271,8 +271,8 @@ func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) 
 	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
 		t.Fatalf("first RunHLS profile = %q, want remux", calls[0].Profile)
 	}
-	if calls[1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	if calls[1].Profile != helpers.HLS_PROFILE_1080P_4MBPS {
+		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_4MBPS)
 	}
 	if calls[2].Profile != helpers.HLS_PROFILE_REMUX {
 		t.Fatalf("third RunHLS profile = %q, want remux retry", calls[2].Profile)
@@ -322,8 +322,8 @@ func TestCreateHLSSession_UnsafeVerdictSurvivesRestart(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("RunHLS call count after restart = %d, want 1 (no remux attempt)", len(calls))
 	}
-	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
-		t.Fatalf("RunHLS profile after restart = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_4MBPS {
+		t.Fatalf("RunHLS profile after restart = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_4MBPS)
 	}
 }
 
@@ -443,7 +443,7 @@ func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
 	}
-	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS || calls[0].CopyVideo {
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_4MBPS || calls[0].CopyVideo {
 		t.Fatalf("RunHLS call = profile %q copyVideo %v, want fallback transcode", calls[0].Profile, calls[0].CopyVideo)
 	}
 }
@@ -481,7 +481,7 @@ func TestCreateHLSSession_InterlacedFallsBackToTranscodeWithDeinterlace(t *testi
 	if len(calls) != 1 {
 		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
 	}
-	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS || calls[0].CopyVideo {
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_4MBPS || calls[0].CopyVideo {
 		t.Fatalf("RunHLS call = profile %q copyVideo %v, want fallback transcode", calls[0].Profile, calls[0].CopyVideo)
 	}
 	if !calls[0].Deinterlace {

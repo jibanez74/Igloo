@@ -446,6 +446,9 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	// Track ordinals and stream indices both start at 0, so every sql.NullInt64
+	// below keeps an explicit Valid: true. helpers.NullInt64 maps 0 to NULL and
+	// would record the first track as "no track at all".
 	var subtitleTrack sql.NullInt64
 	if req.SubtitleTrack != nil {
 		subtitleTrack = sql.NullInt64{Int64: *req.SubtitleTrack, Valid: true}

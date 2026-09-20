@@ -18,8 +18,36 @@ func applyShow(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVSho
 	if err != nil {
 		return err
 	}
+	// Two null policies meet in this literal, and the difference is deliberate.
+	// The helpers map a zero value to NULL, which is right wherever a zero
+	// carries no meaning: TMDB never issues id 0, and a 0-minute runtime means
+	// the runtime is unknown. The TMDB rating and count fields keep an explicit
+	// Valid: true, because for them a genuine 0 is a fact — a show nobody has
+	// rated has 0 votes, and that is not the same as a vote count never fetched.
 	err = q.UpdateShowMetadata(ctx, database.UpdateShowMetadataParams{
-		ID: id, Name: m.Name, TmdbID: helpers.NullInt64(int64(m.ID)), ImdbID: helpers.NullString(m.ExternalIDs.IMDbID), OriginalName: helpers.NullString(m.OriginalName), Overview: helpers.NullString(m.Overview), Tagline: helpers.NullString(m.Tagline), Language: helpers.NullString(m.OriginalLanguage), OriginCountries: helpers.NullString(string(countries)), FirstAirDate: helpers.NullString(m.FirstAirDate), LastAirDate: helpers.NullString(m.LastAirDate), Status: helpers.NullString(m.Status), Type: helpers.NullString(m.Type), Adult: m.Adult, PosterPath: helpers.NullString(m.PosterPath), BackdropPath: helpers.NullString(m.BackdropPath), Homepage: helpers.NullString(m.Homepage), VoteAverage: sql.NullFloat64{Float64: m.VoteAverage, Valid: true}, VoteCount: sql.NullInt64{Int64: int64(m.VoteCount), Valid: true}, Popularity: sql.NullFloat64{Float64: m.Popularity, Valid: true}, Certification: helpers.NullString(m.Certification()), TmdbSeasonCount: sql.NullInt64{Int64: int64(m.NumberOfSeasons), Valid: true}, TmdbEpisodeCount: sql.NullInt64{Int64: int64(m.NumberOfEpisodes), Valid: true},
+		ID:               id,
+		Name:             m.Name,
+		TmdbID:           helpers.NullInt64(int64(m.ID)),
+		ImdbID:           helpers.NullString(m.ExternalIDs.IMDbID),
+		OriginalName:     helpers.NullString(m.OriginalName),
+		Overview:         helpers.NullString(m.Overview),
+		Tagline:          helpers.NullString(m.Tagline),
+		Language:         helpers.NullString(m.OriginalLanguage),
+		OriginCountries:  helpers.NullString(string(countries)),
+		FirstAirDate:     helpers.NullString(m.FirstAirDate),
+		LastAirDate:      helpers.NullString(m.LastAirDate),
+		Status:           helpers.NullString(m.Status),
+		Type:             helpers.NullString(m.Type),
+		Adult:            m.Adult,
+		PosterPath:       helpers.NullString(m.PosterPath),
+		BackdropPath:     helpers.NullString(m.BackdropPath),
+		Homepage:         helpers.NullString(m.Homepage),
+		VoteAverage:      sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
+		VoteCount:        sql.NullInt64{Int64: int64(m.VoteCount), Valid: true},
+		Popularity:       sql.NullFloat64{Float64: m.Popularity, Valid: true},
+		Certification:    helpers.NullString(m.Certification()),
+		TmdbSeasonCount:  sql.NullInt64{Int64: int64(m.NumberOfSeasons), Valid: true},
+		TmdbEpisodeCount: sql.NullInt64{Int64: int64(m.NumberOfEpisodes), Valid: true},
 	})
 	if err != nil {
 		return err
@@ -86,7 +114,18 @@ func applySeason(ctx context.Context, q *database.Queries, id int64, m *tmdb.TVS
 	if name == "" {
 		name = fmt.Sprintf(seasonPlaceholderNameFormat, m.SeasonNumber)
 	}
-	err := q.UpdateShowSeasonMetadata(ctx, database.UpdateShowSeasonMetadataParams{ID: id, Name: name, TmdbID: helpers.NullInt64(int64(m.ID)), Overview: helpers.NullString(m.Overview), AirDate: helpers.NullString(m.AirDate), PosterPath: helpers.NullString(m.PosterPath), VoteAverage: sql.NullFloat64{Float64: m.VoteAverage, Valid: true}, TmdbEpisodeCount: sql.NullInt64{Int64: int64(len(m.Episodes)), Valid: true}})
+	// See applyShow for why the rating and count fields keep an explicit
+	// Valid: true while the rest go through the helpers.
+	err := q.UpdateShowSeasonMetadata(ctx, database.UpdateShowSeasonMetadataParams{
+		ID:               id,
+		Name:             name,
+		TmdbID:           helpers.NullInt64(int64(m.ID)),
+		Overview:         helpers.NullString(m.Overview),
+		AirDate:          helpers.NullString(m.AirDate),
+		PosterPath:       helpers.NullString(m.PosterPath),
+		VoteAverage:      sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
+		TmdbEpisodeCount: sql.NullInt64{Int64: int64(len(m.Episodes)), Valid: true},
+	})
 	if err != nil {
 		return err
 	}
@@ -106,7 +145,20 @@ func applyEpisode(ctx context.Context, q *database.Queries, id int64, m tmdb.TVE
 	if name == "" {
 		name = fmt.Sprintf(episodePlaceholderNameFormat, m.EpisodeNumber)
 	}
-	err := q.UpdateShowEpisodeMetadata(ctx, database.UpdateShowEpisodeMetadataParams{ID: id, Name: name, TmdbID: helpers.NullInt64(int64(m.ID)), Overview: helpers.NullString(m.Overview), AirDate: helpers.NullString(m.AirDate), StillPath: helpers.NullString(m.StillPath), ProductionCode: helpers.NullString(m.ProductionCode), TmdbRuntime: helpers.NullInt64(int64(m.Runtime)), VoteAverage: sql.NullFloat64{Float64: m.VoteAverage, Valid: true}, VoteCount: sql.NullInt64{Int64: int64(m.VoteCount), Valid: true}})
+	// See applyShow for why the rating and count fields keep an explicit
+	// Valid: true while the rest go through the helpers.
+	err := q.UpdateShowEpisodeMetadata(ctx, database.UpdateShowEpisodeMetadataParams{
+		ID:             id,
+		Name:           name,
+		TmdbID:         helpers.NullInt64(int64(m.ID)),
+		Overview:       helpers.NullString(m.Overview),
+		AirDate:        helpers.NullString(m.AirDate),
+		StillPath:      helpers.NullString(m.StillPath),
+		ProductionCode: helpers.NullString(m.ProductionCode),
+		TmdbRuntime:    helpers.NullInt64(int64(m.Runtime)),
+		VoteAverage:    sql.NullFloat64{Float64: m.VoteAverage, Valid: true},
+		VoteCount:      sql.NullInt64{Int64: int64(m.VoteCount), Valid: true},
+	})
 	if err != nil {
 		return err
 	}

@@ -244,7 +244,11 @@ This is a sample, not a proof: the 4 segments are the session's first 4, so a pr
 
 Persisted verdicts survive server restarts, so the preflight cost is paid once per file rather than once per process. A verdict is recomputed only when its fingerprint changes — the file was replaced or rescanned with a new size or timestamp, its stream properties changed, or the producer changed. The producer terms matter because a verdict validates FFmpeg-generated fMP4 output, not just the source: the fingerprint carries the FFmpeg version parsed from the startup `-version` banner (so an upgraded embedded payload or a swapped `IGLOO_FFMPEG_PATH` binary invalidates it) plus `remuxVerdictProducerRevision`, a constant to bump whenever the remux arguments or `ValidateRemuxSafety` change. Either kind of change costs one re-preflight per file. If preflight times out or FFmpeg exits before enough output is available, Igloo falls back to transcoding without persisting an unsafe verdict, because that kind of failure may be transient. If validation proves the fragments are unsafe, Igloo persists the unsafe verdict and falls back immediately for later sessions on the same fingerprint.
 
-The fallback profile is chosen with `BestFitHLSFallbackProfile`. Igloo picks the highest configured transcode profile whose target height fits within the source height. If the source is smaller than every configured profile, it falls back to `720p_3mbps` so playback still has a reliable transcode path.
+The fallback profile is chosen with `BestFitHLSFallbackProfile`, in two stages. First height: the tallest configured profile whose target height fits within the source height wins, and a source shorter than every configured profile falls back to `720p_3mbps` so playback still has a reliable transcode path. Then bitrate, among the profiles sharing that height: the highest profile bitrate that does not exceed the source bitrate wins. Spending more bits than the source carries buys nothing, and a 1080p source that failed remux prevalidation on a constrained server is exactly where the cheaper 1080p profiles help. When every profile at that height targets more than the source carries, the cheapest of them is used.
+
+Bitrate never changes the height — a low-bitrate 4K source still transcodes at 2160p, because the resolution the source was mastered at is not in question. A source bitrate of 0 means unknown and keeps the tallest profile at that height, which is the answer height alone would have given.
+
+The bitrate comes from the primary video stream's stored `bit_rate`. ffprobe frequently omits a per-stream `bit_rate` for Matroska, and those are exactly the sources that fail the remux gate, so an absent value falls back to the container average (`size * 8 / duration`). That estimate counts audio and container overhead too, so it only ever reads high, which biases selection toward the richer profile and never past what the file actually carries.
 
 ## Direct Play Eligibility and Fallback
 
@@ -268,6 +272,8 @@ Allowed HLS profiles are centralized in `server/cmd/internal/helpers/hls_profile
 | `1080p_6mbps` | `6M` | `12M` | `1080` |
 | `1080p_4mbps` | `4M` | `8M` | `1080` |
 | `720p_3mbps` | `3M` | `6M` | `720` |
+
+Three profiles target 1080. A client may request any of them by name, and automatic fallback selection tells them apart by source bitrate (see Remux, Transcode, and Fallback). `VideoBitrate` is the string handed to FFmpeg and `VideoMbps` is the same number for code that compares it; a test in `hls_profiles_test.go` keeps them in step, and requires equal heights to be listed from the richest bitrate to the cheapest.
 
 Transcode mode sets `-b:v`, `-maxrate`, and `-bufsize` from the selected profile. It scales video to the profile height with width `-2`, which preserves aspect ratio while keeping the output width divisible by two for H.264 encoders.
 

@@ -345,6 +345,10 @@ func insertTestHLSMovieFixtureAt(
 		t.Fatalf("movie last insert id: %v", err)
 	}
 
+	// 5 Mbps at 1080p. The bitrate is load-bearing for the remux-fallback
+	// tests: BestFitHLSFallbackProfile picks the highest 1080p profile that
+	// fits within it, which is 1080p_4mbps rather than the 1080p_8mbps a
+	// height-only rule would give.
 	_, err = app.DB.Exec(`
 		INSERT INTO video_streams (movie_id, stream_index, codec, bit_rate, width, height, frame_rate)
 		VALUES (?, ?, ?, ?, ?, ?, ?)

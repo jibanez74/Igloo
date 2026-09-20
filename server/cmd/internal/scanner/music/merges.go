@@ -7,6 +7,10 @@ import (
 	"igloo/cmd/internal/scanner"
 )
 
+// The sql.NullInt64 literals below wrap row ids for queries whose columns are
+// nullable foreign keys. They are query arguments, not persisted values:
+// helpers.NullInt64 would turn an id of 0 into a NULL scan that matches
+// nothing, so the explicit Valid: true is what keeps the lookup exact.
 func (s *Scanner) mergeMusicArtist(ctx context.Context, qtx *database.Queries, scan *musicScanContext, redundant, owner int64) error {
 	ids, err := qtx.MusicArtistTrackIDs(ctx, redundant)
 	if err != nil {
