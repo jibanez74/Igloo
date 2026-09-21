@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   User,
@@ -9,7 +9,6 @@ import {
   Play,
   Shuffle,
   ListOrdered,
-  ArrowLeft,
 } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
@@ -20,6 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import MediaNotFound from "@/components/shared/MediaNotFound";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
+import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
+import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
+import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import {
   SpotifyGlyph,
   SpotifyPopularityMeter,
@@ -34,10 +36,8 @@ import {
   DETAIL_RAIL_HEADING_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
-  MOTION_LOADING_STATE_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
-  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -64,23 +64,21 @@ function MusicianDetailsPage() {
   const { id } = Route.useParams();
   const musicianId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery({
-    ...musicianDetailsQueryOpts(musicianId ?? 0),
-    enabled: musicianId != null,
-  });
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the page goes straight to
+  // not-found rather than sitting on a skeleton.
+  const { data, isPending, isError } = useQuery(
+    musicianDetailsQueryOpts(musicianId ?? 0),
+  );
 
   if (musicianId == null) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Musician not found
-        </h2>
-      </div>
+      <MediaNotFound
+        message="That musician link is not valid."
+        backTo="/music"
+        backLabel="Back to Music"
+      />
     );
-  }
-
-  if (isPending) {
-    return <MusicianDetailsSkeleton />;
   }
 
   if (isError || data?.error) {
@@ -96,97 +94,21 @@ function MusicianDetailsPage() {
     );
   }
 
+  if (isPending) {
+    return <MusicDetailSkeleton variant="musician" />;
+  }
+
   if (!data?.data?.musician) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Musician not found
-        </h2>
-      </div>
+      <MediaNotFound
+        message="Musician not found."
+        backTo="/music"
+        backLabel="Back to Music"
+      />
     );
   }
 
   return <MusicianDetailsContent key={musicianId} {...data.data} />;
-}
-
-function MusicianDetailsSkeleton() {
-  return (
-    <div
-      className={MOTION_LOADING_STATE_CLASS}
-      role="status"
-      aria-label="Loading musician details"
-    >
-      <span className="sr-only">Loading musician details...</span>
-
-      <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
-        <div className="h-44 w-full bg-muted sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48" />
-        <div className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent" />
-      </div>
-
-      <div
-        className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32"
-        aria-hidden="true"
-      >
-        <div className="flex flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-          <div className="mx-auto shrink-0 lg:mx-0">
-            <div className="aspect-square w-48 rounded-full bg-muted md:w-56 lg:w-64" />
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-4 text-center lg:text-left">
-            <div className="mx-auto h-10 max-w-md rounded-sm bg-muted lg:mx-0" />
-            <div className="mx-auto h-6 max-w-lg rounded-sm bg-muted lg:mx-0" />
-            <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-              <div className="h-7 w-20 rounded-full bg-muted" />
-              <div className="h-7 w-24 rounded-full bg-muted" />
-            </div>
-            <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
-              <div className="h-5 w-20 rounded-sm bg-muted" />
-              <div className="h-5 w-20 rounded-sm bg-muted" />
-              <div className="h-5 w-16 rounded-sm bg-muted" />
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-              <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-              <div className="h-12 w-full rounded-full bg-muted sm:w-28" />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-10">
-          <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="overflow-hidden rounded-xl border border-border bg-card"
-              >
-                <div className="aspect-square bg-muted" />
-                <div className="space-y-2 p-3">
-                  <div className="h-4 w-3/4 rounded-sm bg-accent" />
-                  <div className="h-3 w-1/2 rounded-sm bg-accent" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-10">
-          <div className="mb-4 h-7 w-32 rounded-sm bg-muted" />
-          <div className="space-y-2">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex h-14 items-center gap-4 rounded-lg bg-muted/50"
-              >
-                <div className="ml-4 h-4 w-6 rounded-sm bg-accent" />
-                <div className="h-4 max-w-xs flex-1 rounded-sm bg-accent" />
-                <div className="mr-4 h-4 w-16 rounded-sm bg-accent" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // Format follower count for display
@@ -327,7 +249,7 @@ function MusicianDetailsContent({
       />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <MusicianDetailsBackdrop thumbUrl={thumbUrl} name={musician.name} />
+        <MusicDetailBackdrop imageUrl={thumbUrl ?? ""} fallbackIcon={User} />
       </div>
 
       <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
@@ -589,64 +511,10 @@ function MusicianDetailsContent({
             </section>
           )}
 
-          {/* Back link */}
-          <nav aria-label="Page navigation">
-            <Link
-              to="/music"
-              search={{ tab: "musicians" }}
-              className={cn(
-                MOTION_MICRO_COLORS_CLASS,
-                FOCUS_VISIBLE_RING_CLASS,
-                "inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary",
-              )}
-              aria-label="Back to Musicians library"
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Back to Musicians
-            </Link>
-          </nav>
+          <MusicDetailBackNav tab="musicians" label="Back to Musicians" />
         </div>
       </div>
     </article>
-  );
-}
-
-function MusicianDetailsBackdrop({
-  thumbUrl,
-  name,
-}: {
-  thumbUrl: string | null;
-  name: string;
-}) {
-  const [failed, setFailed] = useState(false);
-  const showImage = thumbUrl && !failed;
-
-  return (
-    <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
-      {showImage ? (
-        <img
-          src={thumbUrl}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          fetchPriority="low"
-          className="h-44 w-full object-cover object-center sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <div className="flex h-44 w-full items-center justify-center bg-muted sm:h-52 md:aspect-21/9 md:min-h-48">
-          <User
-            className="size-16 text-muted-foreground opacity-40"
-            aria-hidden="true"
-          />
-          <span className="sr-only">{name}</span>
-        </div>
-      )}
-      <div
-        className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent"
-        aria-hidden="true"
-      />
-    </div>
   );
 }
 

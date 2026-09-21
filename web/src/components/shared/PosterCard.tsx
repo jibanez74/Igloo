@@ -11,6 +11,7 @@ import {
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -170,5 +171,24 @@ export default function PosterCard({
         </Link>
       )}
     </article>
+  );
+}
+
+// Authored beside the card it mirrors (design-system §3.4): the same 2:3 box
+// and two text bars, for every grid that loads poster cards.
+export function PosterCardSkeleton() {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-border bg-card",
+        MOTION_LOADING_STATE_CLASS,
+      )}
+    >
+      <div className="aspect-2/3 bg-muted" />
+      <div className="p-3">
+        <div className="h-4 w-3/4 rounded-sm bg-muted" />
+        <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
+      </div>
+    </div>
   );
 }

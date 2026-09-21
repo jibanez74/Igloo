@@ -140,10 +140,14 @@ function TvShowsPage() {
       >
         <LibraryStats
           queryOpts={showsStatsQueryOpts()}
-          getTotal={data => data.total_shows}
-          icon={Tv}
-          label="Shows"
-          noun={SHOW_NOUN}
+          figures={[
+            {
+              icon: Tv,
+              label: "Shows",
+              noun: SHOW_NOUN,
+              getValue: data => data.total_shows,
+            },
+          ]}
         />
         <MoreMenu />
       </div>

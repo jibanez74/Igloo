@@ -280,7 +280,9 @@ describe("music route section motion", () => {
     expect(heading.closest("header")?.className).toContain(
       MOTION_SECTION_ENTER_CLASS,
     );
-    expect(stats.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
+    expect(stats.parentElement?.className).toContain(
+      MOTION_SECTION_ENTER_DELAYED_CLASS,
+    );
     expect(tabsRoot?.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
     expect(
       screen.getByRole("tabpanel", { name: "Albums" }).firstElementChild

@@ -12,7 +12,6 @@ import {
   MoreHorizontal,
   Trash2,
   ListOrdered,
-  ArrowLeft,
   User,
 } from "lucide-react";
 import {
@@ -44,7 +43,9 @@ import type {
   TrackType,
 } from "@/types";
 import MediaNotFound from "@/components/shared/MediaNotFound";
-import AlbumDetailsBackdrop from "@/components/music/AlbumDetailsBackdrop";
+import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
+import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
+import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
@@ -56,7 +57,6 @@ import {
   FOCUS_VISIBLE_RING_CLASS,
   LATEST_ALBUMS_KEY,
   MUSIC_STATS_KEY,
-  MOTION_LOADING_STATE_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
   TRACKS_INFINITE_KEY,
   MOTION_MICRO_COLORS_CLASS,
@@ -79,23 +79,21 @@ function AlbumDetailsPage() {
   const { id } = Route.useParams();
   const albumId = parseRouteId(id);
 
-  const { data, isPending, isError } = useQuery({
-    ...albumDetailsQueryOpts(albumId ?? 0),
-    enabled: albumId != null,
-  });
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the page goes straight to
+  // not-found rather than sitting on a skeleton.
+  const { data, isPending, isError } = useQuery(
+    albumDetailsQueryOpts(albumId ?? 0),
+  );
 
   if (albumId == null) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Album not found
-        </h2>
-      </div>
+      <MediaNotFound
+        message="That album link is not valid."
+        backTo="/music"
+        backLabel="Back to Music"
+      />
     );
-  }
-
-  if (isPending) {
-    return <AlbumDetailsSkeleton />;
   }
 
   if (isError || data?.error) {
@@ -111,77 +109,21 @@ function AlbumDetailsPage() {
     );
   }
 
+  if (isPending) {
+    return <MusicDetailSkeleton variant="album" />;
+  }
+
   if (!data?.data?.album) {
     return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Album not found
-        </h2>
-      </div>
+      <MediaNotFound
+        message="Album not found."
+        backTo="/music"
+        backLabel="Back to Music"
+      />
     );
   }
 
   return <AlbumDetailsContent key={albumId} {...data.data} />;
-}
-
-function AlbumDetailsSkeleton() {
-  return (
-    <div
-      className={MOTION_LOADING_STATE_CLASS}
-      role="status"
-      aria-label="Loading album details"
-    >
-      <span className="sr-only">Loading album details...</span>
-
-      <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
-        <div className="h-44 w-full bg-muted sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48" />
-        <div className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent" />
-      </div>
-
-      <div
-        className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32"
-        aria-hidden="true"
-      >
-        <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-          <div className="mx-auto shrink-0 lg:mx-0 lg:pt-1">
-            <div className="aspect-square w-44 rounded-xl bg-muted sm:w-52 md:w-64 lg:w-72" />
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-4 text-center lg:text-left">
-            <div className="mx-auto h-10 max-w-lg rounded-sm bg-muted lg:mx-0" />
-            <div className="mx-auto h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
-            <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-              <div className="h-8 w-28 rounded-full bg-muted" />
-              <div className="h-8 w-24 rounded-full bg-muted" />
-              <div className="h-8 w-24 rounded-full bg-muted" />
-            </div>
-            <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-              <div className="h-7 w-20 rounded-full bg-muted" />
-              <div className="h-7 w-24 rounded-full bg-muted" />
-            </div>
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-              <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
-              <div className="h-12 w-full rounded-full bg-muted sm:w-24" />
-              <div className="mx-auto size-12 rounded-full bg-muted sm:mx-0" />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-10 space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex h-14 items-center gap-4 rounded-lg bg-muted/50"
-            >
-              <div className="ml-4 h-4 w-6 rounded-sm bg-accent" />
-              <div className="h-4 max-w-xs flex-1 rounded-sm bg-accent" />
-              <div className="mr-4 h-4 w-16 rounded-sm bg-accent" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function AlbumDetailsContent({
@@ -387,7 +329,7 @@ function AlbumDetailsContent({
       />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <AlbumDetailsBackdrop coverUrl={coverUrl} albumTitle={album.title} />
+        <MusicDetailBackdrop imageUrl={coverUrl ?? ""} fallbackIcon={Disc3} />
       </div>
 
       <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
@@ -795,30 +737,7 @@ function AlbumDetailsContent({
             </dl>
           </section>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-            <Link
-              to="/music"
-              search={{ tab: "albums" }}
-              className={cn(
-                MOTION_MICRO_COLORS_CLASS,
-                FOCUS_VISIBLE_RING_CLASS,
-                "inline-flex items-center justify-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary sm:justify-start",
-              )}
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Back to Music
-            </Link>
-            <Link
-              to="/"
-              className={cn(
-                MOTION_MICRO_COLORS_CLASS,
-                FOCUS_VISIBLE_RING_CLASS,
-                "inline-flex items-center justify-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary sm:justify-start",
-              )}
-            >
-              Home
-            </Link>
-          </div>
+          <MusicDetailBackNav tab="albums" label="Back to Albums" />
         </div>
       </div>
     </article>

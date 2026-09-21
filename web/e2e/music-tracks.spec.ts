@@ -286,7 +286,9 @@ test("albums tab renders accessible album cards and URL-backed pagination", asyn
 
   const mockAlbumLink = page.getByRole("link", { name: "Mock Album by Mock Artist" });
   await expect(mockAlbumLink).toBeVisible();
-  await expect(mockAlbumLink.getByRole("img", { name: "Album cover for Mock Album" })).toBeVisible();
+  // The link already names the album, so its cover is decorative (alt="").
+  await expect(mockAlbumLink.locator("img")).toBeVisible();
+  await expect(mockAlbumLink.locator("img")).toHaveAttribute("alt", "");
 
   const coverlessAlbumLink = page.getByRole("link", { name: "Coverless Album by No Cover Artist" });
   await expect(coverlessAlbumLink).toBeVisible();

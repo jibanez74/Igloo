@@ -4,6 +4,8 @@ import { Search, Film, Tv, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LibraryPagination from "@/components/shared/LibraryPagination";
+import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import { PosterCardSkeleton } from "@/components/shared/PosterCard";
 import MovieCard from "@/components/movies/MovieCard";
 import ShowCard from "@/components/shows/ShowCard";
 import AlbumCard from "@/components/music/AlbumCard";
@@ -31,10 +33,10 @@ import {
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
   FOCUS_VISIBLE_RING_CLASS,
+  LIBRARY_POSTER_GRID_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
-  MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
@@ -128,9 +130,6 @@ export const Route = createFileRoute("/_auth/search/")({
   component: SearchPage,
 });
 
-const SEARCH_GRID_CLASS =
-  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
-
 function SearchPage() {
   const navigate = Route.useNavigate();
   const { q, tab, page } = Route.useSearch();
@@ -187,7 +186,7 @@ function SearchPage() {
         page={page}
         queryOpts={searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
         renderGrid={(items: MoviesLibraryListItemType[]) => (
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
@@ -205,7 +204,7 @@ function SearchPage() {
         page={page}
         queryOpts={searchShowsQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
         renderGrid={(items: ShowLibraryItemType[]) => (
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((show) => (
               <ShowCard key={show.id} show={show} />
             ))}
@@ -223,7 +222,7 @@ function SearchPage() {
         page={page}
         queryOpts={searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
         renderGrid={(items: SimpleAlbumType[]) => (
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((album) => (
               <AlbumCard key={album.id} album={album} />
             ))}
@@ -241,7 +240,7 @@ function SearchPage() {
         page={page}
         queryOpts={searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
         renderGrid={(items: SimpleMusicianType[]) => (
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {items.map((musician) => (
               <MusicianCard key={musician.id} musician={musician} />
             ))}
@@ -374,7 +373,7 @@ function AllResultsTab({ q }: { q: string }) {
 
   if (isError || isApiFailure(data)) {
     return (
-      <SearchLoadError
+      <MoviesLoadError
         message={
           isApiFailure(data)
             ? data.message
@@ -420,7 +419,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="movies"
           q={q}
         >
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {movies.results.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
@@ -437,7 +436,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="shows"
           q={q}
         >
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {shows.results.map((show) => (
               <ShowCard key={show.id} show={show} />
             ))}
@@ -454,7 +453,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="albums"
           q={q}
         >
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {albums.results.map((album) => (
               <AlbumCard key={album.id} album={album} />
             ))}
@@ -471,7 +470,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="musicians"
           q={q}
         >
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {musicians.results.map((musician) => (
               <MusicianCard key={musician.id} musician={musician} />
             ))}
@@ -545,8 +544,8 @@ function AllSection({
 }
 
 // ---------------------------------------------------------------------------
-// Category tabs — one generic component; only the query options and the grid
-// renderer differ per category
+// Category tabs — one generic component handling loading / error / empty /
+// pagination; only the query options and the grid renderer differ per category
 // ---------------------------------------------------------------------------
 
 type CategoryResultsTabProps<T> = {
@@ -581,75 +580,27 @@ function CategoryResultsTab<T>({
     scrollWindowToTop();
   };
 
-  return (
-    <CategoryTabFrame
-      label={label}
-      q={q}
-      isLoading={isLoading}
-      isError={isError}
-      isApiFailure={isApiFailure(data)}
-      message={isApiFailure(data) ? data.message : undefined}
-      onRetry={() => void refetch()}
-      results={data?.error === false ? data.data.results : []}
-      total={data?.error === false ? data.data.total : 0}
-      page={data?.error === false ? data.data.page : page}
-      totalPages={data?.error === false ? data.data.total_pages : 0}
-      onPageChange={handlePageChange}
-      renderGrid={renderGrid}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shared category-tab frame: handles loading / error / empty / pagination
-// ---------------------------------------------------------------------------
-
-type CategoryTabFrameProps<T> = {
-  label: PagedSearchTab;
-  q: string;
-  page: number;
-  isLoading: boolean;
-  isError: boolean;
-  isApiFailure: boolean;
-  message: string | undefined;
-  onRetry: () => void;
-  results: T[];
-  total: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-  renderGrid: (items: T[]) => React.ReactNode;
-};
-
-function CategoryTabFrame<T>({
-  label,
-  q,
-  page,
-  isLoading,
-  isError,
-  isApiFailure: isFailure,
-  message,
-  onRetry,
-  results,
-  total,
-  totalPages,
-  onPageChange,
-  renderGrid,
-}: CategoryTabFrameProps<T>) {
   if (isLoading) {
     return <CategorySkeleton />;
   }
 
-  if (isError || isFailure) {
+  if (isError || isApiFailure(data)) {
     return (
-      <SearchLoadError
+      <MoviesLoadError
         message={
-          message ??
-          `Couldn’t load ${label}. Check your connection and try again.`
+          isApiFailure(data)
+            ? data.message
+            : `Couldn’t load ${label}. Check your connection and try again.`
         }
-        onRetry={onRetry}
+        onRetry={() => void refetch()}
       />
     );
   }
+
+  const results = data?.error === false ? data.data.results : [];
+  const total = data?.error === false ? data.data.total : 0;
+  const currentPage = data?.error === false ? data.data.page : page;
+  const totalPages = data?.error === false ? data.data.total_pages : 0;
 
   if (results.length === 0) {
     return (
@@ -665,13 +616,13 @@ function CategoryTabFrame<T>({
     );
   }
 
-  const announcement = `Showing ${results.length} ${label}, page ${page} of ${totalPages}, ${total.toLocaleString()} total`;
+  const announcement = `Showing ${results.length} ${label}, page ${currentPage} of ${totalPages}, ${total.toLocaleString()} total`;
 
   return (
     <div>
       <LiveAnnouncer
         message={announcement}
-        announcementKey={`${q}-${label}-${page}`}
+        announcementKey={`${q}-${label}-${currentPage}`}
       />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
@@ -680,7 +631,7 @@ function CategoryTabFrame<T>({
         </span>
         {totalPages > 1 && (
           <span className="text-sm text-muted-foreground">
-            Page {page} of {totalPages}
+            Page {currentPage} of {totalPages}
           </span>
         )}
       </div>
@@ -689,9 +640,9 @@ function CategoryTabFrame<T>({
 
       {totalPages > 1 && (
         <LibraryPagination
-          currentPage={page}
+          currentPage={currentPage}
           totalPages={totalPages}
-          onPageChange={onPageChange}
+          onPageChange={handlePageChange}
         />
       )}
     </div>
@@ -764,52 +715,13 @@ function EmptyResults({ q }: { q: string }) {
   );
 }
 
-type SearchLoadErrorProps = {
-  message: string;
-  onRetry: () => void;
-};
-
-function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
-  return (
-    <div
-      role="alert"
-      className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center"
-    >
-      <p className="mb-4 text-sm text-destructive">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className={cn(
-          "inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90",
-          MOTION_MICRO_CONTROL_CLASS,
-          FOCUS_VISIBLE_RING_CLASS,
-        )}
-      >
-        Try again
-      </button>
-    </div>
-  );
-}
-
 function CategorySkeleton() {
   return (
     <div>
       <div className={cn("mb-5 h-4 w-32 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-      <div className={SEARCH_GRID_CLASS}>
+      <div className={LIBRARY_POSTER_GRID_CLASS}>
         {Array.from({ length: SEARCH_PER_PAGE }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "overflow-hidden rounded-xl border border-border bg-card",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          >
-            <div className="aspect-2/3 bg-muted" />
-            <div className="p-3">
-              <div className="h-4 w-3/4 rounded-sm bg-muted" />
-              <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
-            </div>
-          </div>
+          <PosterCardSkeleton key={i} />
         ))}
       </div>
     </div>
@@ -822,21 +734,9 @@ function AllResultsSkeleton() {
       {Array.from({ length: 3 }).map((_, s) => (
         <div key={s}>
           <div className={cn("mb-4 h-6 w-40 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-          <div className={SEARCH_GRID_CLASS}>
+          <div className={LIBRARY_POSTER_GRID_CLASS}>
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "overflow-hidden rounded-xl border border-border bg-card",
-                  MOTION_LOADING_STATE_CLASS,
-                )}
-              >
-                <div className="aspect-2/3 bg-muted" />
-                <div className="p-3">
-                  <div className="h-4 w-3/4 rounded-sm bg-muted" />
-                  <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
-                </div>
-              </div>
+              <PosterCardSkeleton key={i} />
             ))}
           </div>
         </div>

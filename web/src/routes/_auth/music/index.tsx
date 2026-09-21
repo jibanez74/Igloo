@@ -1,39 +1,27 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Disc3,
   Heart,
   List,
   ListMusic,
-  MoreHorizontal,
   Music,
   Play,
   Plus,
-  RefreshCw,
   Shuffle,
   User,
   Users,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed } from "@/lib/toast-helpers";
-import { refreshLibraryWithToasts } from "@/lib/library-refresh";
 import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
@@ -57,6 +45,7 @@ import {
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
   FOCUS_VISIBLE_RING_CLASS,
+  LIBRARY_MENU_ITEM_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -71,9 +60,18 @@ import {
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
 
-import AlbumCard from "@/components/music/AlbumCard";
-import MusicianCard from "@/components/music/MusicianCard";
+import AlbumCard, { AlbumCardSkeleton } from "@/components/music/AlbumCard";
+import MusicianCard, {
+  MusicianCardSkeleton,
+} from "@/components/music/MusicianCard";
+import LibraryAllTab, {
+  type LibraryNoun,
+} from "@/components/shared/LibraryAllTab";
+import LibraryMoreMenu, {
+  RefreshLibraryMenuItem,
+} from "@/components/shared/LibraryMoreMenu";
 import LibraryPagination from "@/components/shared/LibraryPagination";
+import LibraryStats from "@/components/shared/LibraryStats";
 import TrackItem from "@/components/music/TrackItem";
 import PlaylistCard from "@/components/music/PlaylistCard";
 import EmptyState from "@/components/shared/EmptyState";
@@ -90,6 +88,15 @@ import {
 const MUSIC_PAGE_TITLE = "Music Library - Igloo";
 const MUSIC_PAGE_DESCRIPTION =
   "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
+
+const ALBUM_NOUN: LibraryNoun = { singular: "album", plural: "albums" };
+const MUSICIAN_NOUN: LibraryNoun = { singular: "musician", plural: "musicians" };
+const TRACK_NOUN: LibraryNoun = { singular: "track", plural: "tracks" };
+
+// Five columns on large screens: circular thumbs and playlist covers read
+// better with a little more room than the six-column poster grid gives.
+const MUSIC_CARD_GRID_CLASS =
+  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
 
 export const Route = createFileRoute("/_auth/music/")({
   validateSearch: musicSearchSchema,
@@ -119,9 +126,7 @@ function MusicPage() {
   const { isExiting, runTransition, usesContentAnimation } =
     useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
-  let topLevelTabContent = (
-    <AlbumsTabContent currentPage={albumsPage} perPage={ALBUMS_PER_PAGE} />
-  );
+  let topLevelTabContent = <AlbumsTabContent currentPage={albumsPage} />;
 
   if (tab === "musicians") {
     topLevelTabContent = <MusiciansTabContent currentPage={musiciansPage} />;
@@ -187,7 +192,29 @@ function MusicPage() {
           MOTION_SECTION_ENTER_DELAYED_CLASS,
         )}
       >
-        <LibraryStats />
+        <LibraryStats
+          queryOpts={musicStatsQueryOpts()}
+          figures={[
+            {
+              icon: Disc3,
+              label: "Albums",
+              noun: ALBUM_NOUN,
+              getValue: data => data.total_albums,
+            },
+            {
+              icon: Music,
+              label: "Tracks",
+              noun: TRACK_NOUN,
+              getValue: data => data.total_tracks,
+            },
+            {
+              icon: User,
+              label: "Musicians",
+              noun: MUSICIAN_NOUN,
+              getValue: data => data.total_musicians,
+            },
+          ]}
+        />
         <MoreMenu />
       </div>
 
@@ -240,65 +267,15 @@ function MusicPage() {
   );
 }
 
-function LibraryStats() {
-  const { data } = useQuery(musicStatsQueryOpts());
-  const stats = data?.error === false ? data.data : null;
-
-  const albumCount = stats?.total_albums ?? 0;
-  const trackCount = stats?.total_tracks ?? 0;
-  const musicianCount = stats?.total_musicians ?? 0;
-
-  const statsLabel = `Library statistics: ${albumCount} albums, ${trackCount} tracks, ${musicianCount} musicians`;
-
-  return (
-    <section
-      className={cn(
-        "flex flex-wrap gap-x-6 gap-y-3",
-        MOTION_SECTION_ENTER_DELAYED_CLASS,
-      )}
-      aria-label={statsLabel}
-    >
-      <div className="flex items-center gap-2" aria-hidden="true">
-        <Disc3 className="size-4 text-primary" />
-        <span className="font-medium text-foreground">{albumCount}</span>
-        <span className="text-muted-foreground">Albums</span>
-      </div>
-      <div className="flex items-center gap-2" aria-hidden="true">
-        <Music className="size-4 text-primary" />
-        <span className="font-medium text-foreground">{trackCount}</span>
-        <span className="text-muted-foreground">Tracks</span>
-      </div>
-      <div className="flex items-center gap-2" aria-hidden="true">
-        <User className="size-4 text-primary" />
-        <span className="font-medium text-foreground">{musicianCount}</span>
-        <span className="text-muted-foreground">Musicians</span>
-      </div>
-    </section>
-  );
-}
-
 function MoreMenu() {
-  const queryClient = useQueryClient();
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const [requestAlbumOpen, setRequestAlbumOpen] = useState(false);
   const [requestTrackOpen, setRequestTrackOpen] = useState(false);
   const { data: spotifyStatusData, isLoading: spotifyStatusLoading } = useQuery(
     spotifyStatusQueryOpts(),
   );
 
-  const handleRefreshLibrary = async () => {
-    if (refreshingLibrary) return;
-
-    setRefreshingLibrary(true);
-    await refreshLibraryWithToasts(queryClient, refreshMusicLibraryCache, "Music");
-    // refreshLibraryWithToasts owns the try/catch and never throws (see its doc
-    // comment), so this reset runs on every outcome.
-    // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
-    setRefreshingLibrary(false);
-    setMenuOpen(false);
-  };
   const spotifyAvailable =
     spotifyStatusData?.error === false
       ? spotifyStatusData.data.available
@@ -310,89 +287,63 @@ function MoreMenu() {
 
   return (
     <>
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger
-          ref={moreOptionsButtonRef}
-          className={cn(
-            "inline-flex items-center justify-center rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground",
-            MOTION_MICRO_CONTROL_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-          )}
-          aria-label="More options"
-        >
-          <MoreHorizontal className="size-5" aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className="border-border bg-muted"
-        >
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            disabled={refreshingLibrary}
-            onSelect={event => {
-              // Keep the menu open while the async refresh runs so the
-              // spinner/disabled state stays perceivable; it closes when the
-              // refresh settles (see handleRefreshLibrary).
+      <LibraryMoreMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        triggerRef={moreOptionsButtonRef}
+      >
+        <RefreshLibraryMenuItem
+          refresh={refreshMusicLibraryCache}
+          libraryNoun="Music"
+          onSettled={() => setMenuOpen(false)}
+        />
+        <DropdownMenuItem
+          className={LIBRARY_MENU_ITEM_CLASS}
+          disabled={spotifyRequestDisabled}
+          aria-label={
+            spotifyRequestDisabled
+              ? `Request Album unavailable. ${spotifyRequestDescription}`
+              : "Request Album"
+          }
+          title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
+          onSelect={event => {
+            if (spotifyRequestDisabled) {
               event.preventDefault();
-              if (refreshingLibrary) return;
-              void handleRefreshLibrary();
-            }}
-          >
-            {refreshingLibrary ? (
-              <Spinner className="mr-2 size-4 text-primary" />
-            ) : (
-              <RefreshCw className="mr-2 size-4" aria-hidden="true" />
-            )}
-            Refresh Library
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            disabled={spotifyRequestDisabled}
-            aria-label={
-              spotifyRequestDisabled
-                ? `Request Album unavailable. ${spotifyRequestDescription}`
-                : "Request Album"
+              return;
             }
-            title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
-            onSelect={event => {
-              if (spotifyRequestDisabled) {
-                event.preventDefault();
-                return;
-              }
-              setRequestAlbumOpen(true);
-            }}
-          >
-            <Plus className="mr-2 size-4" aria-hidden="true" />
-            Request Album
-            {spotifyRequestDisabled && (
-              <span className="sr-only"> {spotifyRequestDescription}</span>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
-            disabled={spotifyRequestDisabled}
-            aria-label={
-              spotifyRequestDisabled
-                ? `Request Track unavailable. ${spotifyRequestDescription}`
-                : "Request Track"
+            setRequestAlbumOpen(true);
+          }}
+        >
+          <Plus className="mr-2 size-4" aria-hidden="true" />
+          Request Album
+          {spotifyRequestDisabled && (
+            <span className="sr-only"> {spotifyRequestDescription}</span>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className={LIBRARY_MENU_ITEM_CLASS}
+          disabled={spotifyRequestDisabled}
+          aria-label={
+            spotifyRequestDisabled
+              ? `Request Track unavailable. ${spotifyRequestDescription}`
+              : "Request Track"
+          }
+          title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
+          onSelect={event => {
+            if (spotifyRequestDisabled) {
+              event.preventDefault();
+              return;
             }
-            title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
-            onSelect={event => {
-              if (spotifyRequestDisabled) {
-                event.preventDefault();
-                return;
-              }
-              setRequestTrackOpen(true);
-            }}
-          >
-            <Plus className="mr-2 size-4" aria-hidden="true" />
-            Request Track
-            {spotifyRequestDisabled && (
-              <span className="sr-only"> {spotifyRequestDescription}</span>
-            )}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            setRequestTrackOpen(true);
+          }}
+        >
+          <Plus className="mr-2 size-4" aria-hidden="true" />
+          Request Track
+          {spotifyRequestDisabled && (
+            <span className="sr-only"> {spotifyRequestDescription}</span>
+          )}
+        </DropdownMenuItem>
+      </LibraryMoreMenu>
 
       {requestAlbumOpen && (
         <RequestAlbumDialog
@@ -413,240 +364,58 @@ function MoreMenu() {
   );
 }
 
-type MusiciansTabContentProps = {
-  currentPage: number;
-};
-
-// Skeleton loader that matches grid layout to prevent CLS
-function MusiciansTabSkeleton() {
-  return (
-    <div>
-      {/* Skeleton grid - matches actual grid dimensions */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {Array.from({ length: MUSICIANS_PER_PAGE }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "rounded-xl border border-border bg-card p-4",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          >
-            <div className="mx-auto mb-3 aspect-square w-full max-w-32 rounded-full bg-muted" />
-            <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
-            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-muted" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
+function MusiciansTabContent({ currentPage }: { currentPage: number }) {
   const navigate = Route.useNavigate();
 
-  const { data, isLoading, isError, refetch } = useQuery(
-    musiciansPaginatedQueryOpts(currentPage, MUSICIANS_PER_PAGE),
-  );
-
-  const musicians = data?.error === false ? data.data.musicians : [];
-  const totalPages = data?.error === false ? data.data.total_pages : 0;
-  const hasMultiplePages = totalPages > 1;
-
-  // Generate announcement for screen readers
-  const getAnnouncement = () => {
-    if (isLoading) return undefined;
-    if (musicians.length === 0) return "No musicians found";
-    return `Showing ${musicians.length} musician${musicians.length === 1 ? "" : "s"}, page ${currentPage} of ${totalPages}`;
-  };
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/music",
-      search: (prev: MusicSearchParams) => ({
-        ...prev,
-        musiciansPage: newPage,
-      }),
-      replace: true,
-    });
-
-    scrollWindowToTop();
-  };
-
-  if (isLoading) {
-    return <MusiciansTabSkeleton />;
-  }
-
-  if (isError || isApiFailure(data)) {
-    return (
-      <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t load musicians. Check your connection and try again."
-        }
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  if (musicians.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <LiveAnnouncer message={getAnnouncement()} />
-        <Users className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
-        <p>No musicians found in your library.</p>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      {/* Announce content changes to screen readers */}
-      <LiveAnnouncer message={getAnnouncement()} />
-      {hasMultiplePages && (
-        <div className="mb-5 flex justify-end">
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
-        </div>
-      )}
-
-      {/* Musicians grid - 5 columns on large screens for circular thumbnails */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {musicians.map(musician => (
-          <MusicianCard key={musician.id} musician={musician} />
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <LibraryPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      )}
-    </div>
+    <LibraryAllTab
+      queryOpts={musiciansPaginatedQueryOpts(currentPage, MUSICIANS_PER_PAGE)}
+      getItems={data => data.musicians}
+      renderCard={musician => <MusicianCard musician={musician} />}
+      currentPage={currentPage}
+      perPage={MUSICIANS_PER_PAGE}
+      noun={MUSICIAN_NOUN}
+      emptyIcon={Users}
+      gridClassName={MUSIC_CARD_GRID_CLASS}
+      skeletonCard={<MusicianCardSkeleton />}
+      onPageChange={newPage =>
+        navigate({
+          to: "/music",
+          search: (prev: MusicSearchParams) => ({
+            ...prev,
+            musiciansPage: newPage,
+          }),
+          replace: true,
+        })
+      }
+    />
   );
 }
 
-type AlbumsTabContentProps = {
-  currentPage: number;
-  perPage: number;
-};
-
-// Skeleton loader that matches the albums grid layout to prevent CLS
-function AlbumsTabSkeleton() {
-  return (
-    <div>
-      {/* Skeleton grid - matches the real albums grid dimensions */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {Array.from({ length: ALBUMS_PER_PAGE }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "overflow-hidden rounded-xl border border-border bg-card",
-              MOTION_LOADING_STATE_CLASS,
-            )}
-          >
-            <div className="aspect-square bg-muted" />
-            <div className="p-3">
-              <div className="h-4 w-3/4 rounded-sm bg-muted" />
-              <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
+function AlbumsTabContent({ currentPage }: { currentPage: number }) {
   const navigate = Route.useNavigate();
 
-  const { data, isLoading, isError, refetch } = useQuery(
-    albumsPaginatedQueryOpts(currentPage, perPage),
-  );
-
-  const albums = data?.error === false ? data.data.albums : [];
-  const totalPages = data?.error === false ? data.data.total_pages : 0;
-  const hasMultiplePages = totalPages > 1;
-
-  // Generate announcement for screen readers
-  const getAnnouncement = () => {
-    if (isLoading) return undefined;
-    if (albums.length === 0) return "No albums found";
-    return `Showing ${albums.length} album${albums.length === 1 ? "" : "s"}, page ${currentPage} of ${totalPages}`;
-  };
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/music",
-      search: (prev: MusicSearchParams) => ({
-        ...prev,
-        albumsPage: newPage,
-      }),
-      replace: true,
-    });
-
-    scrollWindowToTop();
-  };
-
-  if (isLoading) {
-    return <AlbumsTabSkeleton />;
-  }
-
-  if (isError || isApiFailure(data)) {
-    return (
-      <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t load albums. Check your connection and try again."
-        }
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  if (albums.length === 0) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <LiveAnnouncer message={getAnnouncement()} />
-        <Disc3 className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
-        <p>No albums found in your library.</p>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      {/* Announce content changes to screen readers */}
-      <LiveAnnouncer message={getAnnouncement()} />
-      {hasMultiplePages && (
-        <div className="mb-5 flex justify-end">
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
-        </div>
-      )}
-
-      {/* Albums grid */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {albums.map(album => (
-          <AlbumCard key={album.id} album={album} />
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <LibraryPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      )}
-    </div>
+    <LibraryAllTab
+      queryOpts={albumsPaginatedQueryOpts(currentPage, ALBUMS_PER_PAGE)}
+      getItems={data => data.albums}
+      renderCard={album => <AlbumCard album={album} />}
+      currentPage={currentPage}
+      perPage={ALBUMS_PER_PAGE}
+      noun={ALBUM_NOUN}
+      emptyIcon={Disc3}
+      skeletonCard={<AlbumCardSkeleton />}
+      onPageChange={newPage =>
+        navigate({
+          to: "/music",
+          search: (prev: MusicSearchParams) => ({
+            ...prev,
+            albumsPage: newPage,
+          }),
+          replace: true,
+        })
+      }
+    />
   );
 }
 
@@ -1127,7 +896,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       {playlists.length === 0 ? (
         <EmptyPlaylistsState onCreateClick={handleCreateOpen} />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className={MUSIC_CARD_GRID_CLASS}>
           {playlists.map((playlist) => (
             <PlaylistCard key={playlist.id} playlist={playlist} />
           ))}
@@ -1276,7 +1045,7 @@ function PlaylistsTabSkeleton() {
           <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div className={MUSIC_CARD_GRID_CLASS}>
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}

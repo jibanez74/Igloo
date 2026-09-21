@@ -588,20 +588,33 @@ pages.
 
 #### Library pages
 
-The Movies and TV Shows pages are the same page with different nouns, so the
-page-level pieces are shared components in `components/shared/`, each a
-`Library*`: `LibraryStats` (the labelled count region beside the header),
-`LibraryMoreMenu` with `RefreshLibraryMenuItem` (the "More options" dropdown;
-every library has at least Refresh Library, which refetches the page's cached
-queries and toasts), `LibraryAllTab` (the paginated, sortable grid and its
-skeleton), `LibraryGenresTab` (the genre-chip facet with focus restoration
-after Clear, and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A
-button) and `LibraryEmptyState` (the minimal empty variant, §3.4). A page
-supplies what differs: the card renderer, the lowercase nouns for copy and
-announcements, its prepared `queryOptions()`, the tab triggers, and navigation
-callbacks — the page keeps the typed `navigate({ to, search })`, so the shared
-tabs never learn a route. Liked movies and movie playlists stay local to the
-movies page; a new library page composes the same parts.
+The Movies, TV Shows and Music pages are the same page with different nouns,
+so the page-level pieces are shared components in `components/shared/`, each a
+`Library*`: `LibraryStats` (the labelled count region beside the header; it
+takes `figures`, one or several, and joins them into a single
+`Library statistics: 42 movies` / `…: 3 albums, 40 tracks, 2 musicians`
+name), `LibraryMoreMenu` with `RefreshLibraryMenuItem` (the "More options"
+dropdown; every library has at least Refresh Library, which refetches the
+page's cached queries and toasts — Music adds Request Album / Request Track
+beside it), `LibraryAllTab` (the paginated grid and its skeleton),
+`LibraryGenresTab` (the genre-chip facet with focus restoration after Clear,
+and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button) and
+`LibraryEmptyState` (the minimal empty variant, §3.4). A page supplies what
+differs: the card renderer, the lowercase nouns for copy and announcements, its
+prepared `queryOptions()`, the tab triggers, and navigation callbacks — the
+page keeps the typed `navigate({ to, search })`, so the shared tabs never
+learn a route. `LibraryAllTab`'s `sort`/`onSortToggle` pair is optional: an
+API that sorts (movies, shows) passes both, one that does not (albums,
+musicians) passes neither and gets no toggle. Its `gridClassName` and
+`skeletonCard` swap the 2:3 poster grid for another card geometry — the Albums
+tab keeps the poster grid with `AlbumCardSkeleton`, the Musicians tab passes
+its five-column round-thumb grid with `MusicianCardSkeleton`. Liked movies and
+movie playlists stay local to the movies page, as the Tracks and Playlists
+tabs do to the music page; a new library page composes the same parts. The
+search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
+`MoviesLoadError` and `PosterCardSkeleton` but stay page-local: their result
+count line, "No albums match 'q'" copy and non-grid tracks list are not a
+library tab.
 
 #### Detail pages
 
@@ -612,6 +625,17 @@ Movie, show and in-theaters detail pages are built from shared parts —
 media type supplying only its own metadata chips, key-crew summary, and about
 rows.
 Adding a media type means supplying those three, not building a fourth page.
+
+The album and musician pages keep their own hero anatomy — a square cover or
+a round thumb beside the title, over a decorative 21:9 band, rather than
+`DetailHero`'s poster — and share the music-specific parts in
+`components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
+`usePosterFallback`), `MusicDetailSkeleton` (`variant="album" | "musician"`,
+one geometry with the art shape and hero rows switched), and
+`MusicDetailBackNav` (the `nav` "Page navigation" landmark back to the owning
+`/music` tab, also used by the playlist page). Their guards are the movie
+page's: a malformed id, a failed load and a missing payload each render
+`MediaNotFound` with its "Back to Music" link, never a bare heading.
 
 #### Seasons and episode rows
 
@@ -681,10 +705,14 @@ is unknown or empty.
   matches the real layout's grid geometry exactly** (same columns, same aspect
   boxes) so content arrival causes no layout shift — see the shared
   `DetailSkeleton` (`withActions` mirrors whether the real hero has an actions
-  row; pages append their own below-the-fold geometry as children), and the
-  `LibraryAllTabSkeleton` / `LibraryGenresTabSkeleton` that live in the same
-  files as the grids they mirror. Skeleton geometry is authored directly in
-  each loading layout with muted boxes and the shared
+  row; pages append their own below-the-fold geometry as children),
+  `MusicDetailSkeleton` (§3.2), and the `LibraryAllTabSkeleton` /
+  `LibraryGenresTabSkeleton` that live in the same files as the grids they
+  mirror. A grid skeleton repeats one card placeholder that lives beside the
+  card it mirrors — `PosterCardSkeleton` in `PosterCard.tsx`,
+  `AlbumCardSkeleton` and `MusicianCardSkeleton` in their card files — so a
+  card and its placeholder change together. Skeleton geometry is authored
+  directly in each loading layout with muted boxes and the shared
   `MOTION_LOADING_STATE_CLASS`, always beside the layout it must mirror — a
   skeleton moves with its layout, never on its own. `ui/spinner.tsx` (`role="status"`) uses
   `MOTION_SPINNER_STATE_CLASS`. Skeleton layouts hide their visuals with
@@ -700,7 +728,8 @@ is unknown or empty.
   Rich CTA: the shared `EmptyState.tsx` — gradient icon orb
   (`size-20 rounded-full bg-linear-to-br from-muted via-muted to-primary/30`),
   title, description, optional pill CTA, optional `bordered` wrapper. Empty
-  states announce via `LiveAnnouncer`.
+  states announce via `LiveAnnouncer` (`LibraryAllTab` says
+  `No {plural} found` beside its `LibraryEmptyState`).
 - **Error, by shape.** Detection is uniform:
   `isError || isApiFailure(data)` (`lib/is-api-failure.ts`, reading the API
   envelope `{ error, message, data }`). Which component renders it depends on

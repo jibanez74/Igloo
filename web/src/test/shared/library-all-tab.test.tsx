@@ -46,6 +46,19 @@ function renderTab(
   );
 }
 
+function onePage(items: Item[]): ApiResponseType<Payload> {
+  return {
+    error: false,
+    data: {
+      items,
+      total: items.length,
+      page: 1,
+      per_page: 24,
+      total_pages: items.length > 0 ? 1 : 0,
+    },
+  };
+}
+
 // The route tests cover the happy path; these are the branches a loader-fed
 // route never reaches, because the loader would have thrown first.
 describe("LibraryAllTab", () => {
@@ -124,5 +137,73 @@ describe("LibraryAllTab", () => {
       await screen.findByText("No shows found in your library."),
     ).toBeInTheDocument();
     expect(onPageChange).not.toHaveBeenCalled();
+  });
+
+  it("announces the empty state to screen readers", async () => {
+    renderTab(async () => onePage([]));
+
+    await screen.findByText("No shows found in your library.");
+
+    await waitFor(() => {
+      const statusRegions = screen.getAllByRole("status");
+      expect(
+        statusRegions.some(region => region.textContent === "No shows found"),
+      ).toBe(true);
+    });
+  });
+});
+
+// A list whose API does not sort (albums, musicians) passes no sort pair and
+// swaps the poster grid for its own card geometry.
+describe("LibraryAllTab without sort", () => {
+  function renderUnsortedTab(
+    queryFn: () => Promise<ApiResponseType<Payload>>,
+  ) {
+    const opts = queryOptions({
+      queryKey: ["library-all-tab-unsorted-test"],
+      queryFn,
+    });
+
+    return renderWithQueryClient(
+      <LibraryAllTab
+        queryOpts={opts}
+        getItems={data => data.items}
+        renderCard={item => <article>{item.name}</article>}
+        currentPage={1}
+        perPage={3}
+        noun={NOUN}
+        emptyIcon={Tv}
+        gridClassName="test-grid"
+        skeletonCard={<div data-testid="round-card" />}
+        onPageChange={() => {}}
+      />,
+    );
+  }
+
+  it("repeats the supplied skeleton card in the supplied grid while loading", () => {
+    const { container } = renderUnsortedTab(() => new Promise(() => {}));
+
+    expect(screen.getAllByTestId("round-card")).toHaveLength(3);
+    expect(container.querySelector(".test-grid")).not.toBeNull();
+    // No sort toggle placeholder to reserve room for.
+    expect(container.querySelector(".h-8.w-16")).toBeNull();
+  });
+
+  it("renders the grid without a sort toggle or page header once loaded", async () => {
+    const { container } = renderUnsortedTab(async () =>
+      onePage([{ id: 1, name: "Frost Harbor" }]),
+    );
+
+    await screen.findByText("Frost Harbor");
+
+    expect(
+      screen.queryByRole("button", { name: /Sorted/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Page 1 of/)).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".test-grid")?.contains(
+        screen.getByText("Frost Harbor"),
+      ),
+    ).toBe(true);
   });
 });

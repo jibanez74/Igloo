@@ -249,10 +249,14 @@ function MoviesPage() {
       >
         <LibraryStats
           queryOpts={moviesStatsQueryOpts()}
-          getTotal={data => data.total_movies}
-          icon={Film}
-          label="Movies"
-          noun={MOVIE_NOUN}
+          figures={[
+            {
+              icon: Film,
+              label: "Movies",
+              noun: MOVIE_NOUN,
+              getValue: data => data.total_movies,
+            },
+          ]}
         />
         <MoreMenu
           onOpenLikedMovies={handleOpenLikedMovies}

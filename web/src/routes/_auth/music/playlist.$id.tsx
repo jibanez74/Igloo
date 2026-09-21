@@ -18,13 +18,13 @@ import {
   Pencil,
   Trash2,
   List,
-  ArrowLeft,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
 import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
@@ -517,22 +517,11 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         )}
       </section>
 
-      {/* Back navigation */}
-      <nav className="mt-8" aria-label="Page navigation">
-        <Link
-          to="/music"
-          search={{ tab: "playlists" }}
-          className={cn(
-            MOTION_MICRO_COLORS_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-            "inline-flex items-center gap-2 rounded-sm text-muted-foreground hover:text-foreground focus-visible:text-primary",
-          )}
-          aria-label="Back to Playlists"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to Playlists
-        </Link>
-      </nav>
+      <MusicDetailBackNav
+        tab="playlists"
+        label="Back to Playlists"
+        className="mt-8"
+      />
 
       {/* Edit Playlist Dialog */}
       {is_owner && (
