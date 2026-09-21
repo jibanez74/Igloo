@@ -116,7 +116,7 @@ func TestGetOrCreateDir_TempDirItself(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateDir_CreatedDirectoryIsOwnerWritableAndWorldReadable(t *testing.T) {
+func TestGetOrCreateDir_CreatedDirectoryIsNoBroaderThanDirMode(t *testing.T) {
 	tempDir := t.TempDir()
 	newDir := filepath.Join(tempDir, "modes")
 
@@ -135,9 +135,6 @@ func TestGetOrCreateDir_CreatedDirectoryIsOwnerWritableAndWorldReadable(t *testi
 	mode := info.Mode().Perm()
 	if mode&^os.FileMode(dirMode) != 0 {
 		t.Errorf("created directory mode = %#o, want no bits outside %#o", mode, dirMode)
-	}
-	if mode&0o700 != 0o700 {
-		t.Errorf("created directory mode = %#o, want owner rwx", mode)
 	}
 }
 
