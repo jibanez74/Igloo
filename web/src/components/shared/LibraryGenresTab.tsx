@@ -21,6 +21,7 @@ import {
   MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
+import { nounForCount } from "@/lib/format";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -144,7 +145,7 @@ export default function LibraryGenresTab<
     if (!hasSelectedGenre) return undefined;
     if (itemsLoading) return undefined;
     if (items.length === 0) return `No ${noun.plural} in this genre`;
-    return `Showing ${items.length} ${noun.plural}, page ${genresPage} of ${totalPages}`;
+    return `Showing ${items.length} ${nounForCount(items.length, noun)}, page ${genresPage} of ${totalPages}`;
   };
 
   const handleClearGenre = () => {
@@ -229,7 +230,7 @@ export default function LibraryGenresTab<
                     selected ? "text-primary-foreground/70" : "text-muted-foreground"
                   }`}
                 >
-                  {g.count} {g.count === 1 ? noun.singular : noun.plural}
+                  {g.count} {nounForCount(g.count, noun)}
                 </span>
               </button>
             </li>
@@ -247,7 +248,7 @@ export default function LibraryGenresTab<
                 {selectedGenreTag ?? "Genre"}
               </span>
               <span className="text-sm text-muted-foreground">
-                {total.toLocaleString()} {noun.plural}
+                {total.toLocaleString()} {nounForCount(total, noun)}
               </span>
               <button
                 type="button"

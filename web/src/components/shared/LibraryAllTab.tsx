@@ -17,6 +17,7 @@ import {
   LIBRARY_POSTER_GRID_CLASS,
   MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
+import { nounForCount } from "@/lib/format";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -121,7 +122,7 @@ export default function LibraryAllTab<
   const getAnnouncement = () => {
     if (isLoading) return undefined;
     if (items.length === 0) return `No ${noun.plural} found`;
-    return `Showing ${items.length} ${noun.plural}, page ${currentPage} of ${totalPages}`;
+    return `Showing ${items.length} ${nounForCount(items.length, noun)}, page ${currentPage} of ${totalPages}`;
   };
 
   const handlePageChange = (newPage: number) => {

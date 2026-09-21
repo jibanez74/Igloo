@@ -7,6 +7,7 @@ import {
   formatTimecode,
   formatTimeLeft,
   formatTrackDuration,
+  nounForCount,
   parseCatalogDate,
 } from "@/lib/format";
 
@@ -238,6 +239,27 @@ describe("parseCatalogDate", () => {
 
     expect(parseCatalogDate(timestamp).getTime()).toBe(
       new Date(timestamp).getTime(),
+    );
+  });
+});
+
+describe("nounForCount", () => {
+  const ALBUM = { singular: "album", plural: "albums" };
+
+  it("says the singular for exactly one", () => {
+    expect(nounForCount(1, ALBUM)).toBe("album");
+  });
+
+  it("says the plural for none and for many", () => {
+    // Zero is the case the library headers hit first: "0 albums", not
+    // "0 album".
+    expect(nounForCount(0, ALBUM)).toBe("albums");
+    expect(nounForCount(2, ALBUM)).toBe("albums");
+  });
+
+  it("uses the pair's own plural rather than appending an s", () => {
+    expect(nounForCount(3, { singular: "person", plural: "people" })).toBe(
+      "people",
     );
   });
 });

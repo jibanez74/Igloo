@@ -268,7 +268,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
   await page.getByRole("tab", { name: "Movies" }).click();
   await expect(page).toHaveURL(/tab=movies/);
   await expect(page.getByRole("tabpanel", { name: "Movies" })).toBeVisible();
-  await expect(page.getByText("1 movies")).toBeVisible();
+  await expect(page.getByText("1 movie")).toBeVisible();
 
   await page.getByRole("tab", { name: "Shows" }).click();
   await expect(page).toHaveURL(/tab=shows/);

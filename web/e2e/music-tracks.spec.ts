@@ -235,7 +235,7 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
 
   await expect(page).toHaveTitle("Music Library - Igloo");
   await expect(page.getByRole("heading", { name: "Music Library", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Library statistics: 3 albums, 2267 tracks, 1 musicians")).toBeVisible();
+  await expect(page.getByLabel("Library statistics: 3 albums, 2267 tracks, 1 musician")).toBeVisible();
 
   const tablist = page.getByRole("tablist");
   await expect(tablist).toBeVisible();

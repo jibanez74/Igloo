@@ -5,6 +5,7 @@ import {
   type LibraryQueryOptions,
 } from "@/components/shared/LibraryAllTab";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import { nounForCount } from "@/lib/format";
 import { isApiFailure } from "@/lib/is-api-failure";
 
 /** One count in the stats line: its icon, visible label and how to read it. */
@@ -55,7 +56,7 @@ export default function LibraryStats<
   const regionLabel = isLoading
     ? "Library statistics: loading"
     : `Library statistics: ${figures
-        .map((figure, i) => `${counts[i]} ${figure.noun.plural}`)
+        .map((figure, i) => `${counts[i]} ${nounForCount(counts[i], figure.noun)}`)
         .join(", ")}`;
 
   return (

@@ -273,7 +273,7 @@ describe("music route section motion", () => {
       name: "Music Library",
     });
     const stats = screen.getByRole("region", {
-      name: "Library statistics: 1 albums, 5 tracks, 1 musicians",
+      name: "Library statistics: 1 album, 5 tracks, 1 musician",
     });
     const tabsRoot = screen.getByRole("tablist").closest('[data-slot="tabs"]');
 

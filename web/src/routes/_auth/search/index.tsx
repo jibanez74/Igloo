@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 import { Search, Film, Tv, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { type LibraryNoun } from "@/components/shared/LibraryAllTab";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import LibraryPagination from "@/components/shared/LibraryPagination";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
@@ -55,8 +56,19 @@ import type {
   TrackListItemType,
 } from "@/types";
 import { searchSearchSchema, type SearchParams } from "@/lib/route-search";
+import { nounForCount } from "@/lib/format";
 
 type PagedSearchTab = Exclude<SearchTab, "all">;
+
+// The tab value doubles as the visible category word, so each one carries both
+// forms - a single result reads "1 show", not "1 shows".
+const SEARCH_TAB_NOUNS: Record<PagedSearchTab, LibraryNoun> = {
+  movies: { singular: "movie", plural: "movies" },
+  shows: { singular: "show", plural: "shows" },
+  albums: { singular: "album", plural: "albums" },
+  musicians: { singular: "musician", plural: "musicians" },
+  tracks: { singular: "track", plural: "tracks" },
+};
 
 function redirectToLastSearchPage({
   q,
@@ -616,7 +628,8 @@ function CategoryResultsTab<T>({
     );
   }
 
-  const announcement = `Showing ${results.length} ${label}, page ${currentPage} of ${totalPages}, ${total.toLocaleString()} total`;
+  const noun = SEARCH_TAB_NOUNS[label];
+  const announcement = `Showing ${results.length} ${nounForCount(results.length, noun)}, page ${currentPage} of ${totalPages}, ${total.toLocaleString()} total`;
 
   return (
     <div>
@@ -627,7 +640,7 @@ function CategoryResultsTab<T>({
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm text-muted-foreground">
-          {total.toLocaleString()} {label}
+          {total.toLocaleString()} {nounForCount(total, noun)}
         </span>
         {totalPages > 1 && (
           <span className="text-sm text-muted-foreground">

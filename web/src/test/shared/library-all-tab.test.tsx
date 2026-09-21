@@ -151,6 +151,21 @@ describe("LibraryAllTab", () => {
       ).toBe(true);
     });
   });
+
+  it("announces a single result with the singular noun", async () => {
+    renderTab(async () => onePage([{ id: 1, name: "Frost Harbor" }]));
+
+    await screen.findByText("Frost Harbor");
+
+    await waitFor(() => {
+      const statusRegions = screen.getAllByRole("status");
+      expect(
+        statusRegions.some(
+          region => region.textContent === "Showing 1 show, page 1 of 1",
+        ),
+      ).toBe(true);
+    });
+  });
 });
 
 // A list whose API does not sort (albums, musicians) passes no sort pair and

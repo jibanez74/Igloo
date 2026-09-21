@@ -341,6 +341,19 @@ export function pluralize(count: number, noun: string): string {
 }
 
 /**
+ * The form of an explicit singular/plural pair that matches a count - for
+ * nouns that carry both forms (`LibraryNoun`) and for counts the caller
+ * formats itself. Use `pluralize` when the noun takes a plain "s" and the
+ * count needs no formatting.
+ */
+export function nounForCount(
+  count: number,
+  noun: { singular: string; plural: string },
+): string {
+  return count === 1 ? noun.singular : noun.plural;
+}
+
+/**
  * How far into a title the viewer is, as a whole percent clamped to 0-100. One
  * definition for every surface that shows it: the card progress bars, the bars
  * on the movie hero and the episode rows, and the "N% watched" announced in a

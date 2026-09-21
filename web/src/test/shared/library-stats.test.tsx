@@ -88,7 +88,7 @@ describe("LibraryStats", () => {
 
     expect(
       await screen.findByRole("region", {
-        name: "Library statistics: 1 albums, 5 tracks, 1 musicians",
+        name: "Library statistics: 1 album, 5 tracks, 1 musician",
       }),
     ).toBeInTheDocument();
   });
