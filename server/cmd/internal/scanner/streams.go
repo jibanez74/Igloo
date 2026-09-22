@@ -154,7 +154,10 @@ func subtitleFields(stream ffprobe.Stream) SubtitleFields {
 }
 
 // parseNullInt64 maps ffprobe's optional numeric strings to NULL when absent
-// or unparsable.
+// or unparsable. It is used where ffprobe reports the value as a string, so
+// "0" is distinguishable from an absent field. Fields already decoded as ints
+// (codec level, coded width and height) go through helpers.NullInt64 instead,
+// because there a 0 carries no meaning and NULL is the honest record.
 func parseNullInt64(value string) sql.NullInt64 {
 	if value == "" {
 		return sql.NullInt64{}

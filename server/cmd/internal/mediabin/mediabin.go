@@ -136,7 +136,7 @@ func extractToCache(binaryName string, compressed []byte) (string, error) {
 	return binPath, nil
 }
 
-// decompressToFile streams the zstd payload into path (mode 0755), teeing
+// decompressToFile streams the zstd payload into path (mode 0o755), teeing
 // the decompressed bytes into digest.
 func decompressToFile(path string, compressed []byte, digest io.Writer) error {
 	reader, err := zstd.NewReader(bytes.NewReader(compressed))

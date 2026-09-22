@@ -194,6 +194,9 @@ func (s *Scanner) persistMusician(ctx context.Context, qtx *database.Queries, sc
 	var musician database.GetMusicianBySpotifyIDRow
 	var err error
 	if input.spotifyArtist != nil {
+		// A query argument, and the value the stored identity is compared
+		// against, so it must carry exactly what Spotify returned.
+		// helpers.NullString would turn an empty id into a NULL lookup.
 		spotifyID := sql.NullString{String: input.spotifyArtist.ID.String(), Valid: true}
 		if input.existing != nil && input.existing.SpotifyID == spotifyID {
 			musician = *input.existing
@@ -292,10 +295,7 @@ func (s *Scanner) persistAlbum(ctx context.Context, qtx *database.Queries, scan 
 	} else if input.hasExistingID {
 		album.ID = input.existingID
 	} else {
-		params := database.UpsertAlbumParams{Title: input.title, SortTitle: input.sortTitle}
-		if input.albumArtist != "" {
-			params.Musician = sql.NullString{String: input.albumArtist, Valid: true}
-		}
+		params := database.UpsertAlbumParams{Title: input.title, SortTitle: input.sortTitle, Musician: helpers.NullString(input.albumArtist)}
 		row, writeErr := qtx.UpsertAlbum(ctx, params)
 		album = database.GetAlbumBySpotifyIDRow(row)
 		err = writeErr
@@ -356,7 +356,7 @@ func (s *Scanner) updateMusicianThumbIfChanged(ctx context.Context, qtx *databas
 
 	row, err := qtx.UpdateMusicianSpotifyThumb(ctx, database.UpdateMusicianSpotifyThumbParams{
 		ID:    musician.ID,
-		Thumb: sql.NullString{String: thumbURL, Valid: true},
+		Thumb: helpers.NullString(thumbURL),
 	})
 	return database.GetMusicianBySpotifyIDRow(row), err
 }
@@ -371,7 +371,7 @@ func (s *Scanner) updateAlbumCoverIfChanged(ctx context.Context, qtx *database.Q
 
 	row, err := qtx.UpdateAlbumSpotifyCover(ctx, database.UpdateAlbumSpotifyCoverParams{
 		ID:    album.ID,
-		Cover: sql.NullString{String: coverURL, Valid: true},
+		Cover: helpers.NullString(coverURL),
 	})
 	return database.GetAlbumBySpotifyIDRow(row), err
 }

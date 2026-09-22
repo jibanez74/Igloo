@@ -74,6 +74,27 @@ type playbackSource struct {
 	Duration  sql.NullFloat64
 }
 
+// sourceVideoBitRate reports the source's video bitrate in bits per second,
+// or 0 when it cannot be established.
+//
+// ffprobe frequently omits a per-stream bit_rate for Matroska, and those are
+// exactly the sources that fail the remux gate, so falling back to the whole
+// container's average keeps fallback selection informed for them. The estimate
+// counts audio and container overhead as well, so it only ever reads high —
+// which biases profile selection toward the richer profile, never past what
+// the file actually carries.
+func sourceVideoBitRate(source playbackSource, primaryVideo *database.VideoStream) int64 {
+	if primaryVideo != nil && primaryVideo.BitRate > 0 {
+		return primaryVideo.BitRate
+	}
+
+	if source.Size <= 0 || !source.Duration.Valid || source.Duration.Float64 <= 0 {
+		return 0
+	}
+
+	return int64(float64(source.Size) * 8 / source.Duration.Float64)
+}
+
 func playbackSourceFromMovie(movie database.Movie) playbackSource {
 	return playbackSource{
 		Ref:       movieRef(movie.ID),

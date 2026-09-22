@@ -369,8 +369,9 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	}
 
 	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
-	if err := os.MkdirAll(avatarsDir, 0755); err != nil {
-		app.Logger.Error("failed to create avatars directory", "error", err)
+	_, err = helpers.GetOrCreateDir(avatarsDir)
+	if err != nil {
+		app.Logger.Error("failed to create avatars directory", "error", err, "path", avatarsDir)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}

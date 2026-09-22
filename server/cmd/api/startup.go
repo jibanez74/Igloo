@@ -25,7 +25,7 @@ func (app *Application) InitDB() error {
 	dbPath := app.Config.effectiveDBPath()
 
 	dir := filepath.Dir(dbPath)
-	err := os.MkdirAll(dir, 0755)
+	_, err := helpers.GetOrCreateDir(dir)
 	if err != nil {
 		return fmt.Errorf("failed to create database directory %s for %s: %w", dir, dbPath, err)
 	}
@@ -254,33 +254,11 @@ func (app *Application) validateMediaDir(mediaType string, dir *sql.NullString) 
 	}
 
 	dir.String = strings.TrimSpace(dir.String)
-	validationErr := validateExistingDir(dir.String)
+	validationErr := helpers.ValidateDir(dir.String)
 	if validationErr != nil {
 		app.Logger.Warn("disabling inaccessible media directory", "type", mediaType, "path", dir.String, "error", validationErr)
 		*dir = sql.NullString{}
 	}
-}
-
-func validateExistingDir(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("failed to stat directory: %w", err)
-	}
-
-	if !info.IsDir() {
-		return fmt.Errorf("path is not a directory")
-	}
-
-	dir, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("failed to open directory: %w", err)
-	}
-
-	if err = dir.Close(); err != nil {
-		return fmt.Errorf("failed to close directory: %w", err)
-	}
-
-	return nil
 }
 
 func (app *Application) InitLogger() error {

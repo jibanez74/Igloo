@@ -104,6 +104,8 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// A query argument for a nullable foreign key, not a value being stored:
+	// helpers.NullInt64 would turn an id of 0 into a NULL scan matching nothing.
 	tracks, err := qtx.GetTracksByAlbumID(ctx, sql.NullInt64{Int64: id, Valid: true})
 	if err != nil {
 		app.Logger.Error("failed to get tracks for album", "error", err, "album_id", id)

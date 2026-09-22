@@ -45,7 +45,7 @@ func WriteHLSFixture(outDir string, fixture Fixture) error {
 	}
 
 	initData := BuildInitMP4()
-	err := os.WriteFile(filepath.Join(outDir, helpers.HLS_INIT_FILENAME), initData, 0644)
+	err := os.WriteFile(filepath.Join(outDir, helpers.HLS_INIT_FILENAME), initData, 0o644)
 	if err != nil {
 		return err
 	}
@@ -59,14 +59,14 @@ func WriteHLSFixture(outDir string, fixture Fixture) error {
 			i,
 			helpers.HLS_SEGMENT_FILENAME_SUFFIX,
 		)
-		err = os.WriteFile(filepath.Join(outDir, name), segmentData, 0644)
+		err = os.WriteFile(filepath.Join(outDir, name), segmentData, 0o644)
 		if err != nil {
 			return err
 		}
 	}
 
 	playlist := buildEventPlaylist(fixture.Segments)
-	return os.WriteFile(filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), []byte(playlist), 0644)
+	return os.WriteFile(filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), []byte(playlist), 0o644)
 }
 
 func BuildInitMP4() []byte {
