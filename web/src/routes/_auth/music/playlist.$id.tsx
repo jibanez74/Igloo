@@ -95,12 +95,13 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
 
 function PlaylistPage() {
   const { id } = Route.useParams();
-  // 0 for a malformed id: the request then fails into the error branch
-  // below, exactly as an unknown playlist does.
-  const playlistId = parseRouteId(id) ?? 0;
+  const playlistId = parseRouteId(id);
 
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the guard goes straight to
+  // not-found rather than sitting on a skeleton.
   const { data, isLoading, error } = useQuery(
-    playlistDetailsQueryOpts(playlistId)
+    playlistDetailsQueryOpts(playlistId ?? 0),
   );
 
   return (
@@ -114,7 +115,7 @@ function PlaylistPage() {
       payload={data?.error === false ? data.data : null}
       skeleton={<MusicDetailSkeleton variant="playlist" />}
     >
-      {loaded => <PlaylistContent playlistId={playlistId} data={loaded} />}
+      {(loaded, id) => <PlaylistContent playlistId={id} data={loaded} />}
     </MediaDetailGuard>
   );
 }
