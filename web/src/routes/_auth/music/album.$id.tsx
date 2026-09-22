@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { showDeleted, showActionFailed } from "@/lib/toast-helpers";
 import {
   Disc3,
@@ -19,6 +19,7 @@ import {
   authUserQueryOpts,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
+import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
 import { parseRouteId } from "@/lib/route-id";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -56,15 +57,10 @@ import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
-  ALBUM_DETAILS_KEY,
-  ALBUMS_PAGINATED_KEY,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_SECTION_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
-  LATEST_ALBUMS_KEY,
-  MUSIC_STATS_KEY,
   SPOTIFY_BRAND_TEXT_CLASS,
-  TRACKS_INFINITE_KEY,
   MOTION_MICRO_COLORS_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
 } from "@/lib/constants";
@@ -129,7 +125,6 @@ function AlbumDetailsContent({
   const isAdmin = user?.is_admin === true;
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const coverUrl = getMediaImageUrl(unwrapString(album.cover));
@@ -151,18 +146,16 @@ function AlbumDetailsContent({
     : `${album.title} - Igloo`;
   const pageDescription = `Listen to ${album.title}${musicianName ? ` by ${musicianName}` : ""} - ${pluralize(tracks.length, "track")} in your Igloo music library.`;
 
-  const handleDeleteAlbum = async () => {
-    setIsDeleting(true);
-
-    try {
-      const result = await deleteAlbum(album.id);
-
+  // Deleting an album also removes its tracks, which the musician pages, the
+  // liked lists and any playlist may show, so every music query goes stale.
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteAlbum(album.id),
+    onSuccess: (result) => {
       if (result.error) {
         showActionFailed(
           "delete album",
           result.message || "Unable to delete album. Please try again.",
         );
-        setIsDeleting(false);
         return;
       }
 
@@ -170,28 +163,18 @@ function AlbumDetailsContent({
         "Album",
         `"${album.title}" has been removed from your library.`,
       );
-
-      // Refresh music views that can include the deleted album or its tracks.
-      queryClient.invalidateQueries({ queryKey: [ALBUMS_PAGINATED_KEY] });
-      queryClient.invalidateQueries({ queryKey: [ALBUM_DETAILS_KEY, album.id] });
-      queryClient.invalidateQueries({ queryKey: [LATEST_ALBUMS_KEY] });
-      queryClient.invalidateQueries({ queryKey: [MUSIC_STATS_KEY] });
-      queryClient.invalidateQueries({ queryKey: [TRACKS_INFINITE_KEY] });
-
+      invalidateMusicLibraryQueries(queryClient);
       setIsDeleteDialogOpen(false);
       navigate({ to: "/music", search: { tab: "albums" } });
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Failed to delete album:", error);
       showActionFailed(
         "delete album",
         "An unexpected error occurred. Please try again.",
       );
-      // This line is the catch-block reset. The success path deliberately stays busy
-      // while navigating away to /music.
-      // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
-      setIsDeleting(false);
-    }
-  };
+    },
+  });
 
   // Build a map of track_id -> genre tags for easy lookup
   const trackGenreMap = new Map<number, string[]>();
@@ -504,9 +487,9 @@ function AlbumDetailsContent({
                   </>
                 }
                 confirmLabel="Delete Album"
-                pending={isDeleting}
+                pending={deleteMutation.isPending}
                 restoreFocusRef={moreOptionsButtonRef}
-                onConfirm={() => void handleDeleteAlbum()}
+                onConfirm={() => deleteMutation.mutate()}
               >
                 <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">
                   <li>The album and all its metadata</li>
