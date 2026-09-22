@@ -1,4 +1,5 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
 import { jsonResponse, requestURL } from "../helpers/api";
@@ -14,7 +15,13 @@ function movie(id: number, title: string, year: number) {
   };
 }
 
-function mockPlaylistFetch(movies: ReturnType<typeof movie>[]) {
+type MockPlaylist = {
+  name: string;
+  description?: string;
+  movies: ReturnType<typeof movie>[];
+};
+
+function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
 
@@ -22,21 +29,23 @@ function mockPlaylistFetch(movies: ReturnType<typeof movie>[]) {
       return jsonResponse({ error: false, data: { user: authUser() } });
     }
 
-    if (url === "/api/movies/playlists/11") {
+    const detail = url.match(/^\/api\/movies\/playlists\/(\d+)$/);
+    const playlist = detail ? playlists[Number(detail[1])] : undefined;
+    if (detail && playlist) {
       return jsonResponse({
         error: false,
         data: {
           playlist: {
-            id: 11,
+            id: Number(detail[1]),
             user_id: 1,
-            name: "Weekend Picks",
-            description: nullableString("Two for Saturday."),
+            name: playlist.name,
+            description: nullableString(playlist.description),
             cover_image: nullableString(),
             is_public: false,
             created_at: "2026-01-01T00:00:00Z",
             updated_at: "2026-01-01T00:00:00Z",
           },
-          movie_count: movies.length,
+          movie_count: playlist.movies.length,
           is_owner: true,
           can_edit: true,
           collaborators: null,
@@ -44,10 +53,13 @@ function mockPlaylistFetch(movies: ReturnType<typeof movie>[]) {
       });
     }
 
-    if (
-      url ===
-      `/api/movies/playlists/11/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`
-    ) {
+    const list = url.match(
+      /^\/api\/movies\/playlists\/(\d+)\/movies\?page=1&per_page=\d+&sort=(asc|desc)$/,
+    );
+    const listed = list ? playlists[Number(list[1])] : undefined;
+    if (list && listed) {
+      const movies =
+        list[2] === "asc" ? listed.movies : [...listed.movies].reverse();
       return jsonResponse({
         error: false,
         data: {
@@ -66,6 +78,12 @@ function mockPlaylistFetch(movies: ReturnType<typeof movie>[]) {
   vi.stubGlobal("fetch", fetchMock);
 
   return fetchMock;
+}
+
+function mockPlaylistFetch(movies: ReturnType<typeof movie>[]) {
+  return mockPlaylistsFetch({
+    11: { name: "Weekend Picks", description: "Two for Saturday.", movies },
+  });
 }
 
 describe("movie playlist route", () => {
@@ -119,5 +137,48 @@ describe("movie playlist route", () => {
         requestURL(input as RequestInfo | URL).startsWith("/api/movies/playlists/"),
       ),
     ).toBe(false);
+  });
+
+  it("starts a fresh page and sort when moving from one playlist to another", async () => {
+    const fetchMock = mockPlaylistsFetch({
+      11: { name: "Weekend Picks", movies: [movie(1, "Arrival", 2016)] },
+      12: { name: "Late Night", movies: [movie(3, "Collateral", 2004)] },
+    });
+    const user = userEvent.setup();
+
+    const { router } = await renderRoute("/movies/playlist/11");
+
+    expect(
+      await screen.findByRole("heading", { name: "Weekend Picks" }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Sorted A to Z, click to sort Z to A" }),
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Sorted Z to A, click to sort A to Z",
+      }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await router.navigate({
+        to: "/movies/playlist/$id",
+        params: { id: "12" },
+      });
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Late Night" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sorted A to Z, click to sort Z to A" }),
+    ).toBeInTheDocument();
+
+    const listRequests = fetchMock.mock.calls
+      .map(([input]) => requestURL(input as RequestInfo | URL))
+      .filter(url => url.startsWith("/api/movies/playlists/12/movies"));
+    expect(listRequests).toEqual([
+      `/api/movies/playlists/12/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`,
+    ]);
   });
 });

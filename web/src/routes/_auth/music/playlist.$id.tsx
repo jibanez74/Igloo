@@ -117,7 +117,7 @@ function PlaylistPage() {
       payload={data?.error === false ? data.data : null}
       skeleton={<MusicDetailSkeleton variant="playlist" />}
     >
-      {(loaded, id) => <PlaylistContent playlistId={id} data={loaded} />}
+      {(loaded, id) => <PlaylistContent key={id} playlistId={id} data={loaded} />}
     </MediaDetailGuard>
   );
 }

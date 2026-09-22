@@ -62,7 +62,7 @@ function MoviePlaylistPage() {
       payload={data?.error === false ? data.data : null}
       skeleton={<MoviePlaylistSkeleton />}
     >
-      {(loaded, id) => <MoviePlaylistContent playlistId={id} data={loaded} />}
+      {(loaded, id) => <MoviePlaylistContent key={id} playlistId={id} data={loaded} />}
     </MediaDetailGuard>
   );
 }
