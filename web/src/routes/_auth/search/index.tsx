@@ -56,7 +56,7 @@ import type {
   TrackListItemType,
 } from "@/types";
 import { searchSearchSchema, type SearchParams } from "@/lib/route-search";
-import { nounForCount } from "@/lib/format";
+import { nounForCount, pluralize } from "@/lib/format";
 
 type PagedSearchTab = Exclude<SearchTab, "all">;
 
@@ -407,7 +407,7 @@ function AllResultsTab({ q }: { q: string }) {
   const announcement =
     totalAll === 0
       ? `No results for ${q}`
-      : `${totalAll.toLocaleString()} results for ${q}: ${movies.total} movies, ${shows.total} shows, ${albums.total} albums, ${musicians.total} musicians, ${tracks.total} tracks`;
+      : `${totalAll.toLocaleString()} results for ${q}: ${pluralize(movies.total, "movie")}, ${pluralize(shows.total, "show")}, ${pluralize(albums.total, "album")}, ${pluralize(musicians.total, "musician")}, ${pluralize(tracks.total, "track")}`;
 
   if (totalAll === 0) {
     return (

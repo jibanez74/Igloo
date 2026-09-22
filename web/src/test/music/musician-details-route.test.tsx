@@ -264,6 +264,21 @@ describe("musician details route accessibility", () => {
     expect(playAll).toHaveFocus();
   });
 
+  it("names the play actions with the singular noun for a one-track artist", async () => {
+    await renderMusicianDetailsRoute("/music/musician/21");
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Play all 1 track by The Soloist",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Shuffle play all 1 track by The Soloist",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("renders section skip links targeting the page headings", async () => {
     await renderMusicianDetailsRoute();
 

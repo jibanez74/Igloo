@@ -62,8 +62,8 @@ export default function LibraryStats<
   return (
     <section className="flex flex-wrap gap-x-6 gap-y-3" aria-label={regionLabel}>
       {figures.map(({ icon: Icon, label }, i) => (
-        <div key={label} className="flex items-center gap-2" aria-hidden="true">
-          <Icon className="size-4 text-primary" />
+        <div key={label} className="flex items-center gap-2">
+          <Icon className="size-4 text-primary" aria-hidden="true" />
           <span className="font-medium text-foreground">
             {isLoading ? "—" : counts[i]}
           </span>

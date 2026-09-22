@@ -53,6 +53,23 @@ describe("LibraryStats", () => {
     expect(screen.getByText("Movies")).toBeInTheDocument();
   });
 
+  it("leaves the counts inside the region for a reader to reach", async () => {
+    renderMovieStats(async () => ({
+      error: false,
+      data: { total_movies: 42 },
+    }));
+
+    const region = await screen.findByRole("region", {
+      name: "Library statistics: 42 movies",
+    });
+
+    // A region whose every child is aria-hidden has a name and nothing in it,
+    // and region navigation may skip it - so the counts must stay readable.
+    expect(region).toHaveTextContent("42");
+    expect(region).toHaveTextContent("Movies");
+    expect(region.querySelector("[aria-hidden='true']:not(svg)")).toBeNull();
+  });
+
   it("joins several figures into the one accessible name", async () => {
     renderWithQueryClient(
       <LibraryStats

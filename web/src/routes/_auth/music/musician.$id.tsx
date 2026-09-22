@@ -29,7 +29,7 @@ import {
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, pluralize } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -391,7 +391,7 @@ function MusicianDetailsContent({
                     size="lg"
                     onClick={handlePlayAll}
                     className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                    aria-label={`Play all ${tracks.length} tracks by ${musician.name}`}
+                    aria-label={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
                   >
                     <Play className="size-4 fill-current" aria-hidden="true" />
                     Play All
@@ -402,7 +402,7 @@ function MusicianDetailsContent({
                     size="lg"
                     onClick={handleShufflePlay}
                     className="w-full rounded-full font-semibold sm:w-auto"
-                    aria-label={`Shuffle play all ${tracks.length} tracks by ${musician.name}`}
+                    aria-label={`Shuffle play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
                   >
                     <Shuffle className="size-4" aria-hidden="true" />
                     Shuffle

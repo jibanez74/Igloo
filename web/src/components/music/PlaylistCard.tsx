@@ -8,7 +8,7 @@ import {
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import type { PlaylistSummaryType } from "@/types";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type PlaylistCardProps = {
@@ -28,7 +28,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         to="/music/playlist/$id"
         params={{ id: id.toString() }}
         className={cn("block", FOCUS_VISIBLE_RING_CLASS, "focus-visible:ring-inset")}
-        aria-label={`${name}, ${track_count} tracks, ${formatDuration(total_duration)}`}
+        aria-label={`${name}, ${pluralize(track_count, "track")}, ${formatDuration(total_duration)}`}
       >
         {/* Playlist cover - square with aspect-square to prevent CLS */}
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">
@@ -56,7 +56,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         <div className="text-center">
           <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {track_count} {track_count === 1 ? "track" : "tracks"}
+            {pluralize(track_count, "track")}
             {total_duration > 0 && ` · ${formatDuration(total_duration)}`}
           </p>
         </div>

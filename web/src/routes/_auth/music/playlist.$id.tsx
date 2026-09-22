@@ -42,7 +42,7 @@ import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, pluralize } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
@@ -407,7 +407,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 size="lg"
                 onClick={handlePlayAll}
                 className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                aria-label={`Play all ${track_count} tracks`}
+                aria-label={`Play all ${pluralize(track_count, "track")}`}
               >
                 {isLoadingRest ? (
                   <Spinner className="size-4" />
@@ -422,7 +422,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 size="lg"
                 onClick={handleShuffle}
                 className="w-full rounded-full font-semibold sm:w-auto"
-                aria-label={`Shuffle all ${track_count} tracks`}
+                aria-label={`Shuffle all ${pluralize(track_count, "track")}`}
               >
                 {isLoadingRest ? (
                   <Spinner className="size-4" />
