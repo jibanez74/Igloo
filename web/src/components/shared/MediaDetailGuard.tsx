@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import MediaNotFound, {
   type BackDestination,
 } from "@/components/shared/MediaNotFound";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 type MediaDetailGuardProps<TPayload> = {
   /** The parsed route id; null when the URL segment was not a number. */
@@ -46,10 +47,10 @@ export default function MediaDetailGuard<TPayload>({
   if (isError || data?.error) {
     return (
       <MediaNotFound
-        message={
-          data?.message
-          || `Failed to load ${noun} details. Please try again later.`
-        }
+        message={apiErrorMessage(
+          data,
+          `Failed to load ${noun} details. Please try again later.`,
+        )}
         back={back}
       />
     );
