@@ -1,55 +1,93 @@
 import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Disc3, Search } from "lucide-react";
+import { Disc3, Music, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { searchSpotifyAlbums } from "@/lib/api";
 import {
   MOTION_MICRO_COLORS_CLASS,
   PEER_FOCUS_VISIBLE_RING_CLASS,
 } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type {
-  ApiResponseType,
-  SpotifyAlbumSearchRequest,
-  SpotifyAlbumSearchResultType,
-} from "@/types";
+import type { ApiResponseType } from "@/types";
 
-type SpotifyAlbumPickerProps = {
-  confirmLabel: string;
-  initialTitle: string;
-  onConfirm: (result: SpotifyAlbumSearchResultType) => Promise<void>;
-  renderResultMeta?: (result: SpotifyAlbumSearchResultType) => ReactNode;
-  searchFn?: (
-    body: SpotifyAlbumSearchRequest,
-  ) => Promise<ApiResponseType<{ results: SpotifyAlbumSearchResultType[] }>>;
+/**
+ * Deliberately not shared with `movies/TmdbMoviePicker`, which looks similar
+ * and is not: it takes year and TMDB-id fields, marks results already in the
+ * library as unselectable, and rethrows from `onConfirm` where this swallows
+ * into a toast. Those are behaviors, not styling.
+ */
+export type SpotifyPickerKind = "album" | "track";
+
+/** What the picker itself reads off a result; each kind carries more. */
+export type SpotifySearchResult = {
+  spotify_id: string;
+  title: string;
+  artist_names: string[];
+  cover_url: string;
 };
 
-export default function SpotifyAlbumPicker({
+const KIND_COPY = {
+  album: {
+    label: "Album title",
+    legend: "Spotify album results",
+    empty: "No Spotify album matches found",
+    icon: Disc3,
+  },
+  track: {
+    label: "Track title",
+    legend: "Spotify track results",
+    empty: "No Spotify track matches found",
+    icon: Music,
+  },
+} as const;
+
+type SpotifyPickerProps<T extends SpotifySearchResult> = {
+  kind: SpotifyPickerKind;
+  confirmLabel: string;
+  initialTitle: string;
+  searchFn: (body: {
+    title: string;
+  }) => Promise<ApiResponseType<{ results: T[] }>>;
+  onConfirm: (result: T) => Promise<void>;
+  /** Parenthetical after the title: a release year, or a duration. */
+  getTitleSuffix: (result: T) => string;
+  /** Muted lines under the artists row, above the Spotify id. */
+  renderDetails?: (result: T) => ReactNode;
+  /** Extra content below the card, e.g. an already-in-library note. */
+  renderResultMeta?: (result: T) => ReactNode;
+};
+
+export default function SpotifyPicker<T extends SpotifySearchResult>({
+  kind,
   confirmLabel,
   initialTitle,
+  searchFn,
   onConfirm,
+  getTitleSuffix,
+  renderDetails,
   renderResultMeta,
-  searchFn = searchSpotifyAlbums,
-}: SpotifyAlbumPickerProps) {
+}: SpotifyPickerProps<T>) {
   const pickerId = useId().replace(/:/g, "");
   const [title, setTitle] = useState(initialTitle);
-  const [results, setResults] = useState<SpotifyAlbumSearchResultType[]>([]);
+  const [results, setResults] = useState<T[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
+  const copy = KIND_COPY[kind];
   const trimmedTitle = title.trim();
   const selectedResult =
     results.find(result => result.spotify_id === selectedId) ?? null;
   const canSearch = trimmedTitle.length > 0;
-  const resultsGroupName = `${pickerId}-spotify-album-result`;
+  const titleInputId = `${pickerId}-title`;
+  const resultsGroupName = `${pickerId}-spotify-${kind}-result`;
   const resultsLabelId = `${pickerId}-spotify-results-label`;
 
   function getResultInputId(spotifyId: string) {
-    return `${pickerId}-spotify-album-result-${spotifyId}`;
+    return `${pickerId}-spotify-${kind}-result-${spotifyId}`;
   }
 
   function handleResultArrowKey(
@@ -109,7 +147,7 @@ export default function SpotifyAlbumPicker({
       } else {
         setResults(response.data.results);
         if (response.data.results.length === 0) {
-          showInfo("No Spotify album matches found");
+          showInfo(copy.empty);
         }
       }
     } catch {
@@ -138,11 +176,11 @@ export default function SpotifyAlbumPicker({
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="spotify-album-title" className="text-muted-foreground">
-          Album title
+        <Label htmlFor={titleInputId} className="text-muted-foreground">
+          {copy.label}
         </Label>
         <Input
-          id="spotify-album-title"
+          id={titleInputId}
           value={title}
           onChange={event => setTitle(event.target.value)}
           className="mt-1 border-border bg-muted text-foreground"
@@ -167,10 +205,10 @@ export default function SpotifyAlbumPicker({
       {results.length > 0 && (
         <fieldset className="space-y-2">
           <legend id={resultsLabelId} className="sr-only">
-            Spotify album results
+            {copy.legend}
           </legend>
           <p className="text-sm text-muted-foreground">
-            {results.length} result{results.length === 1 ? "" : "s"} found
+            {pluralize(results.length, "result")} found
           </p>
 
           <ul className="max-h-72 space-y-2 overflow-y-auto">
@@ -178,8 +216,10 @@ export default function SpotifyAlbumPicker({
               const meta = renderResultMeta?.(result);
 
               return (
-                <SpotifyAlbumResultCard
+                <SpotifyResultCard
                   key={result.spotify_id}
+                  details={renderDetails?.(result)}
+                  fallbackIcon={copy.icon}
                   inputId={getResultInputId(result.spotify_id)}
                   meta={meta}
                   metaId={meta ? `${pickerId}-spotify-meta-${result.spotify_id}` : undefined}
@@ -188,6 +228,7 @@ export default function SpotifyAlbumPicker({
                   onSelect={() => setSelectedId(result.spotify_id)}
                   result={result}
                   selected={selectedId === result.spotify_id}
+                  titleSuffix={getTitleSuffix(result)}
                 />
               );
             })}
@@ -208,7 +249,9 @@ export default function SpotifyAlbumPicker({
   );
 }
 
-function SpotifyAlbumResultCard({
+function SpotifyResultCard({
+  details,
+  fallbackIcon: FallbackIcon,
   inputId,
   meta,
   metaId,
@@ -217,22 +260,24 @@ function SpotifyAlbumResultCard({
   onSelect,
   result,
   selected,
+  titleSuffix,
 }: {
+  details?: ReactNode;
+  fallbackIcon: typeof Disc3;
   inputId: string;
   meta?: ReactNode;
   metaId?: string;
   name: string;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onSelect: () => void;
-  result: SpotifyAlbumSearchResultType;
+  result: SpotifySearchResult;
   selected: boolean;
+  titleSuffix: string;
 }) {
   const artistsLabel =
     result.artist_names.length > 0
       ? result.artist_names.join(", ")
       : "Unknown artist";
-  const releaseYear = result.release_date.slice(0, 4);
-  const albumType = result.album_type ? result.album_type : "album";
   const labelId = `${inputId}-label`;
 
   return (
@@ -272,27 +317,25 @@ function SpotifyAlbumResultCard({
           />
         ) : (
           <div className="flex size-20 shrink-0 items-center justify-center rounded-sm bg-accent">
-            <Disc3 className="size-6 text-muted-foreground" aria-hidden="true" />
+            <FallbackIcon
+              className="size-6 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-foreground">
             {result.title}
-            {releaseYear && (
-              <span className="ml-1 text-muted-foreground">({releaseYear})</span>
+            {titleSuffix && (
+              <span className="ml-1 text-muted-foreground">({titleSuffix})</span>
             )}
           </p>
           <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {artistsLabel}
           </p>
+          {details}
           <p className="mt-1 text-xs text-muted-foreground">
             Spotify ID: {result.spotify_id}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {albumType}
-            {result.total_tracks > 0
-              ? ` - ${result.total_tracks} track${result.total_tracks === 1 ? "" : "s"}`
-              : ""}
           </p>
         </div>
       </Label>
