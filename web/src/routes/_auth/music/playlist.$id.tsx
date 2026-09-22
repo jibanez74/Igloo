@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
@@ -48,6 +49,7 @@ import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { formatDuration, pluralize } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
   MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
@@ -315,6 +317,17 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
+      <DetailSkipLinks
+        titleHref="#playlist-name"
+        titleLabel="Skip to playlist info"
+        sections={[
+          allTracks.length > 0 && {
+            href: "#tracks-heading",
+            label: "Skip to tracks",
+          },
+        ]}
+      />
+
       {/* Header section */}
       <header className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
         {/* Playlist cover */}
@@ -340,7 +353,11 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {/* Name */}
           <h1
             id="playlist-name"
-            className="text-2xl font-bold text-foreground sm:truncate sm:text-3xl md:text-4xl lg:text-5xl"
+            tabIndex={-1}
+            className={cn(
+              "rounded-sm text-2xl font-bold text-foreground sm:truncate sm:text-3xl md:text-4xl lg:text-5xl",
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
             title={playlist.name}
           >
             {playlist.name}
@@ -461,7 +478,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <section aria-labelledby="tracks-heading">
         <h2
           id="tracks-heading"
-          className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
+          tabIndex={-1}
+          className={cn(DETAIL_RAIL_HEADING_CLASS, "flex items-center gap-2")}
         >
           <List className="size-5 text-primary" aria-hidden="true" />
           Tracks
