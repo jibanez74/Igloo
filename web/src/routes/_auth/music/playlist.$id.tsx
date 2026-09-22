@@ -33,7 +33,7 @@ import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
-import { unwrapString, unwrapInt } from "@/lib/nullable";
+import { trackRowProps } from "@/lib/track-row-props";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
@@ -739,12 +739,7 @@ function VirtualizedPlaylistTracksList({
               }}
             >
               <TrackItem
-                id={track.id}
-                title={track.title}
-                duration={track.duration}
-                subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
-                albumId={unwrapInt(track.album_id)}
-                musicianId={unwrapInt(track.musician_id)}
+                {...trackRowProps(track)}
                 variant="playlist"
                 {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}

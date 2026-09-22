@@ -15,10 +15,7 @@ import TrackItem from "@/components/music/TrackItem";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
-import {
-  unwrapInt,
-  unwrapString,
-} from "@/lib/nullable";
+import { trackRowProps } from "@/lib/track-row-props";
 import { isApiFailure } from "@/lib/is-api-failure";
 import {
   searchAlbumsQueryOpts,
@@ -696,12 +693,7 @@ function SearchTrackItem({
 
   return (
     <TrackItem
-      id={track.id}
-      title={track.title}
-      duration={track.duration}
-      subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
-      albumId={unwrapInt(track.album_id)}
-      musicianId={unwrapInt(track.musician_id)}
+      {...trackRowProps(track)}
       variant="library"
       {...matchTrackPlayback(track.id)}
       onPlay={handlePlay}

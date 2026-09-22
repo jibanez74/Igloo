@@ -19,7 +19,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import SortableTrackItem from "./SortableTrackItem";
 import TrackItem from "./TrackItem";
-import { unwrapString, unwrapInt } from "@/lib/nullable";
+import { trackRowProps } from "@/lib/track-row-props";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import type { PlaylistTrackType } from "@/types";
 
@@ -144,12 +144,7 @@ export default function DraggableTrackList({
               <SortableTrackItem
                 key={track.id}
                 sortableId={track.id}
-                id={track.id}
-                title={track.title}
-                duration={track.duration}
-                subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
-                albumId={unwrapInt(track.album_id)}
-                musicianId={unwrapInt(track.musician_id)}
+                {...trackRowProps(track)}
                 variant="playlist"
                 {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}
@@ -166,14 +161,7 @@ export default function DraggableTrackList({
           {activeTrack ? (
             <div className="rounded-lg bg-card shadow-2xl ring-2 ring-ring">
               <TrackItem
-                id={activeTrack.id}
-                title={activeTrack.title}
-                duration={activeTrack.duration}
-                subtitle={
-                  activeTrack.musician_name?.Valid
-                    ? activeTrack.musician_name.String
-                    : "Unknown Artist"
-                }
+                {...trackRowProps(activeTrack)}
                 variant="playlist"
                 isPlaying={false}
                 isCurrentTrack={false}
