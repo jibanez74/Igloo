@@ -135,7 +135,7 @@ export default function LibraryAllTab<
   }, [currentPage, totalPages, onPageChange]);
 
   const getAnnouncement = () => {
-    if (isLoading) return undefined;
+    if (isLoading || isError || isApiFailure(data)) return undefined;
     if (items.length === 0) return `No ${noun.plural} found`;
     return `Showing ${items.length} ${nounForCount(items.length, noun)}, page ${currentPage} of ${totalPages}`;
   };

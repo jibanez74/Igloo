@@ -82,7 +82,7 @@ export default function AddToPlaylistDialog({
         });
         queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
 
-        showAdded("Track", `to ${selectedPlaylists.size} playlist(s)`);
+        showAdded("Track", `to ${pluralize(selectedPlaylists.size, "playlist")}`);
         handleClose();
       } else {
         showInfo("Track already in selected playlists");

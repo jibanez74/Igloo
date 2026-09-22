@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Tv } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
@@ -151,6 +151,22 @@ describe("LibraryAllTab", () => {
         statusRegions.some(region => region.textContent === "No shows found"),
       ).toBe(true);
     });
+  });
+
+  it("leaves the failure to the alert instead of announcing an empty library", async () => {
+    renderTab(async () => ({ error: true, message: "Shows are unavailable." }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Shows are unavailable.");
+
+    // LiveAnnouncer defers its text by 100ms, so give a wrong announcement
+    // time to land before asserting that none did.
+    await act(() => new Promise(resolve => setTimeout(resolve, 150)));
+    expect(
+      screen
+        .queryAllByRole("status")
+        .some(region => region.textContent === "No shows found"),
+    ).toBe(false);
   });
 
   it("announces a single result with the singular noun", async () => {
