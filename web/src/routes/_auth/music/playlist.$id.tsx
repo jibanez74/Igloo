@@ -36,9 +36,11 @@ import {
 } from "@/lib/query-opts";
 import { trackRowProps } from "@/lib/track-row-props";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { unwrapString } from "@/lib/nullable";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
@@ -135,12 +137,11 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
-  const coverUrl = getMediaImageUrl(
-    playlist.cover_image?.Valid ? playlist.cover_image.String : null
+  const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
+  const { showPoster: showCover, onError: onCoverError } = usePosterFallback(
+    coverUrl ?? "",
   );
-  const description = playlist.description?.Valid
-    ? playlist.description.String
-    : null;
+  const description = unwrapString(playlist.description);
 
   // React 19 document metadata - dynamic based on playlist
   const pageTitle = `${playlist.name} - Igloo`;
@@ -318,11 +319,12 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         {/* Playlist cover */}
         <figure className="mx-auto shrink-0 lg:mx-0">
           <div className="aspect-square w-40 overflow-hidden rounded-xl border border-primary/20 bg-muted shadow-2xl shadow-primary/10 sm:w-48 lg:w-56 xl:w-64">
-            {coverUrl ? (
+            {showCover ? (
               <img
-                src={coverUrl}
+                src={coverUrl ?? ""}
                 alt={playlist.name}
                 className="size-full object-cover"
+                onError={onCoverError}
               />
             ) : (
               <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/30">
