@@ -118,7 +118,7 @@ async function expectPlaylistsSmoke(page: Page) {
   await expect(backToPlaylistsButton).toBeVisible();
 
   const likedEmptyState = playlistsPanel.getByText(
-    "You have not liked any movies yet.",
+    "No liked movies found in your library.",
   );
   const firstLikedMovieLink = playlistsPanel
     .locator('a[href^="/movies/"]')

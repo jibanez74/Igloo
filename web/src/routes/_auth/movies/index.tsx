@@ -17,21 +17,16 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/movies/MovieCard";
 import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
 import LibraryAllTab, {
-  LibraryAllTabSkeleton,
   type LibraryNoun,
 } from "@/components/shared/LibraryAllTab";
-import LibraryEmptyState from "@/components/shared/LibraryEmptyState";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
 import LibraryMoreMenu, {
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
-import LibraryPagination from "@/components/shared/LibraryPagination";
-import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
 import LibraryStats from "@/components/shared/LibraryStats";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import {
@@ -40,7 +35,6 @@ import {
   CONTENT_FADE_TRANSITION_MS,
   FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_MENU_ITEM_CLASS,
-  LIBRARY_POSTER_GRID_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -62,7 +56,6 @@ import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { cn } from "@/lib/utils";
-import { scrollWindowToTop } from "@/lib/motion";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import {
@@ -693,6 +686,8 @@ function PlaylistsTabContent({
   );
 }
 
+const LIKED_MOVIE_NOUN = { singular: "liked movie", plural: "liked movies" };
+
 type LikedMoviesInPlaylistsTabProps = {
   playlistsPage: number;
   sort: "asc" | "desc";
@@ -709,12 +704,12 @@ function LikedMoviesInPlaylistsTab({
   const navigate = Route.useNavigate();
   const backToPlaylistsButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const { data, isLoading, isError, refetch } = useQuery(
+  // The same key LibraryAllTab runs below, so TanStack serves both from one
+  // request; the page reads it only for the count beside the back link.
+  const { data, isLoading } = useQuery(
     likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
   );
 
-  const movies = data?.error === false ? data.data.movies : [];
-  const totalPages = data?.error === false ? data.data.total_pages : 0;
   const total = data?.error === false ? data.data.total : 0;
 
   useEffect(() => {
@@ -727,12 +722,6 @@ function LikedMoviesInPlaylistsTab({
     focusDialogRestoreTarget(backToPlaylistsButtonRef.current);
   }, [focusIntentRef, isLoading]);
 
-  const getAnnouncement = () => {
-    if (isLoading) return undefined;
-    if (movies.length === 0) return "No liked movies";
-    return `Showing ${movies.length} liked movies, page ${playlistsPage} of ${totalPages}`;
-  };
-
   const handlePageChange = (newPage: number) => {
     navigate({
       to: "/movies",
@@ -742,7 +731,6 @@ function LikedMoviesInPlaylistsTab({
       }),
       replace: true,
     });
-    scrollWindowToTop();
   };
 
   const handleSortToggle = () =>
@@ -756,53 +744,20 @@ function LikedMoviesInPlaylistsTab({
       replace: true,
     });
 
-  if (isLoading) {
-    return <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />;
-  }
-
-  if (isError || isApiFailure(data)) {
-    return (
-      <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t load liked movies. Check your connection and try again."
-        }
-        onRetry={() => void refetch()}
-      />
-    );
-  }
-
-  if (movies.length === 0) {
-    return (
-      <div>
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <button
-            ref={backToPlaylistsButtonRef}
-            type="button"
-            onClick={onExitLiked}
-            className={cn(
-              "rounded-sm text-sm font-medium text-primary hover:underline",
-              FOCUS_VISIBLE_RING_CLASS,
-            )}
-          >
-            Back to playlists
-          </button>
-        </div>
-        <LibraryEmptyState
-          icon={Heart}
-          message="You have not liked any movies yet."
-        />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <LiveAnnouncer message={getAnnouncement()} />
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
+    <LibraryAllTab
+      queryOpts={likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort)}
+      getItems={data => data.movies}
+      renderCard={movie => <MovieCard movie={movie} />}
+      currentPage={playlistsPage}
+      sort={sort}
+      perPage={MOVIES_PER_PAGE}
+      noun={LIKED_MOVIE_NOUN}
+      emptyIcon={Heart}
+      onPageChange={handlePageChange}
+      onSortToggle={handleSortToggle}
+      toolbarStartSlot={
+        <>
           <button
             ref={backToPlaylistsButtonRef}
             type="button"
@@ -814,32 +769,14 @@ function LikedMoviesInPlaylistsTab({
           >
             Back to playlists
           </button>
-          <span className="text-sm text-muted-foreground">
-            {total.toLocaleString()} liked
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-sm text-muted-foreground">
-            Page {playlistsPage} of {totalPages}
-          </span>
-          <LibrarySortToggle sort={sort} onToggle={handleSortToggle} />
-        </div>
-      </div>
-
-      <div className={`mb-8 ${LIBRARY_POSTER_GRID_CLASS}`}>
-        {movies.map(movie => (
-          <MovieCard key={movie.id} movie={movie} />
-        ))}
-      </div>
-
-      {totalPages > 1 && (
-        <LibraryPagination
-          currentPage={playlistsPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      )}
-    </div>
+          {data?.error === false && (
+            <span className="text-sm text-muted-foreground">
+              {total.toLocaleString()} liked
+            </span>
+          )}
+        </>
+      }
+    />
   );
 }
 

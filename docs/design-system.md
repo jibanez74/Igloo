@@ -612,9 +612,12 @@ its five-column round-thumb grid with `MusicianCardSkeleton`. The tab owns one
 toolbar — page info on the right, then the sort toggle, with `toolbarStartSlot`
 for anything a page puts on the left — and renders it identically while
 loading, empty, errored and loaded, reserving its height so the grid top never
-moves (§3.4). Liked movies and
-movie playlists stay local to the movies page, as the Tracks and Playlists
-tabs do to the music page; a new library page composes the same parts. The
+moves (§3.4). The liked-movies view is a
+`LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
+and count, so it inherits the tab's out-of-range page clamp and keeps that
+link reachable while loading, empty and errored. Movie playlists stay local to
+the movies page, as the Tracks and Playlists tabs do to the music page; a new
+library page composes the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `MoviesLoadError` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a
