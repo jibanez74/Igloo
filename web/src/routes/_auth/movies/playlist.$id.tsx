@@ -5,12 +5,15 @@ import { ArrowLeft, ListVideo } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import MovieCard from "@/components/movies/MovieCard";
 import LibraryPagination from "@/components/shared/LibraryPagination";
+import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
+import { LibraryAllTabSkeleton } from "@/components/shared/LibraryAllTab";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import {
   moviePlaylistDetailsQueryOpts,
   moviePlaylistMoviesQueryOpts,
 } from "@/lib/query-opts";
 import {
+  LIBRARY_POSTER_GRID_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOVIES_PER_PAGE,
   MOVIES_PLAYLISTS_TAB_SEARCH,
@@ -147,16 +150,13 @@ function MoviePlaylistPage() {
           <span className="text-sm text-muted-foreground">
             Page {page} of {Math.max(totalPages, 1)}
           </span>
-          <button
-            type="button"
-            onClick={() => {
+          <LibrarySortToggle
+            sort={sort}
+            onToggle={() => {
               setSort((s) => (s === "asc" ? "desc" : "asc"));
               setPage(1);
             }}
-            className="rounded-full bg-muted px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
-          >
-            Sort: {sort === "asc" ? "A–Z" : "Z–A"}
-          </button>
+          />
         </div>
       </div>
 
@@ -170,16 +170,14 @@ function MoviePlaylistPage() {
           onRetry={() => void refetchMovies()}
         />
       ) : moviesLoading ? (
-        <div className="flex justify-center py-12">
-          <Spinner className="size-8 text-primary" />
-        </div>
+        <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />
       ) : movies.length === 0 ? (
         <p className="py-12 text-center text-muted-foreground">
           No movies in this playlist yet.
         </p>
       ) : (
         <>
-          <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className={cn("mb-8", LIBRARY_POSTER_GRID_CLASS)}>
             {movies.map((m) => (
               <MovieCard key={m.id} movie={m} />
             ))}
