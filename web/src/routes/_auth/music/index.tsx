@@ -36,7 +36,6 @@ import {
   spotifyStatusQueryOpts,
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
-import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import {
@@ -899,14 +898,11 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
     scrollWindowToTop();
   };
 
+  // playTrackFromList, as the library tab does: a click on the current row
+  // toggles play/pause, and the raw rows keep each track's own cover and
+  // artist as the queue advances.
   const handlePlayTrack = (track: TrackListItemType) => {
-    const audioTrack = convertToAudioTrack(track);
-    const allAudioTracks = tracks.map((t) => convertToAudioTrack(t));
-    audioPlayer.playTrack(audioTrack, allAudioTracks, {
-      cover: null,
-      title: "Liked Tracks",
-      musician: null,
-    });
+    audioPlayer.playTrackFromList(tracks, track.id);
   };
 
   if (isLoading) {
