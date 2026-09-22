@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -28,14 +27,17 @@ import {
 } from "@/components/music/SpotifyPopularity";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import TrackItem from "@/components/music/TrackItem";
 import { formatDuration, pluralize } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
+import { trackRowProps } from "@/lib/track-row-props";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   DETAIL_RAIL_HEADING_CLASS,
   DETAIL_TRACK_LIST_CONTAINER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  LIBRARY_POSTER_GRID_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
 } from "@/lib/constants";
@@ -43,7 +45,6 @@ import { cn } from "@/lib/utils";
 import type {
   MusicianAlbumType,
   MusicianDetailsResponseType,
-  MusicianTrackType,
   PlayableTrackData,
 } from "@/types";
 
@@ -110,10 +111,9 @@ function MusicianDetailsContent({
   const audioPlayer = useAudioPlayerActions();
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
-  const [thumbFailed, setThumbFailed] = useState(false);
-
-  const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
-  const showThumb = thumbUrl && !thumbFailed;
+  const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb)) ?? "";
+  const { showPoster: showThumb, onError: onThumbError } =
+    usePosterFallback(thumbUrl);
   const summary = unwrapString(musician.summary);
   const spotifyPopularityRaw = unwrapFloat(musician.spotify_popularity);
   const spotifyPopularity =
@@ -122,54 +122,49 @@ function MusicianDetailsContent({
 
   // React 19 document metadata - dynamic based on musician
   const pageTitle = `${musician.name} - Igloo`;
-  const pageDescription = `Listen to ${musician.name} - ${albums.length} albums, ${tracks.length} tracks in your Igloo music library.`;
+  const pageDescription = `Listen to ${musician.name} - ${pluralize(albums.length, "album")}, ${pluralize(tracks.length, "track")} in your Igloo music library.`;
 
   // A musician's tracks span every album they appear on, so each row carries its
   // own album title and cover. Keep them as PlayableTrackData and hand them to
   // the player, or the queue-wide fallback shows the musician's name in the
   // album slot and their photo as the cover for every track. Only the artist is
   // genuinely queue-wide here, so that one is filled in from the page.
-  const toPlayableData = (
-    musicianTracks: MusicianTrackType[],
-  ): PlayableTrackData[] =>
-    musicianTracks.map((track) => ({
-      id: track.id,
-      title: track.title,
-      duration: track.duration,
-      codec: track.codec,
-      bit_rate: track.bit_rate,
-      album_id: track.album_id,
-      album_title: track.album_title,
-      album_cover: track.album_cover,
-      musician_id: { Int64: musician.id, Valid: true },
-      musician_name: { String: musician.name, Valid: true },
-    }));
+  const playableTracks: PlayableTrackData[] = tracks.map((track) => ({
+    id: track.id,
+    title: track.title,
+    duration: track.duration,
+    codec: track.codec,
+    bit_rate: track.bit_rate,
+    album_id: track.album_id,
+    album_title: track.album_title,
+    album_cover: track.album_cover,
+    musician_id: { Int64: musician.id, Valid: true },
+    musician_name: { String: musician.name, Valid: true },
+  }));
 
   const albumInfo = {
-    cover: thumbUrl,
+    cover: thumbUrl || null,
     title: musician.name,
     musician: musician.name,
   };
 
   const handlePlayAll = () => {
-    if (tracks.length === 0) return;
+    if (playableTracks.length === 0) return;
 
-    const rawTracks = toPlayableData(tracks);
     audioPlayer.playQueue(
-      rawTracks.map(convertToAudioTrack),
+      playableTracks.map(convertToAudioTrack),
       albumInfo,
-      rawTracks,
+      playableTracks,
     );
   };
 
   const handleShufflePlay = () => {
-    if (tracks.length === 0) return;
+    if (playableTracks.length === 0) return;
 
-    const rawTracks = toPlayableData(tracks);
     audioPlayer.shuffleQueue(
-      rawTracks.map(convertToAudioTrack),
+      playableTracks.map(convertToAudioTrack),
       albumInfo,
-      rawTracks,
+      playableTracks,
     );
   };
 
@@ -178,20 +173,21 @@ function MusicianDetailsContent({
   // there. The list is rotated to start at the clicked track, which is what the
   // page has always done, and passing the raw rows keeps each track's own album
   // details as the queue advances.
-  const handlePlayTrack = (track: MusicianTrackType) => {
-    const trackIndex = tracks.findIndex((t) => t.id === track.id);
+  const handlePlayTrack = (trackId: number) => {
+    const trackIndex = playableTracks.findIndex((t) => t.id === trackId);
     if (trackIndex < 0) return;
 
-    const rawTracks = toPlayableData([
-      ...tracks.slice(trackIndex),
-      ...tracks.slice(0, trackIndex),
-    ]);
-
-    audioPlayer.playTrackFromList(rawTracks, track.id);
+    audioPlayer.playTrackFromList(
+      [
+        ...playableTracks.slice(trackIndex),
+        ...playableTracks.slice(0, trackIndex),
+      ],
+      trackId,
+    );
   };
 
   // Screen reader announcement summarizing the page
-  const pageAnnouncement = `${musician.name}. ${albums.length} ${albums.length === 1 ? "album" : "albums"}, ${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}. Total duration: ${formatDuration(total_duration)}.${genres.length > 0 ? ` Genres: ${genres.join(", ")}.` : ""}`;
+  const pageAnnouncement = `${musician.name}. ${pluralize(albums.length, "album")}, ${pluralize(tracks.length, "track")}. Total duration: ${formatDuration(total_duration)}.${genres.length > 0 ? ` Genres: ${genres.join(", ")}.` : ""}`;
   const pageAnnouncementId = `musician-${musician.id}-summary`;
 
   return (
@@ -225,7 +221,7 @@ function MusicianDetailsContent({
       />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <MusicDetailBackdrop imageUrl={thumbUrl ?? ""} fallbackIcon={User} />
+        <MusicDetailBackdrop imageUrl={thumbUrl} fallbackIcon={User} />
       </div>
 
       <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
@@ -248,7 +244,7 @@ function MusicianDetailsContent({
                     decoding="async"
                     fetchPriority="low"
                     className="size-full object-cover"
-                    onError={() => setThumbFailed(true)}
+                    onError={onThumbError}
                   />
                 ) : (
                   <div
@@ -320,9 +316,7 @@ function MusicianDetailsContent({
                       className="size-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <span>
-                      {albums.length} {albums.length === 1 ? "album" : "albums"}
-                    </span>
+                    <span>{pluralize(albums.length, "album")}</span>
                   </Badge>
                 </li>
                 <li>
@@ -334,9 +328,7 @@ function MusicianDetailsContent({
                       className="size-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <span>
-                      {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
-                    </span>
+                    <span>{pluralize(tracks.length, "track")}</span>
                   </Badge>
                 </li>
                 <li>
@@ -432,7 +424,7 @@ function MusicianDetailsContent({
                 Discography
               </h2>
 
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              <div className={LIBRARY_POSTER_GRID_CLASS}>
                 {albums.map((album) => (
                   <AlbumCard
                     key={album.id}
@@ -467,19 +459,14 @@ function MusicianDetailsContent({
 
               <div className={DETAIL_TRACK_LIST_CONTAINER_CLASS}>
                 <div className="divide-y divide-border/30">
-                  {tracks.map((track) => (
+                  {playableTracks.map((track) => (
                     <TrackItem
                       key={track.id}
-                      id={track.id}
-                      title={track.title}
-                      duration={track.duration}
-                      subtitle={
-                        unwrapString(track.album_title) ?? "Unknown Album"
-                      }
-                      albumId={unwrapInt(track.album_id)}
+                      {...trackRowProps(track)}
+                      subtitle={unwrapString(track.album_title) ?? "Unknown Album"}
                       variant="musician"
                       {...matchTrackPlayback(track.id)}
-                      onPlay={() => handlePlayTrack(track)}
+                      onPlay={() => handlePlayTrack(track.id)}
                     />
                   ))}
                 </div>
@@ -496,7 +483,7 @@ function MusicianDetailsContent({
 
 function albumSubtitle(album: MusicianAlbumType) {
   const year = unwrapInt(album.year);
-  const trackCount = `${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`;
+  const trackCount = pluralize(album.track_count, "track");
 
   return year ? `${year} · ${trackCount}` : trackCount;
 }

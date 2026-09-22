@@ -32,9 +32,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import TrackItem from "@/components/music/TrackItem";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
-import { formatDate, formatDuration } from "@/lib/format";
+import {
+  formatDate,
+  formatDuration,
+  nounForCount,
+  pluralize,
+} from "@/lib/format";
 import type {
   AlbumDetailsResponseType,
   ArtistType,
@@ -127,6 +133,7 @@ function AlbumDetailsContent({
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const coverUrl = getMediaImageUrl(unwrapString(album.cover));
+  const releaseDate = unwrapString(album.release_date);
   const releaseYear = unwrapInt(album.year);
   const musicianName = unwrapString(album.musician);
   const spotifyPopularity = unwrapFloat(album.spotify_popularity);
@@ -142,7 +149,7 @@ function AlbumDetailsContent({
   const pageTitle = musicianName
     ? `${album.title} by ${musicianName} - Igloo`
     : `${album.title} - Igloo`;
-  const pageDescription = `Listen to ${album.title}${musicianName ? ` by ${musicianName}` : ""} - ${tracks.length} tracks in your Igloo music library.`;
+  const pageDescription = `Listen to ${album.title}${musicianName ? ` by ${musicianName}` : ""} - ${pluralize(tracks.length, "track")} in your Igloo music library.`;
 
   const handleDeleteAlbum = async () => {
     setIsDeleting(true);
@@ -247,7 +254,7 @@ function AlbumDetailsContent({
     : null;
 
   // Screen reader announcement summarizing the page
-  const pageAnnouncement = `${album.title}${musicianName ? ` by ${musicianName}` : ""}. ${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}. Total duration: ${formatDuration(total_duration)}.${album_genres.length > 0 ? ` Genres: ${album_genres.join(", ")}.` : ""}`;
+  const pageAnnouncement = `${album.title}${musicianName ? ` by ${musicianName}` : ""}. ${pluralize(tracks.length, "track")}. Total duration: ${formatDuration(total_duration)}.${album_genres.length > 0 ? ` Genres: ${album_genres.join(", ")}.` : ""}`;
   const pageAnnouncementId = `album-${album.id}-summary`;
 
   // playTrack toggles play/pause itself when the clicked track is current
@@ -357,7 +364,7 @@ function AlbumDetailsContent({
                 className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
                 aria-label="Album details"
               >
-                {(album.release_date.Valid || releaseYear) && (
+                {(releaseDate || releaseYear) && (
                   <li>
                     <Badge
                       variant="outline"
@@ -367,14 +374,8 @@ function AlbumDetailsContent({
                         className="size-4 shrink-0 text-muted-foreground"
                         aria-hidden="true"
                       />
-                      <time
-                        dateTime={
-                          album.release_date.String || String(releaseYear ?? "")
-                        }
-                      >
-                        {album.release_date.Valid
-                          ? formatDate(album.release_date.String)
-                          : releaseYear}
+                      <time dateTime={releaseDate ?? String(releaseYear ?? "")}>
+                        {releaseDate ? formatDate(releaseDate) : releaseYear}
                       </time>
                     </Badge>
                   </li>
@@ -388,9 +389,7 @@ function AlbumDetailsContent({
                       className="size-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <span>
-                      {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
-                    </span>
+                    <span>{pluralize(tracks.length, "track")}</span>
                   </Badge>
                 </li>
                 <li>
@@ -512,8 +511,7 @@ function AlbumDetailsContent({
                 <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">
                   <li>The album and all its metadata</li>
                   <li>
-                    All {tracks.length}{" "}
-                    {tracks.length === 1 ? "track" : "tracks"} associated with
+                    All {pluralize(tracks.length, "track")} associated with
                     this album
                   </li>
                   <li>All genre and artist associations</li>
@@ -526,7 +524,10 @@ function AlbumDetailsContent({
                     id="artists-heading"
                     className="mb-3 text-center text-sm font-semibold tracking-wide text-muted-foreground uppercase lg:text-left"
                   >
-                    {artists.length === 1 ? "Artist" : "Artists"}
+                    {nounForCount(artists.length, {
+                      singular: "Artist",
+                      plural: "Artists",
+                    })}
                   </h2>
                   <div className="flex flex-wrap justify-center gap-3 lg:justify-start">
                     {artists.map((artist: ArtistType) => (
@@ -618,14 +619,12 @@ function AlbumDetailsContent({
               Album Details
             </h2>
             <dl className="grid grid-cols-1 gap-6 text-sm min-[480px]:grid-cols-2 lg:grid-cols-4">
-              {album.release_date.Valid && (
+              {releaseDate && (
                 <div>
                   <dt className="font-semibold tracking-wide text-primary/70 uppercase">
                     Release Date
                   </dt>
-                  <dd className="mt-1 text-foreground">
-                    {formatDate(album.release_date.String)}
-                  </dd>
+                  <dd className="mt-1 text-foreground">{formatDate(releaseDate)}</dd>
                 </div>
               )}
               <div>
@@ -721,11 +720,8 @@ function AlbumDetailsContent({
 }
 
 function ArtistBadge({ artist }: { artist: ArtistType }) {
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const thumbUrl = getMediaImageUrl(
-    artist.thumb.Valid ? artist.thumb.String : null
-  );
-  const showThumb = thumbUrl && !thumbFailed;
+  const thumbUrl = getMediaImageUrl(unwrapString(artist.thumb)) ?? "";
+  const { showPoster: showThumb, onError } = usePosterFallback(thumbUrl);
 
   return (
     <Link
@@ -744,7 +740,7 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
           loading="lazy"
           decoding="async"
           className="size-6 rounded-full object-cover"
-          onError={() => setThumbFailed(true)}
+          onError={onError}
         />
       ) : (
         <div className="flex size-6 items-center justify-center rounded-full bg-accent">
