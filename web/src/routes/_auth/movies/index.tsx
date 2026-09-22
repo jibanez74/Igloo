@@ -25,6 +25,7 @@ import LibraryAllTab, {
 } from "@/components/shared/LibraryAllTab";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
 import LibraryMoreMenu, {
+  RequestMediaMenuItem,
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryStats from "@/components/shared/LibraryStats";
@@ -328,10 +329,6 @@ function MoreMenu({
   );
   const tmdbAvailable =
     tmdbStatusData?.error === false ? tmdbStatusData.data.available : false;
-  const requestMovieDisabled = tmdbStatusLoading || !tmdbAvailable;
-  const requestMovieDescription = tmdbStatusLoading
-    ? "TMDB search status is still loading."
-    : "TMDB search is unavailable on this server.";
 
   return (
     <>
@@ -359,29 +356,13 @@ function MoreMenu({
           libraryNoun="Movie"
           onSettled={() => setMenuOpen(false)}
         />
-        <DropdownMenuItem
-          className={LIBRARY_MENU_ITEM_CLASS}
-          disabled={requestMovieDisabled}
-          aria-label={
-            requestMovieDisabled
-              ? `Request Movie unavailable. ${requestMovieDescription}`
-              : "Request Movie"
-          }
-          title={requestMovieDisabled ? requestMovieDescription : undefined}
-          onSelect={(event) => {
-            if (requestMovieDisabled) {
-              event.preventDefault();
-              return;
-            }
-            setRequestMovieOpen(true);
-          }}
-        >
-          <Plus className="mr-2 size-4" aria-hidden="true" />
-          Request Movie
-          {requestMovieDisabled && (
-            <span className="sr-only"> {requestMovieDescription}</span>
-          )}
-        </DropdownMenuItem>
+        <RequestMediaMenuItem
+          label="Request Movie"
+          provider="TMDB"
+          available={tmdbAvailable}
+          statusLoading={tmdbStatusLoading}
+          onSelect={() => setRequestMovieOpen(true)}
+        />
       </LibraryMoreMenu>
 
       {requestMovieOpen && (

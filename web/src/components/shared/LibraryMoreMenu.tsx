@@ -1,6 +1,6 @@
 import { useState, type ReactNode, type RefObject } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, RefreshCw } from "lucide-react";
+import { MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,6 +101,59 @@ export function RefreshLibraryMenuItem({
         <RefreshCw className="mr-2 size-4" aria-hidden="true" />
       )}
       Refresh Library
+    </DropdownMenuItem>
+  );
+}
+
+type RequestMediaMenuItemProps = {
+  /** "Request Album" — also the item's accessible name while it is enabled. */
+  label: string;
+  /** Names the provider in the reason a disabled item gives. */
+  provider: "TMDB" | "Spotify";
+  available: boolean;
+  statusLoading: boolean;
+  onSelect: () => void;
+};
+
+/**
+ * "Request Album" / "Request Movie": the menu item that asks an admin for
+ * something the library does not have. It is disabled until the provider's
+ * status says the search works, and it says why in three places a reader might
+ * look — the accessible name, the tooltip, and an sr-only tail — because a
+ * disabled menu item otherwise announces nothing but its label.
+ *
+ * The page owns the status query rather than this item: mounted inside the
+ * dropdown, the fetch would not start until the menu opened.
+ */
+export function RequestMediaMenuItem({
+  label,
+  provider,
+  available,
+  statusLoading,
+  onSelect,
+}: RequestMediaMenuItemProps) {
+  const disabled = statusLoading || !available;
+  const reason = statusLoading
+    ? `${provider} search status is still loading.`
+    : `${provider} search is unavailable on this server.`;
+
+  return (
+    <DropdownMenuItem
+      className={LIBRARY_MENU_ITEM_CLASS}
+      disabled={disabled}
+      aria-label={disabled ? `${label} unavailable. ${reason}` : label}
+      title={disabled ? reason : undefined}
+      onSelect={event => {
+        if (disabled) {
+          event.preventDefault();
+          return;
+        }
+        onSelect();
+      }}
+    >
+      <Plus className="mr-2 size-4" aria-hidden="true" />
+      {label}
+      {disabled && <span className="sr-only"> {reason}</span>}
     </DropdownMenuItem>
   );
 }

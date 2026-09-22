@@ -15,7 +15,6 @@ import {
   Users,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -45,7 +44,6 @@ import {
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
   FOCUS_VISIBLE_RING_CLASS,
-  LIBRARY_MENU_ITEM_CLASS,
   LIBRARY_TAB_TRIGGER_CLASS,
   LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -68,6 +66,7 @@ import LibraryAllTab, {
   type LibraryNoun,
 } from "@/components/shared/LibraryAllTab";
 import LibraryMoreMenu, {
+  RequestMediaMenuItem,
   RefreshLibraryMenuItem,
 } from "@/components/shared/LibraryMoreMenu";
 import LibraryPagination from "@/components/shared/LibraryPagination";
@@ -280,10 +279,6 @@ function MoreMenu() {
     spotifyStatusData?.error === false
       ? spotifyStatusData.data.available
       : false;
-  const spotifyRequestDisabled = spotifyStatusLoading || !spotifyAvailable;
-  const spotifyRequestDescription = spotifyStatusLoading
-    ? "Spotify search status is still loading."
-    : "Spotify search is unavailable on this server.";
 
   return (
     <>
@@ -297,52 +292,20 @@ function MoreMenu() {
           libraryNoun="Music"
           onSettled={() => setMenuOpen(false)}
         />
-        <DropdownMenuItem
-          className={LIBRARY_MENU_ITEM_CLASS}
-          disabled={spotifyRequestDisabled}
-          aria-label={
-            spotifyRequestDisabled
-              ? `Request Album unavailable. ${spotifyRequestDescription}`
-              : "Request Album"
-          }
-          title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
-          onSelect={event => {
-            if (spotifyRequestDisabled) {
-              event.preventDefault();
-              return;
-            }
-            setRequestAlbumOpen(true);
-          }}
-        >
-          <Plus className="mr-2 size-4" aria-hidden="true" />
-          Request Album
-          {spotifyRequestDisabled && (
-            <span className="sr-only"> {spotifyRequestDescription}</span>
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className={LIBRARY_MENU_ITEM_CLASS}
-          disabled={spotifyRequestDisabled}
-          aria-label={
-            spotifyRequestDisabled
-              ? `Request Track unavailable. ${spotifyRequestDescription}`
-              : "Request Track"
-          }
-          title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
-          onSelect={event => {
-            if (spotifyRequestDisabled) {
-              event.preventDefault();
-              return;
-            }
-            setRequestTrackOpen(true);
-          }}
-        >
-          <Plus className="mr-2 size-4" aria-hidden="true" />
-          Request Track
-          {spotifyRequestDisabled && (
-            <span className="sr-only"> {spotifyRequestDescription}</span>
-          )}
-        </DropdownMenuItem>
+        <RequestMediaMenuItem
+          label="Request Album"
+          provider="Spotify"
+          available={spotifyAvailable}
+          statusLoading={spotifyStatusLoading}
+          onSelect={() => setRequestAlbumOpen(true)}
+        />
+        <RequestMediaMenuItem
+          label="Request Track"
+          provider="Spotify"
+          available={spotifyAvailable}
+          statusLoading={spotifyStatusLoading}
+          onSelect={() => setRequestTrackOpen(true)}
+        />
       </LibraryMoreMenu>
 
       {requestAlbumOpen && (

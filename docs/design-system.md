@@ -593,10 +593,15 @@ so the page-level pieces are shared components in `components/shared/`, each a
 `Library*`: `LibraryStats` (the labelled count region beside the header; it
 takes `figures`, one or several, and joins them into a single
 `Library statistics: 42 movies` / `…: 3 albums, 40 tracks, 2 musicians`
-name), `LibraryMoreMenu` with `RefreshLibraryMenuItem` (the "More options"
-dropdown; every library has at least Refresh Library, which refetches the
-page's cached queries and toasts — Music adds Request Album / Request Track
-beside it), `LibraryAllTab` (the paginated grid and its skeleton),
+name), `LibraryMoreMenu` with `RefreshLibraryMenuItem` and
+`RequestMediaMenuItem` (the "More options" dropdown; every library has at
+least Refresh Library, which refetches the page's cached queries and toasts —
+Movies adds Request Movie and Music adds Request Album / Request Track beside
+it, each a `RequestMediaMenuItem` that stays disabled until its provider's
+status answers and states the reason in its accessible name, its tooltip and
+an `sr-only` tail, since a disabled menu item otherwise announces only its
+label; the page owns the status query, because one mounted inside the dropdown
+would not fetch until the menu opened), `LibraryAllTab` (the paginated grid and its skeleton),
 `LibraryGenresTab` (the genre-chip facet with focus restoration after Clear,
 and its skeleton), `LibrarySortToggle` (the single A–Z / Z–A button) and
 `LibraryEmptyState` (the minimal empty variant, §3.4). A page supplies what
