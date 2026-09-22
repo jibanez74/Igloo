@@ -6,7 +6,7 @@ import {
 } from "@/components/shared/LibraryAllTab";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { nounForCount } from "@/lib/format";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 
 /** One count in the stats line: its icon, visible label and how to read it. */
 export type LibraryStatsFigure<TData> = {
@@ -39,11 +39,7 @@ export default function LibraryStats<
   if (isError || isApiFailure(data)) {
     return (
       <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t load library statistics. Check your connection and try again."
-        }
+        message={apiErrorMessage(data, "Couldn’t load library statistics. Check your connection and try again.")}
         onRetry={() => void refetch()}
       />
     );

@@ -15,7 +15,7 @@ import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { PosterCardSkeleton } from "@/components/shared/PosterCard";
 import { LIBRARY_POSTER_GRID_CLASS } from "@/lib/constants";
 import { nounForCount } from "@/lib/format";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType } from "@/types";
@@ -176,11 +176,7 @@ export default function LibraryAllTab<
     if (isError || isApiFailure(data)) {
       return (
         <MoviesLoadError
-          message={
-            isApiFailure(data)
-              ? data.message
-              : `Couldn’t load ${noun.plural}. Check your connection and try again.`
-          }
+          message={apiErrorMessage(data, `Couldn’t load ${noun.plural}. Check your connection and try again.`)}
           onRetry={() => void refetch()}
         />
       );

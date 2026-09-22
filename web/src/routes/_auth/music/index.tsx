@@ -24,7 +24,7 @@ import { showActionFailed } from "@/lib/toast-helpers";
 import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { trackRowProps } from "@/lib/track-row-props";
 import {
   albumsPaginatedQueryOpts,
@@ -452,11 +452,10 @@ function TracksTabContent() {
   if (isError || firstPageFailed) {
     return (
       <MoviesLoadError
-        message={
-          firstPageFailed
-            ? firstPage.message
-            : "Couldn’t load tracks. Check your connection and try again."
-        }
+        message={apiErrorMessage(
+          firstPage,
+          "Couldn’t load tracks. Check your connection and try again.",
+        )}
         onRetry={() => void refetch()}
       />
     );

@@ -22,7 +22,7 @@ import {
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
 import { nounForCount } from "@/lib/format";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -165,11 +165,7 @@ export default function LibraryGenresTab<
   if (genresError || isApiFailure(genresRes)) {
     return (
       <MoviesLoadError
-        message={
-          isApiFailure(genresRes)
-            ? genresRes.message
-            : "Couldn’t load genres. Check your connection and try again."
-        }
+        message={apiErrorMessage(genresRes, "Couldn’t load genres. Check your connection and try again.")}
         onRetry={() => void refetchGenres()}
       />
     );
@@ -276,11 +272,7 @@ export default function LibraryGenresTab<
 
           {itemsError || isApiFailure(itemsRes) ? (
             <MoviesLoadError
-              message={
-                isApiFailure(itemsRes)
-                  ? itemsRes.message
-                  : `Couldn’t load ${noun.plural} for this genre. Check your connection and try again.`
-              }
+              message={apiErrorMessage(itemsRes, `Couldn’t load ${noun.plural} for this genre. Check your connection and try again.`)}
               onRetry={() => void refetchItems()}
             />
           ) : itemsLoading ? (

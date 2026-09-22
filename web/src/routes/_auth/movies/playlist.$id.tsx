@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
 import { unwrapString } from "@/lib/nullable";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { parseRouteId } from "@/lib/route-id";
 
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({
@@ -72,13 +72,13 @@ function MoviePlaylistPage() {
   }
 
   if (error || !data || data.error) {
-    const msg = isApiFailure(data)
-      ? data.message
-      : "Failed to load playlist. Check your connection and try again.";
     return (
       <div className="py-12">
         <MoviesLoadError
-          message={msg}
+          message={apiErrorMessage(
+            data,
+            "Failed to load playlist. Check your connection and try again.",
+          )}
           onRetry={() => void refetchDetails()}
         />
         <Link
@@ -162,11 +162,7 @@ function MoviePlaylistPage() {
 
       {moviesQueryError || isApiFailure(moviesRes) ? (
         <MoviesLoadError
-          message={
-            isApiFailure(moviesRes)
-              ? moviesRes.message
-              : "Couldn’t load movies in this playlist. Check your connection and try again."
-          }
+          message={apiErrorMessage(moviesRes, "Couldn’t load movies in this playlist. Check your connection and try again.")}
           onRetry={() => void refetchMovies()}
         />
       ) : moviesLoading ? (

@@ -16,7 +16,7 @@ import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { trackRowProps } from "@/lib/track-row-props";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import {
   searchAlbumsQueryOpts,
   searchAllQueryOpts,
@@ -382,11 +382,7 @@ function AllResultsTab({ q }: { q: string }) {
   if (isError || isApiFailure(data)) {
     return (
       <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : "Couldn’t run that search. Check your connection and try again."
-        }
+        message={apiErrorMessage(data, "Couldn’t run that search. Check your connection and try again.")}
         onRetry={() => void refetch()}
       />
     );
@@ -595,11 +591,7 @@ function CategoryResultsTab<T>({
   if (isError || isApiFailure(data)) {
     return (
       <MoviesLoadError
-        message={
-          isApiFailure(data)
-            ? data.message
-            : `Couldn’t load ${label}. Check your connection and try again.`
-        }
+        message={apiErrorMessage(data, `Couldn’t load ${label}. Check your connection and try again.`)}
         onRetry={() => void refetch()}
       />
     );
