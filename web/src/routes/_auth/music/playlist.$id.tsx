@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -8,7 +8,6 @@ import {
   showActionFailed,
 } from "@/lib/toast-helpers";
 import {
-  AlertCircle,
   ListMusic,
   Music,
   Clock,
@@ -25,6 +24,8 @@ import TrackItem from "@/components/music/TrackItem";
 import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
+import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
@@ -95,31 +96,20 @@ function PlaylistPage() {
     playlistDetailsQueryOpts(playlistId)
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    );
-  }
-
-  if (error || !data || data.error) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <AlertCircle className="mx-auto mb-4 size-10" aria-hidden="true" />
-        <p>Failed to load playlist. Please try again.</p>
-        <Link
-          to="/music"
-          search={{ tab: "playlists" }}
-          className="mt-4 inline-block text-primary hover:underline"
-        >
-          Back to Playlists
-        </Link>
-      </div>
-    );
-  }
-
-  return <PlaylistContent playlistId={playlistId} data={data.data} />;
+  return (
+    <MediaDetailGuard
+      id={playlistId}
+      noun="playlist"
+      back="musicPlaylists"
+      isPending={isLoading}
+      isError={Boolean(error)}
+      data={data}
+      payload={data?.error === false ? data.data : null}
+      skeleton={<MusicDetailSkeleton variant="playlist" />}
+    >
+      {loaded => <PlaylistContent playlistId={playlistId} data={loaded} />}
+    </MediaDetailGuard>
+  );
 }
 
 type PlaylistContentProps = {

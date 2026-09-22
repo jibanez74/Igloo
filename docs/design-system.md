@@ -642,12 +642,14 @@ The album and musician pages keep their own hero anatomy — a square cover or
 a round thumb beside the title, over a decorative 21:9 band, rather than
 `DetailHero`'s poster — and share the music-specific parts in
 `components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
-`usePosterFallback`), `MusicDetailSkeleton` (`variant="album" | "musician"`,
-one geometry with the art shape and hero rows switched), and
+`usePosterFallback`), `MusicDetailSkeleton`
+(`variant="album" | "musician" | "playlist"`, one geometry with the art shape
+and hero rows switched — an album and a playlist share the square cover), and
 `MusicDetailBackNav` (the `nav` "Page navigation" landmark back to the owning
-`/music` tab, also used by the playlist page). Their guards are the movie
-page's: a malformed id, a failed load and a missing payload each render
-`MediaNotFound` with its "Back to Music" link, never a bare heading.
+`/music` tab, also used by the playlist page). All three pages, the playlist
+included, guard through `MediaDetailGuard` (§3.4), so a malformed id, a failed
+load and a missing payload each render `MediaNotFound` with a link back to the
+owning tab, never a bare heading or a lone spinner.
 
 #### Seasons and episode rows
 
@@ -756,6 +758,13 @@ is unknown or empty.
     a shadcn `Alert`, rendered for you by `HomeMediaSection`.
   - A Settings card → `SettingsErrorCard` (and `SettingsLoadingCard` for its
     pending state), so the card keeps its place in the page.
+  - The four ways a detail page fails to show its subject — an invalid id, a
+    failed request, one still in flight, an empty response — are
+    `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
+    the four are dead ends, so each renders `MediaNotFound`; its destination is
+    a named key (`music`, `moviePlaylists`, …) carrying both the route and the
+    words on the link, so the two can never disagree and a destination may
+    carry search params.
   - A missing resource → `MediaNotFound`: a destructive `Alert` plus a
     **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
     page never dead-ends.

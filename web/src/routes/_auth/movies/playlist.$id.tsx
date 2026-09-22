@@ -2,11 +2,12 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ListVideo } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import MovieCard from "@/components/movies/MovieCard";
 import LibraryPagination from "@/components/shared/LibraryPagination";
 import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
 import { LibraryAllTabSkeleton } from "@/components/shared/LibraryAllTab";
+import DetailSkeleton from "@/components/shared/DetailSkeleton";
+import MediaNotFound from "@/components/shared/MediaNotFound";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import {
   moviePlaylistDetailsQueryOpts,
@@ -51,7 +52,6 @@ function MoviePlaylistPage() {
     data,
     isLoading,
     error,
-    refetch: refetchDetails,
   } = useQuery(moviePlaylistDetailsQueryOpts(playlistId));
 
   const {
@@ -64,31 +64,20 @@ function MoviePlaylistPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    );
+    return <DetailSkeleton label="Loading playlist" withActions />;
   }
 
+  // A playlist that will not load is a missing resource, not a section that
+  // failed beside others, so it gets a way back rather than a retry (§3.4).
   if (error || !data || data.error) {
     return (
-      <div className="py-12">
-        <MoviesLoadError
-          message={apiErrorMessage(
-            data,
-            "Failed to load playlist. Check your connection and try again.",
-          )}
-          onRetry={() => void refetchDetails()}
-        />
-        <Link
-          to="/movies"
-          search={MOVIES_PLAYLISTS_TAB_SEARCH}
-          className="mt-4 inline-block text-primary hover:underline"
-        >
-          Back to movie playlists
-        </Link>
-      </div>
+      <MediaNotFound
+        message={apiErrorMessage(
+          data,
+          "Failed to load playlist. Check your connection and try again.",
+        )}
+        back="moviePlaylists"
+      />
     );
   }
 
