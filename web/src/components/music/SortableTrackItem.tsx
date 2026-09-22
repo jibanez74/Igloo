@@ -1,41 +1,16 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import TrackItem from "./TrackItem";
-import type { TrackItemVariant } from "@/types";
+import TrackItem, { type TrackItemProps } from "./TrackItem";
 
-type SortableTrackItemProps = {
-  // Sortable ID (must be unique)
+// A dnd-kit adapter over TrackItem: it owns the sortable wiring and forwards
+// everything else, so its props are TrackItem's minus the drag state it
+// supplies itself.
+type SortableTrackItemProps = Omit<
+  TrackItemProps,
+  "isDraggable" | "isDragging" | "dragHandleProps"
+> & {
+  /** Must be unique within the list. */
   sortableId: number;
-
-  // Core track data
-  id: number;
-  title: string;
-  duration: number;
-
-  // Optional display data
-  trackIndex?: number;
-  subtitle?: string;
-  genres?: string[];
-
-  // Navigation data
-  albumId?: number | null;
-  albumTitle?: string;
-  musicianId?: number | null;
-  musicianName?: string;
-
-  // State
-  variant: TrackItemVariant;
-  isPlaying?: boolean;
-  isCurrentTrack?: boolean;
-
-  // Actions
-  onPlay: () => void;
-  showActionsMenu?: boolean;
-
-  // Playlist-specific
-  playlistId?: number;
-  canRemoveFromPlaylist?: boolean;
-  onRemoveFromPlaylist?: () => void;
 };
 
 export default function SortableTrackItem({

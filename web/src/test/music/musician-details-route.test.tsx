@@ -216,6 +216,20 @@ afterEach(() => {
   audioPlayerNowPlayingMock.isPlaying = false;
 });
 
+describe("musician details guards", () => {
+  it("shows the not-found card with a way back for a malformed musician id", async () => {
+    await renderMusicianDetailsRoute("/music/musician/abc");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("That musician link is not valid.");
+    expect(screen.getByRole("link", { name: "Back to Music" })).toHaveAttribute(
+      "href",
+      "/music",
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});
+
 describe("musician details route accessibility", () => {
   it("describes the artist article with a non-focusable summary and keeps Play All in the tab order", async () => {
     const user = userEvent.setup();
@@ -248,6 +262,21 @@ describe("musician details route accessibility", () => {
     }
 
     expect(playAll).toHaveFocus();
+  });
+
+  it("names the play actions with the singular noun for a one-track artist", async () => {
+    await renderMusicianDetailsRoute("/music/musician/21");
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Play all 1 track by The Soloist",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Shuffle play all 1 track by The Soloist",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders section skip links targeting the page headings", async () => {

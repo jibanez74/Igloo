@@ -28,7 +28,7 @@ import {
   unwrapInt,
   unwrapString,
 } from "@/lib/nullable";
-import MediaNotFound from "@/components/shared/MediaNotFound";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkeleton from "@/components/shared/DetailSkeleton";
 import CastSection from "@/components/shared/CastSection";
 import DetailHero from "@/components/shared/DetailHero";
@@ -102,49 +102,21 @@ function MovieDetailsPage() {
   const payload = data?.data;
   const movie = payload?.movie;
 
-  if (movieId == null) {
-    return (
-      <MediaNotFound
-        message="That movie link is not valid."
-        backTo="/movies"
-        backLabel="Back to Movies"
-      />
-    );
-  }
-
-  if (isError || (data && data.error)) {
-    return (
-      <MediaNotFound
-        message={
-          data?.message ||
-          "Failed to load movie details. Please try again later."
-        }
-        backTo="/movies"
-        backLabel="Back to Movies"
-      />
-    );
-  }
-
-  if (isPending) {
-    return <DetailSkeleton label="Loading movie details" withActions />;
-  }
-
-  if (!movie || !payload) {
-    return (
-      <MediaNotFound
-        message="Movie not found."
-        backTo="/movies"
-        backLabel="Back to Movies"
-      />
-    );
-  }
-
   return (
-    <LibraryMovieDetailsContent
-      key={movieId}
-      movieId={movieId}
-      payload={payload}
-    />
+    <MediaDetailGuard
+      id={movieId}
+      noun="movie"
+      back="movies"
+      isPending={isPending}
+      isError={isError}
+      data={data}
+      payload={movie && payload ? payload : null}
+      skeleton={<DetailSkeleton label="Loading movie details" withActions />}
+    >
+      {(loaded, id) => (
+        <LibraryMovieDetailsContent key={id} movieId={id} payload={loaded} />
+      )}
+    </MediaDetailGuard>
   );
 }
 

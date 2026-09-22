@@ -184,7 +184,7 @@ test("musician details renders hero, discography, and tracks without console iss
   // Genre badges and stat chips.
   await expect(page.getByRole("list", { name: "Genres: Ambient, Electronic" })).toBeVisible();
   const stats = page.getByRole("list", { name: "Musician statistics" });
-  await expect(stats.getByText("1 album")).toBeVisible();
+  await expect(stats.getByText("1 album", { exact: true })).toBeVisible();
   await expect(stats.getByText("2 tracks")).toBeVisible();
 
   // Hero actions carry accessible names and keyboard focus.

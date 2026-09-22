@@ -235,7 +235,7 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
 
   await expect(page).toHaveTitle("Music Library - Igloo");
   await expect(page.getByRole("heading", { name: "Music Library", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Library statistics: 3 albums, 2267 tracks, 1 musicians")).toBeVisible();
+  await expect(page.getByLabel("Library statistics: 3 albums, 2267 tracks, 1 musician", { exact: true })).toBeVisible();
 
   const tablist = page.getByRole("tablist");
   await expect(tablist).toBeVisible();
@@ -286,7 +286,9 @@ test("albums tab renders accessible album cards and URL-backed pagination", asyn
 
   const mockAlbumLink = page.getByRole("link", { name: "Mock Album by Mock Artist" });
   await expect(mockAlbumLink).toBeVisible();
-  await expect(mockAlbumLink.getByRole("img", { name: "Album cover for Mock Album" })).toBeVisible();
+  // The link already names the album, so its cover is decorative (alt="").
+  await expect(mockAlbumLink.locator("img")).toBeVisible();
+  await expect(mockAlbumLink.locator("img")).toHaveAttribute("alt", "");
 
   const coverlessAlbumLink = page.getByRole("link", { name: "Coverless Album by No Cover Artist" });
   await expect(coverlessAlbumLink).toBeVisible();

@@ -267,6 +267,20 @@ describe("album details route motion", () => {
   });
 });
 
+describe("album details guards", () => {
+  it("shows the not-found card with a way back for a malformed album id", async () => {
+    await renderAlbumDetailsRoute("/music/album/abc");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("That album link is not valid.");
+    expect(screen.getByRole("link", { name: "Back to Music" })).toHaveAttribute(
+      "href",
+      "/music",
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});
+
 describe("album details content", () => {
   it("links the hero artist name, artist badge, and details entry to the musician page", async () => {
     await renderAlbumDetailsRoute("/music/album/42");

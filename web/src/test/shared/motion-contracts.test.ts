@@ -21,7 +21,6 @@ import {
   MOTION_LOADING_STATE_CLASS,
   MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-  MOTION_MEDIA_OVERLAY_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOTION_MICRO_OPACITY_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
@@ -186,7 +185,7 @@ describe("motion contracts", () => {
     expect(MOTION_PLAYER_CHROME_PANEL_CLASS).toContain(
       "motion-reduce:transform-none",
     );
-    expect(MOTION_MEDIA_OVERLAY_CLASS).toContain(
+    expect(CARD_OVERLAY_REVEAL_CLASS).toContain(
       "motion-reduce:transition-none",
     );
     expect(MOTION_MEDIA_DIALOG_SURFACE_CLASS).toContain(

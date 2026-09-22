@@ -140,6 +140,9 @@ export const MOVIES_PLAYLISTS_TAB_SEARCH = {
   tab: "playlists" as const,
 };
 
+/** Search when opening /music on the Playlists tab (e.g. after deleting a playlist). */
+export const MUSIC_PLAYLISTS_TAB_SEARCH = { tab: "playlists" as const };
+
 export const SHOWS_INDEX_DEFAULT_SEARCH = {
   tab: "all" as const,
   allPage: 1,
@@ -491,8 +494,6 @@ export const MOTION_TRACK_ICON_BUTTON_CLASS =
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
-export const MOTION_MEDIA_OVERLAY_CLASS =
-  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
   "border-border bg-card shadow-2xl shadow-black/40 motion-reduce:animate-none";
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
@@ -559,7 +560,8 @@ export const CARD_INTERACTIVE_SURFACE_CLASS =
 export const CARD_SURFACE_CLASS = `${CARD_INTERACTIVE_SURFACE_CLASS} group relative overflow-hidden rounded-xl border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20`;
 export const CARD_MEDIA_HOVER_CLASS =
   "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
-export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;
+export const CARD_OVERLAY_REVEAL_CLASS =
+  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 export const CARD_ACTION_REVEAL_CLASS =
   "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
 /**
@@ -582,6 +584,12 @@ export const HOME_POSTER_GRID_CLASS =
  */
 export const LIBRARY_POSTER_GRID_CLASS =
   "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
+/**
+ * Five columns on large screens for square-art cards - musician thumbs and
+ * playlist covers read better with a little more room than the poster grid.
+ */
+export const MUSIC_CARD_GRID_CLASS =
+  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
 /** Items in a library page's "More options" dropdown. */
 export const LIBRARY_MENU_ITEM_CLASS =
   "cursor-pointer text-foreground focus:bg-accent focus:text-foreground";

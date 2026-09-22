@@ -7,6 +7,7 @@ import {
   CARD_FOCUS_WITHIN_RING_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
+  MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -71,5 +72,22 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
         </div>
       </Link>
     </article>
+  );
+}
+
+// Authored beside the card it mirrors (design-system §3.4): the same padded
+// surface, round thumb and centred text bars.
+export function MusicianCardSkeleton() {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card p-4",
+        MOTION_LOADING_STATE_CLASS,
+      )}
+    >
+      <div className="mx-auto mb-3 aspect-square w-full max-w-32 rounded-full bg-muted" />
+      <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
+      <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-muted" />
+    </div>
   );
 }

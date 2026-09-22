@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
@@ -8,6 +9,8 @@ import type { ApiResponseType, PlaylistsListResponseType } from "@/types";
 import { createTestQueryClient } from "../helpers/render";
 
 const getPlaylistsMock = vi.fn();
+const addTracksToPlaylistMock = vi.fn();
+const showAddedMock = vi.fn();
 
 vi.mock("@/lib/api", async () => {
   const actual =
@@ -15,9 +18,20 @@ vi.mock("@/lib/api", async () => {
 
   return {
     ...actual,
-    // Stubbed only to keep the dialog off the network; no test asserts on it.
-    addTracksToPlaylist: vi.fn(),
+    addTracksToPlaylist: (...args: unknown[]) => addTracksToPlaylistMock(...args),
     getPlaylists: () => getPlaylistsMock(),
+  };
+});
+
+vi.mock("@/lib/toast-helpers", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/toast-helpers")>(
+      "@/lib/toast-helpers",
+    );
+
+  return {
+    ...actual,
+    showAdded: (...args: unknown[]) => showAddedMock(...args),
   };
 });
 
@@ -76,6 +90,8 @@ function renderDialog() {
 
 beforeEach(() => {
   getPlaylistsMock.mockReset();
+  addTracksToPlaylistMock.mockReset();
+  showAddedMock.mockReset();
 });
 
 describe("AddToPlaylistDialog", () => {
@@ -83,5 +99,19 @@ describe("AddToPlaylistDialog", () => {
     renderDialog();
 
     expect(screen.getByLabelText("Search playlists")).toBeInTheDocument();
+  });
+
+  it("says how many playlists the track went to, singular when it is one", async () => {
+    const user = userEvent.setup();
+    addTracksToPlaylistMock.mockResolvedValue(success({ added: 1 }));
+    renderDialog();
+
+    await user.click(screen.getByRole("button", { name: /^Playlist 2/ }));
+    await user.click(screen.getByRole("button", { name: "Add to 1 Playlist" }));
+
+    await waitFor(() => {
+      expect(showAddedMock).toHaveBeenCalledWith("Track", "to 1 playlist");
+    });
+    expect(addTracksToPlaylistMock).toHaveBeenCalledWith(2, [7]);
   });
 });

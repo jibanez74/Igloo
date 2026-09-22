@@ -186,7 +186,7 @@ export function formatSpokenRuntimeMinutes(
 }
 
 /** A remaining-time label: the compact text shown, plus the words spoken. */
-export type TimeLeftLabel = { text: string; spoken: string };
+type TimeLeftLabel = { text: string; spoken: string };
 
 /**
  * Remaining watch time for the movie hero's resume strip and the episode rows,
@@ -338,6 +338,19 @@ export function episodeTitle(
 /** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */
 export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * The form of an explicit singular/plural pair that matches a count - for
+ * nouns that carry both forms (`LibraryNoun`) and for counts the caller
+ * formats itself. Use `pluralize` when the noun takes a plain "s" and the
+ * count needs no formatting.
+ */
+export function nounForCount(
+  count: number,
+  noun: { singular: string; plural: string },
+): string {
+  return count === 1 ? noun.singular : noun.plural;
 }
 
 /**

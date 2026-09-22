@@ -554,12 +554,6 @@ export const setMediaWatched = (media: PlaybackMediaRef, watched: boolean) =>
     },
   );
 
-export const getMovieWatchProgress = (movieId: number) =>
-  getMediaWatchProgress(movieMediaRef(movieId));
-
-export const deleteMovieWatchProgress = (movieId: number) =>
-  deleteMediaWatchProgress(movieMediaRef(movieId));
-
 export const setMovieWatched = (movieId: number, watched: boolean) =>
   setMediaWatched(movieMediaRef(movieId), watched);
 

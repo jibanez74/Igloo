@@ -254,7 +254,7 @@ describe("search route", () => {
     });
 
     expect(showLink).toHaveAttribute("href", "/tv-shows/55");
-    expect(screen.getByText("1 shows")).toBeInTheDocument();
+    expect(screen.getByText("1 show")).toBeInTheDocument();
   });
 
   it("delays swapping from all results to albums until the fade-out completes", async () => {

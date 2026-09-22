@@ -624,6 +624,7 @@ export function musicianDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MUSICIAN_DETAILS_KEY, id],
     queryFn: () => getMusicianDetails(id),
+    enabled: id > 0,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });

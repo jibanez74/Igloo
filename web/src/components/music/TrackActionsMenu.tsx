@@ -18,9 +18,7 @@ type TrackActionsMenuProps = {
   trackTitle: string;
   // Navigation
   albumId?: number | null;
-  albumTitle?: string;
   musicianId?: number | null;
-  musicianName?: string;
   // Playlist actions
   canRemoveFromPlaylist?: boolean;
   onRemoveFromPlaylist?: () => void;

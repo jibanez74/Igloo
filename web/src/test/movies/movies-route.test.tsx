@@ -154,13 +154,19 @@ function mockMoviesFetch(options?: {
       });
     }
 
-    if (url === `/api/movies/liked?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
+    const likedPage = url.startsWith("/api/movies/liked?")
+      ? Number(new URLSearchParams(url.split("?")[1]).get("page"))
+      : null;
+
+    if (likedPage !== null) {
+      // The API does not clamp: a page past the end answers empty, with the
+      // real total still in the envelope.
       return jsonResponse({
         error: false,
         data: {
-          movies: likedMovies,
+          movies: likedPage === 1 ? likedMovies : [],
           total: likedMovies.length,
-          page: 1,
+          page: likedPage,
           per_page: MOVIES_PER_PAGE,
           total_pages: 1,
         },
@@ -414,6 +420,18 @@ describe("movies route focus restoration", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Liked movies" })).toHaveFocus();
     });
+  });
+
+  it("walks an out-of-range liked movies page back to the last real page", async () => {
+    const { router } = await renderMoviesRoute(
+      "/movies/?tab=playlists&view=liked&playlistsPage=99",
+    );
+
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ playlistsPage: 1 });
+    });
+
+    expect(await screen.findByText("Moonlight")).toBeInTheDocument();
   });
 
   it("does not override dropdown focus behavior when liked movies is opened from More options", async () => {

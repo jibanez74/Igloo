@@ -14,6 +14,7 @@ import {
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -144,5 +145,24 @@ export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
         )}
       </button>
     </article>
+  );
+}
+
+// Authored beside the card it mirrors (design-system §3.4): the same square
+// cover box and two text bars.
+export function AlbumCardSkeleton() {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-border bg-card",
+        MOTION_LOADING_STATE_CLASS,
+      )}
+    >
+      <div className="aspect-square bg-muted" />
+      <div className="min-h-17 p-3">
+        <div className="h-4 w-3/4 rounded-sm bg-muted" />
+        <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
+      </div>
+    </div>
   );
 }

@@ -21,7 +21,8 @@ import {
   MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
 } from "@/lib/constants";
-import { isApiFailure } from "@/lib/is-api-failure";
+import { nounForCount } from "@/lib/format";
+import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { scrollWindowToTop } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -144,7 +145,7 @@ export default function LibraryGenresTab<
     if (!hasSelectedGenre) return undefined;
     if (itemsLoading) return undefined;
     if (items.length === 0) return `No ${noun.plural} in this genre`;
-    return `Showing ${items.length} ${noun.plural}, page ${genresPage} of ${totalPages}`;
+    return `Showing ${items.length} ${nounForCount(items.length, noun)}, page ${genresPage} of ${totalPages}`;
   };
 
   const handleClearGenre = () => {
@@ -164,11 +165,7 @@ export default function LibraryGenresTab<
   if (genresError || isApiFailure(genresRes)) {
     return (
       <MoviesLoadError
-        message={
-          isApiFailure(genresRes)
-            ? genresRes.message
-            : "Couldn’t load genres. Check your connection and try again."
-        }
+        message={apiErrorMessage(genresRes, "Couldn’t load genres. Check your connection and try again.")}
         onRetry={() => void refetchGenres()}
       />
     );
@@ -229,7 +226,7 @@ export default function LibraryGenresTab<
                     selected ? "text-primary-foreground/70" : "text-muted-foreground"
                   }`}
                 >
-                  {g.count} {g.count === 1 ? noun.singular : noun.plural}
+                  {g.count} {nounForCount(g.count, noun)}
                 </span>
               </button>
             </li>
@@ -247,7 +244,7 @@ export default function LibraryGenresTab<
                 {selectedGenreTag ?? "Genre"}
               </span>
               <span className="text-sm text-muted-foreground">
-                {total.toLocaleString()} {noun.plural}
+                {total.toLocaleString()} {nounForCount(total, noun)}
               </span>
               <button
                 type="button"
@@ -275,11 +272,7 @@ export default function LibraryGenresTab<
 
           {itemsError || isApiFailure(itemsRes) ? (
             <MoviesLoadError
-              message={
-                isApiFailure(itemsRes)
-                  ? itemsRes.message
-                  : `Couldn’t load ${noun.plural} for this genre. Check your connection and try again.`
-              }
+              message={apiErrorMessage(itemsRes, `Couldn’t load ${noun.plural} for this genre. Check your connection and try again.`)}
               onRetry={() => void refetchItems()}
             />
           ) : itemsLoading ? (

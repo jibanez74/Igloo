@@ -15,7 +15,7 @@ import {
   parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
-import MediaNotFound from "@/components/shared/MediaNotFound";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkeleton from "@/components/shared/DetailSkeleton";
 import CastSection from "@/components/shared/CastSection";
 import DetailHero from "@/components/shared/DetailHero";
@@ -101,44 +101,20 @@ function MovieDetailsPage() {
 
   // A malformed id never reaches TMDB: the query stays disabled and the page
   // goes straight to not-found rather than sitting on a skeleton.
-  if (movieId == null) {
-    return (
-      <MediaNotFound
-        message="That movie link is not valid."
-        backTo="/"
-        backLabel="Back to Home"
-      />
-    );
-  }
-
-  if (isError || (data && data.error)) {
-    return (
-      <MediaNotFound
-        message={
-          data?.message ||
-          "Failed to load movie details. Please try again later."
-        }
-        backTo="/"
-        backLabel="Back to Home"
-      />
-    );
-  }
-
-  if (isPending) {
-    return <DetailSkeleton label="Loading movie details" withActions />;
-  }
-
-  if (!movie) {
-    return (
-      <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-muted-foreground">
-          Movie not found
-        </h2>
-      </div>
-    );
-  }
-
-  return <MovieDetailsContent movie={movie} />;
+  return (
+    <MediaDetailGuard
+      id={movieId}
+      noun="movie"
+      back="home"
+      isPending={isPending}
+      isError={isError}
+      data={data}
+      payload={movie ?? null}
+      skeleton={<DetailSkeleton label="Loading movie details" withActions />}
+    >
+      {loaded => <MovieDetailsContent movie={loaded} />}
+    </MediaDetailGuard>
+  );
 }
 
 function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {

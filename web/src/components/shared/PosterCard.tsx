@@ -11,6 +11,7 @@ import {
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MOTION_LOADING_STATE_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -170,5 +171,28 @@ export default function PosterCard({
         </Link>
       )}
     </article>
+  );
+}
+
+// Authored beside the card it mirrors (design-system §3.4): the same 2:3 box,
+// with the two text bars under the same gradient the card overlays its title
+// on. They sit inside the box because the real title does - a text section
+// below it would shrink every grid the moment the cards land.
+export function PosterCardSkeleton() {
+  return (
+    <div
+      className={cn(
+        "min-w-0 overflow-hidden rounded-xl border border-border bg-card",
+        MOTION_LOADING_STATE_CLASS,
+      )}
+    >
+      <div className="relative aspect-2/3 bg-muted">
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <div className="h-4 w-3/4 rounded-sm bg-white/25" />
+          <div className="mt-2 h-3 w-1/2 rounded-sm bg-white/20" />
+        </div>
+      </div>
+    </div>
   );
 }

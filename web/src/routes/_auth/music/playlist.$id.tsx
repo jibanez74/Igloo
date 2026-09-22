@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -8,7 +8,6 @@ import {
   showActionFailed,
 } from "@/lib/toast-helpers";
 import {
-  AlertCircle,
   ListMusic,
   Music,
   Clock,
@@ -18,13 +17,16 @@ import {
   Pencil,
   Trash2,
   List,
-  ArrowLeft,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
-import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
+import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
+import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
+import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
@@ -33,19 +35,23 @@ import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
-import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { trackRowProps } from "@/lib/track-row-props";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { unwrapString } from "@/lib/nullable";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, pluralize } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
@@ -53,7 +59,11 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { parseRouteId } from "@/lib/route-id";
-import type { PlayableTrackData, PlaylistTrackType } from "@/types";
+import type {
+  PlayableTrackData,
+  PlaylistDetailResponseType,
+  PlaylistTrackType,
+} from "@/types";
 
 // A playlist row already carries every field the player needs, including the
 // per-track album/artist. Keep it as PlayableTrackData and hand that to the
@@ -87,60 +97,34 @@ export const Route = createFileRoute("/_auth/music/playlist/$id")({
 
 function PlaylistPage() {
   const { id } = Route.useParams();
-  // 0 for a malformed id: the request then fails into the error branch
-  // below, exactly as an unknown playlist does.
-  const playlistId = parseRouteId(id) ?? 0;
+  const playlistId = parseRouteId(id);
 
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the guard goes straight to
+  // not-found rather than sitting on a skeleton.
   const { data, isLoading, error } = useQuery(
-    playlistDetailsQueryOpts(playlistId)
+    playlistDetailsQueryOpts(playlistId ?? 0),
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    );
-  }
-
-  if (error || !data || data.error) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <AlertCircle className="mx-auto mb-4 size-10" aria-hidden="true" />
-        <p>Failed to load playlist. Please try again.</p>
-        <Link
-          to="/music"
-          search={{ tab: "playlists" }}
-          className="mt-4 inline-block text-primary hover:underline"
-        >
-          Back to Playlists
-        </Link>
-      </div>
-    );
-  }
-
-  return <PlaylistContent playlistId={playlistId} data={data.data} />;
+  return (
+    <MediaDetailGuard
+      id={playlistId}
+      noun="playlist"
+      back="musicPlaylists"
+      isPending={isLoading}
+      isError={Boolean(error)}
+      data={data}
+      payload={data?.error === false ? data.data : null}
+      skeleton={<MusicDetailSkeleton variant="playlist" />}
+    >
+      {(loaded, id) => <PlaylistContent key={id} playlistId={id} data={loaded} />}
+    </MediaDetailGuard>
+  );
 }
 
 type PlaylistContentProps = {
   playlistId: number;
-  data: {
-    playlist: {
-      id: number;
-      user_id: number;
-      name: string;
-      description: { String: string; Valid: boolean };
-      cover_image: { String: string; Valid: boolean };
-      is_public: boolean;
-      created_at: string;
-      updated_at: string;
-    };
-    track_count: number;
-    duration: number;
-    is_owner: boolean;
-    can_edit: boolean;
-    collaborators: unknown[] | null;
-  };
+  data: PlaylistDetailResponseType;
 };
 
 function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
@@ -156,16 +140,15 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
-  const coverUrl = getMediaImageUrl(
-    playlist.cover_image?.Valid ? playlist.cover_image.String : null
+  const coverUrl = getMediaImageUrl(unwrapString(playlist.cover_image));
+  const { showPoster: showCover, onError: onCoverError } = usePosterFallback(
+    coverUrl ?? "",
   );
-  const description = playlist.description?.Valid
-    ? playlist.description.String
-    : null;
+  const description = unwrapString(playlist.description);
 
   // React 19 document metadata - dynamic based on playlist
   const pageTitle = `${playlist.name} - Igloo`;
-  const pageDescription = `Listen to ${playlist.name} - ${track_count} tracks, ${formatDuration(duration)} in your Igloo playlist.`;
+  const pageDescription = `Listen to ${playlist.name} - ${pluralize(track_count, "track")}, ${formatDuration(duration)} in your Igloo playlist.`;
 
   // Infinite query for tracks
   const {
@@ -192,7 +175,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       }
       queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
       showDeleted("Playlist");
-      navigate({ to: "/music", search: { tab: "playlists" } });
+      navigate({ to: "/music", search: MUSIC_PLAYLISTS_TAB_SEARCH });
     },
     onError: () => {
       showActionFailed("delete playlist");
@@ -334,16 +317,28 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
+      <DetailSkipLinks
+        titleHref="#playlist-name"
+        titleLabel="Skip to playlist info"
+        sections={[
+          allTracks.length > 0 && {
+            href: "#tracks-heading",
+            label: "Skip to tracks",
+          },
+        ]}
+      />
+
       {/* Header section */}
       <header className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
         {/* Playlist cover */}
         <figure className="mx-auto shrink-0 lg:mx-0">
           <div className="aspect-square w-40 overflow-hidden rounded-xl border border-primary/20 bg-muted shadow-2xl shadow-primary/10 sm:w-48 lg:w-56 xl:w-64">
-            {coverUrl ? (
+            {showCover ? (
               <img
-                src={coverUrl}
+                src={coverUrl ?? ""}
                 alt={playlist.name}
                 className="size-full object-cover"
+                onError={onCoverError}
               />
             ) : (
               <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/30">
@@ -358,7 +353,11 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {/* Name */}
           <h1
             id="playlist-name"
-            className="text-2xl font-bold text-foreground sm:truncate sm:text-3xl md:text-4xl lg:text-5xl"
+            tabIndex={-1}
+            className={cn(
+              "rounded-sm text-2xl font-bold text-foreground sm:truncate sm:text-3xl md:text-4xl lg:text-5xl",
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
             title={playlist.name}
           >
             {playlist.name}
@@ -378,9 +377,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           >
             <li className="flex items-center gap-1.5">
               <Music className="size-4 text-muted-foreground" aria-hidden="true" />
-              <span>
-                {track_count} {track_count === 1 ? "track" : "tracks"}
-              </span>
+              <span>{pluralize(track_count, "track")}</span>
             </li>
             <li className="flex items-center gap-1.5">
               <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -407,7 +404,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 size="lg"
                 onClick={handlePlayAll}
                 className="w-full rounded-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                aria-label={`Play all ${track_count} tracks`}
+                aria-label={`Play all ${pluralize(track_count, "track")}`}
               >
                 {isLoadingRest ? (
                   <Spinner className="size-4" />
@@ -422,7 +419,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 size="lg"
                 onClick={handleShuffle}
                 className="w-full rounded-full font-semibold sm:w-auto"
-                aria-label={`Shuffle all ${track_count} tracks`}
+                aria-label={`Shuffle all ${pluralize(track_count, "track")}`}
               >
                 {isLoadingRest ? (
                   <Spinner className="size-4" />
@@ -481,7 +478,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <section aria-labelledby="tracks-heading">
         <h2
           id="tracks-heading"
-          className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
+          tabIndex={-1}
+          className={cn(DETAIL_RAIL_HEADING_CLASS, "flex items-center gap-2")}
         >
           <List className="size-5 text-primary" aria-hidden="true" />
           Tracks
@@ -511,32 +509,20 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             fetchNextPage={fetchNextPage}
             onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
             onReorderTracks={(trackIds) => reorderMutation.mutate(trackIds)}
-            playlistName={playlist.name}
-            coverUrl={coverUrl}
           />
         )}
       </section>
 
-      {/* Back navigation */}
-      <nav className="mt-8" aria-label="Page navigation">
-        <Link
-          to="/music"
-          search={{ tab: "playlists" }}
-          className={cn(
-            MOTION_MICRO_COLORS_CLASS,
-            FOCUS_VISIBLE_RING_CLASS,
-            "inline-flex items-center gap-2 rounded-sm text-muted-foreground hover:text-foreground focus-visible:text-primary",
-          )}
-          aria-label="Back to Playlists"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to Playlists
-        </Link>
-      </nav>
+      <MusicDetailBackNav
+        tab="playlists"
+        label="Back to Playlists"
+        className="mt-8"
+      />
 
       {/* Edit Playlist Dialog */}
       {is_owner && (
-        <EditPlaylistDialog
+        <PlaylistFormDialog
+          mode="edit"
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           playlist={playlist}
@@ -573,8 +559,6 @@ type PlaylistTracksListProps = {
   fetchNextPage: () => Promise<unknown>;
   onRemoveTrack: (trackId: number) => void;
   onReorderTracks: (trackIds: number[]) => void;
-  playlistName: string;
-  coverUrl: string | null;
 };
 
 // Threshold for using draggable list vs virtualized list
@@ -590,8 +574,6 @@ function PlaylistTracksList({
   fetchNextPage,
   onRemoveTrack,
   onReorderTracks,
-  playlistName,
-  coverUrl,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
 
@@ -641,9 +623,6 @@ function PlaylistTracksList({
         >
           <DraggableTrackList
             tracks={orderedTracks}
-            playlistId={playlistId}
-            playlistName={playlistName}
-            coverUrl={coverUrl}
             canEdit={canEdit}
             onReorder={handleReorder}
             onPlayTrack={handlePlayTrack}
@@ -662,8 +641,8 @@ function PlaylistTracksList({
   // Use virtualized list for large playlists or read-only
   return (
     <VirtualizedPlaylistTracksList
-      tracks={orderedTracks}
       playlistId={playlistId}
+      tracks={orderedTracks}
       canEdit={canEdit}
       hasNextPage={hasNextPage}
       isFetchingNextPage={isFetchingNextPage}
@@ -751,19 +730,11 @@ function VirtualizedPlaylistTracksList({
               }}
             >
               <TrackItem
-                id={track.id}
-                title={track.title}
-                duration={track.duration}
-                subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
-                albumId={unwrapInt(track.album_id)}
-                albumTitle={unwrapStringOrUndefined(track.album_title)}
-                musicianId={unwrapInt(track.musician_id)}
-                musicianName={unwrapStringOrUndefined(track.musician_name)}
+                {...trackRowProps(track)}
                 variant="playlist"
                 {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}
                 showActionsMenu
-                playlistId={playlistId}
                 canRemoveFromPlaylist={canEdit}
                 onRemoveFromPlaylist={() => onRemoveTrack(track.id)}
               />
