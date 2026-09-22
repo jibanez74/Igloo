@@ -3,28 +3,28 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ListVideo } from "lucide-react";
 import MovieCard from "@/components/movies/MovieCard";
-import LibraryPagination from "@/components/shared/LibraryPagination";
-import LibrarySortToggle from "@/components/shared/LibrarySortToggle";
-import { LibraryAllTabSkeleton } from "@/components/shared/LibraryAllTab";
-import DetailSkeleton from "@/components/shared/DetailSkeleton";
-import MediaNotFound from "@/components/shared/MediaNotFound";
-import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import LibraryAllTab, {
+  LibraryAllTabSkeleton,
+  type LibraryNoun,
+} from "@/components/shared/LibraryAllTab";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import {
   moviePlaylistDetailsQueryOpts,
   moviePlaylistMoviesQueryOpts,
 } from "@/lib/query-opts";
 import {
-  LIBRARY_POSTER_GRID_CLASS,
+  MOTION_LOADING_STATE_CLASS,
   MOTION_MICRO_COLORS_CLASS,
   MOVIES_PER_PAGE,
   MOVIES_PLAYLISTS_TAB_SEARCH,
 } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { scrollWindowToTop } from "@/lib/motion";
 import { unwrapString } from "@/lib/nullable";
-import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
-import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { parseRouteId } from "@/lib/route-id";
+import type { MoviePlaylistDetailResponseType } from "@/types";
+
+const MOVIE_NOUN: LibraryNoun = { singular: "movie", plural: "movies" };
 
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({
   loader: async ({ context, params }) => {
@@ -42,77 +42,49 @@ export const Route = createFileRoute("/_auth/movies/playlist/$id")({
 
 function MoviePlaylistPage() {
   const { id } = Route.useParams();
-  // 0 for a malformed id: the request then fails into the error branch
-  // below, exactly as an unknown playlist does.
-  const playlistId = parseRouteId(id) ?? 0;
+  const playlistId = parseRouteId(id);
+
+  // A malformed id never reaches the API: the query options disable
+  // themselves for the zero sentinel, and the guard goes straight to
+  // not-found rather than sitting on a skeleton.
+  const { data, isLoading, isError } = useQuery(
+    moviePlaylistDetailsQueryOpts(playlistId ?? 0),
+  );
+
+  return (
+    <MediaDetailGuard
+      id={playlistId}
+      noun="playlist"
+      back="moviePlaylists"
+      isPending={isLoading}
+      isError={isError}
+      data={data}
+      payload={data?.error === false ? data.data : null}
+      skeleton={<MoviePlaylistSkeleton />}
+    >
+      {(loaded, id) => <MoviePlaylistContent playlistId={id} data={loaded} />}
+    </MediaDetailGuard>
+  );
+}
+
+type MoviePlaylistContentProps = {
+  playlistId: number;
+  data: MoviePlaylistDetailResponseType;
+};
+
+function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"asc" | "desc">("asc");
 
-  const {
-    data,
-    isLoading,
-    error,
-  } = useQuery(moviePlaylistDetailsQueryOpts(playlistId));
-
-  const {
-    data: moviesRes,
-    isLoading: moviesLoading,
-    isError: moviesQueryError,
-    refetch: refetchMovies,
-  } = useQuery(
-    moviePlaylistMoviesQueryOpts(playlistId, page, MOVIES_PER_PAGE, sort),
-  );
-
-  if (isLoading) {
-    return <DetailSkeleton label="Loading playlist" withActions />;
-  }
-
-  // A playlist that will not load is a missing resource, not a section that
-  // failed beside others, so it gets a way back rather than a retry (§3.4).
-  if (error || !data || data.error) {
-    return (
-      <MediaNotFound
-        message={apiErrorMessage(
-          data,
-          "Failed to load playlist. Check your connection and try again.",
-        )}
-        back="moviePlaylists"
-      />
-    );
-  }
-
-  const { playlist, movie_count } = data.data;
+  const { playlist, movie_count } = data;
   const desc = unwrapString(playlist.description);
-
-  const movies =
-    moviesRes?.error === false ? moviesRes.data.movies : [];
-  const totalPages =
-    moviesRes?.error === false ? moviesRes.data.total_pages : 0;
-
-  const announce =
-    !moviesLoading && movies.length > 0
-      ? `Page ${page} of ${Math.max(totalPages, 1)}, ${movies.length} movies on this page`
-      : undefined;
 
   return (
     <div className="min-w-0">
       <title>{playlist.name} - Igloo</title>
-      <meta
-        name="description"
-        content={`Movie playlist: ${playlist.name}`}
-      />
+      <meta name="description" content={`Movie playlist: ${playlist.name}`} />
 
-      <Link
-        to="/movies"
-        search={MOVIES_PLAYLISTS_TAB_SEARCH}
-        className={cn(
-          MOTION_MICRO_COLORS_CLASS,
-          "mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary",
-        )}
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Movie playlists
-      </Link>
+      <MoviePlaylistsBackLink />
 
       <header className="mb-8">
         <div className="flex items-start gap-3">
@@ -125,60 +97,76 @@ function MoviePlaylistPage() {
               <p className="mt-2 text-muted-foreground">{desc}</p>
             ) : null}
             <p className="mt-2 text-sm text-muted-foreground">
-              {movie_count} {movie_count === 1 ? "movie" : "movies"}
+              {pluralize(movie_count, "movie")}
             </p>
           </div>
         </div>
       </header>
 
-      <LiveAnnouncer message={announce} />
+      <LibraryAllTab
+        queryOpts={moviePlaylistMoviesQueryOpts(playlistId, page, MOVIES_PER_PAGE, sort)}
+        getItems={data => data.movies}
+        renderCard={movie => <MovieCard movie={movie} />}
+        currentPage={page}
+        sort={sort}
+        perPage={MOVIES_PER_PAGE}
+        noun={MOVIE_NOUN}
+        emptyIcon={ListVideo}
+        emptyMessage="No movies in this playlist yet."
+        onPageChange={setPage}
+        onSortToggle={() => {
+          setSort(s => (s === "asc" ? "desc" : "asc"));
+          setPage(1);
+        }}
+        toolbarStartSlot={
+          <span className="text-sm text-muted-foreground">Playlist movies</span>
+        }
+      />
+    </div>
+  );
+}
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-muted-foreground">Playlist movies</span>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {Math.max(totalPages, 1)}
-          </span>
-          <LibrarySortToggle
-            sort={sort}
-            onToggle={() => {
-              setSort((s) => (s === "asc" ? "desc" : "asc"));
-              setPage(1);
-            }}
-          />
+function MoviePlaylistsBackLink() {
+  return (
+    <Link
+      to="/movies"
+      search={MOVIES_PLAYLISTS_TAB_SEARCH}
+      className={cn(
+        MOTION_MICRO_COLORS_CLASS,
+        "mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary",
+      )}
+    >
+      <ArrowLeft className="size-4" aria-hidden="true" />
+      Movie playlists
+    </Link>
+  );
+}
+
+// Authored beside the layout it mirrors (design-system §3.4): the header's
+// icon, title and count, the toolbar strip LibraryAllTab reserves in every
+// state, then the poster grid. The back link is real: it works while loading.
+function MoviePlaylistSkeleton() {
+  return (
+    <div className="min-w-0">
+      <MoviePlaylistsBackLink />
+      <div
+        className={MOTION_LOADING_STATE_CLASS}
+        role="status"
+        aria-label="Loading playlist"
+      >
+        <span className="sr-only">Loading playlist...</span>
+        <div className="mb-8 flex items-start gap-3" aria-hidden="true">
+          <div className="mt-1 size-8 shrink-0 rounded-sm bg-muted" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-8 max-w-sm rounded-sm bg-muted md:h-9" />
+            <div className="h-5 w-24 rounded-sm bg-muted" />
+          </div>
+        </div>
+        <div className="mb-5 min-h-8" aria-hidden="true" />
+        <div aria-hidden="true">
+          <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />
         </div>
       </div>
-
-      {moviesQueryError || isApiFailure(moviesRes) ? (
-        <MoviesLoadError
-          message={apiErrorMessage(moviesRes, "Couldn’t load movies in this playlist. Check your connection and try again.")}
-          onRetry={() => void refetchMovies()}
-        />
-      ) : moviesLoading ? (
-        <LibraryAllTabSkeleton perPage={MOVIES_PER_PAGE} />
-      ) : movies.length === 0 ? (
-        <p className="py-12 text-center text-muted-foreground">
-          No movies in this playlist yet.
-        </p>
-      ) : (
-        <>
-          <div className={cn("mb-8", LIBRARY_POSTER_GRID_CLASS)}>
-            {movies.map((m) => (
-              <MovieCard key={m.id} movie={m} />
-            ))}
-          </div>
-          {totalPages > 1 && (
-            <LibraryPagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={(p) => {
-                setPage(p);
-                scrollWindowToTop();
-              }}
-            />
-          )}
-        </>
-      )}
     </div>
   );
 }

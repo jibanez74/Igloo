@@ -620,9 +620,12 @@ loading, empty, errored and loaded, reserving its height so the grid top never
 moves (§3.4). The liked-movies view is a
 `LibraryAllTab` whose `toolbarStartSlot` carries its "Back to playlists" link
 and count, so it inherits the tab's out-of-range page clamp and keeps that
-link reachable while loading, empty and errored. Movie playlists stay local to
-the movies page, as the Tracks and Playlists tabs do to the music page; a new
-library page composes the same parts. The
+link reachable while loading, empty and errored. The movie playlist page is
+the same shape: its header above a `LibraryAllTab` whose `toolbarStartSlot`
+names the list and whose `emptyMessage` scopes the empty copy to the playlist
+rather than the library. The Playlists tabs themselves stay local to their
+pages, as the Tracks tab does to the music page; a new library page composes
+the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
 `MoviesLoadError` and `PosterCardSkeleton` but stay page-local: their result
 count line, "No albums match 'q'" copy and non-grid tracks list are not a

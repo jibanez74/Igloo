@@ -77,6 +77,11 @@ type LibraryAllTabProps<
   perPage: number;
   noun: LibraryNoun;
   emptyIcon: LucideIcon;
+  /**
+   * The empty sentence; defaults to "No {plural} found in your library.",
+   * which a list scoped to something narrower than the library overrides.
+   */
+  emptyMessage?: string;
   onPageChange: (page: number) => void;
   /** The grid the cards sit in; defaults to the 2:3 poster grid. */
   gridClassName?: string;
@@ -105,6 +110,7 @@ export default function LibraryAllTab<
   perPage,
   noun,
   emptyIcon,
+  emptyMessage = `No ${noun.plural} found in your library.`,
   onPageChange,
   onSortToggle,
   gridClassName = LIBRARY_POSTER_GRID_CLASS,
@@ -184,10 +190,7 @@ export default function LibraryAllTab<
 
     if (items.length === 0) {
       return (
-        <LibraryEmptyState
-          icon={emptyIcon}
-          message={`No ${noun.plural} found in your library.`}
-        />
+        <LibraryEmptyState icon={emptyIcon} message={emptyMessage} />
       );
     }
 
