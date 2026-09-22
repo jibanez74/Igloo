@@ -608,7 +608,11 @@ API that sorts (movies, shows) passes both, one that does not (albums,
 musicians) passes neither and gets no toggle. Its `gridClassName` and
 `skeletonCard` swap the 2:3 poster grid for another card geometry — the Albums
 tab keeps the poster grid with `AlbumCardSkeleton`, the Musicians tab passes
-its five-column round-thumb grid with `MusicianCardSkeleton`. Liked movies and
+its five-column round-thumb grid with `MusicianCardSkeleton`. The tab owns one
+toolbar — page info on the right, then the sort toggle, with `toolbarStartSlot`
+for anything a page puts on the left — and renders it identically while
+loading, empty, errored and loaded, reserving its height so the grid top never
+moves (§3.4). Liked movies and
 movie playlists stay local to the movies page, as the Tracks and Playlists
 tabs do to the music page; a new library page composes the same parts. The
 search page's category tabs reuse `LIBRARY_POSTER_GRID_CLASS`,
@@ -708,7 +712,10 @@ is unknown or empty.
   row; pages append their own below-the-fold geometry as children),
   `MusicDetailSkeleton` (§3.2), and the `LibraryAllTabSkeleton` /
   `LibraryGenresTabSkeleton` that live in the same files as the grids they
-  mirror. A grid skeleton repeats one card placeholder that lives beside the
+  mirror. A skeleton mirrors the **grid only**; chrome whose presence depends
+  on the response — a library tab's page info — belongs to the component that
+  renders it in every state, never to the skeleton, which cannot know how many
+  pages there are before the query resolves. A grid skeleton repeats one card placeholder that lives beside the
   card it mirrors — `PosterCardSkeleton` in `PosterCard.tsx`,
   `AlbumCardSkeleton` and `MusicianCardSkeleton` in their card files — so a
   card and its placeholder change together. Skeleton geometry is authored

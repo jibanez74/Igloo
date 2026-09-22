@@ -101,9 +101,10 @@ describe("LibraryAllTab", () => {
     expect(
       await screen.findByText("No shows found in your library."),
     ).toBeInTheDocument();
+    // The toolbar is reserved in every state, so it outlives the grid.
     expect(
-      screen.queryByRole("button", { name: /Sorted A to Z/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: /Sorted A to Z/ }),
+    ).toBeInTheDocument();
   });
 
   it("walks back to the last page when the requested page is out of range", async () => {
@@ -171,12 +172,16 @@ describe("LibraryAllTab", () => {
 // A list whose API does not sort (albums, musicians) passes no sort pair and
 // swaps the poster grid for its own card geometry.
 describe("LibraryAllTab without sort", () => {
+  let unsortedKey = 0;
+
   function renderUnsortedTab(
     queryFn: () => Promise<ApiResponseType<Payload>>,
   ) {
+    unsortedKey += 1;
     const opts = queryOptions({
-      queryKey: ["library-all-tab-unsorted-test"],
+      queryKey: ["library-all-tab-unsorted-test", unsortedKey],
       queryFn,
+      retry: false,
     });
 
     return renderWithQueryClient(
@@ -200,7 +205,8 @@ describe("LibraryAllTab without sort", () => {
 
     expect(screen.getAllByTestId("round-card")).toHaveLength(3);
     expect(container.querySelector(".test-grid")).not.toBeNull();
-    // No sort toggle placeholder to reserve room for.
+    // The skeleton mirrors the grid only; the toolbar above it is the tab's,
+    // so there is no placeholder pill standing in for the sort toggle.
     expect(container.querySelector(".h-8.w-16")).toBeNull();
   });
 
@@ -220,5 +226,47 @@ describe("LibraryAllTab without sort", () => {
         screen.getByText("Frost Harbor"),
       ),
     ).toBe(true);
+  });
+
+  it("reserves the toolbar row before an unsorted paginated tab resolves", async () => {
+    let resolve: (value: ApiResponseType<Payload>) => void = () => {};
+    const { container } = renderUnsortedTab(
+      () =>
+        new Promise<ApiResponseType<Payload>>(r => {
+          resolve = r;
+        }),
+    );
+
+    const toolbarSelector = '[data-slot="library-tab-toolbar"]';
+    expect(container.querySelector(toolbarSelector)).not.toBeNull();
+
+    resolve({
+      error: false,
+      data: {
+        items: [{ id: 1, name: "Frost Harbor" }],
+        total: 72,
+        page: 1,
+        per_page: 3,
+        total_pages: 3,
+      },
+    });
+
+    await screen.findByText("Frost Harbor");
+
+    // Same row, now carrying the page info it had reserved room for.
+    expect(container.querySelector(toolbarSelector)).not.toBeNull();
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+  });
+
+  it("keeps the toolbar row on the error state", async () => {
+    const { container } = renderUnsortedTab(async () => {
+      throw new Error("offline");
+    });
+
+    await screen.findByRole("alert");
+
+    expect(
+      container.querySelector('[data-slot="library-tab-toolbar"]'),
+    ).not.toBeNull();
   });
 });
