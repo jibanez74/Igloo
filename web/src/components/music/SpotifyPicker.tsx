@@ -24,6 +24,7 @@ export type SpotifyPickerKind = "album" | "track";
 /** What the picker itself reads off a result; each kind carries more. */
 export type SpotifySearchResult = {
   spotify_id: string;
+  spotify_url: string;
   title: string;
   artist_names: string[];
   cover_url: string;

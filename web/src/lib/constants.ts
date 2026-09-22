@@ -140,6 +140,9 @@ export const MOVIES_PLAYLISTS_TAB_SEARCH = {
   tab: "playlists" as const,
 };
 
+/** Search when opening /music on the Playlists tab (e.g. after deleting a playlist). */
+export const MUSIC_PLAYLISTS_TAB_SEARCH = { tab: "playlists" as const };
+
 export const SHOWS_INDEX_DEFAULT_SEARCH = {
   tab: "all" as const,
   allPage: 1,
@@ -581,6 +584,12 @@ export const HOME_POSTER_GRID_CLASS =
  */
 export const LIBRARY_POSTER_GRID_CLASS =
   "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
+/**
+ * Five columns on large screens for square-art cards - musician thumbs and
+ * playlist covers read better with a little more room than the poster grid.
+ */
+export const MUSIC_CARD_GRID_CLASS =
+  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
 /** Items in a library page's "More options" dropdown. */
 export const LIBRARY_MENU_ITEM_CLASS =
   "cursor-pointer text-foreground focus:bg-accent focus:text-foreground";

@@ -2,7 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { MOVIES_PLAYLISTS_TAB_SEARCH } from "@/lib/constants";
+import {
+  MOVIES_PLAYLISTS_TAB_SEARCH,
+  MUSIC_PLAYLISTS_TAB_SEARCH,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,7 +30,7 @@ const BACK_DESTINATIONS = {
   music: { to: "/music", label: "Back to Music" },
   musicPlaylists: {
     to: "/music",
-    search: { tab: "playlists" as const },
+    search: MUSIC_PLAYLISTS_TAB_SEARCH,
     label: "Back to Playlists",
   },
 } as const;

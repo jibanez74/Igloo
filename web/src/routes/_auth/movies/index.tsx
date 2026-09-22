@@ -43,6 +43,7 @@ import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
+  MUSIC_CARD_GRID_CLASS,
 } from "@/lib/constants";
 import {
   likedMoviesQueryOpts,
@@ -54,6 +55,7 @@ import {
   tmdbStatusQueryOpts,
 } from "@/lib/query-opts";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
+import { pluralize } from "@/lib/format";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { cn } from "@/lib/utils";
@@ -602,7 +604,7 @@ function PlaylistsTabContent({
     <div>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm text-muted-foreground">
-          {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
+          {pluralize(playlists.length, "playlist")}
         </span>
         <div className="flex flex-wrap gap-2">
           <button
@@ -647,7 +649,7 @@ function PlaylistsTabContent({
       {playlists.length === 0 ? (
         <EmptyMoviePlaylistsState onCreate={handleCreateOpen} />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className={MUSIC_CARD_GRID_CLASS}>
           {playlists.map(p => (
             <MoviePlaylistCard key={p.id} playlist={p} />
           ))}
@@ -764,7 +766,7 @@ function PlaylistsTabSkeleton() {
         <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
         <div className={cn("h-10 w-40 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
       </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div className={MUSIC_CARD_GRID_CLASS}>
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}

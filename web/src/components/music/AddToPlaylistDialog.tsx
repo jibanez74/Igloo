@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { playlistsQueryOpts } from "@/lib/query-opts";
+import { pluralize } from "@/lib/format";
 import { addTracksToPlaylist } from "@/lib/api";
 import {
   MOTION_MICRO_COLORS_CLASS,
@@ -128,8 +129,8 @@ export default function AddToPlaylistDialog({
     setSelectedPlaylists(next);
     setAnnouncement(
       wasSelected
-        ? `${playlistName} deselected. ${next.size} playlist${next.size !== 1 ? "s" : ""} selected.`
-        : `${playlistName} selected. ${next.size} playlist${next.size !== 1 ? "s" : ""} selected.`,
+        ? `${playlistName} deselected. ${pluralize(next.size, "playlist")} selected.`
+        : `${playlistName} selected. ${pluralize(next.size, "playlist")} selected.`,
     );
   };
 
@@ -218,7 +219,7 @@ export default function AddToPlaylistDialog({
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{playlist.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {playlist.track_count} tracks
+                        {pluralize(playlist.track_count, "track")}
                       </p>
                     </div>
                   </button>
@@ -250,7 +251,9 @@ export default function AddToPlaylistDialog({
                 Adding...
               </>
             ) : (
-              `Add to ${selectedPlaylists.size || ""} Playlist${selectedPlaylists.size !== 1 ? "s" : ""}`
+              selectedPlaylists.size === 0
+                ? "Add to Playlists"
+                : `Add to ${pluralize(selectedPlaylists.size, "Playlist")}`
             )}
           </Button>
         </DialogFooter>

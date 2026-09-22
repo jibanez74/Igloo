@@ -1,3 +1,4 @@
+import { unwrapString } from "@/lib/nullable";
 import type { PlayableTrackData } from "@/types";
 
 // Start playback, swallowing the rejection browsers throw when autoplay is
@@ -46,9 +47,9 @@ export function extractTrackMetadata(track: PlayableTrackData): {
   albumTitle: string;
 } {
   return {
-    cover: track.album_cover.Valid ? track.album_cover.String : null,
-    musician: track.musician_name.Valid ? track.musician_name.String : null,
-    albumTitle: track.album_title?.Valid ? track.album_title.String : "",
+    cover: unwrapString(track.album_cover),
+    musician: unwrapString(track.musician_name),
+    albumTitle: unwrapString(track.album_title) ?? "",
   };
 }
 

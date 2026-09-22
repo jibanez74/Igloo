@@ -47,6 +47,7 @@ import { formatDuration, pluralize } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MUSIC_PLAYLISTS_TAB_SEARCH,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
@@ -143,7 +144,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   // React 19 document metadata - dynamic based on playlist
   const pageTitle = `${playlist.name} - Igloo`;
-  const pageDescription = `Listen to ${playlist.name} - ${track_count} tracks, ${formatDuration(duration)} in your Igloo playlist.`;
+  const pageDescription = `Listen to ${playlist.name} - ${pluralize(track_count, "track")}, ${formatDuration(duration)} in your Igloo playlist.`;
 
   // Infinite query for tracks
   const {
@@ -170,7 +171,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       }
       queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
       showDeleted("Playlist");
-      navigate({ to: "/music", search: { tab: "playlists" } });
+      navigate({ to: "/music", search: MUSIC_PLAYLISTS_TAB_SEARCH });
     },
     onError: () => {
       showActionFailed("delete playlist");
@@ -356,9 +357,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           >
             <li className="flex items-center gap-1.5">
               <Music className="size-4 text-muted-foreground" aria-hidden="true" />
-              <span>
-                {track_count} {track_count === 1 ? "track" : "tracks"}
-              </span>
+              <span>{pluralize(track_count, "track")}</span>
             </li>
             <li className="flex items-center gap-1.5">
               <Clock className="size-4 text-muted-foreground" aria-hidden="true" />

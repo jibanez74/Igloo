@@ -25,6 +25,7 @@ import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { apiErrorMessage, isApiFailure } from "@/lib/is-api-failure";
+import { pluralize } from "@/lib/format";
 import { trackRowProps } from "@/lib/track-row-props";
 import {
   albumsPaginatedQueryOpts,
@@ -50,6 +51,7 @@ import {
   MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
+  MUSIC_CARD_GRID_CLASS,
   MUSICIANS_PER_PAGE,
   TRACK_LIST_CONTAINER_CLASS,
   VIRTUAL_LIST_LETTER_HEIGHT,
@@ -91,11 +93,6 @@ const MUSIC_PAGE_DESCRIPTION =
 const ALBUM_NOUN: LibraryNoun = { singular: "album", plural: "albums" };
 const MUSICIAN_NOUN: LibraryNoun = { singular: "musician", plural: "musicians" };
 const TRACK_NOUN: LibraryNoun = { singular: "track", plural: "tracks" };
-
-// Five columns on large screens: circular thumbs and playlist covers read
-// better with a little more room than the six-column poster grid gives.
-const MUSIC_CARD_GRID_CLASS =
-  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
 
 export const Route = createFileRoute("/_auth/music/")({
   validateSearch: musicSearchSchema,
@@ -808,7 +805,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
   // Reached only after the isLoading early-return above, so no loading case here.
   const getAnnouncement = () => {
     if (playlists.length === 0) return "No playlists yet";
-    return `${playlists.length} playlist${playlists.length !== 1 ? "s" : ""} loaded`;
+    return `${pluralize(playlists.length, "playlist")} loaded`;
   };
 
   if (isLoading) {
@@ -822,7 +819,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       {/* Header with count and create button */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm text-muted-foreground">
-          {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
+          {pluralize(playlists.length, "playlist")}
         </span>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -887,7 +884,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   // Reached only after the isLoading early-return below, so no loading case here.
   const getAnnouncement = () => {
     if (tracks.length === 0) return "No liked tracks";
-    return `${total} liked track${total !== 1 ? "s" : ""}, page ${likedTracksPage} of ${totalPages}`;
+    return `${pluralize(total, "liked track")}, page ${likedTracksPage} of ${totalPages}`;
   };
 
   const handlePageChange = (newPage: number) => {
@@ -943,7 +940,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
           </h2>
         </div>
         <span className="text-sm text-muted-foreground">
-          {total} {total === 1 ? "track" : "tracks"}
+          {pluralize(total, "track")}
         </span>
       </div>
 

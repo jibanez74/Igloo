@@ -95,8 +95,7 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
 
     const requester = authData.data.user;
     const spotifyURL =
-      ("spotify_url" in selectedResult
-        && (selectedResult as { spotify_url?: string }).spotify_url)
+      selectedResult.spotify_url
       || `https://open.spotify.com/${copy.spotifyPath}/${selectedResult.spotify_id}`;
 
     const lines = [
