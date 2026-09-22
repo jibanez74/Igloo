@@ -643,8 +643,10 @@ a round thumb beside the title, over a decorative 21:9 band, rather than
 `DetailHero`'s poster — and share the music-specific parts in
 `components/music/`: `MusicDetailBackdrop` (the aria-hidden band, on
 `usePosterFallback`), `MusicDetailSkeleton`
-(`variant="album" | "musician" | "playlist"`, one geometry with the art shape
-and hero rows switched — an album and a playlist share the square cover), and
+(`variant="album" | "musician" | "playlist"`: the album and musician variants
+are one hero geometry with the art shape and hero rows switched; the playlist
+variant mirrors the playlist page instead, which has no backdrop band and no
+overlap, just a square cover beside the title over the rows), and
 `MusicDetailBackNav` (the `nav` "Page navigation" landmark back to the owning
 `/music` tab, also used by the playlist page). All three pages, the playlist
 included, guard through `MediaDetailGuard` (§3.4), so a malformed id, a failed

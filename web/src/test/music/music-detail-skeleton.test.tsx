@@ -26,6 +26,20 @@ describe("MusicDetailSkeleton", () => {
     expect(container.querySelectorAll(".h-12, .size-12")).toHaveLength(3);
   });
 
+  it("mirrors the playlist header: a square cover with no backdrop band and no overlap", () => {
+    const { container } = render(<MusicDetailSkeleton variant="playlist" />);
+
+    expect(
+      screen.getByRole("status", { name: "Loading playlist details" }),
+    ).toBeInTheDocument();
+    expect(container.querySelector(".rounded-xl.w-40")).not.toBeNull();
+    expect(container.querySelector(".aspect-21\\/9")).toBeNull();
+    expect(container.querySelector(".-mt-20")).toBeNull();
+    // Play and Shuffle only: the playlist page has no round menu button.
+    expect(container.querySelectorAll(".h-12, .size-12")).toHaveLength(2);
+    expect(container.querySelectorAll(".h-14")).toHaveLength(8);
+  });
+
   it("mirrors the musician hero: a round thumb and the six-card discography", () => {
     const { container } = render(<MusicDetailSkeleton variant="musician" />);
 
