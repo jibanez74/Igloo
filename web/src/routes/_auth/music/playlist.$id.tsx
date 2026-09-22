@@ -33,7 +33,7 @@ import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
-import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { unwrapString, unwrapInt } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack, dedupeById } from "@/lib/audio-utils";
@@ -630,7 +630,6 @@ function PlaylistTracksList({
         >
           <DraggableTrackList
             tracks={orderedTracks}
-            playlistId={playlistId}
             playlistName={playlistName}
             coverUrl={coverUrl}
             canEdit={canEdit}
@@ -651,8 +650,8 @@ function PlaylistTracksList({
   // Use virtualized list for large playlists or read-only
   return (
     <VirtualizedPlaylistTracksList
-      tracks={orderedTracks}
       playlistId={playlistId}
+      tracks={orderedTracks}
       canEdit={canEdit}
       hasNextPage={hasNextPage}
       isFetchingNextPage={isFetchingNextPage}
@@ -745,14 +744,11 @@ function VirtualizedPlaylistTracksList({
                 duration={track.duration}
                 subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
                 albumId={unwrapInt(track.album_id)}
-                albumTitle={unwrapStringOrUndefined(track.album_title)}
                 musicianId={unwrapInt(track.musician_id)}
-                musicianName={unwrapStringOrUndefined(track.musician_name)}
                 variant="playlist"
                 {...matchTrackPlayback(track.id)}
                 onPlay={() => onPlayTrack(track)}
                 showActionsMenu
-                playlistId={playlistId}
                 canRemoveFromPlaylist={canEdit}
                 onRemoveFromPlaylist={() => onRemoveTrack(track.id)}
               />

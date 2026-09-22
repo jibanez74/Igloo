@@ -26,7 +26,7 @@ import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
-import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { unwrapString, unwrapInt } from "@/lib/nullable";
 import {
   albumsPaginatedQueryOpts,
   likedTracksQueryOpts,
@@ -765,9 +765,7 @@ const TrackListItem = memo(function TrackListItem({
       duration={track.duration}
       subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
       albumId={unwrapInt(track.album_id)}
-      albumTitle={unwrapStringOrUndefined(track.album_title)}
       musicianId={unwrapInt(track.musician_id)}
-      musicianName={unwrapStringOrUndefined(track.musician_name)}
       variant="library"
       {...matchTrackPlayback(track.id)}
       onPlay={handlePlay}
@@ -1009,9 +1007,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
               duration={track.duration}
               subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
               albumId={unwrapInt(track.album_id)}
-              albumTitle={unwrapStringOrUndefined(track.album_title)}
               musicianId={unwrapInt(track.musician_id)}
-              musicianName={unwrapStringOrUndefined(track.musician_name)}
               variant="library"
               {...matchTrackPlayback(track.id)}
               onPlay={() => handlePlayTrack(track)}

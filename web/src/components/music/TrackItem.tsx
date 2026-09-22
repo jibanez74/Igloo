@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import TrackActionsMenu from "@/components/music/TrackActionsMenu";
 import type { TrackItemVariant } from "@/types";
 
-type TrackItemProps = {
+export type TrackItemProps = {
   // Core track data
   id: number;
   title: string;
@@ -26,9 +26,7 @@ type TrackItemProps = {
 
   // Navigation data (for actions menu)
   albumId?: number | null;
-  albumTitle?: string;
   musicianId?: number | null;
-  musicianName?: string;
 
   // Variant and state
   variant: TrackItemVariant;
@@ -40,7 +38,6 @@ type TrackItemProps = {
   showActionsMenu?: boolean;
 
   // Playlist-specific props
-  playlistId?: number;
   canRemoveFromPlaylist?: boolean;
   onRemoveFromPlaylist?: () => void;
 
@@ -63,9 +60,7 @@ export default function TrackItem({
   subtitle,
   genres,
   albumId,
-  albumTitle,
   musicianId,
-  musicianName,
   variant,
   isPlaying = false,
   isCurrentTrack = false,
@@ -206,9 +201,7 @@ export default function TrackItem({
           trackId={id}
           trackTitle={title}
           albumId={albumId}
-          albumTitle={albumTitle}
           musicianId={musicianId}
-          musicianName={musicianName}
           canRemoveFromPlaylist={canRemoveFromPlaylist}
           onRemoveFromPlaylist={onRemoveFromPlaylist}
         />

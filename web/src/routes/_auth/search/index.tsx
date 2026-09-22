@@ -18,7 +18,6 @@ import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import {
   unwrapInt,
   unwrapString,
-  unwrapStringOrUndefined,
 } from "@/lib/nullable";
 import { isApiFailure } from "@/lib/is-api-failure";
 import {
@@ -702,9 +701,7 @@ function SearchTrackItem({
       duration={track.duration}
       subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
       albumId={unwrapInt(track.album_id)}
-      albumTitle={unwrapStringOrUndefined(track.album_title)}
       musicianId={unwrapInt(track.musician_id)}
-      musicianName={unwrapStringOrUndefined(track.musician_name)}
       variant="library"
       {...matchTrackPlayback(track.id)}
       onPlay={handlePlay}
