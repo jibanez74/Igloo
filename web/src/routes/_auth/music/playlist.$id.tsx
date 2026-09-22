@@ -21,7 +21,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import TrackItem from "@/components/music/TrackItem";
-import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
+import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
@@ -54,7 +54,11 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { parseRouteId } from "@/lib/route-id";
-import type { PlayableTrackData, PlaylistTrackType } from "@/types";
+import type {
+  PlayableTrackData,
+  PlaylistDetailResponseType,
+  PlaylistTrackType,
+} from "@/types";
 
 // A playlist row already carries every field the player needs, including the
 // per-track album/artist. Keep it as PlayableTrackData and hand that to the
@@ -114,23 +118,7 @@ function PlaylistPage() {
 
 type PlaylistContentProps = {
   playlistId: number;
-  data: {
-    playlist: {
-      id: number;
-      user_id: number;
-      name: string;
-      description: { String: string; Valid: boolean };
-      cover_image: { String: string; Valid: boolean };
-      is_public: boolean;
-      created_at: string;
-      updated_at: string;
-    };
-    track_count: number;
-    duration: number;
-    is_owner: boolean;
-    can_edit: boolean;
-    collaborators: unknown[] | null;
-  };
+  data: PlaylistDetailResponseType;
 };
 
 function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
@@ -501,8 +489,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
             fetchNextPage={fetchNextPage}
             onRemoveTrack={(trackId) => removeTrackMutation.mutate(trackId)}
             onReorderTracks={(trackIds) => reorderMutation.mutate(trackIds)}
-            playlistName={playlist.name}
-            coverUrl={coverUrl}
           />
         )}
       </section>
@@ -515,7 +501,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
       {/* Edit Playlist Dialog */}
       {is_owner && (
-        <EditPlaylistDialog
+        <PlaylistFormDialog
+          mode="edit"
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           playlist={playlist}
@@ -552,8 +539,6 @@ type PlaylistTracksListProps = {
   fetchNextPage: () => Promise<unknown>;
   onRemoveTrack: (trackId: number) => void;
   onReorderTracks: (trackIds: number[]) => void;
-  playlistName: string;
-  coverUrl: string | null;
 };
 
 // Threshold for using draggable list vs virtualized list
@@ -569,8 +554,6 @@ function PlaylistTracksList({
   fetchNextPage,
   onRemoveTrack,
   onReorderTracks,
-  playlistName,
-  coverUrl,
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
 
@@ -620,8 +603,6 @@ function PlaylistTracksList({
         >
           <DraggableTrackList
             tracks={orderedTracks}
-            playlistName={playlistName}
-            coverUrl={coverUrl}
             canEdit={canEdit}
             onReorder={handleReorder}
             onPlayTrack={handlePlayTrack}

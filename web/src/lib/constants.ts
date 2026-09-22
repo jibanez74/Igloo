@@ -491,8 +491,6 @@ export const MOTION_TRACK_ICON_BUTTON_CLASS =
 export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
-export const MOTION_MEDIA_OVERLAY_CLASS =
-  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
   "border-border bg-card shadow-2xl shadow-black/40 motion-reduce:animate-none";
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
@@ -559,7 +557,8 @@ export const CARD_INTERACTIVE_SURFACE_CLASS =
 export const CARD_SURFACE_CLASS = `${CARD_INTERACTIVE_SURFACE_CLASS} group relative overflow-hidden rounded-xl border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20`;
 export const CARD_MEDIA_HOVER_CLASS =
   "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
-export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;
+export const CARD_OVERLAY_REVEAL_CLASS =
+  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 export const CARD_ACTION_REVEAL_CLASS =
   "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
 /**

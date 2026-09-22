@@ -186,7 +186,7 @@ export function formatSpokenRuntimeMinutes(
 }
 
 /** A remaining-time label: the compact text shown, plus the words spoken. */
-export type TimeLeftLabel = { text: string; spoken: string };
+type TimeLeftLabel = { text: string; spoken: string };
 
 /**
  * Remaining watch time for the movie hero's resume strip and the episode rows,

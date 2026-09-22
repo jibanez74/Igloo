@@ -25,8 +25,6 @@ import type { PlaylistTrackType } from "@/types";
 
 type DraggableTrackListProps = {
   tracks: PlaylistTrackType[];
-  playlistName: string;
-  coverUrl: string | null;
   canEdit: boolean;
   onReorder: (trackIds: number[]) => void;
   onPlayTrack: (track: PlaylistTrackType) => void;
