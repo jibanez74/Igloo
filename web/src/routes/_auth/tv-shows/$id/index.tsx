@@ -21,7 +21,7 @@ import {
   unwrapString,
 } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
-import MediaNotFound from "@/components/shared/MediaNotFound";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import CastSection from "@/components/shared/CastSection";
 import ExtraVideosSection from "@/components/shared/ExtraVideosSection";
 import DetailSkeleton from "@/components/shared/DetailSkeleton";
@@ -97,47 +97,24 @@ function ShowDetailsPage() {
   const payload = data?.data;
   const show = payload?.show;
 
-  if (showId == null) {
-    return (
-      <MediaNotFound
-        message="That show link is not valid."
-        backTo="/tv-shows"
-        backLabel="Back to TV Shows"
-      />
-    );
-  }
-
-  if (isError || (data && data.error)) {
-    return (
-      <MediaNotFound
-        message={
-          data?.message || "Failed to load show details. Please try again later."
-        }
-        backTo="/tv-shows"
-        backLabel="Back to TV Shows"
-      />
-    );
-  }
-
-  if (isPending) {
-    return (
-      <DetailSkeleton label="Loading show details" withActions>
-        <ShowSeasonsSectionPlaceholder />
-      </DetailSkeleton>
-    );
-  }
-
-  if (!show || !payload) {
-    return (
-      <MediaNotFound
-        message="Show not found."
-        backTo="/tv-shows"
-        backLabel="Back to TV Shows"
-      />
-    );
-  }
-
-  return <ShowDetailsContent key={showId} showId={showId} payload={payload} />;
+  return (
+    <MediaDetailGuard
+      id={showId}
+      noun="show"
+      back="shows"
+      isPending={isPending}
+      isError={isError}
+      data={data}
+      payload={show && payload ? payload : null}
+      skeleton={
+        <DetailSkeleton label="Loading show details" withActions>
+          <ShowSeasonsSectionPlaceholder />
+        </DetailSkeleton>
+      }
+    >
+      {(loaded, id) => <ShowDetailsContent key={id} showId={id} payload={loaded} />}
+    </MediaDetailGuard>
+  );
 }
 
 function ShowDetailsContent({

@@ -42,7 +42,7 @@ import type {
   TrackGenreType,
   TrackType,
 } from "@/types";
-import MediaNotFound from "@/components/shared/MediaNotFound";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
 import MusicDetailBackNav from "@/components/music/MusicDetailBackNav";
 import MusicDetailSkeleton from "@/components/music/MusicDetailSkeleton";
@@ -86,44 +86,20 @@ function AlbumDetailsPage() {
     albumDetailsQueryOpts(albumId ?? 0),
   );
 
-  if (albumId == null) {
-    return (
-      <MediaNotFound
-        message="That album link is not valid."
-        backTo="/music"
-        backLabel="Back to Music"
-      />
-    );
-  }
-
-  if (isError || data?.error) {
-    return (
-      <MediaNotFound
-        message={
-          data?.message ||
-          "Failed to load album details. Please try again later."
-        }
-        backTo="/music"
-        backLabel="Back to Music"
-      />
-    );
-  }
-
-  if (isPending) {
-    return <MusicDetailSkeleton variant="album" />;
-  }
-
-  if (!data?.data?.album) {
-    return (
-      <MediaNotFound
-        message="Album not found."
-        backTo="/music"
-        backLabel="Back to Music"
-      />
-    );
-  }
-
-  return <AlbumDetailsContent key={albumId} {...data.data} />;
+  return (
+    <MediaDetailGuard
+      id={albumId}
+      noun="album"
+      back="music"
+      isPending={isPending}
+      isError={isError}
+      data={data}
+      payload={data?.data?.album ? data.data : null}
+      skeleton={<MusicDetailSkeleton variant="album" />}
+    >
+      {(loaded, id) => <AlbumDetailsContent key={id} {...loaded} />}
+    </MediaDetailGuard>
+  );
 }
 
 function AlbumDetailsContent({

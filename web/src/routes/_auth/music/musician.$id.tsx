@@ -16,7 +16,7 @@ import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import MediaNotFound from "@/components/shared/MediaNotFound";
+import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkipLinks from "@/components/shared/DetailSkipLinks";
 import AlbumCard from "@/components/music/AlbumCard";
 import MusicDetailBackdrop from "@/components/music/MusicDetailBackdrop";
@@ -71,44 +71,20 @@ function MusicianDetailsPage() {
     musicianDetailsQueryOpts(musicianId ?? 0),
   );
 
-  if (musicianId == null) {
-    return (
-      <MediaNotFound
-        message="That musician link is not valid."
-        backTo="/music"
-        backLabel="Back to Music"
-      />
-    );
-  }
-
-  if (isError || data?.error) {
-    return (
-      <MediaNotFound
-        message={
-          data?.message ||
-          "Failed to load musician details. Please try again later."
-        }
-        backTo="/music"
-        backLabel="Back to Music"
-      />
-    );
-  }
-
-  if (isPending) {
-    return <MusicDetailSkeleton variant="musician" />;
-  }
-
-  if (!data?.data?.musician) {
-    return (
-      <MediaNotFound
-        message="Musician not found."
-        backTo="/music"
-        backLabel="Back to Music"
-      />
-    );
-  }
-
-  return <MusicianDetailsContent key={musicianId} {...data.data} />;
+  return (
+    <MediaDetailGuard
+      id={musicianId}
+      noun="musician"
+      back="music"
+      isPending={isPending}
+      isError={isError}
+      data={data}
+      payload={data?.data?.musician ? data.data : null}
+      skeleton={<MusicDetailSkeleton variant="musician" />}
+    >
+      {(loaded, id) => <MusicianDetailsContent key={id} {...loaded} />}
+    </MediaDetailGuard>
+  );
 }
 
 // Format follower count for display
