@@ -106,9 +106,11 @@ type HLSSession struct {
 	// Negative means unknown; callers then fall back to StartSec. Guarded by
 	// ExitMu along with the exit fields above.
 	ActualStartSec float64
-	// SourceFrameRate is the primary video stream's nominal frame rate, which
-	// sizes the synthesized transcode playlist (see ffmpeg.HLSSegmentCount).
-	// Zero means unknown. Set once at construction and read-only afterwards.
+	// SourceFrameRate sizes the synthesized transcode playlist (see
+	// ffmpeg.HLSSegmentCount). It is the lower of the primary video stream's
+	// nominal and average rates (hlsPlaylistFrameRate), not the nominal rate
+	// the encoder's GOP is sized from. Zero means unknown. Set once at
+	// construction and read-only afterwards.
 	SourceFrameRate float64
 	// StartedAt anchors the cold time-to-first-segment measurement at the top
 	// of startHLSSession, before any directory, limiter, or FFmpeg work. Set
@@ -269,6 +271,33 @@ func isVFRStream(stream *database.VideoStream) bool {
 		return false
 	}
 	return math.Abs(avg-stream.FrameRate)/stream.FrameRate > hlsVFRRelativeTolerance
+}
+
+// hlsPlaylistFrameRate is the frame rate that sizes a synthesized transcode
+// playlist (ffmpeg.HLSSegmentCount): the lower of the stream's nominal and
+// average rates. ffprobe's r_frame_rate is the lowest rate at which every
+// timestamp is representable, which Matroska muxers routinely inflate (1000/1
+// for millisecond-jittered timestamps), while avg_frame_rate is frames over
+// duration. The count tolerates an underestimate, which can only drop a
+// sub-frame real tail, but an overestimate places the "last frame" later and
+// re-advertises the phantom final segment the count exists to remove. Zero
+// means unknown; the encoder's GOP size keeps using the nominal rate because
+// -force_key_frames pins the boundaries regardless.
+func hlsPlaylistFrameRate(stream *database.VideoStream) float64 {
+	nominal := stream.FrameRate
+	avg := 0.0
+	if stream.AvgFrameRate.Valid {
+		avg = helpers.ParseFrameRate(stream.AvgFrameRate.String)
+	}
+
+	switch {
+	case nominal > 0 && avg > 0:
+		return math.Min(nominal, avg)
+	case nominal > 0:
+		return nominal
+	default:
+		return avg
+	}
 }
 
 // isCopySafeAACStream returns true when the audio stream is AAC with a
@@ -996,7 +1025,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		RequestedAudioProfile: params.RequestedAudioProfile,
 		EffectiveAudioProfile: effectiveAudio,
 		TempFileSegments:      ffmpeg.HLSUsesTempFile(hlsRunParams),
-		SourceFrameRate:       params.PrimaryVideo.FrameRate,
+		SourceFrameRate:       hlsPlaylistFrameRate(params.PrimaryVideo),
 		// Re-encoding seeks accurately, so a transcode starts exactly where it
 		// was asked to. Copy-video cannot and is measured below.
 		ActualStartSec: startSec,
