@@ -665,7 +665,10 @@ func (app *Application) reservePersonalHLSSession(
 	limit := app.hlsMaxPersonalSessionsPerUser()
 	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
 	reserved := app.PersonalHLSReservations[ownerUserID]
-	for len(entries)+reserved >= limit && len(entries) > 0 {
+	// Evicting cached sessions can only make room when the in-flight
+	// reservations leave some: with reserved >= limit the loop used to kill
+	// every cached session the owner had and then refuse the request anyway.
+	for reserved < limit && len(entries)+reserved >= limit && len(entries) > 0 {
 		victim := entries[0]
 		entries = entries[1:]
 		removed = append(removed, app.deleteHLSSession(victim.key))
