@@ -1,6 +1,7 @@
 import { createRef, StrictMode, useRef, useState } from "react";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -11,6 +12,7 @@ import VideoPlayer from "@/components/playback/VideoPlayer";
 import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
+  HLS_NETWORK_RECOVERY_DELAYS_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
@@ -31,6 +33,7 @@ type FakeHlsInstance = {
   levels: Array<{ details?: FakeLevelDetails }>;
   destroyed: boolean;
   startLoadCalls: number;
+  loadSourceCalls: number;
   stopLoadCalls: number;
   recoverMediaErrorCalls: number;
 };
@@ -68,6 +71,7 @@ vi.mock("hls.js/light", () => {
     levels: Array<{ details?: FakeLevelDetails }> = [];
     destroyed = false;
     startLoadCalls = 0;
+    loadSourceCalls = 0;
     stopLoadCalls = 0;
     recoverMediaErrorCalls = 0;
 
@@ -91,7 +95,9 @@ vi.mock("hls.js/light", () => {
       }
     }
 
-    loadSource() {}
+    loadSource() {
+      this.loadSourceCalls += 1;
+    }
     attachMedia() {}
     recoverMediaError() {
       this.recoverMediaErrorCalls += 1;
@@ -723,9 +729,11 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  // hls.js's documented recovery for a fatal network error, which this handler
-  // previously never attempted — it went straight to the error screen.
-  it("restarts loading once on a fatal network error", async () => {
+  // hls.js's documented recovery for a fatal network error. A restarting
+  // server needs more than one immediate retry, so the retries back off
+  // before the error screen shows.
+  it("retries a load that got no answer with a backoff before reporting it", async () => {
+    vi.useFakeTimers();
     const onError = vi.fn();
     const hls = await renderHlsPlayer({ onError });
 
@@ -735,19 +743,170 @@ describe("VideoPlayer hls.js error routing", () => {
       fatal: true,
     };
 
-    act(() => {
-      hls.trigger("hlsError", networkFailure);
-    });
-
-    expect(hls.startLoadCalls).toBe(1);
+    for (const [attempt, delayMs] of HLS_NETWORK_RECOVERY_DELAYS_MS.entries()) {
+      act(() => {
+        hls.trigger("hlsError", networkFailure);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delayMs - 1);
+      });
+      expect(hls.startLoadCalls).toBe(attempt);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(hls.startLoadCalls).toBe(attempt + 1);
+    }
     expect(onError).not.toHaveBeenCalled();
 
     act(() => {
       hls.trigger("hlsError", networkFailure);
     });
 
-    expect(hls.startLoadCalls).toBe(1);
+    expect(hls.startLoadCalls).toBe(HLS_NETWORK_RECOVERY_DELAYS_MS.length);
     expect(onError).toHaveBeenCalledOnce();
+  });
+
+  // The XHR loader reports a dropped connection, which is also what a
+  // restarting server looks like, as status 0 rather than no response. Only
+  // timeouts used to reach the retry; this went straight to the error screen.
+  it("treats a dropped connection (status 0) as a load with no answer", async () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onError });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: true,
+        response: { code: 0 },
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_NETWORK_RECOVERY_DELAYS_MS[0]);
+    });
+
+    expect(hls.startLoadCalls).toBe(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("fetches the manifest again when the manifest request got no answer", async () => {
+    vi.useFakeTimers();
+    const hls = await renderHlsPlayer();
+    const initialLoads = hls.loadSourceCalls;
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "manifestLoadError",
+        fatal: true,
+        response: { code: 0 },
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_NETWORK_RECOVERY_DELAYS_MS[0]);
+    });
+
+    expect(hls.loadSourceCalls).toBe(initialLoads + 1);
+    expect(hls.startLoadCalls).toBe(0);
+  });
+
+  it("cancels a scheduled network retry when the instance is replaced", async () => {
+    vi.useFakeTimers();
+    const hls = await renderHlsPlayer();
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadTimeOut",
+        fatal: true,
+      });
+    });
+    cleanup();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_NETWORK_RECOVERY_DELAYS_MS[0]);
+    });
+
+    expect(hls.destroyed).toBe(true);
+    expect(hls.startLoadCalls).toBe(0);
+  });
+
+  // FFmpeg died partway through. The server replaces the failed session on
+  // the next manifest request, so a rebase keeps the film playing.
+  it("routes a fatal segment 500 to onSessionLost", async () => {
+    const onSessionLost = vi.fn();
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost, onError });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: true,
+        response: { code: 500 },
+      });
+    });
+
+    expect(onSessionLost).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  // A lost session fails every request still in flight; each used to spend
+  // one attempt of the recovery budget on the same failure.
+  it("reports a lost session once per hls.js instance", async () => {
+    const onSessionLost = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost });
+
+    const lost = {
+      type: "networkError",
+      details: "fragLoadError",
+      fatal: false,
+      response: { code: 404 },
+    };
+    act(() => {
+      hls.trigger("hlsError", lost);
+      hls.trigger("hlsError", { ...lost, details: "levelLoadError" });
+    });
+
+    expect(onSessionLost).toHaveBeenCalledOnce();
+  });
+
+  // Before anything buffers, currentTime reads 0, the new session's start.
+  // Reporting that sent every recovery ten seconds (the resume rewind)
+  // before its target, so a 404 that kept coming back walked the film
+  // backwards.
+  it("reports the source's start position until a fragment buffers", async () => {
+    const onSessionLost = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost, startSec: 30 });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "manifestLoadError",
+        fatal: true,
+        response: { code: 404 },
+      });
+    });
+
+    expect(onSessionLost).toHaveBeenCalledWith(30);
+  });
+
+  it("reports the playhead once a fragment has buffered", async () => {
+    const onSessionLost = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost, startSec: 30 });
+
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: false,
+        response: { code: 404 },
+      });
+    });
+
+    // jsdom never advances the playhead, so it still reads 0.
+    expect(onSessionLost).toHaveBeenCalledWith(0);
   });
 });
 

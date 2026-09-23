@@ -347,12 +347,12 @@ export default function VideoPlaybackPage({
     }));
   };
 
-  const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
-    streamWindowKey: sessionWindowKey,
-    onRecover: (currentTimeSec) =>
-      navigateToPlaybackPosition(currentTimeSec, { forceReload: true }),
-    onMaxAttempts: setPlaybackError,
-  });
+  const { handleSessionLost, resetRecovery, recoveryAttempt } =
+    useHlsSessionRecovery({
+      onRecover: (currentTimeSec) =>
+        navigateToPlaybackPosition(currentTimeSec, { forceReload: true }),
+      onMaxAttempts: setPlaybackError,
+    });
 
   const { waitingForCapacity, handleCapacityBusy, notifyManifestLoaded } =
     useHlsCapacityRetry({
@@ -753,6 +753,7 @@ export default function VideoPlaybackPage({
         mediaNoun={kind}
         onBack={handleBack}
         onRetry={() => {
+          resetRecovery();
           setPlaybackError(null);
           setPlaying(false);
           setCurrentTime(0);

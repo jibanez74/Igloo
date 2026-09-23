@@ -142,7 +142,6 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     });
 
   const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
-    streamWindowKey,
     onRecover: () => setStreamReloadKey((prev) => prev + 1),
     onMaxAttempts: () =>
       setPlaybackError(
