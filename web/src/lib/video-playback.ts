@@ -103,6 +103,18 @@ export function getOrCreateHlsPlaybackSessionId(
   }
 }
 
+/**
+ * Cancels a response body whose headers were all the caller needed, so the
+ * connection is freed instead of holding an unread playlist.
+ */
+export async function releaseResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // The headers are still usable; body release is best-effort.
+  }
+}
+
 export async function stopHlsPlaybackSession(
   media: PlaybackMediaRef,
   playbackSessionId: string,

@@ -347,12 +347,12 @@ export default function VideoPlaybackPage({
     }));
   };
 
-  const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
-    streamWindowKey: sessionWindowKey,
-    onRecover: (currentTimeSec) =>
-      navigateToPlaybackPosition(currentTimeSec, { forceReload: true }),
-    onMaxAttempts: setPlaybackError,
-  });
+  const { handleSessionLost, resetRecovery, recoveryAttempt } =
+    useHlsSessionRecovery({
+      onRecover: (currentTimeSec) =>
+        navigateToPlaybackPosition(currentTimeSec, { forceReload: true }),
+      onMaxAttempts: setPlaybackError,
+    });
 
   const { waitingForCapacity, handleCapacityBusy, notifyManifestLoaded } =
     useHlsCapacityRetry({
@@ -497,8 +497,11 @@ export default function VideoPlaybackPage({
       fallbackDurationSec: mediaDurationSec,
     });
 
+  // Paused while the stream waits for server capacity: the ping is a
+  // manifest request, so it would queue for a transcode permit alongside the
+  // retry it is meant to keep alive.
   useHlsSessionKeepalive({
-    enabled: isHlsPlayback && playerMounted,
+    enabled: isHlsPlayback && playerMounted && !waitingForCapacity,
     streamUrl,
   });
 
@@ -753,6 +756,7 @@ export default function VideoPlaybackPage({
         mediaNoun={kind}
         onBack={handleBack}
         onRetry={() => {
+          resetRecovery();
           setPlaybackError(null);
           setPlaying(false);
           setCurrentTime(0);

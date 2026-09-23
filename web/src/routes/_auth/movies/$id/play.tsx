@@ -59,7 +59,10 @@ function PlayMoviePage() {
   const notFound = Boolean(isError || (data && data.error) || (data && !movie));
 
   return (
+    // Keyed on the movie: the player's refs and state belong to one media
+    // item, and the router reuses the component when only the param changes.
     <VideoPlaybackPage
+      key={movieId}
       media={movieMediaRef(movieId)}
       search={search}
       onNavigateSearch={(update) =>

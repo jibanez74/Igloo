@@ -1110,3 +1110,86 @@ func TestReservePersonalHLSSession_ReservationsAtLimitKeepCachedSessions(t *test
 		t.Fatalf("pending reservations = %d, want 2", reserved)
 	}
 }
+
+// A failed session answered every retry of its URL with the same failure and
+// never expired, because each retry refreshed it. The next manifest request
+// must replace it, while a stop Igloo asked for and a clean exit stay cached.
+func TestGetOrCreateHLSSession_ReplacesOnlyFailedSessions(t *testing.T) {
+	cases := []struct {
+		name         string
+		exitErr      error
+		expectedStop bool
+		wantReplaced bool
+	}{
+		{name: "ffmpeg failed", exitErr: errors.New("exit status 1"), wantReplaced: true},
+		{name: "stop igloo asked for", exitErr: errors.New("signal: killed"), expectedStop: true},
+		{name: "clean exit", exitErr: nil},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			defer app.DB.Close()
+			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+			app.FFmpeg = fake
+
+			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+			userID := int64(100)
+			key := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+			oldDir := t.TempDir()
+			old := &HLSSession{
+				Media:           movieRef(movieID),
+				FileID:          movieID,
+				OwnerUserID:     userID,
+				PlaybackSession: testPlaybackSessionID,
+				TempDir:         oldDir,
+				Exited:          true,
+				ExitErr:         tc.exitErr,
+				ExpectedStop:    tc.expectedStop,
+			}
+			app.HLSSessionCache.Set(key, old, hlsPersonalSessionTTL)
+
+			session, gotKey, err := app.GetOrCreateHLSSession(
+				context.Background(),
+				movieRef(movieID),
+				helpers.HLS_PROFILE_720P_3MBPS,
+				testIntPtr(0),
+				nil,
+				testPlaybackSessionID,
+				0,
+				userID,
+			)
+			if err != nil {
+				t.Fatalf("GetOrCreateHLSSession error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+			if gotKey != key {
+				t.Fatalf("key = %q, want %q", gotKey, key)
+			}
+
+			if !tc.wantReplaced {
+				if session != old {
+					t.Fatal("cached session was replaced, want it reused")
+				}
+				if fake.CallCount() != 0 {
+					t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
+				}
+				return
+			}
+
+			if session == old {
+				t.Fatal("failed session was served again, want a replacement")
+			}
+			if fake.CallCount() != 1 {
+				t.Fatalf("RunHLS call count = %d, want 1", fake.CallCount())
+			}
+			raw, ok := app.HLSSessionCache.Get(key)
+			if !ok || raw != session {
+				t.Fatal("replacement is not the cached session")
+			}
+			if _, statErr := os.Stat(oldDir); !os.IsNotExist(statErr) {
+				t.Fatalf("failed session temp dir still exists (stat error %v)", statErr)
+			}
+		})
+	}
+}

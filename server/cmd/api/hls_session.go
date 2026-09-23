@@ -155,6 +155,16 @@ func (s *HLSSession) exitStatus() (bool, error) {
 	return s.Exited, s.ExitErr
 }
 
+// failed reports whether FFmpeg died on its own with an error. A stop Igloo
+// asked for (eviction, a seek, shutdown) also exits with an error, which
+// ExpectedStop tells apart.
+func (s *HLSSession) failed() bool {
+	s.ExitMu.Lock()
+	defer s.ExitMu.Unlock()
+
+	return s.Exited && s.ExitErr != nil && !s.ExpectedStop
+}
+
 // hlsAudioMetadataError reports an explicit audio request against a stream
 // whose stored channel metadata cannot resolve a safe output profile. It is a
 // media-profile problem (HTTP 422), not a malformed query.
@@ -486,6 +496,62 @@ func (app *Application) removePersonalHLSSession(key string) {
 	cleanupHLSSession(session)
 }
 
+// cachedPersonalHLSSession returns the owner's live session under key and
+// refreshes its TTL. A nil session with a nil error means create one.
+//
+// A session whose FFmpeg failed is dropped here rather than served. Left in
+// place it answered every retry of the same URL with the same failure, and
+// each retry refreshed its TTL, so it never expired while a client was still
+// trying; it also kept a per-user slot and its temp dir. Only manifest
+// requests come through here, so segment requests keep serving what the
+// session wrote before it failed.
+func (app *Application) cachedPersonalHLSSession(key string, media mediaRef, ownerUserID int64) (*HLSSession, error) {
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok {
+		return nil, nil
+	}
+
+	session, typeOK := raw.(*HLSSession)
+	if !typeOK || session == nil {
+		app.removePersonalHLSSession(key)
+		return nil, nil
+	}
+	if !canAccessPersonalHLSSession(session, media, ownerUserID) {
+		return nil, errHLSSessionNotFound
+	}
+	if session.failed() {
+		app.evictFailedPersonalHLSSession(key, session)
+		return nil, nil
+	}
+	if !app.RefreshHLSSessionTTL(key, session) {
+		return nil, nil
+	}
+	return session, nil
+}
+
+// evictFailedPersonalHLSSession removes a failed session only if it is still
+// the one cached under key, so a replacement a concurrent request already
+// published is left alone.
+func (app *Application) evictFailedPersonalHLSSession(key string, session *HLSSession) {
+	app.PersonalHLSMu.Lock()
+	raw, ok := app.HLSSessionCache.Get(key)
+	evicted := ok && raw == session
+	if evicted {
+		app.deleteHLSSession(key)
+	}
+	app.PersonalHLSMu.Unlock()
+
+	if !evicted {
+		return
+	}
+	cleanupHLSSession(session)
+	app.Logger.Info("failed hls session replaced",
+		"media", session.Media.String(),
+		"owner_user_id", session.OwnerUserID,
+		"session_dir", filepath.Base(session.TempDir),
+	)
+}
+
 func (app *Application) cleanupPersonalHLSSessionsForOwner(media mediaRef, ownerUserID int64, playbackSession string, keepKey string) int {
 	app.PersonalHLSMu.Lock()
 	sessions := app.cleanupPersonalHLSSessionsForOwnerLocked(media, ownerUserID, playbackSession, keepKey)
@@ -802,6 +868,37 @@ func (app *Application) getActiveRoomHLSSession(roomID int64, key string) (*HLSS
 
 	app.RefreshHLSSessionTTL(key, session)
 	return session, true, nil
+}
+
+// liveRoomHLSSession is getActiveRoomHLSSession for the manifest path: a room
+// session whose FFmpeg failed is dropped and reported missing so the caller
+// starts a new one. A room has one session for every member and its TTL is
+// refreshed by each of their requests, so a failed one otherwise stays until
+// someone deletes the room. The segment path keeps using
+// getActiveRoomHLSSession, which still serves what was written before the
+// failure.
+func (app *Application) liveRoomHLSSession(roomID int64, key string) (*HLSSession, bool, error) {
+	session, found, err := app.getActiveRoomHLSSession(roomID, key)
+	if err != nil || !found || !session.failed() {
+		return session, found, err
+	}
+
+	app.RoomHLSMu.Lock()
+	raw, ok := app.HLSSessionCache.Get(key)
+	evicted := ok && raw == session
+	if evicted {
+		app.deleteHLSSession(key)
+	}
+	app.RoomHLSMu.Unlock()
+
+	if evicted {
+		cleanupHLSSession(session)
+		app.Logger.Info("failed watch room hls session replaced",
+			"room_id", roomID,
+			"session_dir", filepath.Base(session.TempDir),
+		)
+	}
+	return nil, false, nil
 }
 
 func cleanupHLSSession(session *HLSSession) {
@@ -1261,18 +1358,9 @@ func (app *Application) GetOrCreateHLSSession(
 	// to the duration tail -- every keepalive and live-playlist re-fetch -- so
 	// this lookup hits without needing the media row. A clamped start simply
 	// misses here and takes the load-and-normalize path below.
-	if raw, ok := app.HLSSessionCache.Get(requestedKey); ok {
-		session, typeOK := raw.(*HLSSession)
-		if !typeOK || session == nil {
-			app.removePersonalHLSSession(requestedKey)
-		} else if !canAccessPersonalHLSSession(session, media, ownerUserID) {
-			return nil, requestedKey, errHLSSessionNotFound
-		} else {
-			refreshed := app.RefreshHLSSessionTTL(requestedKey, session)
-			if refreshed {
-				return session, requestedKey, nil
-			}
-		}
+	cached, err := app.cachedPersonalHLSSession(requestedKey, media, ownerUserID)
+	if err != nil || cached != nil {
+		return cached, requestedKey, err
 	}
 
 	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, media, startSec)
@@ -1282,34 +1370,16 @@ func (app *Application) GetOrCreateHLSSession(
 	key := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
 
 	if key != requestedKey {
-		if raw, ok := app.HLSSessionCache.Get(key); ok {
-			session, typeOK := raw.(*HLSSession)
-			if !typeOK || session == nil {
-				app.removePersonalHLSSession(key)
-			} else if !canAccessPersonalHLSSession(session, media, ownerUserID) {
-				return nil, key, errHLSSessionNotFound
-			} else {
-				refreshed := app.RefreshHLSSessionTTL(key, session)
-				if refreshed {
-					return session, key, nil
-				}
-			}
+		cached, err = app.cachedPersonalHLSSession(key, media, ownerUserID)
+		if err != nil || cached != nil {
+			return cached, key, err
 		}
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
-		if raw, ok := app.HLSSessionCache.Get(key); ok {
-			existing, typeOK := raw.(*HLSSession)
-			if !typeOK || existing == nil {
-				app.removePersonalHLSSession(key)
-			} else if !canAccessPersonalHLSSession(existing, media, ownerUserID) {
-				return nil, errHLSSessionNotFound
-			} else {
-				refreshed := app.RefreshHLSSessionTTL(key, existing)
-				if refreshed {
-					return existing, nil
-				}
-			}
+		existing, cacheErr := app.cachedPersonalHLSSession(key, media, ownerUserID)
+		if cacheErr != nil || existing != nil {
+			return existing, cacheErr
 		}
 
 		reservation, reserveErr := app.reservePersonalHLSSession(
@@ -1419,7 +1489,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 ) (*HLSSession, error) {
 	key := RoomHLSSessionKey(roomID)
 
-	session, ok, err := app.getActiveRoomHLSSession(roomID, key)
+	session, ok, err := app.liveRoomHLSSession(roomID, key)
 	if err != nil {
 		return nil, err
 	}
@@ -1428,7 +1498,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
-		existing, found, getErr := app.getActiveRoomHLSSession(roomID, key)
+		existing, found, getErr := app.liveRoomHLSSession(roomID, key)
 		if getErr != nil {
 			return nil, getErr
 		}

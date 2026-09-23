@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"sync"
@@ -368,5 +369,54 @@ func TestInvalidateHLSSessionsForMovie(t *testing.T) {
 	}
 	if ok || session != nil {
 		t.Fatal("expected invalidated room session to be absent, not active")
+	}
+}
+
+// One room session serves every member and each of their requests refreshes
+// it, so a failed one used to stay until the room was deleted. The segment
+// path keeps serving what it wrote; the next manifest request replaces it.
+func TestGetOrCreateRoomHLSSession_ReplacesFailedSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	const roomID = int64(31)
+	key := RoomHLSSessionKey(roomID)
+	oldDir := t.TempDir()
+	old := &HLSSession{
+		Media:   movieRef(movieID),
+		FileID:  movieID,
+		IsRoom:  true,
+		TempDir: oldDir,
+		Exited:  true,
+		ExitErr: errors.New("exit status 1"),
+	}
+	app.HLSSessionCache.Set(key, old, hlsRoomSessionTTL)
+
+	segmentSession, found, err := app.getActiveRoomHLSSession(roomID, key)
+	if err != nil || !found || segmentSession != old {
+		t.Fatalf("segment lookup = (%p, %v, %v), want the failed session", segmentSession, found, err)
+	}
+
+	session, err := app.GetOrCreateRoomHLSSession(background, roomID, movieID, helpers.HLS_PROFILE_720P_3MBPS, 0, nil, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateRoomHLSSession error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session == old {
+		t.Fatal("failed room session was served again, want a replacement")
+	}
+	if fake.CallCount() != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", fake.CallCount())
+	}
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok || raw != session {
+		t.Fatal("replacement is not the cached room session")
+	}
+	if _, statErr := os.Stat(oldDir); !os.IsNotExist(statErr) {
+		t.Fatalf("failed room session temp dir still exists (stat error %v)", statErr)
 	}
 }

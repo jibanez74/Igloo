@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { HLS_SESSION_KEEPALIVE_INTERVAL_MS } from "@/lib/constants";
+import { releaseResponseBody } from "@/lib/video-playback";
 
 type HlsSessionKeepaliveOptions = {
   enabled: boolean;
@@ -26,14 +27,40 @@ export function useHlsSessionKeepalive({
   useEffect(() => {
     if (!enabled || !streamUrl) return;
 
-    const interval = window.setInterval(() => {
-      void fetch(streamUrl, { credentials: "include" }).catch(() => {
+    // Aborted on cleanup. A ping still in flight when the player unmounts
+    // used to reach the server after the page's stop request and, since a
+    // manifest request recreates a missing session, start an orphan that
+    // transcoded until its idle TTL ran out.
+    const controller = new AbortController();
+    let inFlight = false;
+
+    const ping = async () => {
+      // A manifest request can wait on the server for tens of seconds, so a
+      // slow ping must not stack a second one behind it.
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch(streamUrl, {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        // Only the request matters. Releasing the body frees the connection
+        // instead of leaving the playlist unread.
+        await releaseResponseBody(response);
+      } catch {
         // Best-effort keepalive; playback errors surface through the player.
-      });
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void ping();
     }, HLS_SESSION_KEEPALIVE_INTERVAL_MS);
 
     return () => {
       window.clearInterval(interval);
+      controller.abort();
     };
   }, [enabled, streamUrl]);
 }

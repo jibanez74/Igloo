@@ -266,10 +266,17 @@ export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
  */
 export const DIRECT_PLAY_STALL_TIMEOUT_MS = 10_000;
 
-/** Max session-lost recoveries per stream window (enforced in `useHlsSessionRecovery`). */
+/** Max session-lost recoveries per incident (enforced in `useHlsSessionRecovery`). */
 export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
-/** Min ms between recovery attempts to avoid tight loops when `src` updates re-trigger 404. */
+/** Min ms between recovery attempts, so a 404 that comes back at once cannot loop tightly. */
 export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
+/**
+ * A session loss this long after the previous recovery attempt starts a new
+ * incident with a full budget. Must be longer than one failed rebase cycle
+ * (startup plus a buffer's worth of playback), or a failure that repeats at
+ * the same point would get a fresh budget on every cycle.
+ */
+export const HLS_SESSION_LOST_INCIDENT_WINDOW_MS = 60_000;
 
 /** Max manifest retries per stream window while the server is at transcode capacity (503). */
 export const HLS_CAPACITY_RETRY_MAX_ATTEMPTS = 6;
@@ -292,7 +299,7 @@ export const HLS_ACTUAL_START_HEADER = "X-Igloo-Actual-Start";
 export const HLS_SEGMENT_STATUS_HEADER = "X-Igloo-Segment";
 export const HLS_SEGMENT_STATUS_PAST_END = "past-end";
 
-/** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
+/** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the ready player is mounted and not waiting for capacity. */
 export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;
 /** hls.js: manifest / level request timeout (ms). */
 export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
@@ -307,6 +314,13 @@ export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
 export const HLS_JS_FRAG_LOAD_TIMEOUT_MS = 150_000;
 /** Retries of a segment the server reports as not yet produced (503). */
 export const HLS_SEGMENT_NOT_READY_MAX_RETRIES = 3;
+
+/**
+ * Delays before each retry of a load that got no answer at all: a timeout, or
+ * a dropped connection (status 0), which is also what a restarting server
+ * looks like. Long enough in total for a restart to finish.
+ */
+export const HLS_NETWORK_RECOVERY_DELAYS_MS = [2_000, 4_000, 8_000] as const;
 /** Resume HLS sessions this far before the target so short rewinds work without rebasing. */
 export const HLS_RESUME_REWIND_BUFFER_SEC = 10;
 /** hls.js: seconds of already-played buffer to keep behind the playhead. */

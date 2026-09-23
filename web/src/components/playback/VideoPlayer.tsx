@@ -11,6 +11,7 @@ import {
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_FRAG_LOAD_TIMEOUT_MS,
   HLS_JS_LOAD_TIMEOUT_MS,
+  HLS_NETWORK_RECOVERY_DELAYS_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   HLS_SEGMENT_STATUS_HEADER,
   HLS_SEGMENT_STATUS_PAST_END,
@@ -18,6 +19,7 @@ import {
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
 import { supportsNativeHLS } from "@/lib/playback";
+import { releaseResponseBody } from "@/lib/video-playback";
 import { cn } from "@/lib/utils";
 
 type SubtitleTrackInfo = {
@@ -178,14 +180,6 @@ function isPastEndSegment(headers: ManifestHeaders | null): boolean {
   );
 }
 
-async function releaseResponseBody(response: Response): Promise<void> {
-  try {
-    await response.body?.cancel();
-  } catch {
-    // The headers are still usable; body release is best-effort.
-  }
-}
-
 export default function VideoPlayer({
   videoRef,
   src,
@@ -311,6 +305,16 @@ export default function VideoPlayer({
     return true;
   });
 
+  // A source that has buffered nothing has no playhead of its own yet:
+  // `currentTime` still reads 0, the new session's start. Reporting that sent
+  // each recovery to the start of the failed window, which is ten seconds
+  // before its target (the resume rewind), so a 404 that kept coming back
+  // walked the film backwards. The start this source was built for is the
+  // position the viewer was actually at.
+  const reportSessionLostAtStart = useEffectEvent((): boolean =>
+    reportSessionLost(startSec),
+  );
+
   const handleHlsError = useEffectEvent((data: ErrorData) => {
     const detail = data.details ?? "unknown error";
     if (data.type === HLS_NETWORK_ERROR) {
@@ -362,7 +366,9 @@ export default function VideoPlayer({
         });
         hlsRef.current = hls;
         hlsLoadStoppedAtEndRef.current = false;
+        let networkRecoveryTimer: number | undefined;
         disposeHls = () => {
+          window.clearTimeout(networkRecoveryTimer);
           hls.destroy();
           // A late dispose must not clobber a newer instance a subsequent
           // effect run already put in the ref.
@@ -404,16 +410,31 @@ export default function VideoPlayer({
         ];
 
         let mediaRecoveryAttempted = false;
-        let networkRecoveryAttempted = false;
+        let networkRecoveryAttempts = 0;
         let segmentNotReadyRetries = 0;
+        let fragmentBuffered = false;
+        // One report per instance: a lost session fails the requests that
+        // are still in flight too, and the page replaces this instance after
+        // the first report. Reporting each of them used to spend the
+        // recovery budget on a single failure.
+        let sessionLostReported = false;
+        const reportLost = (): boolean => {
+          if (sessionLostReported) return true;
+          const reported = fragmentBuffered
+            ? reportSessionLost(video.currentTime)
+            : reportSessionLostAtStart();
+          sessionLostReported = reported;
+          return reported;
+        };
 
         // A fragment that buffers proves the stream recovered, so the one-shot
         // budgets above are for consecutive failures rather than for the life
         // of the instance: a session that stalls once an hour can recover each
         // time instead of dying on the second incident.
         hls.on(Hls.Events.FRAG_BUFFERED, () => {
+          fragmentBuffered = true;
           mediaRecoveryAttempted = false;
-          networkRecoveryAttempted = false;
+          networkRecoveryAttempts = 0;
           segmentNotReadyRetries = 0;
         });
 
@@ -441,7 +462,7 @@ export default function VideoPlayer({
           if (
             responseCode === 404 &&
             sessionLostDetails.includes(data.details) &&
-            reportSessionLost(video.currentTime)
+            reportLost()
           ) {
             return;
           }
@@ -478,25 +499,54 @@ export default function VideoPlayer({
             return;
           }
 
+          // A 500 on a segment means FFmpeg died partway through. The server
+          // replaces a failed session on the next manifest request, so a
+          // rebase at the playhead gets a working one; the recovery budget
+          // stops a failure that repeats at the same point.
+          if (
+            responseCode === 500 &&
+            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+            reportLost()
+          ) {
+            return;
+          }
+
           if (data.type === HLS_MEDIA_ERROR && !mediaRecoveryAttempted) {
             mediaRecoveryAttempted = true;
             hls.recoverMediaError();
             return;
           }
 
-          // hls.js's documented recovery for a fatal network error, which this
-          // handler previously never attempted. Only for requests that never
-          // got an answer — a timeout or a dropped connection. A status code
-          // means the server decided something, and the cases worth retrying
-          // are the ones handled above; blindly reloading the rest would just
-          // hide a definite failure behind a second identical response.
+          // hls.js's documented recovery for a fatal network error. Only for
+          // requests that never got an answer, meaning a timeout or a dropped
+          // connection. A status code means the server decided something, and
+          // the cases worth retrying are the ones handled above; blindly
+          // reloading the rest would just hide a definite failure behind a
+          // second identical response. A timeout carries no response, but a
+          // dropped connection reports status 0 (the XHR loader passes
+          // xhr.status through), and hls.js never retries a 0 while the
+          // browser thinks it is online. So a server restart used to land
+          // straight on the error screen. The backoff gives a restarting
+          // server time to come back, and once it has, the next request 404s
+          // and the session-lost rule rebases.
           if (
             data.type === HLS_NETWORK_ERROR &&
-            responseCode === undefined &&
-            !networkRecoveryAttempted
+            (responseCode === undefined || responseCode === 0) &&
+            networkRecoveryAttempts < HLS_NETWORK_RECOVERY_DELAYS_MS.length
           ) {
-            networkRecoveryAttempted = true;
-            hls.startLoad();
+            const delayMs =
+              HLS_NETWORK_RECOVERY_DELAYS_MS[networkRecoveryAttempts];
+            networkRecoveryAttempts += 1;
+            window.clearTimeout(networkRecoveryTimer);
+            networkRecoveryTimer = window.setTimeout(() => {
+              // Nothing is loaded without a manifest, so startLoad() has
+              // nothing to resume; fetching the source again does.
+              if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
+                hls.loadSource(src);
+              } else {
+                hls.startLoad();
+              }
+            }, delayMs);
             return;
           }
 
@@ -569,7 +619,7 @@ export default function VideoPlayer({
         // handler routes to onSessionLost. Handing it to the native player
         // instead would surface only a generic media error.
         const handledLostSession =
-          response.status === 404 && reportSessionLost(video.currentTime);
+          response.status === 404 && reportSessionLostAtStart();
         if (handledLostSession) return;
 
         if (response.ok) {

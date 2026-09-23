@@ -142,7 +142,6 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     });
 
   const { handleSessionLost, recoveryAttempt } = useHlsSessionRecovery({
-    streamWindowKey,
     onRecover: () => setStreamReloadKey((prev) => prev + 1),
     onMaxAttempts: () =>
       setPlaybackError(
@@ -153,7 +152,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   // Rooms keep a long TTL but nothing refreshes it while every participant is
   // paused, so without this a paused room can be evicted mid-film.
   useHlsSessionKeepalive({
-    enabled: isHlsRoom && !playbackError,
+    enabled: isHlsRoom && !playbackError && !waitingForCapacity,
     streamUrl,
   });
 

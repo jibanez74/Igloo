@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   EPISODE_TECHNICAL_DETAILS_KEY,
   EPISODE_WATCH_PROGRESS_KEY,
@@ -11,7 +11,7 @@ import {
   mediaWatchProgressQueryKey,
   movieTechnicalDetailsQueryOpts,
 } from "@/lib/query-opts";
-import { buildStreamUrl } from "@/lib/video-playback";
+import { buildStreamUrl, releaseResponseBody } from "@/lib/video-playback";
 
 const session = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 
@@ -72,5 +72,27 @@ describe("media query keys", () => {
       MOVIE_TECHNICAL_DETAILS_KEY,
       12,
     ]);
+  });
+});
+
+describe("releaseResponseBody", () => {
+  it("cancels the body so the connection is freed", async () => {
+    const response = new Response("#EXTM3U");
+    const cancel = vi.spyOn(response.body!, "cancel");
+
+    await releaseResponseBody(response);
+
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("tolerates a response without a body", async () => {
+    await expect(releaseResponseBody(new Response(null))).resolves.toBeUndefined();
+  });
+
+  it("swallows a cancel failure because the headers are already usable", async () => {
+    const response = new Response("#EXTM3U");
+    vi.spyOn(response.body!, "cancel").mockRejectedValue(new Error("locked"));
+
+    await expect(releaseResponseBody(response)).resolves.toBeUndefined();
   });
 });
