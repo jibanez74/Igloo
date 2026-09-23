@@ -497,8 +497,11 @@ export default function VideoPlaybackPage({
       fallbackDurationSec: mediaDurationSec,
     });
 
+  // Paused while the stream waits for server capacity: the ping is a
+  // manifest request, so it would queue for a transcode permit alongside the
+  // retry it is meant to keep alive.
   useHlsSessionKeepalive({
-    enabled: isHlsPlayback && playerMounted,
+    enabled: isHlsPlayback && playerMounted && !waitingForCapacity,
     streamUrl,
   });
 

@@ -26,14 +26,36 @@ export function useHlsSessionKeepalive({
   useEffect(() => {
     if (!enabled || !streamUrl) return;
 
+    // Aborted on cleanup. A ping still in flight when the player unmounts
+    // used to reach the server after the page's stop request and, since a
+    // manifest request recreates a missing session, start an orphan that
+    // transcoded until its idle TTL ran out.
+    const controller = new AbortController();
+    let inFlight = false;
+
     const interval = window.setInterval(() => {
-      void fetch(streamUrl, { credentials: "include" }).catch(() => {
-        // Best-effort keepalive; playback errors surface through the player.
-      });
+      // A manifest request can wait on the server for tens of seconds, so a
+      // slow ping must not stack a second one behind it.
+      if (inFlight) return;
+      inFlight = true;
+      void fetch(streamUrl, {
+        credentials: "include",
+        signal: controller.signal,
+      })
+        // Only the request matters. Cancelling the body frees the
+        // connection instead of leaving the playlist unread.
+        .then((response) => response.body?.cancel())
+        .catch(() => {
+          // Best-effort keepalive; playback errors surface through the player.
+        })
+        .finally(() => {
+          inFlight = false;
+        });
     }, HLS_SESSION_KEEPALIVE_INTERVAL_MS);
 
     return () => {
       window.clearInterval(interval);
+      controller.abort();
     };
   }, [enabled, streamUrl]);
 }

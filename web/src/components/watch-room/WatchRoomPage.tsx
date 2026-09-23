@@ -152,7 +152,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   // Rooms keep a long TTL but nothing refreshes it while every participant is
   // paused, so without this a paused room can be evicted mid-film.
   useHlsSessionKeepalive({
-    enabled: isHlsRoom && !playbackError,
+    enabled: isHlsRoom && !playbackError && !waitingForCapacity,
     streamUrl,
   });
 
