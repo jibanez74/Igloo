@@ -548,14 +548,20 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(onCapacityBusy).not.toHaveBeenCalled();
   });
 
-  // The synthesized transcode playlist can list one segment more than FFmpeg
-  // writes when a source's audio outlasts its video. Everything before it is
-  // buffered, so its 404 ends the media instead of rebasing the session.
-  it("treats a 404 on the final segment of an ended playlist as end of stream", async () => {
+  const pastEndDetails = {
+    getResponseHeader: (name: string) =>
+      name === "X-Igloo-Segment" ? "past-end" : null,
+  };
+
+  // The server marks a segment 404 as past the end only when FFmpeg exited
+  // cleanly without writing it: the synthesized transcode playlist can list
+  // one or two segments more than FFmpeg writes when a source's audio
+  // outlasts its video. Everything before them is buffered, so the marked
+  // 404 ends the media instead of rebasing the session.
+  it("treats a segment 404 marked past-end as end of stream", async () => {
     const onSessionLost = vi.fn();
     const onError = vi.fn();
     const hls = await renderHlsPlayer({ onSessionLost, onError });
-    hls.levels = [{ details: { live: false, endSN: 10 } }];
 
     act(() => {
       hls.trigger("hlsError", {
@@ -563,7 +569,8 @@ describe("VideoPlayer hls.js error routing", () => {
         details: "fragLoadError",
         fatal: false,
         response: { code: 404 },
-        frag: { sn: 10, level: 0 },
+        networkDetails: pastEndDetails,
+        frag: { sn: 9, level: 0 },
       });
     });
 
@@ -573,15 +580,46 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  // Stopping hls.js at the end must not strand a viewer who then jumps back
+  // past the back buffer: nothing would ever load again.
+  it("resumes loading when the viewer seeks after an end-of-stream 404", async () => {
+    const onSessionLost = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost });
+    const video = screen.getByLabelText("Video player for Test Movie");
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: false,
+        response: { code: 404 },
+        networkDetails: pastEndDetails,
+        frag: { sn: 10, level: 0 },
+      });
+    });
+    expect(hls.startLoadCalls).toBe(0);
+
+    fireEvent(video, new Event("seeking"));
+    expect(hls.startLoadCalls).toBe(1);
+
+    // Only the first seek re-arms; a normal seek afterwards is hls.js's own.
+    fireEvent(video, new Event("seeking"));
+    expect(hls.startLoadCalls).toBe(1);
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
+  // The segment index proves nothing: an unmarked 404 on the last listed
+  // segment is what an idle eviction looks like, and rebasing is the only
+  // way to keep playing.
   it.each([
-    ["an earlier segment", { live: false, endSN: 10 }, 9],
-    ["the last segment of a live playlist", { live: true, endSN: 10 }, 10],
+    ["the last segment of an ended playlist", { getResponseHeader: () => null }],
+    ["a segment with no response details", null],
   ])(
-    "still routes a 404 on %s to onSessionLost",
-    async (_label, details, sn) => {
+    "still routes an unmarked 404 on %s to onSessionLost",
+    async (_label, networkDetails) => {
       const onSessionLost = vi.fn();
       const hls = await renderHlsPlayer({ onSessionLost });
-      hls.levels = [{ details }];
+      hls.levels = [{ details: { live: false, endSN: 10 } }];
 
       act(() => {
         hls.trigger("hlsError", {
@@ -589,7 +627,8 @@ describe("VideoPlayer hls.js error routing", () => {
           details: "fragLoadError",
           fatal: false,
           response: { code: 404 },
-          frag: { sn, level: 0 },
+          networkDetails,
+          frag: { sn: 10, level: 0 },
         });
       });
 

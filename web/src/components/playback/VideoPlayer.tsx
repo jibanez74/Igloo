@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type Hls from "hls.js";
-import type { ErrorData, Fragment } from "hls.js";
+import type { ErrorData } from "hls.js";
 import type { Events } from "hls.js";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -12,6 +12,8 @@ import {
   HLS_JS_FRAG_LOAD_TIMEOUT_MS,
   HLS_JS_LOAD_TIMEOUT_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
+  HLS_SEGMENT_STATUS_HEADER,
+  HLS_SEGMENT_STATUS_PAST_END,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
@@ -161,21 +163,19 @@ function retryAfterSecFromHeaders(headers: ManifestHeaders | null): number {
 }
 
 /**
- * Whether `frag` is the last segment of a playlist that has ended. The server
- * synthesizes a transcode playlist from the movie duration and its frame
- * rate, and a source whose audio outlasts its video by more than a frame can
- * still leave that playlist one segment longer than FFmpeg writes. Everything
- * before that segment is buffered, so its 404 is the end of the media, not
- * the lost session every other segment 404 means.
+ * Whether a segment 404 is the end of the media rather than a lost session.
+ * The server marks the 404 only when FFmpeg exited cleanly without writing
+ * the file: a synthesized transcode playlist can list one or two segments
+ * more than FFmpeg produces when a source's audio outlasts its video. The
+ * segment index cannot tell the two apart — an unmarked 404 on the last
+ * listed segment after an idle eviction is a lost session — so the marker is
+ * the only signal used.
  */
-function isFinalFragmentOfEndedPlaylist(
-  hls: Hls,
-  frag: Fragment | undefined,
-): boolean {
-  if (!frag || typeof frag.sn !== "number") return false;
-  const details = hls.levels[frag.level]?.details;
-  if (!details || details.live) return false;
-  return frag.sn === details.endSN;
+function isPastEndSegment(headers: ManifestHeaders | null): boolean {
+  return (
+    readManifestHeader(headers, HLS_SEGMENT_STATUS_HEADER)?.trim() ===
+    HLS_SEGMENT_STATUS_PAST_END
+  );
 }
 
 async function releaseResponseBody(response: Response): Promise<void> {
@@ -210,6 +210,17 @@ export default function VideoPlayer({
   onActualStart,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+  // True after a past-the-end segment 404 stopped hls.js loading. Loading has
+  // to be re-armed on the next seek, or a jump back past the back buffer
+  // never fetches again; a seek into the same tail just re-enters the branch.
+  const hlsLoadStoppedAtEndRef = useRef(false);
+
+  const resumeHlsLoadAfterEnd = (video: HTMLVideoElement) => {
+    const hls = hlsRef.current;
+    if (!hls || !hlsLoadStoppedAtEndRef.current) return;
+    hlsLoadStoppedAtEndRef.current = false;
+    hls.startLoad(video.currentTime);
+  };
 
   // Mid-playback buffering indicator: shown only after a short delay so
   // sub-perceptual stalls never flash a spinner.
@@ -350,6 +361,7 @@ export default function VideoPlayer({
           startPosition: startSec > 0 ? startSec : -1,
         });
         hlsRef.current = hls;
+        hlsLoadStoppedAtEndRef.current = false;
         disposeHls = () => {
           hls.destroy();
           // A late dispose must not clobber a newer instance a subsequent
@@ -416,8 +428,11 @@ export default function VideoPlayer({
           if (
             responseCode === 404 &&
             data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
-            isFinalFragmentOfEndedPlaylist(hls, data.frag)
+            isPastEndSegment(
+              manifestHeadersFromNetworkDetails(data.networkDetails),
+            )
           ) {
+            hlsLoadStoppedAtEndRef.current = true;
             hls.stopLoad();
             hls.trigger(Hls.Events.BUFFER_EOS, { type: null });
             return;
@@ -677,7 +692,10 @@ export default function VideoPlayer({
           }}
           onWaiting={scheduleBufferingIndicator}
           onStalled={scheduleBufferingIndicator}
-          onSeeking={scheduleBufferingIndicator}
+          onSeeking={(e) => {
+            scheduleBufferingIndicator();
+            resumeHlsLoadAfterEnd(e.currentTarget);
+          }}
           onPlaying={clearBufferingIndicator}
           onCanPlay={clearBufferingIndicator}
           onSeeked={clearBufferingIndicator}

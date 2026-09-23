@@ -284,6 +284,13 @@ export const HLS_CAPACITY_RETRY_FALLBACK_SEC = 5;
 export const HLS_EFFECTIVE_PROFILE_HEADER = "X-Igloo-Effective-Profile";
 /** Manifest response header reporting where rebased HLS media actually begins. */
 export const HLS_ACTUAL_START_HEADER = "X-Igloo-Actual-Start";
+/**
+ * Segment 404 response header the server sets only when FFmpeg exited cleanly
+ * without ever writing the requested file: that 404 is the end of the media,
+ * while an unmarked one is a lost session to rebase.
+ */
+export const HLS_SEGMENT_STATUS_HEADER = "X-Igloo-Segment";
+export const HLS_SEGMENT_STATUS_PAST_END = "past-end";
 
 /** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
 export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;

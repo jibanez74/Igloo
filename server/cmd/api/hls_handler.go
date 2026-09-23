@@ -48,6 +48,12 @@ const (
 	hlsEffectiveAudioCodecHeader    = "X-Igloo-Effective-Audio-Codec"
 	hlsEffectiveAudioChannelsHeader = "X-Igloo-Effective-Audio-Channels"
 	hlsEffectiveAudioBitrateHeader  = "X-Igloo-Effective-Audio-Bitrate"
+	// hlsSegmentStatusHeader distinguishes the two 404s a segment request can
+	// get. Without it a client cannot tell "the session is gone" (rebase and
+	// keep playing) from "FFmpeg finished and never wrote this file" (the end
+	// of the media), and guessing from the segment index is wrong both ways.
+	hlsSegmentStatusHeader  = "X-Igloo-Segment"
+	hlsSegmentStatusPastEnd = "past-end"
 )
 
 // Said by the personal segment handler and the watch-room one alike.
@@ -425,6 +431,13 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 			if exitErr != nil {
 				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
 			} else {
+				// A clean exit wrote every segment it ever will, so a missing
+				// file is past the end of the media. The synthesized transcode
+				// playlist can list one or two more than FFmpeg produces when
+				// a source's audio outlasts its video, and the client needs
+				// to hear "end of stream" rather than the session-lost 404 the
+				// cache-miss path answers with.
+				w.Header().Set(hlsSegmentStatusHeader, hlsSegmentStatusPastEnd)
 				helpers.ErrorJSON(w, errors.New("segment does not exist"), http.StatusNotFound)
 			}
 			return

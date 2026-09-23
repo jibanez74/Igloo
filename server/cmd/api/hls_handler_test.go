@@ -818,6 +818,27 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		if !strings.Contains(w.Body.String(), "transcoding stopped") {
 			t.Fatalf("body = %q, want transcode failure", w.Body.String())
 		}
+		if got := w.Header().Get(hlsSegmentStatusHeader); got != "" {
+			t.Fatalf("%s = %q on a failed exit, want unset", hlsSegmentStatusHeader, got)
+		}
+	})
+
+	// A clean exit wrote every segment it ever will. The synthesized transcode
+	// playlist can still list one or two past that when the source's audio
+	// outlasts its video, and the client must be able to tell that 404 from
+	// the session-lost one, which it rebases on.
+	t.Run("marks a segment past a clean exit as past the end", func(t *testing.T) {
+		session := &HLSSession{TempDir: t.TempDir(), Exited: true}
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		w := httptest.NewRecorder()
+		serveReadyHLSSegment(w, req, session, helpers.HLS_SEGMENT_FILENAME_PREFIX+"10"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404: %s", w.Code, w.Body.String())
+		}
+		if got := w.Header().Get(hlsSegmentStatusHeader); got != hlsSegmentStatusPastEnd {
+			t.Fatalf("%s = %q, want %q", hlsSegmentStatusHeader, got, hlsSegmentStatusPastEnd)
+		}
 	})
 
 	// The init segment is gated on segment_0 existing, so a session that died
