@@ -229,6 +229,93 @@ func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
 	})
 }
 
+// The synthesized transcode playlist lists HLSSegmentCount segments, so the
+// prediction has to match what the real muxer writes on both sides of the
+// boundary: a container whose audio outlasts its last frame by a few
+// milliseconds (the common shape of real files), and one whose video really
+// carries a frame on the boundary.
+func TestExternalFFmpegHLSSegmentCountMatchesMuxer(t *testing.T) {
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatalf("resolve external FFmpeg: %v", err)
+	}
+	prober, err := ffprobe.New()
+	if err != nil {
+		t.Fatalf("resolve external ffprobe: %v", err)
+	}
+	workspace := t.TempDir()
+
+	f := &ffmpeg{
+		bin:          candidate.path,
+		capabilities: Capabilities{Probed: true},
+	}
+
+	tests := []struct {
+		name          string
+		videoDuration string
+		audioDuration string
+		wantSegments  int
+	}{
+		// 960 frames end at 39.958 s; the audio runs to ~40.02 s, so the
+		// container duration crosses the 40 s boundary without a frame there.
+		{name: "audio tail past the last frame", videoDuration: "40", audioDuration: "40.02", wantSegments: 10},
+		// 961 frames put one on the boundary, so the muxer opens segment_10.
+		{name: "frame on the boundary", videoDuration: "40.0417", audioDuration: "40.05", wantSegments: 11},
+	}
+
+	for index, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sourcePath := filepath.Join(workspace, fmt.Sprintf("count source %d.mkv", index))
+			runExternalFFmpegCommand(t, candidate.path,
+				"-y", "-v", "error",
+				"-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration="+tt.videoDuration,
+				"-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration="+tt.audioDuration,
+				"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+				"-c:a", "aac",
+				sourcePath,
+			)
+
+			meta, err := prober.GetMetadata(context.Background(), sourcePath)
+			if err != nil {
+				t.Fatalf("probe source: %v", err)
+			}
+			durationSec, ok := helpers.ParseDurationSeconds(meta.Format.Duration)
+			if !ok {
+				t.Fatalf("source duration %q did not parse", meta.Format.Duration)
+			}
+			video := probeExternalVideoStream(t, prober, sourcePath)
+			frameRate := helpers.ParseFrameRate(video.FrameRate)
+
+			outDir := filepath.Join(workspace, fmt.Sprintf("count HLS %d", index))
+			err = os.Mkdir(outDir, 0755)
+			if err != nil {
+				t.Fatalf("mkdir output: %v", err)
+			}
+			params := HLSParams{
+				SourcePath:       sourcePath,
+				OutDir:           outDir,
+				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+				CopyAudio:        true,
+				SourceFrameRate:  frameRate,
+				Capabilities:     Capabilities{Probed: true},
+			}
+			runExternalHLSAndWait(t, f, params)
+			segments := assertCompleteSequentialHLSOutput(t, outDir)
+
+			if len(segments) != tt.wantSegments {
+				t.Fatalf("muxer wrote %d segments for duration %.3f, want %d", len(segments), durationSec, tt.wantSegments)
+			}
+			predicted := HLSSegmentCount(durationSec, frameRate)
+			if predicted != len(segments) {
+				t.Fatalf("HLSSegmentCount(%.3f, %.3f) = %d, muxer wrote %d", durationSec, frameRate, predicted, len(segments))
+			}
+		})
+	}
+}
+
 func isInterlacedFieldOrder(fieldOrder string) bool {
 	switch fieldOrder {
 	case "tt", "bb", "tb", "bt":

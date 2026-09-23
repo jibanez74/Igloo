@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +14,30 @@ import (
 	"igloo/cmd/internal/ffprobe"
 )
 
+// serveUntilShutdown runs the HTTP server and returns once ListenForShutdown
+// has finished cleaning up. ListenAndServe returns the moment Shutdown closes
+// the listener, before any cleanup has run; returning from main on that alone
+// ended the process mid-teardown, with FFmpeg children orphaned, temp
+// directories left behind, and the database and logger never closed.
+func (app *Application) serveUntilShutdown() error {
+	shutdownDone := make(chan struct{})
+	go func() {
+		defer close(shutdownDone)
+		app.ListenForShutdown()
+	}()
+
+	err := app.Server.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	<-shutdownDone
+	return nil
+}
+
+// ListenForShutdown blocks until SIGINT or SIGTERM, then stops the HTTP
+// server and releases every resource the process owns. It returns rather than
+// exiting so the caller decides when the process ends.
 func (app *Application) ListenForShutdown() {
 	quit := make(chan os.Signal, 1)
 
@@ -45,8 +71,6 @@ func (app *Application) ListenForShutdown() {
 	app.cleanupMediaBinaries()
 	app.closeDatabase()
 	app.closeLogger()
-
-	os.Exit(0)
 }
 
 func (app *Application) cancelScans() {

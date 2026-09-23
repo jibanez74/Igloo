@@ -385,9 +385,26 @@ func TestSessionPlaylistDurationSec(t *testing.T) {
 	}
 }
 
+// seedReadyInitSegment writes the files that make init.mp4 count as complete
+// for a bare test session: the init file itself and the segment_0 FFmpeg only
+// opens after closing it.
+func seedReadyInitSegment(t *testing.T, dir string) {
+	t.Helper()
+	for _, name := range []string{
+		helpers.HLS_INIT_FILENAME,
+		helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+	} {
+		err := os.WriteFile(filepath.Join(dir, name), []byte("bytes"), 0o644)
+		if err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+}
+
 func TestBuildHLSPlaylistBody(t *testing.T) {
 	t.Run("synthesizes a transcode playlist and rewrites its URLs", func(t *testing.T) {
-		session := &HLSSession{DurationSec: 12, CopyVideo: false}
+		session := &HLSSession{DurationSec: 12, CopyVideo: false, TempDir: t.TempDir()}
+		seedReadyInitSegment(t, session.TempDir)
 		generated, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?audio_track=0")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -550,6 +567,7 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 
 	t.Run("running transcode still gets a synthesized playlist", func(t *testing.T) {
 		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+		seedReadyInitSegment(t, session.TempDir)
 
 		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
 		if err != nil {
@@ -557,6 +575,75 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		}
 		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
 			t.Fatalf("synthesized playlist missing segment URL: %s", playlist)
+		}
+	})
+
+	// A synthesized playlist only describes real output once FFmpeg has
+	// started producing it. Answering before the init segment exists handed a
+	// transcode whose encoder died during startup a complete playlist followed
+	// by 500s on init.mp4, which no client recovers from.
+	t.Run("transcode without an init segment yet is retryable", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		_, err := buildHLSPlaylistBody(ctx, session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected the abandoned request to stop waiting, got %v", err)
+		}
+	})
+
+	t.Run("transcode that dies during startup reports a failed session", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			session.ExitMu.Lock()
+			session.Exited = true
+			session.ExitErr = errors.New("ffmpeg exited 1")
+			session.ExitMu.Unlock()
+		}()
+
+		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if !errors.Is(err, errHLSSessionFailed) {
+			t.Fatalf("expected a failed-session error, got %v", err)
+		}
+	})
+
+	t.Run("transcode serves the playlist as soon as the init segment is ready", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 600, TempDir: t.TempDir()}
+
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			seedReadyInitSegment(t, session.TempDir)
+		}()
+
+		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "?start=0")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
+			t.Fatalf("late playlist was not served: %s", playlist)
+		}
+	})
+
+	// The session's frame rate sizes the playlist: a 40.005 s transcode at
+	// 24 fps ends on its 960th frame, so FFmpeg writes ten segments, not the
+	// eleven that ceil(duration / 4) would list.
+	t.Run("transcode playlist stops at the last video frame", func(t *testing.T) {
+		session := &HLSSession{DurationSec: 40.005, SourceFrameRate: 24, TempDir: t.TempDir()}
+		seedReadyInitSegment(t, session.TempDir)
+
+		playlist, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := strings.Count(playlist, "#EXTINF:"); got != 10 {
+			t.Fatalf("segment count = %d, want 10:\n%s", got, playlist)
+		}
+		if strings.Contains(playlist, "segment_10.m4s") {
+			t.Fatalf("playlist lists a segment FFmpeg never writes:\n%s", playlist)
 		}
 	})
 
@@ -730,6 +817,27 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		}
 		if !strings.Contains(w.Body.String(), "transcoding stopped") {
 			t.Fatalf("body = %q, want transcode failure", w.Body.String())
+		}
+		if got := w.Header().Get(hlsSegmentStatusHeader); got != "" {
+			t.Fatalf("%s = %q on a failed exit, want unset", hlsSegmentStatusHeader, got)
+		}
+	})
+
+	// A clean exit wrote every segment it ever will. The synthesized transcode
+	// playlist can still list one or two past that when the source's audio
+	// outlasts its video, and the client must be able to tell that 404 from
+	// the session-lost one, which it rebases on.
+	t.Run("marks a segment past a clean exit as past the end", func(t *testing.T) {
+		session := &HLSSession{TempDir: t.TempDir(), Exited: true}
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		w := httptest.NewRecorder()
+		serveReadyHLSSegment(w, req, session, helpers.HLS_SEGMENT_FILENAME_PREFIX+"10"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404: %s", w.Code, w.Body.String())
+		}
+		if got := w.Header().Get(hlsSegmentStatusHeader); got != hlsSegmentStatusPastEnd {
+			t.Fatalf("%s = %q, want %q", hlsSegmentStatusHeader, got, hlsSegmentStatusPastEnd)
 		}
 	})
 
@@ -1190,6 +1298,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		StartSec:        0,
 		CopyVideo:       false,
 	}
+	seedReadyInitSegment(t, session.TempDir)
 	app.HLSSessionCache.SetDefault(HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, userID), session)
 
 	req := httptest.NewRequest(

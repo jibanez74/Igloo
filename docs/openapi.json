@@ -2110,7 +2110,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "$ref": "#/components/responses/HLSSegmentNotFound"
           },
           "416": {
             "$ref": "#/components/responses/HLSRangeNotSatisfiableResponse"
@@ -3301,7 +3301,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "$ref": "#/components/responses/HLSSegmentNotFound"
           },
           "416": {
             "$ref": "#/components/responses/HLSRangeNotSatisfiableResponse"
@@ -4502,7 +4502,7 @@
             "$ref": "#/components/responses/Forbidden"
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "$ref": "#/components/responses/HLSSegmentNotFound"
           },
           "416": {
             "$ref": "#/components/responses/HLSRangeNotSatisfiableResponse"
@@ -8156,6 +8156,28 @@
       },
       "Forbidden": {
         "description": "Authenticated user is not allowed to perform this action.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "HLSSegmentNotFound": {
+        "description": "The HLS session does not exist (request the manifest again), or FFmpeg finished cleanly and never wrote this segment. Only the second case carries X-Igloo-Segment: past-end; a synthesized transcode playlist can list one or two segments more than FFmpeg produces when a source's audio outlasts its video, and a client must treat that 404 as the end of the media rather than as a lost session.",
+        "headers": {
+          "X-Igloo-Segment": {
+            "required": false,
+            "description": "Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "past-end"
+              ]
+            }
+          }
+        },
         "content": {
           "application/json": {
             "schema": {

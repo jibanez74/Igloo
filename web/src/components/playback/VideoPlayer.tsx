@@ -12,6 +12,8 @@ import {
   HLS_JS_FRAG_LOAD_TIMEOUT_MS,
   HLS_JS_LOAD_TIMEOUT_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
+  HLS_SEGMENT_STATUS_HEADER,
+  HLS_SEGMENT_STATUS_PAST_END,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
@@ -160,6 +162,22 @@ function retryAfterSecFromHeaders(headers: ManifestHeaders | null): number {
   return HLS_CAPACITY_RETRY_FALLBACK_SEC;
 }
 
+/**
+ * Whether a segment 404 is the end of the media rather than a lost session.
+ * The server marks the 404 only when FFmpeg exited cleanly without writing
+ * the file: a synthesized transcode playlist can list one or two segments
+ * more than FFmpeg produces when a source's audio outlasts its video. The
+ * segment index cannot tell the two apart — an unmarked 404 on the last
+ * listed segment after an idle eviction is a lost session — so the marker is
+ * the only signal used.
+ */
+function isPastEndSegment(headers: ManifestHeaders | null): boolean {
+  return (
+    readManifestHeader(headers, HLS_SEGMENT_STATUS_HEADER)?.trim() ===
+    HLS_SEGMENT_STATUS_PAST_END
+  );
+}
+
 async function releaseResponseBody(response: Response): Promise<void> {
   try {
     await response.body?.cancel();
@@ -192,6 +210,17 @@ export default function VideoPlayer({
   onActualStart,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+  // True after a past-the-end segment 404 stopped hls.js loading. Loading has
+  // to be re-armed on the next seek, or a jump back past the back buffer
+  // never fetches again; a seek into the same tail just re-enters the branch.
+  const hlsLoadStoppedAtEndRef = useRef(false);
+
+  const resumeHlsLoadAfterEnd = (video: HTMLVideoElement) => {
+    const hls = hlsRef.current;
+    if (!hls || !hlsLoadStoppedAtEndRef.current) return;
+    hlsLoadStoppedAtEndRef.current = false;
+    hls.startLoad(video.currentTime);
+  };
 
   // Mid-playback buffering indicator: shown only after a short delay so
   // sub-perceptual stalls never flash a spinner.
@@ -332,6 +361,7 @@ export default function VideoPlayer({
           startPosition: startSec > 0 ? startSec : -1,
         });
         hlsRef.current = hls;
+        hlsLoadStoppedAtEndRef.current = false;
         disposeHls = () => {
           hls.destroy();
           // A late dispose must not clobber a newer instance a subsequent
@@ -389,6 +419,24 @@ export default function VideoPlayer({
 
         hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
           const responseCode = data.response?.code;
+
+          // Checked ahead of the session-lost rule below, which would
+          // otherwise rebase the session three times over a segment that
+          // cannot exist and then report the film as unrecoverable. hls.js
+          // only signals end of stream after buffering the last listed
+          // segment, so the player asks for it directly.
+          if (
+            responseCode === 404 &&
+            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+            isPastEndSegment(
+              manifestHeadersFromNetworkDetails(data.networkDetails),
+            )
+          ) {
+            hlsLoadStoppedAtEndRef.current = true;
+            hls.stopLoad();
+            hls.trigger(Hls.Events.BUFFER_EOS, { type: null });
+            return;
+          }
 
           if (
             responseCode === 404 &&
@@ -644,7 +692,10 @@ export default function VideoPlayer({
           }}
           onWaiting={scheduleBufferingIndicator}
           onStalled={scheduleBufferingIndicator}
-          onSeeking={scheduleBufferingIndicator}
+          onSeeking={(e) => {
+            scheduleBufferingIndicator();
+            resumeHlsLoadAfterEnd(e.currentTarget);
+          }}
           onPlaying={clearBufferingIndicator}
           onCanPlay={clearBufferingIndicator}
           onSeeked={clearBufferingIndicator}

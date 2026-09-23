@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -213,39 +212,46 @@ func runListenForShutdownHelper(t *testing.T) {
 		t.Fatalf("attach shutdown websocket client: %v", err)
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
 	app.Server = &http.Server{
+		Addr:    "127.0.0.1:0",
 		Handler: http.NewServeMux(),
 	}
-
-	serverDone := make(chan error, 1)
-	go func() {
-		serverDone <- app.Server.Serve(listener)
-	}()
-
-	go app.ListenForShutdown()
 
 	process, err := os.FindProcess(os.Getpid())
 	if err != nil {
 		t.Fatalf("find process: %v", err)
 	}
 
-	time.Sleep(150 * time.Millisecond)
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_ = process.Signal(syscall.SIGTERM)
+	}()
 
-	err = process.Signal(syscall.SIGTERM)
-	if err != nil {
-		t.Fatalf("signal process: %v", err)
+	// The helper ends the way main does: by returning once serveUntilShutdown
+	// does. The success path takes ~2s (graceful-wait timeout before the hung
+	// HLS child is killed) plus ~1s of race-runtime latency under -race, so
+	// the deadline needs generous headroom.
+	served := make(chan error, 1)
+	go func() {
+		served <- app.serveUntilShutdown()
+	}()
+
+	select {
+	case err = <-served:
+		if err != nil {
+			t.Fatalf("serveUntilShutdown: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("serveUntilShutdown did not return after SIGTERM")
 	}
 
-	// Failure backstop only: on success ListenForShutdown calls os.Exit(0)
-	// mid-sleep. The success path takes ~2s (graceful-wait timeout before the
-	// hung HLS child is killed) plus ~1s of race-runtime exit latency under
-	// -race, so the deadline needs generous headroom.
-	time.Sleep(10 * time.Second)
-	t.Fatal("ListenForShutdown did not exit helper process")
+	// Cleanup must have finished before the return, not merely started: main
+	// used to return as soon as the listener closed, and the parent then read
+	// markers a still-running goroutine never got to write.
+	_, statErr := os.Stat(loggerMarker)
+	if statErr != nil {
+		t.Fatalf("serveUntilShutdown returned before cleanup finished: %v", statErr)
+	}
 }
 
 func TestListenForShutdown_HLSProcessHelper(t *testing.T) {

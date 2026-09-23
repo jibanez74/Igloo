@@ -137,8 +137,11 @@ func TestGenerateVODPlaylist(t *testing.T) {
 	tests := []struct {
 		name        string
 		durationSec float64
-		audioTrack  int
-		wantSegs    int
+		// frameRate defaults to 24 fps below; zero exercises the unknown-rate
+		// fallback.
+		frameRate  float64
+		audioTrack int
+		wantSegs   int
 		// wantLastEXTINF pins the trailing segment's advertised duration: a
 		// partial tail must be reported at its real length, never a full
 		// segment, or the player seeks past the end of the media.
@@ -195,13 +198,43 @@ func TestGenerateVODPlaylist(t *testing.T) {
 			wantSegs:       1,
 			wantLastEXTINF: "#EXTINF:4.000000,",
 		},
+		{
+			// FFmpeg opens a segment only for a video frame at or past its
+			// boundary. A container that outlasts its last frame by a few
+			// milliseconds (audio priming, rounding) must not list a segment
+			// FFmpeg never writes: every client treats that 404 as a lost
+			// session and ends the film in a recovery loop.
+			name:           "audio tail past the last frame does not add a segment",
+			durationSec:    segDur*10 + 0.005,
+			wantSegs:       10,
+			wantLastEXTINF: "#EXTINF:4.005000,",
+		},
+		{
+			// 961 frames at 24 fps: the last one sits exactly on the boundary
+			// and FFmpeg does open a segment for it.
+			name:           "a frame on the boundary does add a segment",
+			durationSec:    961.0 / 24.0,
+			wantSegs:       11,
+			wantLastEXTINF: "#EXTINF:0.041667,",
+		},
+		{
+			name:           "unknown frame rate still drops the sub-frame tail",
+			durationSec:    segDur*10 + 0.005,
+			frameRate:      0,
+			wantSegs:       10,
+			wantLastEXTINF: "#EXTINF:4.005000,",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			frameRate := tt.frameRate
+			if frameRate == 0 && !strings.Contains(tt.name, "unknown frame rate") {
+				frameRate = 24
+			}
 			baseURL := "/api/movies/1/hls/720p_3mbps/"
 			querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &tt.audioTrack})
-			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix, true)
+			got := generateVODPlaylist(tt.durationSec, frameRate, baseURL, querySuffix, true)
 
 			if !strings.HasPrefix(got, "#EXTM3U\n") {
 				t.Error("playlist must start with #EXTM3U")
@@ -270,7 +303,7 @@ func TestGenerateVODPlaylistOmitsIndependentSegmentsWhenNotGuaranteed(t *testing
 	baseURL := "/api/movies/1/hls/720p_3mbps/"
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)})
 
-	got := generateVODPlaylist(float64(helpers.HLS_SEGMENT_TIME_SEC)*2, baseURL, querySuffix, false)
+	got := generateVODPlaylist(float64(helpers.HLS_SEGMENT_TIME_SEC)*2, 24, baseURL, querySuffix, false)
 
 	if strings.Contains(got, "#EXT-X-INDEPENDENT-SEGMENTS") {
 		t.Errorf("playlist must omit #EXT-X-INDEPENDENT-SEGMENTS, got:\n%s", got)

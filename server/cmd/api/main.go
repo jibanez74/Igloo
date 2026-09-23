@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,16 +51,14 @@ func main() {
 		app.runDeviceExpirySweeper(deviceExpiryCtx)
 	}()
 
-	go app.ListenForShutdown()
-
 	startupSweepCtx, cancelStartupSweep := context.WithTimeout(deviceExpiryCtx, deviceExpirySweepTimeout)
 	app.sweepStaleDevices(startupSweepCtx)
 	cancelStartupSweep()
 
 	log.Printf("server listening on port %d", app.Config.Port)
 
-	err = app.Server.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+	err = app.serveUntilShutdown()
+	if err != nil {
 		// InitApp already extracted the ffmpeg/ffprobe binaries and opened the
 		// database and logger, so a serve failure (e.g. port already in use) must
 		// run cleanup rather than exit bare.

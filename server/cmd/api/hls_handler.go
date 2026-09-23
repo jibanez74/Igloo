@@ -48,6 +48,12 @@ const (
 	hlsEffectiveAudioCodecHeader    = "X-Igloo-Effective-Audio-Codec"
 	hlsEffectiveAudioChannelsHeader = "X-Igloo-Effective-Audio-Channels"
 	hlsEffectiveAudioBitrateHeader  = "X-Igloo-Effective-Audio-Bitrate"
+	// hlsSegmentStatusHeader distinguishes the two 404s a segment request can
+	// get. Without it a client cannot tell "the session is gone" (rebase and
+	// keep playing) from "FFmpeg finished and never wrote this file" (the end
+	// of the media), and guessing from the segment index is wrong both ways.
+	hlsSegmentStatusHeader  = "X-Igloo-Segment"
+	hlsSegmentStatusPastEnd = "past-end"
 )
 
 // Said by the personal segment handler and the watch-room one alike.
@@ -311,6 +317,14 @@ func hasPlayableSegment(playlist string) bool {
 // count are whatever the source encode dictates: synthesizing those advertises
 // durations FFmpeg never produces and segments that will never exist. They are
 // read back from FFmpeg instead, and the request waits for the first one.
+//
+// Neither flavor is answered before FFmpeg has produced something. A
+// synthesized playlist describes output FFmpeg has not produced yet, which is
+// correct while it is running and a lie once it is not: a transcode whose
+// encoder died during startup used to be handed a complete playlist and then
+// 500s on init.mp4, which no client recovers from. Waiting for the init
+// segment turns that into the failed-session error below, and costs nothing a
+// client would not have waited for on its first asset request anyway.
 func buildHLSPlaylistBody(
 	ctx context.Context,
 	session *HLSSession,
@@ -322,31 +336,14 @@ func buildHLSPlaylistBody(
 		return "", errHLSSessionNotFound
 	}
 
+	// The transcode check is a stat or two against page-cached directory
+	// entries and sits on the cold-start path, so it polls as tightly as the
+	// segment handler; reading the live playlist back is heavier.
+	pollInterval := hlsRemuxPreflightPoll
 	if !session.CopyVideo {
-		finalPlaylist := session.currentFinalPlaylist()
-		if finalPlaylist != "" {
-			if !hasPlayableSegment(finalPlaylist) {
-				return "", errHLSSessionEmpty
-			}
-			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
-		}
-
-		// A synthesized playlist describes output FFmpeg has not produced yet,
-		// which is correct while it is still running and a lie once it is not:
-		// without this the client is handed a complete playlist for a dead
-		// session and only discovers the failure by waiting out every segment.
-		exited, exitErr := session.exitStatus()
-		if exited {
-			if exitErr != nil {
-				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
-			}
-			return "", errHLSSessionEmpty
-		}
-
-		return generateVODPlaylist(durationSec, baseURL, querySuffix, session.IndependentSegments), nil
+		pollInterval = hlsSegmentPoll
 	}
-
-	ticker := time.NewTicker(hlsRemuxPreflightPoll)
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	deadline := time.Now().Add(hlsLivePlaylistWait)
@@ -375,9 +372,16 @@ func buildHLSPlaylistBody(
 			return "", errHLSSessionEmpty
 		}
 
-		livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
-		if readErr == nil {
-			return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+		if session.CopyVideo {
+			livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
+			if readErr == nil {
+				return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+			}
+		} else {
+			initReady := segmentReady(session, helpers.HLS_INIT_FILENAME)
+			if initReady {
+				return generateVODPlaylist(durationSec, session.SourceFrameRate, baseURL, querySuffix, session.IndependentSegments), nil
+			}
 		}
 
 		if !time.Now().Before(deadline) {
@@ -427,6 +431,13 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 			if exitErr != nil {
 				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
 			} else {
+				// A clean exit wrote every segment it ever will, so a missing
+				// file is past the end of the media. The synthesized transcode
+				// playlist can list one or two more than FFmpeg produces when
+				// a source's audio outlasts its video, and the client needs
+				// to hear "end of stream" rather than the session-lost 404 the
+				// cache-miss path answers with.
+				w.Header().Set(hlsSegmentStatusHeader, hlsSegmentStatusPastEnd)
 				helpers.ErrorJSON(w, errors.New("segment does not exist"), http.StatusNotFound)
 			}
 			return

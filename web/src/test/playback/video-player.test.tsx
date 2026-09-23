@@ -21,11 +21,17 @@ const fakeHlsInstances = vi.hoisted(() => [] as FakeHlsInstance[]);
 const fakeHlsSupport = vi.hoisted(() => ({ supported: true }));
 const nativeHlsSupport = vi.hoisted(() => ({ supported: false }));
 
+type FakeLevelDetails = { live: boolean; endSN: number };
+
 type FakeHlsInstance = {
   listeners: Map<string, FakeHlsListener[]>;
   trigger: (event: string, data: unknown) => void;
+  /** Every event the component itself raised through `trigger`. */
+  triggered: Array<{ event: string; data: unknown }>;
+  levels: Array<{ details?: FakeLevelDetails }>;
   destroyed: boolean;
   startLoadCalls: number;
+  stopLoadCalls: number;
   recoverMediaErrorCalls: number;
 };
 
@@ -49,6 +55,7 @@ vi.mock("hls.js/light", () => {
       MANIFEST_PARSED: "hlsManifestParsed",
       MANIFEST_LOADED: "hlsManifestLoaded",
       FRAG_BUFFERED: "hlsFragBuffered",
+      BUFFER_EOS: "hlsBufferEos",
     };
     static ErrorDetails = {
       FRAG_LOAD_ERROR: "fragLoadError",
@@ -57,8 +64,11 @@ vi.mock("hls.js/light", () => {
     };
 
     listeners = new Map<string, FakeHlsListener[]>();
+    triggered: Array<{ event: string; data: unknown }> = [];
+    levels: Array<{ details?: FakeLevelDetails }> = [];
     destroyed = false;
     startLoadCalls = 0;
+    stopLoadCalls = 0;
     recoverMediaErrorCalls = 0;
 
     constructor() {
@@ -75,6 +85,7 @@ vi.mock("hls.js/light", () => {
     }
 
     trigger(event: string, data: unknown) {
+      this.triggered.push({ event, data });
       for (const listener of this.listeners.get(event) ?? []) {
         listener(event, data);
       }
@@ -87,6 +98,9 @@ vi.mock("hls.js/light", () => {
     }
     startLoad() {
       this.startLoadCalls += 1;
+    }
+    stopLoad() {
+      this.stopLoadCalls += 1;
     }
     destroy() {
       this.destroyed = true;
@@ -533,6 +547,95 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(onSessionLost).toHaveBeenCalledOnce();
     expect(onCapacityBusy).not.toHaveBeenCalled();
   });
+
+  const pastEndDetails = {
+    getResponseHeader: (name: string) =>
+      name === "X-Igloo-Segment" ? "past-end" : null,
+  };
+
+  // The server marks a segment 404 as past the end only when FFmpeg exited
+  // cleanly without writing it: the synthesized transcode playlist can list
+  // one or two segments more than FFmpeg writes when a source's audio
+  // outlasts its video. Everything before them is buffered, so the marked
+  // 404 ends the media instead of rebasing the session.
+  it("treats a segment 404 marked past-end as end of stream", async () => {
+    const onSessionLost = vi.fn();
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost, onError });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: false,
+        response: { code: 404 },
+        networkDetails: pastEndDetails,
+        frag: { sn: 9, level: 0 },
+      });
+    });
+
+    expect(hls.stopLoadCalls).toBe(1);
+    expect(hls.triggered).toContainEqual({ event: "hlsBufferEos", data: { type: null } });
+    expect(onSessionLost).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  // Stopping hls.js at the end must not strand a viewer who then jumps back
+  // past the back buffer: nothing would ever load again.
+  it("resumes loading when the viewer seeks after an end-of-stream 404", async () => {
+    const onSessionLost = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost });
+    const video = screen.getByLabelText("Video player for Test Movie");
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: false,
+        response: { code: 404 },
+        networkDetails: pastEndDetails,
+        frag: { sn: 10, level: 0 },
+      });
+    });
+    expect(hls.startLoadCalls).toBe(0);
+
+    fireEvent(video, new Event("seeking"));
+    expect(hls.startLoadCalls).toBe(1);
+
+    // Only the first seek re-arms; a normal seek afterwards is hls.js's own.
+    fireEvent(video, new Event("seeking"));
+    expect(hls.startLoadCalls).toBe(1);
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
+  // The segment index proves nothing: an unmarked 404 on the last listed
+  // segment is what an idle eviction looks like, and rebasing is the only
+  // way to keep playing.
+  it.each([
+    ["the last segment of an ended playlist", { getResponseHeader: () => null }],
+    ["a segment with no response details", null],
+  ])(
+    "still routes an unmarked 404 on %s to onSessionLost",
+    async (_label, networkDetails) => {
+      const onSessionLost = vi.fn();
+      const hls = await renderHlsPlayer({ onSessionLost });
+      hls.levels = [{ details: { live: false, endSN: 10 } }];
+
+      act(() => {
+        hls.trigger("hlsError", {
+          type: "networkError",
+          details: "fragLoadError",
+          fatal: false,
+          response: { code: 404 },
+          networkDetails,
+          frag: { sn: 10, level: 0 },
+        });
+      });
+
+      expect(hls.stopLoadCalls).toBe(0);
+      expect(onSessionLost).toHaveBeenCalledOnce();
+    },
+  );
 
   // The server 404s the playlist handler as well as the segment handler when a
   // session is gone, and hls.js reports those as manifest/level errors. Only

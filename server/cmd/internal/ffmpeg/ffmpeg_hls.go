@@ -122,6 +122,38 @@ func HLSSegmentsAreIndependent(p HLSParams) bool {
 	return hlsEncoderForcesIDR(hlsVideoEncoder(deviceDecision.Effective), p.Capabilities)
 }
 
+// hlsFallbackFrameRate stands in when a stream's frame rate is unknown. It
+// is the slowest common rate on purpose: overestimating the frame duration can
+// only drop a real final segment shorter than one frame, while underestimating
+// it would advertise a segment that never exists.
+const hlsFallbackFrameRate = 24.0
+
+// HLSSegmentCount is the number of segments the hls muxer writes for a
+// transcode of durationSec at frameRate, and so the number a synthesized
+// playlist may list. The muxer opens a new segment only on a video packet at
+// or past each HLS_SEGMENT_TIME_SEC boundary, which -force_key_frames makes
+// a keyframe, so the count is decided by the last video frame rather than by
+// the container duration: a container usually runs a few milliseconds past
+// its video (audio priming, rounding), and ceil(duration / segment) then
+// lists a final segment FFmpeg never produces. A constant-rate video within
+// durationSec holds at most floor(durationSec * frameRate) frames, the last
+// of them at (frames - 1) / frameRate.
+func HLSSegmentCount(durationSec float64, frameRate float64) int {
+	if frameRate <= 0 {
+		frameRate = hlsFallbackFrameRate
+	}
+
+	// The epsilon absorbs float noise in a duration that sits exactly on a
+	// frame boundary, so 961/24 counts 961 frames rather than 960.
+	frames := math.Floor(durationSec*frameRate + 1e-6)
+	if frames < 1 {
+		return 1
+	}
+
+	lastFrameSec := (frames - 1) / frameRate
+	return int(lastFrameSec/float64(helpers.HLS_SEGMENT_TIME_SEC)) + 1
+}
+
 // HLSUsesTempFile reports whether the hls muxer writes each segment to a
 // .tmp name and renames it on close (-hls_flags temp_file), which is what
 // lets the api package judge a segment complete by its final name's

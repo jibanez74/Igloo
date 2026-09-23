@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -821,6 +822,36 @@ func TestIsVFRStream(t *testing.T) {
 			got := isVFRStream(&database.VideoStream{FrameRate: tt.frameRate, AvgFrameRate: tt.avgFrameRate})
 			if got != tt.want {
 				t.Fatalf("isVFRStream(rate=%v, avg=%q) = %v, want %v", tt.frameRate, tt.avgFrameRate.String, got, tt.want)
+			}
+		})
+	}
+}
+
+// The playlist rate must never exceed the real frame rate: HLSSegmentCount
+// survives an underestimate but an overestimate re-advertises the phantom
+// final segment.
+func TestHLSPlaylistFrameRate(t *testing.T) {
+	tests := []struct {
+		name         string
+		frameRate    float64
+		avgFrameRate sql.NullString
+		want         float64
+	}{
+		{name: "matching rates keep the nominal rate", frameRate: 24, avgFrameRate: sql.NullString{String: "24/1", Valid: true}, want: 24},
+		{name: "inflated nominal rate yields the average", frameRate: 1000, avgFrameRate: sql.NullString{String: "24000/1001", Valid: true}, want: 24000.0 / 1001.0},
+		{name: "inflated average rate yields the nominal", frameRate: 25, avgFrameRate: sql.NullString{String: "50/1", Valid: true}, want: 25},
+		{name: "unset average keeps the nominal rate", frameRate: 23.976, avgFrameRate: sql.NullString{}, want: 23.976},
+		{name: "unparseable average keeps the nominal rate", frameRate: 23.976, avgFrameRate: sql.NullString{String: "garbage", Valid: true}, want: 23.976},
+		{name: "zero average keeps the nominal rate", frameRate: 23.976, avgFrameRate: sql.NullString{String: "0/0", Valid: true}, want: 23.976},
+		{name: "unknown nominal rate uses the average", frameRate: 0, avgFrameRate: sql.NullString{String: "30/1", Valid: true}, want: 30},
+		{name: "both unknown is unknown", frameRate: 0, avgFrameRate: sql.NullString{}, want: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hlsPlaylistFrameRate(&database.VideoStream{FrameRate: tt.frameRate, AvgFrameRate: tt.avgFrameRate})
+			if math.Abs(got-tt.want) > 1e-9 {
+				t.Fatalf("hlsPlaylistFrameRate(rate=%v, avg=%q) = %v, want %v", tt.frameRate, tt.avgFrameRate.String, got, tt.want)
 			}
 		})
 	}

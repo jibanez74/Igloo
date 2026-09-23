@@ -5543,6 +5543,17 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description The HLS session does not exist (request the manifest again), or FFmpeg finished cleanly and never wrote this segment. Only the second case carries X-Igloo-Segment: past-end; a synthesized transcode playlist can list one or two segments more than FFmpeg produces when a source's audio outlasts its video, and a client must treat that 404 as the end of the media rather than as a lost session. */
+        HLSSegmentNotFound: {
+            headers: {
+                /** @description Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown. */
+                "X-Igloo-Segment"?: "past-end";
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Resource not found. */
         NotFound: {
             headers: {
@@ -7162,7 +7173,7 @@ export interface operations {
             304: components["responses"]["HLSNotModifiedResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            404: components["responses"]["HLSSegmentNotFound"];
             412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];
@@ -7876,7 +7887,7 @@ export interface operations {
             304: components["responses"]["HLSNotModifiedResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            404: components["responses"]["HLSSegmentNotFound"];
             412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];
@@ -8618,7 +8629,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
+            404: components["responses"]["HLSSegmentNotFound"];
             412: components["responses"]["PreconditionFailed"];
             416: components["responses"]["HLSRangeNotSatisfiableResponse"];
             500: components["responses"]["InternalServerError"];

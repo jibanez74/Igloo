@@ -1064,3 +1064,49 @@ func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 		t.Fatal("explicit session was removed by a different playback session's creation")
 	}
 }
+
+// With every slot already held by an in-flight reservation, evicting cached
+// sessions cannot make room. The eviction loop used to run anyway: it killed
+// each of the owner's cached sessions in turn and then refused the request.
+func TestReservePersonalHLSSession_ReservationsAtLimitKeepCachedSessions(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.HLSMaxPersonalSessionsPerUser = 2
+
+	userID := int64(100)
+	keys := []string{
+		HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testPlaybackSessionID, 0, userID),
+		HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testPlaybackSessionID, 0, userID),
+	}
+	for i, key := range keys {
+		session := &HLSSession{
+			Media:           movieRef(int64(5 + i)),
+			FileID:          int64(5 + i),
+			OwnerUserID:     userID,
+			PlaybackSession: testPlaybackSessionID,
+			TempDir:         t.TempDir(),
+			Exited:          true,
+		}
+		defer cleanupHLSSession(session)
+		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+	}
+	app.PersonalHLSReservations[userID] = 2
+
+	_, err := app.reservePersonalHLSSession(movieRef(7), userID, "11111111-2222-3333-4444-555555555555")
+	var capacityErr *hlsPersonalSessionCapacityError
+	if !errors.As(err, &capacityErr) {
+		t.Fatalf("error = %v, want personal-session capacity error", err)
+	}
+
+	for _, key := range keys {
+		if _, cached := app.HLSSessionCache.Get(key); !cached {
+			t.Fatalf("cached session %q was evicted although eviction could not make room", key)
+		}
+	}
+	app.PersonalHLSMu.Lock()
+	reserved := app.PersonalHLSReservations[userID]
+	app.PersonalHLSMu.Unlock()
+	if reserved != 2 {
+		t.Fatalf("pending reservations = %d, want 2", reserved)
+	}
+}
