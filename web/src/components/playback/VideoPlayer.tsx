@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type Hls from "hls.js";
-import type { ErrorData } from "hls.js";
+import type { ErrorData, Fragment } from "hls.js";
 import type { Events } from "hls.js";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -158,6 +158,24 @@ function retryAfterSecFromHeaders(headers: ManifestHeaders | null): number {
     return parsed;
   }
   return HLS_CAPACITY_RETRY_FALLBACK_SEC;
+}
+
+/**
+ * Whether `frag` is the last segment of a playlist that has ended. The server
+ * synthesizes a transcode playlist from the movie duration and its frame
+ * rate, and a source whose audio outlasts its video by more than a frame can
+ * still leave that playlist one segment longer than FFmpeg writes. Everything
+ * before that segment is buffered, so its 404 is the end of the media, not
+ * the lost session every other segment 404 means.
+ */
+function isFinalFragmentOfEndedPlaylist(
+  hls: Hls,
+  frag: Fragment | undefined,
+): boolean {
+  if (!frag || typeof frag.sn !== "number") return false;
+  const details = hls.levels[frag.level]?.details;
+  if (!details || details.live) return false;
+  return frag.sn === details.endSN;
 }
 
 async function releaseResponseBody(response: Response): Promise<void> {
@@ -389,6 +407,21 @@ export default function VideoPlayer({
 
         hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
           const responseCode = data.response?.code;
+
+          // Checked ahead of the session-lost rule below, which would
+          // otherwise rebase the session three times over a segment that
+          // cannot exist and then report the film as unrecoverable. hls.js
+          // only signals end of stream after buffering the last listed
+          // segment, so the player asks for it directly.
+          if (
+            responseCode === 404 &&
+            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+            isFinalFragmentOfEndedPlaylist(hls, data.frag)
+          ) {
+            hls.stopLoad();
+            hls.trigger(Hls.Events.BUFFER_EOS, { type: null });
+            return;
+          }
 
           if (
             responseCode === 404 &&

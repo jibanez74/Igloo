@@ -106,6 +106,10 @@ type HLSSession struct {
 	// Negative means unknown; callers then fall back to StartSec. Guarded by
 	// ExitMu along with the exit fields above.
 	ActualStartSec float64
+	// SourceFrameRate is the primary video stream's nominal frame rate, which
+	// sizes the synthesized transcode playlist (see ffmpeg.HLSSegmentCount).
+	// Zero means unknown. Set once at construction and read-only afterwards.
+	SourceFrameRate float64
 	// StartedAt anchors the cold time-to-first-segment measurement at the top
 	// of startHLSSession, before any directory, limiter, or FFmpeg work. Set
 	// once at construction and read-only afterwards; zero in bare test
@@ -992,6 +996,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		RequestedAudioProfile: params.RequestedAudioProfile,
 		EffectiveAudioProfile: effectiveAudio,
 		TempFileSegments:      ffmpeg.HLSUsesTempFile(hlsRunParams),
+		SourceFrameRate:       params.PrimaryVideo.FrameRate,
 		// Re-encoding seeks accurately, so a transcode starts exactly where it
 		// was asked to. Copy-video cannot and is measured below.
 		ActualStartSec: startSec,

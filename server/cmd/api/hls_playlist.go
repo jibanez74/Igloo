@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -85,18 +85,23 @@ func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {
 // Only transcode sessions use it: their -force_key_frames boundaries make the
 // arithmetic exact, while copy-video sessions serve FFmpeg's own playlist.
 //
+// The segment count comes from ffmpeg.HLSSegmentCount rather than from the
+// duration alone: FFmpeg opens a segment only for a video frame at or past
+// its boundary, so a container that outlasts its last frame by a few
+// milliseconds would otherwise be listed with one segment more than FFmpeg
+// writes, and every client treats that trailing 404 as a lost session. The
+// tail past the last full boundary is folded into the final segment, which
+// can therefore run slightly longer than the nominal segment time.
+//
 // independentSegments comes from ffmpeg.HLSSegmentsAreIndependent, the same
 // predicate that decides whether FFmpeg writes the tag into its own playlist,
 // so a session's two playlist flavors never disagree.
 //
 // FFmpeg produces the actual segment files in the background; the segment
 // handler waits for each file to appear on disk before serving.
-func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, independentSegments bool) string {
+func generateVODPlaylist(totalDurationSec float64, frameRate float64, baseURL, querySuffix string, independentSegments bool) string {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
-	segCount := int(math.Ceil(totalDurationSec / segDur))
-	if segCount < 1 {
-		segCount = 1
-	}
+	segCount := ffmpeg.HLSSegmentCount(totalDurationSec, frameRate)
 
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
@@ -115,9 +120,9 @@ func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, 
 
 	for i := 0; i < segCount; i++ {
 		dur := segDur
-		elapsed := float64(i) * segDur
-		if elapsed+dur > totalDurationSec {
-			dur = totalDurationSec - elapsed
+		last := i == segCount-1
+		if last {
+			dur = totalDurationSec - float64(i)*segDur
 		}
 		if dur <= 0 {
 			dur = 0.001
