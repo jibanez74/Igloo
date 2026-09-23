@@ -18,7 +18,9 @@ type HlsSessionRecoveryOptions = {
 // hundreds of manifest requests in a row. A loss more than
 // HLS_SESSION_LOST_INCIDENT_WINDOW_MS after the previous attempt starts a new
 // incident, so an idle eviction an hour into the film still gets a full
-// budget.
+// budget. The budget and the pending retry belong to one media item: both
+// play routes key the page on the media id, so a change of item is a remount
+// and the unmount cleanup drops a retry that still held the old position.
 export function useHlsSessionRecovery({
   onRecover,
   onMaxAttempts,
