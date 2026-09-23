@@ -201,7 +201,15 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	// encoders) auto-detect an appropriate value, which lets a single transcode
 	// use the whole machine. Total CPU pressure is bounded by the concurrency
 	// limiter in the api package, not by a per-process thread cap.
+	//
+	// -nostats is load-bearing, not tidiness: FFmpeg's progress report ends
+	// each update with \r rather than \n, so the line-based stderr tail in
+	// RunHLS saw one line that grew for the whole encode. It was logged as the
+	// ffmpeg_tail of every failure, and after about 87 minutes of encoding it
+	// overflowed the scanner and cost the real final error. -nostdin keeps a
+	// background process from ever reading the terminal.
 	args := []string{
+		"-nostdin", "-nostats",
 		"-y", "-fflags", "+genpts",
 		"-analyzeduration", "5000000", "-probesize", "5000000",
 	}

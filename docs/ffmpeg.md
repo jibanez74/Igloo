@@ -303,6 +303,7 @@ The GOP flags make the GOP the right size, while `-force_key_frames` is what act
 
 FFmpeg also runs with:
 
+- `-nostats` and `-nostdin`. The progress report ends each update with `\r` rather than a newline, so the line-based stderr tail (see "Segment Serving and Readiness") read it as one line that grew for the whole encode. That line was logged as the `ffmpeg_tail` of every failure. Past 1 MiB, about 87 minutes of encoding, it overflowed the reader and lost FFmpeg's actual final error.
 - `-fflags +genpts` to generate timestamps when sources have missing or awkward presentation timestamps.
 - `-analyzeduration 5000000` and `-probesize 5000000` to give FFmpeg enough input data to identify streams without making startup unbounded.
 - `-readrate 4` and `-readrate_initial_burst 60`, when the FFmpeg build supports those CLI options, so a session reads input at most 4x realtime after an initial 60-second burst instead of racing arbitrarily far ahead of playback.

@@ -701,3 +701,23 @@ func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {
 		})
 	}
 }
+
+// Without -nostats FFmpeg's \r-separated progress report reaches the stderr
+// tail as one ever-growing line, which buried the real failure in the log.
+func TestBuildHLSArgs_SuppressesProgressAndStdin(t *testing.T) {
+	for _, profile := range []string{helpers.HLS_PROFILE_720P_3MBPS, helpers.HLS_PROFILE_REMUX} {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           t.TempDir(),
+			Profile:          profile,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		})
+		for _, flag := range []string{"-nostats", "-nostdin"} {
+			if countArgument(args, flag) != 1 {
+				t.Errorf("%s: %s appears %d times, want 1: %v", profile, flag, countArgument(args, flag), args)
+			}
+		}
+	}
+}
