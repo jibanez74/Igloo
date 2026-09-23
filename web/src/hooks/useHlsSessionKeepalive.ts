@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { HLS_SESSION_KEEPALIVE_INTERVAL_MS } from "@/lib/constants";
+import { releaseResponseBody } from "@/lib/video-playback";
 
 type HlsSessionKeepaliveOptions = {
   enabled: boolean;
@@ -33,24 +34,28 @@ export function useHlsSessionKeepalive({
     const controller = new AbortController();
     let inFlight = false;
 
-    const interval = window.setInterval(() => {
+    const ping = async () => {
       // A manifest request can wait on the server for tens of seconds, so a
       // slow ping must not stack a second one behind it.
       if (inFlight) return;
       inFlight = true;
-      void fetch(streamUrl, {
-        credentials: "include",
-        signal: controller.signal,
-      })
-        // Only the request matters. Cancelling the body frees the
-        // connection instead of leaving the playlist unread.
-        .then((response) => response.body?.cancel())
-        .catch(() => {
-          // Best-effort keepalive; playback errors surface through the player.
-        })
-        .finally(() => {
-          inFlight = false;
+      try {
+        const response = await fetch(streamUrl, {
+          credentials: "include",
+          signal: controller.signal,
         });
+        // Only the request matters. Releasing the body frees the connection
+        // instead of leaving the playlist unread.
+        await releaseResponseBody(response);
+      } catch {
+        // Best-effort keepalive; playback errors surface through the player.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void ping();
     }, HLS_SESSION_KEEPALIVE_INTERVAL_MS);
 
     return () => {

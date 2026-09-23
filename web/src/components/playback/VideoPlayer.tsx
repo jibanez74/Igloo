@@ -19,6 +19,7 @@ import {
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
 import { supportsNativeHLS } from "@/lib/playback";
+import { releaseResponseBody } from "@/lib/video-playback";
 import { cn } from "@/lib/utils";
 
 type SubtitleTrackInfo = {
@@ -177,14 +178,6 @@ function isPastEndSegment(headers: ManifestHeaders | null): boolean {
     readManifestHeader(headers, HLS_SEGMENT_STATUS_HEADER)?.trim() ===
     HLS_SEGMENT_STATUS_PAST_END
   );
-}
-
-async function releaseResponseBody(response: Response): Promise<void> {
-  try {
-    await response.body?.cancel();
-  } catch {
-    // The headers are still usable; body release is best-effort.
-  }
 }
 
 export default function VideoPlayer({

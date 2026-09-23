@@ -299,7 +299,7 @@ export const HLS_ACTUAL_START_HEADER = "X-Igloo-Actual-Start";
 export const HLS_SEGMENT_STATUS_HEADER = "X-Igloo-Segment";
 export const HLS_SEGMENT_STATUS_PAST_END = "past-end";
 
-/** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
+/** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the ready player is mounted and not waiting for capacity. */
 export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;
 /** hls.js: manifest / level request timeout (ms). */
 export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;

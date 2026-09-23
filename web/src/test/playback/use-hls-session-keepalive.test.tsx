@@ -88,13 +88,15 @@ describe("useHlsSessionKeepalive", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { unmount } = renderHook(() =>
-      useHlsSessionKeepalive({ enabled: true, streamUrl }),
+    const { rerender } = renderHook(
+      (props: { enabled: boolean }) =>
+        useHlsSessionKeepalive({ enabled: props.enabled, streamUrl }),
+      { initialProps: { enabled: true } },
     );
     await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS);
     expect(signal?.aborted).toBe(false);
 
-    unmount();
+    rerender({ enabled: false });
 
     expect(signal?.aborted).toBe(true);
   });
