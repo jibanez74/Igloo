@@ -311,6 +311,14 @@ func hasPlayableSegment(playlist string) bool {
 // count are whatever the source encode dictates: synthesizing those advertises
 // durations FFmpeg never produces and segments that will never exist. They are
 // read back from FFmpeg instead, and the request waits for the first one.
+//
+// Neither flavor is answered before FFmpeg has produced something. A
+// synthesized playlist describes output FFmpeg has not produced yet, which is
+// correct while it is running and a lie once it is not: a transcode whose
+// encoder died during startup used to be handed a complete playlist and then
+// 500s on init.mp4, which no client recovers from. Waiting for the init
+// segment turns that into the failed-session error below, and costs nothing a
+// client would not have waited for on its first asset request anyway.
 func buildHLSPlaylistBody(
 	ctx context.Context,
 	session *HLSSession,
@@ -322,31 +330,14 @@ func buildHLSPlaylistBody(
 		return "", errHLSSessionNotFound
 	}
 
+	// The transcode check is a stat or two against page-cached directory
+	// entries and sits on the cold-start path, so it polls as tightly as the
+	// segment handler; reading the live playlist back is heavier.
+	pollInterval := hlsRemuxPreflightPoll
 	if !session.CopyVideo {
-		finalPlaylist := session.currentFinalPlaylist()
-		if finalPlaylist != "" {
-			if !hasPlayableSegment(finalPlaylist) {
-				return "", errHLSSessionEmpty
-			}
-			return rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix), nil
-		}
-
-		// A synthesized playlist describes output FFmpeg has not produced yet,
-		// which is correct while it is still running and a lie once it is not:
-		// without this the client is handed a complete playlist for a dead
-		// session and only discovers the failure by waiting out every segment.
-		exited, exitErr := session.exitStatus()
-		if exited {
-			if exitErr != nil {
-				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
-			}
-			return "", errHLSSessionEmpty
-		}
-
-		return generateVODPlaylist(durationSec, baseURL, querySuffix, session.IndependentSegments), nil
+		pollInterval = hlsSegmentPoll
 	}
-
-	ticker := time.NewTicker(hlsRemuxPreflightPoll)
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	deadline := time.Now().Add(hlsLivePlaylistWait)
@@ -375,9 +366,16 @@ func buildHLSPlaylistBody(
 			return "", errHLSSessionEmpty
 		}
 
-		livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
-		if readErr == nil {
-			return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+		if session.CopyVideo {
+			livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
+			if readErr == nil {
+				return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+			}
+		} else {
+			initReady := segmentReady(session, helpers.HLS_INIT_FILENAME)
+			if initReady {
+				return generateVODPlaylist(durationSec, session.SourceFrameRate, baseURL, querySuffix, session.IndependentSegments), nil
+			}
 		}
 
 		if !time.Now().Before(deadline) {
