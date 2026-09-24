@@ -44,6 +44,7 @@ const (
 	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
 	envViteDevServer              = "VITE_DEV_SERVER"
 	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
+	envHLSMaxHWTranscodes         = "HLS_MAX_HW_TRANSCODES"
 	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"
 	envDefaultAdminName           = "DEFAULT_ADMIN_NAME"
 	envDefaultAdminEmail          = "DEFAULT_ADMIN_EMAIL"

@@ -63,6 +63,7 @@ import { useDirectPlayFallback } from "@/hooks/useDirectPlayFallback";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
+import { useSettledHlsRebase } from "@/hooks/useSettledHlsRebase";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
 import type { PlaybackMediaRef, UpNextItem } from "@/types/playback";
@@ -347,6 +348,13 @@ export default function VideoPlaybackPage({
     }));
   };
 
+  const { requestRebase, cancelRebase, isRebasePending } = useSettledHlsRebase(
+    {
+      resetKey: sessionWindowKey,
+      onRebase: (targetTimeSec) => navigateToPlaybackPosition(targetTimeSec),
+    },
+  );
+
   const { handleSessionLost, resetRecovery, recoveryAttempt } =
     useHlsSessionRecovery({
       onRecover: (currentTimeSec) =>
@@ -460,13 +468,45 @@ export default function VideoPlaybackPage({
     // so the up-next countdown must not fire out from under them.
     retractUpNext();
 
+    // A rebase waits for the controls to settle and leaves the element where
+    // it is, so the next step of a drag is measured from there and only moves
+    // the pending target. The controls show that target meanwhile, which is
+    // also what the next relative seek (a key press, a skip button) builds on.
     if (rebase) {
-      navigateToPlaybackPosition(t);
+      requestRebase(t);
+      setCurrentTime(t);
       return;
     }
 
+    // Back in range: the element can go there itself, so a far target the
+    // same drag passed through is dropped.
+    cancelRebase();
     video.currentTime = toMediaPlaybackTime(t, playbackTiming);
     setCurrentTime(t);
+  };
+
+  // The same rule for every seek the element makes, not just the ones seek()
+  // issues: a picture-in-picture or native fullscreen scrubber writes
+  // currentTime directly, and seek() measures from currentTime, which is
+  // already the previous pending target during a drag. Either way the player
+  // would ask for a segment far past the encoder and wait minutes for it.
+  // seek()'s own rebases never write currentTime, so they never land here.
+  // The player reports a run of seeks once, after it settles, so a drag or a
+  // scrub arrives with its final target and costs one rebase.
+  const handleHlsSeeking = (fromTime: number, toTime: number) => {
+    const targetTime = clampTime(toAbsolutePlaybackTime(toTime, playbackTiming));
+    const rebase = shouldRebaseHlsSession({
+      isHlsPlayback,
+      targetTimeSec: targetTime,
+      actualHlsStartSec,
+      currentVideoTimeSec: toAbsolutePlaybackTime(fromTime, playbackTiming),
+    });
+    if (!rebase) return;
+
+    // The element's settled target wins over a controls rebase still waiting.
+    cancelRebase();
+    retractUpNext();
+    navigateToPlaybackPosition(targetTime);
   };
 
   const seekForward = () => seek(currentTime + MOVIE_SEEK_STEP_SEC);
@@ -682,6 +722,9 @@ export default function VideoPlaybackPage({
         void handleEndedSave();
       }}
       onTimeUpdate={(time) => {
+        // The controls hold a pending rebase target; the old session's
+        // playhead must not snap them back before it goes out.
+        if (isRebasePending()) return;
         const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
         currentTimeRef.current = absoluteTime;
         setCurrentTime(absoluteTime);
@@ -712,6 +755,7 @@ export default function VideoPlaybackPage({
         setReportedProfile({ streamWindowKey: sessionWindowKey, profile })
       }
       onActualStart={handleActualHlsStart}
+      onHlsSeeking={handleHlsSeeking}
     />
   );
 

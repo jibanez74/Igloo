@@ -170,27 +170,21 @@ func (app *Application) setRemuxSafetyVerdict(
 	}
 }
 
-func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.Duration) error {
+// waitForRemuxPreflight blocks until the session has produced init.mp4 and
+// the first segmentCount complete segments, or FFmpeg has exited. It returns
+// how many leading segments may be validated: segmentCount normally, fewer
+// when FFmpeg exited cleanly with at least one (a short file, or a start near
+// the end of the media). An exit with an error, or a clean exit with nothing
+// complete, is a failure whichever segment it stopped at.
+func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.Duration) (int, error) {
 	initPath := filepath.Join(session.TempDir, helpers.HLS_INIT_FILENAME)
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
 		if fileReady(initPath) {
-			allReady := true
-			for i := 0; i < segmentCount; i++ {
-				name := fmt.Sprintf(
-					"%s%d%s",
-					helpers.HLS_SEGMENT_FILENAME_PREFIX,
-					i,
-					helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-				)
-				if !segmentReady(session, name) {
-					allReady = false
-					break
-				}
-			}
-			if allReady {
-				return nil
+			completed := completedLeadingHLSSegments(session, segmentCount)
+			if completed == segmentCount {
+				return segmentCount, nil
 			}
 		}
 
@@ -202,33 +196,49 @@ func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.D
 		if exited {
 			if !fileReady(initPath) {
 				if exitErr != nil {
-					return fmt.Errorf("init segment was not generated before ffmpeg exit: %w", exitErr)
+					return 0, fmt.Errorf("init segment was not generated before ffmpeg exit: %w", exitErr)
 				}
-				return fmt.Errorf("init segment was not generated before ffmpeg exit")
+				return 0, fmt.Errorf("init segment was not generated before ffmpeg exit")
 			}
 
-			for i := 0; i < segmentCount; i++ {
-				name := fmt.Sprintf(
-					"%s%d%s",
-					helpers.HLS_SEGMENT_FILENAME_PREFIX,
-					i,
-					helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-				)
-				if !segmentReady(session, name) {
-					if exitErr != nil {
-						return fmt.Errorf("segment %q was not completed before ffmpeg exit: %w", name, exitErr)
-					}
-					return fmt.Errorf("segment %q was not completed before ffmpeg exit", name)
-				}
+			completed := completedLeadingHLSSegments(session, segmentCount)
+			if completed == segmentCount {
+				return segmentCount, nil
 			}
+			cleanExit := exitErr == nil
+			if cleanExit && completed > 0 {
+				return completed, nil
+			}
+
+			name := hlsSegmentFilename(completed)
+			if exitErr != nil {
+				return 0, fmt.Errorf("segment %q was not completed before ffmpeg exit: %w", name, exitErr)
+			}
+			return 0, fmt.Errorf("segment %q was not completed before ffmpeg exit", name)
 		}
 
 		time.Sleep(hlsRemuxPreflightPoll)
 	}
 
-	return fmt.Errorf(
+	return 0, fmt.Errorf(
 		"timed out waiting for %d complete remux segments after %s",
 		segmentCount,
 		timeout,
 	)
+}
+
+// completedLeadingHLSSegments counts complete segments from segment 0 upward,
+// stopping at the first that is not, so the result is a prefix the validator
+// can read in order.
+func completedLeadingHLSSegments(session *HLSSession, limit int) int {
+	for i := 0; i < limit; i++ {
+		if !segmentReady(session, hlsSegmentFilename(i)) {
+			return i
+		}
+	}
+	return limit
+}
+
+func hlsSegmentFilename(index int) string {
+	return fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, index, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
 }

@@ -217,9 +217,41 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 		writeSegments(t, dir, segmentCount-1)
 		session := &HLSSession{TempDir: dir, Exited: true}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		checked, err := waitForRemuxPreflight(session, segmentCount, time.Second)
 		if err != nil {
 			t.Fatalf("waitForRemuxPreflight returned error: %v", err)
+		}
+		if checked != segmentCount {
+			t.Fatalf("checked = %d, want %d", checked, segmentCount)
+		}
+	})
+
+	// A clean exit before the full count is a short file or a start near the
+	// end of one: whatever it produced is what there is to validate.
+	t.Run("a clean exit with fewer segments returns what it produced", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		writeSegments(t, dir, 1)
+		session := &HLSSession{TempDir: dir, Exited: true}
+
+		checked, err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		if err != nil {
+			t.Fatalf("waitForRemuxPreflight returned error: %v", err)
+		}
+		if checked != 2 {
+			t.Fatalf("checked = %d, want 2", checked)
+		}
+	})
+
+	t.Run("a clean exit with no segments is a failure", func(t *testing.T) {
+		dir := t.TempDir()
+		writeInit(t, dir)
+		session := &HLSSession{TempDir: dir, Exited: true}
+
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		wantName := fmt.Sprintf("%s0%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+		if err == nil || !strings.Contains(err.Error(), wantName) {
+			t.Fatalf("error = %v, want it to name %q", err, wantName)
 		}
 	})
 
@@ -232,7 +264,7 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 		writeSegments(t, dir, segmentCount-1)
 		session := &HLSSession{TempDir: dir, TempFileSegments: true}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Second)
 		if err != nil {
 			t.Fatalf("waitForRemuxPreflight returned error: %v", err)
 		}
@@ -241,7 +273,7 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 	t.Run("reports a missing init segment", func(t *testing.T) {
 		session := &HLSSession{TempDir: t.TempDir(), Exited: true}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Second)
 		if err == nil || !strings.Contains(err.Error(), "init segment was not generated") {
 			t.Fatalf("error = %v, want the missing-init message", err)
 		}
@@ -250,7 +282,7 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 	t.Run("wraps the ffmpeg error when init is missing", func(t *testing.T) {
 		session := &HLSSession{TempDir: t.TempDir(), Exited: true, ExitErr: exitErr}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Second)
 		if !errors.Is(err, exitErr) {
 			t.Fatalf("error = %v, want it to wrap the ffmpeg exit error", err)
 		}
@@ -260,9 +292,9 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 		dir := t.TempDir()
 		writeInit(t, dir)
 		writeSegments(t, dir, segmentCount-2)
-		session := &HLSSession{TempDir: dir, Exited: true}
+		session := &HLSSession{TempDir: dir, Exited: true, ExitErr: exitErr}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Second)
 		wantName := fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, segmentCount-1, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
 		if err == nil || !strings.Contains(err.Error(), wantName) {
 			t.Fatalf("error = %v, want it to name %q", err, wantName)
@@ -275,7 +307,7 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 		writeSegments(t, dir, segmentCount-2)
 		session := &HLSSession{TempDir: dir, Exited: true, ExitErr: exitErr}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Second)
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Second)
 		if !errors.Is(err, exitErr) {
 			t.Fatalf("error = %v, want it to wrap the ffmpeg exit error", err)
 		}
@@ -288,7 +320,7 @@ func TestWaitForRemuxPreflight(t *testing.T) {
 		writeInit(t, dir)
 		session := &HLSSession{TempDir: dir}
 
-		err := waitForRemuxPreflight(session, segmentCount, time.Millisecond)
+		_, err := waitForRemuxPreflight(session, segmentCount, time.Millisecond)
 		if err == nil || !strings.Contains(err.Error(), "timed out waiting for") {
 			t.Fatalf("error = %v, want a timeout", err)
 		}

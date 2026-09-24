@@ -127,11 +127,15 @@ func ParseDate(s string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("empty string")
 	}
 
-	// Common date formats in audio metadata
+	// Common date formats in audio metadata. A timestamp keeps the calendar
+	// date it was written with: iTunes stores release dates as UTC instants
+	// such as 2019-01-04T08:00:00Z, and callers format in the parsed zone.
 	formats := []string{
 		"2006-01-02",          // ISO 8601
 		"2006-1-2",            // ISO 8601 without leading zeros (e.g. TMDB-style)
 		"2006-01-02T15:04:05", // ISO 8601 with time
+		time.RFC3339,          // ISO 8601 with time and zone (iTunes)
+		"2006-01",             // Year and month
 		"2006",                // Year only
 		"01/02/2006",          // US format
 		"02-01-2006",          // European format

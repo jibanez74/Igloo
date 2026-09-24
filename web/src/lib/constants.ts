@@ -253,6 +253,8 @@ export const UP_NEXT_COUNTDOWN_SEC = 10;
 export const WATCH_PROGRESS_MIN_SECONDS = 30;
 export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 export const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
+/** Quiet time after the last seek event before the player reports where a run of seeks ended. */
+export const HLS_SEEK_SETTLE_MS = 250;
 /** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
 export const MOVIE_BUFFERING_SPINNER_DELAY_MS = 300;
 export const MEDIA_ERR_DECODE = 3;

@@ -13,6 +13,7 @@ import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
   HLS_NETWORK_RECOVERY_DELAYS_MS,
+  HLS_SEEK_SETTLE_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
@@ -42,7 +43,7 @@ vi.mock("@/lib/playback", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/playback")>();
   return {
     ...actual,
-    get supportsNativeHLS() {
+    get prefersNativeHLS() {
       return nativeHlsSupport.supported;
     },
   };
@@ -1343,5 +1344,213 @@ describe("VideoPlayer native HLS manifest preflight", () => {
       expect(video).toHaveAttribute("src", firstSrc);
     });
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+// A picture-in-picture or native fullscreen scrubber writes currentTime
+// directly, and a drag reads currentTime as the previous pending target, so
+// the page's rebase rule needs every seek measured from where playback last
+// came to rest. Otherwise a far seek waits minutes for a segment the encoder
+// has not reached. A run of seeks is reported once it settles: reporting each
+// step of a drag would rebase, and start a transcode, once per 120 s of travel.
+describe("VideoPlayer HLS seek reporting", () => {
+  const hlsSrc =
+    "/api/movies/1/hls/1080p_8mbps/playlist.m3u8?playback_session=uuid&start=990";
+
+  function setPlayhead(video: HTMLElement, currentTime: number, seeking: boolean) {
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      writable: true,
+      value: currentTime,
+    });
+    Object.defineProperty(video, "seeking", {
+      configurable: true,
+      value: seeking,
+    });
+  }
+
+  function playTo(video: HTMLElement, time: number) {
+    setPlayhead(video, time, false);
+    fireEvent(video, new Event("timeupdate"));
+  }
+
+  function seekTo(video: HTMLElement, time: number) {
+    setPlayhead(video, time, true);
+    fireEvent(video, new Event("seeking"));
+  }
+
+  function settleAt(video: HTMLElement, time: number) {
+    setPlayhead(video, time, false);
+    fireEvent(video, new Event("seeked"));
+  }
+
+  /** Lets the element go quiet for long enough that the pending run is reported. */
+  async function settleSeeks() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_SEEK_SETTLE_MS);
+    });
+  }
+
+  async function renderSeekingPlayer(
+    props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
+  ) {
+    vi.useFakeTimers();
+    const onHlsSeeking = vi.fn();
+    const result = renderPlayer({
+      src: hlsSrc,
+      isHlsSource: true,
+      startSec: 10,
+      onHlsSeeking,
+      ...props,
+    });
+    await act(async () => {});
+    return { ...result, onHlsSeeking };
+  }
+
+  it("reports a seek before playback settles from the start the source was built for", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    seekTo(video, 4000);
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000);
+  });
+
+  it("reports a seek from the playhead playback last settled at", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    playTo(video, 42);
+    seekTo(video, 4000);
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenCalledWith(42, 4000);
+  });
+
+  it("waits for the element to go quiet before reporting", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    seekTo(video, 4000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_SEEK_SETTLE_MS - 1);
+    });
+
+    expect(onHlsSeeking).not.toHaveBeenCalled();
+  });
+
+  it("reports a run of seeks once, from the resting point to where it ended", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    playTo(video, 42);
+    seekTo(video, 100);
+    // timeupdate also fires while a seek is pending; it is not a resting point.
+    fireEvent(video, new Event("timeupdate"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_SEEK_SETTLE_MS - 1);
+    });
+    seekTo(video, 160);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HLS_SEEK_SETTLE_MS - 1);
+    });
+    seekTo(video, 220);
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenCalledOnce();
+    expect(onHlsSeeking).toHaveBeenCalledWith(42, 220);
+  });
+
+  it("moves the resting point once a seek completes", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    playTo(video, 42);
+    seekTo(video, 100);
+    settleAt(video, 100);
+    seekTo(video, 160);
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(100, 160);
+  });
+
+  it("measures a new source from its own start, not the previous source's playhead", async () => {
+    vi.useFakeTimers();
+    const onHlsSeeking = vi.fn();
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+      onHlsSeeking,
+    };
+    const { rerender } = render(
+      <VideoPlayer {...baseProps} src={hlsSrc} startSec={10} />,
+    );
+    await act(async () => {});
+    const video = screen.getByLabelText("Video player for Test Movie");
+    playTo(video, 2500);
+
+    rerender(
+      <VideoPlayer
+        {...baseProps}
+        src={hlsSrc.replace("start=990", "start=3990")}
+        startSec={12}
+      />,
+    );
+    await act(async () => {});
+    seekTo(video, 15);
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(12, 15);
+  });
+
+  it("drops a seek the source change already answered", async () => {
+    vi.useFakeTimers();
+    const onHlsSeeking = vi.fn();
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+      onHlsSeeking,
+    };
+    const { rerender } = render(
+      <VideoPlayer {...baseProps} src={hlsSrc} startSec={10} />,
+    );
+    await act(async () => {});
+    const video = screen.getByLabelText("Video player for Test Movie");
+    seekTo(video, 4000);
+
+    rerender(
+      <VideoPlayer
+        {...baseProps}
+        src={hlsSrc.replace("start=990", "start=3990")}
+        startSec={10}
+      />,
+    );
+    await act(async () => {});
+    await settleSeeks();
+
+    expect(onHlsSeeking).not.toHaveBeenCalled();
+  });
+
+  it("reports seeks on native HLS too", async () => {
+    nativeHlsSupport.supported = true;
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    seekTo(video, 4000);
+    await settleSeeks();
+
+    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000);
+  });
+
+  it("never reports a direct-play seek", async () => {
+    vi.useFakeTimers();
+    const onHlsSeeking = vi.fn();
+    const { video } = renderPlayer({ onHlsSeeking });
+
+    seekTo(video, 4000);
+    await settleSeeks();
+
+    expect(onHlsSeeking).not.toHaveBeenCalled();
   });
 });

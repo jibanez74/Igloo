@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -154,6 +155,32 @@ func createTestHLSSessionWithAudio(
 		return nil, err
 	}
 	return app.createHLSSession(ctx, &source, profile, audioTrack, audioProfile, nil, playbackSession, effectiveStartSec, isRoom, 0)
+}
+
+// holdHLSTranscodePermit takes one permit from a pool for the rest of the
+// test, returning a release the test may call early. fakeFFmpeg publishes its
+// exit before RunHLS returns, so a permit a fake session holds is gone by the
+// time createHLSSession returns; a full pool has to be held from outside.
+func holdHLSTranscodePermit(t *testing.T, app *Application, pool hlsTranscodePool) func() {
+	t.Helper()
+
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), pool, 0)
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot(%s): %v", pool, err)
+	}
+	t.Cleanup(release)
+	return release
+}
+
+// setTestHardwareAccelerationDevice switches the Settings device. The fake
+// FFmpeg reports unprobed capabilities, which ResolveHLSDevice trusts, so the
+// configured device is also the effective one.
+func setTestHardwareAccelerationDevice(t *testing.T, app *Application, device string) {
+	t.Helper()
+
+	current := *app.CurrentSettings()
+	current.HardwareAccelerationDevice = sql.NullString{String: device, Valid: true}
+	app.SetSettings(&current)
 }
 
 type testFMP4Fixture = fmp4testutil.Fixture
