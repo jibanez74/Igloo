@@ -100,7 +100,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			want: []string{
 				"-init_hw_device cuda=igloo_cuda", "-filter_hw_device igloo_cuda",
 				"-hwaccel cuda",
-				"format=nv12,hwupload,scale_cuda=w=-2:h=720:format=yuv420p",
+				"format=nv12,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,hwupload,scale_cuda=w=-2:h=720:format=yuv420p",
 			},
 			notWant:   []string{"zscale"},
 			wantOrder: [][2]string{{"-init_hw_device", "-filter_hw_device"}, {"-filter_hw_device", "-i"}},
@@ -250,7 +250,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
 			deinterlace: true,
 			caps:        hlsTestNvidiaCapabilities(false),
-			want:        []string{"yadif,format=nv12,hwupload,scale_cuda=w=-2:h=720:format=yuv420p"},
+			want:        []string{"yadif,format=nv12,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,hwupload,scale_cuda=w=-2:h=720:format=yuv420p"},
 		},
 		{
 			name:        "nvidia deinterlaces before the GPU tone-map",

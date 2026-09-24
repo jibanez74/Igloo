@@ -442,8 +442,10 @@ If NVENC is usable and FFmpeg also exposes `cuda`, `hwupload`, `scale_cuda`, the
 
 ```text
 -init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda
--vf format=nv12,hwupload,scale_cuda=w=-2:h=<height>:format=yuv420p
+-vf format=nv12,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,hwupload,scale_cuda=w=-2:h=<height>:format=yuv420p
 ```
+
+The frames are tagged BT.709 before the upload, as the software chains tag theirs. The `setparams` only labels the frames and converts no pixels. It is load-bearing: with `-hwaccel cuda` decode of a source that carries no color tags, the `-colorspace bt709` output option makes FFmpeg insert a conversion it can only do in software, CUDA frames cannot reach it, and FFmpeg exits before writing a segment ("Impossible to convert between the formats supported by the filter 'Parsed_scale_cuda_…' and the filter 'auto_scale_0'"). The CUDA scale runtime probe cannot catch this, because its test frame is not decoded on the GPU. The GPU tone-map chain needs no tag, because `tonemap_cuda` labels its own output BT.709.
 
 Intel QSV encode is checked with a short runtime encode probe, not just by looking for `h264_qsv` in `ffmpeg -encoders`. Unlike CUDA, QSV decode is intentionally not enabled: FFmpeg's generic `-hwaccel qsv` does not fall back to software decode as reliably across driver stacks. For SDR transcodes, Igloo uses software decode and normally software scaling into `nv12` frames before `h264_qsv` encode:
 
