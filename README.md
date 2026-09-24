@@ -133,3 +133,13 @@ The SQLite schema is in [server/sqlc/schema.sql](server/sqlc/schema.sql), with q
 Frontend unit tests use Vitest. Browser tests use Playwright; install Chromium from `web/` with `bun x playwright install --with-deps chromium`, then run `bun run test:e2e`. By default, Playwright starts Vite and a mock API. Set `E2E_BASE_URL` to a running Igloo URL for live-server suites, along with `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` where needed. Run `bun run test:e2e:boot` to check a production web build with the mock API. The available focused browser scripts are listed in [web/package.json](web/package.json).
 
 The [CI workflow](.github/workflows/ci.yml) runs code, contract, and browser startup checks. It does not publish release binaries.
+
+## License
+
+Copyright (C) 2023–2026 Jose Ibañez
+
+Igloo is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+Igloo is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [GNU General Public License](LICENSE) for more details.
+
+Igloo builds on third-party software, including the Jellyfin FFmpeg build embedded in release binaries and the Inter font. Their licenses and notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
