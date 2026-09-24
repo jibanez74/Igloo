@@ -61,6 +61,12 @@ type VideoPlayerProps = {
   onEffectiveProfile?: (profileId: string) => void;
   /** Reports the validated absolute start measured for the HLS media. */
   onActualStart?: (startSec: number) => void;
+  /**
+   * Reports every seek the element makes on an HLS source, in session time,
+   * from where playback last settled — including seeks the page never issued,
+   * such as a picture-in-picture or native fullscreen scrubber.
+   */
+  onHlsSeeking?: (fromTime: number, toTime: number) => void;
 };
 
 function loadHlsLight() {
@@ -202,8 +208,16 @@ export default function VideoPlayer({
   onManifestLoaded,
   onEffectiveProfile,
   onActualStart,
+  onHlsSeeking,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+  // Where playback last came to rest in the current source: set by timeupdate
+  // outside a seek and by seeked, never while a seek is pending. A drag or a
+  // run of key presses reads currentTime as the previous pending target, so
+  // measuring from it let chained seeks walk far past what the encoder had
+  // produced without ever tripping the rebase rule. Null until the source
+  // settles; each source effect clears it.
+  const settledTimeRef = useRef<number | null>(null);
   // True after a past-the-end segment 404 stopped hls.js loading. Loading has
   // to be re-armed on the next seek, or a jump back past the back buffer
   // never fetches again; a seek into the same tail just re-enters the branch.
@@ -338,6 +352,7 @@ export default function VideoPlayer({
     if (!video || !src) return;
     if (!isHlsSource || prefersNativeHLS) return;
 
+    settledTimeRef.current = null;
     let cancelled = false;
     let disposeHls: (() => void) | null = null;
 
@@ -575,6 +590,7 @@ export default function VideoPlayer({
     if (!video || !src) return;
     if (isHlsSource && !prefersNativeHLS) return;
 
+    settledTimeRef.current = null;
     const clearSource = () => {
       video.removeAttribute("src");
       video.load();
@@ -744,17 +760,31 @@ export default function VideoPlayer({
           onWaiting={scheduleBufferingIndicator}
           onStalled={scheduleBufferingIndicator}
           onSeeking={(e) => {
+            const video = e.currentTarget;
             scheduleBufferingIndicator();
-            resumeHlsLoadAfterEnd(e.currentTarget);
+            resumeHlsLoadAfterEnd(video);
+            // Before the source settles, the start it was built for is where
+            // the viewer is.
+            if (isHlsSource && onHlsSeeking) {
+              onHlsSeeking(
+                settledTimeRef.current ?? startSec,
+                video.currentTime,
+              );
+            }
           }}
           onPlaying={clearBufferingIndicator}
           onCanPlay={clearBufferingIndicator}
-          onSeeked={clearBufferingIndicator}
-          onTimeUpdate={
-            onTimeUpdate
-              ? (e) => onTimeUpdate(e.currentTarget.currentTime)
-              : undefined
-          }
+          onSeeked={(e) => {
+            settledTimeRef.current = e.currentTarget.currentTime;
+            clearBufferingIndicator();
+          }}
+          onTimeUpdate={(e) => {
+            const video = e.currentTarget;
+            if (!video.seeking) {
+              settledTimeRef.current = video.currentTime;
+            }
+            onTimeUpdate?.(video.currentTime);
+          }}
           onDurationChange={
             onDurationChange
               ? (e) => onDurationChange(e.currentTarget.duration)

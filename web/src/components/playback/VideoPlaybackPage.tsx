@@ -469,6 +469,26 @@ export default function VideoPlaybackPage({
     setCurrentTime(t);
   };
 
+  // The same rule for every seek the element makes, not just the ones seek()
+  // issues: a picture-in-picture or native fullscreen scrubber writes
+  // currentTime directly, and seek() measures from currentTime, which is
+  // already the previous pending target during a drag. Either way the player
+  // would ask for a segment far past the encoder and wait minutes for it.
+  // seek()'s own rebases never write currentTime, so they never land here.
+  const handleHlsSeeking = (fromTime: number, toTime: number) => {
+    const targetTime = clampTime(toAbsolutePlaybackTime(toTime, playbackTiming));
+    const rebase = shouldRebaseHlsSession({
+      isHlsPlayback,
+      targetTimeSec: targetTime,
+      actualHlsStartSec,
+      currentVideoTimeSec: toAbsolutePlaybackTime(fromTime, playbackTiming),
+    });
+    if (!rebase) return;
+
+    retractUpNext();
+    navigateToPlaybackPosition(targetTime);
+  };
+
   const seekForward = () => seek(currentTime + MOVIE_SEEK_STEP_SEC);
   const seekBackward = () => seek(currentTime - MOVIE_SEEK_STEP_SEC);
 
@@ -712,6 +732,7 @@ export default function VideoPlaybackPage({
         setReportedProfile({ streamWindowKey: sessionWindowKey, profile })
       }
       onActualStart={handleActualHlsStart}
+      onHlsSeeking={handleHlsSeeking}
     />
   );
 

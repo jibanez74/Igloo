@@ -1345,3 +1345,144 @@ describe("VideoPlayer native HLS manifest preflight", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
+
+// A picture-in-picture or native fullscreen scrubber writes currentTime
+// directly, and a drag reads currentTime as the previous pending target, so
+// the page's rebase rule needs every seek measured from where playback last
+// came to rest. Otherwise a far seek waits minutes for a segment the encoder
+// has not reached.
+describe("VideoPlayer HLS seek reporting", () => {
+  const hlsSrc =
+    "/api/movies/1/hls/1080p_8mbps/playlist.m3u8?playback_session=uuid&start=990";
+
+  function setPlayhead(video: HTMLElement, currentTime: number, seeking: boolean) {
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      writable: true,
+      value: currentTime,
+    });
+    Object.defineProperty(video, "seeking", {
+      configurable: true,
+      value: seeking,
+    });
+  }
+
+  function playTo(video: HTMLElement, time: number) {
+    setPlayhead(video, time, false);
+    fireEvent(video, new Event("timeupdate"));
+  }
+
+  function seekTo(video: HTMLElement, time: number) {
+    setPlayhead(video, time, true);
+    fireEvent(video, new Event("seeking"));
+  }
+
+  function settleAt(video: HTMLElement, time: number) {
+    setPlayhead(video, time, false);
+    fireEvent(video, new Event("seeked"));
+  }
+
+  async function renderSeekingPlayer(
+    props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
+  ) {
+    const onHlsSeeking = vi.fn();
+    const result = renderPlayer({
+      src: hlsSrc,
+      isHlsSource: true,
+      startSec: 10,
+      onHlsSeeking,
+      ...props,
+    });
+    await act(async () => {});
+    return { ...result, onHlsSeeking };
+  }
+
+  it("reports a seek before playback settles from the start the source was built for", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    seekTo(video, 4000);
+
+    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000);
+  });
+
+  it("reports a seek from the playhead playback last settled at", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    playTo(video, 42);
+    seekTo(video, 4000);
+
+    expect(onHlsSeeking).toHaveBeenCalledWith(42, 4000);
+  });
+
+  it("measures chained seeks from the playhead before the first of them", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    playTo(video, 42);
+    seekTo(video, 100);
+    // timeupdate also fires while a seek is pending; it is not a resting point.
+    fireEvent(video, new Event("timeupdate"));
+    seekTo(video, 160);
+    seekTo(video, 220);
+
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(42, 220);
+  });
+
+  it("moves the resting point once a seek completes", async () => {
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    playTo(video, 42);
+    seekTo(video, 100);
+    settleAt(video, 100);
+    seekTo(video, 160);
+
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(100, 160);
+  });
+
+  it("measures a new source from its own start, not the previous source's playhead", async () => {
+    const onHlsSeeking = vi.fn();
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+      onHlsSeeking,
+    };
+    const { rerender } = render(
+      <VideoPlayer {...baseProps} src={hlsSrc} startSec={10} />,
+    );
+    await act(async () => {});
+    const video = screen.getByLabelText("Video player for Test Movie");
+    playTo(video, 2500);
+
+    rerender(
+      <VideoPlayer
+        {...baseProps}
+        src={hlsSrc.replace("start=990", "start=3990")}
+        startSec={12}
+      />,
+    );
+    await act(async () => {});
+    seekTo(video, 15);
+
+    expect(onHlsSeeking).toHaveBeenLastCalledWith(12, 15);
+  });
+
+  it("reports seeks on native HLS too", async () => {
+    nativeHlsSupport.supported = true;
+    const { video, onHlsSeeking } = await renderSeekingPlayer();
+
+    seekTo(video, 4000);
+
+    expect(onHlsSeeking).toHaveBeenCalledWith(10, 4000);
+  });
+
+  it("never reports a direct-play seek", async () => {
+    const onHlsSeeking = vi.fn();
+    const { video } = renderPlayer({ onHlsSeeking });
+
+    seekTo(video, 4000);
+
+    expect(onHlsSeeking).not.toHaveBeenCalled();
+  });
+});
