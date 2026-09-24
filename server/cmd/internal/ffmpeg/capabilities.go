@@ -399,12 +399,21 @@ func ffmpegHelpHasOption(output string, option string) bool {
 	return false
 }
 
+// NVENC rejects an H.264 frame narrower than 145 or shorter than 49 pixels
+// ("Frame Dimension less than the minimum supported value"), so the NVIDIA
+// runtime probes encode a frame above that on every GPU; a smaller one failed
+// the probe and sent every transcode to libx264 on hardware that works.
+const (
+	nvidiaProbeSource = "testsrc2=s=256x144:d=0.1"
+	nvidiaProbeHeight = "144"
+)
+
 func probeH264NVENC(bin string) (bool, string) {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
 		"-f", "lavfi",
-		"-i", "testsrc2=s=128x72:d=0.1",
+		"-i", nvidiaProbeSource,
 		"-frames:v", "1",
 		"-c:v", "h264_nvenc",
 		"-f", "null",
@@ -423,9 +432,9 @@ func probeNvidiaCUDAScale(bin string) bool {
 		"-init_hw_device", "cuda="+hlsNvidiaCUDADeviceName,
 		"-filter_hw_device", hlsNvidiaCUDADeviceName,
 		"-f", "lavfi",
-		"-i", "testsrc2=s=128x72:d=0.1",
+		"-i", nvidiaProbeSource,
 		"-frames:v", "1",
-		"-vf", "format=nv12,hwupload,scale_cuda=w=-2:h=72:format=yuv420p",
+		"-vf", "format=nv12,hwupload,scale_cuda=w=-2:h="+nvidiaProbeHeight+":format=yuv420p",
 		"-c:v", "h264_nvenc",
 		"-f", "null",
 		"-",
@@ -436,6 +445,9 @@ func probeNvidiaCUDAScale(bin string) bool {
 	return true
 }
 
+// tonemap_cuda refuses a frame whose transfer characteristic is not PQ or HLG
+// ("unsupported input transfer characteristic: unknown"), and a lavfi test
+// frame carries none, so the probe tags it the way an HDR10 source arrives.
 func probeNvidiaCUDATonemap(bin string) bool {
 	_, err := runFFmpegProbe(
 		bin,
@@ -443,9 +455,11 @@ func probeNvidiaCUDATonemap(bin string) bool {
 		"-init_hw_device", "cuda="+hlsNvidiaCUDADeviceName,
 		"-filter_hw_device", hlsNvidiaCUDADeviceName,
 		"-f", "lavfi",
-		"-i", "testsrc2=s=128x72:d=0.1",
+		"-i", nvidiaProbeSource,
 		"-frames:v", "1",
-		"-vf", "format=p010le,hwupload,scale_cuda=w=-2:h=72:format=p010,tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
+		"-vf", "setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc,"+
+			"format=p010le,hwupload,scale_cuda=w=-2:h="+nvidiaProbeHeight+":format=p010,"+
+			"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 		"-c:v", "h264_nvenc",
 		"-f", "null",
 		"-",
