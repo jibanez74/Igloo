@@ -979,8 +979,8 @@ func TestHLSRetryable503ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{}
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
 		t.Fatalf("fill transcode limiter: %v", err)
 	}

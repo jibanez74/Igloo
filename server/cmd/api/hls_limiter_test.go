@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"igloo/cmd/internal/helpers"
 )
 
 func TestConfiguredHLSMaxCPUTranscodes(t *testing.T) {
@@ -30,6 +33,59 @@ func TestConfiguredHLSMaxCPUTranscodes(t *testing.T) {
 			got := configuredHLSMaxCPUTranscodes()
 			if got != tt.want {
 				t.Fatalf("configuredHLSMaxCPUTranscodes() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfiguredHLSMaxHWTranscodes(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want int
+	}{
+		{name: "unset falls back to the default", raw: "", want: hlsHWTranscodeDefault},
+		{name: "explicit limit is honoured", raw: "8", want: 8},
+		{name: "surrounding whitespace is trimmed", raw: " 5 ", want: 5},
+		{name: "non-numeric value falls back", raw: "gpu", want: hlsHWTranscodeDefault},
+		{name: "zero falls back", raw: "0", want: hlsHWTranscodeDefault},
+		{name: "negative falls back", raw: "-1", want: hlsHWTranscodeDefault},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(envHLSMaxHWTranscodes, tt.raw)
+
+			got := configuredHLSMaxHWTranscodes()
+			if got != tt.want {
+				t.Fatalf("configuredHLSMaxHWTranscodes() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// The pool follows the effective encoder alone: audio never counts, and any
+// non-CPU effective device is a hardware encode.
+func TestHLSTranscodePoolFor(t *testing.T) {
+	tests := []struct {
+		name      string
+		copyVideo bool
+		device    string
+		want      hlsTranscodePool
+	}{
+		{name: "copied video on the CPU", copyVideo: true, device: helpers.HARDWARE_ACCELERATION_DEVICE_CPU, want: hlsTranscodePoolNone},
+		{name: "copied video with a hardware device configured", copyVideo: true, device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, want: hlsTranscodePoolNone},
+		{name: "CPU encode", device: helpers.HARDWARE_ACCELERATION_DEVICE_CPU, want: hlsTranscodePoolCPU},
+		{name: "NVIDIA encode", device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, want: hlsTranscodePoolHardware},
+		{name: "Intel encode", device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL, want: hlsTranscodePoolHardware},
+		{name: "Apple encode", device: helpers.HARDWARE_ACCELERATION_DEVICE_APPLE, want: hlsTranscodePoolHardware},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hlsTranscodePoolFor(tt.copyVideo, tt.device)
+			if got != tt.want {
+				t.Fatalf("hlsTranscodePoolFor(%v, %q) = %s, want %s", tt.copyVideo, tt.device, got, tt.want)
 			}
 		})
 	}
@@ -62,7 +118,7 @@ func TestConfiguredHLSMaxPersonalSessionsPerUser(t *testing.T) {
 
 func TestHLSTranscodeLimiter(t *testing.T) {
 	t.Run("refuses a permit once the pool is full", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(2)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 2)
 
 		first, err := limiter.tryAcquire()
 		if err != nil {
@@ -93,7 +149,7 @@ func TestHLSTranscodeLimiter(t *testing.T) {
 	// path. Crediting the pool twice would let the server run more concurrent
 	// transcodes than the machine was sized for.
 	t.Run("a repeated release returns only one permit", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(1)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
 
 		release, err := limiter.tryAcquire()
 		if err != nil {
@@ -114,10 +170,34 @@ func TestHLSTranscodeLimiter(t *testing.T) {
 		}
 	})
 
+	// The refusal is what the handler logs and what the client sees on the
+	// 503, so it has to say which pool was full.
+	t.Run("the capacity error names its pool", func(t *testing.T) {
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolHardware, 1)
+
+		release, err := limiter.tryAcquire()
+		if err != nil {
+			t.Fatalf("tryAcquire: %v", err)
+		}
+		defer release()
+
+		_, err = limiter.tryAcquire()
+		var capacityErr *hlsTranscodeCapacityError
+		if !errors.As(err, &capacityErr) {
+			t.Fatalf("second tryAcquire error = %v, want capacity error", err)
+		}
+		if capacityErr.Pool != hlsTranscodePoolHardware {
+			t.Fatalf("Pool = %s, want hardware", capacityErr.Pool)
+		}
+		if !strings.Contains(err.Error(), "hardware HLS transcodes") {
+			t.Fatalf("error = %q, want it to name the hardware pool", err.Error())
+		}
+	})
+
 	// A zero-capacity channel would refuse every transcode forever, so the
 	// constructor clamps rather than trusting its caller.
 	t.Run("a non-positive size still yields one permit", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(0)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 0)
 
 		release, err := limiter.tryAcquire()
 		if err != nil {
@@ -141,7 +221,7 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 	// permit frees, not reject it. Reclaim cannot cover this — every permit here
 	// belongs to a session that is genuinely running.
 	t.Run("a parked waiter is admitted when a permit frees", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(1)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
 
 		held, err := limiter.tryAcquire()
 		if err != nil {
@@ -182,7 +262,7 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 	// The starvation this replaces: a queued stream was refused forever while
 	// others held the pool. Every waiter must get in as permits recycle.
 	t.Run("every waiter is admitted as permits recycle", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(1)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
 
 		held, err := limiter.tryAcquire()
 		if err != nil {
@@ -215,7 +295,7 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 	})
 
 	t.Run("a cancelled context stops the wait and leaks no permit", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(1)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
 
 		held, err := limiter.tryAcquire()
 		if err != nil {
@@ -254,7 +334,7 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 	})
 
 	t.Run("an exhausted wait returns the capacity error", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(2)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 2)
 
 		for i := range 2 {
 			release, err := limiter.tryAcquire()
@@ -277,7 +357,7 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 	// Callers that must not park (room warm-up, the first admission attempt)
 	// pass a zero budget and need the old instant refusal.
 	t.Run("a non-positive wait refuses immediately", func(t *testing.T) {
-		limiter := newHLSTranscodeLimiter(1)
+		limiter := newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
 
 		release, err := limiter.tryAcquire()
 		if err != nil {
@@ -297,19 +377,31 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 	})
 }
 
-func TestAcquireHLSTranscodeSlot_InstallsMissingLimiter(t *testing.T) {
+func TestAcquireHLSTranscodeSlot_InstallsMissingLimiters(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.HLSTranscodeLimiter = nil
+	app.HLSCPUTranscodeLimiter = nil
+	app.HLSHWTranscodeLimiter = nil
 
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	releaseCPU, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+		t.Fatalf("acquireHLSTranscodeSlot(cpu): %v", err)
 	}
-	defer release()
+	defer releaseCPU()
+	releaseHW, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolHardware, 0)
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot(hardware): %v", err)
+	}
+	defer releaseHW()
 
-	if app.HLSTranscodeLimiter == nil {
-		t.Fatal("acquireHLSTranscodeSlot did not install a limiter")
+	if app.HLSCPUTranscodeLimiter == nil || app.HLSHWTranscodeLimiter == nil {
+		t.Fatal("acquireHLSTranscodeSlot did not install both limiters")
+	}
+	if app.HLSCPUTranscodeLimiter == app.HLSHWTranscodeLimiter {
+		t.Fatal("the two pools share one limiter")
+	}
+	if _, capacity := app.HLSHWTranscodeLimiter.occupancy(); capacity != hlsHWTranscodeDefault {
+		t.Fatalf("installed hardware pool capacity = %d, want %d", capacity, hlsHWTranscodeDefault)
 	}
 }
 

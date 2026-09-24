@@ -1261,7 +1261,8 @@ func setupTestApp(t *testing.T) *Application {
 
 	// Tests do not attach real FFmpeg processes to HLS cache entries, so the
 	// session cache is replaced with one that has no eviction hook.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 100)
+	app.HLSHWTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolHardware, 100)
 	app.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
 	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	app.MusicScanner = music.New(music.Dependencies{
@@ -1404,7 +1405,8 @@ func restartTestApp(t *testing.T, app *Application) *Application {
 
 	restarted.initRuntimeCaches()
 	restarted.WatchRoomHub = NewWatchRoomHub()
-	restarted.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
+	restarted.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 100)
+	restarted.HLSHWTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolHardware, 100)
 	restarted.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
 	restarted.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 
