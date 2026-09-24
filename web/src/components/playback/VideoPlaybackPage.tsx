@@ -475,6 +475,8 @@ export default function VideoPlaybackPage({
   // already the previous pending target during a drag. Either way the player
   // would ask for a segment far past the encoder and wait minutes for it.
   // seek()'s own rebases never write currentTime, so they never land here.
+  // The player reports a run of seeks once, after it settles, so a drag or a
+  // scrub arrives with its final target and costs one rebase.
   const handleHlsSeeking = (fromTime: number, toTime: number) => {
     const targetTime = clampTime(toAbsolutePlaybackTime(toTime, playbackTiming));
     const rebase = shouldRebaseHlsSession({

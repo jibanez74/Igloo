@@ -12,6 +12,7 @@ import {
   HLS_JS_FRAG_LOAD_TIMEOUT_MS,
   HLS_JS_LOAD_TIMEOUT_MS,
   HLS_NETWORK_RECOVERY_DELAYS_MS,
+  HLS_SEEK_SETTLE_MS,
   HLS_SEGMENT_NOT_READY_MAX_RETRIES,
   HLS_SEGMENT_STATUS_HEADER,
   HLS_SEGMENT_STATUS_PAST_END,
@@ -62,9 +63,11 @@ type VideoPlayerProps = {
   /** Reports the validated absolute start measured for the HLS media. */
   onActualStart?: (startSec: number) => void;
   /**
-   * Reports every seek the element makes on an HLS source, in session time,
-   * from where playback last settled — including seeks the page never issued,
-   * such as a picture-in-picture or native fullscreen scrubber.
+   * Reports where a run of seeks on an HLS source ended, in session time,
+   * measured from where playback last settled — including seeks the page
+   * never issued, such as a picture-in-picture or native fullscreen scrubber.
+   * A drag, a scrub, or held-down keys report once, after the element has
+   * been quiet for `HLS_SEEK_SETTLE_MS`.
    */
   onHlsSeeking?: (fromTime: number, toTime: number) => void;
 };
@@ -218,6 +221,20 @@ export default function VideoPlayer({
   // produced without ever tripping the rebase rule. Null until the source
   // settles; each source effect clears it.
   const settledTimeRef = useRef<number | null>(null);
+  // A run of seeks — a slider drag, a native scrubber, held-down keys — is
+  // reported once, from the settled point to wherever it ended, after the
+  // element has been quiet for HLS_SEEK_SETTLE_MS. Reporting every step would
+  // rebase the session once per 120 s of travel, and each rebase starts a
+  // transcode.
+  const hlsSeekReportTimerRef = useRef<number | null>(null);
+  const hlsSeekTargetRef = useRef(0);
+  // The timer fires after later renders, so it reads the current handler and
+  // start rather than the ones the seek event closed over: an actual-start
+  // correction changes both without changing the source.
+  const hlsSeekReportRef = useRef({ onHlsSeeking, startSec });
+  useEffect(() => {
+    hlsSeekReportRef.current = { onHlsSeeking, startSec };
+  }, [onHlsSeeking, startSec]);
   // True after a past-the-end segment 404 stopped hls.js loading. Loading has
   // to be re-armed on the next seek, or a jump back past the back buffer
   // never fetches again; a seek into the same tail just re-enters the branch.
@@ -251,11 +268,36 @@ export default function VideoPlayer({
     }, MOVIE_BUFFERING_SPINNER_DELAY_MS);
   };
 
+  const reportHlsSeek = () => {
+    const { onHlsSeeking: report, startSec: sourceStart } =
+      hlsSeekReportRef.current;
+    // Before the source settles, the start it was built for is where the
+    // viewer is.
+    report?.(settledTimeRef.current ?? sourceStart, hlsSeekTargetRef.current);
+  };
+
+  const clearHlsSeekReport = () => {
+    if (hlsSeekReportTimerRef.current === null) return;
+    window.clearTimeout(hlsSeekReportTimerRef.current);
+    hlsSeekReportTimerRef.current = null;
+  };
+
+  const scheduleHlsSeekReport = (targetTime: number) => {
+    hlsSeekTargetRef.current = targetTime;
+    clearHlsSeekReport();
+    hlsSeekReportTimerRef.current = window.setTimeout(() => {
+      hlsSeekReportTimerRef.current = null;
+      reportHlsSeek();
+    }, HLS_SEEK_SETTLE_MS);
+  };
+
   // A source change (e.g. an HLS session rebase) must not inherit a stale
-  // spinner or a pending show timer from the previous stream.
+  // spinner, a pending show timer, or an unreported seek from the previous
+  // stream: the new source is the page's answer to that seek.
   useEffect(() => {
     return () => {
       clearBufferingIndicator();
+      clearHlsSeekReport();
     };
   }, [src]);
 
@@ -763,13 +805,8 @@ export default function VideoPlayer({
             const video = e.currentTarget;
             scheduleBufferingIndicator();
             resumeHlsLoadAfterEnd(video);
-            // Before the source settles, the start it was built for is where
-            // the viewer is.
             if (isHlsSource && onHlsSeeking) {
-              onHlsSeeking(
-                settledTimeRef.current ?? startSec,
-                video.currentTime,
-              );
+              scheduleHlsSeekReport(video.currentTime);
             }
           }}
           onPlaying={clearBufferingIndicator}
