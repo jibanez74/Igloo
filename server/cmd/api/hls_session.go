@@ -1619,13 +1619,6 @@ func (app *Application) loadHLSSourceForSession(
 	return source, effectiveStartSec, nil
 }
 
-// createHLSSession loads stream metadata from the database (audio streams may
-// be preloaded by the caller), creates a temp dir, and starts FFmpeg. No
-// runtime ffprobe call is made. The source must come from
-// loadHLSSourceForSession, and startSec must already be normalized by it.
-//
-// FFmpeg runs on context.Background() so the process outlives the originating
-// HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
 // hlsSessionPlan is everything decided before FFmpeg starts: the start
 // parameters plus what the remux gate concluded. Planning is separate from
 // running so that a retry after a capacity refusal reuses the decision instead
@@ -1640,8 +1633,15 @@ type hlsSessionPlan struct {
 	needsRemuxPreflight bool
 }
 
-// createHLSSession plans and runs a session in one step, for callers that
-// never retry on capacity: rooms and the tests.
+// createHLSSession loads stream metadata from the database (audio streams may
+// be preloaded by the caller), creates a temp dir, and starts FFmpeg. No
+// runtime ffprobe call is made. The source must come from
+// loadHLSSourceForSession, and startSec must already be normalized by it.
+// It plans and runs the session in one step, for callers that never retry on
+// capacity: rooms and the tests.
+//
+// FFmpeg runs on context.Background() so the process outlives the originating
+// HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
 func (app *Application) createHLSSession(
 	ctx context.Context,
 	source *playbackSource,

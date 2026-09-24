@@ -43,9 +43,9 @@ Object.defineProperty(window, "scrollTo", {
 // direct-play probe refuse every file in unit tests. Answer "" for native HLS
 // manifests (jsdom has no MediaSource, so anything else would make
 // prefersNativeHLS true and move the player off its hls.js path) and
-// "probably" otherwise (so the static
-// direct-play rules stay decisive). Tests exercising the probe itself inject
-// their own fake element via createCanPlayProbe.
+// "probably" otherwise (so the static direct-play rules stay decisive). Tests
+// exercising the probe itself inject their own fake element via
+// createCanPlayProbe.
 window.HTMLMediaElement.prototype.canPlayType = (type: string) =>
   type.toLowerCase().includes("mpegurl") ? "" : "probably";
 
