@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -100,6 +101,79 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	}
 	if !caps.NvidiaCUDATonemapRuntimeUsable || !caps.H264QSVRuntimeUsable || !caps.QSVScaleRuntimeUsable {
 		t.Fatalf("tone-map/QSV runtime probes did not succeed: %#v", caps)
+	}
+}
+
+// NVENC refuses an H.264 frame below a minimum that depends on the GPU and
+// driver; 145x49 is the one the QA server's GTX 1660 SUPER enforces. A probe
+// that hands it a smaller frame fails on hardware that works, and the only
+// symptom is that every transcode quietly runs on libx264. The frame each
+// probe encodes is its lavfi source, or the scale_cuda output when the chain
+// rescales it.
+func TestNvidiaRuntimeProbesEncodeAFrameNVENCAccepts(t *testing.T) {
+	const nvencMinWidth, nvencMinHeight = 145, 49
+	logPath := filepath.Join(t.TempDir(), "probes.log")
+	script := fullCapabilityProbeFake(t, 0, logPath)
+
+	caps := probeCapabilities(script, fakeFFmpegVersionBanner)
+	if !caps.NvidiaCUDATonemapRuntimeUsable {
+		t.Fatalf("the NVIDIA runtime probes did not all run: %#v", caps)
+	}
+
+	sourceSize := regexp.MustCompile(`testsrc2=s=(\d+)x(\d+)`)
+	scaledHeight := regexp.MustCompile(`scale_cuda=w=-2:h=(\d+)`)
+	nvencProbes := 0
+	for _, line := range readArgumentLog(t, logPath) {
+		isNVENCProbe := strings.Contains(line, "-c:v h264_nvenc") && strings.Contains(line, "testsrc2")
+		if !isNVENCProbe {
+			continue
+		}
+		nvencProbes++
+
+		size := sourceSize.FindStringSubmatch(line)
+		if size == nil {
+			t.Fatalf("NVENC probe has no sized source: %s", line)
+		}
+		width, _ := strconv.Atoi(size[1])
+		height, _ := strconv.Atoi(size[2])
+		scaled := scaledHeight.FindStringSubmatch(line)
+		if scaled != nil {
+			scaledTo, _ := strconv.Atoi(scaled[1])
+			width = width * scaledTo / height
+			height = scaledTo
+		}
+
+		belowMinimum := width < nvencMinWidth || height < nvencMinHeight
+		if belowMinimum {
+			t.Errorf("NVENC probe encodes %dx%d, below the %dx%d minimum: %s",
+				width, height, nvencMinWidth, nvencMinHeight, line)
+		}
+	}
+	if nvencProbes != 3 {
+		t.Fatalf("found %d NVENC runtime probes, want encode, CUDA scale, and CUDA tone-map", nvencProbes)
+	}
+}
+
+// tonemap_cuda only accepts a PQ or HLG frame; an untagged lavfi frame made
+// the probe fail on every GPU, whatever the hardware could do.
+func TestNvidiaToneMapProbeTagsItsFrameAsHDR(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "tonemap.log")
+	script := writeFakeFFmpeg(t, "probe ffmpeg", writeArgumentLog(logPath)+"exit 0\n")
+
+	if !probeNvidiaCUDATonemap(script) {
+		t.Fatal("tone-map probe failed against a fake that accepts it")
+	}
+	args := readArgumentLog(t, logPath)
+	filterIndex := slices.Index(args, "-vf")
+	if filterIndex < 0 || filterIndex+1 >= len(args) {
+		t.Fatalf("tone-map probe has no filter chain: %q", args)
+	}
+	chain := args[filterIndex+1]
+	tagIndex := strings.Index(chain, "color_trc=smpte2084")
+	tonemapIndex := strings.Index(chain, "tonemap_cuda=")
+	taggedFirst := tagIndex >= 0 && tagIndex < tonemapIndex
+	if !taggedFirst {
+		t.Fatalf("tone-map probe does not tag its frame as PQ before tonemap_cuda: %s", chain)
 	}
 }
 

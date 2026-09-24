@@ -448,9 +448,16 @@ func hlsVideoFilter(
 				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 			cfg.Height,
 		))
+	// The frames are tagged BT.709 before upload, as the software chains tag
+	// theirs: with -hwaccel cuda decode of an untagged source, the -colorspace
+	// output option otherwise asks FFmpeg for a conversion it can only do in
+	// software, which CUDA frames cannot reach, and the session fails to start.
 	case useNvidiaCUDAFilters:
-		return hlsMaybeDeinterlace(deinterlace,
-			fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height))
+		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
+			"format=nv12,%s,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p",
+			hlsSDRColorParams,
+			cfg.Height,
+		))
 	case useIntelQSVScale:
 		return hlsMaybeDeinterlace(deinterlace, fmt.Sprintf(
 			"format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",

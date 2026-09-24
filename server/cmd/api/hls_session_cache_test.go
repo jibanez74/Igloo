@@ -361,12 +361,12 @@ func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) 
 	movieID := int64(5)
 	key := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, nil, nil, testOtherPlaybackSessionID, 0, userID)
 	session := &HLSSession{
-		Media:                 movieRef(movieID),
-		FileID:                movieID,
-		OwnerUserID:           userID,
-		PlaybackSession:       testOtherPlaybackSessionID,
-		TempDir:               t.TempDir(),
-		RequiresTranscodeSlot: true,
+		Media:           movieRef(movieID),
+		FileID:          movieID,
+		OwnerUserID:     userID,
+		PlaybackSession: testOtherPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		TranscodePool:   hlsTranscodePoolCPU,
 	}
 	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, session)
 	app.HLSSessionCache.Set(
@@ -376,7 +376,7 @@ func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) 
 	)
 	resultCh := make(chan bool, 1)
 	go func() {
-		resultCh <- app.reclaimIdlePersonalHLSSessionForOwner(userID)
+		resultCh <- app.reclaimIdlePersonalHLSSessionForOwner(userID, hlsTranscodePoolCPU)
 	}()
 
 	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
@@ -534,8 +534,8 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 
 	// A completed session sorts first but no longer owns a permit. A later idle,
 	// still-running session owns the only permit and must be the reclaim victim.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -558,13 +558,13 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 		Exited:          true,
 	}
 	runningSession := &HLSSession{
-		Media:                 movieRef(movieID),
-		FileID:                movieID,
-		OwnerUserID:           userID,
-		PlaybackSession:       "11111111-1111-4111-8111-111111111111",
-		TempDir:               t.TempDir(),
-		Cancel:                releaseRunningPermit,
-		RequiresTranscodeSlot: true,
+		Media:           movieRef(movieID),
+		FileID:          movieID,
+		OwnerUserID:     userID,
+		PlaybackSession: "11111111-1111-4111-8111-111111111111",
+		TempDir:         t.TempDir(),
+		Cancel:          releaseRunningPermit,
+		TranscodePool:   hlsTranscodePoolCPU,
 	}
 	app.HLSSessionCache.Set(completedKey, completedSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-2*time.Second)
 	app.HLSSessionCache.Set(runningKey, runningSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
@@ -598,8 +598,8 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	// and then 503 the newcomer instead of killing the active stream.
 	withTestHLSTranscodeAcquireWait(t, 50*time.Millisecond)
 
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -641,8 +641,8 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 	// The pool is full and nothing is reclaimable: the held permit belongs to a
 	// session that is genuinely playing, which is precisely the case reclaim
 	// cannot resolve.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -705,17 +705,17 @@ func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
 	userID := int64(100)
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
 	session := &HLSSession{
-		Media:                 movieRef(5),
-		FileID:                5,
-		OwnerUserID:           userID,
-		PlaybackSession:       testOtherPlaybackSessionID,
-		TempDir:               t.TempDir(),
-		CopyVideo:             true,
-		RequiresTranscodeSlot: false,
+		Media:           movieRef(5),
+		FileID:          5,
+		OwnerUserID:     userID,
+		PlaybackSession: testOtherPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		CopyVideo:       true,
+		TranscodePool:   hlsTranscodePoolNone,
 	}
 	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
 
-	if app.reclaimIdlePersonalHLSSessionForOwner(userID) {
+	if app.reclaimIdlePersonalHLSSessionForOwner(userID, hlsTranscodePoolCPU) {
 		t.Fatal("an idle copy-video session was reclaimed")
 	}
 	if _, cached := app.HLSSessionCache.Get(key); !cached {
@@ -723,13 +723,14 @@ func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
 	}
 }
 
-func TestReclaimIdlePersonalHLSSession_ReclaimsCopyVideoAudioEncode(t *testing.T) {
+// An audio-only encode holds no permit either, so it is no more a reclaim
+// candidate than a pure copy.
+func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoAudioEncode(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
 	userID := int64(100)
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
-	canceled := make(chan struct{})
 	session := &HLSSession{
 		Media:                 movieRef(5),
 		FileID:                5,
@@ -737,21 +738,57 @@ func TestReclaimIdlePersonalHLSSession_ReclaimsCopyVideoAudioEncode(t *testing.T
 		PlaybackSession:       testOtherPlaybackSessionID,
 		TempDir:               t.TempDir(),
 		CopyVideo:             true,
-		RequiresTranscodeSlot: true,
-		Cancel:                func() { close(canceled) },
+		TranscodePool:         hlsTranscodePoolNone,
+		EffectiveAudioProfile: &helpers.HLSResolvedAudioProfile{Codec: helpers.HLSAudioCodecAAC, Channels: 2},
 	}
 	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
 
-	if !app.reclaimIdlePersonalHLSSessionForOwner(userID) {
-		t.Fatal("idle copy-video session that encodes audio was not reclaimed")
+	if app.reclaimIdlePersonalHLSSessionForOwner(userID, hlsTranscodePoolCPU) {
+		t.Fatal("an idle audio-encoding remux session was reclaimed")
+	}
+	if _, cached := app.HLSSessionCache.Get(key); !cached {
+		t.Fatal("expected the audio-encoding remux session to stay cached")
+	}
+}
+
+// Reclaim frees a permit for the waiter that asked. Killing an idle hardware
+// encode frees nothing a CPU waiter can use, so only the requested pool is
+// searched.
+func TestReclaimIdlePersonalHLSSession_OnlyReclaimsTheRequestedPool(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := int64(100)
+	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
+	canceled := make(chan struct{})
+	session := &HLSSession{
+		Media:           movieRef(5),
+		FileID:          5,
+		OwnerUserID:     userID,
+		PlaybackSession: testOtherPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		TranscodePool:   hlsTranscodePoolHardware,
+		Cancel:          func() { close(canceled) },
+	}
+	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
+
+	if app.reclaimIdlePersonalHLSSessionForOwner(userID, hlsTranscodePoolCPU) {
+		t.Fatal("an idle hardware session was reclaimed for a CPU waiter")
+	}
+	if _, cached := app.HLSSessionCache.Get(key); !cached {
+		t.Fatal("expected the hardware session to stay cached")
+	}
+
+	if !app.reclaimIdlePersonalHLSSessionForOwner(userID, hlsTranscodePoolHardware) {
+		t.Fatal("idle hardware session was not reclaimed for a hardware waiter")
 	}
 	if _, cached := app.HLSSessionCache.Get(key); cached {
-		t.Fatal("reclaimed audio-encoding remux session remained cached")
+		t.Fatal("reclaimed hardware session remained cached")
 	}
 	select {
 	case <-canceled:
 	default:
-		t.Fatal("reclaim did not stop the audio-encoding remux session")
+		t.Fatal("reclaim did not stop the hardware session")
 	}
 }
 

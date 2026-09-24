@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"errors"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
+	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -521,6 +524,10 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	}
 }
 
+// Each session draws from exactly one pool, decided by what it does with
+// video: copied video holds nothing, whatever the audio needs, and an encode
+// takes the CPU or hardware pool by its effective encoder. Both pools start
+// full here so the test can show which one the session was waiting on.
 func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -529,14 +536,16 @@ func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
 		audioCodec   string
 		audioProfile any
 		request      *helpers.HLSAudioProfileRequest
-		wantSlot     bool
+		device       string
+		wantPool     hlsTranscodePool
 	}{
 		{name: "copy-only remux", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC"},
 		{name: "video-only remux", profile: helpers.HLS_PROFILE_REMUX, videoOnly: true},
-		{name: "legacy audio encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "dts", wantSlot: true},
-		{name: "explicit AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), wantSlot: true},
-		{name: "explicit E-AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6), wantSlot: true},
-		{name: "video encode", profile: helpers.HLS_PROFILE_720P_3MBPS, audioCodec: "aac", audioProfile: "LC", wantSlot: true},
+		{name: "legacy audio encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "dts"},
+		{name: "explicit AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecAC3, 6)},
+		{name: "explicit E-AC-3 encode", profile: helpers.HLS_PROFILE_REMUX, audioCodec: "aac", audioProfile: "LC", request: explicitAudioRequest(helpers.HLSAudioCodecEAC3, 6)},
+		{name: "video encode on the CPU", profile: helpers.HLS_PROFILE_720P_3MBPS, audioCodec: "aac", audioProfile: "LC", wantPool: hlsTranscodePoolCPU},
+		{name: "video encode on hardware", profile: helpers.HLS_PROFILE_720P_3MBPS, audioCodec: "aac", audioProfile: "LC", device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, wantPool: hlsTranscodePoolHardware},
 	}
 
 	for _, tt := range tests {
@@ -545,6 +554,9 @@ func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
 			defer app.DB.Close()
 			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 			app.FFmpeg = fake
+			if tt.device != "" {
+				setTestHardwareAccelerationDevice(t, app, tt.device)
+			}
 
 			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 			audioTrack := testIntPtr(0)
@@ -558,47 +570,67 @@ func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
 				setTestHLSAudioStream(t, app, movieID, tt.audioCodec, tt.audioProfile, 6, "5.1(side)")
 			}
 
-			app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-			release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
-			if err != nil {
-				t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-			}
-			defer release()
+			app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+			app.HLSHWTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolHardware, 1)
+			releaseCPU := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
+			releaseHW := holdHLSTranscodePermit(t, app, hlsTranscodePoolHardware)
 
-			session, err := createTestHLSSessionWithAudio(
-				app, context.Background(), movieID, tt.profile, audioTrack,
-				tt.request, testPlaybackSessionID, 0, false,
-			)
-			if tt.wantSlot {
-				var capacityErr *hlsTranscodeCapacityError
-				if !errors.As(err, &capacityErr) {
-					t.Fatalf("error = %v, want hlsTranscodeCapacityError", err)
-				}
-				if fake.CallCount() != 0 {
-					t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
-				}
-
-				release()
-				session, err = createTestHLSSessionWithAudio(
+			create := func() (*HLSSession, error) {
+				return createTestHLSSessionWithAudio(
 					app, context.Background(), movieID, tt.profile, audioTrack,
 					tt.request, testPlaybackSessionID, 0, false,
 				)
+			}
+
+			session, err := create()
+			if tt.wantPool == hlsTranscodePoolNone {
 				if err != nil {
-					t.Fatalf("createHLSSession after releasing capacity: %v", err)
+					t.Fatalf("createHLSSession with both pools full: %v", err)
 				}
 				defer cleanupHLSSession(session)
-				if !session.RequiresTranscodeSlot {
-					t.Fatal("RequiresTranscodeSlot = false, want true")
+				if session.TranscodePool != hlsTranscodePoolNone {
+					t.Fatalf("TranscodePool = %s, want none", session.TranscodePool)
 				}
 				return
 			}
 
+			var capacityErr *hlsTranscodeCapacityError
+			if !errors.As(err, &capacityErr) {
+				t.Fatalf("error = %v, want hlsTranscodeCapacityError", err)
+			}
+			if capacityErr.Pool != tt.wantPool {
+				t.Fatalf("capacity error pool = %s, want %s", capacityErr.Pool, tt.wantPool)
+			}
+			if fake.CallCount() != 0 {
+				t.Fatalf("RunHLS call count = %d, want 0", fake.CallCount())
+			}
+
+			// A permit in the other pool is no use to this session.
+			releaseOwn := releaseCPU
+			releaseOther := releaseHW
+			if tt.wantPool == hlsTranscodePoolHardware {
+				releaseOwn, releaseOther = releaseHW, releaseCPU
+			}
+			releaseOther()
+			_, err = create()
+			if !errors.As(err, &capacityErr) {
+				t.Fatalf("error after freeing the other pool = %v, want the session still refused", err)
+			}
+
+			releaseOwn()
+			session, err = create()
 			if err != nil {
-				t.Fatalf("createHLSSession returned error: %v", err)
+				t.Fatalf("createHLSSession after freeing its pool: %v", err)
 			}
 			defer cleanupHLSSession(session)
-			if session.RequiresTranscodeSlot {
-				t.Fatal("RequiresTranscodeSlot = true, want false")
+			if session.TranscodePool != tt.wantPool {
+				t.Fatalf("TranscodePool = %s, want %s", session.TranscodePool, tt.wantPool)
+			}
+			if tt.device != "" {
+				calls := fake.Calls()
+				if calls[0].HWDevice != tt.device {
+					t.Fatalf("RunHLS HWDevice = %q, want %q", calls[0].HWDevice, tt.device)
+				}
 			}
 		})
 	}
@@ -609,8 +641,8 @@ func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
 	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{}
 
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -1448,8 +1480,8 @@ func TestCreateHLSSession_ExplicitAudioEncoderUnavailable(t *testing.T) {
 
 	// Exhaust the only transcode permit: the rejection must come from the
 	// encoder gate, which runs before limiter acquisition would block.
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), 0)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
 	if err != nil {
 		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
 	}
@@ -1605,4 +1637,184 @@ func TestLegacyEffectiveHLSAudio(t *testing.T) {
 	if *encoded != wantEncoded {
 		t.Fatalf("encoded profile = %+v, want %+v", *encoded, wantEncoded)
 	}
+}
+
+// A remux preflight that fails while the pool is full used to be paid twice:
+// the fallback was refused for lack of a permit, and the retry re-planned from
+// scratch, so the whole preflight ran again before the request parked. The
+// retry must rerun the same plan and go straight to the fallback.
+func TestGetOrCreateHLSSession_PreflightFallbackDoesNotRerunPreflight(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{ExitErr: errors.New("ffmpeg exited before writing remux preflight output")},
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+	withTestHLSTranscodeAcquireWait(t, 10*time.Second)
+
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
+
+	userID := int64(100)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	type createResult struct {
+		session *HLSSession
+		err     error
+	}
+	resultCh := make(chan createResult, 1)
+	go func() {
+		session, _, createErr := app.GetOrCreateHLSSession(
+			context.Background(), movieRef(movieID), helpers.HLS_PROFILE_REMUX,
+			testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
+		)
+		resultCh <- createResult{session: session, err: createErr}
+	}()
+
+	// The remux attempt needs no permit and fails at once; its fallback parks.
+	select {
+	case created := <-resultCh:
+		t.Fatalf("session resolved while the pool was full: session=%v err=%v", created.session, created.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	release()
+
+	var created createResult
+	select {
+	case created = <-resultCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("GetOrCreateHLSSession never resolved after the permit freed")
+	}
+	if created.err != nil {
+		t.Fatalf("GetOrCreateHLSSession: %v", created.err)
+	}
+	defer cleanupHLSSession(created.session)
+
+	if created.session.CopyVideo {
+		t.Fatal("CopyVideo = true, want the transcode fallback")
+	}
+	calls := fake.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("RunHLS call count = %d, want the remux attempt and its fallback only", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("first RunHLS profile = %q, want remux", calls[0].Profile)
+	}
+	if calls[1].Profile != helpers.HLS_PROFILE_1080P_4MBPS {
+		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_4MBPS)
+	}
+
+	_, err := app.Queries.GetRemuxSafetyVerdict(context.Background(), database.GetRemuxSafetyVerdictParams{
+		MovieID:     movieID,
+		StreamIndex: 0,
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetRemuxSafetyVerdict error = %v, want sql.ErrNoRows after a transient preflight failure", err)
+	}
+}
+
+// A file shorter than the preflight sample, or a start near the end of one,
+// exits cleanly with fewer than HLS_REMUX_PREVALIDATE_SEGMENTS segments. That
+// used to read as a failed preflight and transcode something the browser
+// could have played as-is. The shorter sample is validated but not persisted,
+// so the file-wide verdict still comes from a full sample.
+func TestCreateHLSSession_RemuxCleanExitWithFewerSegmentsIsValidated(t *testing.T) {
+	const shortSegments = helpers.HLS_REMUX_PREVALIDATE_SEGMENTS - 2
+
+	readVerdict := func(t *testing.T, app *Application, movieID int64) (database.GetRemuxSafetyVerdictRow, error) {
+		t.Helper()
+		return app.Queries.GetRemuxSafetyVerdict(context.Background(), database.GetRemuxSafetyVerdictParams{
+			MovieID:     movieID,
+			StreamIndex: 0,
+		})
+	}
+
+	t.Run("safe output stays on remux without a persisted verdict", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(testFMP4Fixture{SafeVideo: true, Segments: shortSegments}),
+		}}
+		app.FFmpeg = fake
+		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+		session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+		if err != nil {
+			t.Fatalf("createHLSSession returned error: %v", err)
+		}
+		defer cleanupHLSSession(session)
+
+		if !session.CopyVideo {
+			t.Fatal("CopyVideo = false, want the remux kept after a clean short exit")
+		}
+		if fake.CallCount() != 1 {
+			t.Fatalf("RunHLS call count = %d, want 1", fake.CallCount())
+		}
+		_, err = readVerdict(t, app, movieID)
+		if !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("GetRemuxSafetyVerdict error = %v, want sql.ErrNoRows for a short sample", err)
+		}
+	})
+
+	t.Run("unsafe output falls back and persists the verdict", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(testFMP4Fixture{SafeVideo: false, Segments: shortSegments}),
+			hlsRunPlan(transcodeFixture),
+		}}
+		app.FFmpeg = fake
+		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+		session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+		if err != nil {
+			t.Fatalf("createHLSSession returned error: %v", err)
+		}
+		defer cleanupHLSSession(session)
+
+		if session.CopyVideo {
+			t.Fatal("CopyVideo = true, want the transcode fallback")
+		}
+		if fake.CallCount() != 2 {
+			t.Fatalf("RunHLS call count = %d, want 2", fake.CallCount())
+		}
+		verdict, err := readVerdict(t, app, movieID)
+		if err != nil {
+			t.Fatalf("GetRemuxSafetyVerdict: %v", err)
+		}
+		if verdict.Safe {
+			t.Fatal("persisted verdict Safe = true, want unsafe")
+		}
+	})
+
+	t.Run("a clean exit with no segments is still a failed preflight", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
+			{WriteFiles: func(outDir string) error {
+				return os.WriteFile(filepath.Join(outDir, helpers.HLS_INIT_FILENAME), fmp4testutil.BuildInitMP4(), 0o644)
+			}},
+			hlsRunPlan(transcodeFixture),
+		}}
+		app.FFmpeg = fake
+		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+		session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+		if err != nil {
+			t.Fatalf("createHLSSession returned error: %v", err)
+		}
+		defer cleanupHLSSession(session)
+
+		if session.CopyVideo {
+			t.Fatal("CopyVideo = true, want the transcode fallback")
+		}
+		_, err = readVerdict(t, app, movieID)
+		if !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("GetRemuxSafetyVerdict error = %v, want sql.ErrNoRows for an empty preflight", err)
+		}
+	})
 }

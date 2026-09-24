@@ -81,7 +81,7 @@ export function buildDirectPlayTypeString(
 /**
  * Creates a `canPlayType` probe backed by a lazily created `<video>` element.
  * A plain injectable function on purpose — module-load IIFEs (like
- * `supportsNativeHLS`) cannot be unit-tested. When no element can be created
+ * `prefersNativeHLS`) cannot be unit-tested. When no element can be created
  * (no DOM), the probe reports `"maybe"`: a non-probing environment must not
  * spuriously refuse, and it cannot widen because the static rules still apply.
  */

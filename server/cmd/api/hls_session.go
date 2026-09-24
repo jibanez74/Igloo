@@ -75,10 +75,11 @@ type HLSSession struct {
 	ExitMu        sync.Mutex
 	IsRoom        bool
 	CopyVideo     bool // true when FFmpeg uses -c:v copy for the effective session profile
-	// RequiresTranscodeSlot is true when FFmpeg encodes either video or audio.
-	// It is computed once from the effective session configuration and remains
-	// the source of truth for limiter ownership and idle reclaim.
-	RequiresTranscodeSlot bool
+	// TranscodePool names the limiter the session's video encode holds a
+	// permit in, or none when video is copied. It is computed once from the
+	// effective session configuration and remains the source of truth for
+	// permit ownership and idle reclaim.
+	TranscodePool hlsTranscodePool
 	// IndependentSegments is true when every segment is guaranteed to start on
 	// an IDR frame, which is the only case where the playlist may carry
 	// #EXT-X-INDEPENDENT-SEGMENTS. FFmpeg's own playlist is gated on the same
@@ -232,7 +233,7 @@ type hlsSessionStartParams struct {
 	DurationSec           float64
 	IsRoom                bool
 
-	// AcquireWait is how long the start may park for a CPU transcode permit
+	// AcquireWait is how long the start may park for a transcode permit
 	// before giving up with a capacity error; zero means do not park. It rides
 	// on the params rather than the signature so the remux-safety fallback
 	// restarts, which copy this struct and switch to a transcoding profile,
@@ -767,16 +768,17 @@ func (app *Application) reservePersonalHLSSession(
 }
 
 // reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
-// session that owns a transcode slot and has been idle for at least
-// hlsIdlePermitReclaimThreshold, freeing its transcode permit. Active clients
-// refresh the TTL on every segment fetch, so a genuinely-playing device is
-// never reclaimed. Returns whether a session was evicted.
-func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64) bool {
+// session that holds a permit in the given pool and has been idle for at least
+// hlsIdlePermitReclaimThreshold, freeing that permit. Only the requested pool
+// is searched: evicting a hardware encode frees nothing for a CPU waiter.
+// Active clients refresh the TTL on every segment fetch, so a genuinely-playing
+// device is never reclaimed. Returns whether a session was evicted.
+func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64, pool hlsTranscodePool) bool {
 	app.PersonalHLSMu.Lock()
 
 	maxExpiration := time.Now().Add(hlsPersonalSessionTTL - hlsIdlePermitReclaimThreshold).UnixNano()
 	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
-		if !entry.session.RequiresTranscodeSlot {
+		if entry.session.TranscodePool != pool {
 			continue
 		}
 		if entry.expiration > maxExpiration {
@@ -793,7 +795,11 @@ func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64)
 		session := app.deleteHLSSession(entry.key)
 		app.PersonalHLSMu.Unlock()
 		cleanupHLSSession(session)
-		app.Logger.Info("idle hls session reclaimed for transcode capacity", "owner_user_id", ownerUserID, "victim_key", entry.key)
+		app.Logger.Info("idle hls session reclaimed for transcode capacity",
+			"owner_user_id", ownerUserID,
+			"pool", pool.String(),
+			"victim_key", entry.key,
+		)
 		return true
 	}
 	app.PersonalHLSMu.Unlock()
@@ -1034,7 +1040,6 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	}
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
 	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
-	requiresTranscodeSlot := !copyVideo || (params.SelectedAudio != nil && !copyAudio)
 	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
 	deinterlace := !copyVideo && isInterlacedStream(params.PrimaryVideo)
 	vfrDetected := isVFRStream(params.PrimaryVideo)
@@ -1042,6 +1047,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	hwDevice := hardwareAccelerationDeviceOrDefault(*app.CurrentSettings())
 	ffmpegCaps := app.FFmpeg.Capabilities()
 	deviceDecision := ffmpeg.ResolveHLSDevice(hwDevice, ffmpegCaps)
+	pool := hlsTranscodePoolFor(copyVideo, deviceDecision.Effective)
 
 	transcodeRoot := app.hlsTranscodeRoot()
 
@@ -1064,8 +1070,8 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	}
 
 	releaseTranscode := func() {}
-	if requiresTranscodeSlot {
-		releaseTranscode, err = app.acquireHLSTranscodeSlot(ctx, params.AcquireWait)
+	if pool != hlsTranscodePoolNone {
+		releaseTranscode, err = app.acquireHLSTranscodeSlot(ctx, pool, params.AcquireWait)
 		if err != nil {
 			removeErr := os.RemoveAll(tempDir)
 			if removeErr != nil {
@@ -1119,7 +1125,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		StartSec:              startSec,
 		IsRoom:                params.IsRoom,
 		CopyVideo:             copyVideo,
-		RequiresTranscodeSlot: requiresTranscodeSlot,
+		TranscodePool:         pool,
 		IndependentSegments:   ffmpeg.HLSSegmentsAreIndependent(hlsRunParams),
 		EffectiveProfile:      params.EffectiveProfile,
 		RequestedAudioProfile: params.RequestedAudioProfile,
@@ -1267,6 +1273,12 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 			session.ExitMu.Unlock()
 		}
 
+		// The permit goes back before Exited is published: cleanupHLSSession
+		// returns as soon as it sees Exited, and the reclaim path acquires
+		// right after, so releasing later would let the next start race the
+		// victim's own permit.
+		releaseTranscode()
+
 		session.ExitMu.Lock()
 		expectedStop := session.ExpectedStop
 		session.Exited = true
@@ -1276,8 +1288,6 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		// Millisecond precision: whole seconds hide everything at the
 		// cold-start scale this log is used to measure.
 		elapsed := time.Since(startedAt).Round(time.Millisecond)
-
-		releaseTranscode()
 
 		if exitErr != nil {
 			if expectedStop {
@@ -1332,6 +1342,7 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 		"session_dir", filepath.Base(tempDir),
 		"media", params.Source.Ref.String(),
 		"copy_video", copyVideo,
+		"transcode_pool", pool.String(),
 		"spawn_ms", time.Since(startedAt).Milliseconds(),
 	)
 
@@ -1392,7 +1403,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		defer reservation.release()
 
-		session, createErr := app.createHLSSession(
+		plan, planErr := app.planHLSSession(
 			ctx,
 			&source,
 			profile,
@@ -1402,36 +1413,32 @@ func (app *Application) GetOrCreateHLSSession(
 			playbackSession,
 			effectiveStartSec,
 			false,
-			0,
 		)
+		if planErr != nil {
+			return nil, planErr
+		}
+
+		session, createErr := app.runHLSSessionPlan(ctx, plan, 0)
 		if createErr != nil {
 			// On a full transcode pool, an abandoned client (closed browser that
 			// never sent a stop) may be holding a permit. Reclaim the owner's
-			// least-recently-used idle transcode session, then retry with a wait
-			// budget: reclaim covers the abandoned case instantly, and parking
-			// covers the case where every permit belongs to a stream that is
-			// genuinely playing, which reclaim can never resolve. Only a request
+			// least-recently-used idle session in that pool, then rerun the same
+			// plan with a wait budget: reclaim covers the abandoned case
+			// instantly, and parking covers the case where every permit belongs
+			// to a stream that is genuinely playing, which reclaim can never
+			// resolve. Rerunning the plan rather than re-planning means a remux
+			// preflight that already failed is not paid again. Only a request
 			// that outlasts the budget falls through to 503 + Retry-After.
 			var capErr *hlsTranscodeCapacityError
 			if errors.As(createErr, &capErr) {
-				if !app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
+				if !app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID, capErr.Pool) {
 					app.Logger.Info("hls limiter reclaim found no idle session",
 						"media", media.String(),
 						"owner_user_id", ownerUserID,
+						"pool", capErr.Pool.String(),
 					)
 				}
-				session, createErr = app.createHLSSession(
-					ctx,
-					&source,
-					profile,
-					audioTrack,
-					audioProfile,
-					nil,
-					playbackSession,
-					effectiveStartSec,
-					false,
-					hlsTranscodeAcquireWait,
-				)
+				session, createErr = app.runHLSSessionPlan(ctx, plan, hlsTranscodeAcquireWait)
 			}
 		}
 		if createErr != nil {
@@ -1612,10 +1619,26 @@ func (app *Application) loadHLSSourceForSession(
 	return source, effectiveStartSec, nil
 }
 
+// hlsSessionPlan is everything decided before FFmpeg starts: the start
+// parameters plus what the remux gate concluded. Planning is separate from
+// running so that a retry after a capacity refusal reuses the decision instead
+// of loading the streams and paying the remux preflight a second time.
+type hlsSessionPlan struct {
+	params          hlsSessionStartParams
+	fallbackProfile string
+	fingerprint     string
+	// needsRemuxPreflight is true until a preflight has run for this plan. A
+	// fallback the preflight decides is written into params, so rerunning the
+	// plan starts the fallback straight away.
+	needsRemuxPreflight bool
+}
+
 // createHLSSession loads stream metadata from the database (audio streams may
 // be preloaded by the caller), creates a temp dir, and starts FFmpeg. No
 // runtime ffprobe call is made. The source must come from
 // loadHLSSourceForSession, and startSec must already be normalized by it.
+// It plans and runs the session in one step, for callers that never retry on
+// capacity: rooms and the tests.
 //
 // FFmpeg runs on context.Background() so the process outlives the originating
 // HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
@@ -1631,6 +1654,24 @@ func (app *Application) createHLSSession(
 	isRoom bool,
 	acquireWait time.Duration,
 ) (*HLSSession, error) {
+	plan, err := app.planHLSSession(ctx, source, profile, audioTrack, audioProfile, preloadedAudio, playbackSession, startSec, isRoom)
+	if err != nil {
+		return nil, err
+	}
+	return app.runHLSSessionPlan(ctx, plan, acquireWait)
+}
+
+func (app *Application) planHLSSession(
+	ctx context.Context,
+	source *playbackSource,
+	profile string,
+	audioTrack *int,
+	audioProfile *helpers.HLSAudioProfileRequest,
+	preloadedAudio []database.AudioStream,
+	playbackSession string,
+	startSec int,
+	isRoom bool,
+) (*hlsSessionPlan, error) {
 	media := source.Ref
 	durationSec := source.Duration.Float64
 
@@ -1762,81 +1803,101 @@ func (app *Application) createHLSSession(
 		}
 	}
 
-	hlsParams := hlsSessionStartParams{
-		Source:                *source,
-		PrimaryVideo:          primaryVideo,
-		SelectedAudio:         selectedAudio,
-		RequestedProfile:      requestedProfile,
-		EffectiveProfile:      effectiveProfile,
-		AudioTrack:            audioTrack,
-		RequestedAudioProfile: audioProfile,
-		ResolvedAudioProfile:  resolvedAudio,
-		PlaybackSession:       playbackSession,
-		StartSec:              startSec,
-		DurationSec:           durationSec,
-		IsRoom:                isRoom,
-		AcquireWait:           acquireWait,
-	}
+	return &hlsSessionPlan{
+		params: hlsSessionStartParams{
+			Source:                *source,
+			PrimaryVideo:          primaryVideo,
+			SelectedAudio:         selectedAudio,
+			RequestedProfile:      requestedProfile,
+			EffectiveProfile:      effectiveProfile,
+			AudioTrack:            audioTrack,
+			RequestedAudioProfile: audioProfile,
+			ResolvedAudioProfile:  resolvedAudio,
+			PlaybackSession:       playbackSession,
+			StartSec:              startSec,
+			DurationSec:           durationSec,
+			IsRoom:                isRoom,
+		},
+		fallbackProfile:     fallbackProfile,
+		fingerprint:         fingerprint,
+		needsRemuxPreflight: needsRemuxPreflight,
+	}, nil
+}
 
-	session, err := app.startHLSSession(ctx, &hlsParams)
+// runHLSSessionPlan starts the planned session, running the remux preflight
+// when the plan calls for one. A preflight that rules remux out rewrites the
+// plan to its fallback profile before starting it, so a capacity refusal on
+// that fallback leaves a plan the caller can rerun without another preflight.
+func (app *Application) runHLSSessionPlan(ctx context.Context, plan *hlsSessionPlan, acquireWait time.Duration) (*HLSSession, error) {
+	plan.params.AcquireWait = acquireWait
+	media := plan.params.Source.Ref
+	requestedProfile := plan.params.RequestedProfile
+	streamIndex := plan.params.PrimaryVideo.StreamIndex
+
+	session, err := app.startHLSSession(ctx, &plan.params)
 	if err != nil {
 		return nil, err
 	}
 
-	if !needsRemuxPreflight {
+	if !plan.needsRemuxPreflight {
 		return session, nil
 	}
 
-	waitErr := waitForRemuxPreflight(
+	startFallback := func() (*HLSSession, error) {
+		cleanupHLSSession(session)
+		plan.params.EffectiveProfile = plan.fallbackProfile
+		plan.needsRemuxPreflight = false
+		return app.startHLSSession(ctx, &plan.params)
+	}
+
+	checked, waitErr := waitForRemuxPreflight(
 		session,
 		helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
 		hlsRemuxPrevalidateTimeout,
 	)
 	if waitErr != nil {
-		fallbackReason := waitErr.Error()
 		// Preflight wait failures can be transient (timeout, early exit, partial output),
 		// so fall back without persisting an unsafe remux verdict.
 		app.Logger.Warn("remux safety fallback engaged",
 			"media", media.String(),
 			"requested_profile", requestedProfile,
-			"effective_profile", fallbackProfile,
+			"effective_profile", plan.fallbackProfile,
 			"validation_result", "preflight_failed",
-			"fallback_reason", fallbackReason,
+			"fallback_reason", waitErr.Error(),
 		)
-		cleanupHLSSession(session)
-		fp := hlsParams
-		fp.EffectiveProfile = fallbackProfile
-		return app.startHLSSession(ctx, &fp)
+		return startFallback()
 	}
 
-	validationSummary, err := ffmpeg.ValidateRemuxSafety(
-		session.TempDir,
-		helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-	)
+	validationSummary, err := ffmpeg.ValidateRemuxSafety(session.TempDir, checked)
 	if err != nil {
 		fallbackReason := err.Error()
-		app.setRemuxSafetyVerdict(*source, primaryVideo.StreamIndex, fingerprint, false, fallbackReason)
+		app.setRemuxSafetyVerdict(plan.params.Source, streamIndex, plan.fingerprint, false, fallbackReason)
 		app.Logger.Warn("remux safety fallback engaged",
 			"media", media.String(),
 			"requested_profile", requestedProfile,
-			"effective_profile", fallbackProfile,
+			"effective_profile", plan.fallbackProfile,
 			"validation_result", "unsafe",
 			"checked_segments", validationSummary.CheckedSegments,
 			"checked_sync_samples", validationSummary.CheckedSyncSamples,
 			"fallback_reason", fallbackReason,
 		)
-		cleanupHLSSession(session)
-		fp := hlsParams
-		fp.EffectiveProfile = fallbackProfile
-		return app.startHLSSession(ctx, &fp)
+		return startFallback()
 	}
 
-	app.setRemuxSafetyVerdict(*source, primaryVideo.StreamIndex, fingerprint, true, "validated safe remux")
+	// A short sample (a clean exit before the full preflight count) clears
+	// this session but is not persisted: the next play from the head of the
+	// file should still earn the file-wide verdict from the full count.
+	fullSample := checked == helpers.HLS_REMUX_PREVALIDATE_SEGMENTS
+	validationResult := "safe_partial"
+	if fullSample {
+		app.setRemuxSafetyVerdict(plan.params.Source, streamIndex, plan.fingerprint, true, "validated safe remux")
+		validationResult = "safe"
+	}
 	app.Logger.Info("remux safety validated",
 		"media", media.String(),
 		"requested_profile", requestedProfile,
 		"effective_profile", requestedProfile,
-		"validation_result", "safe",
+		"validation_result", validationResult,
 		"checked_segments", validationSummary.CheckedSegments,
 		"checked_sync_samples", validationSummary.CheckedSyncSamples,
 	)

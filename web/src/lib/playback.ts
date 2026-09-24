@@ -82,17 +82,44 @@ const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"]
  */
 const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4"];
 
+/** The fMP4 H.264/AAC output every HLS profile produces; hls.js asks MSE the same. */
+const HLS_MSE_PROBE_TYPE = 'video/mp4; codecs="avc1.42E01E,mp4a.40.2"';
+
+type NativeHlsEnvironment = {
+  canPlayType: (type: string) => string;
+  mediaSource: Pick<typeof MediaSource, "isTypeSupported"> | undefined;
+};
+
 /**
- * True when the browser can play HLS via MSE without hls.js (e.g. Safari).
- * Evaluated once at module load; false in non-browser environments.
+ * True only when the browser reports native HLS and Media Source Extensions
+ * cannot play the stream. Reporting native HLS is not enough: Chrome does too
+ * (since ~v141), and handing it the manifest would bypass every hls.js
+ * recovery rule in docs/ffmpeg.md. Only classic `MediaSource` counts, so
+ * iPhone Safari (ManagedMediaSource only) keeps its native engine.
  */
-export const supportsNativeHLS = (() => {
+export function shouldPreferNativeHls({
+  canPlayType,
+  mediaSource,
+}: NativeHlsEnvironment): boolean {
+  const reportsNativeHls =
+    canPlayType("application/vnd.apple.mpegurl") !== "" ||
+    canPlayType("application/x-mpegURL") !== "";
+  if (!reportsNativeHls) return false;
+  return !mediaSource?.isTypeSupported(HLS_MSE_PROBE_TYPE);
+}
+
+/**
+ * True when HLS goes to the browser's own engine instead of hls.js (see
+ * `shouldPreferNativeHls`). Evaluated once at module load; false in
+ * non-browser environments.
+ */
+export const prefersNativeHLS = (() => {
   if (typeof document === "undefined") return false;
   const v = document.createElement("video");
-  return (
-    v.canPlayType("application/vnd.apple.mpegurl") !== "" ||
-    v.canPlayType("application/x-mpegURL") !== ""
-  );
+  return shouldPreferNativeHls({
+    canPlayType: (type) => v.canPlayType(type),
+    mediaSource: typeof MediaSource === "undefined" ? undefined : MediaSource,
+  });
 })();
 
 /** The only track direct play can deliver: the container's first audio stream. */

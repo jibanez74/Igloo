@@ -61,7 +61,8 @@ type Application struct {
 	HLSSessionCache         *cache.Cache
 	HLSSessionGroup         singleflight.Group
 	HLSTranscodeLimiterMu   sync.Mutex
-	HLSTranscodeLimiter     *hlsTranscodeLimiter
+	HLSCPUTranscodeLimiter  *hlsTranscodeLimiter
+	HLSHWTranscodeLimiter   *hlsTranscodeLimiter
 	PersonalHLSMu           sync.Mutex
 	PersonalHLSReservations map[int64]int
 
@@ -305,7 +306,8 @@ func (app *Application) invalidateCommittedShowFile(fileID int64, episodeIDs []i
 }
 
 func (app *Application) initRuntimeCaches() {
-	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, configuredHLSMaxCPUTranscodes())
+	app.HLSHWTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolHardware, configuredHLSMaxHWTranscodes())
 	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
 	app.PersonalHLSReservations = make(map[int64]int)
 

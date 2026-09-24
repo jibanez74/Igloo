@@ -94,10 +94,16 @@ test("HLS mode requests the episode manifest with the shared query contract", as
 
   const streamRequests = trackStreamRequests(page);
   const usesNativeHls = await page.evaluate(() => {
+    // Mirrors shouldPreferNativeHls: native HLS only without usable MSE.
     const video = document.createElement("video");
-    return (
+    const reportsNativeHls =
       video.canPlayType("application/vnd.apple.mpegurl") !== "" ||
-      video.canPlayType("application/x-mpegURL") !== ""
+      video.canPlayType("application/x-mpegURL") !== "";
+    return (
+      reportsNativeHls &&
+      !window.MediaSource?.isTypeSupported(
+        'video/mp4; codecs="avc1.42E01E,mp4a.40.2"',
+      )
     );
   });
   const manifestRequests: string[] = [];
