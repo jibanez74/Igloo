@@ -42,7 +42,7 @@ vi.mock("@/lib/playback", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/playback")>();
   return {
     ...actual,
-    get supportsNativeHLS() {
+    get prefersNativeHLS() {
       return nativeHlsSupport.supported;
     },
   };

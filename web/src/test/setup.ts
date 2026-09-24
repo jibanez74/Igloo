@@ -40,9 +40,10 @@ Object.defineProperty(window, "scrollTo", {
 });
 
 // jsdom's canPlayType answers "" for everything, which would make the
-// direct-play probe refuse every file in unit tests. Mimic Chrome instead:
-// "" for native HLS manifests (so supportsNativeHLS stays false and the
-// player keeps its hls.js path) and "probably" otherwise (so the static
+// direct-play probe refuse every file in unit tests. Answer "" for native HLS
+// manifests (jsdom has no MediaSource, so anything else would make
+// prefersNativeHLS true and move the player off its hls.js path) and
+// "probably" otherwise (so the static
 // direct-play rules stay decisive). Tests exercising the probe itself inject
 // their own fake element via createCanPlayProbe.
 window.HTMLMediaElement.prototype.canPlayType = (type: string) =>

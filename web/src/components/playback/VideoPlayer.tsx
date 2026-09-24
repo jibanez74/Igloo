@@ -18,7 +18,7 @@ import {
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
-import { supportsNativeHLS } from "@/lib/playback";
+import { prefersNativeHLS } from "@/lib/playback";
 import { releaseResponseBody } from "@/lib/video-playback";
 import { cn } from "@/lib/utils";
 
@@ -336,7 +336,7 @@ export default function VideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
-    if (!isHlsSource || supportsNativeHLS) return;
+    if (!isHlsSource || prefersNativeHLS) return;
 
     let cancelled = false;
     let disposeHls: (() => void) | null = null;
@@ -565,14 +565,15 @@ export default function VideoPlayer({
     };
   }, [isHlsSource, src, startSec, videoRef]);
 
-  // Native source lifecycle: direct play, and Safari's built-in HLS. No
+  // Native source lifecycle: direct play, and built-in HLS on browsers without
+  // Media Source Extensions (iPhone Safari). No
   // `startSec` dep — the direct URL is a constant, so a start change must
   // seek (the effect below) rather than tear down the source and refetch
   // from byte 0 (audit D10). Native HLS start changes arrive as a new `src`.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
-    if (isHlsSource && !supportsNativeHLS) return;
+    if (isHlsSource && !prefersNativeHLS) return;
 
     const clearSource = () => {
       video.removeAttribute("src");
@@ -652,7 +653,7 @@ export default function VideoPlayer({
     // onStartApplied via MANIFEST_PARSED; don't compete with it. Gated on
     // source type because hlsRef is assigned asynchronously and is still
     // null when this effect runs on a fresh hls.js mount.
-    if (isHlsSource && !supportsNativeHLS) return;
+    if (isHlsSource && !prefersNativeHLS) return;
     if (hlsRef.current) return;
 
     if (video.readyState >= 1) {
