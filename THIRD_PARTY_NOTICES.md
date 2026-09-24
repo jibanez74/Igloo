@@ -7,7 +7,7 @@ Igloo is licensed under the [GNU General Public License v3.0 or later](LICENSE).
 Release binaries of Igloo embed `ffmpeg` and `ffprobe` executables from the [Jellyfin FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) project. Igloo runs them as separate processes. They are not linked into Igloo's code.
 
 - **License:** GNU General Public License (Jellyfin FFmpeg is built with GPL components enabled). Run `ffmpeg -version` and check the `configuration:` line for the exact options: `--enable-gpl` means GPL, and adding `--enable-version3` means GPLv3.
-- **Source code:** the complete corresponding source for each embedded build is available from the matching tagged release at <https://github.com/jellyfin/jellyfin-ffmpeg/releases>. Current payloads report version `8.1.2-Jellyfin`.
+- **Source code:** the complete corresponding source for each embedded build is available from the matching tagged release at <https://github.com/jellyfin/jellyfin-ffmpeg/releases>. The current Linux x64 and macOS ARM64 payloads are both from the [`v8.1.2-5`](https://github.com/jellyfin/jellyfin-ffmpeg/releases/tag/v8.1.2-5) release, which reports version `8.1.2-Jellyfin`.
 - FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 
 Development builds (`externalbin` tag) do not include FFmpeg. They use whatever `ffmpeg`/`ffprobe` is installed on the host.
