@@ -104,10 +104,12 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	}
 }
 
-// NVENC refuses an H.264 frame below 145x49. A probe that hands it a smaller
-// one fails on every NVIDIA GPU, and the only symptom is that every transcode
-// quietly runs on libx264. The frame each probe encodes is its lavfi source,
-// or the scale_cuda output when the chain rescales it.
+// NVENC refuses an H.264 frame below a minimum that depends on the GPU and
+// driver; 145x49 is the one the QA server's GTX 1660 SUPER enforces. A probe
+// that hands it a smaller frame fails on hardware that works, and the only
+// symptom is that every transcode quietly runs on libx264. The frame each
+// probe encodes is its lavfi source, or the scale_cuda output when the chain
+// rescales it.
 func TestNvidiaRuntimeProbesEncodeAFrameNVENCAccepts(t *testing.T) {
 	const nvencMinWidth, nvencMinHeight = 145, 49
 	logPath := filepath.Join(t.TempDir(), "probes.log")

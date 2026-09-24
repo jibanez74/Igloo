@@ -399,10 +399,11 @@ func ffmpegHelpHasOption(output string, option string) bool {
 	return false
 }
 
-// NVENC rejects an H.264 frame narrower than 145 or shorter than 49 pixels
-// ("Frame Dimension less than the minimum supported value"), so the NVIDIA
-// runtime probes encode a frame above that on every GPU; a smaller one failed
-// the probe and sent every transcode to libx264 on hardware that works.
+// NVENC rejects an H.264 frame below a minimum size that depends on the GPU
+// and driver ("Frame Dimension less than the minimum supported value"; 145x49
+// on the QA server's GTX 1660 SUPER), so the NVIDIA runtime probes encode a
+// frame that clears the minimums NVIDIA reports. A 128x72 frame failed the
+// probe and sent every transcode to libx264 on hardware that works.
 const (
 	nvidiaProbeSource = "testsrc2=s=256x144:d=0.1"
 	nvidiaProbeHeight = "144"

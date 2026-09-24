@@ -812,6 +812,9 @@ export default function VideoPlayer({
           onPlaying={clearBufferingIndicator}
           onCanPlay={clearBufferingIndicator}
           onSeeked={(e) => {
+            // A seek completes only once the element has data at its target,
+            // so a run that lands before its report is measured from there and
+            // does not rebase, and start a transcode, for a seek that played.
             settledTimeRef.current = e.currentTarget.currentTime;
             clearBufferingIndicator();
           }}
