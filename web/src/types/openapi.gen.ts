@@ -3148,6 +3148,7 @@ export interface components {
                 chapters: components["schemas"]["Chapter"][];
             };
         };
+        /** @description One playback position. A save whose progress_sec is at or past 95% of duration_sec marks the item watched and resets its stored position to zero; any lower save stores the position and clears watched. */
         UpdateWatchProgressRequest: {
             progress_sec: number;
             duration_sec: number;
@@ -3171,6 +3172,7 @@ export interface components {
         };
         WatchProgressUpdateEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
+                /** @description True when this save reached the 95% completion threshold and the item is now marked watched. */
                 watched: boolean;
             };
         };

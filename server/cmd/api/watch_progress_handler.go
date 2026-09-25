@@ -17,7 +17,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const watchCompletionThreshold = 0.98
+// A save at or past this share of the runtime marks the item watched instead of storing a
+// position. Credits on a long feature commonly start around 95%; the web and TV clients carry
+// the same ratio for their resume cutoffs.
+const watchCompletionThreshold = 0.95
 
 type updateWatchProgressRequest struct {
 	ProgressSec   *float64 `json:"progress_sec"`
