@@ -235,20 +235,47 @@ func loadOpenAPIContract(t *testing.T) (*openapi3.T, routers.Router) {
 	return openAPIContractDoc, openAPIContractRouter
 }
 
+// openAPIDocumentPath locates docs/openapi.json relative to this package so
+// the contract tests run from any working directory.
+func openAPIDocumentPath() (string, error) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", errors.New("failed to locate the OpenAPI contract tests")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
+	return filepath.Join(repoRoot, "docs", "openapi.json"), nil
+}
+
+// readOpenAPIDocumentJSON decodes docs/openapi.json into target for tests that
+// inspect the raw document rather than the validated contract.
+func readOpenAPIDocumentJSON(t *testing.T, target any) {
+	t.Helper()
+
+	documentPath, err := openAPIDocumentPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(documentPath)
+	if err != nil {
+		t.Fatalf("read OpenAPI document: %v", err)
+	}
+	err = json.Unmarshal(raw, target)
+	if err != nil {
+		t.Fatalf("parse OpenAPI document: %v", err)
+	}
+}
+
 func loadOpenAPIContractOnce() {
 	// kin-openapi does not register Apple's HLS playlist media type by
 	// default. It is a textual response, so validate it with the same decoder
 	// used for text/plain instead of skipping the response body.
 	openapi3filter.RegisterBodyDecoder(hlsPlaylistContentType, openapi3filter.PlainBodyDecoder)
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		openAPIContractErr = errors.New("failed to locate OpenAPI contract test")
+	documentPath, err := openAPIDocumentPath()
+	if err != nil {
+		openAPIContractErr = err
 		return
 	}
-
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
-	documentPath := filepath.Join(repoRoot, "docs", "openapi.json")
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
 	document, err := loader.LoadFromFile(documentPath)

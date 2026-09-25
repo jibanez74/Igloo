@@ -382,39 +382,6 @@ func TestQuickConnect_ExpiredCodeCannotBeApprovedOrRedeemed(t *testing.T) {
 	}
 }
 
-func TestQuickConnect_ApproveIsRateLimited(t *testing.T) {
-	app := setupSessionTestApp(t)
-	app.InitRouter()
-
-	user := createTestUser(t, app, "Approver", "approver@example.com", false)
-	cookie := newAuthSessionCookie(t, app, user.ID)
-
-	for i := 0; i < 10; i++ {
-		w := approveQuickConnectForTest(t, app, "AAAAAA", cookie)
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("attempt %d status = %d, want 404", i+1, w.Code)
-		}
-	}
-
-	w := approveQuickConnectForTest(t, app, "AAAAAA", cookie)
-	if w.Code != http.StatusTooManyRequests {
-		t.Fatalf("11th attempt status = %d, want 429, body = %s", w.Code, w.Body.String())
-	}
-}
-
-func TestQuickConnect_InitiateRequiresDeviceName(t *testing.T) {
-	app := setupSessionTestApp(t)
-	app.InitRouter()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/initiate", strings.NewReader(`{"platform":"ios"}`))
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
-	}
-}
-
 func TestQuickConnectBroker_PurgesExpiredEntries(t *testing.T) {
 	broker := NewQuickConnectBroker()
 

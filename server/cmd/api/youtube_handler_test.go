@@ -53,28 +53,20 @@ func TestProxyYouTubeThumbnail_HTTPRejectsInvalidKey(t *testing.T) {
 	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	router := authenticatedRouter(t, app, viewer.ID)
 
-	tests := []string{
-		"/api/youtube/thumbnails/bad$key",
-		"/api/youtube/thumbnails/bad.key",
-		"/api/youtube/thumbnails/" + strings.Repeat("a", youtubeVideoKeyMaxLength+1),
+	// The key rules themselves are TestIsSafeYouTubeVideoKey's; this proves
+	// the route answers a rejected key with the JSON error envelope.
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/youtube/thumbnails/bad$key", nil))
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
 	}
-
-	for _, path := range tests {
-		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		router.ServeHTTP(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("%s status = %d, want 400, body = %s", path, w.Code, w.Body.String())
-		}
-
-		var resp helpers.JSONResponse
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("decode invalid response: %v", err)
-		}
-		if !resp.Error {
-			t.Fatalf("%s response = %+v, want error", path, resp)
-		}
+	var resp helpers.JSONResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode invalid response: %v", err)
+	}
+	if !resp.Error {
+		t.Fatalf("response = %+v, want error", resp)
 	}
 }
 

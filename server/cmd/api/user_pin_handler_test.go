@@ -79,31 +79,6 @@ func decodeHasPin(t *testing.T, body []byte) bool {
 	return env.Data.User.HasPin
 }
 
-func TestUpdateUserPin_SetViaSession(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := authenticatedRouter(t, app, user.ID)
-
-	w := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	if !decodeHasPin(t, w.Body.Bytes()) {
-		t.Fatalf("expected has_pin true in response: %s", w.Body.String())
-	}
-
-	pin := storedPin(t, app, user.ID)
-	if !pin.Valid || pin.String != "1234" {
-		t.Fatalf("expected stored pin 1234, got valid=%v %q", pin.Valid, pin.String)
-	}
-
-	if strings.Contains(w.Body.String(), `"pin":"1234"`) {
-		t.Fatalf("plaintext pin leaked in user response: %s", w.Body.String())
-	}
-}
-
 func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
 
@@ -117,6 +92,15 @@ func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 		t.Fatalf("update status = %d, body = %s", updateResponse.Code, updateResponse.Body.String())
 	}
 	assertOpenAPIExchange(t, "updateUserPin", updateReq, updateResponse)
+	if !decodeHasPin(t, updateResponse.Body.Bytes()) {
+		t.Fatalf("expected has_pin true in response: %s", updateResponse.Body.String())
+	}
+	if pin := storedPin(t, app, user.ID); !pin.Valid || pin.String != "1234" {
+		t.Fatalf("expected stored pin 1234, got valid=%v %q", pin.Valid, pin.String)
+	}
+	if strings.Contains(updateResponse.Body.String(), `"pin":"1234"`) {
+		t.Fatalf("plaintext pin leaked in user response: %s", updateResponse.Body.String())
+	}
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/user/pin", nil)
 	getResponse := httptest.NewRecorder()

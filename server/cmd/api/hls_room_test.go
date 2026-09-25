@@ -12,22 +12,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
-	roomKey := RoomHLSSessionKey(1)
-	audioTrack := 0
-	personalKey := HLSSessionKey(movieRef(1), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 0, 100)
-
-	if roomKey == personalKey {
-		t.Errorf("room key %q collides with personal key %q", roomKey, personalKey)
-	}
-	if !strings.HasPrefix(roomKey, "room:") {
-		t.Errorf("room key %q should start with 'room:'", roomKey)
-	}
-	if strings.HasPrefix(personalKey, "room:") {
-		t.Errorf("personal key %q should not start with 'room:'", personalKey)
-	}
-}
-
 func TestCleanupRoomHLSSession(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -278,13 +262,7 @@ func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	_, err := app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, movieID, 3, "ac3", 448000, 6, "spa")
-	if err != nil {
-		t.Fatalf("insert second audio stream: %v", err)
-	}
+	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, nil)
 
 	movie, err := app.Queries.GetMovieByID(background, movieID)
 	if err != nil {

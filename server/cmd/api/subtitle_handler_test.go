@@ -98,7 +98,7 @@ func TestSubtitleWebVTT_RejectsNegativeStart(t *testing.T) {
 	}
 }
 
-func TestSubtitleWebVTT_ExtractsTextSubtitle(t *testing.T) {
+func TestSubtitleWebVTT_ExtractsOnceAndServesFromCache(t *testing.T) {
 	app := setupTestApp(t)
 	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	fake := &fakeFFmpeg{}
@@ -124,28 +124,10 @@ func TestSubtitleWebVTT_ExtractsTextSubtitle(t *testing.T) {
 	if fake.SubtitleCallCount() != 1 {
 		t.Fatalf("extractor call count = %d, want 1", fake.SubtitleCallCount())
 	}
-}
-
-func TestSubtitleWebVTT_SecondRequestServedFromCache(t *testing.T) {
-	app := setupTestApp(t)
-	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
-	fake := &fakeFFmpeg{}
-	app.FFmpeg = fake
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, "subrip")
-
-	first := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
-	if first.Code != http.StatusOK {
-		t.Fatalf("first request: expected 200, got %d", first.Code)
-	}
 
 	second := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
-	if second.Code != http.StatusOK {
-		t.Fatalf("second request: expected 200, got %d", second.Code)
-	}
-	if second.Body.String() != "WEBVTT\n" {
-		t.Fatalf("second body = %q, want cached extractor output", second.Body.String())
+	if second.Code != http.StatusOK || second.Body.String() != "WEBVTT\n" {
+		t.Fatalf("second request = %d %q, want the cached extractor output", second.Code, second.Body.String())
 	}
 	if fake.SubtitleCallCount() != 1 {
 		t.Fatalf("extractor call count = %d, want 1 (second request must hit the cache)", fake.SubtitleCallCount())

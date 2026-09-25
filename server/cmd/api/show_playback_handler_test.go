@@ -22,13 +22,12 @@ import (
 // video, an audio and a subtitle stream plus a chapter, and both episodes
 // resolve to it.
 type playbackEpisodeFixture struct {
-	ShowID    int64
-	SeasonID  int64
-	FileID    int64
-	Episode1  int64
-	Episode2  int64
-	FilePath  string
-	Container string
+	ShowID   int64
+	SeasonID int64
+	FileID   int64
+	Episode1 int64
+	Episode2 int64
+	FilePath string
 }
 
 func seedPlaybackEpisode(t *testing.T, app *Application) playbackEpisodeFixture {
@@ -141,13 +140,12 @@ func seedPlaybackEpisodeAt(t *testing.T, app *Application, path string, containe
 	}
 
 	return playbackEpisodeFixture{
-		ShowID:    show.ID,
-		SeasonID:  season.ID,
-		FileID:    file.ID,
-		Episode1:  episodeIDs[0],
-		Episode2:  episodeIDs[1],
-		FilePath:  path,
-		Container: container,
+		ShowID:   show.ID,
+		SeasonID: season.ID,
+		FileID:   file.ID,
+		Episode1: episodeIDs[0],
+		Episode2: episodeIDs[1],
+		FilePath: path,
 	}
 }
 
@@ -295,7 +293,7 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 		EpisodeID:     chain.S1E3,
 		ProgressSec:   600,
 		DurationSec:   2700,
-		SaveSessionID: "11111111-1111-4111-8111-111111111111",
+		SaveSessionID: testWatchProgressSaveSessionID,
 		SaveSequence:  1,
 	})
 	if err != nil {
@@ -414,31 +412,7 @@ func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testi
 	// combined file, it carries the higher file id and so loses the
 	// lowest-id race GetShowFileForEpisode runs: owning a file of its own
 	// does not make S1E2 playable as anything but the file that just ended.
-	path := fmt.Sprintf("/tmp/%s-S01E02.mkv", sanitizeTestPathComponent(t.Name()))
-	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
-		SeasonID:  fixture.SeasonID,
-		FilePath:  path,
-		FileName:  filepath.Base(path),
-		Size:      1_000_000,
-		Container: "mkv",
-		MimeType:  helpers.VideoMimeTypes["mkv"],
-		Duration:  sql.NullFloat64{Float64: 2700, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("upsert duplicate file: %v", err)
-	}
-	if duplicate.ID <= fixture.FileID {
-		t.Fatalf("duplicate file id = %d, want one above the combined file %d", duplicate.ID, fixture.FileID)
-	}
-	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
-		EpisodeID:    fixture.Episode2,
-		FileID:       duplicate.ID,
-		SeasonID:     fixture.SeasonID,
-		EpisodeOrder: 0,
-	})
-	if err != nil {
-		t.Fatalf("link duplicate file: %v", err)
-	}
+	linkDuplicateEpisodeFile(t, app, fixture, fixture.Episode2, fmt.Sprintf("/tmp/%s-S01E02.mkv", sanitizeTestPathComponent(t.Name())), 2700)
 
 	selected, err := app.Queries.GetShowFileForEpisode(ctx, fixture.Episode2)
 	if err != nil {
@@ -635,6 +609,14 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	if err != nil || !row.Watched {
 		t.Fatalf("watched row = %+v, %v", row, err)
 	}
+	unwatched := exchange("setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`))
+	if !strings.Contains(unwatched.Body.String(), `"watched":false`) {
+		t.Fatalf("unwatched response = %s, want watched false", unwatched.Body.String())
+	}
+	row, err = app.Queries.GetShowEpisodeWatchProgress(context.Background(), database.GetShowEpisodeWatchProgressParams{UserID: user.ID, EpisodeID: fixture.Episode2})
+	if err != nil || row.Watched {
+		t.Fatalf("row after unwatched = %+v, %v, want watched false", row, err)
+	}
 
 	// Another user sees none of it.
 	other := createTestUser(t, app, "Other Viewer", "other-viewer@example.com", false)
@@ -730,15 +712,9 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	}
 }
 
-func TestHLSSessionKey_SeparatesMediaKinds(t *testing.T) {
-	movieKey := HLSSessionKey(movieRef(9), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
-	episodeKey := HLSSessionKey(episodeRef(9), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
-	if movieKey == episodeKey {
-		t.Fatalf("movie and episode keys collide: %q", movieKey)
-	}
-	if !strings.Contains(movieKey, ":movie:9:") || !strings.Contains(episodeKey, ":episode:9:") {
-		t.Fatalf("keys do not name their kind: %q %q", movieKey, episodeKey)
-	}
+// The key itself separates media kinds (TestHLSSessionKey); access checks
+// must too, so a movie ref never reaches an episode session with the same id.
+func TestCanAccessPersonalHLSSession_SeparatesMediaKinds(t *testing.T) {
 	session := &HLSSession{Media: episodeRef(9), OwnerUserID: 1}
 	if canAccessPersonalHLSSession(session, movieRef(9), 1) {
 		t.Fatal("a movie ref must not access an episode session")
@@ -991,29 +967,30 @@ func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
 // An episode with two copies on disk resolves to the lowest file id every
 // time, on both the HLS/subtitle path (loadPlaybackSource) and the direct
 // stream path (episodeStreamFile).
-func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing.T) {
-	app := setupTestApp(t)
-	fixture := seedPlaybackEpisode(t, app)
+// linkDuplicateEpisodeFile scans a second copy of an episode's file into the
+// fixture's season. It is inserted after the combined file, so it carries the
+// higher file id and loses the lowest-id choice GetShowFileForEpisode makes.
+func linkDuplicateEpisodeFile(t *testing.T, app *Application, fixture playbackEpisodeFixture, episodeID int64, path string, durationSec float64) {
+	t.Helper()
 	ctx := context.Background()
 
-	copyPath := strings.TrimSuffix(fixture.FilePath, ".mkv") + " (copy).mkv"
 	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
 		SeasonID:  fixture.SeasonID,
-		FilePath:  copyPath,
-		FileName:  filepath.Base(copyPath),
-		Size:      2_000_000,
+		FilePath:  path,
+		FileName:  filepath.Base(path),
+		Size:      1_000_000,
 		Container: "mkv",
 		MimeType:  helpers.VideoMimeTypes["mkv"],
-		Duration:  sql.NullFloat64{Float64: 7200, Valid: true},
+		Duration:  sql.NullFloat64{Float64: durationSec, Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("upsert duplicate file: %v", err)
 	}
 	if duplicate.ID <= fixture.FileID {
-		t.Fatalf("duplicate id %d is not above the original %d", duplicate.ID, fixture.FileID)
+		t.Fatalf("duplicate file id = %d, want one above the original %d", duplicate.ID, fixture.FileID)
 	}
 	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
-		EpisodeID:    fixture.Episode1,
+		EpisodeID:    episodeID,
 		FileID:       duplicate.ID,
 		SeasonID:     fixture.SeasonID,
 		EpisodeOrder: 0,
@@ -1021,6 +998,14 @@ func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing
 	if err != nil {
 		t.Fatalf("link duplicate file: %v", err)
 	}
+}
+
+func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing.T) {
+	app := setupTestApp(t)
+	fixture := seedPlaybackEpisode(t, app)
+	ctx := context.Background()
+
+	linkDuplicateEpisodeFile(t, app, fixture, fixture.Episode1, strings.TrimSuffix(fixture.FilePath, ".mkv")+" (copy).mkv", 7200)
 
 	source := episodePlaybackSource(t, app, fixture.Episode1)
 	if source.FileID != fixture.FileID || source.FilePath != fixture.FilePath {

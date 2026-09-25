@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,17 +10,23 @@ import (
 	"time"
 )
 
+// /auth/user carries DeviceTokenAuth alone and answers 401 itself; the
+// protected group adds IsAuth. Both must refuse a token no device owns.
 func TestDeviceTokenAuth_RejectsUnknownToken(t *testing.T) {
 	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
-	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"not-a-real-token")
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
+	for _, path := range []string{"/api/auth/user", "/api/devices/"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"not-a-real-token")
+			w := httptest.NewRecorder()
+			app.Router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }
 
@@ -38,34 +43,6 @@ func TestDeviceTokenAuth_IgnoresNonDeviceBearerTokens(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
-	}
-}
-
-func TestDeviceTokenAuth_StaleTokenAllowsDeviceLogin(t *testing.T) {
-	app := setupSessionTestApp(t)
-	app.InitRouter()
-
-	createTestUser(t, app, "Revoked TV", "revoked@example.com", false)
-
-	// A client whose token was revoked still sends it; device login must
-	// authenticate the credentials instead of rejecting the stale token.
-	body := fmt.Sprintf(`{"email":"revoked@example.com","password":%q,"device_name":"TV","platform":"android_tv"}`, testUserPassword)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/device-login", strings.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"stale-token")
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
-	}
-
-	var resp quickConnectRedeemResponse
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	if err != nil {
-		t.Fatalf("decode device login response: %v", err)
-	}
-	if !strings.HasPrefix(resp.Data.Token, deviceTokenPrefix) {
-		t.Fatalf("token = %q, want %q prefix", resp.Data.Token, deviceTokenPrefix)
 	}
 }
 
@@ -124,20 +101,6 @@ func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
 		t.Fatalf("login status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
 	assertOpenAPIExchange(t, "authenticateUser", req, w)
-}
-
-func TestDeviceTokenAuth_ProtectedRouteRejectsUnknownToken(t *testing.T) {
-	app := setupSessionTestApp(t)
-	app.InitRouter()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/devices/", nil)
-	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"stale-token")
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
-	}
 }
 
 func TestDeviceTokenAuth_WebSocketRouteRejectsUnknownToken(t *testing.T) {

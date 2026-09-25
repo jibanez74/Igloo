@@ -46,9 +46,9 @@ func searchEntityResults[T any](t *testing.T, app *Application, e searchEntity[T
 func TestSearchMoviesStagedMatching(t *testing.T) {
 	app := setupTestApp(t)
 
-	createSearchMovie(t, app, "Casino Nights", "/movies/casino-nights.mkv")
-	createSearchMovie(t, app, "Royale Tenenbaums", "/movies/royale-tenenbaums.mkv")
-	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+	createTestMovie(t, app, "Casino Nights", "/movies/casino-nights.mkv")
+	createTestMovie(t, app, "Royale Tenenbaums", "/movies/royale-tenenbaums.mkv")
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	// A well-spelled multi-token query resolves at stage 1 (AND) and only
 	// returns documents containing every token.
@@ -68,26 +68,10 @@ func TestSearchMoviesStagedMatching(t *testing.T) {
 	}
 }
 
-func TestSearchMoviesTypoInOneTokenRanksTargetFirst(t *testing.T) {
-	app := setupTestApp(t)
-
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
-	createSearchMovie(t, app, "A Time to Kill", "/movies/a-time-to-kill.mkv")
-
-	results := searchEntityResults(t, app, movieSearchEntity, "License to Kill")
-	if len(results) == 0 {
-		t.Fatal("expected typo-corrected search to return results")
-	}
-	if results[0].Title != "Licence to Kill" {
-		t.Fatalf("expected Licence to Kill first, got %q", results[0].Title)
-	}
-}
-
 func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
 
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+	createTestMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
 
 	for _, query := range []string{"Lisence", "Lisense"} {
 		t.Run(query, func(t *testing.T) {
@@ -238,7 +222,7 @@ func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 	app := setupTestApp(t)
 
-	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	results := searchEntityResults(t, app, movieSearchEntity, `"Casino" OR title:royale`)
 	if len(results) == 0 || results[0].Title != "Casino Royale" {
@@ -296,7 +280,7 @@ func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 	app := setupTestApp(t)
 
 	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
-	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	app.InitSession()
 	app.InitRouter()
@@ -339,8 +323,8 @@ func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
 	app := setupTestApp(t)
 
 	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
+	createTestMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+	createTestMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
 
 	app.InitSession()
 	app.InitRouter()
@@ -370,9 +354,9 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	app := setupTestApp(t)
 
 	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
-	createSearchMovie(t, app, "Pageable Movie One", "/movies/pageable-1.mkv")
-	createSearchMovie(t, app, "Pageable Movie Two", "/movies/pageable-2.mkv")
-	createSearchMovie(t, app, "Pageable Movie Three", "/movies/pageable-3.mkv")
+	createTestMovie(t, app, "Pageable Movie One", "/movies/pageable-1.mkv")
+	createTestMovie(t, app, "Pageable Movie Two", "/movies/pageable-2.mkv")
+	createTestMovie(t, app, "Pageable Movie Three", "/movies/pageable-3.mkv")
 
 	app.InitSession()
 	app.InitRouter()
@@ -449,28 +433,6 @@ func createSearchShow(t *testing.T, app *Application, name, directory, overview,
 	return show.ID
 }
 
-func createSearchMovie(t *testing.T, app *Application, title, filePath string) int64 {
-	t.Helper()
-
-	movieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
-		Title:     title,
-		FilePath:  filePath,
-		FileName:  strings.TrimPrefix(filePath, "/movies/"),
-		Size:      1,
-		Container: "mkv",
-		MimeType:  "video/x-matroska",
-		Adult:     false,
-	})
-	if err != nil {
-		t.Fatalf("create movie %q: %v", title, err)
-	}
-	movie, err := app.Queries.GetMovieByID(context.Background(), movieID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return movie.ID
-}
-
 func createSearchMusician(t *testing.T, app *Application, name string) int64 {
 	t.Helper()
 
@@ -481,11 +443,7 @@ func createSearchMusician(t *testing.T, app *Application, name string) int64 {
 	if err != nil {
 		t.Fatalf("create musician %q: %v", name, err)
 	}
-	musician, err := app.Queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return musician.ID
+	return musicianIdentity.ID
 }
 
 func createSearchAlbum(t *testing.T, app *Application, title, musician string) int64 {
@@ -499,11 +457,7 @@ func createSearchAlbum(t *testing.T, app *Application, title, musician string) i
 	if err != nil {
 		t.Fatalf("create album %q: %v", title, err)
 	}
-	album, err := app.Queries.GetAlbumByID(context.Background(), albumIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return album.ID
+	return albumIdentity.ID
 }
 
 func createSearchTrack(t *testing.T, app *Application, title, filePath string, albumID, musicianID int64) int64 {
@@ -551,7 +505,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 
 	// Search scans into the same row types as the list endpoints, so a hit in
 	// every category is what validates those item schemas here.
-	createSearchMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
+	createTestMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
 	createSearchShow(t, app, "Contract Show", "/shows/Contract Show (2024)", "A contract show.", "Contract taglines.")
 	musicianID := createSearchMusician(t, app, "Contract Artist")
 	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")

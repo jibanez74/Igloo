@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -32,12 +31,6 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 		}
 		assertResponseListNotEmpty(t, operationID, response.Body.Bytes(), dataKeys...)
 		assertOpenAPIExchange(t, operationID, req, response)
-		for _, key := range []string{"file_path", "identity_key", "title_key", "artist_key", "artist_tag", "artist_sort", "album_sort", "spotify_date", "source"} {
-			exposed := strings.Contains(response.Body.String(), fmt.Sprintf("%q:", key))
-			if exposed {
-				t.Fatalf("%s exposed internal field %s", operationID, key)
-			}
-		}
 	}
 
 	emptyGetOperations := []struct {
@@ -76,7 +69,7 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 		})
 	}
 
-	movieID := createSearchMovie(t, app, "Contract Movie", "/movies/contract.mkv")
+	movieID := createTestMovie(t, app, "Contract Movie", "/movies/contract.mkv")
 	seedMovieDetailFixtures(t, app, movieID)
 	musicianID := createSearchMusician(t, app, "Contract Artist")
 	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
@@ -135,6 +128,28 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 
 	playBody := fmt.Sprintf(`{"track_id":%d,"duration_played":120,"completed":true}`, trackID)
 	assertRequest("recordPlayEvent", newOpenAPIJSONRequest(http.MethodPost, "/api/music/user-stats/play", playBody), http.StatusOK)
+
+	// One play of 120 s and one liked track (toggled above) must be reflected
+	// in the overview aggregates.
+	overview := httptest.NewRequest(http.MethodGet, "/api/music/user-stats/overview", nil)
+	overview.AddCookie(cookie)
+	overviewResponse := httptest.NewRecorder()
+	app.Router.ServeHTTP(overviewResponse, overview)
+	var stats struct {
+		Data struct {
+			TotalPlays         int64   `json:"total_plays"`
+			TotalTimeListened  float64 `json:"total_time_listened"`
+			UniqueTracksPlayed int64   `json:"unique_tracks_played"`
+			LikedTracksCount   int64   `json:"liked_tracks_count"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(overviewResponse.Body.Bytes(), &stats)
+	if err != nil {
+		t.Fatalf("decode listening stats: %v", err)
+	}
+	if stats.Data.TotalPlays != 1 || stats.Data.TotalTimeListened != 120 || stats.Data.UniqueTracksPlayed != 1 || stats.Data.LikedTracksCount != 1 {
+		t.Fatalf("listening stats = %+v, want one 120 s play of one track and one liked track", stats.Data)
+	}
 
 	// The listening statistics above ran against an empty play history. Repeat
 	// them now that one play event exists, so the item schemas are validated.

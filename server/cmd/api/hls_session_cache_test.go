@@ -142,7 +142,6 @@ func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T
 func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T) {
 	app := setupTestApp(t)
 	app.HLSMaxPersonalSessionsPerUser = 2
-	app.DB.SetMaxOpenConns(1)
 
 	started := make(chan struct{}, 2)
 	continueStarts := make(chan struct{})
@@ -524,10 +523,7 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	// A completed session sorts first but no longer owns a permit. A later idle,
 	// still-running session owns the only permit and must be the reclaim victim.
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 	var releaseOnce sync.Once
 	releaseRunningPermit := func() {
 		releaseOnce.Do(release)
@@ -587,11 +583,7 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	withTestHLSTranscodeAcquireWait(t, 50*time.Millisecond)
 
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	defer release()
+	holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -606,7 +598,7 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	}
 	app.HLSSessionCache.Set(activeKey, activeSession, hlsPersonalSessionTTL)
 
-	_, _, err = app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	_, _, err := app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
 	var capacityErr *hlsTranscodeCapacityError
 	if !errors.As(err, &capacityErr) {
 		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
@@ -629,10 +621,7 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 	// session that is genuinely playing, which is precisely the case reclaim
 	// cannot resolve.
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)

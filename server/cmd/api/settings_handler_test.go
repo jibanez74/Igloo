@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
-	"igloo/cmd/internal/scanner/movie"
 )
 
 func generalSettingsBody(staticDir string) string {
@@ -309,104 +307,6 @@ func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 	}
 }
 
-func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
-	app := setupSessionTestApp(t)
-	current := *app.CurrentSettings()
-	current.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
-	app.SetSettings(&current)
-
-	app.MusicScanner = musicStartFunc(func() scanner.StartResult { return scanner.StartResult{Status: scanner.StartAlreadyRunning} })
-
-	req := httptest.NewRequest(http.MethodPost, "/api/scan/music", nil)
-	w := httptest.NewRecorder()
-
-	app.TriggerMusicScan(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
-	app := setupSessionTestApp(t)
-	current := *app.CurrentSettings()
-	current.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
-	app.SetSettings(&current)
-
-	app.MovieScanner = movieStartResultStub{result: scanner.StartResult{Status: scanner.StartAlreadyRunning}}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/scan/movies", nil)
-	w := httptest.NewRecorder()
-
-	app.TriggerMovieScan(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestTriggerMovieScanMapsStartStatusesToAdminResponses(t *testing.T) {
-	tests := []struct {
-		name       string
-		result     scanner.StartResult
-		wantStatus int
-	}{
-		{"started", scanner.StartResult{Directory: "/movies", Status: scanner.StartStarted}, http.StatusOK},
-		{"not configured", scanner.StartResult{Status: scanner.StartNotConfigured}, http.StatusInternalServerError},
-		{"already running", scanner.StartResult{Status: scanner.StartAlreadyRunning}, http.StatusConflict},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			app := setupSessionTestApp(t)
-			app.MovieScanner = movieStartResultStub{result: tc.result}
-
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil)
-			app.TriggerMovieScan(w, req)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-func TestTriggerMusicScanMapsStartStatusesToAdminResponses(t *testing.T) {
-	tests := []struct {
-		name       string
-		result     scanner.StartResult
-		wantStatus int
-	}{
-		{"started", scanner.StartResult{Directory: "/music", Status: scanner.StartStarted}, http.StatusOK},
-		{"not configured", scanner.StartResult{Status: scanner.StartNotConfigured}, http.StatusInternalServerError},
-		{"already running", scanner.StartResult{Status: scanner.StartAlreadyRunning}, http.StatusConflict},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			app := setupSessionTestApp(t)
-			app.MusicScanner = musicStartFunc(func() scanner.StartResult { return tc.result })
-
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil)
-			app.TriggerMusicScan(w, req)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-type movieStartResultStub struct {
-	result scanner.StartResult
-}
-
-func (s movieStartResultStub) Start() scanner.StartResult {
-	return s.result
-}
-
 func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 	app := setupSessionTestApp(t)
 
@@ -424,10 +324,6 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
 	}
-}
-
-func (movieStartResultStub) Status() movie.Status {
-	return movie.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
 }
 
 func TestScanStatusAuthorization(t *testing.T) {
@@ -457,38 +353,55 @@ func TestScanStatusAuthorization(t *testing.T) {
 	}
 }
 
-func TestShowScanAdminAuthorizationAndStatuses(t *testing.T) {
-	for _, tc := range []struct {
+// The trigger endpoints map the scanner's start result to the admin response
+// and sit behind RequireAdmin, for all three libraries alike.
+func TestTriggerScan_MapsStartStatusesAndRequiresAdmin(t *testing.T) {
+	kinds := []struct {
+		name    string
+		path    string
+		install func(app *Application, start func() scanner.StartResult)
+	}{
+		{"movies", "/api/settings/scan/movies", func(app *Application, start func() scanner.StartResult) { app.MovieScanner = movieStartFunc(start) }},
+		{"music", "/api/settings/scan/music", func(app *Application, start func() scanner.StartResult) { app.MusicScanner = musicStartFunc(start) }},
+		{"shows", "/api/settings/scan/shows", func(app *Application, start func() scanner.StartResult) { app.ShowScanner = showStartFunc(start) }},
+	}
+	cases := []struct {
 		name                 string
 		authenticated, admin bool
 		status               scanner.StartStatus
 		want                 int
 	}{
-		{"unauthenticated", false, false, scanner.StartStarted, 401},
-		{"non-admin", true, false, scanner.StartStarted, 403},
-		{"started", true, true, scanner.StartStarted, 200},
-		{"already running", true, true, scanner.StartAlreadyRunning, 409},
-		{"unconfigured", true, true, scanner.StartNotConfigured, 500},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			app := setupSessionTestApp(t)
-			var userID int64
-			if tc.authenticated {
-				user := createTestUser(t, app, "User", "tv@example.com", tc.admin)
-				userID = user.ID
-			}
-			calls := 0
-			app.ShowScanner = showStartFunc(func() scanner.StartResult { calls++; return scanner.StartResult{Status: tc.status} })
-			handler := authenticatedRouter(t, app, userID)
-			w := httptest.NewRecorder()
-			handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil))
-			if w.Code != tc.want {
-				t.Fatalf("status %d want %d: %s", w.Code, tc.want, w.Body.String())
-			}
-			allowed := tc.authenticated && tc.admin
-			if allowed && calls != 1 || !allowed && calls != 0 {
-				t.Fatal("unexpected scanner invocation", calls)
-			}
-		})
+		{"unauthenticated", false, false, scanner.StartStarted, http.StatusUnauthorized},
+		{"non-admin", true, false, scanner.StartStarted, http.StatusForbidden},
+		{"started", true, true, scanner.StartStarted, http.StatusOK},
+		{"already running", true, true, scanner.StartAlreadyRunning, http.StatusConflict},
+		{"unconfigured", true, true, scanner.StartNotConfigured, http.StatusInternalServerError},
+	}
+	for _, kind := range kinds {
+		for _, tc := range cases {
+			t.Run(kind.name+"/"+tc.name, func(t *testing.T) {
+				app := setupSessionTestApp(t)
+				var userID int64
+				if tc.authenticated {
+					user := createTestUser(t, app, "User", "scan@example.com", tc.admin)
+					userID = user.ID
+				}
+				calls := 0
+				kind.install(app, func() scanner.StartResult {
+					calls++
+					return scanner.StartResult{Directory: "/media", Status: tc.status}
+				})
+
+				w := httptest.NewRecorder()
+				authenticatedRouter(t, app, userID).ServeHTTP(w, httptest.NewRequest(http.MethodPost, kind.path, nil))
+				if w.Code != tc.want {
+					t.Fatalf("status %d want %d: %s", w.Code, tc.want, w.Body.String())
+				}
+				allowed := tc.authenticated && tc.admin
+				if allowed && calls != 1 || !allowed && calls != 0 {
+					t.Fatalf("scanner invoked %d times", calls)
+				}
+			})
+		}
 	}
 }

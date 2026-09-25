@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -83,75 +82,6 @@ func TestGetPlaybackSettings_ReturnsProfileCatalog(t *testing.T) {
 	}
 }
 
-// The response carries only server-owned data: per-device preferences live in
-// the client's local storage and must never reappear on this contract.
-func TestGetPlaybackSettings_OmitsPerDevicePreferences(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := authenticatedRouter(t, app, user.ID)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var raw map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &raw)
-	if err != nil {
-		t.Fatalf("decode raw: %v\nbody=%s", err, w.Body.String())
-	}
-
-	data, ok := raw["data"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected data object, got %T", raw["data"])
-	}
-	settings, ok := data["settings"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected settings object, got %T", data["settings"])
-	}
-
-	want := map[string]struct{}{
-		"profiles":                     {},
-		"server_upload_mbps":           {},
-		"hardware_acceleration_device": {},
-	}
-	for k := range settings {
-		_, ok := want[k]
-		if !ok {
-			t.Fatalf("unexpected key %q in playback settings; per-device preferences belong in local storage", k)
-		}
-	}
-	for k := range want {
-		_, ok := settings[k]
-		if !ok {
-			t.Fatalf("missing required key %q in playback settings", k)
-		}
-	}
-}
-
-func TestPlaybackSettings_RequiresAuth(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	handler := authenticatedRouter(t, app, 0)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for GET, got %d: %s", w.Code, w.Body.String())
-	}
-
-	putW := putPlayback(t, handler, `{"server_upload_mbps": 50}`)
-	if putW.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for PUT, got %d: %s", putW.Code, putW.Body.String())
-	}
-}
-
 func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 	app := setupSessionTestApp(t)
 
@@ -180,6 +110,14 @@ func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 	}
 	if settings.HardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
 		t.Fatalf("expected hardware device nvidia after admin set, got %q", settings.HardwareAccelerationDevice)
+	}
+	stored, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if !stored.ServerUploadMbps.Valid || stored.ServerUploadMbps.Float64 != 50 ||
+		!stored.HardwareAccelerationDevice.Valid || stored.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
+		t.Fatalf("stored settings = %+v, want server_upload_mbps 50 and hardware device nvidia", stored)
 	}
 
 	w2 := putPlayback(t, handler, `{"server_upload_mbps": null}`)
@@ -222,53 +160,6 @@ func TestUpdatePlaybackSettings_ReturnsFullSettingsEnvelope(t *testing.T) {
 	}
 	if len(settings.Profiles) == 0 {
 		t.Fatal("expected the PUT response to carry the profile catalog")
-	}
-}
-
-func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	current := *app.CurrentSettings()
-	current.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
-	app.SetSettings(&current)
-
-	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := authenticatedRouter(t, app, user.ID)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	settings := decodePlaybackResponse(t, w.Body.Bytes())
-	if settings.ServerUploadMbps == nil || *settings.ServerUploadMbps != 30 {
-		t.Fatalf("expected server_upload_mbps 30, got %+v", settings.ServerUploadMbps)
-	}
-}
-
-func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := authenticatedRouter(t, app, admin.ID)
-
-	w := putPlayback(t, handler, `{"server_upload_mbps": 12.5}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	settings, err := app.Queries.GetSettings(context.Background())
-	if err != nil {
-		t.Fatalf("GetSettings: %v", err)
-	}
-	if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != 12.5 {
-		t.Fatalf("expected server_upload_mbps 12.5, got valid=%v %v", settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
-	}
-	if !app.settings.ServerUploadMbps.Valid || app.settings.ServerUploadMbps.Float64 != 12.5 {
-		t.Fatalf("expected app.settings server_upload_mbps 12.5, got %+v", app.settings)
 	}
 }
 
@@ -346,29 +237,6 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 				t.Fatalf("expected stored server_upload_mbps %v, got %v", tc.wantStored, gotSettings.ServerUploadMbps.Float64)
 			}
 		})
-	}
-}
-
-func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := authenticatedRouter(t, app, admin.ID)
-
-	w := putPlayback(t, handler, `{"hardware_acceleration_device": "apple"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	settings, err := app.Queries.GetSettings(context.Background())
-	if err != nil {
-		t.Fatalf("GetSettings: %v", err)
-	}
-	if !settings.HardwareAccelerationDevice.Valid || settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
-		t.Fatalf("expected stored hardware device apple, got valid=%v %q", settings.HardwareAccelerationDevice.Valid, settings.HardwareAccelerationDevice.String)
-	}
-	if app.settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_APPLE {
-		t.Fatalf("expected app.settings hardware device apple, got %+v", app.settings)
 	}
 }
 

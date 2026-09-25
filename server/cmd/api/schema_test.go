@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"strings"
 	"testing"
 )
@@ -585,5 +587,45 @@ func TestInitTables_UsersSchema(t *testing.T) {
 
 	if isAdmin {
 		t.Error("Expected is_admin to be false by default")
+	}
+}
+
+// Deleting a movie or a user must take its watch rooms and watch progress
+// with it: the scanners rely on the cascade when files disappear, and account
+// deletion must leave no orphans.
+func TestSchema_ParentDeletesCascade(t *testing.T) {
+	parents := []struct {
+		name   string
+		delete func(ctx context.Context, app *Application, userID, movieID int64) error
+	}{
+		{"movie", func(ctx context.Context, app *Application, _, movieID int64) error {
+			return app.Queries.DeleteMovie(ctx, movieID)
+		}},
+		{"user", func(ctx context.Context, app *Application, userID, _ int64) error {
+			return app.Queries.DeleteUser(ctx, userID)
+		}},
+	}
+	for _, parent := range parents {
+		t.Run(parent.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			ctx := context.Background()
+			userID, movieID := createTestUserAndMovie(t, app)
+			room := createTestRoom(t, app, userID, movieID)
+			seedWatchProgress(t, app, userID, movieID)
+
+			err := parent.delete(ctx, app, userID, movieID)
+			if err != nil {
+				t.Fatalf("delete %s: %v", parent.name, err)
+			}
+
+			_, err = app.Queries.GetWatchRoomByID(ctx, room.ID)
+			if !errors.Is(err, sql.ErrNoRows) {
+				t.Errorf("watch room after %s delete: %v, want sql.ErrNoRows", parent.name, err)
+			}
+			_, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{UserID: userID, MovieID: movieID})
+			if !errors.Is(err, sql.ErrNoRows) {
+				t.Errorf("watch progress after %s delete: %v, want sql.ErrNoRows", parent.name, err)
+			}
+		})
 	}
 }

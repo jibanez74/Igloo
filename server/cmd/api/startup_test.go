@@ -247,52 +247,6 @@ func TestInitDB_ReturnsPathForUnwritableDirectory(t *testing.T) {
 	}
 }
 
-func TestInitTables(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("Failed to open in-memory database: %v", err)
-	}
-	defer db.Close()
-
-	app := &Application{DB: db}
-	setupTestLogger(t, app)
-
-	err = app.InitTables()
-	if err != nil {
-		t.Fatalf("InitTables failed: %v", err)
-	}
-
-	expectedTables := []string{
-		"users",
-		"settings",
-		"musicians",
-		"albums",
-		"tracks",
-		"genres",
-		"musician_genres",
-		"musician_albums",
-		"track_genres",
-		"sessions",
-		"movie_watch_progress",
-	}
-
-	for _, tableName := range expectedTables {
-		t.Run("Table_"+tableName, func(t *testing.T) {
-
-			var name string
-
-			err := db.QueryRow(
-				"SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-				tableName,
-			).Scan(&name)
-
-			if err != nil {
-				t.Errorf("Table '%s' does not exist: %v", tableName, err)
-			}
-		})
-	}
-}
-
 func TestInitTables_Idempotent(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {

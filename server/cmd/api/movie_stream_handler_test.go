@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,34 +47,6 @@ func streamTestHandler(t *testing.T, app *Application) http.Handler {
 	return authenticatedRouter(t, app, viewer.ID)
 }
 
-func TestStreamMovieServesFullFileWithPinnedContentType(t *testing.T) {
-	app := setupTestApp(t)
-
-	content := bytes.Repeat([]byte("0123456789"), 30)
-	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-	handler := streamTestHandler(t, app)
-
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-	}
-	if got := w.Header().Get("Content-Type"); got != "video/mp4" {
-		t.Errorf("Content-Type = %q, want video/mp4", got)
-	}
-	if got := w.Header().Get("Accept-Ranges"); got != "bytes" {
-		t.Errorf("Accept-Ranges = %q, want bytes", got)
-	}
-	if got := w.Header().Get("Content-Length"); got != fmt.Sprintf("%d", len(content)) {
-		t.Errorf("Content-Length = %q, want %d", got, len(content))
-	}
-	if !bytes.Equal(w.Body.Bytes(), content) {
-		t.Error("body does not match file content")
-	}
-}
-
 func TestStreamMovieDerivesContentTypeFromContainer(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -97,6 +68,9 @@ func TestStreamMovieDerivesContentTypeFromContainer(t *testing.T) {
 	}
 }
 
+// The bounded, conditional and unsatisfiable range forms are exercised for
+// every media route by TestMediaResponsesConformToOpenAPI; the open-ended and
+// suffix forms are only sent here.
 func TestStreamMovieServesRanges(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -113,13 +87,6 @@ func TestStreamMovieServesRanges(t *testing.T) {
 		wantBody    []byte
 	}{
 		{
-			name:        "bounded range",
-			rangeHeader: "bytes=0-99",
-			wantStatus:  http.StatusPartialContent,
-			wantRange:   fmt.Sprintf("bytes 0-99/%d", size),
-			wantBody:    content[0:100],
-		},
-		{
 			name:        "open-ended range",
 			rangeHeader: fmt.Sprintf("bytes=%d-", size-50),
 			wantStatus:  http.StatusPartialContent,
@@ -132,12 +99,6 @@ func TestStreamMovieServesRanges(t *testing.T) {
 			wantStatus:  http.StatusPartialContent,
 			wantRange:   fmt.Sprintf("bytes %d-%d/%d", size-100, size-1, size),
 			wantBody:    content[size-100:],
-		},
-		{
-			name:        "unsatisfiable range",
-			rangeHeader: fmt.Sprintf("bytes=%d-", size+100),
-			wantStatus:  http.StatusRequestedRangeNotSatisfiable,
-			wantRange:   fmt.Sprintf("bytes */%d", size),
 		},
 	}
 
@@ -161,195 +122,30 @@ func TestStreamMovieServesRanges(t *testing.T) {
 	}
 }
 
-func TestStreamMovieHead(t *testing.T) {
+// TestMediaResponsesConformToOpenAPI proves an ETag is present and honoured;
+// this pins the format the validator is derived from.
+func TestStreamMovieETagFormat(t *testing.T) {
 	app := setupTestApp(t)
 
 	content := bytes.Repeat([]byte("0123456789"), 30)
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
 	handler := streamTestHandler(t, app)
 
-	t.Run("plain head", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodHead, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-		}
-		if got := w.Header().Get("Content-Length"); got != fmt.Sprintf("%d", len(content)) {
-			t.Errorf("Content-Length = %q, want %d", got, len(content))
-		}
-		if got := w.Header().Get("Accept-Ranges"); got != "bytes" {
-			t.Errorf("Accept-Ranges = %q, want bytes", got)
-		}
-		if got := w.Header().Get("Content-Type"); got != "video/mp4" {
-			t.Errorf("Content-Type = %q, want video/mp4", got)
-		}
-		if w.Body.Len() != 0 {
-			t.Errorf("body = %d bytes, want empty", w.Body.Len())
-		}
-	})
-
-	t.Run("head with range", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodHead, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
-		req.Header.Set("Range", "bytes=0-99")
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusPartialContent)
-		}
-		if got := w.Header().Get("Content-Range"); got != fmt.Sprintf("bytes 0-99/%d", len(content)) {
-			t.Errorf("Content-Range = %q, want bytes 0-99/%d", got, len(content))
-		}
-		if w.Body.Len() != 0 {
-			t.Errorf("body = %d bytes, want empty", w.Body.Len())
-		}
-	})
-}
-
-// TestStreamMovieOverSessionMiddleware exercises the delivery path a browser
-// actually takes. httptest.ResponseRecorder does not implement io.ReaderFrom,
-// so the tests above never reach the zero-copy branch that restoreSendfile
-// enables; this one runs over a real socket behind the same middleware pair
-// InitRouter installs.
-func TestStreamMovieOverSessionMiddleware(t *testing.T) {
-	app := setupTestApp(t)
-
-	content := bytes.Repeat([]byte("0123456789"), 4096)
-	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-
-	server := httptest.NewServer(streamTestHandler(t, app))
-	defer server.Close()
-
-	streamURL := fmt.Sprintf("%s/api/movies/%d/stream", server.URL, movie.ID)
-
-	t.Run("full body", func(t *testing.T) {
-		res, err := http.Get(streamURL)
-		if err != nil {
-			t.Fatalf("get: %v", err)
-		}
-		defer res.Body.Close()
-
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusOK)
-		}
-
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			t.Fatalf("read body: %v", err)
-		}
-		if !bytes.Equal(body, content) {
-			t.Errorf("body = %d bytes, want %d matching bytes", len(body), len(content))
-		}
-	})
-
-	t.Run("range", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, streamURL, nil)
-		if err != nil {
-			t.Fatalf("new request: %v", err)
-		}
-		req.Header.Set("Range", "bytes=10-19")
-
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("get: %v", err)
-		}
-		defer res.Body.Close()
-
-		if res.StatusCode != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusPartialContent)
-		}
-
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			t.Fatalf("read body: %v", err)
-		}
-		if !bytes.Equal(body, content[10:20]) {
-			t.Errorf("body = %q, want %q", body, content[10:20])
-		}
-	})
-}
-
-func TestStreamMovieETagValidation(t *testing.T) {
-	app := setupTestApp(t)
-
-	content := bytes.Repeat([]byte("0123456789"), 30)
-	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-	handler := streamTestHandler(t, app)
-	target := fmt.Sprintf("/api/movies/%d/stream", movie.ID)
-
-	fetchETag := func(t *testing.T, method string) string {
-		t.Helper()
-		req := httptest.NewRequest(method, target, nil)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-		}
-		etag := w.Header().Get("ETag")
-		if etag == "" {
-			t.Fatalf("%s response has no ETag", method)
-		}
-		return etag
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	etag := fetchETag(t, http.MethodGet)
 	stat, err := os.Stat(movie.FilePath)
 	if err != nil {
 		t.Fatalf("stat movie file: %v", err)
 	}
 	want := fmt.Sprintf("\"%x-%x\"", stat.Size(), stat.ModTime().UnixNano())
-	if etag != want {
+	if etag := w.Header().Get("ETag"); etag != want {
 		t.Errorf("ETag = %q, want %q", etag, want)
 	}
-	if headETag := fetchETag(t, http.MethodHead); headETag != etag {
-		t.Errorf("HEAD ETag = %q, want %q", headETag, etag)
-	}
-
-	t.Run("if-none-match", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
-		req.Header.Set("If-None-Match", etag)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusNotModified {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusNotModified)
-		}
-		if w.Body.Len() != 0 {
-			t.Errorf("body = %d bytes, want empty", w.Body.Len())
-		}
-	})
-
-	t.Run("if-range match serves the range", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
-		req.Header.Set("Range", "bytes=0-99")
-		req.Header.Set("If-Range", etag)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusPartialContent)
-		}
-		if !bytes.Equal(w.Body.Bytes(), content[0:100]) {
-			t.Errorf("body = %d bytes, want the first 100 bytes", w.Body.Len())
-		}
-	})
-
-	t.Run("if-range mismatch serves the full file", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
-		req.Header.Set("Range", "bytes=0-99")
-		req.Header.Set("If-Range", "\"stale-etag\"")
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-		}
-		if !bytes.Equal(w.Body.Bytes(), content) {
-			t.Errorf("body = %d bytes, want the full %d bytes", w.Body.Len(), len(content))
-		}
-	})
 }
 
 func TestStreamMovieErrorPaths(t *testing.T) {

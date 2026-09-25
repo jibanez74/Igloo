@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -199,7 +198,6 @@ func writeTestMKVFixture(t *testing.T, app *Application, cueTimesSec []float64) 
 func TestStartHLSSession_KeyframeIndexHitNeedsNoProbe(t *testing.T) {
 	app := setupTestApp(t)
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
-	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{err: os.ErrInvalid}
 	app.Ffprobe = prober
 
@@ -241,7 +239,6 @@ func TestStartHLSSession_KeyframeIndexHitNeedsNoProbe(t *testing.T) {
 func TestStartHLSSession_KeyframeIndexMissExtractsFromContainer(t *testing.T) {
 	app := setupTestApp(t)
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
-	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{err: os.ErrInvalid}
 	app.Ffprobe = prober
 
@@ -291,7 +288,6 @@ func TestStartHLSSession_KeyframeIndexMissExtractsFromContainer(t *testing.T) {
 func TestStartHLSSession_PersistsKeyframeIndexAfterSessionTeardown(t *testing.T) {
 	app := setupTestApp(t)
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
-	app.Wait = &sync.WaitGroup{}
 	app.Ffprobe = &stubKeyframeFfprobe{err: os.ErrInvalid}
 
 	movieID := writeTestMKVFixture(t, app, []float64{0, 42, 84, 126})
@@ -324,7 +320,6 @@ func TestStartHLSSession_PersistsKeyframeIndexAfterSessionTeardown(t *testing.T)
 func TestStartHLSSession_AviFallsBackToProbeWithoutPersisting(t *testing.T) {
 	app := setupTestApp(t)
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
-	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{keyframeSec: 96}
 	app.Ffprobe = prober
 
@@ -367,7 +362,6 @@ func TestStartHLSSession_AviFallsBackToProbeWithoutPersisting(t *testing.T) {
 func TestStartHLSSession_PrefetchesIndexAtStartZero(t *testing.T) {
 	app := setupTestApp(t)
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
-	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{err: os.ErrInvalid}
 	app.Ffprobe = prober
 

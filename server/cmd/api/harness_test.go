@@ -277,3 +277,22 @@ func clearSettingsRow(t *testing.T, app *Application) {
 		t.Fatalf("clear settings row: %v", err)
 	}
 }
+
+// createTestMovie stores a bare MKV movie row: no streams, no duration, no
+// metadata. Tests that need a playable file use the HLS or stream fixtures.
+func createTestMovie(t *testing.T, app *Application, title, filePath string) int64 {
+	t.Helper()
+
+	movieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
+		Title:     title,
+		FilePath:  filePath,
+		FileName:  filepath.Base(filePath),
+		Size:      1,
+		Container: "mkv",
+		MimeType:  helpers.VideoMimeTypes["mkv"],
+	})
+	if err != nil {
+		t.Fatalf("create movie %q: %v", title, err)
+	}
+	return movieID
+}

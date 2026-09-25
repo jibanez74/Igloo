@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -171,7 +171,6 @@ func runListenForShutdownHelper(t *testing.T) {
 	}
 
 	app := setupTestApp(t)
-	app.Wait = &sync.WaitGroup{}
 	deviceExpiryCtx, cancelDeviceExpiry := context.WithCancel(context.Background())
 	app.DeviceExpiryCancel = cancelDeviceExpiry
 	app.Wait.Add(1)
@@ -212,8 +211,21 @@ func runListenForShutdownHelper(t *testing.T) {
 		t.Fatalf("attach shutdown websocket client: %v", err)
 	}
 
+	// The signal must not land before ListenForShutdown has registered for it,
+	// or the default action ends the helper. The signal handler goroutine
+	// starts before ListenAndServe, so a listener that accepts connections is
+	// the readiness signal.
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve port: %v", err)
+	}
+	serverAddr := probe.Addr().String()
+	err = probe.Close()
+	if err != nil {
+		t.Fatalf("release reserved port: %v", err)
+	}
 	app.Server = &http.Server{
-		Addr:    "127.0.0.1:0",
+		Addr:    serverAddr,
 		Handler: http.NewServeMux(),
 	}
 
@@ -223,7 +235,7 @@ func runListenForShutdownHelper(t *testing.T) {
 	}
 
 	go func() {
-		time.Sleep(150 * time.Millisecond)
+		waitForListener(serverAddr, 5*time.Second)
 		_ = process.Signal(syscall.SIGTERM)
 	}()
 
@@ -251,6 +263,19 @@ func runListenForShutdownHelper(t *testing.T) {
 	_, statErr := os.Stat(loggerMarker)
 	if statErr != nil {
 		t.Fatalf("serveUntilShutdown returned before cleanup finished: %v", statErr)
+	}
+}
+
+// waitForListener returns once addr accepts a TCP connection, or after timeout.
+func waitForListener(addr string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -419,9 +444,6 @@ func writeShutdownCacheMarker(markerPath string, app *Application) error {
 }
 
 func cacheIsEmpty(c interface{ ItemCount() int }) bool {
-	if c == nil {
-		return true
-	}
 	return c.ItemCount() == 0
 }
 

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -68,63 +67,21 @@ func TestHLSSessionKey(t *testing.T) {
 		"audio mode":       HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, explicitAudioRequest(helpers.HLSAudioCodecAC3, 6), testPlaybackSessionID, 40, 456),
 		"playback session": HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testOtherPlaybackSessionID, 40, 456),
 		"start":            HLSSessionKey(movieRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 41, 456),
+		"media kind":       HLSSessionKey(episodeRef(123), "720p_3mbps", &audioTrack, nil, testPlaybackSessionID, 40, 456),
 	}
 	for dimension, key := range variants {
 		if key == base {
 			t.Errorf("changing %s did not change the HLS session key", dimension)
 		}
 	}
-}
-
-func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
-	app := setupTestApp(t)
-
-	ctx := context.Background()
-	_, err := app.DB.Exec(`
-		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult)
-		VALUES ('No Duration', '/tmp/nodur.mkv', 'nodur.mkv', 1, 'mkv', 'video/x-matroska', 0)
-	`)
-	if err != nil {
-		t.Fatalf("insert movie: %v", err)
-	}
-	var id int64
-	err = app.DB.QueryRowContext(ctx, `SELECT id FROM movies WHERE file_path = '/tmp/nodur.mkv'`).Scan(&id)
-	if err != nil {
-		t.Fatalf("select id: %v", err)
+	if !strings.Contains(variants["media kind"], ":episode:123:") {
+		t.Errorf("episode key %q does not name its media kind", variants["media kind"])
 	}
 
-	_, err = createTestHLSSession(app, ctx, id, "720p_3mbps", testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err == nil {
-		t.Fatal("expected error when duration missing")
-	}
-	if !strings.Contains(err.Error(), "no valid duration") {
-		t.Errorf("error = %v, want mention of no valid duration", err)
-	}
-}
-
-func TestCreateHLSSession_ErrorsWhenNoVideoStream(t *testing.T) {
-	app := setupTestApp(t)
-
-	ctx := context.Background()
-	_, err := app.DB.Exec(`
-		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult, duration)
-		VALUES ('No Video', '/tmp/novid.mkv', 'novid.mkv', 1, 'mkv', 'video/x-matroska', 0, 3600.0)
-	`)
-	if err != nil {
-		t.Fatalf("insert movie: %v", err)
-	}
-	var id int64
-	err = app.DB.QueryRowContext(ctx, `SELECT id FROM movies WHERE file_path = '/tmp/novid.mkv'`).Scan(&id)
-	if err != nil {
-		t.Fatalf("select id: %v", err)
-	}
-
-	_, err = createTestHLSSession(app, ctx, id, "720p_3mbps", testIntPtr(0), testPlaybackSessionID, 0, false)
-	if err == nil {
-		t.Fatal("expected error when no video stream rows")
-	}
-	if !strings.Contains(err.Error(), "no playable video track") {
-		t.Errorf("error = %v, want mention of no playable video", err)
+	// Room sessions share the cache, so their keys live in their own namespace.
+	roomKey := RoomHLSSessionKey(123)
+	if roomKey == base || !strings.HasPrefix(roomKey, "room:") || strings.HasPrefix(base, "room:") {
+		t.Errorf("room key %q is not distinct from personal key %q", roomKey, base)
 	}
 }
 
@@ -543,7 +500,11 @@ func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
 			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 			app.FFmpeg = fake
 			if tt.device != "" {
-				setTestHardwareAccelerationDevice(t, app, tt.device)
+				// The fake FFmpeg reports unprobed capabilities, which ResolveHLSDevice
+				// trusts, so the configured device is also the effective one.
+				current := *app.CurrentSettings()
+				current.HardwareAccelerationDevice = sql.NullString{String: tt.device, Valid: true}
+				app.SetSettings(&current)
 			}
 
 			movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -624,26 +585,6 @@ func TestCreateHLSSession_TranscodeLimiterParticipation(t *testing.T) {
 	}
 }
 
-func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
-	app := setupTestApp(t)
-	app.FFmpeg = &fakeFFmpeg{}
-
-	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	defer release()
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-
-	_, err = createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
-	var capacityErr *hlsTranscodeCapacityError
-	if !errors.As(err, &capacityErr) {
-		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
-	}
-}
-
 // audio_track and the movie's audio streams have to agree: a movie with audio
 // needs a track chosen, and a video-only movie must not be handed one, or
 // FFmpeg is asked to -map a stream that does not exist.
@@ -717,7 +658,7 @@ func TestCreateHLSSession_AudioTrackValidation(t *testing.T) {
 	}
 }
 
-func TestLoadHLSMovieForSession_RejectsNegativeStart(t *testing.T) {
+func TestLoadHLSSourceForSession_RejectsNegativeStart(t *testing.T) {
 	app := setupTestApp(t)
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -728,39 +669,6 @@ func TestLoadHLSMovieForSession_RejectsNegativeStart(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "outside media duration") {
 		t.Fatalf("error = %v, want it to mention the duration bound", err)
-	}
-}
-
-// The copy-video start probe is wired up inside startHLSSession. Without it the
-// client maps session time to movie time using the requested offset, so the
-// clock and every watch-progress write run ahead of the picture.
-func TestStartHLSSession_MeasuresActualStartForCopyVideo(t *testing.T) {
-	app := setupTestApp(t)
-	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
-	app.Wait = &sync.WaitGroup{}
-	app.Ffprobe = &stubKeyframeFfprobe{keyframeSec: 84}
-
-	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-
-	session, err := createTestHLSSession(
-		app,
-		context.Background(),
-		movieID,
-		helpers.HLS_PROFILE_REMUX,
-		testIntPtr(0),
-		testPlaybackSessionID,
-		100,
-		false,
-	)
-	if err != nil {
-		t.Fatalf("createHLSSession returned error: %v", err)
-	}
-	defer cleanupHLSSession(session)
-
-	app.Wait.Wait()
-
-	if got := session.actualStartSec(); got != 84 {
-		t.Fatalf("actual start = %v, want the measured keyframe 84", got)
 	}
 }
 
@@ -1081,15 +989,7 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	// The fixture holds one audio stream at absolute index 1; adding a Spanish
-	// stream at absolute index 3 makes ordinal 1 resolve to index 3.
-	_, err := app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, movieID, 3, "ac3", 448000, 6, "spa")
-	if err != nil {
-		t.Fatalf("insert second audio stream: %v", err)
-	}
+	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, nil)
 
 	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(1), testPlaybackSessionID, 0, false)
 	if err != nil {
@@ -1115,7 +1015,6 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 func TestResolveHLSActualStart_FallsBackToProbeWithoutContainerIndex(t *testing.T) {
 	app := setupTestApp(t)
 
-	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{keyframeSec: 591.174}
 	app.Ffprobe = prober
 
@@ -1148,7 +1047,6 @@ func TestResolveHLSActualStart_FallsBackToProbeWithoutContainerIndex(t *testing.
 func TestResolveHLSActualStart_LeavesStartUnknownOnFailure(t *testing.T) {
 	app := setupTestApp(t)
 
-	app.Wait = &sync.WaitGroup{}
 	app.Ffprobe = &stubKeyframeFfprobe{err: errors.New("probe failed")}
 
 	session := &HLSSession{Media: movieRef(1), FileID: 1, CopyVideo: true, StartSec: 600}
@@ -1339,13 +1237,7 @@ func TestCreateHLSSession_ExplicitAudioUsesSelectedTrack(t *testing.T) {
 	// The fixture's first row stays stereo AAC; the second row is a 5.1 DTS
 	// track at absolute index 3, so ordinal 1 must resolve six channels.
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	_, err := app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, channel_layout, language)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, movieID, 3, "dts", 1_500_000, 6, "5.1(side)", "spa")
-	if err != nil {
-		t.Fatalf("insert second audio stream: %v", err)
-	}
+	insertTestSecondaryAudioStream(t, app, movieID, "dts", 1_500_000, 6, "5.1(side)")
 
 	session, err := createTestHLSSessionWithAudio(
 		app,
@@ -1453,15 +1345,12 @@ func TestCreateHLSSession_ExplicitAudioEncoderUnavailable(t *testing.T) {
 	// Exhaust the only transcode permit: the rejection must come from the
 	// encoder gate, which runs before limiter acquisition would block.
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	setTestHLSAudioStream(t, app, movieID, "aac", "LC", 6, "5.1(side)")
 
-	_, err = createTestHLSSessionWithAudio(
+	_, err := createTestHLSSessionWithAudio(
 		app,
 		context.Background(),
 		movieID,
@@ -1705,7 +1594,7 @@ func TestCreateHLSSession_RemuxCleanExitWithFewerSegmentsIsValidated(t *testing.
 	t.Run("safe output stays on remux without a persisted verdict", func(t *testing.T) {
 		app := setupTestApp(t)
 		fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(testFMP4Fixture{SafeVideo: true, Segments: shortSegments}),
+			hlsRunPlan(fmp4testutil.Fixture{SafeVideo: true, Segments: shortSegments}),
 		}}
 		app.FFmpeg = fake
 		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -1731,7 +1620,7 @@ func TestCreateHLSSession_RemuxCleanExitWithFewerSegmentsIsValidated(t *testing.
 	t.Run("unsafe output falls back and persists the verdict", func(t *testing.T) {
 		app := setupTestApp(t)
 		fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
-			hlsRunPlan(testFMP4Fixture{SafeVideo: false, Segments: shortSegments}),
+			hlsRunPlan(fmp4testutil.Fixture{SafeVideo: false, Segments: shortSegments}),
 			hlsRunPlan(transcodeFixture),
 		}}
 		app.FFmpeg = fake

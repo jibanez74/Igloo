@@ -102,3 +102,23 @@ func TestSweepStaleDevices_RemovesOnlyStaleRows(t *testing.T) {
 		t.Fatalf("fresh device = %+v, want New Phone", fresh)
 	}
 }
+
+// ListenForShutdown cancels the sweeper's context and then waits on the
+// application wait group, so the loop has to return promptly.
+func TestRunDeviceExpirySweeper_StopsWhenCancelled(t *testing.T) {
+	app := setupTestApp(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		app.runDeviceExpirySweeper(ctx)
+		close(done)
+	}()
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("device expiry sweeper did not stop after its context was cancelled")
+	}
+}

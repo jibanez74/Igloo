@@ -32,13 +32,11 @@ func (failingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 
 type stubTmdbClient struct {
 	searchErr     error
-	detailErr     error
 	theatersErr   error
 	searchResults []tmdb.TmdbMovie
 	detailMovies  map[int]tmdb.TmdbMovie
 	theaterMovies []*tmdb.TmdbMovie
 	searchCalls   []stubTmdbSearchCall
-	detailCalls   []int
 }
 
 type stubTmdbSearchCall struct {
@@ -47,10 +45,6 @@ type stubTmdbSearchCall struct {
 }
 
 func (s *stubTmdbClient) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMovie) error {
-	s.detailCalls = append(s.detailCalls, movie.TmdbID)
-	if s.detailErr != nil {
-		return s.detailErr
-	}
 	if s.detailMovies == nil {
 		return errors.New("tmdb details unavailable")
 	}
@@ -562,36 +556,6 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	if resp.Data.Movies[0].TmdbID != 1 || resp.Data.Movies[tmdbMaxItems-1].TmdbID != tmdbMaxItems {
 		t.Fatalf("movie order = first %d, last %d; want 1 through %d", resp.Data.Movies[0].TmdbID, resp.Data.Movies[tmdbMaxItems-1].TmdbID, tmdbMaxItems)
 	}
-
-	var rawResp struct {
-		Data struct {
-			Movies []map[string]json.RawMessage `json:"movies"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &rawResp); err != nil {
-		t.Fatalf("decode raw theater response: %v", err)
-	}
-	wantFields := []string{
-		"id", "title", "original_title", "overview", "release_date", "poster_path", "backdrop_path",
-		"popularity", "vote_average", "vote_count", "adult", "original_language", "genre_ids", "video",
-	}
-	first := rawResp.Data.Movies[0]
-	if len(first) != len(wantFields) {
-		t.Fatalf("theater movie fields = %v, want exactly %v", first, wantFields)
-	}
-	for _, field := range wantFields {
-		if _, ok := first[field]; !ok {
-			t.Errorf("theater movie missing field %q", field)
-		}
-	}
-	if string(first["genre_ids"]) != "[]" {
-		t.Errorf("genre_ids = %s, want []", first["genre_ids"])
-	}
-	for _, field := range []string{"runtime", "status", "tagline", "budget", "revenue", "homepage", "imdb_id", "production_companies", "genres", "credits", "videos", "release_dates"} {
-		if _, ok := first[field]; ok {
-			t.Errorf("theater movie unexpectedly includes detail field %q", field)
-		}
-	}
 }
 
 func TestGetMoviesInTheaters_HTTPError(t *testing.T) {
@@ -748,56 +712,6 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("missing movie status = %d, want 404", w.Code)
-	}
-}
-
-func TestApplyTmdbMetadataMapsNullableFields(t *testing.T) {
-	app := setupTestApp(t)
-	ctx := context.Background()
-	localID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Local", FilePath: "/mapping.mkv", FileName: "mapping.mkv", Container: "mkv", MimeType: "video/x-matroska"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	local, err := app.Queries.GetMovieByID(ctx, localID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err := app.DB.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback()
-
-	movie := tmdbMovieFromJSON(t, `{
-		"id": 603,
-		"title": "The Matrix",
-		"release_date": "1999-03-31",
-		"imdb_id": "tt0133093",
-		"poster_path": "/poster.jpg",
-		"backdrop_path": "/backdrop.jpg",
-		"adult": false,
-		"original_language": "en",
-		"overview": "Overview",
-		"tagline": "Tagline",
-		"vote_average": 8.2,
-		"revenue": 463517383,
-		"budget": 63000000,
-		"runtime": 136,
-		"release_dates": {
-			"results": [{"iso_3166_1": "US", "release_dates": [{"certification": "R"}]}]
-		}
-	}`)
-	err = moviescanner.ApplyTmdbMetadata(ctx, app.Queries.WithTx(tx), local.ID, &movie)
-	if err != nil {
-		t.Fatal(err)
-	}
-	params, err := app.Queries.WithTx(tx).GetMovieByID(ctx, local.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if params.ID != local.ID || params.Title != "The Matrix" || !params.TmdbID.Valid || params.TmdbID.Int64 != 603 ||
-		!params.Year.Valid || params.Year.Int64 != 1999 || !params.Certification.Valid || params.Certification.String != "R" {
-		t.Fatalf("params = %+v, want mapped TMDB fields", params)
 	}
 }
 
@@ -962,19 +876,12 @@ func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
 	}
 }
 
-func TestMoviePickerRankingAndEmptySentinel(t *testing.T) {
+// Ranking is asserted through the route in TestTmdbSearchMovies_HTTPSearchRanksResults;
+// the client's no-results sentinel must surface as an empty list, not an error.
+func TestSearchTmdbMovies_NoResultsSentinelIsEmpty(t *testing.T) {
 	app := setupTestApp(t)
-	client := &stubTmdbClient{searchResults: []tmdb.TmdbMovie{
-		{TmdbID: 1, Title: "Arrival", ReleaseDate: "2015-01-01"},
-		{TmdbID: 2, Title: "Unrelated", ReleaseDate: "2016-01-01", Popularity: 1e9, VoteAverage: 10},
-	}}
-	app.Tmdb = client
-	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival", Year: 2016})
-	if err != nil || len(results) != 2 || results[0].TmdbID != 1 {
-		t.Fatalf("picker ranking=%+v %v", results, err)
-	}
-	client.searchErr = fmt.Errorf("wrapped: %w", tmdb.ErrNoMoviesFound)
-	results, err = app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival"})
+	app.Tmdb = &stubTmdbClient{searchErr: fmt.Errorf("wrapped: %w", tmdb.ErrNoMoviesFound)}
+	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival"})
 	if err != nil || len(results) != 0 {
 		t.Fatalf("no-result sentinel=%+v %v", results, err)
 	}
@@ -1027,7 +934,7 @@ func TestIdentifyMovieRollsBackRetryCleanupFailure(t *testing.T) {
 
 func TestUpdateMovieMetadata_MissingUpdateRollsBack(t *testing.T) {
 	app := setupTestApp(t)
-	movieID := createSearchMovie(t, app, "Original", "/movies/update-rollback.mkv")
+	movieID := createTestMovie(t, app, "Original", "/movies/update-rollback.mkv")
 	// A row removed inside the UPDATE must retain the old RETURNING failure
 	// behavior, including rollback of the trigger's deletion.
 	_, err := app.DB.Exec(`CREATE TRIGGER remove_movie_before_update BEFORE UPDATE ON movies

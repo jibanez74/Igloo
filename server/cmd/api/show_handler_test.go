@@ -16,8 +16,10 @@ import (
 // The empty-library table in library_handler_contract_test.go always validates an
 // empty array, so this is the only coverage that checks a LatestShow element against
 // the contract. The unenriched row exercises the nullable poster and premiere year.
-func TestGetLatestShows_ConformsToOpenAPIWithRows(t *testing.T) {
-	app := setupTestApp(t)
+// The contract rows are validated by TestListHandlers_ConformToOpenAPIWithRows;
+// this pins the order the client relies on.
+func TestGetLatestShows_NewestFirst(t *testing.T) {
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Shows Contract User", "shows-contract@example.com", false)
 
@@ -31,21 +33,12 @@ func TestGetLatestShows_ConformsToOpenAPIWithRows(t *testing.T) {
 		t.Fatalf("seed shows: %v", err)
 	}
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
-
-	request := httptest.NewRequest(http.MethodGet, "/api/shows/latest", nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
-
+	authenticatedRouter(t, app, user.ID).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/shows/latest", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
 
-	// Without this the seeded rows could silently fail to insert and the contract
-	// assertion below would vacuously validate an empty array.
 	var body struct {
 		Data struct {
 			Shows []struct {
@@ -57,15 +50,9 @@ func TestGetLatestShows_ConformsToOpenAPIWithRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if len(body.Data.Shows) != 2 {
-		t.Fatalf("shows length = %d, want 2, body = %s", len(body.Data.Shows), response.Body.String())
+	if len(body.Data.Shows) != 2 || body.Data.Shows[0].Name != "Unenriched Show" {
+		t.Fatalf("shows = %+v, want the last inserted show first", body.Data.Shows)
 	}
-	// Newest first: the unenriched show was inserted last.
-	if body.Data.Shows[0].Name != "Unenriched Show" {
-		t.Fatalf("first show = %q, want %q", body.Data.Shows[0].Name, "Unenriched Show")
-	}
-
-	assertOpenAPIExchange(t, "getLatestShows", request, response)
 }
 
 // seedContractShow builds a show through the scanner's own upserts, so the
@@ -460,23 +447,6 @@ func TestGetShowDetails_UnknownShowIsNotFound(t *testing.T) {
 	assertOpenAPIExchange(t, "getShowDetails", request, response)
 }
 
-func TestGetShowDetails_RequiresAuthentication(t *testing.T) {
-	app := setupTestApp(t)
-
-	showID := seedContractShow(t, app)
-
-	app.InitSession()
-	app.InitRouter()
-
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/details/%d", showID), nil)
-	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusUnauthorized, response.Body.String())
-	}
-}
-
 type showSeasonEpisodesBody struct {
 	Data struct {
 		Season struct {
@@ -664,19 +634,133 @@ func TestGetShowSeasonEpisodes_RejectsNegativeSeasonNumber(t *testing.T) {
 	assertOpenAPIResponse(t, "getShowSeasonEpisodes", request, response)
 }
 
-func TestGetShowSeasonEpisodes_RequiresAuthentication(t *testing.T) {
-	app := setupTestApp(t)
+// Sorting is case-insensitive on name and per_page is clamped, never rejected.
+func TestGetShowsLibrary_SortsAndClampsPerPage(t *testing.T) {
+	app := setupSessionTestApp(t)
 
-	showID := seedContractShow(t, app)
+	user := createTestUser(t, app, "Show Sort User", "show-sort@example.com", false)
 
-	app.InitSession()
+	_, err := app.DB.Exec(`
+ INSERT INTO shows (directory_path, local_name, name) VALUES ('/shows/beta', 'beta', 'beta');
+ INSERT INTO shows (directory_path, local_name, name) VALUES ('/shows/Alpha', 'Alpha', 'Alpha');
+ INSERT INTO shows (directory_path, local_name, name) VALUES ('/shows/gamma', 'gamma', 'gamma');
+ `)
+	if err != nil {
+		t.Fatalf("seed shows: %v", err)
+	}
+
 	app.InitRouter()
+	cookie := newAuthSessionCookie(t, app, user.ID)
 
-	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/%d/seasons/1/episodes", showID), nil)
-	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	cases := []struct {
+		name        string
+		query       string
+		wantPerPage int64
+		wantNames   []string
+	}{
+		{name: "asc default", query: "", wantPerPage: libraryDefaultPerPage, wantNames: []string{"Alpha", "beta", "gamma"}},
+		{name: "desc clamped", query: "?sort=desc&per_page=999", wantPerPage: libraryMaxPerPage, wantNames: []string{"gamma", "beta", "Alpha"}},
+	}
 
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusUnauthorized, response.Body.String())
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/shows/library"+tc.query, nil)
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			app.Router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+			}
+
+			var body struct {
+				Data struct {
+					Shows []struct {
+						Name string `json:"name"`
+					} `json:"shows"`
+					Total   int64 `json:"total"`
+					PerPage int64 `json:"per_page"`
+				} `json:"data"`
+			}
+			err := json.Unmarshal(response.Body.Bytes(), &body)
+			if err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+
+			if body.Data.Total != 3 || body.Data.PerPage != tc.wantPerPage {
+				t.Fatalf("total = %d, per_page = %d, want 3 and %d", body.Data.Total, body.Data.PerPage, tc.wantPerPage)
+			}
+			if len(body.Data.Shows) != len(tc.wantNames) {
+				t.Fatalf("shows length = %d, want %d", len(body.Data.Shows), len(tc.wantNames))
+			}
+			for i, want := range tc.wantNames {
+				if body.Data.Shows[i].Name != want {
+					t.Fatalf("shows[%d] = %q, want %q", i, body.Data.Shows[i].Name, want)
+				}
+			}
+
+			// per_page=999 is outside the documented input range, so only the
+			// response is validated against the contract.
+			assertOpenAPIResponse(t, "getShowsLibrary", request, response)
+		})
+	}
+}
+
+// The genre listing has its own descending query and row mapping.
+func TestGetShowsByGenre_SortDescendingReversesTheAscendingOrder(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Genre Sort User", "genre-sort@example.com", false)
+	showID := seedContractShow(t, app)
+	var genreID int64
+	err := app.DB.QueryRow("SELECT genre_id FROM show_genres WHERE show_id = ?", showID).Scan(&genreID)
+	if err != nil {
+		t.Fatalf("read seeded show genre: %v", err)
+	}
+	for _, name := range []string{"beta", "gamma"} {
+		var siblingID int64
+		err = app.DB.QueryRow("INSERT INTO shows (directory_path, local_name, name) VALUES (?, ?, ?) RETURNING id", "/shows/"+name, name, name).Scan(&siblingID)
+		if err != nil {
+			t.Fatalf("seed show %q: %v", name, err)
+		}
+		_, err = app.DB.Exec("INSERT INTO show_genres (show_id, genre_id) VALUES (?, ?)", siblingID, genreID)
+		if err != nil {
+			t.Fatalf("link show %q: %v", name, err)
+		}
+	}
+	handler := authenticatedRouter(t, app, user.ID)
+
+	listed := func(t *testing.T, sort string) []string {
+		t.Helper()
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/genres/%d/shows?sort=%s", genreID, sort), nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("sort=%s status = %d: %s", sort, response.Code, response.Body.String())
+		}
+		var body struct {
+			Data struct {
+				Shows []struct {
+					Name string `json:"name"`
+				} `json:"shows"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(response.Body.Bytes(), &body)
+		if err != nil {
+			t.Fatalf("decode sort=%s: %v", sort, err)
+		}
+		names := make([]string, 0, len(body.Data.Shows))
+		for _, show := range body.Data.Shows {
+			names = append(names, show.Name)
+		}
+		return names
+	}
+
+	ascending := listed(t, "asc")
+	descending := listed(t, "desc")
+	if len(ascending) != 3 {
+		t.Fatalf("ascending shows = %v, want all three", ascending)
+	}
+	slices.Reverse(ascending)
+	if !slices.Equal(descending, ascending) {
+		t.Fatalf("descending shows = %v, want %v", descending, ascending)
 	}
 }

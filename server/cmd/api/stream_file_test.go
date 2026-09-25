@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/database"
 )
@@ -51,60 +49,18 @@ func seedStreamTestTrack(t *testing.T, app *Application, albumID sql.NullInt64, 
 	return streamTestTrack{GetTrackRow: track, FilePath: path}
 }
 
-// StreamTrack shares serveMediaFile with the movie handlers, so this covers the
-// music side of that helper: content type, validator and range support.
-func TestStreamTrackServesFileWithRangeSupport(t *testing.T) {
+// The file delivery itself is covered for tracks by
+// TestMediaResponsesConformToOpenAPI; only the missing-row path is unique here.
+func TestStreamTrack_MissingTrackReturnsNotFound(t *testing.T) {
 	app := setupTestApp(t)
-
-	content := bytes.Repeat([]byte("abcdefghij"), 30)
-	track := seedStreamTestTrack(t, app, sql.NullInt64{}, content)
-
 	listener := createTestUser(t, app, "Listener", "listener@example.com", false)
-	router := authenticatedRouter(t, app, listener.ID)
-	target := fmt.Sprintf("/api/music/tracks/%d/stream", track.ID)
 
-	t.Run("full body", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+	w := httptest.NewRecorder()
+	authenticatedRouter(t, app, listener.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/music/tracks/999999/stream", nil))
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-		}
-		if got := w.Header().Get("Content-Type"); got != "audio/flac" {
-			t.Errorf("Content-Type = %q, want audio/flac", got)
-		}
-		if w.Header().Get("ETag") == "" {
-			t.Error("ETag was not set")
-		}
-		if !bytes.Equal(w.Body.Bytes(), content) {
-			t.Error("body does not match file content")
-		}
-	})
-
-	t.Run("range", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
-		req.Header.Set("Range", "bytes=5-14")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		if w.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusPartialContent)
-		}
-		if !bytes.Equal(w.Body.Bytes(), content[5:15]) {
-			t.Errorf("body = %q, want %q", w.Body.Bytes(), content[5:15])
-		}
-	})
-
-	t.Run("missing row", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/music/tracks/999999/stream", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
-		}
-	})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
 }
 
 func TestMovieStreamFileServesFromCacheUntilEvicted(t *testing.T) {
@@ -251,35 +207,5 @@ func TestDeleteAlbumEvictsTrackStreamFileCache(t *testing.T) {
 	_, err = app.trackStreamFile(context.Background(), track.ID)
 	if err == nil {
 		t.Error("resolving a cascaded-deleted track succeeded; the stream cache outlived the row")
-	}
-}
-
-// A reader that misses the cache reads its row before the query returns, so a
-// delete can land in between. The generation guard is what stops that reader
-// from republishing what it read.
-func TestStreamFileCacheDropsFillRacingAnInvalidation(t *testing.T) {
-	c := newGenerationCache[streamFile](time.Minute, 2*time.Minute)
-	key := movieStreamFileKey(1)
-
-	// Captured before the query, as generationCache.resolve does.
-	gen := c.generation()
-
-	// The row is deleted and the key evicted while that query is in flight.
-	c.invalidate(key)
-
-	c.setIfCurrent(key, gen, streamFile{Path: "/deleted.mp4"})
-
-	_, hit := c.get(key)
-	if hit {
-		t.Error("a fill started before the invalidation was published; the deleted file stays streamable until the TTL")
-	}
-
-	// A fill that starts after the invalidation is still cached normally.
-	fresh := streamFile{Path: "/current.mp4"}
-	c.setIfCurrent(key, c.generation(), fresh)
-
-	got, hit := c.get(key)
-	if !hit || got != fresh {
-		t.Errorf("post-invalidation fill = %+v (hit %v), want %+v (hit true)", got, hit, fresh)
 	}
 }

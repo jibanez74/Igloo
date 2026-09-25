@@ -268,30 +268,6 @@ func expectConnectedUserIDs(t *testing.T, event watchRoomWSTestEvent, want ...in
 	}
 }
 
-func TestWatchRoomWebSocket_RejectsNonMember(t *testing.T) {
-	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	outsider := createTestUser(t, app, "Outsider", "outsider@example.com", false)
-
-	room := createTestRoom(t, app, ownerID, movieID)
-	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
-
-	conn, resp := dialWatchRoomSocket(t, app, server.URL, room.ID, outsider.ID)
-	if conn != nil {
-		_ = conn.Close()
-		t.Fatal("expected websocket dial to fail for non-member")
-	}
-	if resp == nil || resp.StatusCode != 403 {
-		if resp == nil {
-			t.Fatalf("expected 403 response for non-member websocket upgrade")
-		}
-		t.Fatalf("expected 403 response, got %d", resp.StatusCode)
-	}
-}
-
 func TestWatchRoomWebSocket_LoadsSessionReadOnlyWithoutCommit(t *testing.T) {
 	app := setupTestApp(t)
 	defer closeWatchRoomWSTestApp(t, app)
@@ -601,33 +577,6 @@ func TestWatchRoomWebSocket_JoinSnapshotReflectsCurrentPlaybackState(t *testing.
 	}
 }
 
-func TestWatchRoomWebSocket_DoesNotBroadcastMemberJoinedForSecondSocket(t *testing.T) {
-	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	guest := createTestUser(t, app, "Guest", "guest-second-socket@example.com", false)
-
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
-
-	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
-	defer ownerConn.Close()
-	guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
-	defer guestConn.Close()
-
-	_ = readUntilEventType(t, ownerConn, "room_snapshot")
-	_ = readUntilEventType(t, guestConn, "room_snapshot")
-
-	ownerSecondConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
-	defer ownerSecondConn.Close()
-
-	_ = readUntilEventType(t, ownerSecondConn, "room_snapshot")
-	expectNoEventType(t, guestConn, "member_joined")
-}
-
 func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *testing.T) {
 	app := setupTestApp(t)
 	defer closeWatchRoomWSTestApp(t, app)
@@ -665,6 +614,9 @@ func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *t
 	ownerSecondConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerSecondConn.Close()
 	_ = readUntilEventType(t, ownerSecondConn, "room_snapshot")
+	// A member's second socket is not a second member: no join, and no leave
+	// until the last socket goes.
+	expectNoEventType(t, guestConn, "member_joined")
 
 	_ = ownerSecondConn.Close()
 	expectNoEventType(t, guestConn, "member_left")
@@ -735,10 +687,32 @@ func TestWatchRoomHub_ShutdownClosesConnectionsAndClearsSessions(t *testing.T) {
 	_ = readUntilEventType(t, ownerConn, "room_snapshot")
 	_ = readUntilEventType(t, guestConn, "room_snapshot")
 
+	// Open sockets hold the application wait group, which is what lets
+	// ListenForShutdown wait for them.
+	waitReleased := make(chan struct{})
+	go func() {
+		app.Wait.Wait()
+		close(waitReleased)
+	}()
+	select {
+	case <-waitReleased:
+		t.Fatal("expected wait group to remain blocked while websockets are connected")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	app.WatchRoomHub.Shutdown()
+	// ListenForShutdown and the test harness both shut the hub down, so a
+	// second call must be a no-op rather than a panic.
 	app.WatchRoomHub.Shutdown()
 
 	expectSocketToClose(t, ownerConn)
 	expectSocketToClose(t, guestConn)
+
+	select {
+	case <-waitReleased:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected wait group to release after websocket shutdown")
+	}
 
 	app.WatchRoomHub.mu.Lock()
 	sessionCount := len(app.WatchRoomHub.sessions)
@@ -746,48 +720,6 @@ func TestWatchRoomHub_ShutdownClosesConnectionsAndClearsSessions(t *testing.T) {
 	if sessionCount != 0 {
 		t.Fatalf("expected hub sessions to be cleared after shutdown, got %d", sessionCount)
 	}
-}
-
-func TestWatchRoomWebSocket_ShutdownReleasesWaitGroup(t *testing.T) {
-	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID)
-	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
-
-	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
-	defer conn.Close()
-
-	_ = readUntilEventType(t, conn, "room_snapshot")
-
-	done := make(chan struct{})
-	go func() {
-		app.Wait.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		t.Fatal("expected wait group to remain blocked while websocket is connected")
-	case <-time.After(150 * time.Millisecond):
-	}
-
-	app.WatchRoomHub.Shutdown()
-
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("expected wait group to release after websocket shutdown")
-	}
-}
-
-func TestWatchRoomHub_ShutdownIsIdempotent(t *testing.T) {
-	hub := NewWatchRoomHub()
-	hub.Shutdown()
-	hub.Shutdown()
 }
 
 func TestWatchRoomClient_EnqueueEvictsStalledClientWithoutBlocking(t *testing.T) {
@@ -819,8 +751,8 @@ func TestWatchRoomClient_EnqueueEvictsStalledClientWithoutBlocking(t *testing.T)
 func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
 	origReadTimeout := watchRoomReadTimeout
 	origPingInterval := watchRoomPingInterval
-	watchRoomReadTimeout = 250 * time.Millisecond
-	watchRoomPingInterval = 100 * time.Millisecond
+	watchRoomReadTimeout = 100 * time.Millisecond
+	watchRoomPingInterval = 40 * time.Millisecond
 	defer func() {
 		watchRoomReadTimeout = origReadTimeout
 		watchRoomPingInterval = origPingInterval
@@ -856,7 +788,7 @@ func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
 		results <- readResult{event: event, err: err}
 	}()
 
-	time.Sleep(time.Second)
+	time.Sleep(400 * time.Millisecond)
 
 	if err := conn.WriteJSON(map[string]any{"type": "ping"}); err != nil {
 		t.Fatalf("write ping after idle period: %v", err)

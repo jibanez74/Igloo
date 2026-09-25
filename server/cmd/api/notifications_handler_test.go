@@ -53,70 +53,39 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	}
 }
 
-func TestCreateNotification_HTTPRejectsInvalidTitle(t *testing.T) {
+func TestCreateNotification_HTTPRejectsInvalidRequests(t *testing.T) {
 	app := setupSessionTestApp(t)
-
-	user := createTestUser(t, app, "Requester", "requester@example.com", false)
-
-	handler := authenticatedRouter(t, app, user.ID)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
-		"title": "invalid",
-		"message": "Requester: requester@example.com",
-		"isAdmin": true
-	}`))
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
-	}
-}
-
-func TestCreateNotification_HTTPRejectsEmptyMessage(t *testing.T) {
-	app := setupSessionTestApp(t)
-
-	user := createTestUser(t, app, "Requester", "requester@example.com", false)
-
-	handler := authenticatedRouter(t, app, user.ID)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
-		"title": "movie_request",
-		"message": "   ",
-		"isAdmin": true
-	}`))
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
-	}
-}
-
-func TestCreateNotification_HTTPRejectsIsAdminFalse(t *testing.T) {
-	app := setupSessionTestApp(t)
-
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
-		"title": "movie_request",
-		"message": "Requester: requester@example.com",
-		"isAdmin": false
-	}`))
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
+	tests := []struct {
+		name        string
+		body        string
+		wantMessage string
+	}{
+		{"unknown title", `{"title":"invalid","message":"Requester: requester@example.com","isAdmin":true}`, ""},
+		{"blank message", `{"title":"movie_request","message":"   ","isAdmin":true}`, ""},
+		{"isAdmin false", `{"title":"movie_request","message":"Requester: requester@example.com","isAdmin":false}`, "isAdmin must be true: notifications are the shared admin queue"},
 	}
-
-	var resp helpers.JSONResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
-	}
-	if !resp.Error || resp.Message != "isAdmin must be true: notifications are the shared admin queue" {
-		t.Fatalf("response = %+v, want isAdmin-required error", resp)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(tt.body)))
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
+			}
+			if tt.wantMessage == "" {
+				return
+			}
+			var resp helpers.JSONResponse
+			err := json.Unmarshal(w.Body.Bytes(), &resp)
+			if err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+			if !resp.Error || resp.Message != tt.wantMessage {
+				t.Fatalf("response = %+v, want %q", resp, tt.wantMessage)
+			}
+		})
 	}
 }
 

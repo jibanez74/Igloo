@@ -157,3 +157,45 @@ func TestLoadRuntimeEnvFile_MissingEnvFileIsIgnored(t *testing.T) {
 		t.Fatalf("expected missing .env to be ignored, got file=%q loaded=%t", envFile, loaded)
 	}
 }
+
+func TestNewRuntimeConfig_BooleansAndDefaultAdmin(t *testing.T) {
+	clearRuntimeConfigEnv(t)
+	t.Setenv(envDebug, "true")
+	t.Setenv(envSessionCookieSecure, "true")
+	t.Setenv(envDefaultAdminName, "Ops")
+	t.Setenv(envDefaultAdminEmail, "ops@example.com")
+	t.Setenv(envDefaultAdminPassword, " top secret ")
+
+	config, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig: %v", err)
+	}
+	if !config.Debug || !config.SessionCookieSecure {
+		t.Fatalf("Debug = %t, SessionCookieSecure = %t, want both true", config.Debug, config.SessionCookieSecure)
+	}
+	// LOG_TO_STDOUT follows DEBUG when it is unset.
+	if !config.LogToStdout {
+		t.Fatal("LogToStdout = false, want it to follow DEBUG=true")
+	}
+	if config.DefaultAdminName != "Ops" || config.DefaultAdminEmail != "ops@example.com" || config.DefaultAdminPassword != "top secret" {
+		t.Fatalf("default admin = %q %q %q, want the trimmed env values", config.DefaultAdminName, config.DefaultAdminEmail, config.DefaultAdminPassword)
+	}
+
+	t.Setenv(envLogToStdout, "false")
+	t.Setenv(envSessionCookieSecure, "not a bool")
+	t.Setenv(envDefaultAdminName, "")
+	t.Setenv(envDefaultAdminEmail, "")
+	config, err = NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig: %v", err)
+	}
+	if config.LogToStdout {
+		t.Fatal("LogToStdout = true, want the explicit false to win over DEBUG")
+	}
+	if config.SessionCookieSecure {
+		t.Fatal("SessionCookieSecure = true, want an unparsable value to fall back to false")
+	}
+	if config.DefaultAdminName != defaultAdminName || config.DefaultAdminEmail != defaultAdminEmail {
+		t.Fatalf("default admin = %q %q, want the built-in defaults", config.DefaultAdminName, config.DefaultAdminEmail)
+	}
+}
