@@ -20,14 +20,11 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 	for _, scenario := range []string{"canceled", "database error"} {
 		t.Run(scenario, func(t *testing.T) {
 			// Cancellation can discard the connection, so rollback needs a file database.
-			db, queries := scannertest.OpenDB(t, filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
+			s := setupMusicScannerDatabase(t, filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
+			db := s.tx.DB
 			metadata := testMusicMetadata()
 			metadata.Format.Tags.Genre = "Rock"
-			s := New(Dependencies{
-				DB: db, Queries: queries, Logger: &scannertest.Logger{},
-				Now:     func() time.Time { return time.Now().Add(2 * time.Minute) },
-				Ffprobe: &scannertest.CountingProbe{Default: metadata},
-			})
+			s.ffprobe = &scannertest.CountingProbe{Default: metadata}
 			root := t.TempDir()
 			path := filepath.Join(root, "missing.m4a")
 			imported, _, failures := s.processMusicFixtureBatch(t, context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a", Size: 1}})

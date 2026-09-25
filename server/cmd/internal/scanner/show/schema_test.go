@@ -12,39 +12,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type fileEpisode struct {
-	id            int64
-	episodeNumber int64
-	name          string
-	tmdbRuntime   sql.NullInt64
-}
-
-// The episodes a physical file resolves to, in link order. The scanner no
-// longer needs this shape, but file and episode identity surviving a rescan is
-// exactly what these tests assert.
-func fileEpisodes(t *testing.T, db *sql.DB, fileID int64) []fileEpisode {
-	t.Helper()
-	rows, err := db.Query("SELECT e.id, e.episode_number, e.name, e.tmdb_runtime FROM show_episodes e JOIN show_episode_files l ON l.episode_id = e.id WHERE l.file_id = ? ORDER BY l.episode_order", fileID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	var episodes []fileEpisode
-	for rows.Next() {
-		var episode fileEpisode
-		err = rows.Scan(&episode.id, &episode.episodeNumber, &episode.name, &episode.tmdbRuntime)
-		if err != nil {
-			t.Fatal(err)
-		}
-		episodes = append(episodes, episode)
-	}
-	err = rows.Err()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return episodes
-}
-
 func TestCatalogOwnershipAndRollback(t *testing.T) {
 	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	ctx := context.Background()

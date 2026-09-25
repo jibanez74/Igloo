@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
@@ -20,8 +20,15 @@ import (
 
 func setupMusicScanner(t testing.TB) *Scanner {
 	t.Helper()
-	db, queries := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
-	return New(Dependencies{DB: db, Queries: queries, Logger: &scannertest.Logger{}, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }})
+	return setupMusicScannerDatabase(t, ":memory:?_foreign_keys=on")
+}
+
+// setupMusicScannerDatabase opens source instead of an in-memory database,
+// for tests whose cancellation can discard the connection mid-transaction.
+func setupMusicScannerDatabase(t testing.TB, source string) *Scanner {
+	t.Helper()
+	db, queries := scannertest.OpenDB(t, source)
+	return New(Dependencies{DB: db, Queries: queries, Logger: &scannertest.Logger{}, Now: scannertest.SettledNow})
 }
 
 func (app *Scanner) processMusicBatchForTest(t testing.TB, ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
@@ -81,8 +88,12 @@ func testMusicMetadataWithTags(tags ffprobe.FormatTags) *ffprobe.FfprobeResult {
 	}
 }
 
+// musicScannerFfprobeByPath answers each path from results and counts the
+// generic and audio metadata requests apart, which CountingProbe merges. The
+// counters are locked so the stub stays safe if music probes concurrently.
 type musicScannerFfprobeByPath struct {
 	scannertest.NoKeyframeProbe
+	mu            sync.Mutex
 	results       map[string]*ffprobe.FfprobeResult
 	metadataCalls map[string]int
 	audioCalls    map[string]int
@@ -97,12 +108,16 @@ func newMusicScannerFfprobeByPath(results map[string]*ffprobe.FfprobeResult) *mu
 }
 
 func (s *musicScannerFfprobeByPath) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
+	s.mu.Lock()
 	s.metadataCalls[filePath]++
+	s.mu.Unlock()
 	return s.resultForPath(filePath)
 }
 
 func (s *musicScannerFfprobeByPath) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
+	s.mu.Lock()
 	s.audioCalls[filePath]++
+	s.mu.Unlock()
 	return s.resultForPath(filePath)
 }
 
@@ -115,7 +130,15 @@ func (s *musicScannerFfprobeByPath) resultForPath(filePath string) (*ffprobe.Ffp
 	return result, nil
 }
 
+func (s *musicScannerFfprobeByPath) audioCallsFor(filePath string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.audioCalls[filePath]
+}
+
 func (s *musicScannerFfprobeByPath) totalAudioCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	total := 0
 	for _, calls := range s.audioCalls {
 		total += calls
@@ -124,6 +147,8 @@ func (s *musicScannerFfprobeByPath) totalAudioCalls() int {
 }
 
 func (s *musicScannerFfprobeByPath) totalMetadataCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	total := 0
 	for _, calls := range s.metadataCalls {
 		total += calls
@@ -236,4 +261,13 @@ func (s *Scanner) processMusicFixtureBatch(t testing.TB, ctx context.Context, sc
 	t.Helper()
 	prepareMusicFixtures(t, files)
 	return s.processBatchCounts(ctx, scan, files)
+}
+
+func scanTaggedTrack(t *testing.T, s *Scanner, scan *musicScanContext, path string, size int64, tags ffprobe.FormatTags) {
+	t.Helper()
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadataWithTags(tags)}
+	n, _, failures := s.processMusicFixtureBatch(t, context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a", Size: size}})
+	if n != 1 || failures != 0 {
+		t.Fatalf("scan %s: scanned=%d failures=%d logs=%+v", path, n, failures, s.logger.(*scannertest.Logger).WarnEntries)
+	}
 }

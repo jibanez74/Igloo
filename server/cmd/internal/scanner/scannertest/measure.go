@@ -2,6 +2,7 @@ package scannertest
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -45,6 +46,22 @@ func (l *MeasurementLogger) Info(message string, args ...any) {
 func (l *MeasurementLogger) Debug(string, ...any)              {}
 func (l *MeasurementLogger) Warn(message string, args ...any)  { l.t.Log(message, args) }
 func (l *MeasurementLogger) Error(message string, args ...any) { l.t.Log(message, args) }
+
+// MeasureRun times one benchmark pass and logs its heap and process I/O
+// around scan, which runs the pass and returns the library's status summary.
+func MeasureRun(t *testing.T, run string, scan func() string) {
+	t.Helper()
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	t.Logf("%s initial I/O: %s", run, ProcessMeasurement("/proc/self/io"))
+	summary := scan()
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+	t.Logf("%s: elapsed=%s %s heap=%d allocated=%d", run, elapsed, summary, after.HeapAlloc, after.TotalAlloc-before.TotalAlloc)
+	t.Logf("%s final I/O: %s; memory: %s", run, ProcessMeasurement("/proc/self/io"), ProcessMeasurement("/proc/self/status"))
+}
 
 // ProcessMeasurement summarizes /proc/self/io or /proc/self/status for a
 // benchmark log line; other platforms report unavailability.

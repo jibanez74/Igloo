@@ -14,20 +14,6 @@ import (
 	"igloo/cmd/internal/tmdb"
 )
 
-func nextMovieScan(t *testing.T, s *Scanner) *movieScanContext {
-	t.Helper()
-	index, _, err := s.loadMovieScanIndex(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return newMovieScanContext(index)
-}
-
-func retryMovieFixture(t *testing.T) tmdb.TmdbMovie {
-	t.Helper()
-	return tmdbMovieFromJSON(t, `{"id":42,"title":"Enriched","overview":"Overview","tagline":"Tagline","release_date":"2001-02-03","imdb_id":"tt42","poster_path":"/poster","backdrop_path":"/backdrop","adult":true,"original_language":"es","vote_average":8,"budget":100,"revenue":200,"runtime":999,"production_companies":[{"id":1,"name":"Studio"}],"genres":[{"id":1,"name":"Drama"}],"credits":{"cast":[{"id":1,"name":"Actor","character":"Lead","order":0}],"crew":[{"id":2,"name":"Director","job":"Director","department":"Directing"}]},"videos":{"results":[{"id":"trailer","key":"key","site":"YouTube","type":"Trailer"}]}}`)
-}
-
 func TestMovieEnrichmentRecovery(t *testing.T) {
 	for _, failure := range []string{"offline", "empty", "search", "details", "timeout"} {
 		for _, metadataChanged := range []bool{false, true} {
@@ -449,14 +435,6 @@ func TestMovieRetryAtomicityAndStaleResults(t *testing.T) {
 			})
 		}
 	}
-}
-
-func readTestMovieByPath(ctx context.Context, q *database.Queries, path string) (database.Movie, error) {
-	row, err := q.GetMovieByPath(ctx, path)
-	if err != nil {
-		return database.Movie{}, err
-	}
-	return q.GetMovieByID(ctx, row.ID)
 }
 
 // A movie the user edited through the Edit dialog keeps those values when the

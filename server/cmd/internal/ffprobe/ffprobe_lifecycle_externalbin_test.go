@@ -5,7 +5,6 @@ package ffprobe
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -91,28 +90,10 @@ func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
 	}
 }
 
-func TestResolveBinaryCandidateReportsMissingExternalBinary(t *testing.T) {
-	prepareSingletonLifecycleTest(t)
-	t.Setenv("IGLOO_FFPROBE_PATH", "")
-	t.Setenv("PATH", t.TempDir())
-
-	_, err := resolveBinaryCandidate()
-	if err == nil {
-		t.Fatal("expected missing ffprobe error")
-	}
-	if !strings.Contains(err.Error(), "IGLOO_FFPROBE_PATH") {
-		t.Fatalf("error = %q, want environment-variable guidance", err.Error())
-	}
-}
-
 func countVersionCalls(t *testing.T, callLog string) int {
 	t.Helper()
-	data, err := os.ReadFile(callLog)
-	if err != nil {
-		t.Fatalf("read call log: %v", err)
-	}
 	calls := 0
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+	for _, line := range readArgumentLog(t, callLog) {
 		if line == "-version" {
 			calls++
 		}

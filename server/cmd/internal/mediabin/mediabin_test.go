@@ -28,6 +28,46 @@ func zstdCompress(t *testing.T, payload []byte) []byte {
 	return buf.Bytes()
 }
 
+func TestResolveExternal(t *testing.T) {
+	const envVar = "IGLOO_TEST_MEDIABIN_PATH"
+
+	t.Run("prefers the trimmed override", func(t *testing.T) {
+		t.Setenv(envVar, "  /opt/media/fakebin  ")
+		t.Setenv("PATH", t.TempDir())
+
+		path, err := ResolveExternal("fakebin", envVar)
+		if err != nil || path != "/opt/media/fakebin" {
+			t.Fatalf("ResolveExternal = %q, %v; want the trimmed override", path, err)
+		}
+	})
+
+	t.Run("falls back to PATH when the override is blank", func(t *testing.T) {
+		dir := t.TempDir()
+		binary := filepath.Join(dir, "fakebin")
+		err := os.WriteFile(binary, []byte("#!/bin/sh\n"), 0o755)
+		if err != nil {
+			t.Fatalf("write fake binary: %v", err)
+		}
+		t.Setenv(envVar, "   ")
+		t.Setenv("PATH", dir)
+
+		path, err := ResolveExternal("fakebin", envVar)
+		if err != nil || path != binary {
+			t.Fatalf("ResolveExternal = %q, %v; want %q from PATH", path, err, binary)
+		}
+	})
+
+	t.Run("names the override when the binary is missing", func(t *testing.T) {
+		t.Setenv(envVar, "")
+		t.Setenv("PATH", t.TempDir())
+
+		_, err := ResolveExternal("fakebin", envVar)
+		if err == nil || !strings.Contains(err.Error(), "fakebin binary not found") || !strings.Contains(err.Error(), envVar) {
+			t.Fatalf("error = %v, want a not-found error naming %s", err, envVar)
+		}
+	})
+}
+
 func TestExtractEmbeddedZstdUsesCacheAcrossCalls(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 

@@ -7,35 +7,20 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	cache "github.com/patrickmn/go-cache"
 )
-
-func newTestClient(baseURL string) *tmdbClient {
-	return &tmdbClient{
-		key:            "test-api-key",
-		baseURL:        baseURL,
-		httpClient:     &http.Client{Timeout: time.Second},
-		maxRetries:     3,
-		retryBaseDelay: time.Millisecond,
-		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
-	}
-}
 
 func TestGetTmdbMovieByID_RequiresTmdbID(t *testing.T) {
 	var attempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 	}))
-	defer server.Close()
 
-	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{})
+	err := client.GetTmdbMovieByID(context.Background(), &TmdbMovie{})
 	if err == nil {
 		t.Fatal("expected missing tmdb id to return error")
 	}
@@ -43,11 +28,6 @@ func TestGetTmdbMovieByID_RequiresTmdbID(t *testing.T) {
 		t.Fatalf("expected no HTTP requests, got %d", attempts.Load())
 	}
 }
-
-// yearWithNoReleases is a year no catalog entry can carry, so a search
-// filtered by it must fall back to an unfiltered search. The live tests use
-// the same value against the real API.
-const yearWithNoReleases = 1850
 
 func TestGetTmdbMovieByID_Retries(t *testing.T) {
 	const success = `{"id":603,"title":"The Matrix"}`
@@ -115,7 +95,7 @@ func TestGetTmdbMovieByID_Retries(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var attempts atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				attempt := attempts.Add(1)
 				if attempt <= tc.failures {
 					tc.fail(w)
@@ -123,10 +103,9 @@ func TestGetTmdbMovieByID_Retries(t *testing.T) {
 				}
 				_, _ = w.Write([]byte(success))
 			}))
-			defer server.Close()
 
 			movie := &TmdbMovie{TmdbID: 603}
-			err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), movie)
+			err := client.GetTmdbMovieByID(context.Background(), movie)
 			if attempts.Load() != tc.wantAttempts {
 				t.Fatalf("attempts = %d, want %d", attempts.Load(), tc.wantAttempts)
 			}
@@ -147,17 +126,16 @@ func TestGetTmdbMovieByID_Retries(t *testing.T) {
 }
 
 func TestGetTmdbMovieByID_ContextExpiresDuringBackoff(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "2")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"status_message":"rate limit"}`))
 	}))
-	defer server.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := newTestClient(server.URL).GetTmdbMovieByID(ctx, &TmdbMovie{TmdbID: 603})
+	err := client.GetTmdbMovieByID(ctx, &TmdbMovie{TmdbID: 603})
 	if err == nil {
 		t.Fatal("expected context deadline error, got nil")
 	}
@@ -167,13 +145,11 @@ func TestGetTmdbMovieByID_ContextExpiresDuringBackoff(t *testing.T) {
 }
 
 func TestGetTmdbMovieByID_TimeoutReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(50 * time.Millisecond)
 		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
 	}))
-	defer server.Close()
 
-	client := newTestClient(server.URL)
 	client.httpClient = &http.Client{Timeout: 10 * time.Millisecond}
 	client.maxRetries = 1
 
@@ -185,15 +161,14 @@ func TestGetTmdbMovieByID_TimeoutReturnsError(t *testing.T) {
 
 func TestGetTmdbMovieByID_RespectsCanceledContext(t *testing.T) {
 	var attempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 	}))
-	defer server.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := newTestClient(server.URL).GetTmdbMovieByID(ctx, &TmdbMovie{TmdbID: 603})
+	err := client.GetTmdbMovieByID(ctx, &TmdbMovie{TmdbID: 603})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
@@ -202,38 +177,14 @@ func TestGetTmdbMovieByID_RespectsCanceledContext(t *testing.T) {
 	}
 }
 
-// queryCapture records every request's query string plus its path under the
-// "path" key, so a test can assert both after the calls complete.
-type queryCapture struct {
-	mu      sync.Mutex
-	queries []url.Values
-}
-
-func (c *queryCapture) record(r *http.Request) {
-	query := r.URL.Query()
-	query.Set("path", r.URL.Path)
-	c.mu.Lock()
-	c.queries = append(c.queries, query)
-	c.mu.Unlock()
-}
-
-func (c *queryCapture) all() []url.Values {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]url.Values(nil), c.queries...)
-}
-
 func TestGetTmdbMovieByID_UsesCacheAndClearCache(t *testing.T) {
 	var attempts atomic.Int32
 	var capture queryCapture
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempt := attempts.Add(1)
 		capture.record(r)
 		fmt.Fprintf(w, `{"id":603,"title":"The Matrix %d"}`, attempt)
 	}))
-	defer server.Close()
-
-	client := newTestClient(server.URL)
 
 	first := &TmdbMovie{TmdbID: 603}
 	err := client.GetTmdbMovieByID(context.Background(), first)
@@ -274,13 +225,10 @@ func TestGetTmdbMovieByID_UsesCacheAndClearCache(t *testing.T) {
 
 func TestGetTmdbMovieByID_CachedCopiesAreIsolated(t *testing.T) {
 	var attempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 		_, _ = w.Write([]byte(`{"id":603,"title":"The Matrix"}`))
 	}))
-	defer server.Close()
-
-	client := newTestClient(server.URL)
 
 	first := &TmdbMovie{TmdbID: 603}
 	err := client.GetTmdbMovieByID(context.Background(), first)
@@ -303,13 +251,12 @@ func TestGetTmdbMovieByID_CachedCopiesAreIsolated(t *testing.T) {
 }
 
 func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"status_message":"not found"}`))
 	}))
-	defer server.Close()
 
-	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
+	err := client.GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
 	if err == nil {
 		t.Fatal("expected non-OK response to return error")
 	}
@@ -319,12 +266,11 @@ func TestGetTmdbMovieByID_NonOKReturnsError(t *testing.T) {
 }
 
 func TestGetTmdbMovieByID_MalformedJSONReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"id":`))
 	}))
-	defer server.Close()
 
-	err := newTestClient(server.URL).GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
+	err := client.GetTmdbMovieByID(context.Background(), &TmdbMovie{TmdbID: 603})
 	if err == nil {
 		t.Fatal("expected malformed JSON to return error")
 	}
@@ -332,7 +278,7 @@ func TestGetTmdbMovieByID_MalformedJSONReturnsError(t *testing.T) {
 
 func TestSearchMoviesByTitleAndYear_RetriesWithoutYearWhenEmpty(t *testing.T) {
 	var capture queryCapture
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capture.record(r)
 		if r.URL.Query().Get("year") == strconv.Itoa(yearWithNoReleases) {
 			_, _ = w.Write([]byte(`{"results":[]}`))
@@ -340,9 +286,8 @@ func TestSearchMoviesByTitleAndYear_RetriesWithoutYearWhenEmpty(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"results":[{"id":603,"title":"The Matrix","release_date":"1999-03-31"}]}`))
 	}))
-	defer server.Close()
 
-	results, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "The Matrix", yearWithNoReleases)
+	results, err := client.SearchMoviesByTitleAndYear(context.Background(), "The Matrix", yearWithNoReleases)
 	if err != nil {
 		t.Fatalf("SearchMoviesByTitleAndYear returned error: %v", err)
 	}
@@ -381,24 +326,22 @@ func TestSearchMoviesByTitleAndYear_RejectsEmptyTitle(t *testing.T) {
 }
 
 func TestSearchMoviesByTitleAndYear_NoResultsReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"results":[]}`))
 	}))
-	defer server.Close()
 
-	_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "No Results")
+	_, err := client.SearchMoviesByTitleAndYear(context.Background(), "No Results")
 	if !errors.Is(err, ErrNoMoviesFound) {
 		t.Fatalf("expected ErrNoMoviesFound, got %v", err)
 	}
 }
 
 func TestSearchMoviesByTitleAndYear_MalformedJSONReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"results":`))
 	}))
-	defer server.Close()
 
-	_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "The Matrix")
+	_, err := client.SearchMoviesByTitleAndYear(context.Background(), "The Matrix")
 	if err == nil {
 		t.Fatal("expected malformed JSON to return error")
 	}
@@ -406,13 +349,12 @@ func TestSearchMoviesByTitleAndYear_MalformedJSONReturnsError(t *testing.T) {
 
 func TestGetMoviesInTheaters(t *testing.T) {
 	var capture queryCapture
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capture.record(r)
 		_, _ = w.Write([]byte(`{"results":[{"id":1,"title":"One"},{"id":2,"title":"Two"}]}`))
 	}))
-	defer server.Close()
 
-	movies, err := newTestClient(server.URL).GetMoviesInTheaters(context.Background())
+	movies, err := client.GetMoviesInTheaters(context.Background())
 	if err != nil {
 		t.Fatalf("GetMoviesInTheaters returned error: %v", err)
 	}
@@ -437,12 +379,11 @@ func TestGetMoviesInTheaters(t *testing.T) {
 }
 
 func TestGetMoviesInTheaters_EmptyResultsReturnsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"results":[]}`))
 	}))
-	defer server.Close()
 
-	_, err := newTestClient(server.URL).GetMoviesInTheaters(context.Background())
+	_, err := client.GetMoviesInTheaters(context.Background())
 	if err == nil {
 		t.Fatal("expected empty now-playing results to return error")
 	}
@@ -530,9 +471,8 @@ func TestRetryDelayHonorsRetryAfterAndCaps(t *testing.T) {
 func TestProviderStatusClassificationThroughHTTP(t *testing.T) {
 	for _, code := range []int{401, 403, 404, 429, 503} {
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code) }))
-			defer server.Close()
-			_, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(context.Background(), "movie")
+			client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code) }))
+			_, err := client.SearchMoviesByTitleAndYear(context.Background(), "movie")
 			authentication, transient := ProviderFailure(err)
 			if authentication != (code == 401 || code == 403) || transient != (code == 429 || code == 503) {
 				t.Fatalf("code=%d auth=%v transient=%v err=%v", code, authentication, transient, err)
@@ -574,16 +514,15 @@ func TestCancelBlockedMovieRequest(t *testing.T) {
 	entered := make(chan struct{})
 	stopped := make(chan struct{})
 	var enteredOnce, stoppedOnce sync.Once
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		enteredOnce.Do(func() { close(entered) })
 		<-r.Context().Done()
 		stoppedOnce.Do(func() { close(stopped) })
 	}))
-	defer server.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	result := make(chan error, 1)
-	go func() { _, err := newTestClient(server.URL).SearchMoviesByTitleAndYear(ctx, "movie"); result <- err }()
+	go func() { _, err := client.SearchMoviesByTitleAndYear(ctx, "movie"); result <- err }()
 	select {
 	case <-entered:
 	case <-time.After(time.Second):

@@ -87,6 +87,12 @@ func argText(arg any) string {
 	return ""
 }
 
+// SettledNow is a clock two minutes ahead, past scanner.FileQuietPeriod, so
+// files a test has just written are old enough to scan instead of deferred.
+func SettledNow() time.Time {
+	return time.Now().Add(2 * time.Minute)
+}
+
 // WriteFile writes contents to path, creating parent directories, and fails
 // the test on error. It returns path so fixtures can be declared inline.
 func WriteFile(t testing.TB, path, contents string) string {
@@ -193,4 +199,57 @@ func (p *CountingProbe) Calls() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.calls
+}
+
+// GateProbe holds every metadata request until Release, so a test can act
+// while a scan is known to be inside probing. Each request reports its path
+// on Entered, dropping the report once the buffer is full so repeated
+// requests never block, then waits for Release or its context. A released
+// request answers with a copy of Result.
+type GateProbe struct {
+	NoKeyframeProbe
+	Result  *ffprobe.FfprobeResult
+	Entered chan string
+	Release func()
+	release chan struct{}
+}
+
+func NewGateProbe(result *ffprobe.FfprobeResult) *GateProbe {
+	p := &GateProbe{Result: result, Entered: make(chan string, 16), release: make(chan struct{})}
+	p.Release = sync.OnceFunc(func() { close(p.release) })
+	return p
+}
+
+func (p *GateProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+	select {
+	case p.Entered <- path:
+	default:
+	}
+	select {
+	case <-p.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if p.Result == nil {
+		return nil, errors.New("no probe result configured")
+	}
+	result := *p.Result
+	return &result, nil
+}
+
+func (p *GateProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+	return p.GetMetadata(ctx, path)
+}
+
+// WaitEntered returns the path of the first request still unread on Entered,
+// or fails the test after timeout.
+func (p *GateProbe) WaitEntered(t testing.TB, timeout time.Duration, what string) string {
+	t.Helper()
+	select {
+	case path := <-p.Entered:
+		return path
+	case <-time.After(timeout):
+		t.Fatalf("%s did not happen within %s", what, timeout)
+		return ""
+	}
 }

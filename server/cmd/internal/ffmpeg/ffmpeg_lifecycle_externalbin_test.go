@@ -5,7 +5,6 @@ package ffmpeg
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -56,20 +55,6 @@ func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
 	}
 }
 
-func TestResolveBinaryCandidateReportsMissingExternalBinary(t *testing.T) {
-	prepareSingletonTest(t)
-	t.Setenv("IGLOO_FFMPEG_PATH", "")
-	t.Setenv("PATH", t.TempDir())
-
-	_, err := resolveBinaryCandidate()
-	if err == nil {
-		t.Fatal("expected missing FFmpeg error")
-	}
-	if !strings.Contains(err.Error(), "IGLOO_FFMPEG_PATH") {
-		t.Fatalf("error = %q, want environment-variable guidance", err.Error())
-	}
-}
-
 func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 	prepareSingletonTest(t)
 	logPath := filepath.Join(t.TempDir(), "calls.log")
@@ -88,18 +73,14 @@ func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 		t.Fatal("New did not reuse the singleton instance")
 	}
 
-	logData, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read call log: %v", err)
-	}
 	versionCalls := 0
-	for _, line := range strings.Split(strings.TrimSpace(string(logData)), "\n") {
+	for _, line := range readArgumentLog(t, logPath) {
 		if line == "-version" {
 			versionCalls++
 		}
 	}
 	if versionCalls != 1 {
-		t.Fatalf("version calls = %d, want 1; log: %s", versionCalls, logData)
+		t.Fatalf("version calls = %d, want 1", versionCalls)
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"sync/atomic"
 	"testing"
@@ -15,7 +14,7 @@ import (
 
 func TestTVRequestsCachingAndFallback(t *testing.T) {
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		if r.URL.Query().Get("api_key") != "test-api-key" || r.URL.Query().Get("language") != "en-US" {
 			t.Errorf("missing shared request parameters: %s", r.URL)
@@ -44,8 +43,6 @@ func TestTVRequestsCachingAndFallback(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
-	client := newTestClient(server.URL)
 	ctx := context.Background()
 	found, err := client.SearchShowsByTitleAndYear(ctx, "Example", 2020)
 	if err != nil || len(found) != 1 {
@@ -98,9 +95,7 @@ func TestTVFailuresAreNotCached(t *testing.T) {
 	} {
 		t.Run(body, func(t *testing.T) {
 			var calls atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); fmt.Fprint(w, body) }))
-			defer server.Close()
-			client := newTestClient(server.URL)
+			client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); fmt.Fprint(w, body) }))
 			for range 2 {
 				_, err := client.GetShowDetails(context.Background(), 7)
 				if err == nil {
@@ -116,15 +111,13 @@ func TestTVFailuresAreNotCached(t *testing.T) {
 
 func TestTVRateLimitAndMissingResults(t *testing.T) {
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
 			w.WriteHeader(429)
 			return
 		}
 		fmt.Fprint(w, `{"results":[]}`)
 	}))
-	defer server.Close()
-	client := newTestClient(server.URL)
 	_, err := client.SearchShowsByTitleAndYear(context.Background(), "missing")
 	if !errors.Is(err, ErrNoShowsFound) || calls.Load() != 2 {
 		t.Fatal("rate-limit retry", err, calls.Load())
@@ -149,9 +142,8 @@ func TestTVSeasonNumberValidation(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, tc.body) }))
-			defer server.Close()
-			_, err := newTestClient(server.URL).GetSeasonDetails(context.Background(), 7, 1)
+			client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, tc.body) }))
+			_, err := client.GetSeasonDetails(context.Background(), 7, 1)
 			if err == nil {
 				t.Fatal("accepted invalid season response")
 			}
@@ -161,9 +153,7 @@ func TestTVSeasonNumberValidation(t *testing.T) {
 
 func TestTVArgumentValidationSkipsTheNetwork(t *testing.T) {
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
-	defer server.Close()
-	client := newTestClient(server.URL)
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
 	ctx := context.Background()
 
 	_, err := client.SearchShowsByTitleAndYear(ctx, "  \t ")
@@ -202,12 +192,11 @@ func TestTVResponseErrors(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tc.status)
 				fmt.Fprint(w, tc.body)
 			}))
-			defer server.Close()
-			_, err := newTestClient(server.URL).GetShowDetails(context.Background(), 7)
+			_, err := client.GetShowDetails(context.Background(), 7)
 			if err == nil || err.Error() != tc.wantErr {
 				t.Fatalf("error = %v, want %q", err, tc.wantErr)
 			}
@@ -223,11 +212,10 @@ func TestTVResponseErrors(t *testing.T) {
 }
 
 func TestTVSearchRejectsResultWithoutIdentity(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"results":[{"id":7,"name":"Example"},{"id":0,"name":"Nameless"}]}`)
 	}))
-	defer server.Close()
-	_, err := newTestClient(server.URL).SearchShowsByTitleAndYear(context.Background(), "Example")
+	_, err := client.SearchShowsByTitleAndYear(context.Background(), "Example")
 	if err == nil || err.Error() != "invalid TMDB show identity" {
 		t.Fatalf("error = %v, want invalid TMDB show identity", err)
 	}
@@ -237,12 +225,10 @@ func TestTVSearchRejectsResultWithoutIdentity(t *testing.T) {
 // colliding key) is refetched instead of decoded.
 func TestTVCacheEntryOfWrongTypeIsRefetched(t *testing.T) {
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		fmt.Fprint(w, `{"id":7,"name":"Example","aggregate_credits":{},"content_ratings":{},"external_ids":{},"videos":{}}`)
 	}))
-	defer server.Close()
-	client := newTestClient(server.URL)
 	params := url.Values{"append_to_response": {"aggregate_credits,content_ratings,external_ids,videos"}, "language": {tmdbRequestLanguage}}
 	key := "tv:/tv/7?" + params.Encode()
 	client.movieCache.Set(key, &TmdbMovie{}, cache.DefaultExpiration)

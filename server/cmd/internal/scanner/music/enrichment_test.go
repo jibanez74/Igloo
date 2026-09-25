@@ -10,21 +10,11 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
 
 	spotifylib "github.com/zmb3/spotify/v2"
 )
-
-func scanTaggedTrack(t *testing.T, s *Scanner, scan *musicScanContext, path string, size int64, tags ffprobe.FormatTags) {
-	t.Helper()
-	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadataWithTags(tags)}
-	n, _, failures := s.processMusicFixtureBatch(t, context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a", Size: size}})
-	if n != 1 || failures != 0 {
-		t.Fatalf("scan %s: scanned=%d failures=%d logs=%+v", path, n, failures, s.logger.(*scannertest.Logger).WarnEntries)
-	}
-}
 
 func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 	for _, offline := range []bool{false, true} {

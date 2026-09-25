@@ -354,7 +354,7 @@ func TestFailedMovieProbeValidation(t *testing.T) {
 					scannertest.WriteFile(t, path, "changed media")
 				}
 				// Start past initial eligibility so every deferral comes from a failed probe.
-				now := time.Now().Add(2 * time.Minute)
+				now := scannertest.SettledNow()
 				s.now = func() time.Time { return now }
 				calls, waits, invalidations := 0, 0, 0
 				s.invalidateCommittedMovie = func(int64) { invalidations++ }
@@ -426,9 +426,12 @@ func TestCancellationDuringDeferredWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.scanContext = ctx
-	entered := make(chan struct{})
+	entered := make(chan struct{}, 1)
 	s.waitForRetry = func(ctx context.Context, delay time.Duration) error {
-		close(entered)
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
 		return waitForMovieRetry(ctx, delay)
 	}
 	done := make(chan struct{})

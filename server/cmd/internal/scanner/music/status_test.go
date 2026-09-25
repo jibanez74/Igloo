@@ -132,21 +132,14 @@ func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 	s.scanContext = ctx
 	// The probe holds the scan until the test cancels it, so the running
 	// report is read before the background run can finish.
-	entered := make(chan struct{}, 1)
-	s.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-		select {
-		case entered <- struct{}{}:
-		case <-ctx.Done():
-		}
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}}
+	probe := scannertest.NewGateProbe(nil)
+	s.ffprobe = probe
 	scannertest.WriteFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
 	result := s.Start()
 	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
-	scannertest.WaitForSignal(t, entered, 5*time.Second, "music scan reaching probing")
+	probe.WaitEntered(t, 5*time.Second, "music scan reaching probing")
 	started := s.Status()
 	if started.State != scanner.StateRunning || started.RunID == observed.RunID {
 		t.Fatalf("Start did not publish a new running report: %+v", started)

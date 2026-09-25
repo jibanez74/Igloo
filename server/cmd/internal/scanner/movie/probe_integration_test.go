@@ -29,7 +29,7 @@ func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
 			s := fixture.scanner
 			s.ffprobe = probe
 			filename := tc.name + "." + tc.ext
-			data, err := os.ReadFile(filepath.Join("../testdata", filename))
+			data, err := os.ReadFile(filepath.Join("testdata", filename))
 			if err != nil {
 				t.Fatal(err)
 			}

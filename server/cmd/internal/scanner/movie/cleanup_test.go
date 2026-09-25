@@ -238,7 +238,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
 			var now atomic.Int64
-			now.Store(time.Now().Add(2 * time.Minute).UnixNano())
+			now.Store(scannertest.SettledNow().UnixNano())
 			s.now = func() time.Time { return time.Unix(0, now.Load()) }
 			s.waitForRetry = func(ctx context.Context, delay time.Duration) error { now.Add(int64(delay)); return ctx.Err() }
 			ctx, cancel := context.WithCancel(context.Background())

@@ -188,11 +188,23 @@ func albumSearchThenDetails(id, name string, queries *[]string) http.Handler {
 // every later search with one candidate, and the details request with its
 // full record, so the client takes the plain-text fallback path.
 func albumFallbackThenDetails(id, name string, queries *[]string) http.Handler {
+	return albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondJSON(albumSearchJSON(id, name)), respondJSON(fullAlbumJSON(id, name)), queries)
+}
+
+// albumSearchSequence answers the first album search (the field-filter
+// strategy) with first, every later search (the fallback) with later, and
+// any other request with details, or 404 when details is nil. When queries
+// is non-nil, each search's q parameter is appended to it in request order.
+func albumSearchSequence(first, later, details func(http.ResponseWriter), queries *[]string) http.Handler {
 	searches := 0
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isSearch := strings.HasSuffix(r.URL.Path, "/search")
 		if !isSearch {
-			writeJSON(w, fullAlbumJSON(id, name))
+			if details == nil {
+				http.NotFound(w, r)
+				return
+			}
+			details(w)
 			return
 		}
 		searches++
@@ -200,9 +212,17 @@ func albumFallbackThenDetails(id, name string, queries *[]string) http.Handler {
 			*queries = append(*queries, r.URL.Query().Get("q"))
 		}
 		if searches == 1 {
-			writeJSON(w, emptyAlbumSearchJSON())
+			first(w)
 			return
 		}
-		writeJSON(w, albumSearchJSON(id, name))
+		later(w)
 	})
+}
+
+func respondJSON(v interface{}) func(http.ResponseWriter) {
+	return func(w http.ResponseWriter) { writeJSON(w, v) }
+}
+
+func respondSpotifyAPIError(status int, message string) func(http.ResponseWriter) {
+	return func(w http.ResponseWriter) { writeSpotifyAPIError(w, status, message) }
 }

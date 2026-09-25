@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
@@ -19,7 +18,6 @@ func TestMusicMetadataRealProbePersistence(t *testing.T) {
 		t.Run(ext, func(t *testing.T) {
 			s := setupMusicScanner(t)
 			s.ffprobe = probe
-			s.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
 			path := filepath.Join(t.TempDir(), "track."+ext)
 			scan := newMusicScanContext(nil)
 			var initialID int64

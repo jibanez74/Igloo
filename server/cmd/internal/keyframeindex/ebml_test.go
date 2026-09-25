@@ -2,7 +2,6 @@ package keyframeindex_test
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"math"
 	"testing"
@@ -10,23 +9,6 @@ import (
 	"igloo/cmd/internal/keyframeindex"
 	"igloo/cmd/internal/keyframeindex/kftestutil"
 )
-
-func extractBytes(t *testing.T, data []byte, container string) (keyframeindex.Index, error) {
-	t.Helper()
-	return keyframeindex.Extract(context.Background(), bytes.NewReader(data), int64(len(data)), container)
-}
-
-func requireKeyframes(t *testing.T, idx keyframeindex.Index, want []float64) {
-	t.Helper()
-	if len(idx.KeyframeSec) != len(want) {
-		t.Fatalf("keyframe count = %d, want %d (%v)", len(idx.KeyframeSec), len(want), idx.KeyframeSec)
-	}
-	for i, kf := range idx.KeyframeSec {
-		if math.Abs(kf-want[i]) > 0.001 {
-			t.Fatalf("keyframe[%d] = %f, want %f", i, kf, want[i])
-		}
-	}
-}
 
 func TestExtractEBML_CuedFile(t *testing.T) {
 	cues := []float64{0, 4.2, 9.96, 14.0}

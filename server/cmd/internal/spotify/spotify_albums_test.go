@@ -130,26 +130,14 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	})
 
 	t.Run("falls back when the field search response has no albums object", func(t *testing.T) {
-		searches := 0
-		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			isSearch := strings.HasSuffix(r.URL.Path, "/search")
-			if !isSearch {
-				writeJSON(w, fullAlbumJSON("noobj123", "Abbey Road"))
-				return
-			}
-			searches++
-			if searches == 1 {
-				writeJSON(w, map[string]interface{}{})
-				return
-			}
-			writeJSON(w, albumSearchJSON("noobj123", "Abbey Road"))
-		}))
+		var queries []string
+		sc := newMockClient(albumSearchSequence(respondJSON(map[string]interface{}{}), respondJSON(albumSearchJSON("noobj123", "Abbey Road")), respondJSON(fullAlbumJSON("noobj123", "Abbey Road")), &queries))
 		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if searches != 2 || string(album.ID) != "noobj123" {
-			t.Fatalf("searches = %d, album = %v, want the fallback result", searches, album.ID)
+		if len(queries) != 2 || string(album.ID) != "noobj123" {
+			t.Fatalf("searches = %d, album = %v, want the fallback result", len(queries), album.ID)
 		}
 	})
 
@@ -261,38 +249,18 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	})
 
 	t.Run("returns no_results when fallback response has no albums object", func(t *testing.T) {
-		searchCallCount := 0
-		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			searchCallCount++
-			if searchCallCount == 1 {
-				writeJSON(w, emptyAlbumSearchJSON())
-				return
-			}
-			writeJSON(w, map[string]interface{}{})
-		}))
+		var queries []string
+		sc := newMockClient(albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondJSON(map[string]interface{}{}), nil, &queries))
 
 		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
 		assertMatchReason(t, err, MatchReasonNoResults)
-		if searchCallCount != 2 {
-			t.Fatalf("searchCallCount = %d, want 2", searchCallCount)
+		if len(queries) != 2 {
+			t.Fatalf("searches = %d, want 2", len(queries))
 		}
 	})
 
 	t.Run("returns search_failed on the fallback strategy when the fallback request fails", func(t *testing.T) {
-		searchCallCount := 0
-		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasSuffix(r.URL.Path, "/search") {
-				t.Errorf("unexpected non-search request: %s", r.URL.Path)
-				http.NotFound(w, r)
-				return
-			}
-			searchCallCount++
-			if searchCallCount == 1 {
-				writeJSON(w, emptyAlbumSearchJSON())
-				return
-			}
-			writeSpotifyAPIError(w, http.StatusBadGateway, "fallback failed")
-		}))
+		sc := newMockClient(albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondSpotifyAPIError(http.StatusBadGateway, "fallback failed"), nil, nil))
 
 		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
 		matchErr := assertMatchReason(t, err, MatchReasonSearchFailed)
@@ -318,20 +286,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	})
 
 	t.Run("returns details_failed on the fallback strategy when its details request fails", func(t *testing.T) {
-		searchCallCount := 0
-		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			isSearch := strings.HasSuffix(r.URL.Path, "/search")
-			if !isSearch {
-				writeSpotifyAPIError(w, http.StatusBadGateway, "album details failed")
-				return
-			}
-			searchCallCount++
-			if searchCallCount == 1 {
-				writeJSON(w, emptyAlbumSearchJSON())
-				return
-			}
-			writeJSON(w, albumSearchJSON("fallbackBad123", "Abbey Road"))
-		}))
+		sc := newMockClient(albumSearchSequence(respondJSON(emptyAlbumSearchJSON()), respondJSON(albumSearchJSON("fallbackBad123", "Abbey Road")), respondSpotifyAPIError(http.StatusBadGateway, "album details failed"), nil))
 
 		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
 		matchErr := assertMatchReason(t, err, MatchReasonDetailsFailed)

@@ -331,9 +331,9 @@ func buildMoov(opts MP4Options) []byte {
 			SampleDeltas: [][2]uint32{{1, 1024}},
 			OmitStss:     true,
 		}, "soun", 48000)
-		return fmp4testutil.Box("moov", concat(mvhd, audioTrak, videoTrak))
+		return fmp4testutil.Box("moov", mvhd, audioTrak, videoTrak)
 	}
-	return fmp4testutil.Box("moov", concat(mvhd, videoTrak))
+	return fmp4testutil.Box("moov", mvhd, videoTrak)
 }
 
 func buildTrak(opts MP4Options, handler string, timescale uint32) []byte {
@@ -390,11 +390,11 @@ func buildTrak(opts MP4Options, handler string, timescale uint32) []byte {
 		}
 		// Built by hand because FullBoxPayload always writes version 0 and
 		// ctts is the one box whose version the parser must honour.
-		ctts := fmp4testutil.Box("ctts", concat(
+		ctts := fmp4testutil.Box("ctts",
 			[]byte{opts.CttsVersion, 0, 0, 0},
 			fmp4testutil.U32(uint32(len(opts.CttsOffsets))),
 			cttsEntries,
-		))
+		)
 		stblChildren = concat(stblChildren, ctts)
 	}
 
@@ -412,8 +412,8 @@ func buildTrak(opts MP4Options, handler string, timescale uint32) []byte {
 
 	stbl := fmp4testutil.Box("stbl", stblChildren)
 	minf := fmp4testutil.Box("minf", stbl)
-	mdia := fmp4testutil.Box("mdia", concat(mdhd, hdlr, minf))
-	return fmp4testutil.Box("trak", concat(tkhd, edts, mdia))
+	mdia := fmp4testutil.Box("mdia", mdhd, hdlr, minf)
+	return fmp4testutil.Box("trak", tkhd, edts, mdia)
 }
 
 func concat(parts ...[]byte) []byte {

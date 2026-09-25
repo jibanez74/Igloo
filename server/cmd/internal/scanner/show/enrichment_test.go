@@ -45,7 +45,7 @@ func TestShowUnmatchedBacksOffAcrossScans(t *testing.T) {
 	client := &testTMDB{}
 	client.searchHook = func(string, int) ([]tmdb.TVShow, error) { return nil, tmdb.ErrNoShowsFound }
 	s.Tmdb = client
-	clock := time.Now().Add(2 * time.Minute)
+	clock := scannertest.SettledNow()
 	s.Now = func() time.Time { return clock }
 
 	scanOK(t, s, root)

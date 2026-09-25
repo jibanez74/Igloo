@@ -48,7 +48,7 @@ func setupScanner(t *testing.T) (*Scanner, *scannertest.CountingProbe, string) {
 	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	root := t.TempDir()
 	probe := &scannertest.CountingProbe{Default: defaultProbeResult()}
-	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
+	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: scannertest.SettledNow, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
 	return s, probe, root
 }
 func scanOK(t *testing.T, s *Scanner, root string) {
@@ -234,7 +234,7 @@ func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 }
 
 func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
-	s, p, root := setupScanner(t)
+	s, _, root := setupScanner(t)
 	path := scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "file")
 	// Only the first read returns root, so a scan that re-read the setting
 	// after Start would walk a directory holding none of the fixture.
@@ -245,26 +245,18 @@ func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 		}
 		return sql.NullString{String: "/changed/shows", Valid: true}
 	}
-	entered := make(chan string, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.ScanContext = ctx
-	p.Hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-		entered <- path
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}
+	probe := scannertest.NewGateProbe(nil)
+	s.Ffprobe = probe
 	result := s.Start()
 	if result.Status != scanner.StartStarted || result.Directory != root {
 		t.Fatalf("first start: %+v", result)
 	}
-	select {
-	case got := <-entered:
-		if got != path || calls.Load() != 1 {
-			t.Fatalf("probed %q, directory calls=%d; want %q read once", got, calls.Load(), path)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("show scan did not probe the captured directory")
+	got := probe.WaitEntered(t, 5*time.Second, "show scan probing the captured directory")
+	if got != path || calls.Load() != 1 {
+		t.Fatalf("probed %q, directory calls=%d; want %q read once", got, calls.Load(), path)
 	}
 	result = s.Start()
 	if result.Status != scanner.StartAlreadyRunning {
@@ -672,4 +664,37 @@ func TestInvalidateCommittedShowFileHookFiresAfterCommit(t *testing.T) {
 	if len(calls) != 2 || calls[1].fileID != file.ID || len(calls[1].episodes) != 2 {
 		t.Fatalf("deletion hook calls = %+v, want a second call for file %d with both episodes", calls, file.ID)
 	}
+}
+
+type fileEpisode struct {
+	id            int64
+	episodeNumber int64
+	name          string
+	tmdbRuntime   sql.NullInt64
+}
+
+// The episodes a physical file resolves to, in link order. The scanner no
+// longer needs this shape, but file and episode identity surviving a rescan is
+// exactly what these tests assert.
+func fileEpisodes(t *testing.T, db *sql.DB, fileID int64) []fileEpisode {
+	t.Helper()
+	rows, err := db.Query("SELECT e.id, e.episode_number, e.name, e.tmdb_runtime FROM show_episodes e JOIN show_episode_files l ON l.episode_id = e.id WHERE l.file_id = ? ORDER BY l.episode_order", fileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var episodes []fileEpisode
+	for rows.Next() {
+		var episode fileEpisode
+		err = rows.Scan(&episode.id, &episode.episodeNumber, &episode.name, &episode.tmdbRuntime)
+		if err != nil {
+			t.Fatal(err)
+		}
+		episodes = append(episodes, episode)
+	}
+	err = rows.Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return episodes
 }

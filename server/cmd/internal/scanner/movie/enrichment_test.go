@@ -47,7 +47,7 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "Unknown (2001).mkv")
 	scannertest.WriteFile(t, path, "movie")
-	clock := time.Now().Add(2 * time.Minute)
+	clock := scannertest.SettledNow()
 	s.now = func() time.Time { return clock }
 
 	searches := func() int { return len(client.searchCalls) }

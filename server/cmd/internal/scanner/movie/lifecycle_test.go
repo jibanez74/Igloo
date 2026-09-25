@@ -11,7 +11,6 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
-	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -31,25 +30,11 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 	testScanner.scanner.launcher.Wait = wait
 	ctx, cancel := context.WithCancel(context.Background())
 	testScanner.scanner.scanContext = ctx
-	entered := make(chan struct{}, 1)
-	release := make(chan struct{})
-	releaseProbe := sync.OnceFunc(func() { close(release) })
-	testScanner.scanner.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-		select {
-		case entered <- struct{}{}:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		select {
-		case <-release:
-			return movieScannerMetadataFixture("120"), nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}}
+	probe := scannertest.NewGateProbe(movieScannerMetadataFixture("120"))
+	testScanner.scanner.ffprobe = probe
 	defer func() {
 		cancel()
-		releaseProbe()
+		probe.Release()
 		scannertest.WaitForGroup(t, wait, 5*time.Second, "movie scan stop")
 	}()
 
@@ -58,13 +43,13 @@ func TestStartStatusesAndGuardRelease(t *testing.T) {
 		t.Fatalf("configured Start result = %+v, want started for %q", started, testScanner.moviesDir.String)
 	}
 
-	scannertest.WaitForSignal(t, entered, 5*time.Second, "movie scan reaching probing")
+	probe.WaitEntered(t, 5*time.Second, "movie scan reaching probing")
 	alreadyRunning := testScanner.scanner.Start()
 	if alreadyRunning.Status != scanner.StartAlreadyRunning {
 		t.Fatalf("concurrent Start status = %v, want %v", alreadyRunning.Status, scanner.StartAlreadyRunning)
 	}
 
-	releaseProbe()
+	probe.Release()
 	scannertest.WaitForGroup(t, wait, 5*time.Second, "movie scan stop")
 	restarted := testScanner.scanner.Start()
 	if restarted.Status != scanner.StartStarted {
@@ -146,18 +131,6 @@ func TestProcessMoviesBatchRollbackLeavesScanIndexUnpolluted(t *testing.T) {
 				{Index: 0, CodecName: "aac", CodecType: "audio", Channels: 2},
 			},
 		},
-	}
-
-	details := tmdbMovieFromJSON(t, `{
-		"id": 4242,
-		"title": "Audio Only",
-		"release_date": "2020-01-01",
-		"genres": [{"id": 18, "name": "Drama"}],
-		"credits": {"cast": [{"id": 77, "name": "Rolled Back Actor", "character": "Self", "order": 0}]}
-	}`)
-	testScanner.scanner.tmdb = &stubMovieScannerTmdb{
-		searchResults: []tmdb.TmdbMovie{{TmdbID: 4242, Title: "Audio Only", ReleaseDate: "2020-01-01"}},
-		detailMovies:  map[int]tmdb.TmdbMovie{4242: details},
 	}
 
 	scan := newMovieScanContext(nil)

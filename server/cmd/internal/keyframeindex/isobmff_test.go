@@ -12,16 +12,6 @@ import (
 	"igloo/cmd/internal/keyframeindex/kftestutil"
 )
 
-// mp4Fixture is 10 samples at 512 ticks in a 12800-tick timescale (25 fps,
-// 0.04 s per sample), sync samples 1 and 6 -> DTS 0 and 0.2 s.
-func mp4Fixture() kftestutil.MP4Options {
-	return kftestutil.MP4Options{
-		SampleDeltas:       [][2]uint32{{10, 512}},
-		SyncSamples:        []uint32{1, 6},
-		MediaDurationTicks: 5120,
-	}
-}
-
 func TestExtractISOBMFF_SyncSampleTimes(t *testing.T) {
 	data := kftestutil.BuildMP4(mp4Fixture())
 
