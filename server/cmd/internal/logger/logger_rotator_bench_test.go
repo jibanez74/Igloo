@@ -5,7 +5,7 @@ import "testing"
 // Benchmarks the request-logging hot path: one JSON line per HTTP request,
 // including the rotation cost each time the byte cap is reached.
 func BenchmarkRotatingWriterWrite(b *testing.B) {
-	w, _ := newTestWriter(b, loggerMaxBytes, "")
+	w, _ := newTestWriter(b, loggerMaxBytes, "", loggerFlushInterval)
 
 	line := []byte(`{"time":"2026-08-12T00:00:00Z","level":"INFO","msg":"request completed","method":"GET","path":"/api/movies/latest","status":200,"duration_ms":12}` + "\n")
 

@@ -88,11 +88,16 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 
 	closer = rw.Close
 
+	return slog.New(newFileHandler(rw, level)), closer, nil
+}
+
+// newFileHandler writes JSON records to rw and flushes it after severe ones.
+func newFileHandler(rw *rotatingWriter, level slog.Level) slog.Handler {
 	handler := slog.NewJSONHandler(rw, &slog.HandlerOptions{
 		Level: level,
 	})
 
-	return slog.New(flushOnSevereHandler{Handler: handler, flush: rw.Flush}), closer, nil
+	return flushOnSevereHandler{Handler: handler, flush: rw.Flush}
 }
 
 // flushOnSevereHandler flushes the rotating writer after WARN and ERROR

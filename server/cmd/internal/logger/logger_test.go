@@ -255,14 +255,14 @@ func TestNewStdoutLogger(t *testing.T) {
 	}
 }
 
-// countingHandler records what the wrapped handler saw and can fail on demand,
-// so the severe-flush hook's ordering and error precedence are observable.
-type countingHandler struct {
+// failingHandler wraps a handler and can fail every record on demand, so the
+// severe-flush hook's error precedence is observable.
+type failingHandler struct {
 	slog.Handler
 	handleErr error
 }
 
-func (h countingHandler) Handle(ctx context.Context, record slog.Record) error {
+func (h failingHandler) Handle(ctx context.Context, record slog.Record) error {
 	if h.handleErr != nil {
 		return h.handleErr
 	}
@@ -273,7 +273,7 @@ func TestFlushOnSevereHandler(t *testing.T) {
 	newHandler := func(handleErr, flushErr error) (flushOnSevereHandler, *int, *bytes.Buffer) {
 		flushes := 0
 		var buf bytes.Buffer
-		wrapped := countingHandler{Handler: slog.NewJSONHandler(&buf, nil), handleErr: handleErr}
+		wrapped := failingHandler{Handler: slog.NewJSONHandler(&buf, nil), handleErr: handleErr}
 		handler := flushOnSevereHandler{
 			Handler: wrapped,
 			flush: func() error {
@@ -348,16 +348,11 @@ func TestFlushOnSevereHandler(t *testing.T) {
 
 // Routine records sit in the writer's buffer until the ticker, a severe record
 // or the closer flushes them; a warning must be on disk before any of those.
-func TestNewFileLoggerFlushesSevereRecordsImmediately(t *testing.T) {
-	dir := t.TempDir()
-
-	logger, closer, err := New(&LoggerConfig{LogDir: dir, LogFile: "test.log"})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	t.Cleanup(func() { closer() })
-
-	path := filepath.Join(dir, "test.log")
+func TestFileHandlerFlushesSevereRecordsImmediately(t *testing.T) {
+	// New's one-second ticker could flush the Info record on a slow run, so
+	// the handler New uses is built over a writer whose ticker stays idle.
+	rw, path := newTestWriter(t, loggerMaxBytes, "", idleFlushInterval)
+	logger := slog.New(newFileHandler(rw, slog.LevelInfo))
 
 	logger.Info("buffered")
 	lines := readLogLines(t, path)

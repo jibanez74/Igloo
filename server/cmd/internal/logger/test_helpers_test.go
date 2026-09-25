@@ -6,12 +6,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+// idleFlushInterval keeps the background ticker out of a test's way, so only
+// the test's own writes, flushes and closes decide what reaches the file.
+const idleFlushInterval = time.Hour
 
 // newTestWriter creates a rotatingWriter over a temp file, seeding the file
 // first when seed is not empty. The writer is closed at cleanup, so a test
 // that closes it itself is fine: the second close only reports an error.
-func newTestWriter(tb testing.TB, maxBytes int64, seed string) (*rotatingWriter, string) {
+func newTestWriter(tb testing.TB, maxBytes int64, seed string, flushInterval time.Duration) (*rotatingWriter, string) {
 	tb.Helper()
 
 	path := filepath.Join(tb.TempDir(), "test.log")
@@ -23,7 +28,7 @@ func newTestWriter(tb testing.TB, maxBytes int64, seed string) (*rotatingWriter,
 		}
 	}
 
-	rw, err := newRotatingWriter(path, maxBytes, loggerFlushInterval)
+	rw, err := newRotatingWriter(path, maxBytes, flushInterval)
 	if err != nil {
 		tb.Fatalf("create rotating writer: %v", err)
 	}
@@ -33,6 +38,42 @@ func newTestWriter(tb testing.TB, maxBytes int64, seed string) (*rotatingWriter,
 	})
 
 	return rw, path
+}
+
+// failOpen makes openLogFile return the error fail picks for each open flag
+// set, deferring to os.OpenFile when it picks nil, until the test ends.
+func failOpen(t *testing.T, fail func(flag int) error) {
+	t.Helper()
+
+	t.Cleanup(func() { openLogFile = os.OpenFile })
+	openLogFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		err := fail(flag)
+		if err != nil {
+			return nil, err
+		}
+		return os.OpenFile(name, flag, perm)
+	}
+}
+
+// requireWriterRecovered proves a writer is usable again after a failed
+// rotation: a new entry is accepted and reaches the end of the live file.
+func requireWriterRecovered(t *testing.T, rw *rotatingWriter, path string) {
+	t.Helper()
+
+	_, err := rw.Write([]byte("recovered\n"))
+	if err != nil {
+		t.Fatalf("write after a failed rotation: %v", err)
+	}
+
+	err = rw.Flush()
+	if err != nil {
+		t.Fatalf("flush after a failed rotation: %v", err)
+	}
+
+	lines := readLogLines(t, path)
+	if len(lines) == 0 || lines[len(lines)-1] != "recovered" {
+		t.Fatalf("live file = %q, want it to end with the recovered entry", lines)
+	}
 }
 
 // writeRegularFile creates a regular file and returns its path, for the cases

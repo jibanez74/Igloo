@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 func TestNewRotatingWriter(t *testing.T) {
 	t.Run("seeds the size from an existing file", func(t *testing.T) {
 		seed := "line1\nline2\n"
-		rw, _ := newTestWriter(t, 1024, seed)
+		rw, _ := newTestWriter(t, 1024, seed, idleFlushInterval)
 
 		if rw.size != int64(len(seed)) {
 			t.Errorf("size = %d, want %d", rw.size, len(seed))
@@ -45,7 +46,7 @@ func TestNewRotatingWriter(t *testing.T) {
 
 func TestRotatingWriter_Write(t *testing.T) {
 	t.Run("reports the written byte count", func(t *testing.T) {
-		rw, _ := newTestWriter(t, 1024, "")
+		rw, _ := newTestWriter(t, 1024, "", idleFlushInterval)
 
 		entry := []byte("test log line\n")
 
@@ -64,7 +65,7 @@ func TestRotatingWriter_Write(t *testing.T) {
 	})
 
 	t.Run("entries reach the file after a flush", func(t *testing.T) {
-		rw, path := newTestWriter(t, 1024, "")
+		rw, path := newTestWriter(t, 1024, "", idleFlushInterval)
 
 		_, err := rw.Write([]byte("buffered line\n"))
 		if err != nil {
@@ -83,7 +84,7 @@ func TestRotatingWriter_Write(t *testing.T) {
 	})
 
 	t.Run("entries reach the file on close", func(t *testing.T) {
-		rw, path := newTestWriter(t, 1024, "")
+		rw, path := newTestWriter(t, 1024, "", idleFlushInterval)
 
 		_, err := rw.Write([]byte("closed line\n"))
 		if err != nil {
@@ -102,15 +103,9 @@ func TestRotatingWriter_Write(t *testing.T) {
 	})
 
 	t.Run("entries reach the file on the flush tick", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "test.log")
+		rw, path := newTestWriter(t, 1024, "", 5*time.Millisecond)
 
-		rw, err := newRotatingWriter(path, 1024, 5*time.Millisecond)
-		if err != nil {
-			t.Fatalf("create rotating writer: %v", err)
-		}
-		t.Cleanup(func() { rw.Close() })
-
-		_, err = rw.Write([]byte("ticked line\n"))
+		_, err := rw.Write([]byte("ticked line\n"))
 		if err != nil {
 			t.Fatalf("write: %v", err)
 		}
@@ -129,7 +124,7 @@ func TestRotatingWriter_Write(t *testing.T) {
 	})
 
 	t.Run("reports a failed write", func(t *testing.T) {
-		rw, _ := newTestWriter(t, loggerMaxBytes, "")
+		rw, _ := newTestWriter(t, loggerMaxBytes, "", idleFlushInterval)
 
 		// Closing the file underneath the writer makes the buffered writer's
 		// own write fail; an entry larger than its buffer bypasses the buffer
@@ -149,7 +144,7 @@ func TestRotatingWriter_Write(t *testing.T) {
 func TestRotatingWriter_Rotate(t *testing.T) {
 	t.Run("rotates once the byte cap would be exceeded", func(t *testing.T) {
 		entry := []byte("0123456789\n")
-		rw, path := newTestWriter(t, int64(3*len(entry)), "")
+		rw, path := newTestWriter(t, int64(3*len(entry)), "", idleFlushInterval)
 
 		for i := 0; i < 3; i++ {
 			_, err := rw.Write(entry)
@@ -181,7 +176,7 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 
 	t.Run("keeps at most two generations", func(t *testing.T) {
 		entry := []byte("aaaaaaaaa\n")
-		rw, path := newTestWriter(t, int64(2*len(entry)), "")
+		rw, path := newTestWriter(t, int64(2*len(entry)), "", idleFlushInterval)
 
 		for i := 1; i <= 9; i++ {
 			_, err := rw.Write([]byte(fmt.Sprintf("line%04d0\n", i)))
@@ -215,7 +210,7 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 	})
 
 	t.Run("writes an entry larger than the cap without rotating first", func(t *testing.T) {
-		rw, path := newTestWriter(t, 8, "")
+		rw, path := newTestWriter(t, 8, "", idleFlushInterval)
 
 		big := strings.Repeat("x", 16)
 		_, err := rw.Write([]byte(big + "\n"))
@@ -244,7 +239,7 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 	// process logged nothing for the rest of its life.
 	t.Run("keeps logging after a rotation fails", func(t *testing.T) {
 		seed := "retained\n"
-		rw, path := newTestWriter(t, int64(len(seed)), seed)
+		rw, path := newTestWriter(t, int64(len(seed)), seed, idleFlushInterval)
 
 		// A directory in the rotated file's place makes the rename fail.
 		err := os.Mkdir(path+".1", 0o755)
@@ -277,32 +272,102 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 		}
 	})
 
-	t.Run("reports a flush failure before rotating", func(t *testing.T) {
-		rw, _ := newTestWriter(t, 8, "")
+	// Each failure below strikes after the live file is no longer usable: a
+	// flush into a closed descriptor, a close of one, a rename into a blocked
+	// path (above), or an open that fails after the rename. Every one must
+	// end with the writer over a reopened live file.
+	t.Run("keeps logging after a failed flush or close", func(t *testing.T) {
+		for _, tc := range []struct {
+			name     string
+			buffered bool
+		}{
+			{name: "flush", buffered: true},
+			{name: "close", buffered: false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				rw, path := newTestWriter(t, 8, "", idleFlushInterval)
 
-		_, err := rw.Write([]byte("buffered\n"))
+				_, err := rw.Write([]byte("buffered\n"))
+				if err != nil {
+					t.Fatalf("write: %v", err)
+				}
+				if !tc.buffered {
+					// With nothing buffered the rotation's flush succeeds, so
+					// the close of the dead descriptor is what fails.
+					err = rw.Flush()
+					if err != nil {
+						t.Fatalf("flush: %v", err)
+					}
+				}
+
+				err = rw.file.Close()
+				if err != nil {
+					t.Fatalf("close underlying file: %v", err)
+				}
+
+				_, err = rw.Write([]byte("trigger\n"))
+				if err == nil || !strings.Contains(err.Error(), "failed to rotate log file") {
+					t.Fatalf("error = %v, want a rotation error", err)
+				}
+
+				requireWriterRecovered(t, rw, path)
+			})
+		}
+	})
+
+	t.Run("keeps logging when the fresh live file cannot be created", func(t *testing.T) {
+		rw, path := newTestWriter(t, 8, "", idleFlushInterval)
+		errCreate := errors.New("create refused")
+		failOpen(t, func(flag int) error {
+			if flag&os.O_TRUNC != 0 {
+				return errCreate
+			}
+			return nil
+		})
+
+		_, err := rw.Write([]byte("rotated\n"))
 		if err != nil {
 			t.Fatalf("write: %v", err)
 		}
-
-		err = rw.file.Close()
-		if err != nil {
-			t.Fatalf("close underlying file: %v", err)
-		}
-
 		_, err = rw.Write([]byte("trigger\n"))
-		if err == nil {
-			t.Fatal("expected the rotation flush to fail")
+		if !errors.Is(err, errCreate) {
+			t.Fatalf("error = %v, want the create failure", err)
 		}
-		if !strings.Contains(err.Error(), "failed to rotate log file") {
-			t.Errorf("error = %v, want a rotation error", err)
+
+		// The rename went through, so the old entry sits in the rotated file
+		// and the reopened live file starts empty.
+		rotated := readLogLines(t, path+".1")
+		if len(rotated) != 1 || rotated[0] != "rotated" {
+			t.Errorf("rotated file = %q, want [rotated]", rotated)
+		}
+		requireWriterRecovered(t, rw, path)
+	})
+
+	t.Run("reports both errors when the reopen fails too", func(t *testing.T) {
+		rw, _ := newTestWriter(t, 8, "", idleFlushInterval)
+		errCreate := errors.New("create refused")
+		errReopen := errors.New("reopen refused")
+		failOpen(t, func(flag int) error {
+			if flag&os.O_TRUNC != 0 {
+				return errCreate
+			}
+			return errReopen
+		})
+
+		_, err := rw.Write([]byte("rotated\n"))
+		if err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		_, err = rw.Write([]byte("trigger\n"))
+		if !errors.Is(err, errCreate) || !errors.Is(err, errReopen) {
+			t.Fatalf("error = %v, want both the create and the reopen failure", err)
 		}
 	})
 }
 
 func TestRotatingWriter_Close(t *testing.T) {
 	t.Run("write and flush after close report errors", func(t *testing.T) {
-		rw, _ := newTestWriter(t, 1024, "")
+		rw, _ := newTestWriter(t, 1024, "", idleFlushInterval)
 
 		err := rw.Close()
 		if err != nil {
@@ -321,7 +386,7 @@ func TestRotatingWriter_Close(t *testing.T) {
 	})
 
 	t.Run("reports buffered entries it could not write out", func(t *testing.T) {
-		rw, _ := newTestWriter(t, 1024, "")
+		rw, _ := newTestWriter(t, 1024, "", idleFlushInterval)
 
 		_, err := rw.Write([]byte("buffered\n"))
 		if err != nil {
@@ -349,7 +414,7 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 	entry := "concurrent write\n"
 	maxBytes := int64(20 * len(entry))
 
-	rw, path := newTestWriter(t, maxBytes, "")
+	rw, path := newTestWriter(t, maxBytes, "", idleFlushInterval)
 
 	errs := make(chan error, goroutines*perRoutine)
 	var wg sync.WaitGroup
