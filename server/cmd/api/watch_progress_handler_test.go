@@ -616,7 +616,7 @@ func TestWatchProgress_CascadeDeleteUser(t *testing.T) {
 }
 
 // TestUpdateMovieWatchProgress_HTTPCompletionThreshold drives the real handler
-// so the 98% auto-watched rule and the progress clamp are asserted end to end:
+// so the 95% auto-watched rule and the progress clamp are asserted end to end:
 // on the response body and on the persisted row, not on arithmetic repeated in
 // the test.
 func TestUpdateMovieWatchProgress_HTTPCompletionThreshold(t *testing.T) {
@@ -628,9 +628,9 @@ func TestUpdateMovieWatchProgress_HTTPCompletionThreshold(t *testing.T) {
 		wantProgress float64
 	}{
 		{name: "half way is not watched", progressSec: 3600, durationSec: 7200, wantProgress: 3600},
-		{name: "just below the threshold is not watched", progressSec: 7055, durationSec: 7200, wantProgress: 7055},
+		{name: "just below the threshold is not watched", progressSec: 6839, durationSec: 7200, wantProgress: 6839},
 		{name: "negative progress clamps to zero", progressSec: -50, durationSec: 7200, wantProgress: 0},
-		{name: "exactly at the threshold is watched", progressSec: 7056, durationSec: 7200, wantWatched: true},
+		{name: "exactly at the threshold is watched", progressSec: 6840, durationSec: 7200, wantWatched: true},
 		{name: "above the duration is watched", progressSec: 8000, durationSec: 7200, wantWatched: true},
 	}
 

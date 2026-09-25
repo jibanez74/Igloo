@@ -251,7 +251,8 @@ export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 export const UP_NEXT_COUNTDOWN_SEC = 10;
 /** Floor for persisting/offering resume; the server's continue-watching query uses the same 30s floor. */
 export const WATCH_PROGRESS_MIN_SECONDS = 30;
-export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
+/** Share of the runtime at which the server marks an item watched; resume stops being offered there. */
+export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.95;
 export const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 /** Quiet time after the last seek event before the player reports where a run of seeks ended. */
 export const HLS_SEEK_SETTLE_MS = 250;
