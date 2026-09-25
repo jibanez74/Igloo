@@ -9,18 +9,18 @@ import (
 	"igloo/cmd/internal/scanner"
 )
 
-// Each iteration scans 120 changed files against real SQLite. Setup is excluded;
+// Each iteration scans 120 changed files against real SQLite. Rewriting the
+// fixture files happens with the timer stopped, so only fingerprinting,
 // database writes, resolution, and transaction cache publication are measured.
 func BenchmarkMusicScan(b *testing.B) {
-	musicDir := b.TempDir()
 	for _, distinct := range []bool{false, true} {
 		name := "RepeatedAlbum"
 		if distinct {
 			name = "DistinctTracks"
 		}
 		b.Run(name, func(b *testing.B) {
+			musicDir := b.TempDir()
 			s := setupMusicScanner(b)
-			defer s.tx.DB.Close()
 			results := make(map[string]*ffprobe.FfprobeResult)
 			files := make([]scanner.ScanFile, 120)
 			for i := range files {
@@ -38,10 +38,13 @@ func BenchmarkMusicScan(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
+				b.StopTimer()
 				for i := range files {
 					files[i].Size = int64(n + 1)
 				}
-				scanned, _, failures := s.processMusicFixtureBatch(b, context.Background(), newMusicScanContext(nil), files)
+				prepareMusicFixtures(b, files)
+				b.StartTimer()
+				scanned, _, failures := s.processBatchCounts(context.Background(), newMusicScanContext(nil), files)
 				if scanned != len(files) || failures != 0 {
 					b.Fatalf("scanned=%d failures=%d", scanned, failures)
 				}

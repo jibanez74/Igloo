@@ -9,22 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
-	probe, err := ffprobe.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		err := ffprobe.Cleanup()
-		if err != nil {
-			t.Error(err)
-		}
-	})
+	probe := scannertest.RealProbe(t)
 	for _, tc := range []struct {
 		name, ext, codec string
 		index            int64
@@ -36,11 +26,10 @@ func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
-			defer fixture.db.Close()
 			s := fixture.scanner
 			s.ffprobe = probe
 			filename := tc.name + "." + tc.ext
-			data, err := os.ReadFile(filepath.Join("testdata", filename))
+			data, err := os.ReadFile(filepath.Join("../testdata", filename))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,7 +86,6 @@ func TestMovieRealProbeVideoAndArtwork(t *testing.T) {
 
 func TestMovieScanCancelsRunningSubprocess(t *testing.T) {
 	fixture := setupMovieScanner(t)
-	defer fixture.db.Close()
 	s := fixture.scanner
 	root := createMovieLibrary(t, 1)
 	control := t.TempDir()
@@ -109,11 +97,7 @@ func TestMovieScanCancelsRunningSubprocess(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("IGLOO_FFPROBE_PATH", binary)
-	probe, err := ffprobe.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ffprobe.Cleanup()
+	probe := scannertest.RealProbe(t)
 	s.ffprobe = probe
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -132,12 +116,12 @@ func TestMovieScanCancelsRunningSubprocess(t *testing.T) {
 		case <-ticker.C:
 		case <-deadline:
 			cancel()
-			awaitScanSignal(t, done)
+			scannertest.WaitForSignal(t, done, 5*time.Second, "scan boundary")
 			t.Fatal("probe subprocess never started")
 		}
 	}
 	cancel()
-	awaitScanSignal(t, done)
+	scannertest.WaitForSignal(t, done, 5*time.Second, "scan boundary")
 	if s.Status().State != "canceled" || s.Status().Imported != 0 {
 		t.Fatalf("subprocess cancellation: %+v", s.Status())
 	}

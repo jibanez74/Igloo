@@ -211,10 +211,10 @@ func runListenForShutdownHelper(t *testing.T) {
 		t.Fatalf("attach shutdown websocket client: %v", err)
 	}
 
-	// The signal must not land before ListenForShutdown has registered for it,
-	// or the default action ends the helper. The signal handler goroutine
-	// starts before ListenAndServe, so a listener that accepts connections is
-	// the readiness signal.
+	// The signal must not land before the process has subscribed to it, or
+	// the default action ends the helper. serveUntilShutdown subscribes before
+	// ListenAndServe binds, so a listener that accepts connections is the
+	// readiness signal.
 	probe, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("reserve port: %v", err)

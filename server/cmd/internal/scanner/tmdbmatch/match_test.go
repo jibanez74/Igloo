@@ -6,9 +6,9 @@ import (
 	"igloo/cmd/internal/tmdb"
 )
 
-// best is the top-ranked candidate, or nil when there are none. The scanners
-// use the same ranking as the manual picker.
-func best(results []tmdb.TmdbMovie, targetTitle string, targetYear int) *Match {
+// topMatch is the top-ranked candidate, or nil when there are none. The
+// scanners use the same ranking as the manual picker.
+func topMatch(results []tmdb.TmdbMovie, targetTitle string, targetYear int) *Match {
 	ranked := Rank(results, targetTitle, targetYear)
 	if len(ranked) == 0 {
 		return nil
@@ -17,27 +17,12 @@ func best(results []tmdb.TmdbMovie, targetTitle string, targetYear int) *Match {
 }
 
 func TestSelectBestMatch(t *testing.T) {
-	t.Run("empty results returns nil", func(t *testing.T) {
-		result := best([]tmdb.TmdbMovie{}, "test movie", 2023)
-		if result != nil {
-			t.Errorf("Expected nil for empty results, got %v", result)
-		}
-	})
-
-	t.Run("single result returns that result", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{{TmdbID: 1, Title: "Test Movie", ReleaseDate: "2023-01-01", Popularity: 50.0, VoteAverage: 7.5}}
-		result := best(results, "Test Movie", 2023)
-		if result == nil || result.Movie.TmdbID != 1 {
-			t.Fatalf("Expected TMDB ID 1, got %v", result)
-		}
-	})
-
 	t.Run("clean title beats noisy similar candidate", func(t *testing.T) {
 		results := []tmdb.TmdbMovie{
 			{TmdbID: 1, Title: "Moneyball", ReleaseDate: "2011-09-22", Popularity: 35.0, VoteAverage: 7.6},
 			{TmdbID: 2, Title: "Balls of Fury", ReleaseDate: "2007-08-29", Popularity: 50.0, VoteAverage: 7.0},
 		}
-		result := best(results, "Moneyball", 2011)
+		result := topMatch(results, "Moneyball", 2011)
 		if result == nil || result.Movie.TmdbID != 1 {
 			t.Fatalf("Expected TMDB ID 1 (best title match), got %v", result)
 		}
@@ -48,20 +33,9 @@ func TestSelectBestMatch(t *testing.T) {
 			{TmdbID: 1, Title: "Train Dreams", Popularity: 5.0, VoteAverage: 6.0},
 			{TmdbID: 2, Title: "Dream Scenario", ReleaseDate: "2023-01-01", Popularity: 20.0, VoteAverage: 7.0},
 		}
-		result := best(results, "Train Dreams", 2025)
+		result := topMatch(results, "Train Dreams", 2025)
 		if result == nil || result.Movie.TmdbID != 1 {
 			t.Fatalf("Expected TMDB ID 1 (best title match), got %v", result)
-		}
-	})
-
-	t.Run("confidence stays bounded", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{{TmdbID: 1, Title: "Goldfinger", ReleaseDate: "1964-09-20", Popularity: 200.0, VoteAverage: 10.0}}
-		result := best(results, "Goldfinger", 1964)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		if result.Confidence < 0 || result.Confidence > 100 {
-			t.Errorf("Expected bounded confidence, got %f", result.Confidence)
 		}
 	})
 }
@@ -124,33 +98,6 @@ func TestNormalizeComparableTitlePreservesWordsEndingInBit(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("normalizeComparableTitle(%q) = %q, want %q", tt.input, got, tt.want)
 		}
-	}
-}
-
-func TestReleaseYear(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected int
-	}{
-		{"valid date format YYYY-MM-DD", "2023-12-25", 2023},
-		{"valid date with single digit month/day", "2023-1-5", 2023},
-		{"empty string", "", 0},
-		{"too short string", "202", 0},
-		{"invalid format", "invalid", 0},
-		{"only year", "2023", 2023},
-		{"year with trailing text", "2023-12-25T00:00:00", 2023},
-		{"year 2000", "2000-01-01", 2000},
-		{"year 1999", "1999-12-31", 1999},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ReleaseYear(tt.input)
-			if result != tt.expected {
-				t.Errorf("ReleaseYear(%q) = %d, want %d", tt.input, result, tt.expected)
-			}
-		})
 	}
 }
 

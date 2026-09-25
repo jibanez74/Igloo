@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -139,20 +140,26 @@ func TestFinishResolvesTerminalState(t *testing.T) {
 }
 
 func TestStartProgressLogStopsAndWaits(t *testing.T) {
-	calls := make(chan struct{}, 16)
-	stop := StartProgressLog(time.Millisecond, func() { calls <- struct{}{} })
+	var calls atomic.Int32
+	fired := make(chan struct{}, 1)
+	stop := StartProgressLog(time.Millisecond, func() {
+		calls.Add(1)
+		select {
+		case fired <- struct{}{}:
+		default:
+		}
+	})
 	select {
-	case <-calls:
+	case <-fired:
 	case <-time.After(time.Second):
 		t.Fatal("progress log never fired")
 	}
 	stop()
-	// Drain then confirm nothing fires after stop returned.
-	for len(calls) > 0 {
-		<-calls
-	}
-	time.Sleep(5 * time.Millisecond)
-	if len(calls) != 0 {
-		t.Fatal("progress log fired after stop")
+	// stop joins the ticker goroutine, so the count must be final once it
+	// returns; a stop that only signalled would keep ticking during the wait.
+	final := calls.Load()
+	time.Sleep(10 * time.Millisecond)
+	if final < 1 || calls.Load() != final {
+		t.Fatalf("progress log fired after stop: %d then %d", final, calls.Load())
 	}
 }

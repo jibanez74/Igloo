@@ -4,45 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/sqlc"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 func TestMusicCleanupDeletionFailure(t *testing.T) {
 	for _, scenario := range []string{"canceled", "database error"} {
 		t.Run(scenario, func(t *testing.T) {
 			// Cancellation can discard the connection, so rollback needs a file database.
-			db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer db.Close()
-			db.SetMaxOpenConns(1)
-			_, err = db.Exec(sqlc.Schema)
-			if err != nil {
-				t.Fatal(err)
-			}
-			queries, err := database.Prepare(context.Background(), db)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer queries.Close()
+			db, queries := scannertest.OpenDB(t, filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
 			metadata := testMusicMetadata()
 			metadata.Format.Tags.Genre = "Rock"
 			s := New(Dependencies{
 				DB: db, Queries: queries, Logger: &scannertest.Logger{},
 				Now:     func() time.Time { return time.Now().Add(2 * time.Minute) },
-				Ffprobe: &countingMusicScannerFfprobe{result: metadata},
+				Ffprobe: &scannertest.CountingProbe{Default: metadata},
 			})
 			root := t.TempDir()
 			path := filepath.Join(root, "missing.m4a")
@@ -50,7 +34,7 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 			if imported != 1 || failures != 0 {
 				t.Fatalf("import=%d errors=%d", imported, failures)
 			}
-			err = os.Remove(path)
+			err := os.Remove(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,10 +92,8 @@ func TestMusicCleanupDeletionFailure(t *testing.T) {
 			if len(logs.ErrorEntries) != 1 || logs.ErrorEntries[0].Msg != "music scan failed" {
 				t.Fatalf("cleanup error logs=%+v", logs.ErrorEntries)
 			}
-			for _, entry := range append(append([]scannertest.LogEntry{}, logs.InfoEntries...), logs.WarnEntries...) {
-				if entry.Msg == "music library scan interrupted" || strings.Contains(entry.Msg, "completed:") {
-					t.Errorf("failed cleanup logged %q", entry.Msg)
-				}
+			if s.Status().State != scanner.StateFailed || len(logs.WarnEntries) != 0 {
+				t.Errorf("failed cleanup reported state %q with warnings %+v", s.Status().State, logs.WarnEntries)
 			}
 		})
 	}
@@ -121,7 +103,6 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 	for _, scenario := range []string{"deleted", "removed subdirectory", "broken symlink", "no fingerprint", "outside directory", "unavailable root"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			root := t.TempDir()
 			directory := filepath.Join(root, "library")
 			err := os.Mkdir(directory, 0700)
@@ -143,11 +124,8 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 				}
 				path = filepath.Join(directory+"-other", "media.m4a")
 			}
-			err = os.WriteFile(path, []byte("media"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			probe := &countingMusicScannerFfprobe{result: testMusicMetadata()}
+			scannertest.WriteFile(t, path, "media")
+			probe := &scannertest.CountingProbe{Default: testMusicMetadata()}
 			s.ffprobe = probe
 			scan := newMusicScanContext(nil)
 			imported, _, failures := s.processBatchCounts(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a"}})
@@ -186,8 +164,8 @@ func TestMissingMusicCleanupLifecycle(t *testing.T) {
 				wantRows, wantInvalidations = 1, 0
 			}
 			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
-			if count != wantRows || invalidations != wantInvalidations || probe.calls != 1 {
-				t.Fatalf("rows=%d invalidations=%d probes=%d", count, invalidations, probe.calls)
+			if count != wantRows || invalidations != wantInvalidations || probe.Calls() != 1 {
+				t.Fatalf("rows=%d invalidations=%d probes=%d", count, invalidations, probe.Calls())
 			}
 		})
 	}
@@ -197,7 +175,6 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 	for _, scenario := range []string{"commit", "rollback", "reappeared", "root replaced", "path changed", "id changed"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			ctx := context.Background()
 			root := filepath.Join(t.TempDir(), "library")
 			err := os.Mkdir(root, 0700)
@@ -205,11 +182,8 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(root, "media.m4a")
-			err = os.WriteFile(path, []byte("media"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+			scannertest.WriteFile(t, path, "media")
+			s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 			scan := newMusicScanContext(nil)
 			imported, _, failures := s.processBatchCounts(ctx, scan, []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 			if imported != 1 || failures != 0 {
@@ -236,10 +210,7 @@ func TestMissingMusicDeletionTransaction(t *testing.T) {
 				// This fixture has cascading dependents; changing the identity requires a fresh row.
 				_, err = s.tx.DB.Exec("DELETE FROM tracks WHERE id = ?", files[0].ID)
 				if err == nil {
-					err = os.WriteFile(path, []byte("replacement"), 0600)
-					if err != nil {
-						t.Fatal(err)
-					}
+					scannertest.WriteFile(t, path, "replacement")
 					imported, _, failures = s.processBatchCounts(ctx, newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 					if imported != 1 || failures != 0 {
 						t.Fatal("replacement import failed")
@@ -320,7 +291,6 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 	for _, scenario := range []string{"failed", "deferred", "unchanged", "canceled", "root replaced"} {
 		t.Run(scenario, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
@@ -333,10 +303,7 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			missingPath := filepath.Join(root, "c-missing.m4a")
 			s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return testMusicMetadata(), nil }}
 			for _, path := range []string{seenPath, triggerPath, missingPath} {
-				err = os.WriteFile(path, []byte("media"), 0600)
-				if err != nil {
-					t.Fatal(err)
-				}
+				scannertest.WriteFile(t, path, "media")
 				imported, _, failures := s.processBatchCounts(ctx, newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 				if imported != 1 || failures != 0 {
 					t.Fatalf("import=%d errors=%d", imported, failures)
@@ -346,15 +313,9 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = os.WriteFile(triggerPath, []byte("changed trigger"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
+			scannertest.WriteFile(t, triggerPath, "changed trigger")
 			if scenario == "failed" {
-				err = os.WriteFile(seenPath, []byte("changed seen"), 0600)
-				if err != nil {
-					t.Fatal(err)
-				}
+				scannertest.WriteFile(t, seenPath, "changed seen")
 			}
 			if scenario == "deferred" {
 				future := time.Now().Add(24 * time.Hour)
@@ -406,20 +367,16 @@ func TestMusicCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 
 func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	first, second := t.TempDir(), t.TempDir()
 	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return testMusicMetadata(), nil }}
 	for _, root := range []string{first, second} {
 		path := filepath.Join(root, "missing.m4a")
-		err := os.WriteFile(path, []byte("media"), 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
+		scannertest.WriteFile(t, path, "media")
 		imported, _, failures := s.processBatchCounts(context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "m4a"}})
 		if imported != 1 || failures != 0 {
 			t.Fatal("import failed")
 		}
-		err = os.Remove(path)
+		err := os.Remove(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -437,7 +394,7 @@ func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
-	s.launcher.Wait.Wait()
+	scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
 	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE file_path = ?", filepath.Join(second, "missing.m4a"))
 	total := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
 	if calls != 1 || count != 1 || total != 1 {
@@ -447,7 +404,6 @@ func TestMusicCleanupCapturesConfiguredDirectory(t *testing.T) {
 
 func TestMusicCleanupReconcilesMetadataAndCascades(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	root := t.TempDir()
 	first, second := filepath.Join(root, "first.m4a"), filepath.Join(root, "second.m4a")
 	scan := newMusicScanContext(nil)

@@ -9,26 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 )
 
 func TestMusicMetadataRealProbePersistence(t *testing.T) {
-	probe, err := ffprobe.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		err := ffprobe.Cleanup()
-		if err != nil {
-			t.Error(err)
-		}
-	})
+	probe := scannertest.RealProbe(t)
 	for _, ext := range []string{"mp3", "flac", "m4a"} {
 		t.Run(ext, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			s.ffprobe = probe
 			s.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
 			path := filepath.Join(t.TempDir(), "track."+ext)

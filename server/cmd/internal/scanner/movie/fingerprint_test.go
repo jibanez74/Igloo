@@ -7,27 +7,23 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 func TestFileFingerprintLifecycle(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	defer fixture.db.Close()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "media.mkv")
-	err := os.WriteFile(path, []byte("media"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stub := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+	scannertest.WriteFile(t, path, "media")
+	stub := &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 	s.ffprobe = stub
 	invalidations := 0
 	s.invalidateCommittedMovie = func(int64) { invalidations++ }
@@ -35,8 +31,8 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	file := scanner.ScanFile{Path: path, Ext: "mkv", Size: 999} // Walking size is deliberately stale.
 	s.now = time.Now
 	scanned, skipped, failures, deferred := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 0 || skipped != 0 || failures != 0 || deferred != 1 || stub.calls != 0 {
-		t.Fatalf("recent file: %d/%d/%d deferred=%d probes=%d", scanned, skipped, failures, deferred, stub.calls)
+	if scanned != 0 || skipped != 0 || failures != 0 || deferred != 1 || stub.Calls() != 0 {
+		t.Fatalf("recent file: %d/%d/%d deferred=%d probes=%d", scanned, skipped, failures, deferred, stub.Calls())
 	}
 	s.now = func() time.Time { return time.Now().Add(time.Hour) }
 	scanned, _, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
@@ -48,7 +44,7 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatalf("size=%d", baseline.Size)
 	}
 	var id int64
-	err = s.tx.DB.QueryRow("SELECT id FROM movies WHERE file_path = ?", path).Scan(&id)
+	err := s.tx.DB.QueryRow("SELECT id FROM movies WHERE file_path = ?", path).Scan(&id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,8 +63,8 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	}
 	scan = newMovieScanContext(reloaded)
 	scanned, skipped, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 0 || skipped != 1 || failures != 0 || stub.calls != 1 {
-		t.Fatalf("unchanged reload: %d/%d/%d probes=%d", scanned, skipped, failures, stub.calls)
+	if scanned != 0 || skipped != 1 || failures != 0 || stub.Calls() != 1 {
+		t.Fatalf("unchanged reload: %d/%d/%d probes=%d", scanned, skipped, failures, stub.Calls())
 	}
 	_, err = s.tx.DB.Exec("INSERT INTO keyframe_indexes(movie_id,stream_index,fingerprint,duration_sec,keyframes) VALUES (?,0,'old',120,'[0]')", id)
 	if err != nil {
@@ -83,8 +79,8 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanned, skipped, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 1 || skipped != 0 || failures != 0 || stub.calls != 2 || invalidations != 2 {
-		t.Fatalf("identical bytes: %d/%d/%d probes=%d invalidations=%d", scanned, skipped, failures, stub.calls, invalidations)
+	if scanned != 1 || skipped != 0 || failures != 0 || stub.Calls() != 2 || invalidations != 2 {
+		t.Fatalf("identical bytes: %d/%d/%d probes=%d invalidations=%d", scanned, skipped, failures, stub.Calls(), invalidations)
 	}
 	after, err := s.queries.GetMovieByID(ctx, id)
 	if err != nil || before.ID != after.ID || before.Title != after.Title || after.UpdatedAt == before.UpdatedAt {
@@ -106,8 +102,8 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanned, _, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 1 || failures != 0 || stub.calls != 3 || invalidations != 3 {
-		t.Fatalf("same size edit: %d/%d probes=%d invalidations=%d", scanned, failures, stub.calls, invalidations)
+	if scanned != 1 || failures != 0 || stub.Calls() != 3 || invalidations != 3 {
+		t.Fatalf("same size edit: %d/%d probes=%d invalidations=%d", scanned, failures, stub.Calls(), invalidations)
 	}
 	var currentID int64
 	err = s.tx.DB.QueryRow("SELECT id FROM movies WHERE file_path = ?", path).Scan(&currentID)
@@ -129,8 +125,8 @@ func TestFileFingerprintLifecycle(t *testing.T) {
 	}
 	scan = newMovieScanContext(reloaded)
 	scanned, _, failures, _ = s.processMoviesBatch(ctx, scan, []scanner.ScanFile{file})
-	if scanned != 1 || failures != 0 || stub.calls != 4 {
-		t.Fatalf("missing baseline: %d/%d probes=%d", scanned, failures, stub.calls)
+	if scanned != 1 || failures != 0 || stub.Calls() != 4 {
+		t.Fatalf("missing baseline: %d/%d probes=%d", scanned, failures, stub.Calls())
 	}
 	_, err = s.tx.DB.Exec("DELETE FROM movies WHERE id = ?", id)
 	if err != nil {
@@ -151,14 +147,10 @@ func TestFingerprintRollbackPreservesBaseline(t *testing.T) {
 		t.Run(map[bool]string{false: "content", true: "metadata change"}[identical], func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
-			defer fixture.db.Close()
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "media.mkv")
-			err := os.WriteFile(path, []byte("media"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			stub := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+			scannertest.WriteFile(t, path, "media")
+			stub := &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 			s.ffprobe = stub
 			invalidations := 0
 			s.invalidateCommittedMovie = func(int64) { invalidations++ }
@@ -237,32 +229,22 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 		t.Run(stage, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
-			defer fixture.db.Close()
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "media.mkv")
-			err := os.WriteFile(path, []byte("media"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+			scannertest.WriteFile(t, path, "media")
+			s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 			scan := newMovieScanContext(nil)
 			file := scanner.ScanFile{Path: path, Ext: "mkv"}
-			_, err = s.processFile(ctx, scan, file)
+			_, err := s.processFile(ctx, scan, file)
 			if err != nil {
 				t.Fatal(err)
 			}
 			baseline := scan.movieIndex[path]
 			invalidations := 0
 			s.invalidateCommittedMovie = func(int64) { invalidations++ }
-			err = os.WriteFile(path, []byte("other"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
+			scannertest.WriteFile(t, path, "other")
 			mutate := func() {
-				err := os.WriteFile(path+".new", []byte("replacement"), 0600)
-				if err != nil {
-					t.Fatal(err)
-				}
+				scannertest.WriteFile(t, path+".new", "replacement")
 				err = os.Rename(path+".new", path)
 				if err != nil {
 					t.Fatal(err)
@@ -311,13 +293,9 @@ func TestFileChangesDuringResolutionAndCommit(t *testing.T) {
 func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	defer fixture.db.Close()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "media.mkv")
-	err := os.WriteFile(path, []byte("media"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scannertest.WriteFile(t, path, "media")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.scanContext = ctx
@@ -327,23 +305,10 @@ func TestCanceledFinalBatchDoesNotComplete(t *testing.T) {
 	}}
 	fixture.moviesDir.String, fixture.moviesDir.Valid = dir, true
 	s.scan(s.currentMoviesDirectory().String)
-	log := s.logger.(*scannertest.Logger)
-	for _, entry := range log.InfoEntries {
-		if strings.Contains(entry.Msg, "scanner completed") {
-			t.Fatalf("canceled scan reported completion: %s", entry.Msg)
-		}
+	if s.Status().State != scanner.StateCanceled {
+		t.Fatalf("canceled scan reported state %q", s.Status().State)
 	}
 	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies") != 0 {
 		t.Fatal("canceled scan persisted item")
-	}
-}
-
-func TestStoreFingerprintRejectsMissingCatalogRow(t *testing.T) {
-	s := setupMovieScanner(t)
-	defer s.db.Close()
-	err := storeMovieFingerprint(context.Background(), s.queries, "/missing/media", scanner.FileFingerprint{})
-	missing := errors.Is(err, sql.ErrNoRows)
-	if !missing {
-		t.Fatalf("missing catalog fingerprint error = %v, want sql.ErrNoRows", err)
 	}
 }

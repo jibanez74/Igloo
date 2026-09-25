@@ -5,21 +5,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
-	spotifylib "github.com/zmb3/spotify/v2"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
+
+	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func scanTaggedTrack(t *testing.T, s *Scanner, scan *musicScanContext, path string, size int64, tags ffprobe.FormatTags) {
 	t.Helper()
-	s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadataWithTags(tags)}
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadataWithTags(tags)}
 	n, _, failures := s.processMusicFixtureBatch(t, context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a", Size: size}})
 	if n != 1 || failures != 0 {
 		t.Fatalf("scan %s: scanned=%d failures=%d logs=%+v", path, n, failures, s.logger.(*scannertest.Logger).WarnEntries)
@@ -30,21 +30,17 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 	for _, offline := range []bool{false, true} {
 		t.Run(fmt.Sprintf("offline_%v", offline), func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			dir := t.TempDir()
-			err := os.WriteFile(filepath.Join(dir, "track.m4a"), []byte("audio"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			probe := &countingMusicScannerFfprobe{result: testMusicMetadata()}
+			scannertest.WriteFile(t, filepath.Join(dir, "track.m4a"), "audio")
+			probe := &scannertest.CountingProbe{Default: testMusicMetadata()}
 			s.ffprobe = probe
 			stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
 			if !offline {
 				s.spotify = stub
 			}
 			s.scan(dir)
-			if probe.calls != 1 {
-				t.Fatalf("probes=%d", probe.calls)
+			if probe.Calls() != 1 {
+				t.Fatalf("probes=%d", probe.Calls())
 			}
 			if !offline && (stub.artistCalls != 1 || stub.albumCalls != 1) {
 				t.Fatalf("repeated initial attempts: %+v", stub)
@@ -56,15 +52,15 @@ func TestSpotifyRetriesUnchangedCatalog(t *testing.T) {
 			stub.album = &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "2001", ReleaseDatePrecision: "year"}}
 			beforeArtist, beforeAlbum := stub.artistCalls, stub.albumCalls
 			s.scan(dir)
-			if probe.calls != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
-				t.Fatalf("recovery probes=%d artist=%d album=%d", probe.calls, stub.artistCalls, stub.albumCalls)
+			if probe.Calls() != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
+				t.Fatalf("recovery probes=%d artist=%d album=%d", probe.Calls(), stub.artistCalls, stub.albumCalls)
 			}
-			count1 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE status='matched'")
-			if count1 != 2 {
+			matchedRows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE status='matched'")
+			if matchedRows != 2 {
 				t.Fatal("recovery did not persist matches")
 			}
 			s.scan(dir)
-			if probe.calls != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
+			if probe.Calls() != 1 || stub.artistCalls != beforeArtist+1 || stub.albumCalls != beforeAlbum+1 {
 				t.Fatal("final outcomes were retried")
 			}
 		})
@@ -76,7 +72,6 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reverse_%v", reverse), func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			tags := []ffprobe.FormatTags{
 				{Title: "One", Artist: " ÉCHO ", Album: " Record ", AlbumArtist: " ÉCHO ", Genre: " RÖCK ", SortArtist: "Z", SortAlbum: "Z", Date: "2020"},
 				{Title: "Two", Artist: "écho", Album: "record", AlbumArtist: "écho", Genre: "röck", SortArtist: "A", SortAlbum: "A", Date: "2019"},
@@ -95,8 +90,8 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 				scanTaggedTrack(t, s, scan, fmt.Sprintf(fixtureDir+"/%d.m4a", j), 1, tags[j])
 			}
 			for _, table := range []string{"musicians", "albums", "genres"} {
-				count2 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
-				if count2 != 1 {
+				tableRows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
+				if tableRows != 1 {
 					t.Fatalf("duplicate %s", table)
 				}
 			}
@@ -126,19 +121,21 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 				tags[i].Date = "invalid"
 				scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf(fixtureDir+"/%d.m4a", i), 2, tags[i])
 			}
-			count3 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums WHERE sort_title=title AND release_date IS NULL AND year IS NULL")
-			count4 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE sort_name=name")
-			if count4 != 1 || count3 != 1 {
+			fallbackAlbums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums WHERE sort_title=title AND release_date IS NULL AND year IS NULL")
+			fallbackMusicians := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE sort_name=name")
+			if fallbackMusicians != 1 || fallbackAlbums != 1 {
 				t.Fatal("removed tags did not restore fallback")
 			}
+			// Music genres normalise case; movie genres must keep it, since
+			// TMDB names are the identity there.
 			for _, tag := range []string{"Movie", "movie"} {
 				_, err = s.queries.GetOrCreateGenre(context.Background(), database.GetOrCreateGenreParams{Tag: tag, GenreType: "movie"})
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-			count5 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM genres WHERE genre_type='movie'")
-			if count5 != 2 {
+			movieGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM genres WHERE genre_type='movie'")
+			if movieGenres != 2 {
 				t.Fatal("movie identity changed")
 			}
 		})
@@ -148,14 +145,13 @@ func TestMusicNormalizedIdentityAndMutableMetadata(t *testing.T) {
 func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "artist"}, Genres: []string{"Rock"}}, album: &spotifylib.FullAlbum{SimpleAlbum: spotifylib.SimpleAlbum{ID: "album", ReleaseDate: "2000", ReleaseDatePrecision: "year"}, Genres: []string{"Rock"}}}
 	scan := newMusicScanContext(nil)
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "Album", Genre: "Rock", Date: "2022"}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
 	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 1, tags)
-	count6 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres")
-	if count6 != 2 {
+	musicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres")
+	if musicianGenres != 2 {
 		t.Fatal("missing provenance overlap")
 	}
 	genres, err := s.queries.GetGenresByMusicianID(context.Background(), 1)
@@ -167,45 +163,45 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	tags.Genre = ""
 	tags.Date = ""
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 2, tags)
-	count7 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
-	if count7 != 1 {
+	musicianAlbums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
+	if musicianAlbums != 1 {
 		t.Fatal("removed multiply supported link")
 	}
 	// Remove the last local date and genre while retaining album membership.
 	tags.Artist = "Artist"
 	tags.Album = "Album"
 	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 2, tags)
-	count8 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums WHERE release_date='2000-01-01' AND year=2000")
-	if count8 != 1 {
+	datedAlbums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM albums WHERE release_date='2000-01-01' AND year=2000")
+	if datedAlbums != 1 {
 		t.Fatal("missing Spotify date fallback")
 	}
-	count9 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM album_genres WHERE source='spotify'")
-	count10 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
-	if count10 != 0 || count9 != 1 {
+	spotifyAlbumGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM album_genres WHERE source='spotify'")
+	localMusicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
+	if localMusicianGenres != 0 || spotifyAlbumGenres != 1 {
 		t.Fatal("genre provenance removal")
 	}
 	tags.Genre = "Rock"
 	tags.SortArtist = "Sort"
 	scanTaggedTrack(t, s, scan, fixtureDir+"/two", 3, tags)
-	count11 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
-	if count11 != 1 {
+	restoredLocalGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
+	if restoredLocalGenres != 1 {
 		t.Fatal("local genre not restored within scan")
 	}
 	err = s.queries.DeleteAlbum(context.Background(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	count12 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
-	count13 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
-	if count13 != 0 || count12 != 0 {
+	localGenresAfterDelete := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='local'")
+	albumLinksAfterDelete := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
+	if albumLinksAfterDelete != 0 || localGenresAfterDelete != 0 {
 		t.Fatal("album deletion left local relationships")
 	}
-	count14 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE sort_name=name")
-	if count14 != 1 {
+	fallbackSortMusicians := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE sort_name=name")
+	if fallbackSortMusicians != 1 {
 		t.Fatal("album deletion left sort contribution")
 	}
-	count15 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='spotify'")
-	if count15 != 1 {
+	spotifyMusicianGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE source='spotify'")
+	if spotifyMusicianGenres != 1 {
 		t.Fatal("album deletion removed Spotify genre")
 	}
 }
@@ -213,28 +209,27 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	scanTaggedTrack(t, s, newMusicScanContext(nil), fixtureDir+"/one", 1, ffprobe.FormatTags{Title: "Track", Artist: "One & Two", Album: "Album", Genre: "Rock", SortArtist: "First & Second"})
-	probe := s.ffprobe.(*countingMusicScannerFfprobe)
+	probe := s.ffprobe.(*scannertest.CountingProbe)
 	s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}}, albumErr: errors.New("temporary")}
 	err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if probe.calls != 1 {
+	if probe.Calls() != 1 {
 		t.Fatal("retry probed a file")
 	}
-	count16 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
-	count17 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians")
-	if count17 != 2 || count16 != 2 {
+	musicianAlbums := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_albums")
+	trackMusicians := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians")
+	if trackMusicians != 2 || musicianAlbums != 2 {
 		t.Fatal("compound credits or album links not split")
 	}
-	count18 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE (name='One' AND sort_name='First') OR (name='Two' AND sort_name='Second')")
-	if count18 != 2 {
+	sortedCredits := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians WHERE (name='One' AND sort_name='First') OR (name='Two' AND sort_name='Second')")
+	if sortedCredits != 2 {
 		t.Fatal("per-credit sort tags lost")
 	}
-	count19 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE musician_id=(SELECT id FROM musicians WHERE name='One & Two')")
-	if count19 != 0 {
+	compoundGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE musician_id=(SELECT id FROM musicians WHERE name='One & Two')")
+	if compoundGenres != 0 {
 		t.Fatal("old compound genre relationship remains")
 	}
 }
@@ -242,10 +237,9 @@ func TestSpotifyRetrySplitsPersistedCompoundCredits(t *testing.T) {
 func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	ctx := context.Background()
 	for i := 1; i <= 2; i++ {
-		scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf(fixtureDir+"/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i), SortArtist: fmt.Sprintf("Sort %d", i), Genre: "Rock"})
+		scanTaggedTrack(t, s, newMusicScanContext(nil), fmt.Sprintf(fixtureDir+"/%d", i), 1, ffprobe.FormatTags{Title: "Track", Artist: fmt.Sprintf("Artist %d", i), Album: fmt.Sprintf("Album %d", i), SortArtist: fmt.Sprintf("Sort %d", i), Genre: fmt.Sprintf("Genre %d", i)})
 	}
 	_, err := s.tx.DB.Exec("INSERT INTO users(id,email,password,name) VALUES(1,'test@example.com','hash','Test')")
 	if err != nil {
@@ -293,9 +287,9 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected merge rollback")
 	}
-	count20 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_artist_identity WHERE musician_id=2")
-	count21 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE id=2 AND musician_id=2")
-	if count21 != 1 || count20 != 1 {
+	secondIdentities := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_artist_identity WHERE musician_id=2")
+	secondTracks := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE id=2 AND musician_id=2")
+	if secondTracks != 1 || secondIdentities != 1 {
 		t.Fatal("merge rollback changed references")
 	}
 	_, err = s.tx.DB.Exec("DROP TRIGGER reject_merge")
@@ -307,24 +301,33 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"musicians", "albums"} {
-		count22 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
-		if count22 != 1 {
+		tableRows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+table)
+		if tableRows != 1 {
 			t.Fatalf("merge left duplicate %s", table)
 		}
 	}
-	count23 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM playlist_tracks WHERE track_id=2")
-	count24 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE id IN (1,2) AND musician_id=1 AND album_id=1")
-	if count24 != 2 || count23 != 1 {
+	playlistTracks := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM playlist_tracks WHERE track_id=2")
+	mergedTracks := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE id IN (1,2) AND musician_id=1 AND album_id=1")
+	if mergedTracks != 2 || playlistTracks != 1 {
 		t.Fatal("merge changed track identity or playlist")
 	}
-	count25 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_album_identity WHERE album_id=1")
-	count26 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_artist_identity WHERE musician_id=1")
-	if count26 != 2 || count25 != 2 {
+	albumAliases := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_album_identity WHERE album_id=1")
+	artistAliases := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_artist_identity WHERE musician_id=1")
+	if artistAliases != 2 || albumAliases != 2 {
 		t.Fatal("aliases not retained")
 	}
+	// The redundant artist's genres and credits move to the owner and its
+	// Spotify match row goes with it, so nothing keeps pointing at the merged
+	// row.
+	ownerGenres := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musician_genres WHERE musician_id=1")
+	ownerCredits := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians WHERE musician_id=1")
+	redundantRefs := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM track_musicians WHERE musician_id=2") + scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM music_spotify_matches WHERE entity_type='musician' AND entity_id=2")
+	if ownerGenres != 2 || ownerCredits != 2 || redundantRefs != 0 {
+		t.Fatalf("merge moved genres=%d credits=%d, redundant references=%d", ownerGenres, ownerCredits, redundantRefs)
+	}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/3", 1, ffprobe.FormatTags{Title: "Later", Artist: "Artist 2", Album: "Album 2"})
-	count27 := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE musician_id=1 AND album_id=1")
-	if count27 != 3 {
+	laterTracks := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks WHERE musician_id=1 AND album_id=1")
+	if laterTracks != 3 {
 		t.Fatal("stale cached IDs after merge")
 	}
 	historyCount := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM user_play_history WHERE track_id=2 AND duration_played=60")
@@ -332,25 +335,15 @@ func TestSpotifyMergesPreserveTracksAndRollback(t *testing.T) {
 		t.Fatal("merge lost history")
 	}
 
-	var violations int
-	rows, err := s.tx.DB.Query("PRAGMA foreign_key_check")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		violations++
-	}
-	rowsErr := rows.Err()
-	if rowsErr != nil || violations != 0 {
-		t.Fatalf("foreign keys: %d %v", violations, rows.Err())
+	violations := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM pragma_foreign_key_check")
+	if violations != 0 {
+		t.Fatalf("foreign keys: %d violations", violations)
 	}
 }
 
 func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	ctx := context.Background()
 	scan := newMusicScanContext(nil)
 	for i := 0; i < 105; i++ {
@@ -368,7 +361,7 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 	if len(candidates) != 100 {
 		t.Fatalf("page size=%d", len(candidates))
 	}
-	probe := s.ffprobe.(*countingMusicScannerFfprobe)
+	probe := s.ffprobe.(*scannertest.CountingProbe)
 	stub := &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
 	s.spotify = stub
 	retryScan := newMusicScanContext(nil)
@@ -376,8 +369,8 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stub.artistCalls != 105 || stub.albumCalls != 105 || probe.calls != 1 {
-		t.Fatalf("paged attempts artist=%d album=%d probes=%d", stub.artistCalls, stub.albumCalls, probe.calls)
+	if stub.artistCalls != 105 || stub.albumCalls != 105 || probe.Calls() != 1 {
+		t.Fatalf("paged attempts artist=%d album=%d probes=%d", stub.artistCalls, stub.albumCalls, probe.Calls())
 	}
 	// Reusing the same scan context cannot issue another request for these entities.
 	err = s.retrySpotify(ctx, retryScan, newScanReport(Status{}))
@@ -404,7 +397,6 @@ func TestSpotifyRetryPagesAndCancellation(t *testing.T) {
 func TestMusicAlbumMoveReconcilesBothSides(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	scan := newMusicScanContext(nil)
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "First", Genre: "Rock", Date: "2020", SortAlbum: "Sort"}
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
@@ -437,7 +429,6 @@ func TestMusicAlbumMoveReconcilesBothSides(t *testing.T) {
 func TestSpotifyAlbumMergeRollback(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	ctx := context.Background()
 	scan := newMusicScanContext(nil)
 	for i := 1; i <= 2; i++ {
@@ -489,7 +480,6 @@ func TestSpotifyAlbumMergeRollback(t *testing.T) {
 func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
 	fixtureDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	tags := ffprobe.FormatTags{Title: "Track", Artist: "Artist", Album: "Album", SortArtist: "Sort Artist", SortAlbum: "Sort Album", Date: "2020"}
 	scan := newMusicScanContext(nil)
 	scanTaggedTrack(t, s, scan, fixtureDir+"/one", 1, tags)
@@ -522,7 +512,6 @@ func TestMusicUnchangedDerivedMetadataDoesNotWrite(t *testing.T) {
 // whenever a merge happened, so every credit lands on the surviving owner.
 func TestCompoundCreditMergeRepointsEarlierCredits(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	ctx := context.Background()
 
 	// One local artist row aliased by both credited names, and a separate row

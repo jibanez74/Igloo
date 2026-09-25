@@ -21,6 +21,24 @@ func TestVideoMimeTypesCoverValidVideoExtensions(t *testing.T) {
 	}
 }
 
+// Expected values are literals on purpose: a bad edit to VideoMimeTypes must
+// fail here, so do not assert against the map.
+func TestVideoMimeTypesPinPerContainerValues(t *testing.T) {
+	cases := map[string]string{
+		"mp4":  "video/mp4",
+		"m4v":  "video/mp4",
+		"mkv":  "video/x-matroska",
+		"webm": "video/webm",
+		"avi":  "video/x-msvideo",
+		"mov":  "video/quicktime",
+	}
+	for ext, want := range cases {
+		if VideoMimeTypes[ext] != want {
+			t.Errorf("VideoMimeTypes[%q] = %q, want %q", ext, VideoMimeTypes[ext], want)
+		}
+	}
+}
+
 func TestAudioMimeTypesCoverValidAudioExtensions(t *testing.T) {
 	for ext := range ValidAudioExtensions {
 		mimeType, ok := AudioMimeTypes[ext]

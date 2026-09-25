@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner/scannertest"
 )
 
@@ -23,11 +22,7 @@ func TestMovieLibraryBenchmark(t *testing.T) {
 		t.Skip("set IGLOO_BENCH_MOVIES_DIR for read-only real-library measurements")
 	}
 	db, queries := scannertest.OpenDB(t, filepath.Join(t.TempDir(), "benchmark.db")+"?_foreign_keys=on")
-	probe, err := ffprobe.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ffprobe.Cleanup()
+	probe := scannertest.RealProbe(t)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	log := scannertest.NewMeasurementLogger(t)

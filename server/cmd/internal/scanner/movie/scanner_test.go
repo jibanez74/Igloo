@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
 	"path/filepath"
@@ -50,39 +51,20 @@ func setupMovieScannerDatabase(t *testing.T, source string) *movieScannerTestCon
 	return ctx
 }
 
-type stubMovieScannerFfprobe struct {
-	mu sync.Mutex
-	scannertest.NoKeyframeProbe
-	result  *ffprobe.FfprobeResult
-	results []*ffprobe.FfprobeResult
-	calls   int
-}
-
-func (s *stubMovieScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	callIndex := s.calls
-	s.calls++
-	if callIndex < len(s.results) && s.results[callIndex] != nil {
-		return s.results[callIndex], nil
-	}
-	return s.result, nil
-}
-
-func (s *stubMovieScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
-	return s.GetMetadata(context.Background(), filePath)
-}
-
+// stubMovieScannerTmdb answers searches and detail lookups from fixtures and
+// records every call. searchHook, when set, answers a search after the call
+// is recorded; detailHook runs before a detail lookup is answered.
 type stubMovieScannerTmdb struct {
+	tmdb.TmdbInterface
 	mu            sync.Mutex
 	searchErr     error
 	detailErr     error
-	theatersErr   error
 	searchResults []tmdb.TmdbMovie
 	detailMovies  map[int]tmdb.TmdbMovie
-	theaterMovies []*tmdb.TmdbMovie
 	searchCalls   []stubMovieScannerTmdbSearchCall
 	detailCalls   []int
+	searchHook    func(ctx context.Context, title string, year int) ([]tmdb.TmdbMovie, error)
+	detailHook    func()
 }
 
 type stubMovieScannerTmdbSearchCall struct {
@@ -91,14 +73,14 @@ type stubMovieScannerTmdbSearchCall struct {
 }
 
 func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMovie) error {
+	if s.detailHook != nil {
+		s.detailHook()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.detailCalls = append(s.detailCalls, movie.TmdbID)
 	if s.detailErr != nil {
 		return s.detailErr
-	}
-	if s.detailMovies == nil {
-		return errors.New("tmdb details unavailable")
 	}
 	details, ok := s.detailMovies[movie.TmdbID]
 	if !ok {
@@ -108,11 +90,21 @@ func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, movie *tmdb.T
 	return nil
 }
 
-func (s *stubMovieScannerTmdb) SearchMoviesByTitleAndYear(_ context.Context, title string, year ...int) ([]tmdb.TmdbMovie, error) {
+func (s *stubMovieScannerTmdb) SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]tmdb.TmdbMovie, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	yearCopy := append([]int(nil), year...)
 	s.searchCalls = append(s.searchCalls, stubMovieScannerTmdbSearchCall{title: title, year: yearCopy})
+	hook := s.searchHook
+	s.mu.Unlock()
+	if hook != nil {
+		firstYear := 0
+		if len(year) > 0 {
+			firstYear = year[0]
+		}
+		return hook(ctx, title, firstYear)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.searchErr != nil {
 		return nil, s.searchErr
 	}
@@ -120,15 +112,6 @@ func (s *stubMovieScannerTmdb) SearchMoviesByTitleAndYear(_ context.Context, tit
 	copy(results, s.searchResults)
 	return results, nil
 }
-
-func (s *stubMovieScannerTmdb) GetMoviesInTheaters(_ context.Context) ([]*tmdb.TmdbMovie, error) {
-	if s.theatersErr != nil {
-		return nil, s.theatersErr
-	}
-	return s.theaterMovies, nil
-}
-
-func (*stubMovieScannerTmdb) ClearCache() {}
 
 func movieScannerMetadataFixture(duration string) *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{
@@ -214,81 +197,69 @@ func (s *Scanner) scan(directory string) {
 	s.runMovieScan(directory)
 }
 
-// enrichmentAttempted mirrors the pipeline's one-lookup-per-scan guarantee,
-// which enrichMovies gets structurally by running once, for fixtures that push
-// the same file through processFile several times on one scan context.
-var enrichmentAttempted = map[*movieScanContext]map[string]bool{}
-
-// These focused persistence fixtures execute both phases for one file. Full
-// pipeline tests below exercise scheduling, accounting, and phase separation.
-func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file scanner.ScanFile) (scanner.FileOutcome, error) {
-	file.Path = filepath.Clean(file.Path)
-	result := s.prepareFile(ctx, probeJob{file: file, baseline: scan.movieIndex[file.Path]})
-	if result.inspection != nil {
-		defer result.inspection.Close()
+// processBatchReport runs files through the production local and enrichment
+// phases on one scan context and returns the report they filled in. Focused
+// persistence tests build on it; the pipeline tests exercise scheduling,
+// accounting, and phase separation through scan.
+func (s *Scanner) processBatchReport(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) *scanReport {
+	report := newScanReport(Status{})
+	report.scan = scan
+	local := make([]localFile, len(files))
+	indexes := make([]int, len(files))
+	for i, file := range files {
+		file.Path = filepath.Clean(file.Path)
+		local[i] = localFile{file: file}
+		indexes[i] = i
 	}
-	if result.err != nil {
-		return scanner.FileNeedsProcessing, result.err
+	s.processLocal(ctx, scan, report, local, indexes, time.Time{})
+	if ctx.Err() == nil {
+		s.enrichMovies(ctx, scan, report, local)
 	}
-	outcome := result.inspection.Outcome
-	if outcome == scanner.FileDeferred {
-		return outcome, nil
-	}
-	if result.resolved != nil {
-		err := s.persistLocalMovie(ctx, scan, result.resolved)
-		if err != nil {
-			return outcome, err
-		}
-	}
-	baseline := scan.movieIndex[file.Path]
-	if s.tmdb == nil || !baseline.enrichmentEligible(s.now()) || enrichmentAttempted[scan][file.Path] {
-		return outcome, nil
-	}
-	if enrichmentAttempted[scan] == nil {
-		enrichmentAttempted[scan] = map[string]bool{}
-	}
-	enrichmentAttempted[scan][file.Path] = true
-	enriched := s.prepareEnrichment(ctx, enrichmentJob{file: file, baseline: baseline})
-	if enriched.inspection != nil {
-		defer enriched.inspection.Close()
-	}
-	if enriched.err != nil {
-		if ctx.Err() != nil {
-			return outcome, ctx.Err()
-		}
-		return outcome, nil
-	}
-	_, err := s.persistEnrichment(ctx, scan, enriched.resolved)
-	return outcome, err
+	return report
 }
 
 func (s *Scanner) processMoviesBatch(ctx context.Context, scan *movieScanContext, files []scanner.ScanFile) (scanned, skipped, failures, deferred int) {
-	for _, file := range files {
-		outcome, err := s.processFile(ctx, scan, file)
-		if ctx.Err() != nil {
-			return
-		}
-		var deferral *scanner.FileDeferral
-		isDeferred := errors.As(err, &deferral)
-		if isDeferred || (err == nil && outcome == scanner.FileDeferred) {
-			deferred++
-		} else if err != nil {
-			failures++
-		} else if outcome == scanner.FileUnchanged {
-			skipped++
-		} else {
-			scanned++
-		}
-	}
-	return
+	report := s.processBatchReport(ctx, scan, files)
+	return report.status.Imported + report.status.Updated, report.status.Unchanged, report.status.Failed, report.status.Deferred
 }
 
-func (*stubMovieScannerTmdb) SearchShowsByTitleAndYear(context.Context, string, ...int) ([]tmdb.TVShow, error) {
-	return nil, tmdb.ErrNoShowsFound
+// processFile runs one file through both phases and reports its local outcome
+// plus the first failure the pipeline recorded for it, or the cancellation.
+func (s *Scanner) processFile(ctx context.Context, scan *movieScanContext, file scanner.ScanFile) (scanner.FileOutcome, error) {
+	report := s.processBatchReport(ctx, scan, []scanner.ScanFile{file})
+	contextErr := ctx.Err()
+	if contextErr != nil {
+		return scanner.FileNeedsProcessing, contextErr
+	}
+	outcome := scanner.FileNeedsProcessing
+	if report.status.Unchanged == 1 {
+		outcome = scanner.FileUnchanged
+	}
+	if report.status.Deferred == 1 {
+		outcome = scanner.FileDeferred
+	}
+	if report.status.Failed+report.status.EnrichmentFailed > 0 {
+		return outcome, fmt.Errorf("%s: %w", report.status.Issues[0].Reason, s.lastLoggedFailure())
+	}
+	return outcome, nil
 }
-func (*stubMovieScannerTmdb) GetShowDetails(context.Context, int) (*tmdb.TVShow, error) {
-	return nil, tmdb.ErrNoShowsFound
-}
-func (*stubMovieScannerTmdb) GetSeasonDetails(context.Context, int, int) (*tmdb.TVSeason, error) {
-	return nil, tmdb.ErrNoShowsFound
+
+// lastLoggedFailure returns the error the pipeline logged for the file it just
+// processed, so callers can match the cause behind the user-facing reason.
+func (s *Scanner) lastLoggedFailure() error {
+	log, ok := s.logger.(*scannertest.Logger)
+	if !ok {
+		return errors.New("failure not captured")
+	}
+	for _, entries := range [][]scannertest.LogEntry{log.WarnEntries, log.ErrorEntries} {
+		for i := len(entries) - 1; i >= 0; i-- {
+			for j := 0; j+1 < len(entries[i].Args); j += 2 {
+				err, isError := entries[i].Args[j+1].(error)
+				if entries[i].Args[j] == "error" && isError {
+					return err
+				}
+			}
+		}
+	}
+	return errors.New("failure not logged")
 }

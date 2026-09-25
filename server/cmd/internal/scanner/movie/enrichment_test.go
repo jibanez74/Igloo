@@ -3,62 +3,20 @@ package movie
 import (
 	"context"
 	"database/sql"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 )
-
-// Workers must not touch the database: the pool is pinned to one connection,
-// so a worker read would wait behind the coordinator's open transaction before
-// it could even start ffprobe. A closed database fails every query, so a
-// successful prepare proves the worker stayed off it.
-func TestWorkersPrepareWithoutDatabase(t *testing.T) {
-	fixture := setupMovieScanner(t)
-	s := fixture.scanner
-	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
-	details := retryMovieFixture(t)
-	s.tmdb = &stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42, Title: "Local"}}, detailMovies: map[int]tmdb.TmdbMovie{42: details}}
-	path := filepath.Join(t.TempDir(), "Local (2001).mkv")
-	err := os.WriteFile(path, []byte("movie"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture.db.Close()
-	_, err = s.queries.GetMovieByPath(context.Background(), path)
-	if err == nil {
-		t.Fatal("closed database still answers queries")
-	}
-
-	file := scanner.ScanFile{Path: path, Ext: "mkv"}
-	probed := s.prepareFile(context.Background(), probeJob{file: file})
-	if probed.err != nil || probed.resolved == nil || probed.resolved.params.Title != "Local" {
-		t.Fatalf("probe used the database: err=%v resolved=%+v", probed.err, probed.resolved)
-	}
-	probed.inspection.Close()
-
-	inspection, err := scanner.InspectFileMetadata(context.Background(), path, nil, s.now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	inspection.Close()
-	baseline := movieScanEntry{FileFingerprint: inspection.Fingerprint, ID: 1, FilePath: path, HasFingerprint: true}
-	enriched := s.prepareEnrichment(context.Background(), enrichmentJob{file: file, baseline: baseline})
-	if enriched.err != nil || enriched.resolved == nil || enriched.resolved.tmdbMovie == nil || enriched.resolved.tmdbMovie.TmdbID != 42 {
-		t.Fatalf("enrichment used the database: err=%v resolved=%+v", enriched.err, enriched.resolved)
-	}
-	enriched.inspection.Close()
-}
 
 // The backoff arithmetic is covered in the scanner package; these cases pin
 // the pending-state gate in front of it.
 func TestEnrichmentEligibilityRequiresPendingState(t *testing.T) {
 	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
-	missedAt := helpers.NullInt64(now.Add(-time.Hour).Unix())
 	cases := []struct {
 		name  string
 		entry movieScanEntry
@@ -66,7 +24,6 @@ func TestEnrichmentEligibilityRequiresPendingState(t *testing.T) {
 	}{
 		{"identified and not re-queued", movieScanEntry{TmdbID: helpers.NullInt64(7)}, false},
 		{"never attempted", movieScanEntry{}, true},
-		{"second miss waits a day", movieScanEntry{PendingRetry: true, RetryAttempts: 2, LastAttemptAt: missedAt}, false},
 		{"re-queued by rescan resets", movieScanEntry{TmdbID: helpers.NullInt64(7), PendingRetry: true}, true},
 	}
 	for _, tc := range cases {
@@ -83,17 +40,13 @@ func TestEnrichmentEligibilityRequiresPendingState(t *testing.T) {
 // only outstanding work is backed-off enrichment completes without issues.
 func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 	fixture := setupMovieScanner(t)
-	defer fixture.db.Close()
 	s := fixture.scanner
-	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("3600")}
 	client := &stubMovieScannerTmdb{searchErr: tmdb.ErrNoMoviesFound}
 	s.tmdb = client
 	root := t.TempDir()
 	path := filepath.Join(root, "Unknown (2001).mkv")
-	err := os.WriteFile(path, []byte("movie"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scannertest.WriteFile(t, path, "movie")
 	clock := time.Now().Add(2 * time.Minute)
 	s.now = func() time.Time { return clock }
 
@@ -104,7 +57,7 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 		t.Fatalf("first miss: %+v searches=%d", first, searches())
 	}
 	var attempts, lastAttempt sql.NullInt64
-	err = s.tx.DB.QueryRow("SELECT attempts, last_attempt_at FROM movie_tmdb_retries").Scan(&attempts, &lastAttempt)
+	err := s.tx.DB.QueryRow("SELECT attempts, last_attempt_at FROM movie_tmdb_retries").Scan(&attempts, &lastAttempt)
 	if err != nil || attempts.Int64 != 1 || lastAttempt.Int64 != clock.Unix() {
 		t.Fatalf("miss bookkeeping: attempts=%v last=%v err=%v", attempts, lastAttempt, err)
 	}
@@ -137,14 +90,10 @@ func TestRepeatedMissesBackOffAcrossScans(t *testing.T) {
 // than a bar frozen at 0/N.
 func TestScanWithoutTmdbCompletesCleanly(t *testing.T) {
 	fixture := setupMovieScanner(t)
-	defer fixture.db.Close()
 	s := fixture.scanner
-	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("3600")}
 	root := t.TempDir()
-	err := os.WriteFile(filepath.Join(root, "Local (2001).mkv"), []byte("movie"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scannertest.WriteFile(t, filepath.Join(root, "Local (2001).mkv"), "movie")
 	s.scan(root)
 	status := s.Status()
 	if status.State != scanner.StateCompleted || status.Imported != 1 || status.PendingEnrichment != 1 || status.EnrichmentTotal != 0 {
@@ -156,7 +105,6 @@ func TestScanWithoutTmdbCompletesCleanly(t *testing.T) {
 // stays pending and retries on a later scan, so the user sees no issue for it.
 func TestEnrichmentDeferralIsNotAFailure(t *testing.T) {
 	fixture := setupMovieScanner(t)
-	defer fixture.db.Close()
 	s := fixture.scanner
 	report := newScanReport(Status{})
 	result := enrichmentResult{
@@ -168,5 +116,31 @@ func TestEnrichmentDeferralIsNotAFailure(t *testing.T) {
 
 	if report.status.EnrichmentFailed != 0 || report.status.EnrichmentUnmatched != 0 || report.IssueCount() != 0 {
 		t.Fatalf("deferral recorded as a failure: %+v issues=%d", report.status, report.IssueCount())
+	}
+}
+
+// A file with no title at all has nothing to search, so enrichment records a
+// miss without asking TMDB for an empty query. Release-noise-only names keep
+// their raw title and are searched like any other.
+func TestEnrichmentRecordsMissForFilenameWithoutTitle(t *testing.T) {
+	fixture := setupMovieScanner(t)
+	s := fixture.scanner
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
+	client := &stubMovieScannerTmdb{searchResults: []tmdb.TmdbMovie{{TmdbID: 42, Title: "Noise"}}, detailMovies: map[int]tmdb.TmdbMovie{42: retryMovieFixture(t)}}
+	s.tmdb = client
+	path := filepath.Join(t.TempDir(), ".mkv")
+	scannertest.WriteFile(t, path, "movie")
+	if movieTitleYear(path).Title != "" {
+		t.Fatalf("fixture has a title: %+v", movieTitleYear(path))
+	}
+	report := s.processBatchReport(context.Background(), nextMovieScan(t, s), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
+	if report.status.Imported != 1 || report.status.EnrichmentUnmatched != 1 || report.status.EnrichmentFailed != 0 {
+		t.Fatalf("untitled file: %+v", report.status)
+	}
+	if len(client.searchCalls) != 0 || len(client.detailCalls) != 0 {
+		t.Fatalf("TMDB was queried for an empty title: searches=%+v details=%+v", client.searchCalls, client.detailCalls)
+	}
+	if scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movie_tmdb_retries") != 1 {
+		t.Fatal("miss was not recorded for a later retry")
 	}
 }

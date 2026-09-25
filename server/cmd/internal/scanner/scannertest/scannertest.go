@@ -7,9 +7,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/ffprobe"
 )
@@ -41,22 +45,83 @@ func (l *Logger) Warn(msg string, args ...any)  { l.log(&l.WarnEntries, msg, arg
 func (l *Logger) Error(msg string, args ...any) { l.log(&l.ErrorEntries, msg, args) }
 
 // WarnMentions reports whether a warning with the given message carries
-// needle in any of its structured values.
+// needle in any of its structured values. Errors and Stringers are matched
+// on their text, so "error", err arguments can be searched too.
 func (l *Logger) WarnMentions(msg, needle string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, entry := range l.WarnEntries {
+	return mentions(l.WarnEntries, msg, needle)
+}
+
+// DebugMentions is WarnMentions for debug entries, which is where the
+// scanners report deferrals that are not failures.
+func (l *Logger) DebugMentions(msg, needle string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return mentions(l.DebugEntries, msg, needle)
+}
+
+func mentions(entries []LogEntry, msg, needle string) bool {
+	for _, entry := range entries {
 		if entry.Msg != msg {
 			continue
 		}
 		for _, arg := range entry.Args {
-			value, ok := arg.(string)
-			if ok && strings.Contains(value, needle) {
+			if strings.Contains(argText(arg), needle) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func argText(arg any) string {
+	switch value := arg.(type) {
+	case string:
+		return value
+	case error:
+		return value.Error()
+	case fmt.Stringer:
+		return value.String()
+	}
+	return ""
+}
+
+// WriteFile writes contents to path, creating parent directories, and fails
+// the test on error. It returns path so fixtures can be declared inline.
+func WriteFile(t testing.TB, path, contents string) string {
+	t.Helper()
+	err := os.MkdirAll(filepath.Dir(path), 0o755)
+	if err != nil {
+		t.Fatalf("create directory for %s: %v", path, err)
+	}
+	err = os.WriteFile(path, []byte(contents), 0o644)
+	if err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	return path
+}
+
+// WaitForGroup waits for wait to drain or fails the test after timeout, so a
+// scan that never stops reports what it was instead of hanging the package.
+func WaitForGroup(t testing.TB, wait *sync.WaitGroup, timeout time.Duration, what string) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+	WaitForSignal(t, done, timeout, what)
+}
+
+// WaitForSignal receives from signal or fails the test after timeout.
+func WaitForSignal(t testing.TB, signal <-chan struct{}, timeout time.Duration, what string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(timeout):
+		t.Fatalf("%s did not happen within %s", what, timeout)
+	}
 }
 
 // CountRows runs a single-column count query and fails the test on error.

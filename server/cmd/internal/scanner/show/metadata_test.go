@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/scanner/scannertest"
 	"igloo/cmd/internal/tmdb"
 )
 
@@ -28,7 +29,7 @@ func nullableColumn(t *testing.T, db *sql.DB, query string, id int64) any {
 }
 
 func TestApplyShowStoresZeroRatingsAndNullsMeaninglessZeros(t *testing.T) {
-	db, q := testDB(t)
+	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	ctx := context.Background()
 
 	show, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{
@@ -77,7 +78,7 @@ func TestApplyShowStoresZeroRatingsAndNullsMeaninglessZeros(t *testing.T) {
 }
 
 func TestApplySeasonAndEpisodeStoreZeroRatingsAndNullUnknownRuntime(t *testing.T) {
-	db, q := testDB(t)
+	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	ctx := context.Background()
 
 	show, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{
@@ -139,5 +140,106 @@ func TestApplySeasonAndEpisodeStoreZeroRatingsAndNullUnknownRuntime(t *testing.T
 	got = nullableColumn(t, db, "SELECT tmdb_runtime FROM show_episodes WHERE id = ?", episode.ID)
 	if got != nil {
 		t.Errorf("show_episodes.tmdb_runtime = %#v, want NULL", got)
+	}
+}
+
+// applyShow replaces every relation it owns from the payload, so a refresh
+// that drops a genre, company, network, creator, crew credit or video removes
+// the stale row; videos without an id or key are skipped and untitled ones
+// fall back to their key.
+func TestApplyShowReplacesRelationsAndVideos(t *testing.T) {
+	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
+	ctx := context.Background()
+	show, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{DirectoryPath: "/shows/Full", LocalName: "Full", Name: "Full"})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	full := &tmdb.TVShow{
+		ID:                  10,
+		Name:                "Full",
+		Genres:              []tmdb.Genre{{ID: 18, Name: "Drama"}},
+		ProductionCompanies: []tmdb.ProductionCompany{{ID: 7, Name: "Studio"}},
+		Networks:            []tmdb.ProductionCompany{{ID: 8, Name: "Network", LogoPath: "/n.png", OriginCountry: "US"}},
+		CreatedBy:           []tmdb.TVPerson{{ID: 3, Name: "Creator"}},
+		AggregateCredits: tmdb.TVAggregateCredits{
+			Cast: []tmdb.TVAggregateCast{{TVPerson: tmdb.TVPerson{ID: 1, Name: "Actor"}, Roles: []tmdb.TVRole{{Character: "A", CreditID: "a", EpisodeCount: 3}}}},
+			Crew: []tmdb.TVAggregateCrew{{TVPerson: tmdb.TVPerson{ID: 4, Name: "Writer"}, Department: "Writing", Jobs: []tmdb.TVRole{{Job: "Writer", CreditID: "w", EpisodeCount: 2}}}},
+		},
+		Videos: tmdb.TVVideos{Results: []tmdb.TmdbVideoResult{
+			{ID: "v1", Key: "k1", Name: "Trailer", Site: "YouTube", Type: "Trailer"},
+			{Key: "k2", Name: "No id", Site: "YouTube", Type: "Trailer"},
+			{ID: "v3", Key: "k3", Name: "   ", Site: "YouTube", Type: "Featurette"},
+		}},
+	}
+	tables := []string{"show_genres", "show_production_companies", "show_networks", "show_creators", "show_cast", "show_crew", "show_extra_videos"}
+	err = applyShow(ctx, q, show.ID, full)
+	if err != nil {
+		t.Fatalf("applyShow: %v", err)
+	}
+	for _, table := range tables {
+		want := 1
+		if table == "show_extra_videos" {
+			want = 2
+		}
+		count := scannertest.CountRows(t, db, "SELECT count(*) FROM "+table)
+		if count != want {
+			t.Errorf("%s rows = %d, want %d", table, count, want)
+		}
+	}
+	if scannertest.CountRows(t, db, "SELECT count(*) FROM extra_videos WHERE key = 'k3' AND title = 'k3'") != 1 {
+		t.Error("untitled video did not fall back to its key")
+	}
+	if scannertest.CountRows(t, db, "SELECT count(*) FROM show_crew WHERE job = 'Writer' AND department = 'Writing' AND episode_count = 2") != 1 {
+		t.Error("crew credit not stored")
+	}
+
+	err = applyShow(ctx, q, show.ID, &tmdb.TVShow{ID: 10, Name: "Bare"})
+	if err != nil {
+		t.Fatalf("applyShow without relations: %v", err)
+	}
+	for _, table := range tables {
+		count := scannertest.CountRows(t, db, "SELECT count(*) FROM "+table)
+		if count != 0 {
+			t.Errorf("%s rows after refresh = %d, want 0", table, count)
+		}
+	}
+}
+
+// TMDB never issues person id 0, so a creator without an identity aborts the
+// whole apply rather than storing an artist row that can never be refreshed.
+func TestApplyShowRejectsCreatorWithoutIdentity(t *testing.T) {
+	_, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
+	ctx := context.Background()
+	show, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{DirectoryPath: "/shows/Anon", LocalName: "Anon", Name: "Anon"})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	err = applyShow(ctx, q, show.ID, &tmdb.TVShow{ID: 10, Name: "Anon", CreatedBy: []tmdb.TVPerson{{Name: "Nobody"}}})
+	if err == nil || err.Error() != "invalid TMDB person identity" {
+		t.Fatalf("applyShow error = %v, want the invalid person identity", err)
+	}
+}
+
+func TestApplyEpisodeStoresCrew(t *testing.T) {
+	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
+	ctx := context.Background()
+	show, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{DirectoryPath: "/shows/Crew", LocalName: "Crew", Name: "Crew"})
+	if err != nil {
+		t.Fatalf("create show: %v", err)
+	}
+	season, err := q.UpsertLocalShowSeason(ctx, database.UpsertLocalShowSeasonParams{ShowID: show.ID, SeasonNumber: 1, Name: "Season 1"})
+	if err != nil {
+		t.Fatalf("create season: %v", err)
+	}
+	episode, err := q.UpsertLocalShowEpisode(ctx, database.UpsertLocalShowEpisodeParams{SeasonID: season.ID, EpisodeNumber: 1, Name: "Episode 1"})
+	if err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+	err = applyEpisode(ctx, q, episode.ID, tmdb.TVEpisode{Name: "Pilot", Crew: []tmdb.TVCrewCredit{{TVPerson: tmdb.TVPerson{ID: 5, Name: "Director"}, Department: "Directing", Job: "Director", CreditID: "d"}}})
+	if err != nil {
+		t.Fatalf("applyEpisode: %v", err)
+	}
+	if scannertest.CountRows(t, db, "SELECT count(*) FROM show_episode_crew WHERE job = 'Director' AND department = 'Directing'") != 1 {
+		t.Fatal("episode crew credit not stored")
 	}
 }

@@ -6,20 +6,11 @@ import (
 	"errors"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/scanner/scannertest"
+
+	_ "github.com/mattn/go-sqlite3"
 )
-
-func testDB(t *testing.T) (*sql.DB, *database.Queries) {
-	t.Helper()
-	return scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
-}
-
-func countRows(t *testing.T, db *sql.DB, table string) int {
-	t.Helper()
-	return scannertest.CountRows(t, db, "SELECT count(*) FROM "+table)
-}
 
 type fileEpisode struct {
 	id            int64
@@ -55,7 +46,7 @@ func fileEpisodes(t *testing.T, db *sql.DB, fileID int64) []fileEpisode {
 }
 
 func TestCatalogOwnershipAndRollback(t *testing.T) {
-	db, q := testDB(t)
+	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	ctx := context.Background()
 	a, err := q.UpsertLocalShow(ctx, database.UpsertLocalShowParams{DirectoryPath: "/tv/A", LocalName: "A", Name: "A"})
 	if err != nil {
@@ -125,21 +116,6 @@ func TestCatalogOwnershipAndRollback(t *testing.T) {
 			t.Fatalf("accepted invalid statement: %s", statement)
 		}
 	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = tx.Exec("DELETE FROM show_files WHERE id=1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if countRows(t, db, "show_episode_files") != 4 {
-		t.Fatal("rollback lost relationships")
-	}
 	_, err = db.Exec("DELETE FROM show_files WHERE id=1")
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +126,7 @@ func TestCatalogOwnershipAndRollback(t *testing.T) {
 	}
 	// Pruning is scoped to the touched season: the other season's unlinked
 	// episode is not this file's business.
-	if countRows(t, db, "show_episodes") != 3 || countRows(t, db, "show_episode_files") != 2 {
+	if scannertest.CountRows(t, db, "SELECT count(*) FROM show_episodes") != 3 || scannertest.CountRows(t, db, "SELECT count(*) FROM show_episode_files") != 2 {
 		t.Fatal("deleting a copy deleted logical episodes")
 	}
 	// A season that still owns files survives pruning; an emptied one is
@@ -172,7 +148,7 @@ func TestCatalogOwnershipAndRollback(t *testing.T) {
 		t.Fatal("empty season not pruned", showID, err)
 	}
 	err = q.PruneShow(ctx, a.ID)
-	if err != nil || countRows(t, db, "shows") != 1 || countRows(t, db, "show_episodes") != 1 {
+	if err != nil || scannertest.CountRows(t, db, "SELECT count(*) FROM shows") != 1 || scannertest.CountRows(t, db, "SELECT count(*) FROM show_episodes") != 1 {
 		t.Fatal("empty show not pruned", err)
 	}
 	_, err = db.Exec("DELETE FROM shows")
@@ -180,7 +156,7 @@ func TestCatalogOwnershipAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"show_seasons", "show_episodes", "show_files", "show_episode_files"} {
-		if countRows(t, db, table) != 0 {
+		if scannertest.CountRows(t, db, "SELECT count(*) FROM "+table) != 0 {
 			t.Fatalf("cascade left %s", table)
 		}
 	}

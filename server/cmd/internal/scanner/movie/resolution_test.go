@@ -8,54 +8,15 @@ import (
 
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
-	"igloo/cmd/internal/scanner/tmdbmatch"
 	"igloo/cmd/internal/tmdb"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func TestResolveMovieFilePinsMimeTypePerContainer(t *testing.T) {
-	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
-
-	// Expected values are literals on purpose: a bad edit to
-	// helpers.VideoMimeTypes must fail here, so do not assert against the map.
-	cases := []struct {
-		ext  string
-		want string
-	}{
-		{ext: "mp4", want: "video/mp4"},
-		{ext: "m4v", want: "video/mp4"},
-		{ext: "mkv", want: "video/x-matroska"},
-		{ext: "webm", want: "video/webm"},
-		{ext: "avi", want: "video/x-msvideo"},
-		{ext: "mov", want: "video/quicktime"},
-	}
-
-	for _, tc := range cases {
-		resolved, err := testScanner.scanner.resolveMovieFile(context.Background(), scanner.ScanFile{
-			Path: "/movies/Sample.Movie.2024." + tc.ext,
-			Ext:  tc.ext,
-			Size: 100,
-		})
-		if err != nil {
-			t.Fatalf("resolve %s movie: %v", tc.ext, err)
-		}
-		if resolved.params.MimeType != tc.want {
-			t.Errorf("mime_type for .%s = %q, want %q", tc.ext, resolved.params.MimeType, tc.want)
-		}
-		if resolved.params.Container != tc.ext {
-			t.Errorf("container for .%s = %q, want %q", tc.ext, resolved.params.Container, tc.ext)
-		}
-	}
-}
-
 func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("3600")}
 	resolved, err := testScanner.scanner.resolveMovieFile(context.Background(), scanner.ScanFile{
 		Path: "/movies/Local.Only.2024.mkv",
 		Ext:  "mkv",
@@ -80,11 +41,10 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 
 func TestResolveMovieFileReturnsTmdbSearchFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	logged := &scannertest.Logger{}
 	testScanner.scanner.logger = logged
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("3600")}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
 
 	path := "/movies/Search.Failed.2024.mkv"
@@ -104,11 +64,10 @@ func TestResolveMovieFileReturnsTmdbSearchFailure(t *testing.T) {
 
 func TestResolveMovieFileDoesNotWarnWhenScanIsCanceled(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	logged := &scannertest.Logger{}
 	testScanner.scanner.logger = logged
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("3600")}
 	testScanner.scanner.tmdb = &stubMovieScannerTmdb{searchErr: context.Canceled}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -130,7 +89,6 @@ func TestResolveMovieFileDoesNotWarnWhenScanIsCanceled(t *testing.T) {
 
 func TestResolveMovieFileReturnsTmdbDetailFailure(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	tmdbStub := &stubMovieScannerTmdb{
 		searchResults: []tmdb.TmdbMovie{{
@@ -141,7 +99,7 @@ func TestResolveMovieFileReturnsTmdbDetailFailure(t *testing.T) {
 		detailErr: sql.ErrNoRows,
 	}
 	testScanner.scanner.tmdb = tmdbStub
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("3600")}
 
 	resolved, err := testScanner.scanner.resolveMovieFile(context.Background(), scanner.ScanFile{
 		Path: "/movies/Detail.Fails.2022.mkv",
@@ -154,20 +112,6 @@ func TestResolveMovieFileReturnsTmdbDetailFailure(t *testing.T) {
 	if len(tmdbStub.detailCalls) != 1 || tmdbStub.detailCalls[0] != 42 {
 		t.Fatalf("detail calls = %#v, want [42]", tmdbStub.detailCalls)
 	}
-}
-
-type interpretationTmdb struct {
-	stubMovieScannerTmdb
-	search func(context.Context, string, int) ([]tmdb.TmdbMovie, error)
-}
-
-func (s *interpretationTmdb) SearchMoviesByTitleAndYear(ctx context.Context, title string, years ...int) ([]tmdb.TmdbMovie, error) {
-	year := 0
-	if len(years) > 0 {
-		year = years[0]
-	}
-	s.searchCalls = append(s.searchCalls, stubMovieScannerTmdbSearchCall{title: title, year: years})
-	return s.search(ctx, title, year)
 }
 
 func TestAmbiguousTitleYearSearches(t *testing.T) {
@@ -183,13 +127,12 @@ func TestAmbiguousTitleYearSearches(t *testing.T) {
 	} {
 		t.Run(tc.filename, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
-			defer fixture.db.Close()
 			s := fixture.scanner
-			s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+			s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 			correct := tmdb.TmdbMovie{TmdbID: 2, Title: tc.full, OriginalTitle: tc.full, ReleaseDate: "2017-01-01"}
 			wrong := tmdb.TmdbMovie{TmdbID: 1, Title: tc.parsed, OriginalTitle: tc.parsed, ReleaseDate: "1980-01-01"}
-			client := &interpretationTmdb{stubMovieScannerTmdb: stubMovieScannerTmdb{detailMovies: map[int]tmdb.TmdbMovie{2: correct}}}
-			client.search = func(_ context.Context, title string, year int) ([]tmdb.TmdbMovie, error) {
+			client := &stubMovieScannerTmdb{detailMovies: map[int]tmdb.TmdbMovie{2: correct}}
+			client.searchHook = func(_ context.Context, title string, year int) ([]tmdb.TmdbMovie, error) {
 				if len(client.searchCalls) == 1 && (title != tc.parsed || year != tc.year) {
 					t.Fatalf("parsed query=%s/%d", title, year)
 				}
@@ -217,14 +160,13 @@ func TestAmbiguousSearchPartialFailuresAndCancellation(t *testing.T) {
 	for _, failure := range []string{"first", "second", "cancel", "duplicate"} {
 		t.Run(failure, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
-			defer fixture.db.Close()
 			s := fixture.scanner
-			s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+			s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			details := tmdb.TmdbMovie{TmdbID: 2, Title: "Blade Runner 2049"}
-			client := &interpretationTmdb{stubMovieScannerTmdb: stubMovieScannerTmdb{detailMovies: map[int]tmdb.TmdbMovie{2: details}}}
-			client.search = func(_ context.Context, _ string, _ int) ([]tmdb.TmdbMovie, error) {
+			client := &stubMovieScannerTmdb{detailMovies: map[int]tmdb.TmdbMovie{2: details}}
+			client.searchHook = func(_ context.Context, _ string, _ int) ([]tmdb.TmdbMovie, error) {
 				call := len(client.searchCalls)
 				if failure == "cancel" {
 					cancel()
@@ -274,12 +216,8 @@ func (s *Scanner) resolveMovieFile(ctx context.Context, file scanner.ScanFile) (
 	if err != nil {
 		return nil, err
 	}
-	titleYear := movieTitleYear(file.Path)
-	searchTitle := tmdbmatch.NormalizeTitleForSearch(titleYear.Title)
-	if searchTitle == "" {
-		searchTitle = titleYear.Title
-	}
-	details, err := s.lookupTmdbMovie(ctx, file.Path, searchTitle, titleYear.Year, sql.NullInt64{})
+	searchTitle, year := tmdbSearchTitle(file.Path)
+	details, err := s.lookupTmdbMovie(ctx, file.Path, searchTitle, year, sql.NullInt64{})
 	if err != nil {
 		return nil, err
 	}

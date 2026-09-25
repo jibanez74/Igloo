@@ -2,7 +2,6 @@ package music
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -11,11 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
-	"igloo/sqlc"
 
 	_ "github.com/mattn/go-sqlite3"
 	spotifylib "github.com/zmb3/spotify/v2"
@@ -23,31 +20,15 @@ import (
 
 func setupMusicScanner(t testing.TB) *Scanner {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open in-memory database: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	_, err = db.Exec(sqlc.Schema)
-	if err != nil {
-		db.Close()
-		t.Fatalf("initialize schema: %v", err)
-	}
-	queries, err := database.Prepare(context.Background(), db)
-	if err != nil {
-		db.Close()
-		t.Fatalf("prepare queries: %v", err)
-	}
-	t.Cleanup(func() { queries.Close() })
+	db, queries := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	return New(Dependencies{DB: db, Queries: queries, Logger: &scannertest.Logger{}, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }})
 }
 
 func (app *Scanner) processMusicBatchForTest(t testing.TB, ctx context.Context, files []scanner.ScanFile) (scanned, skipped, errCount int) {
+	t.Helper()
 	scanIndex, _, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
-		app.logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
-		return 0, 0, len(files)
+		t.Fatalf("load music scan index: %v", err)
 	}
 
 	return app.processMusicFixtureBatch(t, ctx, newMusicScanContext(scanIndex), files)
@@ -98,63 +79,6 @@ func testMusicMetadataWithTags(tags ffprobe.FormatTags) *ffprobe.FfprobeResult {
 			},
 		},
 	}
-}
-
-type countingMusicScannerFfprobe struct {
-	scannertest.NoKeyframeProbe
-	result *ffprobe.FfprobeResult
-	calls  int
-}
-
-func (s *countingMusicScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
-	s.calls++
-	return s.result, nil
-}
-
-func (s *countingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
-	s.calls++
-	return s.result, nil
-}
-
-type cancelingMusicScannerFfprobe struct {
-	scannertest.NoKeyframeProbe
-	cancel context.CancelFunc
-	calls  int
-}
-
-func (s *cancelingMusicScannerFfprobe) GetMetadata(_ context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-	return nil, errors.New("generic metadata probing is not expected")
-}
-
-func (s *cancelingMusicScannerFfprobe) GetAudioMetadata(_ context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-	s.calls++
-	s.cancel()
-	return nil, context.Canceled
-}
-
-type failingPathMusicScannerFfprobe struct {
-	scannertest.NoKeyframeProbe
-	result      *ffprobe.FfprobeResult
-	failingPath string
-	calls       int
-}
-
-func (s *failingPathMusicScannerFfprobe) GetMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
-	s.calls++
-	if filePath == s.failingPath {
-		return nil, errors.New("ffprobe failed")
-	}
-
-	return s.result, nil
-}
-
-func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(_ context.Context, filePath string) (*ffprobe.FfprobeResult, error) {
-	s.calls++
-	if filePath == s.failingPath {
-		return nil, errors.New("ffprobe failed")
-	}
-
-	return s.result, nil
 }
 
 type musicScannerFfprobeByPath struct {
@@ -265,12 +189,6 @@ func (s *Scanner) scan(directory string) {
 	s.runMusicScan(directory)
 }
 
-func runMusicScanForTest(t *testing.T, app *Scanner) {
-	t.Helper()
-
-	app.scan(app.currentMusicDirectory().String)
-}
-
 // processBatchReport runs one batch against a fresh report.
 func (s *Scanner) processBatchReport(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) *scanReport {
 	report := newScanReport(Status{})
@@ -283,22 +201,6 @@ func (s *Scanner) processBatchReport(ctx context.Context, scan *musicScanContext
 func (s *Scanner) processBatchCounts(ctx context.Context, scan *musicScanContext, files []scanner.ScanFile) (scanned, skipped, failures int) {
 	report := s.processBatchReport(ctx, scan, files)
 	return report.status.Imported + report.status.Updated, report.status.Unchanged, report.status.Failed
-}
-
-func writeMusicScannerTestFile(t *testing.T, path, contents string) int64 {
-	t.Helper()
-
-	err := os.MkdirAll(filepath.Dir(path), 0755)
-	if err != nil {
-		t.Fatalf("create test music directory: %v", err)
-	}
-
-	err = os.WriteFile(path, []byte(contents), 0644)
-	if err != nil {
-		t.Fatalf("write test music file: %v", err)
-	}
-
-	return int64(len(contents))
 }
 
 // Metadata tests use synthetic media bytes with stubbed ffprobe responses.

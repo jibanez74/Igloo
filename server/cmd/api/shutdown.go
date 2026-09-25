@@ -20,10 +20,14 @@ import (
 // ended the process mid-teardown, with FFmpeg children orphaned, temp
 // directories left behind, and the database and logger never closed.
 func (app *Application) serveUntilShutdown() error {
+	// Subscribe before the listener binds: a signal landing after the port is
+	// open but before the goroutine below had registered took the default
+	// action and ended the process mid-startup with no cleanup at all.
+	quit := subscribeShutdownSignals()
 	shutdownDone := make(chan struct{})
 	go func() {
 		defer close(shutdownDone)
-		app.ListenForShutdown()
+		app.ListenForShutdown(quit)
 	}()
 
 	err := app.Server.ListenAndServe()
@@ -35,14 +39,18 @@ func (app *Application) serveUntilShutdown() error {
 	return nil
 }
 
-// ListenForShutdown blocks until SIGINT or SIGTERM, then stops the HTTP
+// subscribeShutdownSignals returns a channel that receives the first SIGINT
+// or SIGTERM; ListenForShutdown stops the subscription once it fires.
+func subscribeShutdownSignals() chan os.Signal {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	return quit
+}
+
+// ListenForShutdown blocks until quit delivers a signal, then stops the HTTP
 // server and releases every resource the process owns. It returns rather than
 // exiting so the caller decides when the process ends.
-func (app *Application) ListenForShutdown() {
-	quit := make(chan os.Signal, 1)
-
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
+func (app *Application) ListenForShutdown(quit chan os.Signal) {
 	<-quit
 
 	signal.Stop(quit)

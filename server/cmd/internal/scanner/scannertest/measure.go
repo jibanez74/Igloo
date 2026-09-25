@@ -10,9 +10,10 @@ import (
 
 // MeasurementLogger reports per-phase wall time for opt-in library
 // benchmarks. It keys on the "<library> scan phase" and "<library> scan
-// finished" messages every scanner logs.
+// finished" messages every scanner logs. It deliberately does not capture
+// entries: a benchmark over a real library logs per-file debug lines, and
+// retaining them would show up in the RSS it measures.
 type MeasurementLogger struct {
-	Logger
 	mu    sync.Mutex
 	t     *testing.T
 	phase string
@@ -41,6 +42,7 @@ func (l *MeasurementLogger) Info(message string, args ...any) {
 	l.t.Log(message, args)
 }
 
+func (l *MeasurementLogger) Debug(string, ...any)              {}
 func (l *MeasurementLogger) Warn(message string, args ...any)  { l.t.Log(message, args) }
 func (l *MeasurementLogger) Error(message string, args ...any) { l.t.Log(message, args) }
 

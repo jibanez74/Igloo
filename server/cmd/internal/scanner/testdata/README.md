@@ -1,4 +1,4 @@
-# Movie probe fixtures
+# Video probe fixtures
 
 Synthetic fixtures generated with the repository's Jellyfin FFmpeg `7.1.4-Jellyfin` Linux x64 payload. No third-party media is included.
 
@@ -9,10 +9,10 @@ Synthetic fixtures generated with the repository's Jellyfin FFmpeg `7.1.4-Jellyf
 Regenerate from the repository root, setting `IGLOO_FFMPEG_PATH` to the matching Jellyfin payload for Linux x64 or macOS ARM64:
 
 ```sh
-"$IGLOO_FFMPEG_PATH" -v error -y -f lavfi -i sine=frequency=440:sample_rate=8000 -f lavfi -i testsrc2=size=64x48:rate=5 -map 0:a -map 1:v -t 0.6 -c:a pcm_s16le -c:v mjpeg -threads 1 server/cmd/internal/scanner/movie/testdata/moving.avi
+"$IGLOO_FFMPEG_PATH" -v error -y -f lavfi -i sine=frequency=440:sample_rate=8000 -f lavfi -i testsrc2=size=64x48:rate=5 -map 0:a -map 1:v -t 0.6 -c:a pcm_s16le -c:v mjpeg -threads 1 server/cmd/internal/scanner/testdata/moving.avi
 "$IGLOO_FFMPEG_PATH" -v error -y -f lavfi -i color=red:size=32x32 -frames:v 1 -threads 1 /tmp/igloo-cover.jpg
-"$IGLOO_FFMPEG_PATH" -v error -y -f lavfi -i testsrc2=size=64x48:rate=5 -f lavfi -i sine=frequency=440:sample_rate=8000 -i /tmp/igloo-cover.jpg -map 0:v -map 1:a -map 2:v -t 0.6 -c:v:0 libx264 -threads 1 -c:a aac -c:v:1 copy -disposition:v:1 attached_pic server/cmd/internal/scanner/movie/testdata/artwork-with-video.mp4
-"$IGLOO_FFMPEG_PATH" -v error -y -i /tmp/igloo-cover.jpg -map 0:v -c:v copy -disposition:v attached_pic server/cmd/internal/scanner/movie/testdata/artwork-only.mp4
+"$IGLOO_FFMPEG_PATH" -v error -y -f lavfi -i testsrc2=size=64x48:rate=5 -f lavfi -i sine=frequency=440:sample_rate=8000 -i /tmp/igloo-cover.jpg -map 0:v -map 1:a -map 2:v -t 0.6 -c:v:0 libx264 -threads 1 -c:a aac -c:v:1 copy -disposition:v:1 attached_pic server/cmd/internal/scanner/testdata/artwork-with-video.mp4
+"$IGLOO_FFMPEG_PATH" -v error -y -i /tmp/igloo-cover.jpg -map 0:v -c:v copy -disposition:v attached_pic server/cmd/internal/scanner/testdata/artwork-only.mp4
 ```
 
 `TestMovieRealProbeVideoAndArtwork` uses the real ffprobe wrapper and the scanner database transaction. Run from `server/` with `IGLOO_FFPROBE_PATH` set to the matching Jellyfin payload:

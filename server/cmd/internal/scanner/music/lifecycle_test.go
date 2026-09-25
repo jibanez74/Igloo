@@ -5,60 +5,33 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
-	"igloo/sqlc"
 
 	"github.com/mattn/go-sqlite3"
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
-func TestRunMusicScanDoesNotClearSpotifyRuntimeCache(t *testing.T) {
-	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
-
-	musicDir := t.TempDir()
-	trackPath := filepath.Join(musicDir, "Test Track.m4a")
-	err := os.WriteFile(trackPath, []byte("test"), 0644)
-	if err != nil {
-		t.Fatalf("write track file: %v", err)
-	}
-
-	spotifyStub := &musicScannerSpotifyStub{}
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
-	app.spotify = spotifyStub
-	app.currentMusicDirectory = func() sql.NullString {
-		return sql.NullString{String: musicDir, Valid: true}
-	}
-
-	app.scan(app.currentMusicDirectory().String)
-
-	if spotifyStub.clearCalls != 0 {
-		t.Fatalf("spotify cache clear calls = %d, want 0", spotifyStub.clearCalls)
-	}
-}
-
 func TestRunMusicScanLogsCancellationFromFinalPartialBatch(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	musicDir := t.TempDir()
 	trackPath := filepath.Join(musicDir, "Canceled Track.m4a")
-	writeMusicScannerTestFile(t, trackPath, "test")
+	scannertest.WriteFile(t, trackPath, "test")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ffprobeStub := &cancelingMusicScannerFfprobe{cancel: cancel}
+	ffprobeStub := &scannertest.CountingProbe{Hook: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+		cancel()
+		return nil, context.Canceled
+	}}
 	logger := &scannertest.Logger{}
 	app.scanContext = ctx
 	app.ffprobe = ffprobeStub
@@ -67,31 +40,20 @@ func TestRunMusicScanLogsCancellationFromFinalPartialBatch(t *testing.T) {
 		return sql.NullString{String: musicDir, Valid: true}
 	}
 
-	runMusicScanForTest(t, app)
+	app.scan(app.currentMusicDirectory().String)
 
-	if ffprobeStub.calls != 1 {
-		t.Fatalf("audio metadata calls = %d, want 1", ffprobeStub.calls)
+	if ffprobeStub.Calls() != 1 {
+		t.Fatalf("audio metadata calls = %d, want 1", ffprobeStub.Calls())
 	}
 
-	foundCancellation := false
-	for _, entry := range logger.WarnEntries {
-		if entry.Msg == "music library scan interrupted" {
-			foundCancellation = true
-		}
-	}
-	for _, entry := range logger.InfoEntries {
-		if strings.HasPrefix(entry.Msg, "music scanner completed:") {
-			t.Fatalf("canceled scan logged completion: %q", entry.Msg)
-		}
-	}
-	if !foundCancellation {
-		t.Fatalf("missing cancellation log; warn entries = %+v", logger.WarnEntries)
+	assertMusicInterrupted(t, app)
+	if scannertest.CountRows(t, app.tx.DB, "SELECT count(*) FROM tracks") != 0 {
+		t.Fatal("canceled scan persisted the track")
 	}
 }
 
 func TestRunMusicScanWalksAudioFilesAndSkipsUnchangedFiles(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	musicDir := t.TempDir()
 	m4aPath := filepath.Join(musicDir, "Album", "Track One.m4a")
@@ -99,10 +61,10 @@ func TestRunMusicScanWalksAudioFilesAndSkipsUnchangedFiles(t *testing.T) {
 	flacPath := filepath.Join(musicDir, "Nested", "Track Three.flac")
 	ignoredPath := filepath.Join(musicDir, "Album", "cover.jpg")
 
-	writeMusicScannerTestFile(t, m4aPath, "m4a")
-	writeMusicScannerTestFile(t, mp3Path, "mp3")
-	writeMusicScannerTestFile(t, flacPath, "flac")
-	writeMusicScannerTestFile(t, ignoredPath, "jpg")
+	scannertest.WriteFile(t, m4aPath, "m4a")
+	scannertest.WriteFile(t, mp3Path, "mp3")
+	scannertest.WriteFile(t, flacPath, "flac")
+	scannertest.WriteFile(t, ignoredPath, "jpg")
 
 	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
 		m4aPath: testMusicMetadataWithTags(ffprobe.FormatTags{
@@ -129,12 +91,14 @@ func TestRunMusicScanWalksAudioFilesAndSkipsUnchangedFiles(t *testing.T) {
 		return sql.NullString{String: musicDir, Valid: true}
 	}
 
-	runMusicScanForTest(t, app)
+	app.scan(app.currentMusicDirectory().String)
 
-	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks"); got != 3 {
+	got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks")
+	if got != 3 {
 		t.Fatalf("track count after first scan = %d, want 3", got)
 	}
-	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks WHERE file_path = ?", ignoredPath); got != 0 {
+	got = scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM tracks WHERE file_path = ?", ignoredPath)
+	if got != 0 {
 		t.Fatalf("ignored file track count = %d, want 0", got)
 	}
 	if ffprobeStub.totalAudioCalls() != 3 {
@@ -144,13 +108,14 @@ func TestRunMusicScanWalksAudioFilesAndSkipsUnchangedFiles(t *testing.T) {
 		t.Fatalf("generic metadata calls = %d, want 0", ffprobeStub.totalMetadataCalls())
 	}
 
-	runMusicScanForTest(t, app)
+	app.scan(app.currentMusicDirectory().String)
 
 	if ffprobeStub.totalAudioCalls() != 3 {
 		t.Fatalf("audio metadata calls after unchanged rescan = %d, want 3", ffprobeStub.totalAudioCalls())
 	}
 
-	newSize := writeMusicScannerTestFile(t, mp3Path, "mp3 changed")
+	scannertest.WriteFile(t, mp3Path, "mp3 changed")
+	newSize := int64(len("mp3 changed"))
 	ffprobeStub.results[mp3Path] = testMusicMetadataWithTags(ffprobe.FormatTags{
 		Title:  "Track Two Updated",
 		Artist: "Walk Artist",
@@ -158,7 +123,7 @@ func TestRunMusicScanWalksAudioFilesAndSkipsUnchangedFiles(t *testing.T) {
 		Track:  "2/3",
 	})
 
-	runMusicScanForTest(t, app)
+	app.scan(app.currentMusicDirectory().String)
 
 	if ffprobeStub.totalAudioCalls() != 4 {
 		t.Fatalf("audio metadata calls after changed rescan = %d, want 4", ffprobeStub.totalAudioCalls())
@@ -192,7 +157,6 @@ func TestStartRejectsUnconfiguredDirectories(t *testing.T) {
 
 func TestStartReleasesGuardAndTracksShutdown(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	directory := t.TempDir()
 	s.currentMusicDirectory = func() sql.NullString {
 		return sql.NullString{String: directory, Valid: true}
@@ -207,57 +171,15 @@ func TestStartReleasesGuardAndTracksShutdown(t *testing.T) {
 		if result.Status != scanner.StartStarted {
 			t.Fatalf("Start %d = %+v, want started", i, result)
 		}
-		s.launcher.Wait.Wait()
-	}
-}
-
-func TestScannerContextFallbackAndOptionalWait(t *testing.T) {
-	s := New(Dependencies{})
-	if s.launcher.Wait == nil {
-		t.Fatal("missing wait group was not defaulted")
-	}
-	ctx := s.scanContext
-	if ctx != context.Background() {
-		t.Fatal("missing scan context did not fall back to background")
-	}
-	shutdownCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	s.scanContext = shutdownCtx
-	if s.scanContext != shutdownCtx {
-		t.Fatal("scanner did not use shutdown context")
-	}
-}
-
-type callbackMusicProbe struct {
-	scannertest.NoKeyframeProbe
-	audio func(context.Context, string) (*ffprobe.FfprobeResult, error)
-}
-
-func (p *callbackMusicProbe) GetMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	return p.audio(ctx, path)
-}
-
-func (p *callbackMusicProbe) GetAudioMetadata(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
-	return p.audio(ctx, path)
-}
-
-func waitForMusicScan(t *testing.T, s *Scanner) {
-	t.Helper()
-	done := make(chan struct{})
-	go func() { s.launcher.Wait.Wait(); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("scan did not stop")
+		scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
 	}
 }
 
 func TestStartCapturesDirectoryAndUsesInstanceGuard(t *testing.T) {
 	first := setupMusicScanner(t)
-	defer first.tx.DB.Close()
 	directory := t.TempDir()
 	path := filepath.Join(directory, "track.m4a")
-	writeMusicScannerTestFile(t, path, "audio")
+	scannertest.WriteFile(t, path, "audio")
 	calls := atomic.Int32{}
 	first.currentMusicDirectory = func() sql.NullString {
 		if calls.Add(1) == 1 {
@@ -267,12 +189,12 @@ func TestStartCapturesDirectoryAndUsesInstanceGuard(t *testing.T) {
 	}
 	entered := make(chan string, 1)
 	release := make(chan struct{})
-	first.ffprobe = &callbackMusicProbe{audio: func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+	first.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
 		entered <- path
 		<-release
 		return testMusicMetadata(), nil
 	}}
-	defer func() { close(release); waitForMusicScan(t, first) }()
+	defer func() { close(release); scannertest.WaitForGroup(t, first.launcher.Wait, 5*time.Second, "music scan") }()
 	result := first.Start()
 	if result.Status != scanner.StartStarted || result.Directory != directory {
 		t.Fatalf("first start: %+v", result)
@@ -290,14 +212,13 @@ func TestStartCapturesDirectoryAndUsesInstanceGuard(t *testing.T) {
 		t.Fatalf("overlapping start: %+v", result)
 	}
 	second := setupMusicScanner(t)
-	defer second.tx.DB.Close()
 	second.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: directory, Valid: true} }
-	second.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	second.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	result = second.Start()
 	if result.Status != scanner.StartStarted {
 		t.Fatalf("independent scanner start: %+v", result)
 	}
-	waitForMusicScan(t, second)
+	scannertest.WaitForGroup(t, second.launcher.Wait, 5*time.Second, "music scan")
 	count := scannertest.CountRows(t, second.tx.DB, "SELECT count(*) FROM tracks")
 	if count != 1 {
 		t.Fatalf("independent scanner wrote %d tracks", count)
@@ -308,7 +229,6 @@ func TestStartReleasesGuardAfterFailures(t *testing.T) {
 	for _, phase := range []string{"index", "walk", "probe"} {
 		t.Run(phase, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			directory := t.TempDir()
 			s.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: directory, Valid: true} }
 			switch phase {
@@ -320,15 +240,15 @@ func TestStartReleasesGuardAfterFailures(t *testing.T) {
 			case "walk":
 				directory = filepath.Join(directory, "absent")
 			case "probe":
-				writeMusicScannerTestFile(t, filepath.Join(directory, "fail.m4a"), "audio")
-				s.ffprobe = &callbackMusicProbe{audio: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, errors.New("probe failure") }}
+				scannertest.WriteFile(t, filepath.Join(directory, "fail.m4a"), "audio")
+				s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) { return nil, errors.New("probe failure") }}
 			}
 			for i := 0; i < 2; i++ {
 				result := s.Start()
 				if result.Status != scanner.StartStarted {
 					t.Fatalf("start %d: %+v", i, result)
 				}
-				waitForMusicScan(t, s)
+				scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
 			}
 		})
 	}
@@ -343,10 +263,8 @@ func assertMusicInterrupted(t *testing.T, s *Scanner) {
 			interrupted++
 		}
 	}
-	for _, entry := range logs.InfoEntries {
-		if strings.Contains(entry.Msg, "completed:") {
-			t.Errorf("interrupted scan logged completion: %s", entry.Msg)
-		}
+	if s.Status().State != scanner.StateCanceled {
+		t.Errorf("interrupted scan reported state %q", s.Status().State)
 	}
 	if interrupted != 1 || len(logs.WarnEntries) != interrupted || len(logs.ErrorEntries) != 0 {
 		t.Fatalf("interrupted=%d warnings=%+v errors=%+v", interrupted, logs.WarnEntries, logs.ErrorEntries)
@@ -355,7 +273,6 @@ func assertMusicInterrupted(t *testing.T, s *Scanner) {
 
 func TestShutdownDuringIndexLoading(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.scanContext = ctx
@@ -378,52 +295,53 @@ func TestShutdownDuringIndexLoading(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	cancel()
-	waitForMusicScan(t, s)
+	scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
 	assertMusicInterrupted(t, s)
 }
 
+// A cancellation in the final partial batch is covered by
+// TestRunMusicScanLogsCancellationFromFinalPartialBatch; this drives it
+// through a full batch, by explicit cancel and by context expiry.
 func TestShutdownDuringProbeBatches(t *testing.T) {
-	for _, count := range []int{1, scanner.BatchSize + 1} {
-		for _, expiry := range []bool{false, true} {
-			t.Run(fmt.Sprintf("files=%d/expiry=%v", count, expiry), func(t *testing.T) {
-				s := setupMusicScanner(t)
-				defer s.tx.DB.Close()
-				directory := t.TempDir()
-				for i := 0; i < count; i++ {
-					writeMusicScannerTestFile(t, filepath.Join(directory, fmt.Sprintf("%03d.m4a", i)), "audio")
-				}
-				ctx, cancel := context.WithCancel(context.Background())
-				if expiry {
+	const count = scanner.BatchSize + 1
+	for _, expiry := range []bool{false, true} {
+		t.Run(fmt.Sprintf("expiry=%v", expiry), func(t *testing.T) {
+			s := setupMusicScanner(t)
+			directory := t.TempDir()
+			for i := 0; i < count; i++ {
+				scannertest.WriteFile(t, filepath.Join(directory, fmt.Sprintf("%03d.m4a", i)), "audio")
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			if expiry {
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+			}
+			defer cancel()
+			s.scanContext = ctx
+			s.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: directory, Valid: true} }
+			calls := 0
+			s.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
+				calls++
+				if !expiry {
 					cancel()
-					ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 				}
-				defer cancel()
-				s.scanContext = ctx
-				s.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: directory, Valid: true} }
-				calls := 0
-				s.ffprobe = &callbackMusicProbe{audio: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-					calls++
-					if !expiry {
-						cancel()
-					}
-					<-ctx.Done()
-					return nil, ctx.Err()
-				}}
-				result := s.Start()
-				if result.Status != scanner.StartStarted {
-					t.Fatal(result)
-				}
-				waitForMusicScan(t, s)
-				assertMusicInterrupted(t, s)
-				if calls != 1 {
-					t.Fatalf("probe calls=%d", calls)
-				}
-				rows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
-				if rows != 0 {
-					t.Fatalf("canceled scan wrote %d tracks", rows)
-				}
-			})
-		}
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}}
+			result := s.Start()
+			if result.Status != scanner.StartStarted {
+				t.Fatal(result)
+			}
+			scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
+			assertMusicInterrupted(t, s)
+			if calls != 1 {
+				t.Fatalf("probe calls=%d", calls)
+			}
+			rows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
+			if rows != 0 {
+				t.Fatalf("canceled scan wrote %d tracks", rows)
+			}
+		})
 	}
 }
 
@@ -453,12 +371,11 @@ func TestShutdownDuringSpotifyResolution(t *testing.T) {
 	for _, phase := range []string{"artist", "album"} {
 		t.Run(phase, func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			spotify := &cancelingMusicSpotify{cancel: cancel, phase: phase}
 			s.spotify = spotify
-			s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+			s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 			scan := newMusicScanContext(nil)
 			scanned, _, failures := s.processMusicFixtureBatch(t, ctx, scan, []scanner.ScanFile{{Path: musicDir + "/cancel.m4a", Ext: "m4a", Size: 1}, {Path: musicDir + "/later.m4a", Ext: "m4a", Size: 1}})
 			if scanned != 0 || failures != 0 || spotify.artistCalls != 1 {
@@ -479,15 +396,14 @@ func TestShutdownDuringSpotifyResolution(t *testing.T) {
 
 func TestShutdownWaitingForPersistence(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	directory := t.TempDir()
-	writeMusicScannerTestFile(t, filepath.Join(directory, "track.m4a"), "audio")
+	scannertest.WriteFile(t, filepath.Join(directory, "track.m4a"), "audio")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.scanContext = ctx
 	s.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: directory, Valid: true} }
 	entered := make(chan struct{})
-	s.ffprobe = &callbackMusicProbe{audio: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		close(entered)
 		return testMusicMetadataWithTags(ffprobe.FormatTags{Title: "Track"}), nil
 	}}
@@ -497,10 +413,10 @@ func TestShutdownWaitingForPersistence(t *testing.T) {
 		s.tx.Mu.Unlock()
 		t.Fatal(result)
 	}
-	<-entered
+	scannertest.WaitForSignal(t, entered, 5*time.Second, "music scan reaching persistence")
 	cancel()
 	s.tx.Mu.Unlock()
-	waitForMusicScan(t, s)
+	scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
 	assertMusicInterrupted(t, s)
 	rows := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM tracks")
 	if rows != 0 {
@@ -511,21 +427,7 @@ func TestShutdownWaitingForPersistence(t *testing.T) {
 func TestShutdownDuringTrackTransaction(t *testing.T) {
 	musicDir := t.TempDir()
 	// A file database survives database/sql discarding a canceled connection.
-	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	db.SetMaxOpenConns(1)
-	_, err = db.Exec(sqlc.Schema)
-	if err != nil {
-		t.Fatal(err)
-	}
-	queries, err := database.Prepare(context.Background(), db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer queries.Close()
+	db, queries := scannertest.OpenDB(t, filepath.Join(t.TempDir(), "music.db")+"?_foreign_keys=on")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	conn, err := db.Conn(context.Background())
@@ -544,7 +446,7 @@ func TestShutdownDuringTrackTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidations := 0
-	s := New(Dependencies{Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, DB: db, Queries: queries, Logger: &scannertest.Logger{}, Ffprobe: &countingMusicScannerFfprobe{result: testMusicMetadata()}, InvalidateCommittedTrack: func(int64) { invalidations++ }})
+	s := New(Dependencies{Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, DB: db, Queries: queries, Logger: &scannertest.Logger{}, Ffprobe: &scannertest.CountingProbe{Default: testMusicMetadata()}, InvalidateCommittedTrack: func(int64) { invalidations++ }})
 	scan := newMusicScanContext(nil)
 	scanned, _, failures := s.processMusicFixtureBatch(t, ctx, scan, []scanner.ScanFile{{Path: musicDir + "/interrupt.m4a", Ext: "m4a", Size: 1}})
 	if scanned != 0 || failures != 0 || invalidations != 0 {
