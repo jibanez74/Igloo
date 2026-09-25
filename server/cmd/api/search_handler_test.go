@@ -7,7 +7,6 @@ import (
 	"igloo/cmd/internal/database"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -206,9 +205,9 @@ func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
 func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
 
-	musicianID := createSearchMusician(t, app, "Adele")
-	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Adele")
+	albumID := createTestAlbum(t, app, "Twenty Five", "Adele")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
 	results := searchEntityResults(t, app, trackSearchEntity, "Adelle")
 	if len(results) != 1 {
@@ -233,9 +232,9 @@ func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 	app := setupTestApp(t)
 
-	musicianID := createSearchMusician(t, app, "Adele")
-	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Adele")
+	albumID := createTestAlbum(t, app, "Twenty Five", "Adele")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
 	for _, query := range []string{"Hello", "Twenty", "Adele"} {
 		t.Run(query, func(t *testing.T) {
@@ -253,17 +252,17 @@ func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 	app := setupTestApp(t)
 
-	originalMusicianID := createSearchMusician(t, app, "Adele")
-	updatedMusicianID := createSearchMusician(t, app, "Sia")
-	albumID := createSearchAlbum(t, app, "Power Ballads", "Various Artists")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, originalMusicianID)
+	originalMusicianID := createTestMusician(t, app, "Adele")
+	updatedMusicianID := createTestMusician(t, app, "Sia")
+	albumID := createTestAlbum(t, app, "Power Ballads", "Various Artists")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, originalMusicianID)
 
 	results := searchEntityResults(t, app, trackSearchEntity, "Sia")
 	if len(results) != 0 {
 		t.Fatalf("expected no Sia results before update, got %#v", results)
 	}
 
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, updatedMusicianID)
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, updatedMusicianID)
 
 	results = searchEntityResults(t, app, trackSearchEntity, "Sia")
 	if len(results) != 1 || results[0].Title != "Hello" {
@@ -288,7 +287,7 @@ func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 	var previous *searchAllData
 	for _, path := range []string{"/api/search?q=casino", "/api/search/?q=casino"} {
 		t.Run(path, func(t *testing.T) {
-			w := performAuthenticatedSearchRequest(t, app, userID, path)
+			w := serveAs(t, app, userID, http.MethodGet, path, "")
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 			}
@@ -329,7 +328,7 @@ func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
 	app.InitSession()
 	app.InitRouter()
 
-	w := performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=License+to+Kill")
+	w := serveAs(t, app, userID, http.MethodGet, "/api/search/movies?q=License+to+Kill", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 	}
@@ -361,7 +360,7 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	app.InitSession()
 	app.InitRouter()
 
-	w := performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=Pageable&page=999&per_page=2")
+	w := serveAs(t, app, userID, http.MethodGet, "/api/search/movies?q=Pageable&page=999&per_page=2", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 	}
@@ -387,7 +386,7 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 		t.Fatalf("expected last page to contain 1 result, got %d", len(resp.Data.Results))
 	}
 
-	w = performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=Pageable&page=1&per_page=999")
+	w = serveAs(t, app, userID, http.MethodGet, "/api/search/movies?q=Pageable&page=1&per_page=999", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 	}
@@ -433,72 +432,6 @@ func createSearchShow(t *testing.T, app *Application, name, directory, overview,
 	return show.ID
 }
 
-func createSearchMusician(t *testing.T, app *Application, name string) int64 {
-	t.Helper()
-
-	musicianIdentity, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     name,
-		SortName: strings.ToLower(name),
-	})
-	if err != nil {
-		t.Fatalf("create musician %q: %v", name, err)
-	}
-	return musicianIdentity.ID
-}
-
-func createSearchAlbum(t *testing.T, app *Application, title, musician string) int64 {
-	t.Helper()
-
-	albumIdentity, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     title,
-		SortTitle: strings.ToLower(title),
-		Musician:  sql.NullString{String: musician, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("create album %q: %v", title, err)
-	}
-	return albumIdentity.ID
-}
-
-func createSearchTrack(t *testing.T, app *Application, title, filePath string, albumID, musicianID int64) int64 {
-	t.Helper()
-
-	track, err := app.Queries.UpsertTrack(context.Background(), database.UpsertTrackParams{
-		Title:         title,
-		SortTitle:     strings.ToLower(title),
-		FilePath:      filePath,
-		FileName:      strings.TrimPrefix(filePath, "/music/"),
-		Container:     "flac",
-		MimeType:      "audio/flac",
-		Codec:         "flac",
-		Size:          1,
-		TrackIndex:    1,
-		Duration:      180,
-		Disc:          1,
-		Channels:      "2",
-		ChannelLayout: "stereo",
-		BitRate:       1000,
-		Profile:       "",
-		AlbumID:       sql.NullInt64{Int64: albumID, Valid: true},
-		MusicianID:    sql.NullInt64{Int64: musicianID, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("create track %q: %v", title, err)
-	}
-	return track
-}
-
-func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID int64, path string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	req.AddCookie(newAuthSessionCookie(t, app, userID))
-
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-	return w
-}
-
 func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
 	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
@@ -507,13 +440,11 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	// every category is what validates those item schemas here.
 	createTestMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
 	createSearchShow(t, app, "Contract Show", "/shows/Contract Show (2024)", "A contract show.", "Contract taglines.")
-	musicianID := createSearchMusician(t, app, "Contract Artist")
-	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
-	createSearchTrack(t, app, "Contract Track", "/music/search-contract.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Contract Artist")
+	albumID := createTestAlbum(t, app, "Contract Album", "Contract Artist")
+	createTestTrack(t, app, "Contract Track", "/music/search-contract.flac", albumID, musicianID)
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 
 	tests := []struct {
 		operationID string
@@ -530,9 +461,8 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.operationID, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, test.path, nil)
-			req.AddCookie(cookie)
 			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, req)
+			handler.ServeHTTP(response, req)
 			if response.Code != http.StatusOK {
 				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 			}

@@ -101,9 +101,9 @@ func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	app := setupTestApp(t)
 	ctx := context.Background()
 
-	musicianID := createSearchMusician(t, app, "Adele")
-	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Adele")
+	albumID := createTestAlbum(t, app, "Twenty Five", "Adele")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
 	corrections, err := testVocabCorrections(app, ctx, "tracks_search_fts_vocab", "adelle")
 	if err != nil {

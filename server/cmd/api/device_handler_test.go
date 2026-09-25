@@ -9,31 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"igloo/cmd/internal/database"
 )
-
-// createTestDevice inserts a device row directly and returns its bearer token.
-func createTestDevice(t *testing.T, app *Application, userID int64, name, platform string) string {
-	t.Helper()
-
-	token, tokenHash, err := generateDeviceToken()
-	if err != nil {
-		t.Fatalf("generate device token: %v", err)
-	}
-
-	_, err = app.Queries.CreateDevice(context.Background(), database.CreateDeviceParams{
-		UserID:    userID,
-		Name:      name,
-		Platform:  platform,
-		TokenHash: tokenHash,
-	})
-	if err != nil {
-		t.Fatalf("create device: %v", err)
-	}
-
-	return token
-}
 
 type deviceListResponse struct {
 	Data struct {

@@ -15,18 +15,6 @@ import (
 // where the subtitle track follows one video and one audio stream.
 const testSubtitleStreamIndex = 2
 
-func insertTestSubtitleFixture(t *testing.T, app *Application, movieID int64, codec string) {
-	t.Helper()
-
-	_, err := app.DB.Exec(`
-		INSERT INTO subtitles (movie_id, stream_index, codec, language)
-		VALUES (?, ?, ?, ?)
-	`, movieID, testSubtitleStreamIndex, codec, "eng")
-	if err != nil {
-		t.Fatalf("insert subtitle: %v", err)
-	}
-}
-
 func serveSubtitleWebVTTWithQuery(
 	t *testing.T,
 	app *Application,
@@ -58,7 +46,7 @@ func TestSubtitleWebVTT_ShiftsCuesBySessionStart(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, "subrip")
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
 
 	absolute := "WEBVTT\n\n00:10:05.000 --> 00:10:07.000\nLine\n"
 	app.SubtitleVTTCache.Set(helpers.SubtitleCacheKey("movie", movieID, 2), []byte(absolute), subtitleCacheTTL)
@@ -89,7 +77,7 @@ func TestSubtitleWebVTT_RejectsNegativeStart(t *testing.T) {
 	app.FFmpeg = &fakeFFmpeg{}
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, "subrip")
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
 
 	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "?start=-5")
 
@@ -105,7 +93,7 @@ func TestSubtitleWebVTT_ExtractsOnceAndServesFromCache(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, "subrip")
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
 
 	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
 
@@ -141,7 +129,7 @@ func TestSubtitleWebVTT_RejectsBitmapSubtitle(t *testing.T) {
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, "hdmv_pgs_subtitle")
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "hdmv_pgs_subtitle", "eng")
 
 	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "0", "")
 
@@ -170,7 +158,7 @@ func TestSubtitleWebVTT_TrackIndexOutOfRange(t *testing.T) {
 	app.FFmpeg = &fakeFFmpeg{}
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSubtitleFixture(t, app, movieID, "subrip")
+	insertTestSubtitle(t, app, movieID, testSubtitleStreamIndex, "subrip", "eng")
 
 	recorder := serveSubtitleWebVTTWithQuery(t, app, viewer.ID, movieID, "5", "")
 

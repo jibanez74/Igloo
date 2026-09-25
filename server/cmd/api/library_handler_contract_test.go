@@ -17,20 +17,12 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 
 	user := createTestUser(t, app, "Contract User", "contract-user@example.com", false)
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	assertRequest := func(operationID string, req *http.Request, wantStatus int, dataKeys ...string) {
 		t.Helper()
-		req.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, req)
-		if response.Code != wantStatus {
-			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
-		}
+		response := serveOpenAPIExchange(t, handler, operationID, req, wantStatus)
 		assertResponseListNotEmpty(t, operationID, response.Body.Bytes(), dataKeys...)
-		assertOpenAPIExchange(t, operationID, req, response)
 	}
 
 	emptyGetOperations := []struct {
@@ -71,9 +63,9 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 
 	movieID := createTestMovie(t, app, "Contract Movie", "/movies/contract.mkv")
 	seedMovieDetailFixtures(t, app, movieID)
-	musicianID := createSearchMusician(t, app, "Contract Artist")
-	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
-	trackID := createSearchTrack(t, app, "Contract Track", "/music/contract.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Contract Artist")
+	albumID := createTestAlbum(t, app, "Contract Album", "Contract Artist")
+	trackID := createTestTrack(t, app, "Contract Track", "/music/contract.flac", albumID, musicianID)
 	seedTrackRelationships(t, app, trackID, musicianID, "Contract Track Genre")
 	_, err := app.DB.Exec(`
  INSERT INTO music_artist_identity(identity_key,musician_id) VALUES('contract artist',?);
@@ -132,9 +124,8 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 	// One play of 120 s and one liked track (toggled above) must be reflected
 	// in the overview aggregates.
 	overview := httptest.NewRequest(http.MethodGet, "/api/music/user-stats/overview", nil)
-	overview.AddCookie(cookie)
 	overviewResponse := httptest.NewRecorder()
-	app.Router.ServeHTTP(overviewResponse, overview)
+	handler.ServeHTTP(overviewResponse, overview)
 	var stats struct {
 		Data struct {
 			TotalPlays         int64   `json:"total_plays"`
@@ -169,6 +160,121 @@ func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 			assertRequest(operation.operationID, httptest.NewRequest(http.MethodGet, operation.path, nil), http.StatusOK, operation.dataKey)
 		})
 	}
+}
+
+// TestLibraryAndStatisticsHandlers_ConformToOpenAPI validates the list
+// operations against an empty library, where the item schema is never
+// exercised. TestListHandlers_ConformToOpenAPIWithRows seeds one movie, show,
+// track, album, musician and playlist of each kind so the array elements are
+// validated too.
+func TestListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
+	app := setupSessionTestApp(t)
+
+	user := createTestUser(t, app, "List User", "list-contract@example.com", false)
+	collaborator := createTestUser(t, app, "List Collaborator", "list-collaborator@example.com", false)
+
+	movieID := createTestMovie(t, app, "Contract List Movie", "/movies/contract-list.mkv")
+	_, err := app.DB.Exec(
+		"UPDATE movies SET certification = ?, year = ?, poster_path = ? WHERE id = ?",
+		"PG-13", 2026, "/contract-list.jpg", movieID,
+	)
+	if err != nil {
+		t.Fatalf("seed movie metadata: %v", err)
+	}
+	movieGenreID := createMovieGenre(t, app, movieID, "Contract Genre")
+	moviePlaylistID := createMoviePlaylist(t, app, user.ID, movieID)
+	_, err = app.DB.Exec("INSERT INTO user_liked_movies (user_id, movie_id) VALUES (?, ?)", user.ID, movieID)
+	if err != nil {
+		t.Fatalf("like movie: %v", err)
+	}
+
+	showID := seedContractShow(t, app)
+	var showGenreID int64
+	err = app.DB.QueryRow("SELECT genre_id FROM show_genres WHERE show_id = ?", showID).Scan(&showGenreID)
+	if err != nil {
+		t.Fatalf("read seeded show genre: %v", err)
+	}
+
+	musicianID := createTestMusician(t, app, "Contract List Artist")
+	albumID := createTestAlbum(t, app, "Contract List Album", "Contract List Artist")
+	trackID := createTestTrack(t, app, "Contract List Track", "/music/contract-list.flac", albumID, musicianID)
+	err = app.Queries.LikeTrack(t.Context(), database.LikeTrackParams{UserID: user.ID, TrackID: trackID})
+	if err != nil {
+		t.Fatalf("like track: %v", err)
+	}
+	trackPlaylistID := createTrackPlaylistWithTrack(t, app, user.ID, trackID)
+	_, err = app.Queries.AddCollaborator(t.Context(), database.AddCollaboratorParams{
+		PlaylistID: trackPlaylistID,
+		UserID:     collaborator.ID,
+		CanEdit:    true,
+	})
+	if err != nil {
+		t.Fatalf("add playlist collaborator: %v", err)
+	}
+
+	handler := authenticatedRouter(t, app, user.ID)
+	moviePlaylist := strconv.FormatInt(moviePlaylistID, 10)
+	trackPlaylist := strconv.FormatInt(trackPlaylistID, 10)
+
+	operations := []struct {
+		operationID string
+		path        string
+		dataKey     string
+	}{
+		{operationID: "getLatestMovies", path: "/api/movies/latest", dataKey: "movies"},
+		{operationID: "getMoviesLibrary", path: "/api/movies/library", dataKey: "movies"},
+		{operationID: "getLikedMovies", path: "/api/movies/liked", dataKey: "movies"},
+		{operationID: "getMoviesByGenreLibrary", path: "/api/movies/genres/" + strconv.FormatInt(movieGenreID, 10) + "/movies", dataKey: "movies"},
+		{operationID: "getMoviePlaylistMovies", path: "/api/movies/playlists/" + moviePlaylist + "/movies", dataKey: "movies"},
+		{operationID: "getMoviePlaylists", path: "/api/movies/playlists", dataKey: "playlists"},
+		{operationID: "getMovieGenresList", path: "/api/movies/genres", dataKey: "genres"},
+		{operationID: "getLatestShows", path: "/api/shows/latest", dataKey: "shows"},
+		{operationID: "getShowsLibrary", path: "/api/shows/library", dataKey: "shows"},
+		{operationID: "getShowsByGenreLibrary", path: "/api/shows/genres/" + strconv.FormatInt(showGenreID, 10) + "/shows", dataKey: "shows"},
+		{operationID: "getShowGenresList", path: "/api/shows/genres", dataKey: "genres"},
+		{operationID: "getTracksAlphabetical", path: "/api/music/tracks", dataKey: "tracks"},
+		{operationID: "getShuffleTracks", path: "/api/music/tracks/shuffle", dataKey: "tracks"},
+		{operationID: "getLikedTracks", path: "/api/music/tracks/liked", dataKey: "tracks"},
+		{operationID: "getLikedTrackIDsForUser", path: "/api/music/tracks/liked-ids", dataKey: "liked_track_ids"},
+		{operationID: "getAlbumsAlphabetical", path: "/api/music/albums", dataKey: "albums"},
+		{operationID: "getLatestAlbums", path: "/api/music/albums/latest", dataKey: "albums"},
+		{operationID: "getMusiciansAlphabetical", path: "/api/music/musicians", dataKey: "musicians"},
+		{operationID: "getPlaylists", path: "/api/music/playlists", dataKey: "playlists"},
+		{operationID: "getPlaylistTracks", path: "/api/music/playlists/" + trackPlaylist + "/tracks", dataKey: "tracks"},
+		{operationID: "getPlaylistCollaborators", path: "/api/music/playlists/" + trackPlaylist + "/collaborators", dataKey: "collaborators"},
+	}
+
+	for _, operation := range operations {
+		t.Run(operation.operationID, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, operation.path, nil)
+			response := serveOpenAPIExchange(t, handler, operation.operationID, request, http.StatusOK)
+			assertResponseListNotEmpty(t, operation.operationID, response.Body.Bytes(), operation.dataKey)
+		})
+	}
+}
+
+func createTrackPlaylistWithTrack(t *testing.T, app *Application, userID, trackID int64) int64 {
+	t.Helper()
+
+	playlist, err := app.Queries.CreatePlaylist(t.Context(), database.CreatePlaylistParams{
+		UserID:   userID,
+		Name:     "Contract List Playlist",
+		IsPublic: false,
+	})
+	if err != nil {
+		t.Fatalf("create track playlist: %v", err)
+	}
+
+	_, err = app.Queries.AddTrackToPlaylist(t.Context(), database.AddTrackToPlaylistParams{
+		PlaylistID: playlist.ID,
+		TrackID:    trackID,
+		AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("add track to playlist: %v", err)
+	}
+
+	return playlist.ID
 }
 
 // getMovieDetails and getMovieTechnicalDetails return six arrays that a bare
@@ -318,8 +424,7 @@ func seedTrackRelationships(t *testing.T, app *Application, trackID, musicianID 
 func TestListeningStatisticsPaginationConformsToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
 	user := createTestUser(t, app, "Listener", "listener@example.com", false)
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 	endpoints := []struct {
 		path, operation   string
 		defaultLimit, cap int64
@@ -335,9 +440,8 @@ func TestListeningStatisticsPaginationConformsToOpenAPI(t *testing.T) {
 		for _, query := range []string{"", "limit=", "limit=abc", "limit=1.5", "limit=0", "limit=-1", "limit=9223372036854775808", "limit=1", "limit=999", "offset=7", "offset=-1", "offset=abc", "offset=9223372036854775808"} {
 			t.Run(endpoint.path+"/"+query, func(t *testing.T) {
 				request := httptest.NewRequest(http.MethodGet, "/api/music/user-stats/"+endpoint.path+"?"+query, nil)
-				request.AddCookie(cookie)
 				response := httptest.NewRecorder()
-				app.Router.ServeHTTP(response, request)
+				handler.ServeHTTP(response, request)
 				if response.Code != http.StatusOK {
 					t.Fatalf("status = %d: %s", response.Code, response.Body.String())
 				}
@@ -382,11 +486,10 @@ func TestListeningStatisticsPaginationConformsToOpenAPI(t *testing.T) {
 func TestRecordPlayEventDurationBoundaries(t *testing.T) {
 	app := setupSessionTestApp(t)
 	user := createTestUser(t, app, "Listener", "duration@example.com", false)
-	musicianID := createSearchMusician(t, app, "Artist")
-	albumID := createSearchAlbum(t, app, "Album", "Artist")
-	trackID := createSearchTrack(t, app, "Track", "/music/duration.flac", albumID, musicianID)
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	musicianID := createTestMusician(t, app, "Artist")
+	albumID := createTestAlbum(t, app, "Album", "Artist")
+	trackID := createTestTrack(t, app, "Track", "/music/duration.flac", albumID, musicianID)
+	handler := authenticatedRouter(t, app, user.ID)
 	for _, tc := range []struct {
 		name              string
 		trackID, duration int64
@@ -399,9 +502,8 @@ func TestRecordPlayEventDurationBoundaries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			body := fmt.Sprintf(`{"track_id":%d,"duration_played":%d,"completed":false}`, tc.trackID, tc.duration)
 			request := newOpenAPIJSONRequest(http.MethodPost, "/api/music/user-stats/play", body)
-			request.AddCookie(cookie)
 			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, request)
+			handler.ServeHTTP(response, request)
 			if response.Code != tc.status {
 				t.Fatalf("status=%d, want %d: %s", response.Code, tc.status, response.Body.String())
 			}

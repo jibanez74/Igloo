@@ -15,9 +15,9 @@ import (
 func TestToggleLikeTrack_HTTPPersistsLikeAndUnlike(t *testing.T) {
 	app := setupSessionTestApp(t)
 	user := createTestUser(t, app, "Listener", "listener@example.com", false)
-	musicianID := createSearchMusician(t, app, "Like Artist")
-	albumID := createSearchAlbum(t, app, "Like Album", "Like Artist")
-	trackID := createSearchTrack(t, app, "Like Track", "/music/like-track.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Like Artist")
+	albumID := createTestAlbum(t, app, "Like Album", "Like Artist")
+	trackID := createTestTrack(t, app, "Like Track", "/music/like-track.flac", albumID, musicianID)
 	handler := authenticatedRouter(t, app, user.ID)
 
 	toggle := func(t *testing.T) bool {

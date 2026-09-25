@@ -989,7 +989,7 @@ func TestCreateHLSSession_AudioTrackOrdinalMapsToAbsoluteStreamIndex(t *testing.
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, nil)
+	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, "")
 
 	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(1), testPlaybackSessionID, 0, false)
 	if err != nil {

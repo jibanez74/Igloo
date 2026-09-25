@@ -41,17 +41,6 @@ func TestValidatePin(t *testing.T) {
 	}
 }
 
-func pinRequest(t *testing.T, handler http.Handler, method, target, body string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(method, target, strings.NewReader(body))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	return w
-}
-
 func storedPin(t *testing.T, app *Application, userID int64) sql.NullString {
 	t.Helper()
 	user, err := app.Queries.GetUser(context.Background(), userID)
@@ -155,7 +144,7 @@ func TestUpdateUserPin_InvalidFormatRejected(t *testing.T) {
 	handler := authenticatedRouter(t, app, user.ID)
 
 	for _, body := range cases {
-		w := pinRequest(t, handler, http.MethodPut, "/api/user/pin", body)
+		w := serveRequest(t, handler, http.MethodPut, "/api/user/pin", body)
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("body %s: expected 400, got %d: %s", body, w.Code, w.Body.String())
 		}
@@ -173,22 +162,22 @@ func TestUpdateUserPin_ChangeRequiresCurrentPin(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
+	seed := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
 		t.Fatalf("seed: expected 200, got %d: %s", seed.Code, seed.Body.String())
 	}
 
-	missing := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678"}`)
+	missing := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678"}`)
 	if missing.Code != http.StatusBadRequest {
 		t.Fatalf("missing current_pin: expected 400, got %d: %s", missing.Code, missing.Body.String())
 	}
 
-	wrong := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"0000"}`)
+	wrong := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"0000"}`)
 	if wrong.Code != http.StatusUnauthorized {
 		t.Fatalf("wrong current_pin: expected 401, got %d: %s", wrong.Code, wrong.Body.String())
 	}
 
-	correct := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"1234"}`)
+	correct := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"1234"}`)
 	if correct.Code != http.StatusOK {
 		t.Fatalf("correct current_pin: expected 200, got %d: %s", correct.Code, correct.Body.String())
 	}
@@ -205,12 +194,12 @@ func TestUpdateUserPin_RemoveClearsPin(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
+	seed := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
 		t.Fatalf("seed: expected 200, got %d: %s", seed.Code, seed.Body.String())
 	}
 
-	remove := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"","current_pin":"1234"}`)
+	remove := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"","current_pin":"1234"}`)
 	if remove.Code != http.StatusOK {
 		t.Fatalf("remove: expected 200, got %d: %s", remove.Code, remove.Body.String())
 	}
@@ -230,7 +219,7 @@ func TestUpdateUserPin_RemoveWhenUnsetIsIdempotent(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	w := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":""}`)
+	w := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":""}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -242,7 +231,7 @@ func TestGetUserPin_SessionOnly(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	empty := pinRequest(t, handler, http.MethodGet, "/api/user/pin", "")
+	empty := serveRequest(t, handler, http.MethodGet, "/api/user/pin", "")
 	if empty.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", empty.Code, empty.Body.String())
 	}
@@ -250,12 +239,12 @@ func TestGetUserPin_SessionOnly(t *testing.T) {
 		t.Fatalf("expected pin null when unset, got: %s", empty.Body.String())
 	}
 
-	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
+	seed := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
 		t.Fatalf("seed: expected 200, got %d: %s", seed.Code, seed.Body.String())
 	}
 
-	get := pinRequest(t, handler, http.MethodGet, "/api/user/pin", "")
+	get := serveRequest(t, handler, http.MethodGet, "/api/user/pin", "")
 	if get.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", get.Code, get.Body.String())
 	}
@@ -302,22 +291,22 @@ func TestVerifyUserPin(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	noPin := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
+	noPin := serveRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
 	if noPin.Code != http.StatusBadRequest {
 		t.Fatalf("no pin set: expected 400, got %d: %s", noPin.Code, noPin.Body.String())
 	}
 
-	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
+	seed := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
 		t.Fatalf("seed: expected 200, got %d: %s", seed.Code, seed.Body.String())
 	}
 
-	malformed := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"12"}`)
+	malformed := serveRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"12"}`)
 	if malformed.Code != http.StatusBadRequest {
 		t.Fatalf("malformed pin: expected 400, got %d: %s", malformed.Code, malformed.Body.String())
 	}
 
-	correct := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
+	correct := serveRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
 	if correct.Code != http.StatusOK {
 		t.Fatalf("correct pin: expected 200, got %d: %s", correct.Code, correct.Body.String())
 	}
@@ -325,7 +314,7 @@ func TestVerifyUserPin(t *testing.T) {
 		t.Fatalf("expected valid true, got: %s", correct.Body.String())
 	}
 
-	wrong := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"0000"}`)
+	wrong := serveRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"0000"}`)
 	if wrong.Code != http.StatusOK {
 		t.Fatalf("wrong pin: expected 200, got %d: %s", wrong.Code, wrong.Body.String())
 	}
@@ -369,26 +358,26 @@ func TestPinAttempts_RateLimited(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
 
-	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
+	seed := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
 		t.Fatalf("seed: expected 200, got %d: %s", seed.Code, seed.Body.String())
 	}
 
 	for i := 0; i < pinAttemptLimit; i++ {
-		w := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"0000"}`)
+		w := serveRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"0000"}`)
 		if w.Code != http.StatusOK {
 			t.Fatalf("attempt %d: expected 200, got %d: %s", i+1, w.Code, w.Body.String())
 		}
 	}
 
-	limited := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"0000"}`)
+	limited := serveRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"0000"}`)
 	if limited.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 after %d attempts, got %d: %s", pinAttemptLimit, limited.Code, limited.Body.String())
 	}
 
 	// The bucket is shared with change/remove so the limiter cannot be
 	// bypassed by guessing through the update endpoint instead.
-	change := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"1234"}`)
+	change := serveRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"5678","current_pin":"1234"}`)
 	if change.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 for change while limited, got %d: %s", change.Code, change.Body.String())
 	}

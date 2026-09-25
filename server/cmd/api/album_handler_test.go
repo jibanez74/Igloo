@@ -13,7 +13,7 @@ func TestAlbumHandlers_RejectBadIDsUnknownRowsAndNonAdmins(t *testing.T) {
 	app := setupSessionTestApp(t)
 	member := createTestUser(t, app, "Member", "member@example.com", false)
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	albumID := createSearchAlbum(t, app, "Kept Album", "Kept Artist")
+	albumID := createTestAlbum(t, app, "Kept Album", "Kept Artist")
 
 	tests := []struct {
 		name        string

@@ -54,6 +54,21 @@ func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Reque
 	assertOpenAPIHTTPExchange(t, operationID, request, response, true)
 }
 
+// serveOpenAPIExchange serves req through handler, requires wantStatus, and
+// validates the exchange against the contract. Requests carrying a body must
+// come from newOpenAPIJSONRequest so the consumed body can be replayed.
+func serveOpenAPIExchange(t *testing.T, handler http.Handler, operationID string, req *http.Request, wantStatus int) *httptest.ResponseRecorder {
+	t.Helper()
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != wantStatus {
+		t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
+	}
+	assertOpenAPIExchange(t, operationID, req, response)
+	return response
+}
+
 // A list operation validated against an empty array proves nothing about its
 // item schema, so seeded contract tests assert the named data arrays actually
 // carried a row before validating the exchange.

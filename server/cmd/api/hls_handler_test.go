@@ -1528,17 +1528,7 @@ func TestHLSManifest_SurfacesSessionCreationFailure(t *testing.T) {
 	app := setupTestApp(t)
 	app.FFmpeg = &fakeFFmpeg{}
 
-	result, err := app.DB.Exec(`
-		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult)
-		VALUES ('No Duration', '/tmp/manifest-nodur.mkv', 'manifest-nodur.mkv', 1, 'mkv', 'video/x-matroska', 0)
-	`)
-	if err != nil {
-		t.Fatalf("insert movie: %v", err)
-	}
-	movieID, err := result.LastInsertId()
-	if err != nil {
-		t.Fatalf("last insert id: %v", err)
-	}
+	movieID := createTestMovie(t, app, "No Duration", "/tmp/manifest-nodur.mkv")
 
 	recorder := httptest.NewRecorder()
 	authenticatedRouter(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(

@@ -17,64 +17,27 @@ import (
 
 const testWatchProgressSaveSessionID = "11111111-1111-4111-8111-111111111111"
 
-func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int64) {
-	t.Helper()
-	ctx := context.Background()
-
-	user := createTestUser(t, app, "Test User", "test@example.com", false)
-
-	// MP4 on purpose: watch-room tests create direct-mode rooms with this
-	// movie, and direct playback is refused for non-MP4 containers.
-	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
-		Title:     "Test Movie",
-		FilePath:  "/movies/test.mp4",
-		FileName:  "test.mp4",
-		Size:      1024,
-		Container: "mp4",
-		MimeType:  helpers.VideoMimeTypes["mp4"],
-	})
-	if err != nil {
-		t.Fatalf("failed to create test movie: %v", err)
-	}
-
-	return user.ID, movieID
-}
-
 func TestWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
 	userID, movieID := createTestUserAndMovie(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, userID)
-
-	assertRequest := func(operationID string, req *http.Request) *httptest.ResponseRecorder {
-		t.Helper()
-		req.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, body = %s", operationID, response.Code, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-		return response
-	}
+	handler := authenticatedRouter(t, app, userID)
 
 	// The empty and populated shapes differ (nulls versus values), so both are
 	// validated against the contract.
 	progressPath := fmt.Sprintf("/api/movies/%d/watch-progress", movieID)
-	empty := assertRequest("getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
+	empty := serveOpenAPIExchange(t, handler, "getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
 	if !strings.Contains(empty.Body.String(), `"progress_sec":null`) {
 		t.Fatalf("fresh progress = %s, want nulls", empty.Body.String())
 	}
 	updateBody := `{"progress_sec":120,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`
-	assertRequest("updateMovieWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody))
-	populated := assertRequest("getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
+	serveOpenAPIExchange(t, handler, "updateMovieWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody), http.StatusOK)
+	populated := serveOpenAPIExchange(t, handler, "getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
 	if !strings.Contains(populated.Body.String(), `"progress_sec":120`) || !strings.Contains(populated.Body.String(), `"duration_sec":7200`) {
 		t.Fatalf("saved progress = %s, want 120/7200", populated.Body.String())
 	}
 	watchedPath := fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID)
-	assertRequest("setMovieWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`))
-	assertRequest("deleteMovieWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil))
+	serveOpenAPIExchange(t, handler, "setMovieWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "deleteMovieWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil), http.StatusOK)
 }
 
 func TestWatchProgress_UpsertResetsWatchedFlag(t *testing.T) {
@@ -754,20 +717,9 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	seedWatchProgress(t, app, otherUser.ID, movieID)
 	seedEpisodeWatchProgress(t, app, otherUser.ID, fixture.Episode2, 900.0, 1)
 
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
-
 	request := httptest.NewRequest(http.MethodGet, "/api/continue-watching", nil)
-	request.AddCookie(cookie)
-	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
-	}
-
+	response := serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "getContinueWatching", request, http.StatusOK)
 	assertResponseListNotEmpty(t, "getContinueWatching", response.Body.Bytes(), "items")
-	assertOpenAPIExchange(t, "getContinueWatching", request, response)
 
 	var payload struct {
 		Data struct {
@@ -958,16 +910,4 @@ func seedSecondShowEpisode(t *testing.T, app *Application) int64 {
 	}
 
 	return episode.ID
-}
-
-func seedWatchProgress(t *testing.T, app *Application, userID, movieID int64) {
-	t.Helper()
-
-	_, err := app.DB.Exec(
-		"INSERT INTO movie_watch_progress (user_id, movie_id, progress_sec, duration_sec) VALUES (?, ?, ?, ?)",
-		userID, movieID, 600, 5400,
-	)
-	if err != nil {
-		t.Fatalf("seed watch progress: %v", err)
-	}
 }

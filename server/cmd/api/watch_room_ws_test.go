@@ -85,24 +85,22 @@ func (s *countingSessionStore) CommitCount() int {
 	return s.commits
 }
 
+// setupWatchRoomWSTestServer serves the production router over a real
+// listener for websocket tests. At cleanup the server closes first, then the
+// hub shuts down and its connection goroutines drain from app.Wait.
 func setupWatchRoomWSTestServer(t *testing.T, app *Application) *httptest.Server {
 	t.Helper()
 
 	app.InitSession()
 	app.InitRouter()
 
-	return httptest.NewServer(app.Router)
-}
-
-func closeWatchRoomWSTestApp(t *testing.T, app *Application) {
-	t.Helper()
-
-	if app.WatchRoomHub != nil {
+	t.Cleanup(func() {
 		app.WatchRoomHub.Shutdown()
-	}
-	if app.Wait != nil {
 		app.Wait.Wait()
-	}
+	})
+	server := httptest.NewServer(app.Router)
+	t.Cleanup(server.Close)
+	return server
 }
 
 func dialWatchRoomSocketWithCookie(
@@ -270,13 +268,11 @@ func expectConnectedUserIDs(t *testing.T, event watchRoomWSTestEvent, want ...in
 
 func TestWatchRoomWebSocket_LoadsSessionReadOnlyWithoutCommit(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	cookie := newAuthSessionCookie(t, app, ownerID)
 	store := &countingSessionStore{store: app.SessionManager.Store}
@@ -310,13 +306,11 @@ func TestWatchRoomWebSocket_LoadsSessionReadOnlyWithoutCommit(t *testing.T) {
 
 func TestWatchRoomWebSocket_PingPongAndIgnoresMalformedMessages(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer conn.Close()
@@ -416,7 +410,6 @@ func TestIsAllowedWatchRoomOrigin(t *testing.T) {
 
 func TestWatchRoomWebSocket_BroadcastsPresenceAndMemberLeft(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	guest := createTestUser(t, app, "Presence Guest", "presence-guest@example.com", false)
@@ -424,7 +417,6 @@ func TestWatchRoomWebSocket_BroadcastsPresenceAndMemberLeft(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerConn.Close()
@@ -451,7 +443,6 @@ func TestWatchRoomWebSocket_BroadcastsPresenceAndMemberLeft(t *testing.T) {
 
 func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	guest := createTestUser(t, app, "Guest", "guest@example.com", false)
@@ -459,7 +450,6 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerConn.Close()
@@ -527,7 +517,6 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 
 func TestWatchRoomWebSocket_JoinSnapshotReflectsCurrentPlaybackState(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	guest := createTestUser(t, app, "Guest", "guest-join-snapshot@example.com", false)
@@ -535,7 +524,6 @@ func TestWatchRoomWebSocket_JoinSnapshotReflectsCurrentPlaybackState(t *testing.
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerConn.Close()
@@ -579,7 +567,6 @@ func TestWatchRoomWebSocket_JoinSnapshotReflectsCurrentPlaybackState(t *testing.
 
 func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	guest := createTestUser(t, app, "Guest", "guest-last-socket@example.com", false)
@@ -588,7 +575,6 @@ func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *t
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID, observer.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	guestConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, guest.ID)
 	defer guestConn.Close()
@@ -631,7 +617,6 @@ func TestWatchRoomWebSocket_DoesNotBroadcastMemberLeftUntilLastSocketCloses(t *t
 
 func TestWatchRoomWebSocket_ReceivesRoomDeletedOnDelete(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ctx := context.Background()
 	ownerID, movieID := createTestUserAndMovie(t, app)
@@ -640,7 +625,6 @@ func TestWatchRoomWebSocket_ReceivesRoomDeletedOnDelete(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerConn.Close()
@@ -669,7 +653,6 @@ func TestWatchRoomWebSocket_ReceivesRoomDeletedOnDelete(t *testing.T) {
 
 func TestWatchRoomHub_ShutdownClosesConnectionsAndClearsSessions(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	guest := createTestUser(t, app, "Guest", "guest-shutdown@example.com", false)
@@ -677,7 +660,6 @@ func TestWatchRoomHub_ShutdownClosesConnectionsAndClearsSessions(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerConn.Close()
@@ -759,13 +741,11 @@ func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
 	}()
 
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer conn.Close()
@@ -866,12 +846,10 @@ func TestWatchRoomHandshakeFailuresConformToOpenAPI(t *testing.T) {
 
 func TestWatchRoomClientEventsConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 	conn, response := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	if conn == nil {
 		t.Fatalf("upgrade failed: %v", response)

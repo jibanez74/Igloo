@@ -165,14 +165,11 @@ func TestGetShowEpisode_ConformsToOpenAPI(t *testing.T) {
 	fixture := seedPlaybackEpisode(t, app)
 	chain := seedNextEpisodeChain(t, app, fixture)
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d", fixture.Episode1), nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
@@ -333,13 +330,10 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 	}
 
 	// The header route serves null after the last episode.
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d", chain.S0E1), nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"next_episode":null`) {
 		t.Fatalf("last episode header = %d %s, want next_episode null", response.Code, response.Body.String())
 	}
@@ -441,9 +435,7 @@ func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 	app := setupTestApp(t)
 
 	user := createTestUser(t, app, "Episode User", "episode@example.com", false)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	for _, tc := range []struct {
 		path   string
@@ -458,9 +450,8 @@ func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 		{"/api/shows/episodes/999999/subtitles/0/web.vtt", http.StatusNotFound, "episode not found"},
 	} {
 		request := httptest.NewRequest(http.MethodGet, tc.path, nil)
-		request.AddCookie(cookie)
 		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, request)
+		handler.ServeHTTP(response, request)
 		if response.Code != tc.status || !strings.Contains(response.Body.String(), tc.body) {
 			t.Fatalf("%s: response = %d %s, want %d %q", tc.path, response.Code, response.Body.String(), tc.status, tc.body)
 		}
@@ -473,9 +464,7 @@ func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 	user := createTestUser(t, app, "Episode Tech User", "episode-tech@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	type techBody struct {
 		Data struct {
@@ -501,9 +490,8 @@ func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 	var bodies []techBody
 	for _, episodeID := range []int64{fixture.Episode1, fixture.Episode2} {
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d/technical-details", episodeID), nil)
-		request.AddCookie(cookie)
 		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, request)
+		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusOK {
 			t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 		}
@@ -539,38 +527,23 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 
 	user := createTestUser(t, app, "Episode Progress User", "episode-progress@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
-
-	exchange := func(operationID string, req *http.Request) *httptest.ResponseRecorder {
-		t.Helper()
-		req.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, body = %s", operationID, response.Code, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-		return response
-	}
+	handler := authenticatedRouter(t, app, user.ID)
 
 	progressPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress", fixture.Episode1)
-	empty := exchange("getEpisodeWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
+	empty := serveOpenAPIExchange(t, handler, "getEpisodeWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
 	if !strings.Contains(empty.Body.String(), `"progress_sec":null`) {
 		t.Fatalf("fresh progress = %s, want nulls", empty.Body.String())
 	}
 
 	updateBody := `{"progress_sec":120,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`
-	exchange("updateEpisodeWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody))
+	serveOpenAPIExchange(t, handler, "updateEpisodeWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody), http.StatusOK)
 
 	// The season listing carries the position for the same user, and only for
 	// the episode that was played: the other episode of the combined file is
 	// its own logical episode.
 	listRequest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/%d/seasons/1/episodes", fixture.ShowID), nil)
-	listRequest.AddCookie(cookie)
 	listResponse := httptest.NewRecorder()
-	app.Router.ServeHTTP(listResponse, listRequest)
+	handler.ServeHTTP(listResponse, listRequest)
 	if listResponse.Code != http.StatusOK {
 		t.Fatalf("season list status = %d, body = %s", listResponse.Code, listResponse.Body.String())
 	}
@@ -601,7 +574,7 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	assertOpenAPIExchange(t, "getShowSeasonEpisodes", listRequest, listResponse)
 
 	watchedPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress/watched", fixture.Episode2)
-	watched := exchange("setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":true}`))
+	watched := serveOpenAPIExchange(t, handler, "setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":true}`), http.StatusOK)
 	if !strings.Contains(watched.Body.String(), fmt.Sprintf(`"episode_id":%d`, fixture.Episode2)) {
 		t.Fatalf("watched response = %s, want the episode id", watched.Body.String())
 	}
@@ -609,7 +582,7 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	if err != nil || !row.Watched {
 		t.Fatalf("watched row = %+v, %v", row, err)
 	}
-	unwatched := exchange("setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`))
+	unwatched := serveOpenAPIExchange(t, handler, "setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`), http.StatusOK)
 	if !strings.Contains(unwatched.Body.String(), `"watched":false`) {
 		t.Fatalf("unwatched response = %s, want watched false", unwatched.Body.String())
 	}
@@ -628,7 +601,7 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 		t.Fatalf("other user's progress = %s, want nulls", otherResponse.Body.String())
 	}
 
-	exchange("deleteEpisodeWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil))
+	serveOpenAPIExchange(t, handler, "deleteEpisodeWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil), http.StatusOK)
 	_, err = app.Queries.GetShowEpisodeWatchProgress(context.Background(), database.GetShowEpisodeWatchProgressParams{UserID: user.ID, EpisodeID: fixture.Episode1})
 	if err != sql.ErrNoRows {
 		t.Fatalf("progress after delete: err = %v, want no rows", err)
@@ -640,24 +613,20 @@ func TestEpisodeWatchProgress_CompletionMarksWatchedAndCascades(t *testing.T) {
 
 	user := createTestUser(t, app, "Completion User", "completion@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	progressPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress", fixture.Episode1)
 	request := newOpenAPIJSONRequest(http.MethodPut, progressPath, `{"progress_sec":7150,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"watched":true`) {
 		t.Fatalf("completion response = %d %s", response.Code, response.Body.String())
 	}
 
 	// An unknown episode is a 404 on the write path via the foreign key.
 	missing := newOpenAPIJSONRequest(http.MethodPut, "/api/shows/episodes/999999/watch-progress", `{"progress_sec":10,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`)
-	missing.AddCookie(cookie)
 	missingResponse := httptest.NewRecorder()
-	app.Router.ServeHTTP(missingResponse, missing)
+	handler.ServeHTTP(missingResponse, missing)
 	if missingResponse.Code != http.StatusNotFound {
 		t.Fatalf("unknown episode write = %d %s, want 404", missingResponse.Code, missingResponse.Body.String())
 	}
@@ -683,9 +652,7 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 
 	user := createTestUser(t, app, "Stop User", "stop@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	media := episodeRef(fixture.Episode1)
 	key := HLSSessionKey(media, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, user.ID)
@@ -696,9 +663,8 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	app.HLSSessionCache.SetDefault(movieKey, &HLSSession{Media: movieRef(fixture.Episode1), FileID: fixture.Episode1, OwnerUserID: user.ID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
 
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/shows/episodes/%d/hls/session/stop?playback_session=%s", fixture.Episode1, testPlaybackSessionID), nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}

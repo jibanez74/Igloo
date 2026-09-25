@@ -41,15 +41,6 @@ func seedServerPlaybackSettings(t *testing.T, app *Application, uploadMbps float
 	app.SetSettings(&settings)
 }
 
-func putPlayback(t *testing.T, handler http.Handler, body string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	return w
-}
-
 func TestGetPlaybackSettings_ReturnsProfileCatalog(t *testing.T) {
 	app := setupSessionTestApp(t)
 
@@ -99,7 +90,7 @@ func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 		return decodePlaybackResponse(t, w.Body.Bytes())
 	}
 
-	w := putPlayback(t, handler, `{"server_upload_mbps": 50, "hardware_acceleration_device": "nvidia"}`)
+	w := serveRequest(t, handler, http.MethodPut, "/api/settings/playback", `{"server_upload_mbps": 50, "hardware_acceleration_device": "nvidia"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("put playback: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -120,7 +111,7 @@ func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("stored settings = %+v, want server_upload_mbps 50 and hardware device nvidia", stored)
 	}
 
-	w2 := putPlayback(t, handler, `{"server_upload_mbps": null}`)
+	w2 := serveRequest(t, handler, http.MethodPut, "/api/settings/playback", `{"server_upload_mbps": null}`)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("put playback: expected 200, got %d: %s", w2.Code, w2.Body.String())
 	}
@@ -175,7 +166,7 @@ func TestUpdatePlaybackSettings_RegularUserForbidden(t *testing.T) {
 		`{"server_upload_mbps": 10}`,
 		`{"hardware_acceleration_device": "nvidia"}`,
 	} {
-		w := putPlayback(t, handler, body)
+		w := serveRequest(t, handler, http.MethodPut, "/api/settings/playback", body)
 		if w.Code != http.StatusForbidden {
 			t.Fatalf("body=%s expected 403, got %d: %s", body, w.Code, w.Body.String())
 		}
@@ -221,7 +212,7 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 			admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 			handler := authenticatedRouter(t, app, admin.ID)
 
-			w := putPlayback(t, handler, `{"server_upload_mbps": `+tc.value+`}`)
+			w := serveRequest(t, handler, http.MethodPut, "/api/settings/playback", `{"server_upload_mbps": `+tc.value+`}`)
 			if w.Code != tc.wantStatus {
 				t.Fatalf("value=%s expected status %d, got %d: %s", tc.value, tc.wantStatus, w.Code, w.Body.String())
 			}
@@ -250,7 +241,7 @@ func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
 		`{"hardware_acceleration_device": "unsupported"}`,
 		`{"hardware_acceleration_device": null}`,
 	} {
-		w := putPlayback(t, handler, body)
+		w := serveRequest(t, handler, http.MethodPut, "/api/settings/playback", body)
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("body=%s expected 400, got %d: %s", body, w.Code, w.Body.String())
 		}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"os"
 	"strings"
@@ -146,19 +145,10 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 	app := setupTestApp(t)
 
-	ctx := context.Background()
-	_, err := app.DB.Exec(`
-		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult, duration)
-		VALUES ('Room No Video', '/tmp/room-no-video.mkv', 'room-no-video.mkv', 1, 'mkv', 'video/x-matroska', 0, 3600.0)
-	`)
+	movieID := createTestMovie(t, app, "Room No Video", "/tmp/room-no-video.mkv")
+	_, err := app.DB.Exec(`UPDATE movies SET duration = 3600.0 WHERE id = ?`, movieID)
 	if err != nil {
-		t.Fatalf("insert movie: %v", err)
-	}
-
-	var movieID int64
-	err = app.DB.QueryRowContext(ctx, `SELECT id FROM movies WHERE file_path = '/tmp/room-no-video.mkv'`).Scan(&movieID)
-	if err != nil {
-		t.Fatalf("select movie id: %v", err)
+		t.Fatalf("set movie duration: %v", err)
 	}
 
 	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0, nil, nil)
@@ -262,7 +252,7 @@ func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.
 	app.FFmpeg = fake
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, nil)
+	insertTestSecondaryAudioStream(t, app, movieID, "ac3", 448000, 6, "")
 
 	movie, err := app.Queries.GetMovieByID(background, movieID)
 	if err != nil {

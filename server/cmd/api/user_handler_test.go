@@ -19,10 +19,9 @@ import (
 
 func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	app.InitRouter()
 
 	user := createTestUser(t, app, "Original", "original@example.com", false)
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	tests := []struct {
 		name        string
@@ -37,40 +36,12 @@ func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			req := newOpenAPIJSONRequest(http.MethodPut, test.target, test.body)
-			req.AddCookie(cookie)
-			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, req)
-			if response.Code != http.StatusOK {
-				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
-			}
-			assertOpenAPIExchange(t, test.operationID, req, response)
+			serveOpenAPIExchange(t, handler, test.operationID, newOpenAPIJSONRequest(http.MethodPut, test.target, test.body), http.StatusOK)
 		})
 	}
 
-	var multipartBody bytes.Buffer
-	writer := multipart.NewWriter(&multipartBody)
-	part, err := writer.CreateFormFile("avatar", "avatar.png")
-	if err != nil {
-		t.Fatalf("create avatar form file: %v", err)
-	}
-	_, err = part.Write([]byte{'\x89', 'P', 'N', 'G', '\r', '\n', '\x1a', '\n'})
-	if err != nil {
-		t.Fatalf("write avatar form file: %v", err)
-	}
-	err = writer.Close()
-	if err != nil {
-		t.Fatalf("close multipart body: %v", err)
-	}
-
-	uploadReq := newOpenAPIRequest(http.MethodPost, "/api/user/avatar/upload", writer.FormDataContentType(), multipartBody.Bytes())
-	uploadReq.AddCookie(cookie)
-	uploadResponse := httptest.NewRecorder()
-	app.Router.ServeHTTP(uploadResponse, uploadReq)
-	if uploadResponse.Code != http.StatusOK {
-		t.Fatalf("upload status = %d, body = %s", uploadResponse.Code, uploadResponse.Body.String())
-	}
-	assertOpenAPIExchange(t, "uploadUserAvatar", uploadReq, uploadResponse)
+	pngHeader := []byte{'\x89', 'P', 'N', 'G', '\r', '\n', '\x1a', '\n'}
+	serveOpenAPIExchange(t, handler, "uploadUserAvatar", avatarUploadRequest(t, "avatar", "avatar.png", pngHeader), http.StatusOK)
 }
 
 func TestUserProfileMutations_RejectInvalidInput(t *testing.T) {
@@ -141,9 +112,8 @@ func avatarUploadRequest(t *testing.T, field, filename string, content []byte) *
 	if err != nil {
 		t.Fatalf("close multipart writer: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/user/avatar/upload", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req
+	// Built through newOpenAPIRequest so the contract check can replay it.
+	return newOpenAPIRequest(http.MethodPost, "/api/user/avatar/upload", writer.FormDataContentType(), body.Bytes())
 }
 
 func TestUploadUserAvatar_RejectsMissingAndNonImageFiles(t *testing.T) {

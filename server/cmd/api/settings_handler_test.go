@@ -30,21 +30,12 @@ func generalSettingsBody(staticDir string) string {
 	}`, staticDir, transcodeDir)
 }
 
-func performUpdateGeneralSettings(app *Application, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	app.UpdateGeneralSettings(w, req)
-
-	return w
-}
-
 func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.T) {
 	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -92,22 +83,12 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 	handler := authenticatedRouter(t, app, admin.ID)
 
-	assertRequest := func(operationID string, req *http.Request, wantStatus int) {
-		t.Helper()
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, req)
-		if response.Code != wantStatus {
-			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-	}
-
-	assertRequest("getSettings", httptest.NewRequest(http.MethodGet, "/api/settings", nil), http.StatusOK)
-	assertRequest("getGeneralSettings", httptest.NewRequest(http.MethodGet, "/api/settings/general", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getSettings", httptest.NewRequest(http.MethodGet, "/api/settings", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getGeneralSettings", httptest.NewRequest(http.MethodGet, "/api/settings/general", nil), http.StatusOK)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
 	generalReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
-	assertRequest("updateGeneralSettings", generalReq, http.StatusOK)
+	serveOpenAPIExchange(t, handler, "updateGeneralSettings", generalReq, http.StatusOK)
 
 	mediaRoot := t.TempDir()
 	moviesDir := filepath.Join(mediaRoot, "movies")
@@ -121,14 +102,14 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	}
 	libraryBody := fmt.Sprintf(`{"movies_dir":%q,"shows_dir":%q,"music_dir":%q}`, moviesDir, showsDir, musicDir)
 	libraryReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/libraries", libraryBody)
-	assertRequest("updateLibrarySettings", libraryReq, http.StatusOK)
+	serveOpenAPIExchange(t, handler, "updateLibrarySettings", libraryReq, http.StatusOK)
 
-	assertRequest("triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), http.StatusOK)
-	assertRequest("getMusicScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/music", nil), http.StatusOK)
-	assertRequest("getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), http.StatusOK)
-	assertRequest("triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), http.StatusOK)
-	assertRequest("triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), http.StatusOK)
-	assertRequest("getShowScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/shows", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getMusicScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/music", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getShowScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/shows", nil), http.StatusOK)
 	app.Wait.Wait()
 }
 
@@ -158,10 +139,11 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := setupSessionTestApp(t)
+			admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 			staticDir := filepath.Join(t.TempDir(), "static")
 			body := strings.Replace(generalSettingsBody(staticDir), tc.old, tc.new, 1)
-			w := performUpdateGeneralSettings(app, body)
+			w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", body)
 
 			if w.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -172,9 +154,10 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 
 func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected setup update 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -192,7 +175,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 		"static_dir": %q,
 		"transcode_dir": %q
 	}`, staticDir, filepath.Join(filepath.Dir(staticDir), "transcode"))
-	w = performUpdateGeneralSettings(app, clearBody)
+	w = serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", clearBody)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected clear update 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -211,26 +194,18 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 
 func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
 	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
-	w := performUpdateGeneralSettings(app, generalSettingsBody(""))
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(""))
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func performUpdateLibrarySettings(app *Application, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/libraries", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	app.UpdateLibrarySettings(w, req)
-
-	return w
-}
-
 func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	root := t.TempDir()
 	moviesDir := filepath.Join(root, "movies")
@@ -247,7 +222,7 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 		"shows_dir": %q,
 		"music_dir": %q
 	}`, moviesDir, showsDir, musicDir)
-	w := performUpdateLibrarySettings(app, body)
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -271,8 +246,9 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 
 func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
 	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
-	w := performUpdateLibrarySettings(app, `{
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", `{
 		"movies_dir": "",
 		"shows_dir": null,
 		"music_dir": ""
@@ -294,13 +270,14 @@ func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
 
 func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	body := fmt.Sprintf(`{
 		"movies_dir": %q,
 		"shows_dir": null,
 		"music_dir": null
 	}`, filepath.Join(t.TempDir(), "missing"))
-	w := performUpdateLibrarySettings(app, body)
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())

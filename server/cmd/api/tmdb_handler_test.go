@@ -259,8 +259,7 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Admin", "unavailable@example.com", true)
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 	for _, tc := range []struct{ method, path, operation string }{
 		{http.MethodPost, "/api/tmdb/movies/search", "searchTmdbMovies"},
 		{http.MethodPost, "/api/movies/1/tmdb-search", "tmdbSearchMovies"},
@@ -272,9 +271,8 @@ func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
 			if tc.method == http.MethodPost {
 				request = newOpenAPIJSONRequest(tc.method, tc.path, `{"title":"Arrival"}`)
 			}
-			request.AddCookie(cookie)
 			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, request)
+			handler.ServeHTTP(response, request)
 			if response.Code != http.StatusServiceUnavailable {
 				t.Fatalf("status = %d, want 503: %s", response.Code, response.Body.String())
 			}

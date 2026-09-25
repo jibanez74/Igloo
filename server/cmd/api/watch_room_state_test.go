@@ -163,7 +163,6 @@ func TestWatchRoomHub_ApplyPlaybackEventTransitions(t *testing.T) {
 
 func TestWatchRoomWebSocket_RoomsAreIsolated(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerAID, movieID := createTestUserAndMovie(t, app)
 	ownerB := createTestUser(t, app, "Owner B", "owner-b-isolated@example.com", false)
@@ -174,7 +173,6 @@ func TestWatchRoomWebSocket_RoomsAreIsolated(t *testing.T) {
 	addMembersToRoom(t, app, roomB.ID, ownerB.ID)
 
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	connA, _ := dialWatchRoomSocket(t, app, server.URL, roomA.ID, ownerAID)
 	defer connA.Close()
@@ -198,7 +196,6 @@ func TestWatchRoomWebSocket_RoomsAreIsolated(t *testing.T) {
 
 func TestWatchRoomWebSocket_ConcurrentPlaybackEventsDoNotDeadlock(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
@@ -212,7 +209,6 @@ func TestWatchRoomWebSocket_ConcurrentPlaybackEventsDoNotDeadlock(t *testing.T) 
 	addMembersToRoom(t, app, room.ID, userIDs...)
 
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	conns := make([]*websocket.Conn, 0, len(userIDs))
 	for _, userID := range userIDs {
@@ -271,7 +267,6 @@ func TestWatchRoomWebSocket_ConcurrentPlaybackEventsDoNotDeadlock(t *testing.T) 
 
 func TestWatchRoomWebSocket_PlaybackStateSurvivesPartialDisconnectAndResetsWhenEmpty(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	guest := createTestUser(t, app, "Lifecycle Guest", "lifecycle-guest@example.com", false)
@@ -279,7 +274,6 @@ func TestWatchRoomWebSocket_PlaybackStateSurvivesPartialDisconnectAndResetsWhenE
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 
 	ownerConn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer ownerConn.Close()

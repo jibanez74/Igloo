@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 	"igloo/cmd/internal/ffprobe"
@@ -358,17 +359,19 @@ func insertTestHLSMovieFixtureAt(
 
 // insertTestSecondaryAudioStream adds a second audio track at absolute stream
 // index 3, so audio ordinal 1 has to resolve past the fixture's index-1 track.
-// channelLayout accepts nil to model a row scanned before that column existed.
-func insertTestSecondaryAudioStream(t *testing.T, app *Application, movieID int64, codec string, bitRate int64, channels int64, channelLayout any) {
+// An empty channelLayout models a row scanned before that column existed.
+func insertTestSecondaryAudioStream(t *testing.T, app *Application, movieID int64, codec string, bitRate int64, channels int64, channelLayout string) {
 	t.Helper()
 
-	_, err := app.DB.Exec(`
-		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, channel_layout, language)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, movieID, 3, codec, bitRate, channels, channelLayout, "spa")
-	if err != nil {
-		t.Fatalf("insert second audio stream: %v", err)
-	}
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{
+		MovieID:       movieID,
+		StreamIndex:   3,
+		Codec:         codec,
+		BitRate:       bitRate,
+		Channels:      channels,
+		ChannelLayout: sql.NullString{String: channelLayout, Valid: channelLayout != ""},
+		Language:      sql.NullString{String: "spa", Valid: true},
+	})
 }
 
 // setTestHLSAudioStream rewrites the fixture's audio row so audio tests can
@@ -393,14 +396,4 @@ func setTestHLSAudioStream(
 	if err != nil {
 		t.Fatalf("update audio stream: %v", err)
 	}
-}
-
-func testIntPtr(v int) *int {
-	return &v
-}
-
-func sanitizeTestPathComponent(value string) string {
-	value = strings.ReplaceAll(value, "/", "_")
-	value = strings.ReplaceAll(value, " ", "_")
-	return value
 }
