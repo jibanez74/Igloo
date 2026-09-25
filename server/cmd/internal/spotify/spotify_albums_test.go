@@ -202,6 +202,11 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		if string(album.ID) != "safeAlbum123" {
 			t.Fatalf("album.ID = %q, want safeAlbum123", album.ID)
 		}
+		// The planted key must be the one the lookup used, or the miss above
+		// proves nothing about the wrong-type branch.
+		if _, ok := sc.getAlbum("abbey road|the beatles"); !ok {
+			t.Fatal("the fetched album did not replace the wrong-type entry under the planted key")
+		}
 	})
 
 	t.Run("cache key includes artist so same title with different artist is a separate entry", func(t *testing.T) {
@@ -277,7 +282,9 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		searchCallCount := 0
 		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasSuffix(r.URL.Path, "/search") {
-				t.Fatalf("unexpected non-search request: %s", r.URL.Path)
+				t.Errorf("unexpected non-search request: %s", r.URL.Path)
+				http.NotFound(w, r)
+				return
 			}
 			searchCallCount++
 			if searchCallCount == 1 {
@@ -348,7 +355,9 @@ func TestSearchAlbums(t *testing.T) {
 		var capturedLimit string
 		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasSuffix(r.URL.Path, "/search") {
-				t.Fatalf("unexpected request path: %s", r.URL.Path)
+				t.Errorf("unexpected request path: %s", r.URL.Path)
+				http.NotFound(w, r)
+				return
 			}
 			capturedQuery = r.URL.Query().Get("q")
 			capturedLimit = r.URL.Query().Get("limit")

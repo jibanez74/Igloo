@@ -60,11 +60,12 @@ func TestNew(t *testing.T) {
 					searchCount++
 					got := r.Header.Get("Authorization")
 					if got != "Bearer validated-token" {
-						t.Fatalf("Authorization = %q, want bearer token from constructor", got)
+						t.Errorf("Authorization = %q, want bearer token from constructor", got)
 					}
 					writeJSON(w, albumSearchJSON("reuse123", "Blue Record"))
 				default:
-					t.Fatalf("unexpected request URL: %s", r.URL.String())
+					t.Errorf("unexpected request URL: %s", r.URL.String())
+					http.NotFound(w, r)
 				}
 			})},
 		}

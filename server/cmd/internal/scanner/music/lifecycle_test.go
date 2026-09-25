@@ -311,20 +311,24 @@ func TestShutdownDuringProbeBatches(t *testing.T) {
 			for i := 0; i < count; i++ {
 				scannertest.WriteFile(t, filepath.Join(directory, fmt.Sprintf("%03d.m4a", i)), "audio")
 			}
-			ctx, cancel := context.WithCancel(context.Background())
+			// The first probe ends the scan context either way; an expiring
+			// context stands in for a deadline so it lands mid-probe instead
+			// of whenever a timer fires relative to the scan's progress.
+			var ctx context.Context
+			var end func()
 			if expiry {
-				cancel()
-				ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+				expiring := newExpiringContext()
+				ctx, end = expiring, expiring.expire
+			} else {
+				ctx, end = context.WithCancel(context.Background())
 			}
-			defer cancel()
+			defer end()
 			s.scanContext = ctx
 			s.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: directory, Valid: true} }
 			calls := 0
 			s.ffprobe = &scannertest.Probe{Callback: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
 				calls++
-				if !expiry {
-					cancel()
-				}
+				end()
 				<-ctx.Done()
 				return nil, ctx.Err()
 			}}
@@ -342,6 +346,31 @@ func TestShutdownDuringProbeBatches(t *testing.T) {
 				t.Fatalf("canceled scan wrote %d tracks", rows)
 			}
 		})
+	}
+}
+
+// expiringContext is a context whose deadline passes when the test calls
+// expire: Done closes and Err reports context.DeadlineExceeded.
+type expiringContext struct {
+	context.Context
+	done   chan struct{}
+	expire func()
+}
+
+func newExpiringContext() *expiringContext {
+	c := &expiringContext{Context: context.Background(), done: make(chan struct{})}
+	c.expire = sync.OnceFunc(func() { close(c.done) })
+	return c
+}
+
+func (c *expiringContext) Done() <-chan struct{} { return c.done }
+
+func (c *expiringContext) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
 	}
 }
 

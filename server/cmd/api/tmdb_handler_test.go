@@ -390,7 +390,11 @@ func TestGetTmdbStatus_HTTP(t *testing.T) {
 func TestProxyTmdbImage_HTTPSuccessStreamsImage(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/w500/poster.jpg" {
-			t.Fatalf("upstream path = %q, want /w500/poster.jpg", r.URL.Path)
+			// The handler runs on the server's goroutine, where t.Fatalf
+			// cannot stop the test.
+			t.Errorf("upstream path = %q, want /w500/poster.jpg", r.URL.Path)
+			http.NotFound(w, r)
+			return
 		}
 
 		w.Header().Set("Content-Type", "image/jpeg")

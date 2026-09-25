@@ -12,7 +12,11 @@ import (
 func TestProxyYouTubeThumbnail_HTTPSuccessStreamsImage(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/dQw4w9WgXcQ/hqdefault.jpg" {
-			t.Fatalf("upstream path = %q, want /dQw4w9WgXcQ/hqdefault.jpg", r.URL.Path)
+			// The handler runs on the server's goroutine, where t.Fatalf
+			// cannot stop the test.
+			t.Errorf("upstream path = %q, want /dQw4w9WgXcQ/hqdefault.jpg", r.URL.Path)
+			http.NotFound(w, r)
+			return
 		}
 
 		w.Header().Set("Content-Type", "image/jpeg")

@@ -123,15 +123,10 @@ func TestLoadRuntimeEnvFile_LoadsWorkingDirectoryEnvFile(t *testing.T) {
 	}
 
 	const key = "IGLOO_TEST_ENV_FILE_VALUE"
-	old, hadOld := os.LookupEnv(key)
+	// t.Setenv restores the key at cleanup; the unset leaves it absent so
+	// the file's value is the one that lands.
+	t.Setenv(key, "")
 	os.Unsetenv(key)
-	t.Cleanup(func() {
-		if hadOld {
-			os.Setenv(key, old)
-		} else {
-			os.Unsetenv(key)
-		}
-	})
 
 	envFile, loaded, err := LoadRuntimeEnvFile()
 	if err != nil {

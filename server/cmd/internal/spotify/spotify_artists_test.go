@@ -97,6 +97,11 @@ func TestSearchArtistByName(t *testing.T) {
 		if string(artist.ID) != "safeArtist123" {
 			t.Fatalf("artist.ID = %q, want safeArtist123", artist.ID)
 		}
+		// The planted key must be the one the lookup used, or the miss above
+		// proves nothing about the wrong-type branch.
+		if _, ok := sc.getArtist("john mayer"); !ok {
+			t.Fatal("the fetched artist did not replace the wrong-type entry under the planted key")
+		}
 	})
 
 	t.Run("cache key ignores case and surrounding whitespace", func(t *testing.T) {

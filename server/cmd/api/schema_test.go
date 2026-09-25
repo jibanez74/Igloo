@@ -493,20 +493,28 @@ func TestInitTables_WatchRoomTrackConstraints(t *testing.T) {
 		t.Fatalf("insert movie: %v", err)
 	}
 
-	_, err = db.Exec(`
-		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track)
-		VALUES (1, 1, 'direct', -1)
-	`)
-	if err == nil {
-		t.Fatal("expected negative audio_track insert to fail")
-	}
-
+	// The valid row proves the fixture reaches the constraint at all, so the
+	// rejections below cannot pass on a renamed column or a missing parent.
 	_, err = db.Exec(`
 		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
-		VALUES (1, 1, 'direct', 0, -1)
+		VALUES (1, 1, 'direct', 0, 0)
 	`)
-	if err == nil {
-		t.Fatal("expected negative subtitle_track insert to fail")
+	if err != nil {
+		t.Fatalf("insert valid watch room: %v", err)
+	}
+
+	for column, insert := range map[string]string{
+		"audio_track": `
+			INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track)
+			VALUES (1, 1, 'direct', -1)`,
+		"subtitle_track": `
+			INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
+			VALUES (1, 1, 'direct', 0, -1)`,
+	} {
+		_, err = db.Exec(insert)
+		if err == nil || !strings.Contains(err.Error(), "CHECK constraint failed") {
+			t.Errorf("negative %s insert error = %v, want a CHECK constraint failure", column, err)
+		}
 	}
 }
 

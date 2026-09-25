@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -234,29 +235,43 @@ func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 
 func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 	s, p, root := setupScanner(t)
-	scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "file")
-	entered := make(chan struct{})
+	path := scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "file")
+	// Only the first read returns root, so a scan that re-read the setting
+	// after Start would walk a directory holding none of the fixture.
+	calls := atomic.Int32{}
+	s.CurrentShowsDirectory = func() sql.NullString {
+		if calls.Add(1) == 1 {
+			return sql.NullString{String: root, Valid: true}
+		}
+		return sql.NullString{String: "/changed/shows", Valid: true}
+	}
+	entered := make(chan string, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.ScanContext = ctx
-	p.Hook = func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-		close(entered)
+	p.Hook = func(ctx context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		entered <- path
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
 	result := s.Start()
-	if result.Status != scanner.StartStarted {
-		t.Fatal(result)
+	if result.Status != scanner.StartStarted || result.Directory != root {
+		t.Fatalf("first start: %+v", result)
 	}
-	scannertest.WaitForSignal(t, entered, 5*time.Second, "show scan reaching probing")
-	s.CurrentShowsDirectory = func() sql.NullString { return sql.NullString{String: t.TempDir(), Valid: true} }
+	select {
+	case got := <-entered:
+		if got != path || calls.Load() != 1 {
+			t.Fatalf("probed %q, directory calls=%d; want %q read once", got, calls.Load(), path)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("show scan did not probe the captured directory")
+	}
 	result = s.Start()
 	if result.Status != scanner.StartAlreadyRunning {
 		t.Fatal(result)
 	}
 	cancel()
 	scannertest.WaitForGroup(t, s.Wait, 5*time.Second, "show scan stop")
-	s.CurrentShowsDirectory = nil
 	// A default scanner reports missing configuration without starting work.
 	empty := New(Dependencies{})
 	if empty.Start().Status != scanner.StartNotConfigured {

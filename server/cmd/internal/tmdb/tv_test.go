@@ -244,7 +244,8 @@ func TestTVCacheEntryOfWrongTypeIsRefetched(t *testing.T) {
 	defer server.Close()
 	client := newTestClient(server.URL)
 	params := url.Values{"append_to_response": {"aggregate_credits,content_ratings,external_ids,videos"}, "language": {tmdbRequestLanguage}}
-	client.movieCache.Set("tv:/tv/7?"+params.Encode(), &TmdbMovie{}, cache.DefaultExpiration)
+	key := "tv:/tv/7?" + params.Encode()
+	client.movieCache.Set(key, &TmdbMovie{}, cache.DefaultExpiration)
 
 	show, err := client.GetShowDetails(context.Background(), 7)
 	if err != nil || show.Name != "Example" {
@@ -253,9 +254,11 @@ func TestTVCacheEntryOfWrongTypeIsRefetched(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatalf("expected the wrong-type entry to force one request, got %d", calls.Load())
 	}
-	_, err = client.GetShowDetails(context.Background(), 7)
-	if err != nil || calls.Load() != 1 {
-		t.Fatalf("expected the refetched body to be cached, got %d calls, %v", calls.Load(), err)
+	// The planted key must be the one the lookup used, or the request above
+	// proves nothing about the wrong-type branch.
+	cached, _ := client.movieCache.Get(key)
+	if _, ok := cached.([]byte); !ok {
+		t.Fatalf("cache entry under the planted key = %T, want the refetched body", cached)
 	}
 }
 

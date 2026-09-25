@@ -12,6 +12,10 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/movie"
+	"igloo/cmd/internal/scanner/music"
+	"igloo/cmd/internal/scanner/show"
 
 	cache "github.com/patrickmn/go-cache"
 )
@@ -113,10 +117,22 @@ func setupTestApp(t *testing.T) *Application {
 
 	initTestRuntime(app)
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
-	t.Cleanup(app.ScanCancel)
+	stopBackgroundWork(t, app)
 	app.initScanners()
 
 	return app
+}
+
+// stopBackgroundWork cancels scans at cleanup and waits for app.Wait, so no
+// scan or teardown goroutine outlives the test into the database close, which
+// was registered earlier and therefore runs later.
+func stopBackgroundWork(t *testing.T, app *Application) {
+	t.Helper()
+
+	t.Cleanup(func() {
+		app.ScanCancel()
+		app.Wait.Wait()
+	})
 }
 
 // initTestRuntime is the harness twin of the InitApp tail: the production
@@ -259,7 +275,7 @@ func restartTestApp(t *testing.T, app *Application) *Application {
 
 	initTestRuntime(restarted)
 	restarted.ScanContext, restarted.ScanCancel = context.WithCancel(context.Background())
-	t.Cleanup(restarted.ScanCancel)
+	stopBackgroundWork(t, restarted)
 	restarted.initScanners()
 
 	return restarted
@@ -295,4 +311,28 @@ func createTestMovie(t *testing.T, app *Application, title, filePath string) int
 		t.Fatalf("create movie %q: %v", title, err)
 	}
 	return movieID
+}
+
+// movieStartFunc, showStartFunc and musicStartFunc stand in for a library
+// scanner whose Start result a test decides; Status reports an idle scanner.
+type movieStartFunc func() scanner.StartResult
+
+func (f movieStartFunc) Start() scanner.StartResult { return f() }
+
+func (movieStartFunc) Status() movie.Status { return movie.Status{Progress: idleScanProgress()} }
+
+type showStartFunc func() scanner.StartResult
+
+func (f showStartFunc) Start() scanner.StartResult { return f() }
+
+func (showStartFunc) Status() show.Status { return show.Status{Progress: idleScanProgress()} }
+
+type musicStartFunc func() scanner.StartResult
+
+func (f musicStartFunc) Start() scanner.StartResult { return f() }
+
+func (musicStartFunc) Status() music.Status { return music.Status{Progress: idleScanProgress()} }
+
+func idleScanProgress() scanner.Progress {
+	return scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}
 }

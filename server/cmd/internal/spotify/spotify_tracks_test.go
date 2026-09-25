@@ -27,7 +27,9 @@ func TestSearchTracks(t *testing.T) {
 		var capturedLimit string
 		sc := newMockClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasSuffix(r.URL.Path, "/search") {
-				t.Fatalf("unexpected request path: %s", r.URL.Path)
+				t.Errorf("unexpected request path: %s", r.URL.Path)
+				http.NotFound(w, r)
+				return
 			}
 			capturedQuery = r.URL.Query().Get("q")
 			capturedLimit = r.URL.Query().Get("limit")

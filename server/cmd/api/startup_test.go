@@ -77,8 +77,7 @@ func TestInitDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	os.Setenv("DB_PATH", dbPath)
-	defer os.Unsetenv("DB_PATH")
+	t.Setenv(envDBPath, dbPath)
 
 	app := &Application{}
 	setupTestLogger(t, app)
