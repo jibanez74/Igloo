@@ -113,9 +113,7 @@ func TestSendfileResponseWriterCommitsHeaderBeforeReadFrom(t *testing.T) {
 // pass-through for it, so without restoreSendfile every media byte is copied
 // through a userspace buffer.
 func TestSendfileSurvivesSessionMiddleware(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	capable := make(chan bool, 1)
 
@@ -145,7 +143,6 @@ func TestSessionCommitControlsSendfile(t *testing.T) {
 	for _, failCommit := range []bool{false, true} {
 		t.Run(fmt.Sprintf("commit failure=%t", failCommit), func(t *testing.T) {
 			app := setupSessionTestApp(t)
-			defer app.DB.Close()
 			if failCommit {
 				_, err := app.DB.Exec(`CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'private storage failure'); END`)
 				if err != nil {

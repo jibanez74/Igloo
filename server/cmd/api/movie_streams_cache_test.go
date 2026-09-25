@@ -11,7 +11,6 @@ import (
 // the old stream index.
 func TestMovieStreamsAreServedFromCacheUntilInvalidated(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
 

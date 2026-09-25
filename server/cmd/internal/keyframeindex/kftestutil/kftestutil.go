@@ -8,6 +8,8 @@ package kftestutil
 import (
 	"encoding/binary"
 	"math"
+
+	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 )
 
 // MKVOptions shapes a BuildMKV fixture.
@@ -279,9 +281,10 @@ type ElstEntry struct {
 	MediaTimeMediaTicks       int64
 }
 
-// BuildMP4 renders a minimal but structurally valid MP4 file.
+// BuildMP4 renders a minimal but structurally valid MP4 file. The ftyp box
+// always comes first; MP4FtypLen is its length.
 func BuildMP4(opts MP4Options) []byte {
-	ftyp := mp4Box("ftyp", concat([]byte("isom"), u32(0x200), []byte("isomiso2avc1mp41")))
+	ftyp := buildFtyp()
 
 	var mdat []byte
 	if opts.LargesizeMdat {
@@ -292,7 +295,7 @@ func BuildMP4(opts MP4Options) []byte {
 		binary.BigEndian.PutUint64(header[8:16], uint64(16+len(payload)))
 		mdat = concat(header, payload)
 	} else {
-		mdat = mp4Box("mdat", make([]byte, 32))
+		mdat = fmp4testutil.Box("mdat", make([]byte, 32))
 	}
 
 	moov := buildMoov(opts)
@@ -303,16 +306,24 @@ func BuildMP4(opts MP4Options) []byte {
 	return concat(ftyp, moov, mdat)
 }
 
+func buildFtyp() []byte {
+	return fmp4testutil.Box("ftyp", []byte("isom"), fmp4testutil.U32(0x200), []byte("isomiso2avc1mp41"))
+}
+
+// MP4FtypLen is the length of the ftyp box every BuildMP4 file starts with.
+func MP4FtypLen() int {
+	return len(buildFtyp())
+}
+
 func buildMoov(opts MP4Options) []byte {
-	mvhdPayload := concat(
-		[]byte{0, 0, 0, 0}, // version 0 + flags
-		u32(0), u32(0),     // creation, modification
-		u32(mp4FixtureMovieTimescale),
-		u32(0), // duration; parsers fall back to the track's mdhd
+	mvhdPayload := fmp4testutil.FullBoxPayload(0,
+		fmp4testutil.U32(0), fmp4testutil.U32(0), // creation, modification
+		fmp4testutil.U32(mp4FixtureMovieTimescale),
+		fmp4testutil.U32(0), // duration; parsers fall back to the track's mdhd
 	)
 	// Pad out the remaining fixed mvhd fields (rate..next_track_ID).
 	mvhdPayload = concat(mvhdPayload, make([]byte, 80))
-	mvhd := mp4Box("mvhd", mvhdPayload)
+	mvhd := fmp4testutil.Box("mvhd", mvhdPayload)
 
 	videoTrak := buildTrak(opts, "vide", mp4FixtureTimescale)
 	if opts.AudioTrackFirst {
@@ -320,45 +331,42 @@ func buildMoov(opts MP4Options) []byte {
 			SampleDeltas: [][2]uint32{{1, 1024}},
 			OmitStss:     true,
 		}, "soun", 48000)
-		return mp4Box("moov", concat(mvhd, audioTrak, videoTrak))
+		return fmp4testutil.Box("moov", mvhd, audioTrak, videoTrak)
 	}
-	return mp4Box("moov", concat(mvhd, videoTrak))
+	return fmp4testutil.Box("moov", mvhd, videoTrak)
 }
 
 func buildTrak(opts MP4Options, handler string, timescale uint32) []byte {
-	tkhd := mp4Box("tkhd", make([]byte, 84))
+	tkhd := fmp4testutil.Box("tkhd", make([]byte, 84))
 
 	var edts []byte
 	if opts.Elst != nil {
 		var entries []byte
 		for _, entry := range opts.Elst {
 			entries = concat(entries,
-				u32(uint32(entry.SegmentDurationMovieTicks)),
-				u32(uint32(int32(entry.MediaTimeMediaTicks))),
-				u32(0x00010000), // media_rate 1.0
+				fmp4testutil.U32(uint32(entry.SegmentDurationMovieTicks)),
+				fmp4testutil.U32(uint32(int32(entry.MediaTimeMediaTicks))),
+				fmp4testutil.U32(0x00010000), // media_rate 1.0
 			)
 		}
-		elst := mp4Box("elst", concat(
-			[]byte{0, 0, 0, 0},
-			u32(uint32(len(opts.Elst))),
+		elst := fmp4testutil.Box("elst", fmp4testutil.FullBoxPayload(0,
+			fmp4testutil.U32(uint32(len(opts.Elst))),
 			entries,
 		))
-		edts = mp4Box("edts", elst)
+		edts = fmp4testutil.Box("edts", elst)
 	}
 
-	mdhdPayload := concat(
-		[]byte{0, 0, 0, 0},
-		u32(0), u32(0),
-		u32(timescale),
-		u32(uint32(opts.MediaDurationTicks)),
+	mdhdPayload := fmp4testutil.FullBoxPayload(0,
+		fmp4testutil.U32(0), fmp4testutil.U32(0),
+		fmp4testutil.U32(timescale),
+		fmp4testutil.U32(uint32(opts.MediaDurationTicks)),
 		[]byte{0x55, 0xC4}, // language "und"
 		make([]byte, 2),
 	)
-	mdhd := mp4Box("mdhd", mdhdPayload)
+	mdhd := fmp4testutil.Box("mdhd", mdhdPayload)
 
-	hdlr := mp4Box("hdlr", concat(
-		[]byte{0, 0, 0, 0},
-		u32(0),
+	hdlr := fmp4testutil.Box("hdlr", fmp4testutil.FullBoxPayload(0,
+		fmp4testutil.U32(0),
 		[]byte(handler),
 		make([]byte, 12),
 		[]byte{0},
@@ -366,11 +374,10 @@ func buildTrak(opts MP4Options, handler string, timescale uint32) []byte {
 
 	var sttsEntries []byte
 	for _, pair := range opts.SampleDeltas {
-		sttsEntries = concat(sttsEntries, u32(pair[0]), u32(pair[1]))
+		sttsEntries = concat(sttsEntries, fmp4testutil.U32(pair[0]), fmp4testutil.U32(pair[1]))
 	}
-	stts := mp4Box("stts", concat(
-		[]byte{0, 0, 0, 0},
-		u32(uint32(len(opts.SampleDeltas))),
+	stts := fmp4testutil.Box("stts", fmp4testutil.FullBoxPayload(0,
+		fmp4testutil.U32(uint32(len(opts.SampleDeltas))),
 		sttsEntries,
 	))
 
@@ -379,46 +386,34 @@ func buildTrak(opts MP4Options, handler string, timescale uint32) []byte {
 	if opts.CttsOffsets != nil {
 		var cttsEntries []byte
 		for _, pair := range opts.CttsOffsets {
-			cttsEntries = concat(cttsEntries, u32(uint32(pair[0])), u32(uint32(pair[1])))
+			cttsEntries = concat(cttsEntries, fmp4testutil.U32(uint32(pair[0])), fmp4testutil.U32(uint32(pair[1])))
 		}
-		ctts := mp4Box("ctts", concat(
+		// Built by hand because FullBoxPayload always writes version 0 and
+		// ctts is the one box whose version the parser must honour.
+		ctts := fmp4testutil.Box("ctts",
 			[]byte{opts.CttsVersion, 0, 0, 0},
-			u32(uint32(len(opts.CttsOffsets))),
+			fmp4testutil.U32(uint32(len(opts.CttsOffsets))),
 			cttsEntries,
-		))
+		)
 		stblChildren = concat(stblChildren, ctts)
 	}
 
 	if !opts.OmitStss {
-		var stssEntries []byte
+		stssEntries := make([]byte, 0, 4*len(opts.SyncSamples))
 		for _, sample := range opts.SyncSamples {
-			stssEntries = concat(stssEntries, u32(sample))
+			stssEntries = append(stssEntries, fmp4testutil.U32(sample)...)
 		}
-		stss := mp4Box("stss", concat(
-			[]byte{0, 0, 0, 0},
-			u32(uint32(len(opts.SyncSamples))),
+		stss := fmp4testutil.Box("stss", fmp4testutil.FullBoxPayload(0,
+			fmp4testutil.U32(uint32(len(opts.SyncSamples))),
 			stssEntries,
 		))
 		stblChildren = concat(stblChildren, stss)
 	}
 
-	stbl := mp4Box("stbl", stblChildren)
-	minf := mp4Box("minf", stbl)
-	mdia := mp4Box("mdia", concat(mdhd, hdlr, minf))
-	return mp4Box("trak", concat(tkhd, edts, mdia))
-}
-
-func mp4Box(boxType string, payload []byte) []byte {
-	header := make([]byte, 8)
-	binary.BigEndian.PutUint32(header[0:4], uint32(8+len(payload)))
-	copy(header[4:8], boxType)
-	return concat(header, payload)
-}
-
-func u32(value uint32) []byte {
-	out := make([]byte, 4)
-	binary.BigEndian.PutUint32(out, value)
-	return out
+	stbl := fmp4testutil.Box("stbl", stblChildren)
+	minf := fmp4testutil.Box("minf", stbl)
+	mdia := fmp4testutil.Box("mdia", mdhd, hdlr, minf)
+	return fmp4testutil.Box("trak", tkhd, edts, mdia)
 }
 
 func concat(parts ...[]byte) []byte {

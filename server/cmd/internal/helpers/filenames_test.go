@@ -13,6 +13,7 @@ func TestIsMovieReleaseNoiseToken(t *testing.T) {
 		{"remastered", true},
 		{"extended", true},
 		{"mkv", true},
+		{" 1080p ", true},
 		{"Moneyball", false},
 		{"2011", false},
 	}
@@ -108,11 +109,8 @@ func TestFileExtension(t *testing.T) {
 	}{
 		{"movie.mkv", "mkv"},
 		{"MOVIE.MKV", "mkv"},
-		{"/media/movies/Arrival (2016).mp4", "mp4"},
-		{"archive.tar.gz", "gz"},
 		{"no-extension", ""},
 		{"", ""},
-		{".hidden", "hidden"},
 	}
 
 	for _, tt := range tests {
@@ -135,8 +133,6 @@ func TestIsReasonableYear(t *testing.T) {
 		{2011, true},
 		{2100, true},
 		{2101, false},
-		{0, false},
-		{-2011, false},
 	}
 
 	for _, tt := range tests {

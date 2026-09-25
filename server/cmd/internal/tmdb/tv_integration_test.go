@@ -18,7 +18,7 @@ func TestTVMetadataIntegration(t *testing.T) {
 	}{
 		{"title only", nil},
 		{"premiere year", []int{2008}},
-		{"unfiltered fallback", []int{1850}},
+		{"unfiltered fallback", []int{yearWithNoReleases}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// A fresh client makes every search (including fallback) hit TMDB.

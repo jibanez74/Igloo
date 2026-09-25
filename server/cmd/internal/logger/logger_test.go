@@ -1,10 +1,15 @@
 package logger
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewRejectsInvalidConfig(t *testing.T) {
@@ -247,5 +252,120 @@ func TestNewStdoutLogger(t *testing.T) {
 				t.Errorf("debug record = %v, want %v (output %q)", hasDebug, tt.wantDebug, output)
 			}
 		})
+	}
+}
+
+// failingHandler wraps a handler and can fail every record on demand, so the
+// severe-flush hook's error precedence is observable.
+type failingHandler struct {
+	slog.Handler
+	handleErr error
+}
+
+func (h failingHandler) Handle(ctx context.Context, record slog.Record) error {
+	if h.handleErr != nil {
+		return h.handleErr
+	}
+	return h.Handler.Handle(ctx, record)
+}
+
+func TestFlushOnSevereHandler(t *testing.T) {
+	newHandler := func(handleErr, flushErr error) (flushOnSevereHandler, *int, *bytes.Buffer) {
+		flushes := 0
+		var buf bytes.Buffer
+		wrapped := failingHandler{Handler: slog.NewJSONHandler(&buf, nil), handleErr: handleErr}
+		handler := flushOnSevereHandler{
+			Handler: wrapped,
+			flush: func() error {
+				flushes++
+				return flushErr
+			},
+		}
+		return handler, &flushes, &buf
+	}
+
+	t.Run("flushes warn and error records but not info", func(t *testing.T) {
+		handler, flushes, _ := newHandler(nil, nil)
+		logger := slog.New(handler)
+
+		logger.Info("routine")
+		if *flushes != 0 {
+			t.Fatalf("flushes after Info = %d, want 0", *flushes)
+		}
+
+		logger.Warn("severe")
+		if *flushes != 1 {
+			t.Fatalf("flushes after Warn = %d, want 1", *flushes)
+		}
+
+		logger.Error("severe")
+		if *flushes != 2 {
+			t.Fatalf("flushes after Error = %d, want 2", *flushes)
+		}
+	})
+
+	t.Run("derived handlers keep the hook", func(t *testing.T) {
+		handler, flushes, buf := newHandler(nil, nil)
+		logger := slog.New(handler)
+
+		logger.With("request", "abc").Warn("with attrs")
+		if *flushes != 1 {
+			t.Fatalf("flushes after With().Warn = %d, want 1", *flushes)
+		}
+		if !strings.Contains(buf.String(), `"request":"abc"`) {
+			t.Errorf("record = %q, want the attribute from With", buf.String())
+		}
+
+		logger.WithGroup("scan").Error("with group", "state", "failed")
+		if *flushes != 2 {
+			t.Fatalf("flushes after WithGroup().Error = %d, want 2", *flushes)
+		}
+		if !strings.Contains(buf.String(), `"scan":{"state":"failed"}`) {
+			t.Errorf("record = %q, want the grouped attribute", buf.String())
+		}
+	})
+
+	t.Run("reports a flush failure only when the record was written", func(t *testing.T) {
+		handleErr := errors.New("handle failed")
+		flushErr := errors.New("flush failed")
+
+		handler, flushes, _ := newHandler(nil, flushErr)
+		err := handler.Handle(context.Background(), slog.NewRecord(time.Now(), slog.LevelWarn, "severe", 0))
+		if !errors.Is(err, flushErr) {
+			t.Errorf("Handle error = %v, want the flush error", err)
+		}
+
+		handler, flushes, _ = newHandler(handleErr, flushErr)
+		err = handler.Handle(context.Background(), slog.NewRecord(time.Now(), slog.LevelError, "severe", 0))
+		if !errors.Is(err, handleErr) {
+			t.Errorf("Handle error = %v, want the handler's own error to win", err)
+		}
+		if *flushes != 1 {
+			t.Errorf("flushes = %d, want the flush to still run after a failed handle", *flushes)
+		}
+	})
+}
+
+// Routine records sit in the writer's buffer until the ticker, a severe record
+// or the closer flushes them; a warning must be on disk before any of those.
+func TestFileHandlerFlushesSevereRecordsImmediately(t *testing.T) {
+	// New's one-second ticker could flush the Info record on a slow run, so
+	// the handler New uses is built over a writer whose ticker stays idle.
+	rw, path := newTestWriter(t, loggerMaxBytes, "", idleFlushInterval)
+	logger := slog.New(newFileHandler(rw, slog.LevelInfo))
+
+	logger.Info("buffered")
+	lines := readLogLines(t, path)
+	if len(lines) != 0 {
+		t.Fatalf("lines after Info = %q, want the record to stay buffered", lines)
+	}
+
+	logger.Warn("flushed")
+	lines = readLogLines(t, path)
+	if len(lines) != 2 {
+		t.Fatalf("lines after Warn = %q, want both records on disk", lines)
+	}
+	if !strings.Contains(lines[1], `"level":"WARN"`) {
+		t.Errorf("line = %q, want the warning record", lines[1])
 	}
 }

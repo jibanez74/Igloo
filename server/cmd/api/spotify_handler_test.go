@@ -55,14 +55,12 @@ var _ spotifyapi.SpotifyInterface = (*spotifyHandlerStub)(nil)
 
 func TestGetSpotifyStatus_HTTP(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Get("/api/spotify/status", app.GetSpotifyStatus)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/spotify/status", nil)
-	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
@@ -108,7 +106,6 @@ func TestGetSpotifyStatus_HTTP(t *testing.T) {
 
 func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	existingAlbumIdentity, err := app.Queries.UpsertAlbum(ctx, database.UpsertAlbumParams{
@@ -154,12 +151,11 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	}
 	app.Spotify = stub
 
-	router := chi.NewRouter()
-	router.Post("/api/spotify/albums/search", app.SearchSpotifyAlbums)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/spotify/albums/search", `{"title":"  Blue Record  "}`)
-	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -223,14 +219,12 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 
 func TestSearchSpotifyTracks_HTTPConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.Spotify = &spotifyHandlerStub{}
 
-	router := chi.NewRouter()
-	router.Post("/api/spotify/tracks/search", app.SearchSpotifyTracks)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/spotify/tracks/search", `{"title":"Blue Train"}`)
-	addOpenAPITestCookie(req)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, req)
 	if response.Code != http.StatusOK {
@@ -269,10 +263,9 @@ func TestSearchSpotifyAlbums_HTTPReturnsErrorWhenLibraryLookupFails(t *testing.T
 
 func TestSearchSpotifyAlbums_HTTPUnavailable(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Post("/api/spotify/albums/search", app.SearchSpotifyAlbums)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/spotify/albums/search", strings.NewReader(`{"title":"Blue Record"}`))
@@ -285,10 +278,9 @@ func TestSearchSpotifyAlbums_HTTPUnavailable(t *testing.T) {
 
 func TestSearchSpotifyAlbums_HTTPValidationAndUpstreamErrors(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Post("/api/spotify/albums/search", app.SearchSpotifyAlbums)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 	app.Spotify = &spotifyHandlerStub{}
 
 	w := httptest.NewRecorder()

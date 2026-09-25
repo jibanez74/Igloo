@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -9,6 +10,9 @@ import (
 )
 
 const loggerFlushInterval = time.Second
+
+// openLogFile is os.OpenFile, swappable so tests can fail the reopen paths.
+var openLogFile = os.OpenFile
 
 // rotatingWriter keeps recent slog JSON entries in a bounded pair of files:
 // the live log plus one rotated predecessor (path + ".1").
@@ -19,23 +23,27 @@ const loggerFlushInterval = time.Second
 // server's idle disk writes. The trade-off is that a hard crash can lose up
 // to a second of buffered INFO lines.
 type rotatingWriter struct {
-	mu       sync.Mutex
-	path     string
-	file     *os.File
-	buf      *bufio.Writer
-	size     int64
-	maxBytes int64
-	closed   bool
-	stop     chan struct{}
-	done     chan struct{}
+	mu            sync.Mutex
+	path          string
+	file          *os.File
+	buf           *bufio.Writer
+	size          int64
+	maxBytes      int64
+	flushInterval time.Duration
+	closed        bool
+	stop          chan struct{}
+	done          chan struct{}
 }
 
-func newRotatingWriter(path string, maxBytes int64) (*rotatingWriter, error) {
+func newRotatingWriter(path string, maxBytes int64, flushInterval time.Duration) (*rotatingWriter, error) {
 	if maxBytes <= 0 {
 		return nil, fmt.Errorf("max bytes must be positive")
 	}
+	if flushInterval <= 0 {
+		return nil, fmt.Errorf("flush interval must be positive")
+	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := openLogFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -47,13 +55,14 @@ func newRotatingWriter(path string, maxBytes int64) (*rotatingWriter, error) {
 	}
 
 	w := &rotatingWriter{
-		path:     path,
-		file:     f,
-		buf:      bufio.NewWriter(f),
-		size:     info.Size(),
-		maxBytes: maxBytes,
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
+		path:          path,
+		file:          f,
+		buf:           bufio.NewWriter(f),
+		size:          info.Size(),
+		maxBytes:      maxBytes,
+		flushInterval: flushInterval,
+		stop:          make(chan struct{}),
+		done:          make(chan struct{}),
 	}
 
 	go w.flushLoop()
@@ -64,7 +73,7 @@ func newRotatingWriter(path string, maxBytes int64) (*rotatingWriter, error) {
 func (w *rotatingWriter) flushLoop() {
 	defer close(w.done)
 
-	ticker := time.NewTicker(loggerFlushInterval)
+	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
 
 	for {
@@ -113,25 +122,35 @@ func (w *rotatingWriter) Write(p []byte) (int, error) {
 // rotate renames the live file to its ".1" sibling (replacing any previous
 // one) and starts a fresh live file, so rotation cost is O(1) instead of
 // rewriting retained lines.
+//
+// No failed step may leave the writer over a closed file or a bufio.Writer
+// holding a sticky error, or one failed rotation would end logging for the
+// rest of the process. The live file is reopened for append instead and the
+// size counter starts over, so the entry that triggered the rotation (and,
+// after a failed flush, whatever was still buffered) is lost, and the next
+// attempt comes after another maxBytes of output.
 func (w *rotatingWriter) rotate() error {
 	err := w.buf.Flush()
 	if err != nil {
-		return err
+		// The flush error is the one worth reporting; closing only releases
+		// the descriptor before the reopen.
+		_ = w.file.Close()
+		return w.reopenAfterFailedRotate(err)
 	}
 
 	err = w.file.Close()
 	if err != nil {
-		return err
+		return w.reopenAfterFailedRotate(err)
 	}
 
 	err = os.Rename(w.path, w.path+".1")
 	if err != nil {
-		return err
+		return w.reopenAfterFailedRotate(err)
 	}
 
-	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	f, err := openLogFile(w.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return w.reopenAfterFailedRotate(err)
 	}
 
 	w.file = f
@@ -139,6 +158,19 @@ func (w *rotatingWriter) rotate() error {
 	w.size = 0
 
 	return nil
+}
+
+func (w *rotatingWriter) reopenAfterFailedRotate(rotateErr error) error {
+	f, err := openLogFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return errors.Join(rotateErr, err)
+	}
+
+	w.file = f
+	w.buf = bufio.NewWriter(f)
+	w.size = 0
+
+	return rotateErr
 }
 
 // Flush forces buffered entries to disk; severe records use it so warnings

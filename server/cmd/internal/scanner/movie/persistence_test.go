@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"math"
-	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -21,7 +21,6 @@ import (
 
 func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	var invalidatedID int64
 	callbackObservedCommittedRow := false
@@ -39,10 +38,8 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 		Container: "mkv",
 		MimeType:  helpers.VideoMimeTypes["mkv"],
 	}}
-	err := os.WriteFile(resolved.params.FilePath, []byte("m"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scannertest.WriteFile(t, resolved.params.FilePath, "m")
+	var err error
 	resolved.inspection, err = scanner.InspectFileMetadata(context.Background(), resolved.params.FilePath, nil, testScanner.scanner.now)
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +51,9 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 	}
 	if invalidatedID != 0 || callbackObservedCommittedRow {
 		t.Fatal("invalidation ran for a rolled-back movie")
+	}
+	if scannertest.CountRows(t, testScanner.db, "SELECT count(*) FROM movies") != 0 {
+		t.Fatal("rolled-back movie left a row behind")
 	}
 
 	resolved.streams = movieScannerMetadataFixture("120").Streams
@@ -68,7 +68,6 @@ func TestPersistResolvedMovieInvalidatesAfterCommit(t *testing.T) {
 
 func TestMovieScannerUpsertPreservesDescriptiveMetadata(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	ctx := context.Background()
 	path := "/movies/Moneyball.2011.mkv"
@@ -125,14 +124,11 @@ func TestMovieScannerUpsertPreservesDescriptiveMetadata(t *testing.T) {
 
 func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	ctx := context.Background()
 	moviesDir := t.TempDir()
 	path := filepath.Join(moviesDir, "The.Matrix.1999.mkv")
-	if err := os.WriteFile(path, []byte("movie"), 0o644); err != nil {
-		t.Fatalf("write movie: %v", err)
-	}
+	scannertest.WriteFile(t, path, "movie")
 
 	tmdbDetails := tmdbMovieFromJSON(t, `{
 		"id": 603,
@@ -188,7 +184,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 		detailMovies: map[int]tmdb.TmdbMovie{603: tmdbDetails},
 	}
 	testScanner.scanner.tmdb = tmdbStub
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("5432.4")}
 
 	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
@@ -273,7 +269,8 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	if err != nil {
 		t.Fatalf("get genres: %v", err)
 	}
-	if got := movieGenreTags(genres); got != "Action,Science Fiction" {
+	got := movieGenreTags(genres)
+	if got != "Action,Science Fiction" {
 		t.Fatalf("genres = %q, want Action,Science Fiction", got)
 	}
 
@@ -344,14 +341,11 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 
 func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	ctx := context.Background()
 	moviesDir := t.TempDir()
 	path := filepath.Join(moviesDir, "Replace.Me.2020.mkv")
-	if err := os.WriteFile(path, []byte("movie"), 0o644); err != nil {
-		t.Fatalf("write movie: %v", err)
-	}
+	scannertest.WriteFile(t, path, "movie")
 
 	firstDetails := tmdbMovieFromJSON(t, `{
 		"id": 1000,
@@ -386,21 +380,23 @@ func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t 
 		detailMovies: map[int]tmdb.TmdbMovie{1000: firstDetails},
 	}
 	testScanner.scanner.tmdb = tmdbStub
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{
-		results: []*ffprobe.FfprobeResult{
-			movieScannerMetadataFixture("120"),
-			{
-				Format: ffprobe.Format{Duration: "180"},
-				Streams: []ffprobe.Stream{
-					{Index: 4, CodecName: "hevc", CodecType: "video", Width: 3840, Height: 2160},
-					{Index: 5, CodecName: "aac", CodecType: "audio", Channels: 2},
-				},
-				Chapters: []ffprobe.Chapter{
-					{StartTime: "30.000000", Tags: ffprobe.ChapterTags{Title: "Only New Chapter"}},
-				},
+	probeResults := []*ffprobe.FfprobeResult{
+		movieScannerMetadataFixture("120"),
+		{
+			Format: ffprobe.Format{Duration: "180"},
+			Streams: []ffprobe.Stream{
+				{Index: 4, CodecName: "hevc", CodecType: "video", Width: 3840, Height: 2160},
+				{Index: 5, CodecName: "aac", CodecType: "audio", Channels: 2},
+			},
+			Chapters: []ffprobe.Chapter{
+				{StartTime: "30.000000", Tags: ffprobe.ChapterTags{Title: "Only New Chapter"}},
 			},
 		},
 	}
+	var probeCalls atomic.Int32
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Hook: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+		return probeResults[probeCalls.Add(1)-1], nil
+	}}
 
 	scan := newMovieScanContext(nil)
 	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
@@ -412,10 +408,7 @@ func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t 
 
 	tmdbStub.detailMovies[1000] = secondDetails
 	scan = newMovieScanContext(scan.movieIndex)
-	err := os.WriteFile(path, []byte("edited"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scannertest.WriteFile(t, path, "edited")
 	scanned, skipped, errCount, _ = testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: path, Ext: "mkv", Size: 6},
 	})
@@ -435,7 +428,7 @@ func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t 
 		RunTime       sql.NullInt64
 		Duration      sql.NullFloat64
 	}{}
-	err = testScanner.db.QueryRowContext(ctx, `
+	err := testScanner.db.QueryRowContext(ctx, `
 		SELECT id, title, tmdb_id, size, year, release_date, certification, language, run_time, duration
 		FROM movies
 		WHERE file_path = ?
@@ -476,7 +469,8 @@ func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t 
 	if err != nil {
 		t.Fatalf("get genres: %v", err)
 	}
-	if got := movieGenreTags(genres); got != "Action" {
+	got := movieGenreTags(genres)
+	if got != "Action" {
 		t.Fatalf("genres after rescan = %q, want the matched Action", got)
 	}
 
@@ -523,7 +517,8 @@ func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t 
 	if err != nil {
 		t.Fatalf("get genres: %v", err)
 	}
-	if got := movieGenreTags(genres); got != "Drama" {
+	got = movieGenreTags(genres)
+	if got != "Drama" {
 		t.Fatalf("genres after identify = %q, want Drama", got)
 	}
 
@@ -562,7 +557,6 @@ func TestProcessMoviesBatchRescanRefreshesTechnicalRowsAndKeepsConfirmedMatch(t 
 
 func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	ctx := context.Background()
 	movieID, err := testScanner.queries.UpsertMovie(ctx, database.UpsertMovieParams{
@@ -585,28 +579,32 @@ func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 	firstCompanies := []tmdb.ProductionCompany{
 		{ID: 100, LogoPath: "/old-logo.png", Name: "Old Studio", OriginCountry: "US"},
 	}
-	if err := processProductionCompanies(ctx, testScanner.queries, movie.ID, firstCompanies); err != nil {
+	err = processProductionCompanies(ctx, testScanner.queries, movie.ID, firstCompanies)
+	if err != nil {
 		t.Fatalf("process first production companies: %v", err)
 	}
 
 	firstVideos := []tmdb.TmdbVideoResult{
 		{ID: "video-1", Key: "old-key", Name: "Old Trailer", Site: "YouTube", Type: "Trailer", Official: false},
 	}
-	if err := processExtraVideos(ctx, testScanner.queries, movie.ID, firstVideos); err != nil {
+	err = processExtraVideos(ctx, testScanner.queries, movie.ID, firstVideos)
+	if err != nil {
 		t.Fatalf("process first extra videos: %v", err)
 	}
 
 	secondCompanies := []tmdb.ProductionCompany{
 		{ID: 100, LogoPath: "/new-logo.png", Name: "New Studio", OriginCountry: "GB"},
 	}
-	if err := processProductionCompanies(ctx, testScanner.queries, movie.ID, secondCompanies); err != nil {
+	err = processProductionCompanies(ctx, testScanner.queries, movie.ID, secondCompanies)
+	if err != nil {
 		t.Fatalf("process second production companies: %v", err)
 	}
 
 	secondVideos := []tmdb.TmdbVideoResult{
 		{ID: "video-1", Key: "new-key", Name: "New Featurette", Site: "Vimeo", Type: "Featurette", Official: true},
 	}
-	if err := processExtraVideos(ctx, testScanner.queries, movie.ID, secondVideos); err != nil {
+	err = processExtraVideos(ctx, testScanner.queries, movie.ID, secondVideos)
+	if err != nil {
 		t.Fatalf("process second extra videos: %v", err)
 	}
 
@@ -645,7 +643,6 @@ func movieGenreTags(genres []database.GetGenresByMovieIDRow) string {
 
 func TestGetOrCreateArtist(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	ctx := context.Background()
 
@@ -728,18 +725,15 @@ func TestGetOrCreateArtist(t *testing.T) {
 	})
 }
 
-func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
+func TestProcessMoviesBatchSharedActorIsCachedPerScan(t *testing.T) {
 	testScanner := setupMovieScanner(t)
-	defer testScanner.db.Close()
 
 	ctx := context.Background()
 	moviesDir := t.TempDir()
 	matrixPath := filepath.Join(moviesDir, "The.Matrix.1999.mkv")
 	wickPath := filepath.Join(moviesDir, "John.Wick.2014.mkv")
 	for _, p := range []string{matrixPath, wickPath} {
-		if err := os.WriteFile(p, []byte("movie"), 0o644); err != nil {
-			t.Fatalf("write movie: %v", err)
-		}
+		scannertest.WriteFile(t, p, "movie")
 	}
 
 	sharedCast := `"credits": {
@@ -774,9 +768,10 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 		},
 		detailMovies: map[int]tmdb.TmdbMovie{603: matrixDetails, 245891: wickDetails},
 	}
-	testScanner.scanner.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
+	testScanner.scanner.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("5432.4")}
 
-	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{
+	scan := newMovieScanContext(nil)
+	scanned, skipped, errCount, _ := testScanner.scanner.processMoviesBatch(ctx, scan, []scanner.ScanFile{
 		{Path: matrixPath, Ext: "mkv", Size: 5},
 		{Path: wickPath, Ext: "mkv", Size: 6},
 	})
@@ -784,12 +779,20 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 2/0/0", scanned, skipped, errCount)
 	}
 
-	if got := scannertest.CountRows(t, testScanner.db, "SELECT COUNT(*) FROM artist WHERE tmdb_id = 6384"); got != 1 {
-		t.Fatalf("artist rows for shared actor = %d, want 1", got)
+	// The UNIQUE tmdb_id column keeps the table at one row regardless, so the
+	// cache is what proves the second movie did not upsert the actor again.
+	var artistID int64
+	err := testScanner.db.QueryRowContext(ctx, "SELECT id FROM artist WHERE tmdb_id = 6384").Scan(&artistID)
+	if err != nil {
+		t.Fatalf("read shared artist: %v", err)
+	}
+	cachedID, cached := scan.artistIDs.Get(6384)
+	if !cached || cachedID != artistID {
+		t.Fatalf("shared actor cache = (%d, %v), want the committed id %d", cachedID, cached, artistID)
 	}
 
 	var name string
-	err := testScanner.db.QueryRowContext(ctx, "SELECT name FROM artist WHERE tmdb_id = 6384").Scan(&name)
+	err = testScanner.db.QueryRowContext(ctx, "SELECT name FROM artist WHERE tmdb_id = 6384").Scan(&name)
 	if err != nil {
 		t.Fatalf("read shared artist: %v", err)
 	}
@@ -798,11 +801,12 @@ func TestProcessMoviesBatchSharedActorIsUpsertedOncePerScan(t *testing.T) {
 	}
 
 	// Both movies' cast rows must reference the single shared artist row.
-	if got := scannertest.CountRows(t, testScanner.db, `
+	got := scannertest.CountRows(t, testScanner.db, `
 		SELECT COUNT(*)
 		FROM cast AS c
 		INNER JOIN artist AS a ON a.id = c.artist_id
-		WHERE a.tmdb_id = 6384`); got != 2 {
+		WHERE a.tmdb_id = 6384`)
+	if got != 2 {
 		t.Fatalf("cast rows referencing shared artist = %d, want 2", got)
 	}
 }

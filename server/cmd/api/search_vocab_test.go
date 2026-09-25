@@ -97,144 +97,13 @@ func TestSearchVocabIndexConcurrentLookups(t *testing.T) {
 	wg.Wait()
 }
 
-func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	movieID := createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-	corrections, err := testVocabCorrections(app, ctx, "movies_fts_vocab", "license")
-	if err != nil {
-		t.Fatalf("initial vocabCorrections failed: %v", err)
-	}
-	if !slices.Contains(corrections, "licence") {
-		t.Fatalf("expected initial correction, got %#v", corrections)
-	}
-
-	var initialGeneration int64
-	err = app.DB.QueryRow(`
-		SELECT generation FROM search_vocab_generations
-		WHERE vocab_table = 'movies_fts_vocab'
-	`).Scan(&initialGeneration)
-	if err != nil {
-		t.Fatalf("read initial generation: %v", err)
-	}
-	initialIndex, ok := app.SearchVocab.get("movies_fts_vocab", initialGeneration)
-	if !ok {
-		t.Fatal("expected initial movie vocabulary index to be cached")
-	}
-
-	_, err = app.DB.Exec("UPDATE movies SET title = ? WHERE id = ?", "Arrival", movieID)
-	if err != nil {
-		t.Fatalf("update movie title: %v", err)
-	}
-	corrections, err = testVocabCorrections(app, ctx, "movies_fts_vocab", "arival")
-	if err != nil {
-		t.Fatalf("updated vocabCorrections failed: %v", err)
-	}
-	if !slices.Contains(corrections, "arrival") {
-		t.Fatalf("expected updated correction, got %#v", corrections)
-	}
-
-	var updatedGeneration int64
-	err = app.DB.QueryRow(`
-		SELECT generation FROM search_vocab_generations
-		WHERE vocab_table = 'movies_fts_vocab'
-	`).Scan(&updatedGeneration)
-	if err != nil {
-		t.Fatalf("read updated generation: %v", err)
-	}
-	updatedIndex, ok := app.SearchVocab.get("movies_fts_vocab", updatedGeneration)
-	if !ok || updatedIndex == initialIndex {
-		t.Fatal("expected movie vocabulary update to replace the cached index")
-	}
-
-	_, err = app.DB.Exec("DELETE FROM movies WHERE id = ?", movieID)
-	if err != nil {
-		t.Fatalf("delete movie: %v", err)
-	}
-	corrections, err = testVocabCorrections(app, ctx, "movies_fts_vocab", "arival")
-	if err != nil {
-		t.Fatalf("deleted vocabCorrections failed: %v", err)
-	}
-	if slices.Contains(corrections, "arrival") {
-		t.Fatalf("deleted term remained cached: %#v", corrections)
-	}
-}
-
-func TestVocabCorrectionsRefreshesAfterShowChanges(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	showID := createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
-	corrections, err := testVocabCorrections(app, ctx, "shows_fts_vocab", "severence")
-	if err != nil {
-		t.Fatalf("initial vocabCorrections failed: %v", err)
-	}
-	if !slices.Contains(corrections, "severance") {
-		t.Fatalf("expected initial correction, got %#v", corrections)
-	}
-
-	var initialGeneration int64
-	err = app.DB.QueryRow(`
-		SELECT generation FROM search_vocab_generations
-		WHERE vocab_table = 'shows_fts_vocab'
-	`).Scan(&initialGeneration)
-	if err != nil {
-		t.Fatalf("read initial generation: %v", err)
-	}
-	initialIndex, ok := app.SearchVocab.get("shows_fts_vocab", initialGeneration)
-	if !ok {
-		t.Fatal("expected initial show vocabulary index to be cached")
-	}
-
-	_, err = app.DB.Exec("UPDATE shows SET name = ? WHERE id = ?", "Andor", showID)
-	if err != nil {
-		t.Fatalf("update show name: %v", err)
-	}
-	corrections, err = testVocabCorrections(app, ctx, "shows_fts_vocab", "andorr")
-	if err != nil {
-		t.Fatalf("updated vocabCorrections failed: %v", err)
-	}
-	if !slices.Contains(corrections, "andor") {
-		t.Fatalf("expected updated correction, got %#v", corrections)
-	}
-
-	var updatedGeneration int64
-	err = app.DB.QueryRow(`
-		SELECT generation FROM search_vocab_generations
-		WHERE vocab_table = 'shows_fts_vocab'
-	`).Scan(&updatedGeneration)
-	if err != nil {
-		t.Fatalf("read updated generation: %v", err)
-	}
-	updatedIndex, ok := app.SearchVocab.get("shows_fts_vocab", updatedGeneration)
-	if !ok || updatedIndex == initialIndex {
-		t.Fatal("expected show vocabulary update to replace the cached index")
-	}
-
-	_, err = app.DB.Exec("DELETE FROM shows WHERE id = ?", showID)
-	if err != nil {
-		t.Fatalf("delete show: %v", err)
-	}
-	corrections, err = testVocabCorrections(app, ctx, "shows_fts_vocab", "andorr")
-	if err != nil {
-		t.Fatalf("deleted vocabCorrections failed: %v", err)
-	}
-	if slices.Contains(corrections, "andor") {
-		t.Fatalf("deleted term remained cached: %#v", corrections)
-	}
-}
-
 func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
-	musicianID := createSearchMusician(t, app, "Adele")
-	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Adele")
+	albumID := createTestAlbum(t, app, "Twenty Five", "Adele")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
 	corrections, err := testVocabCorrections(app, ctx, "tracks_search_fts_vocab", "adelle")
 	if err != nil {
@@ -254,5 +123,84 @@ func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	}
 	if !slices.Contains(corrections, "sia") {
 		t.Fatalf("expected renamed musician correction, got %#v", corrections)
+	}
+}
+
+// A library change bumps the vocabulary generation, which replaces the cached
+// correction index; a stale index would keep suggesting renamed or deleted
+// titles.
+func TestVocabCorrectionsRefreshAfterLibraryChanges(t *testing.T) {
+	libraries := []struct {
+		name, vocabTable          string
+		seed                      func(t *testing.T, app *Application) int64
+		renameSQL, deleteSQL      string
+		initialQuery, initialTerm string
+		renamedQuery, renamedTerm string
+	}{
+		{
+			name: "movies", vocabTable: "movies_fts_vocab",
+			seed: func(t *testing.T, app *Application) int64 {
+				return createTestMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+			},
+			renameSQL: "UPDATE movies SET title = 'Arrival' WHERE id = ?", deleteSQL: "DELETE FROM movies WHERE id = ?",
+			initialQuery: "license", initialTerm: "licence", renamedQuery: "arival", renamedTerm: "arrival",
+		},
+		{
+			name: "shows", vocabTable: "shows_fts_vocab",
+			seed: func(t *testing.T, app *Application) int64 {
+				return createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
+			},
+			renameSQL: "UPDATE shows SET name = 'Andor' WHERE id = ?", deleteSQL: "DELETE FROM shows WHERE id = ?",
+			initialQuery: "severence", initialTerm: "severance", renamedQuery: "andorr", renamedTerm: "andor",
+		},
+	}
+	for _, lib := range libraries {
+		t.Run(lib.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			ctx := context.Background()
+			id := lib.seed(t, app)
+
+			generation := func(t *testing.T) int64 {
+				t.Helper()
+				var current int64
+				err := app.DB.QueryRow(`SELECT generation FROM search_vocab_generations WHERE vocab_table = ?`, lib.vocabTable).Scan(&current)
+				if err != nil {
+					t.Fatalf("read %s generation: %v", lib.vocabTable, err)
+				}
+				return current
+			}
+			expectCorrection := func(t *testing.T, query, term string, present bool) {
+				t.Helper()
+				corrections, err := testVocabCorrections(app, ctx, lib.vocabTable, query)
+				if err != nil {
+					t.Fatalf("vocabCorrections(%q): %v", query, err)
+				}
+				if slices.Contains(corrections, term) != present {
+					t.Fatalf("corrections for %q = %#v, want %q present = %v", query, corrections, term, present)
+				}
+			}
+
+			expectCorrection(t, lib.initialQuery, lib.initialTerm, true)
+			initialIndex, ok := app.SearchVocab.get(lib.vocabTable, generation(t))
+			if !ok {
+				t.Fatal("expected the initial vocabulary index to be cached")
+			}
+
+			_, err := app.DB.Exec(lib.renameSQL, id)
+			if err != nil {
+				t.Fatalf("rename: %v", err)
+			}
+			expectCorrection(t, lib.renamedQuery, lib.renamedTerm, true)
+			updatedIndex, ok := app.SearchVocab.get(lib.vocabTable, generation(t))
+			if !ok || updatedIndex == initialIndex {
+				t.Fatal("expected the rename to replace the cached index")
+			}
+
+			_, err = app.DB.Exec(lib.deleteSQL, id)
+			if err != nil {
+				t.Fatalf("delete: %v", err)
+			}
+			expectCorrection(t, lib.renamedQuery, lib.renamedTerm, false)
+		})
 	}
 }

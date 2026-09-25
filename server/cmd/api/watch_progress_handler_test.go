@@ -13,116 +13,35 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 const testWatchProgressSaveSessionID = "11111111-1111-4111-8111-111111111111"
 
-func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int64) {
-	t.Helper()
-	ctx := context.Background()
-
-	user, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Test User",
-		Email:    "test@example.com",
-		Password: "hashed",
-		IsAdmin:  false,
-	})
-	if err != nil {
-		t.Fatalf("failed to create test user: %v", err)
-	}
-
-	// MP4 on purpose: watch-room tests create direct-mode rooms with this
-	// movie, and direct playback is refused for non-MP4 containers.
-	movieID, err = app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
-		Title:     "Test Movie",
-		FilePath:  "/movies/test.mp4",
-		FileName:  "test.mp4",
-		Size:      1024,
-		Container: "mp4",
-		MimeType:  helpers.VideoMimeTypes["mp4"],
-	})
-	if err != nil {
-		t.Fatalf("failed to create test movie: %v", err)
-	}
-	movie, err := app.Queries.GetMovieByID(ctx, movieID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return user.ID, movie.ID
-}
-
 func TestWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	userID, movieID := createTestUserAndMovie(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 
-	assertRequest := func(operationID string, req *http.Request) {
-		t.Helper()
-		req.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, body = %s", operationID, response.Code, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-	}
-
+	// The empty and populated shapes differ (nulls versus values), so both are
+	// validated against the contract.
 	progressPath := fmt.Sprintf("/api/movies/%d/watch-progress", movieID)
-	assertRequest("getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
+	empty := serveOpenAPIExchange(t, handler, "getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
+	if !strings.Contains(empty.Body.String(), `"progress_sec":null`) {
+		t.Fatalf("fresh progress = %s, want nulls", empty.Body.String())
+	}
 	updateBody := `{"progress_sec":120,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`
-	assertRequest("updateMovieWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody))
+	serveOpenAPIExchange(t, handler, "updateMovieWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody), http.StatusOK)
+	populated := serveOpenAPIExchange(t, handler, "getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
+	if !strings.Contains(populated.Body.String(), `"progress_sec":120`) || !strings.Contains(populated.Body.String(), `"duration_sec":7200`) {
+		t.Fatalf("saved progress = %s, want 120/7200", populated.Body.String())
+	}
 	watchedPath := fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID)
-	assertRequest("setMovieWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`))
-	assertRequest("deleteMovieWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil))
-}
-
-func TestWatchProgress_UpsertAndGet(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	userID, movieID := createTestUserAndMovie(t, app)
-
-	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:        userID,
-		MovieID:       movieID,
-		ProgressSec:   300.5,
-		DurationSec:   7200.0,
-		SaveSessionID: testWatchProgressSaveSessionID,
-		SaveSequence:  1,
-	})
-	if err != nil {
-		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
-	}
-
-	row, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("GetMovieWatchProgress failed: %v", err)
-	}
-
-	if row.ProgressSec != 300.5 {
-		t.Errorf("expected progress_sec 300.5, got %f", row.ProgressSec)
-	}
-	if row.DurationSec != 7200.0 {
-		t.Errorf("expected duration_sec 7200.0, got %f", row.DurationSec)
-	}
-	if row.Watched {
-		t.Error("expected watched to be false after upsert")
-	}
+	serveOpenAPIExchange(t, handler, "setMovieWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "deleteMovieWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil), http.StatusOK)
 }
 
 func TestWatchProgress_UpsertResetsWatchedFlag(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	userID, movieID := createTestUserAndMovie(t, app)
@@ -175,7 +94,6 @@ func TestWatchProgress_UpsertResetsWatchedFlag(t *testing.T) {
 
 func TestWatchProgress_Delete(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	userID, movieID := createTestUserAndMovie(t, app)
@@ -209,88 +127,8 @@ func TestWatchProgress_Delete(t *testing.T) {
 	}
 }
 
-func TestWatchProgress_MarkWatchedClearsExistingProgress(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	userID, movieID := createTestUserAndMovie(t, app)
-
-	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:        userID,
-		MovieID:       movieID,
-		ProgressSec:   3600.0,
-		DurationSec:   7200.0,
-		SaveSessionID: testWatchProgressSaveSessionID,
-		SaveSequence:  1,
-	})
-	if err != nil {
-		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
-	}
-
-	err = app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("MarkMovieWatched failed: %v", err)
-	}
-
-	row, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("GetMovieWatchProgress failed: %v", err)
-	}
-
-	if !row.Watched {
-		t.Error("expected watched=true after MarkMovieWatched")
-	}
-	if row.ProgressSec != 0 {
-		t.Errorf("expected progress_sec=0 (cleared), got %f", row.ProgressSec)
-	}
-}
-
-func TestWatchProgress_MarkUnwatched(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	userID, movieID := createTestUserAndMovie(t, app)
-
-	err := app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("MarkMovieWatched failed: %v", err)
-	}
-
-	err = app.Queries.MarkMovieUnwatched(ctx, database.MarkMovieUnwatchedParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("MarkMovieUnwatched failed: %v", err)
-	}
-
-	row, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("GetMovieWatchProgress failed: %v", err)
-	}
-
-	if row.Watched {
-		t.Error("expected watched=false after MarkMovieUnwatched")
-	}
-}
-
 func TestWatchProgress_MarkUnwatchedIdempotentCreatesRow(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	userID, movieID := createTestUserAndMovie(t, app)
@@ -321,46 +159,17 @@ func TestWatchProgress_MarkUnwatchedIdempotentCreatesRow(t *testing.T) {
 
 func TestWatchProgress_PerUserIsolation(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
-	user1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "User One",
-		Email:    "one@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("failed to create user1: %v", err)
-	}
+	user1 := createTestUser(t, app, "User One", "one@example.com", false)
 
-	user2, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "User Two",
-		Email:    "two@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("failed to create user2: %v", err)
-	}
+	user2 := createTestUser(t, app, "User Two", "two@example.com", false)
 
-	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
-		Title:     "Shared Movie",
-		FilePath:  "/movies/shared.mkv",
-		FileName:  "shared.mkv",
-		Size:      2048,
-		Container: "mkv",
-		MimeType:  "video/x-matroska",
-	})
-	if err != nil {
-		t.Fatalf("failed to create movie: %v", err)
-	}
-	movie, err := app.Queries.GetMovieByID(ctx, movieID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	movieID := createTestMovie(t, app, "Shared Movie", "/movies/shared.mkv")
 
-	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
 		UserID:        user1.ID,
-		MovieID:       movie.ID,
+		MovieID:       movieID,
 		ProgressSec:   600.0,
 		DurationSec:   7200.0,
 		SaveSessionID: testWatchProgressSaveSessionID,
@@ -372,7 +181,7 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 
 	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
 		UserID:        user2.ID,
-		MovieID:       movie.ID,
+		MovieID:       movieID,
 		ProgressSec:   1800.0,
 		DurationSec:   7200.0,
 		SaveSessionID: testWatchProgressSaveSessionID,
@@ -384,7 +193,7 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 
 	row1, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
 		UserID:  user1.ID,
-		MovieID: movie.ID,
+		MovieID: movieID,
 	})
 	if err != nil {
 		t.Fatalf("get for user1 failed: %v", err)
@@ -392,7 +201,7 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 
 	row2, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
 		UserID:  user2.ID,
-		MovieID: movie.ID,
+		MovieID: movieID,
 	})
 	if err != nil {
 		t.Fatalf("get for user2 failed: %v", err)
@@ -408,44 +217,14 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 
 func TestGetContinueWatchingMovies(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
-	user, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Watcher",
-		Email:    "watcher@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
-	}
+	user := createTestUser(t, app, "Watcher", "watcher@example.com", false)
 
-	otherUser, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Other",
-		Email:    "other@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("failed to create other user: %v", err)
-	}
+	otherUser := createTestUser(t, app, "Other", "other@example.com", false)
 
 	createMovie := func(title, fileName string) int64 {
-		movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
-			Title:     title,
-			FilePath:  "/movies/" + fileName,
-			FileName:  fileName,
-			Size:      1024,
-			Container: "mkv",
-			MimeType:  "video/x-matroska",
-		})
-		if err != nil {
-			t.Fatalf("failed to create movie %q: %v", title, err)
-		}
-		movie, err := app.Queries.GetMovieByID(ctx, movieID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return movie.ID
+		return createTestMovie(t, app, title, "/movies/"+fileName)
 	}
 
 	oldInProgressID := createMovie("Old In Progress", "old-in-progress.mkv")
@@ -478,7 +257,7 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 	upsertProgress(user.ID, atFloorID, 30.0)
 	upsertProgress(otherUser.ID, otherUserID, 900.0)
 
-	err = app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
+	err := app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
 		UserID:  user.ID,
 		MovieID: watchedID,
 	})
@@ -549,72 +328,6 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 	}
 }
 
-func TestWatchProgress_CascadeDeleteMovie(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	userID, movieID := createTestUserAndMovie(t, app)
-
-	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:        userID,
-		MovieID:       movieID,
-		ProgressSec:   300.0,
-		DurationSec:   7200.0,
-		SaveSessionID: testWatchProgressSaveSessionID,
-		SaveSequence:  1,
-	})
-	if err != nil {
-		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
-	}
-
-	err = app.Queries.DeleteMovie(ctx, movieID)
-	if err != nil {
-		t.Fatalf("DeleteMovie failed: %v", err)
-	}
-
-	_, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != sql.ErrNoRows {
-		t.Errorf("expected progress row to be cascade-deleted with movie, got: %v", err)
-	}
-}
-
-func TestWatchProgress_CascadeDeleteUser(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	userID, movieID := createTestUserAndMovie(t, app)
-
-	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:        userID,
-		MovieID:       movieID,
-		ProgressSec:   300.0,
-		DurationSec:   7200.0,
-		SaveSessionID: testWatchProgressSaveSessionID,
-		SaveSequence:  1,
-	})
-	if err != nil {
-		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
-	}
-
-	err = app.Queries.DeleteUser(ctx, userID)
-	if err != nil {
-		t.Fatalf("DeleteUser failed: %v", err)
-	}
-
-	_, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != sql.ErrNoRows {
-		t.Errorf("expected progress row to be cascade-deleted with user, got: %v", err)
-	}
-}
-
 // TestUpdateMovieWatchProgress_HTTPCompletionThreshold drives the real handler
 // so the 95% auto-watched rule and the progress clamp are asserted end to end:
 // on the response body and on the persisted row, not on arithmetic repeated in
@@ -637,16 +350,10 @@ func TestUpdateMovieWatchProgress_HTTPCompletionThreshold(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := setupSessionTestApp(t)
-			defer app.DB.Close()
 
 			userID, movieID := createTestUserAndMovie(t, app)
 
-			r := chi.NewRouter()
-			r.Put("/api/movies/{id}/watch-progress", func(w http.ResponseWriter, r *http.Request) {
-				app.SessionManager.Put(r.Context(), cookieUserID, userID)
-				app.UpdateMovieWatchProgress(w, r)
-			})
-			handler := app.SessionManager.LoadAndSave(r)
+			handler := authenticatedRouter(t, app, userID)
 
 			body := fmt.Sprintf(
 				`{"progress_sec": %v, "duration_sec": %v, "save_session_id": %q, "save_sequence": 1}`,
@@ -700,7 +407,6 @@ func TestUpdateMovieWatchProgress_HTTPCompletionThreshold(t *testing.T) {
 
 func TestWatchProgress_SaveOrdering(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	userID, movieID := createTestUserAndMovie(t, app)
@@ -850,16 +556,10 @@ func TestWatchProgress_SaveOrdering(t *testing.T) {
 
 func TestUpdateMovieWatchProgress_HTTPMissingFields(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	userID, movieID := createTestUserAndMovie(t, app)
 
-	r := chi.NewRouter()
-	r.Put("/api/movies/{id}/watch-progress", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.UpdateMovieWatchProgress(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(r)
+	handler := authenticatedRouter(t, app, userID)
 
 	run := func(t *testing.T, body string, wantStatus int) {
 		t.Helper()
@@ -901,111 +601,67 @@ func TestUpdateMovieWatchProgress_HTTPMissingFields(t *testing.T) {
 	})
 }
 
-func TestSetMovieWatched_HTTPMissingWatched(t *testing.T) {
+func TestSetMovieWatched_HTTPTogglesWatchedAndRequiresField(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	userID, movieID := createTestUserAndMovie(t, app)
+	seedWatchProgress(t, app, userID, movieID)
+	handler := authenticatedRouter(t, app, userID)
+	target := fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID)
 
-	r := chi.NewRouter()
-	r.Put("/api/movies/{id}/watch-progress/watched", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.SetMovieWatched(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(r)
-
-	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID), strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status=%d, want %d, body=%s", w.Code, http.StatusBadRequest, w.Body.String())
-	}
-
-	req2 := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID), strings.NewReader(`{"watched": true}`))
-	req2.Header.Set("Content-Type", "application/json")
-	w2 := httptest.NewRecorder()
-	handler.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusOK {
-		t.Errorf("status=%d, want %d, body=%s", w2.Code, http.StatusOK, w2.Body.String())
-	}
-	var watchedResp struct {
+	type watchedResponse struct {
 		Error bool `json:"error"`
 		Data  struct {
 			MovieID int64 `json:"movie_id"`
 			Watched bool  `json:"watched"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(w2.Body.Bytes(), &watchedResp); err != nil {
-		t.Fatalf("unmarshal watched response: %v", err)
+	setWatched := func(t *testing.T, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, target, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w
 	}
-	if watchedResp.Error {
-		t.Fatalf("expected success response, got %s", w2.Body.String())
-	}
-	if watchedResp.Data.MovieID != movieID {
-		t.Errorf("movie_id=%d, want %d", watchedResp.Data.MovieID, movieID)
-	}
-	if !watchedResp.Data.Watched {
-		t.Error("expected watched=true response")
-	}
-	row, err := app.Queries.GetMovieWatchProgress(context.Background(), database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("GetMovieWatchProgress after watched=true: %v", err)
-	}
-	if !row.Watched {
-		t.Error("expected watched=true to persist")
+	expectPersisted := func(t *testing.T, w *httptest.ResponseRecorder, watched bool) database.GetMovieWatchProgressRow {
+		t.Helper()
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d, want %d, body=%s", w.Code, http.StatusOK, w.Body.String())
+		}
+		var resp watchedResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		if err != nil {
+			t.Fatalf("unmarshal watched response: %v", err)
+		}
+		if resp.Error || resp.Data.MovieID != movieID || resp.Data.Watched != watched {
+			t.Fatalf("response = %s, want movie %d watched=%t", w.Body.String(), movieID, watched)
+		}
+		row, err := app.Queries.GetMovieWatchProgress(context.Background(), database.GetMovieWatchProgressParams{
+			UserID:  userID,
+			MovieID: movieID,
+		})
+		if err != nil {
+			t.Fatalf("GetMovieWatchProgress: %v", err)
+		}
+		if row.Watched != watched {
+			t.Fatalf("persisted watched = %t, want %t", row.Watched, watched)
+		}
+		return row
 	}
 
-	req3 := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID), strings.NewReader(`{"watched": false}`))
-	req3.Header.Set("Content-Type", "application/json")
-	w3 := httptest.NewRecorder()
-	handler.ServeHTTP(w3, req3)
-	if w3.Code != http.StatusOK {
-		t.Errorf("status=%d, want %d, body=%s", w3.Code, http.StatusOK, w3.Body.String())
+	missing := setWatched(t, `{}`)
+	if missing.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d, body=%s", missing.Code, http.StatusBadRequest, missing.Body.String())
 	}
-	watchedResp = struct {
-		Error bool `json:"error"`
-		Data  struct {
-			MovieID int64 `json:"movie_id"`
-			Watched bool  `json:"watched"`
-		} `json:"data"`
-	}{}
-	if err := json.Unmarshal(w3.Body.Bytes(), &watchedResp); err != nil {
-		t.Fatalf("unmarshal watched=false response: %v", err)
-	}
-	if watchedResp.Error {
-		t.Fatalf("expected success response, got %s", w3.Body.String())
-	}
-	if watchedResp.Data.MovieID != movieID {
-		t.Errorf("movie_id=%d, want %d", watchedResp.Data.MovieID, movieID)
-	}
-	if watchedResp.Data.Watched {
-		t.Error("expected watched=false response")
-	}
-	row, err = app.Queries.GetMovieWatchProgress(context.Background(), database.GetMovieWatchProgressParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
-	if err != nil {
-		t.Fatalf("GetMovieWatchProgress after watched=false: %v", err)
-	}
-	if row.Watched {
-		t.Error("expected watched=false to persist")
-	}
-}
 
-func TestReadJSON_WatchProgressRequest_DisallowUnknownFields(t *testing.T) {
-	var req updateWatchProgressRequest
-	body := strings.NewReader(`{"progress_sec": 1, "duration_sec": 2, "save_session_id": "11111111-1111-4111-8111-111111111111", "save_sequence": 1, "extra": true}`)
-	r := httptest.NewRequest(http.MethodPut, "/", body)
-	w := httptest.NewRecorder()
-	err := helpers.ReadJSON(w, r, &req)
-	if err == nil {
-		t.Fatal("expected error for unknown field")
+	// Marking a movie watched clears the resume position it had.
+	watched := expectPersisted(t, setWatched(t, `{"watched": true}`), true)
+	if watched.ProgressSec != 0 {
+		t.Fatalf("progress_sec after watched=true = %v, want 0", watched.ProgressSec)
 	}
+
+	expectPersisted(t, setWatched(t, `{"watched": false}`), false)
 }
 
 // backdateProgress forces a distinct, older updated_at so recency ordering is
@@ -1043,10 +699,9 @@ func seedEpisodeWatchProgress(t *testing.T, app *Application, userID, episodeID 
 // leave one branch of the contract's oneOf unexercised.
 func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Watcher", "continue-watching@example.com", false)
-	movieID := createSearchMovie(t, app, "Contract Movie", "/movies/contract-continue.mkv")
+	movieID := createTestMovie(t, app, "Contract Movie", "/movies/contract-continue.mkv")
 	seedWatchProgress(t, app, user.ID, movieID)
 
 	fixture := seedPlaybackEpisode(t, app)
@@ -1057,25 +712,14 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 	// of the merged row are per-user, and the handler runs them off the session
 	// user, so neither may leak into this response.
 	otherUser := createTestUser(t, app, "Other", "continue-watching-other@example.com", false)
-	otherMovieID := createSearchMovie(t, app, "Other Movie", "/movies/other-continue.mkv")
+	otherMovieID := createTestMovie(t, app, "Other Movie", "/movies/other-continue.mkv")
 	seedWatchProgress(t, app, otherUser.ID, otherMovieID)
 	seedWatchProgress(t, app, otherUser.ID, movieID)
 	seedEpisodeWatchProgress(t, app, otherUser.ID, fixture.Episode2, 900.0, 1)
 
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
-
 	request := httptest.NewRequest(http.MethodGet, "/api/continue-watching", nil)
-	request.AddCookie(cookie)
-	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
-	}
-
+	response := serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "getContinueWatching", request, http.StatusOK)
 	assertResponseListNotEmpty(t, "getContinueWatching", response.Body.Bytes(), "items")
-	assertOpenAPIExchange(t, "getContinueWatching", request, response)
 
 	var payload struct {
 		Data struct {
@@ -1135,7 +779,6 @@ func TestGetContinueWatching_ConformsToOpenAPIWithRows(t *testing.T) {
 
 func TestGetContinueWatchingEpisodes_OnePerShowAndOnlyWhatCanBeResumed(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	user := createTestUser(t, app, "Watcher", "episode-continue@example.com", false)

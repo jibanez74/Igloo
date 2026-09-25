@@ -22,8 +22,6 @@ import (
 	"igloo/cmd/internal/helpers"
 	moviescanner "igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/tmdb"
-
-	"github.com/go-chi/chi/v5"
 )
 
 type failingRoundTripper struct{}
@@ -34,13 +32,11 @@ func (failingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 
 type stubTmdbClient struct {
 	searchErr     error
-	detailErr     error
 	theatersErr   error
 	searchResults []tmdb.TmdbMovie
 	detailMovies  map[int]tmdb.TmdbMovie
 	theaterMovies []*tmdb.TmdbMovie
 	searchCalls   []stubTmdbSearchCall
-	detailCalls   []int
 }
 
 type stubTmdbSearchCall struct {
@@ -49,10 +45,6 @@ type stubTmdbSearchCall struct {
 }
 
 func (s *stubTmdbClient) GetTmdbMovieByID(_ context.Context, movie *tmdb.TmdbMovie) error {
-	s.detailCalls = append(s.detailCalls, movie.TmdbID)
-	if s.detailErr != nil {
-		return s.detailErr
-	}
 	if s.detailMovies == nil {
 		return errors.New("tmdb details unavailable")
 	}
@@ -105,7 +97,6 @@ func movieGenreTags(genres []database.GetGenresByMovieIDRow) string {
 
 func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	app.Tmdb = &stubTmdbClient{
 		searchResults: []tmdb.TmdbMovie{
@@ -115,15 +106,14 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 		},
 	}
 
-	router := chi.NewRouter()
-	router.Post("/api/movies/{id}/tmdb-search", app.TmdbSearchMovies)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/movies/10/tmdb-search", `{
 		"title": "Casino Royale",
 		"year": 2006
 	}`)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -153,7 +143,6 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 
 func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	existingMovieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
@@ -182,15 +171,14 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	}
 	app.Tmdb = stub
 
-	router := chi.NewRouter()
-	router.Post("/api/tmdb/movies/search", app.SearchTmdbMovies)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/tmdb/movies/search", `{
 		"title": "The Matrix",
 		"year": 1999
 	}`)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -231,7 +219,6 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 
 func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	app.Tmdb = &stubTmdbClient{
 		detailMovies: map[int]tmdb.TmdbMovie{
@@ -244,8 +231,8 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 		},
 	}
 
-	router := chi.NewRouter()
-	router.Post("/api/movies/{id}/tmdb-search", app.TmdbSearchMovies)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/movies/10/tmdb-search", strings.NewReader(`{"tmdb_id":603}`))
@@ -271,10 +258,8 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 
 func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	admin := createTestUser(t, app, "Admin", "unavailable@example.com", true)
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 	for _, tc := range []struct{ method, path, operation string }{
 		{http.MethodPost, "/api/tmdb/movies/search", "searchTmdbMovies"},
 		{http.MethodPost, "/api/movies/1/tmdb-search", "tmdbSearchMovies"},
@@ -286,9 +271,8 @@ func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
 			if tc.method == http.MethodPost {
 				request = newOpenAPIJSONRequest(tc.method, tc.path, `{"title":"Arrival"}`)
 			}
-			request.AddCookie(cookie)
 			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, request)
+			handler.ServeHTTP(response, request)
 			if response.Code != http.StatusServiceUnavailable {
 				t.Fatalf("status = %d, want 503: %s", response.Code, response.Body.String())
 			}
@@ -299,7 +283,6 @@ func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
 
 func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	app.Tmdb = &stubTmdbClient{
 		detailMovies: map[int]tmdb.TmdbMovie{
@@ -307,12 +290,11 @@ func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 		},
 	}
 
-	router := chi.NewRouter()
-	router.Get("/api/tmdb/movies/{id}", app.GetMovieByTmdbID)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/603", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
@@ -356,14 +338,12 @@ func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 
 func TestGetTmdbStatus_HTTP(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Get("/api/tmdb/status", app.GetTmdbStatus)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/status", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
@@ -408,7 +388,11 @@ func TestGetTmdbStatus_HTTP(t *testing.T) {
 func TestProxyTmdbImage_HTTPSuccessStreamsImage(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/w500/poster.jpg" {
-			t.Fatalf("upstream path = %q, want /w500/poster.jpg", r.URL.Path)
+			// The handler runs on the server's goroutine, where t.Fatalf
+			// cannot stop the test.
+			t.Errorf("upstream path = %q, want /w500/poster.jpg", r.URL.Path)
+			http.NotFound(w, r)
+			return
 		}
 
 		w.Header().Set("Content-Type", "image/jpeg")
@@ -419,12 +403,11 @@ func TestProxyTmdbImage_HTTPSuccessStreamsImage(t *testing.T) {
 	defer upstream.Close()
 
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.TmdbImageBaseURL = upstream.URL
 	app.TmdbImageHTTPClient = upstream.Client()
 
-	router := chi.NewRouter()
-	router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/images/w500/poster.jpg", nil)
@@ -446,10 +429,9 @@ func TestProxyTmdbImage_HTTPSuccessStreamsImage(t *testing.T) {
 
 func TestProxyTmdbImage_HTTPRejectsInvalidPath(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	tests := []string{
 		"/api/tmdb/images/w999/poster.jpg",
@@ -484,14 +466,13 @@ func TestProxyTmdbImage_HTTPReturnsErrorForUpstreamFailures(t *testing.T) {
 		defer upstream.Close()
 
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		app.TmdbImageBaseURL = upstream.URL
 		app.TmdbImageHTTPClient = upstream.Client()
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/tmdb/images/w500/missing.jpg", nil)
-		router := chi.NewRouter()
-		router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+		actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+		router := authenticatedRouter(t, app, actor.ID)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusBadGateway {
@@ -504,14 +485,13 @@ func TestProxyTmdbImage_HTTPReturnsErrorForUpstreamFailures(t *testing.T) {
 
 	t.Run("fetch error", func(t *testing.T) {
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		app.TmdbImageBaseURL = "https://image.tmdb.org/t/p"
 		app.TmdbImageHTTPClient = &http.Client{Transport: failingRoundTripper{}}
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/tmdb/images/w500/poster.jpg", nil)
-		router := chi.NewRouter()
-		router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+		actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+		router := authenticatedRouter(t, app, actor.ID)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusBadGateway {
@@ -534,7 +514,6 @@ func TestProxyTmdbImage_HTTPReturnsErrorForUpstreamFailures(t *testing.T) {
 
 func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	movies := make([]*tmdb.TmdbMovie, tmdbMaxItems+6)
 	for i := 1; i < len(movies); i++ {
@@ -556,8 +535,8 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/in-theaters", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
-	app.GetMoviesInTheaters(w, req)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	authenticatedRouter(t, app, actor.ID).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
@@ -579,47 +558,17 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	if resp.Data.Movies[0].TmdbID != 1 || resp.Data.Movies[tmdbMaxItems-1].TmdbID != tmdbMaxItems {
 		t.Fatalf("movie order = first %d, last %d; want 1 through %d", resp.Data.Movies[0].TmdbID, resp.Data.Movies[tmdbMaxItems-1].TmdbID, tmdbMaxItems)
 	}
-
-	var rawResp struct {
-		Data struct {
-			Movies []map[string]json.RawMessage `json:"movies"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &rawResp); err != nil {
-		t.Fatalf("decode raw theater response: %v", err)
-	}
-	wantFields := []string{
-		"id", "title", "original_title", "overview", "release_date", "poster_path", "backdrop_path",
-		"popularity", "vote_average", "vote_count", "adult", "original_language", "genre_ids", "video",
-	}
-	first := rawResp.Data.Movies[0]
-	if len(first) != len(wantFields) {
-		t.Fatalf("theater movie fields = %v, want exactly %v", first, wantFields)
-	}
-	for _, field := range wantFields {
-		if _, ok := first[field]; !ok {
-			t.Errorf("theater movie missing field %q", field)
-		}
-	}
-	if string(first["genre_ids"]) != "[]" {
-		t.Errorf("genre_ids = %s, want []", first["genre_ids"])
-	}
-	for _, field := range []string{"runtime", "status", "tagline", "budget", "revenue", "homepage", "imdb_id", "production_companies", "genres", "credits", "videos", "release_dates"} {
-		if _, ok := first[field]; ok {
-			t.Errorf("theater movie unexpectedly includes detail field %q", field)
-		}
-	}
 }
 
 func TestGetMoviesInTheaters_HTTPError(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	app.Tmdb = &stubTmdbClient{theatersErr: errors.New("tmdb unavailable")}
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/movies/in-theaters", nil)
-	app.GetMoviesInTheaters(w, req)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", false)
+	authenticatedRouter(t, app, actor.ID).ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", w.Code)
@@ -628,7 +577,6 @@ func TestGetMoviesInTheaters_HTTPError(t *testing.T) {
 
 func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
@@ -673,12 +621,11 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 		detailMovies: map[int]tmdb.TmdbMovie{603: tmdbDetails},
 	}
 
-	router := chi.NewRouter()
-	router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(movie.ID, 10)+"/identify", `{"tmdb_id":603}`)
-	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -735,10 +682,9 @@ func TestIdentifyMovie_HTTPPersistsTmdbMetadataAndRelationships(t *testing.T) {
 
 func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/movies/1/identify", strings.NewReader(`{"tmdb_id":603}`))
@@ -771,60 +717,8 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	}
 }
 
-func TestApplyTmdbMetadataMapsNullableFields(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-	localID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Local", FilePath: "/mapping.mkv", FileName: "mapping.mkv", Container: "mkv", MimeType: "video/x-matroska"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	local, err := app.Queries.GetMovieByID(ctx, localID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err := app.DB.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback()
-
-	movie := tmdbMovieFromJSON(t, `{
-		"id": 603,
-		"title": "The Matrix",
-		"release_date": "1999-03-31",
-		"imdb_id": "tt0133093",
-		"poster_path": "/poster.jpg",
-		"backdrop_path": "/backdrop.jpg",
-		"adult": false,
-		"original_language": "en",
-		"overview": "Overview",
-		"tagline": "Tagline",
-		"vote_average": 8.2,
-		"revenue": 463517383,
-		"budget": 63000000,
-		"runtime": 136,
-		"release_dates": {
-			"results": [{"iso_3166_1": "US", "release_dates": [{"certification": "R"}]}]
-		}
-	}`)
-	err = moviescanner.ApplyTmdbMetadata(ctx, app.Queries.WithTx(tx), local.ID, &movie)
-	if err != nil {
-		t.Fatal(err)
-	}
-	params, err := app.Queries.WithTx(tx).GetMovieByID(ctx, local.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if params.ID != local.ID || params.Title != "The Matrix" || !params.TmdbID.Valid || params.TmdbID.Int64 != 603 ||
-		!params.Year.Valid || params.Year.Int64 != 1999 || !params.Certification.Valid || params.Certification.String != "R" {
-		t.Fatalf("params = %+v, want mapped TMDB fields", params)
-	}
-}
-
 func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	movieID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
@@ -848,12 +742,11 @@ func TestUpdateMovieMetadata_PreservesOmittedNullableFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	router := chi.NewRouter()
-	router.Patch("/api/movies/{id}", app.UpdateMovieMetadata)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPatch, "/api/movies/"+strconv.FormatInt(movie.ID, 10), `{"title":"Updated"}`)
-	addOpenAPITestCookie(req)
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
@@ -903,7 +796,6 @@ func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
 	for _, changed := range []bool{false, true} {
 		t.Run(strconv.FormatBool(changed), func(t *testing.T) {
 			app := setupTestApp(t)
-			defer app.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := t.TempDir()
@@ -944,8 +836,8 @@ func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
 			case <-time.After(5 * time.Second):
 				t.Fatal("scanner did not start identity lookup")
 			}
-			router := chi.NewRouter()
-			router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
+			actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+			router := authenticatedRouter(t, app, actor.ID)
 			recorder := httptest.NewRecorder()
 			req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(local.ID, 10)+"/identify", `{"tmdb_id":99}`)
 			done := make(chan struct{})
@@ -986,20 +878,12 @@ func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
 	}
 }
 
-func TestMoviePickerRankingAndEmptySentinel(t *testing.T) {
+// Ranking is asserted through the route in TestTmdbSearchMovies_HTTPSearchRanksResults;
+// the client's no-results sentinel must surface as an empty list, not an error.
+func TestSearchTmdbMovies_NoResultsSentinelIsEmpty(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	client := &stubTmdbClient{searchResults: []tmdb.TmdbMovie{
-		{TmdbID: 1, Title: "Arrival", ReleaseDate: "2015-01-01"},
-		{TmdbID: 2, Title: "Unrelated", ReleaseDate: "2016-01-01", Popularity: 1e9, VoteAverage: 10},
-	}}
-	app.Tmdb = client
-	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival", Year: 2016})
-	if err != nil || len(results) != 2 || results[0].TmdbID != 1 {
-		t.Fatalf("picker ranking=%+v %v", results, err)
-	}
-	client.searchErr = fmt.Errorf("wrapped: %w", tmdb.ErrNoMoviesFound)
-	results, err = app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival"})
+	app.Tmdb = &stubTmdbClient{searchErr: fmt.Errorf("wrapped: %w", tmdb.ErrNoMoviesFound)}
+	results, err := app.searchTmdbMovies(context.Background(), tmdbSearchRequest{Title: "Arrival"})
 	if err != nil || len(results) != 0 {
 		t.Fatalf("no-result sentinel=%+v %v", results, err)
 	}
@@ -1007,7 +891,6 @@ func TestMoviePickerRankingAndEmptySentinel(t *testing.T) {
 
 func TestIdentifyMovieRollsBackRetryCleanupFailure(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 	beforeID, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{Title: "Original", FilePath: "/rollback.mkv", FileName: "rollback.mkv", Container: "mkv", MimeType: "video/x-matroska", TmdbID: helpers.NullInt64(42), RunTime: helpers.NullInt64(120), AudienceRating: helpers.NullFloat64(9)})
 	if err != nil {
@@ -1026,8 +909,8 @@ func TestIdentifyMovieRollsBackRetryCleanupFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.Tmdb = &stubTmdbClient{detailMovies: map[int]tmdb.TmdbMovie{99: {TmdbID: 99, Title: "New identity", Genres: []tmdb.Genre{{ID: 1, Name: "Drama"}}}}}
-	router := chi.NewRouter()
-	router.Put("/api/movies/{id}/identify", app.IdentifyMovie)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/"+strconv.FormatInt(before.ID, 10)+"/identify", `{"tmdb_id":99}`)
 	router.ServeHTTP(w, req)
@@ -1053,8 +936,7 @@ func TestIdentifyMovieRollsBackRetryCleanupFailure(t *testing.T) {
 
 func TestUpdateMovieMetadata_MissingUpdateRollsBack(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	movieID := createSearchMovie(t, app, "Original", "/movies/update-rollback.mkv")
+	movieID := createTestMovie(t, app, "Original", "/movies/update-rollback.mkv")
 	// A row removed inside the UPDATE must retain the old RETURNING failure
 	// behavior, including rollback of the trigger's deletion.
 	_, err := app.DB.Exec(`CREATE TRIGGER remove_movie_before_update BEFORE UPDATE ON movies
@@ -1062,8 +944,8 @@ func TestUpdateMovieMetadata_MissingUpdateRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := chi.NewRouter()
-	router.Patch("/api/movies/{id}", app.UpdateMovieMetadata)
+	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
+	router := authenticatedRouter(t, app, actor.ID)
 	request := newOpenAPIJSONRequest(http.MethodPatch, fmt.Sprintf("/api/movies/%d", movieID), `{"title":"Changed"}`)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)

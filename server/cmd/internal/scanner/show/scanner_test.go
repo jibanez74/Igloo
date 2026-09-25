@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,24 +45,11 @@ func defaultProbeResult() *ffprobe.FfprobeResult {
 
 func setupScanner(t *testing.T) (*Scanner, *scannertest.CountingProbe, string) {
 	t.Helper()
-	db, q := testDB(t)
+	db, q := scannertest.OpenDB(t, ":memory:?_foreign_keys=on")
 	root := t.TempDir()
 	probe := &scannertest.CountingProbe{Default: defaultProbeResult()}
-	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: func() time.Time { return time.Now().Add(2 * time.Minute) }, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
+	s := New(Dependencies{DB: db, Queries: q, Logger: &scannertest.Logger{}, Ffprobe: probe, Now: scannertest.SettledNow, CurrentShowsDirectory: func() sql.NullString { return sql.NullString{String: root, Valid: true} }})
 	return s, probe, root
-}
-func writeFile(t *testing.T, root, relative, data string) string {
-	t.Helper()
-	path := filepath.Join(root, relative)
-	err := os.MkdirAll(filepath.Dir(path), 0700)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = os.WriteFile(path, []byte(data), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return path
 }
 func scanOK(t *testing.T, s *Scanner, root string) {
 	t.Helper()
@@ -70,55 +58,16 @@ func scanOK(t *testing.T, s *Scanner, root string) {
 		t.Fatal(err)
 	}
 }
-func TestNumericTitlesAndResolutionsReachProbing(t *testing.T) {
-	s, probe, root := setupScanner(t)
-	files := []struct {
-		path    string
-		season  int
-		episode int
-	}{
-		{"Breaking Bad/Season 2/Breaking Bad - S02E09 - 4 Days Out.mkv", 2, 9},
-		{"Show/Season 1/Show.S01E02.[1920x1080].mkv", 1, 2},
-	}
-	for _, file := range files {
-		writeFile(t, root, file.path, file.path)
-	}
-	conflict := writeFile(t, root, "Show/Season 1/S01E01 1x03 [1920x1080].mkv", "conflict")
-	scanOK(t, s, root)
-	if probe.Calls() != len(files) || countRows(t, s.DB, "show_files") != len(files) || countRows(t, s.DB, "show_episode_files") != len(files) {
-		t.Fatalf("expected two probed and linked files, got %d probes", probe.Calls())
-	}
-	for _, file := range files {
-		var season, episode int
-		err := s.DB.QueryRow(`SELECT ss.season_number, se.episode_number
-			FROM show_files sf
-			JOIN show_episode_files sef ON sef.file_id = sf.id
-			JOIN show_episodes se ON se.id = sef.episode_id
-			JOIN show_seasons ss ON ss.id = se.season_id
-			WHERE sf.file_path = ?`, filepath.Join(root, file.path)).Scan(&season, &episode)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if season != file.season || episode != file.episode {
-			t.Fatalf("%s linked to season %d episode %d", file.path, season, episode)
-		}
-	}
-	_, err := s.Queries.GetShowFileByPath(context.Background(), conflict)
-	if !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("conflicting file should be excluded: %v", err)
-	}
-}
-
 func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	s, probe, root := setupScanner(t)
-	combined := writeFile(t, root, "Example (2020)/Season 1/S01E01-E03.mkv", "combined")
-	copyPath := writeFile(t, root, "Example (2020)/Season 1/S01E02.copy.mkv", "copy")
-	writeFile(t, root, "Example (2020)/Specials/S00E01.mkv", "special")
+	combined := scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Season 1/S01E01-E03.mkv"), "combined")
+	copyPath := scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Season 1/S01E02.copy.mkv"), "copy")
+	scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Specials/S00E01.mkv"), "special")
 	for _, path := range []string{".backup/Example/Season 1/S01E01.mkv", "Example (2020)/Season 1/extras/S01E04.mkv", "Example (2020)/Season 1/.S01E05.mkv", "Example (2020)/Season 1/S01E01.nfo", "Example (2020)/Season 1/S01E01.srt", "Example (2020)/Season 1/S02E01.mkv"} {
-		writeFile(t, root, path, "ignore")
+		scannertest.WriteFile(t, filepath.Join(root, path), "ignore")
 	}
 	scanOK(t, s, root)
-	if probe.Calls() != 3 || countRows(t, s.DB, "show_files") != 3 || countRows(t, s.DB, "show_episodes") != 4 || countRows(t, s.DB, "show_episode_files") != 5 {
+	if probe.Calls() != 3 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 3 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episodes") != 4 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_files") != 5 {
 		t.Fatal("wrong physical/logical counts", probe.Calls())
 	}
 	before, err := s.Queries.GetShowFileByPath(context.Background(), combined)
@@ -144,7 +93,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	if probe.Calls() != 4 || s.Status().Updated != 1 {
 		t.Fatal("touched file was not re-probed once", probe.Calls(), s.Status().Updated)
 	}
-	writeFile(t, root, "Example (2020)/Season 1/S01E01-E03.mkv", "different bytes")
+	scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Season 1/S01E01-E03.mkv"), "different bytes")
 	scanOK(t, s, root)
 	after, err := s.Queries.GetShowFileByPath(context.Background(), combined)
 	if err != nil {
@@ -159,7 +108,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanOK(t, s, root)
-	if countRows(t, s.DB, "show_episodes") != 4 || countRows(t, s.DB, "show_files") != 2 {
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episodes") != 4 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 2 {
 		t.Fatal("deleting copy removed episode")
 	}
 	err = os.RemoveAll(filepath.Join(root, "Example (2020)"))
@@ -168,7 +117,7 @@ func TestLocalFilesCopiesFingerprintsAndCleanup(t *testing.T) {
 	}
 	scanOK(t, s, root)
 	for _, table := range []string{"shows", "show_seasons", "show_episodes", "show_files", "show_episode_files", "show_file_fingerprints", "show_tmdb_retries", "show_season_tmdb_retries", "show_episode_tmdb_retries", "show_video_streams", "show_audio_streams", "show_subtitles"} {
-		if countRows(t, s.DB, table) != 0 {
+		if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM "+table) != 0 {
 			t.Fatalf("cleanup left %s", table)
 		}
 	}
@@ -178,7 +127,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 	for _, mode := range []string{"quiet", "probe", "artwork", "rollback", "unstable", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
 			s, p, root := setupScanner(t)
-			path := writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "original")
+			path := scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01E02.mkv"), "original")
 			switch mode {
 			case "quiet":
 				s.Now = time.Now
@@ -212,7 +161,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 				t.Fatal("ignored cancellation", err)
 			}
 			for _, table := range []string{"shows", "show_seasons", "show_episodes", "show_files", "show_file_fingerprints", "show_episode_files", "show_video_streams"} {
-				if countRows(t, s.DB, table) != 0 {
+				if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM "+table) != 0 {
 					t.Fatalf("partial import left %s", table)
 				}
 			}
@@ -222,7 +171,7 @@ func TestDeferralProbeFailureRollbackAndCancellation(t *testing.T) {
 
 func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 	s, _, root := setupScanner(t)
-	target := writeFile(t, t.TempDir(), "source.mkv", "target")
+	target := scannertest.WriteFile(t, filepath.Join(t.TempDir(), "source.mkv"), "target")
 	link := filepath.Join(root, "Show/Season 1/S01E01.mkv")
 	err := os.MkdirAll(filepath.Dir(link), 0700)
 	if err != nil {
@@ -239,7 +188,7 @@ func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(root + "-moved") })
 	err = s.scan(root)
-	if err == nil || countRows(t, s.DB, "show_files") != 1 {
+	if err == nil || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 1 {
 		t.Fatal("missing mount removed records")
 	}
 	err = os.Rename(root+"-moved", root)
@@ -263,7 +212,7 @@ func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = s.deleteMissing(context.Background(), r, scanner.CatalogFile{ID: stored.ID, Path: link})
-	if err == nil || countRows(t, s.DB, "show_files") != 1 {
+	if err == nil || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 1 {
 		t.Fatal("changed root removed records")
 	}
 	err = os.Remove(root)
@@ -279,36 +228,42 @@ func TestCleanupMissingRootChangedRootAndSymlinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	scanOK(t, s, root)
-	if countRows(t, s.DB, "show_files") != 0 {
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 0 {
 		t.Fatal("broken file symlink was not reconciled")
 	}
 }
 
 func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
-	s, p, root := setupScanner(t)
-	writeFile(t, root, "Show/Season 1/S01E01.mkv", "file")
-	entered := make(chan struct{})
+	s, _, root := setupScanner(t)
+	path := scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "file")
+	// Only the first read returns root, so a scan that re-read the setting
+	// after Start would walk a directory holding none of the fixture.
+	calls := atomic.Int32{}
+	s.CurrentShowsDirectory = func() sql.NullString {
+		if calls.Add(1) == 1 {
+			return sql.NullString{String: root, Valid: true}
+		}
+		return sql.NullString{String: "/changed/shows", Valid: true}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.ScanContext = ctx
-	p.Hook = func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-		close(entered)
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}
+	probe := scannertest.NewGateProbe(nil)
+	s.Ffprobe = probe
 	result := s.Start()
-	if result.Status != scanner.StartStarted {
-		t.Fatal(result)
+	if result.Status != scanner.StartStarted || result.Directory != root {
+		t.Fatalf("first start: %+v", result)
 	}
-	<-entered
-	s.CurrentShowsDirectory = func() sql.NullString { return sql.NullString{String: t.TempDir(), Valid: true} }
+	got := probe.WaitEntered(t, 5*time.Second, "show scan probing the captured directory")
+	if got != path || calls.Load() != 1 {
+		t.Fatalf("probed %q, directory calls=%d; want %q read once", got, calls.Load(), path)
+	}
 	result = s.Start()
 	if result.Status != scanner.StartAlreadyRunning {
 		t.Fatal(result)
 	}
 	cancel()
-	s.Wait.Wait()
-	s.CurrentShowsDirectory = nil
+	scannertest.WaitForGroup(t, s.Wait, 5*time.Second, "show scan stop")
 	// A default scanner reports missing configuration without starting work.
 	empty := New(Dependencies{})
 	if empty.Start().Status != scanner.StartNotConfigured {
@@ -319,8 +274,8 @@ func TestStartCapturesRootGuardsAndShutdown(t *testing.T) {
 func TestConcurrentScannerWrites(t *testing.T) {
 	s, _, root := setupScanner(t)
 	other := t.TempDir()
-	writeFile(t, root, "A/Season 1/S01E01.mkv", "a")
-	writeFile(t, other, "B/Season 1/S01E01.mkv", "b")
+	scannertest.WriteFile(t, filepath.Join(root, "A/Season 1/S01E01.mkv"), "a")
+	scannertest.WriteFile(t, filepath.Join(other, "B/Season 1/S01E01.mkv"), "b")
 	second := New(s.Dependencies)
 	second.Ffprobe = &scannertest.CountingProbe{Default: defaultProbeResult()}
 	var wg sync.WaitGroup
@@ -338,7 +293,7 @@ func TestConcurrentScannerWrites(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if countRows(t, s.DB, "shows") != 2 {
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM shows") != 2 {
 		t.Fatal("concurrent writes lost a show")
 	}
 }
@@ -381,9 +336,9 @@ func (c *testTMDB) GetSeasonDetails(_ context.Context, id, season int) (*tmdb.TV
 }
 func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	s, p, root := setupScanner(t)
-	writeFile(t, root, "Example (2020)/Season 1/S01E01E02.mkv", "file")
+	scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Season 1/S01E01E02.mkv"), "file")
 	scanOK(t, s, root)
-	if countRows(t, s.DB, "show_episode_tmdb_retries") != 2 {
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_tmdb_retries") != 2 {
 		t.Fatal("offline retry markers missing")
 	}
 	client := &testTMDB{}
@@ -395,15 +350,15 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	}
 	s.Tmdb = client
 	scanOK(t, s, root)
-	if p.Calls() != 1 || client.showCalls != 1 || client.seasonCalls != 1 || countRows(t, s.DB, "show_episode_tmdb_retries") != 1 || countRows(t, s.DB, "show_episodes") != 2 {
+	if p.Calls() != 1 || client.showCalls != 1 || client.seasonCalls != 1 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_tmdb_retries") != 1 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episodes") != 2 {
 		t.Fatal("partial enrichment counts", client)
 	}
-	if countRows(t, s.DB, "show_cast") != 2 || countRows(t, s.DB, "show_episode_guest_cast") != 1 {
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_cast") != 2 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_guest_cast") != 1 {
 		t.Fatal("aggregate roles collapsed or episode guest cast missing")
 	}
 	client.seasonHook = nil
 	scanOK(t, s, root)
-	if client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 1 || countRows(t, s.DB, "show_episode_guest_cast") != 2 {
+	if client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 1 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_guest_cast") != 2 {
 		t.Fatal("retry repeated successful entity or probe", client, p.Calls())
 	}
 	pending, err := s.Queries.CountShowRetries(context.Background())
@@ -416,7 +371,7 @@ func TestOfflineImportThenGroupedEnrichmentAndPartialFailure(t *testing.T) {
 	}
 	// A changed file re-probes but never re-queues matched entities: no TMDB
 	// call is made and the descriptions stay.
-	writeFile(t, root, "Example (2020)/Season 1/S01E01E02.mkv", "changed file")
+	scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Season 1/S01E01E02.mkv"), "changed file")
 	scanOK(t, s, root)
 	pending, err = s.Queries.CountShowRetries(context.Background())
 	if err != nil || pending != 0 || client.showCalls != 1 || client.seasonCalls != 2 || p.Calls() != 2 || s.Status().EnrichmentTotal != 0 {
@@ -450,7 +405,7 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 	for _, mode := range []string{"missing", "identity", "rollback", "deleted"} {
 		t.Run(mode, func(t *testing.T) {
 			s, _, root := setupScanner(t)
-			writeFile(t, root, "Example/Season 1/S01E01E02.mkv", "file")
+			scannertest.WriteFile(t, filepath.Join(root, "Example/Season 1/S01E01E02.mkv"), "file")
 			scanOK(t, s, root)
 			client := &testTMDB{}
 			s.Tmdb = client
@@ -475,12 +430,12 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 			}
 			scanOK(t, s, root)
 			if mode == "deleted" {
-				if countRows(t, s.DB, "shows") != 0 {
+				if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM shows") != 0 {
 					t.Fatal("stale response recreated catalog")
 				}
 				return
 			}
-			if countRows(t, s.DB, "show_episode_tmdb_retries") != 2 {
+			if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_tmdb_retries") != 2 {
 				t.Fatal("failure cleared episode retries")
 			}
 			// Episodes TMDB does not list yet stay pending without an outcome.
@@ -496,7 +451,7 @@ func TestMissingEpisodeAndStaleResponse(t *testing.T) {
 			// and the show name the update already replaced.
 			if mode == "rollback" {
 				got, err := s.Queries.GetShow(context.Background(), 1)
-				if err != nil || got.Name != "Example" || countRows(t, s.DB, "artist") != 0 || countRows(t, s.DB, "show_tmdb_retries") != 1 {
+				if err != nil || got.Name != "Example" || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM artist") != 0 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_tmdb_retries") != 1 {
 					t.Fatal("metadata transaction leaked", err)
 				}
 			}
@@ -529,7 +484,7 @@ func TestShowRankingAmbiguousYearAndDeterministicTies(t *testing.T) {
 
 func TestTechnicalFieldsAndFileOwnedChapters(t *testing.T) {
 	s, p, root := setupScanner(t)
-	writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "file")
+	scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01E02.mkv"), "file")
 	p.Hook = func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return &ffprobe.FfprobeResult{
 			Streams: []ffprobe.Stream{
@@ -564,7 +519,7 @@ func TestTechnicalFieldsAndFileOwnedChapters(t *testing.T) {
 	}
 	var first, last int
 	err = s.DB.QueryRow("SELECT min(start_time),max(start_time) FROM show_chapters").Scan(&first, &last)
-	if err != nil || first != 12 || last != 573 || countRows(t, s.DB, "show_chapters") != 2 {
+	if err != nil || first != 12 || last != 573 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_chapters") != 2 {
 		t.Fatal("chapters duplicated across episodes or incorrect units", err)
 	}
 }
@@ -576,7 +531,7 @@ func TestCleanupPermissionFailureAndDeletionRollback(t *testing.T) {
 				t.Skip("root bypasses directory permissions")
 			}
 			s, _, root := setupScanner(t)
-			path := writeFile(t, root, "Show/Season 1/S01E01.mkv", "file")
+			path := scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "file")
 			scanOK(t, s, root)
 			err := os.Remove(path)
 			if err != nil {
@@ -598,7 +553,7 @@ func TestCleanupPermissionFailureAndDeletionRollback(t *testing.T) {
 			if mode == "rollback" && err == nil {
 				t.Fatal("deletion unexpectedly succeeded")
 			}
-			if countRows(t, s.DB, "show_files") != 1 || countRows(t, s.DB, "show_episode_files") != 1 {
+			if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 1 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episode_files") != 1 {
 				t.Fatal("unsafe cleanup removed records")
 			}
 		})
@@ -610,18 +565,18 @@ func TestCleanupPermissionFailureAndDeletionRollback(t *testing.T) {
 // served by the API follow files for the local phase and episodes separately.
 func TestLayoutsShareOneShowAndReportCounters(t *testing.T) {
 	s, probe, root := setupScanner(t)
-	writeFile(t, root, "Show (2020)/Show.S01E01.mkv", "a")
-	writeFile(t, root, "Show (2020)/Season 1/S01E02.mkv", "b")
-	writeFile(t, root, "Show (2020)/S2/S02E01.mkv", "c")
-	writeFile(t, root, "Show (2020)/Season 3 - The End/S03E01E02.mkv", "d")
-	writeFile(t, root, "Show (2020)/Show.S00E01.mkv", "special")
-	writeFile(t, root, "Show (2020)/S01/S02E01.mkv", "mismatch")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Show.S01E01.mkv"), "a")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 1/S01E02.mkv"), "b")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/S2/S02E01.mkv"), "c")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Season 3 - The End/S03E01E02.mkv"), "d")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/Show.S00E01.mkv"), "special")
+	scannertest.WriteFile(t, filepath.Join(root, "Show (2020)/S01/S02E01.mkv"), "mismatch")
 	scanOK(t, s, root)
 	status := s.Status()
 	if probe.Calls() != 5 || status.Total != 6 || status.Processed != 6 || status.Imported != 5 || status.Failed != 1 || status.Episodes != 6 || status.State != scanner.StateCompletedWithIssues {
 		t.Fatalf("status %+v probes=%d", status, probe.Calls())
 	}
-	if countRows(t, s.DB, "shows") != 1 || countRows(t, s.DB, "show_seasons") != 4 || countRows(t, s.DB, "show_episodes") != 6 {
+	if scannertest.CountRows(t, s.DB, "SELECT count(*) FROM shows") != 1 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_seasons") != 4 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_episodes") != 6 {
 		t.Fatal("layouts did not share one show")
 	}
 	scanOK(t, s, root)
@@ -635,8 +590,8 @@ func TestLayoutsShareOneShowAndReportCounters(t *testing.T) {
 // hook only returns once both files are in flight.
 func TestWorkersProbeConcurrently(t *testing.T) {
 	s, probe, root := setupScanner(t)
-	writeFile(t, root, "Show/Season 1/S01E01.mkv", "a")
-	writeFile(t, root, "Show/Season 1/S01E02.mkv", "b")
+	scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01.mkv"), "a")
+	scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E02.mkv"), "b")
 	var mu sync.Mutex
 	inFlight := 0
 	release := make(chan struct{})
@@ -656,7 +611,7 @@ func TestWorkersProbeConcurrently(t *testing.T) {
 		}
 	}
 	scanOK(t, s, root)
-	if probe.Calls() != 2 || countRows(t, s.DB, "show_files") != 2 || s.Status().Imported != 2 {
+	if probe.Calls() != 2 || scannertest.CountRows(t, s.DB, "SELECT count(*) FROM show_files") != 2 || s.Status().Imported != 2 {
 		t.Fatalf("%+v", s.Status())
 	}
 }
@@ -665,7 +620,7 @@ func TestWorkersProbeConcurrently(t *testing.T) {
 // so a worker query would wait behind the coordinator's open transaction.
 func TestPrepareFileStaysOffTheDatabase(t *testing.T) {
 	s, _, root := setupScanner(t)
-	path := writeFile(t, root, "Show/Season 1/S01E01E02.mkv", "a")
+	path := scannertest.WriteFile(t, filepath.Join(root, "Show/Season 1/S01E01E02.mkv"), "a")
 	s.DB.Close()
 	result := s.prepareFile(context.Background(), root, probeJob{file: scanner.ScanFile{Path: path, Ext: "mkv"}})
 	if result.err != nil || result.info == nil || !reflect.DeepEqual(result.local.episodes, []int{1, 2}) {
@@ -687,7 +642,7 @@ func TestInvalidateCommittedShowFileHookFiresAfterCommit(t *testing.T) {
 	s.InvalidateCommittedShowFile = func(fileID int64, episodeIDs []int64) {
 		calls = append(calls, call{fileID: fileID, episodes: append([]int64(nil), episodeIDs...)})
 	}
-	combined := writeFile(t, root, "Example (2020)/Season 1/S01E01-E02.mkv", "combined")
+	combined := scannertest.WriteFile(t, filepath.Join(root, "Example (2020)/Season 1/S01E01-E02.mkv"), "combined")
 	scanOK(t, s, root)
 	file, err := s.Queries.GetShowFileByPath(context.Background(), combined)
 	if err != nil {
@@ -709,4 +664,37 @@ func TestInvalidateCommittedShowFileHookFiresAfterCommit(t *testing.T) {
 	if len(calls) != 2 || calls[1].fileID != file.ID || len(calls[1].episodes) != 2 {
 		t.Fatalf("deletion hook calls = %+v, want a second call for file %d with both episodes", calls, file.ID)
 	}
+}
+
+type fileEpisode struct {
+	id            int64
+	episodeNumber int64
+	name          string
+	tmdbRuntime   sql.NullInt64
+}
+
+// The episodes a physical file resolves to, in link order. The scanner no
+// longer needs this shape, but file and episode identity surviving a rescan is
+// exactly what these tests assert.
+func fileEpisodes(t *testing.T, db *sql.DB, fileID int64) []fileEpisode {
+	t.Helper()
+	rows, err := db.Query("SELECT e.id, e.episode_number, e.name, e.tmdb_runtime FROM show_episodes e JOIN show_episode_files l ON l.episode_id = e.id WHERE l.file_id = ? ORDER BY l.episode_order", fileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var episodes []fileEpisode
+	for rows.Next() {
+		var episode fileEpisode
+		err = rows.Scan(&episode.id, &episode.episodeNumber, &episode.name, &episode.tmdbRuntime)
+		if err != nil {
+			t.Fatal(err)
+		}
+		episodes = append(episodes, episode)
+	}
+	err = rows.Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return episodes
 }

@@ -65,8 +65,8 @@ func TestNullFloat64(t *testing.T) {
 	}
 }
 
+// The zero case delegates to NullFloat64 and is pinned there.
 func TestNullFloat64FromPtr(t *testing.T) {
-	zero := 0.0
 	value := 2.5
 
 	tests := []struct {
@@ -75,7 +75,6 @@ func TestNullFloat64FromPtr(t *testing.T) {
 		expected sql.NullFloat64
 	}{
 		{"nil", nil, sql.NullFloat64{}},
-		{"zero", &zero, sql.NullFloat64{}},
 		{"value", &value, sql.NullFloat64{Float64: value, Valid: true}},
 	}
 
@@ -90,8 +89,9 @@ func TestNullFloat64FromPtr(t *testing.T) {
 }
 
 func TestStringPtrFromNull(t *testing.T) {
-	if got := StringPtrFromNull(sql.NullString{}); got != nil {
-		t.Fatalf("StringPtrFromNull(invalid) = %v, want nil", got)
+	invalid := StringPtrFromNull(sql.NullString{})
+	if invalid != nil {
+		t.Fatalf("StringPtrFromNull(invalid) = %v, want nil", invalid)
 	}
 
 	got := StringPtrFromNull(sql.NullString{String: "value", Valid: true})
@@ -101,8 +101,9 @@ func TestStringPtrFromNull(t *testing.T) {
 }
 
 func TestFloat64PtrFromNull(t *testing.T) {
-	if got := Float64PtrFromNull(sql.NullFloat64{}); got != nil {
-		t.Fatalf("Float64PtrFromNull(invalid) = %v, want nil", got)
+	invalid := Float64PtrFromNull(sql.NullFloat64{})
+	if invalid != nil {
+		t.Fatalf("Float64PtrFromNull(invalid) = %v, want nil", invalid)
 	}
 
 	got := Float64PtrFromNull(sql.NullFloat64{Float64: 3.5, Valid: true})

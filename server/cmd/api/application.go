@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"sync"
 
@@ -41,7 +42,13 @@ type Application struct {
 	settingsMu sync.RWMutex
 	settings   *database.Setting
 
-	Config                  RuntimeConfig
+	Config RuntimeConfig
+	// FrontendAssets is the filesystem ServeFrontend serves the SPA from:
+	// the embedded webdist in production, a test filesystem in tests. The
+	// decoded assets are cached per application on first use.
+	FrontendAssets          fs.FS
+	frontendAssetsOnce      sync.Once
+	frontendAssets          map[string]*frontendAsset
 	Logger                  applogger.LoggerInterface
 	LoggerCloser            func() error
 	Ffprobe                 ffprobe.FfprobeInterface
@@ -108,8 +115,9 @@ func InitApp() (initializedApp *Application, err error) {
 	}
 
 	app := Application{
-		Config: config,
-		Wait:   &sync.WaitGroup{},
+		Config:         config,
+		FrontendAssets: FrontendFS,
+		Wait:           &sync.WaitGroup{},
 	}
 	defer func() {
 		if err != nil {
@@ -210,6 +218,19 @@ func InitApp() (initializedApp *Application, err error) {
 
 	app.initRuntimeCaches()
 	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
+	app.initScanners()
+
+	app.InitRouter()
+
+	return &app, nil
+}
+
+// initScanners wires the three library scanners from what InitApp has set up
+// by this point: logger, prepared queries, settings, ffprobe, the TMDB and
+// Spotify clients, the scan context and the runtime caches. The scanners
+// capture those dependencies at construction, so swapping one afterwards
+// means calling this again.
+func (app *Application) initScanners() {
 	app.MusicScanner = music.New(music.Dependencies{
 		DB:          app.DB,
 		Queries:     app.Queries,
@@ -257,10 +278,6 @@ func InitApp() (initializedApp *Application, err error) {
 		InvalidateCommittedMovie:    app.invalidateCommittedMovie,
 		InvalidateDeletedWatchRooms: app.invalidateDeletedWatchRooms,
 	})
-
-	app.InitRouter()
-
-	return &app, nil
 }
 
 // invalidateDeletedWatchRooms runs after scanner deletion commits, before movie

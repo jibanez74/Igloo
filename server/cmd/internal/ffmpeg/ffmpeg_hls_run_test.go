@@ -1,14 +1,17 @@
 package ffmpeg
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/helpers"
 )
@@ -45,6 +48,34 @@ func TestRunHLSRejectsInvalidOutputPaths(t *testing.T) {
 	}
 }
 
+// The stderr reader stops quietly when the pipe is closed under it, which is
+// what a failed Start does; any other scanner error is reported in the tail.
+func TestIsExpectedHLSStderrClose(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "closed file", err: os.ErrClosed, want: true},
+		{name: "closed pipe", err: io.ErrClosedPipe, want: true},
+		{name: "wrapped path error", err: &fs.PathError{Op: "read", Path: "stderr", Err: os.ErrClosed}, want: true},
+		{name: "token too long", err: bufio.ErrTooLong},
+		{name: "end of file", err: io.EOF},
+		{name: "other", err: errors.New("boom")},
+		{name: "nil"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isExpectedHLSStderrClose(tt.err); got != tt.want {
+				t.Fatalf("isExpectedHLSStderrClose(%v) = %t, want %t", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// A start failure returns before the exit goroutine exists, so by the time
+// RunHLS has returned any callback would already be in the channel.
 func TestRunHLSStartFailureDoesNotDeliverCallback(t *testing.T) {
 	results := make(chan hlsExitResult, 1)
 	f := &ffmpeg{bin: filepath.Join(t.TempDir(), "missing-ffmpeg")}
@@ -59,7 +90,7 @@ func TestRunHLSStartFailureDoesNotDeliverCallback(t *testing.T) {
 	select {
 	case result := <-results:
 		t.Fatalf("callback delivered after start failure: %#v", result)
-	case <-time.After(150 * time.Millisecond):
+	default:
 	}
 }
 
@@ -77,7 +108,7 @@ func TestRunHLSDeliversExactlyOneCallbackForSuccessAndFailure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			script := writeFakeFFmpeg(t, "fake ffmpeg", tt.body)
 			f := &ffmpeg{bin: script}
-			results := startFakeHLS(t, f, basicHLSParams(t.TempDir()))
+			results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
 
 			result := waitForHLSExit(t, results)
 			gotFailure := result.exitErr != nil
@@ -88,10 +119,12 @@ func TestRunHLSDeliversExactlyOneCallbackForSuccessAndFailure(t *testing.T) {
 				t.Fatalf("stderr tail = %v, want [%s]", result.stderrTail, tt.name)
 			}
 
+			// The callback runs once after Wait, so a second delivery would
+			// already be buffered by the time the first one was received.
 			select {
 			case duplicate := <-results:
 				t.Fatalf("duplicate callback: %#v", duplicate)
-			case <-time.After(150 * time.Millisecond):
+			default:
 			}
 		})
 	}
@@ -100,16 +133,10 @@ func TestRunHLSDeliversExactlyOneCallbackForSuccessAndFailure(t *testing.T) {
 func TestRunHLSCancellationTerminatesProcess(t *testing.T) {
 	script := writeFakeFFmpeg(t, "fake ffmpeg", "printf '%s\\n' started >&2\nexec sleep 30\n")
 	ctx, cancel := context.WithCancel(context.Background())
-	results := make(chan hlsExitResult, 1)
+	defer cancel()
 	f := &ffmpeg{bin: script}
 
-	cmd, err := f.RunHLS(ctx, basicHLSParams(t.TempDir()), func(exitErr error, stderrTail []string) {
-		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		cancel()
-		t.Fatalf("RunHLS: %v", err)
-	}
+	results, cmd := startHLS(t, ctx, f, basicHLSParams(t.TempDir()))
 	cancel()
 
 	result := waitForHLSExit(t, results)
@@ -142,7 +169,8 @@ done
 exit 3
 `)
 	f := &ffmpeg{bin: script}
-	result := runFakeHLS(t, f, basicHLSParams(t.TempDir()))
+	results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
+	result := waitForHLSExit(t, results)
 
 	if result.exitErr == nil {
 		t.Fatal("expected nonzero exit")
@@ -164,7 +192,8 @@ func TestRunHLSCapturesLongStderrLine(t *testing.T) {
 	script := writeFakeFFmpeg(t, "fake ffmpeg", body)
 	f := &ffmpeg{bin: script}
 
-	result := runFakeHLS(t, f, basicHLSParams(t.TempDir()))
+	results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
+	result := waitForHLSExit(t, results)
 	if result.exitErr != nil {
 		t.Fatalf("exitErr = %v, want nil", result.exitErr)
 	}
@@ -180,7 +209,8 @@ func TestRunHLSReportsStderrScannerErrors(t *testing.T) {
 	script := writeFakeFFmpeg(t, "fake ffmpeg", "head -c 2000000 /dev/zero | tr '\\000' x >&2\nexit 1\n")
 	f := &ffmpeg{bin: script}
 
-	result := runFakeHLS(t, f, basicHLSParams(t.TempDir()))
+	results, _ := startHLS(t, context.Background(), f, basicHLSParams(t.TempDir()))
+	result := waitForHLSExit(t, results)
 	if result.exitErr == nil {
 		t.Fatal("expected nonzero exit")
 	}
@@ -213,8 +243,8 @@ exit 0
 	beta := basicHLSParams(t.TempDir())
 	beta.SourcePath = "beta source"
 
-	alphaResults := startFakeHLS(t, f, alpha)
-	betaResults := startFakeHLS(t, f, beta)
+	alphaResults, _ := startHLS(t, context.Background(), f, alpha)
+	betaResults, _ := startHLS(t, context.Background(), f, beta)
 
 	alphaResult := waitForHLSExit(t, alphaResults)
 	betaResult := waitForHLSExit(t, betaResults)
@@ -256,7 +286,8 @@ func TestRunHLSUsesAbsoluteOutputDirectoryAndInternalCapabilities(t *testing.T) 
 	params.HWDevice = helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA
 	params.Capabilities = Capabilities{}
 
-	result := runFakeHLS(t, f, params)
+	results, _ := startHLS(t, context.Background(), f, params)
+	result := waitForHLSExit(t, results)
 	if result.exitErr != nil {
 		t.Fatalf("exitErr = %v", result.exitErr)
 	}

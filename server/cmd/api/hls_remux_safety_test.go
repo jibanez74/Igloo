@@ -118,7 +118,6 @@ func TestRemuxSafetyFingerprint_ChangesWithStreamProperties(t *testing.T) {
 
 func TestRemuxSafetyVerdictStore(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)

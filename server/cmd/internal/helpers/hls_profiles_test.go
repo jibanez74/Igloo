@@ -6,7 +6,8 @@ import (
 )
 
 func TestIsAllowedHLSProfile(t *testing.T) {
-	for _, profile := range HLSAllowedProfiles {
+	accepted := []string{HLS_PROFILE_REMUX, HLS_PROFILE_1080P_8MBPS, HLS_PROFILE_720P_3MBPS}
+	for _, profile := range accepted {
 		if !IsAllowedHLSProfile(profile) {
 			t.Errorf("IsAllowedHLSProfile(%q) = false, want true", profile)
 		}

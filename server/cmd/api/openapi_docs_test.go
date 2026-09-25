@@ -3,9 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -18,24 +15,8 @@ type openAPIDocument struct {
 }
 
 func TestOpenAPIDocumentsRegisteredAPIRoutes(t *testing.T) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("failed to locate test file")
-	}
-
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
-	docPath := filepath.Join(repoRoot, "docs", "openapi.json")
-
-	raw, err := os.ReadFile(docPath)
-	if err != nil {
-		t.Fatalf("read OpenAPI document: %v", err)
-	}
-
 	var doc openAPIDocument
-	err = json.Unmarshal(raw, &doc)
-	if err != nil {
-		t.Fatalf("parse OpenAPI document: %v", err)
-	}
+	readOpenAPIDocumentJSON(t, &doc)
 
 	documented := make(map[string]map[string]bool, len(doc.Paths))
 	for rawPath, methods := range doc.Paths {
@@ -55,7 +36,7 @@ func TestOpenAPIDocumentsRegisteredAPIRoutes(t *testing.T) {
 
 	registered := make(map[string]map[string]bool)
 	var missing []string
-	err = chi.Walk(app.Router, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+	err := chi.Walk(app.Router, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		if !strings.HasPrefix(route, "/api") {
 			return nil
 		}

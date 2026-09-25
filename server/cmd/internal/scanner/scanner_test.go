@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"errors"
+	"igloo/cmd/internal/scanner/scannertest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,28 +28,12 @@ func TestNormalizedScanCacheKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NormalizedScanCacheKey(tt.parts...); got != tt.expected {
+			got := NormalizedScanCacheKey(tt.parts...)
+			if got != tt.expected {
 				t.Errorf("NormalizedScanCacheKey(%q) = %q, want %q", tt.parts, got, tt.expected)
 			}
 		})
 	}
-}
-
-func TestScanGuard(t *testing.T) {
-	var g ScanGuard
-
-	if !g.TryBegin() {
-		t.Fatal("first TryBegin should succeed")
-	}
-	if g.TryBegin() {
-		t.Fatal("second TryBegin should fail while running")
-	}
-
-	g.Finish()
-	if !g.TryBegin() {
-		t.Fatal("TryBegin should succeed after Finish")
-	}
-	g.Finish()
 }
 
 func TestScanGuardSingleFlight(t *testing.T) {
@@ -79,10 +64,10 @@ func TestWalkMediaLibrary(t *testing.T) {
 	root := t.TempDir()
 
 	// valid files
-	mustWrite(t, filepath.Join(root, "movie.mkv"), "a")
-	mustWrite(t, filepath.Join(root, "nested", "clip.mp4"), "bb")
+	scannertest.WriteFile(t, filepath.Join(root, "movie.mkv"), "a")
+	scannertest.WriteFile(t, filepath.Join(root, "nested", "clip.mp4"), "bb")
 	// filtered out by extension
-	mustWrite(t, filepath.Join(root, "notes.txt"), "ccc")
+	scannertest.WriteFile(t, filepath.Join(root, "notes.txt"), "ccc")
 
 	validExts := map[string]bool{"mkv": true, "mp4": true}
 
@@ -115,9 +100,7 @@ func TestWalkMediaLibrary(t *testing.T) {
 func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "movie.mkv")
-	if err := os.WriteFile(path, []byte("movie"), 0o600); err != nil {
-		t.Fatalf("write media file: %v", err)
-	}
+	scannertest.WriteFile(t, path, "movie")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -147,8 +130,8 @@ func TestWalkMediaLibraryMissingRoot(t *testing.T) {
 
 func TestWalkMediaLibraryPropagatesOnFileError(t *testing.T) {
 	root := t.TempDir()
-	mustWrite(t, filepath.Join(root, "a.mkv"), "x")
-	mustWrite(t, filepath.Join(root, "b.mkv"), "y")
+	scannertest.WriteFile(t, filepath.Join(root, "a.mkv"), "x")
+	scannertest.WriteFile(t, filepath.Join(root, "b.mkv"), "y")
 
 	sentinel := errors.New("stop")
 	count := 0
@@ -167,36 +150,20 @@ func TestWalkMediaLibraryPropagatesOnFileError(t *testing.T) {
 	}
 }
 
-func mustWrite(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir for %s: %v", path, err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
-
 func TestWalkMediaLibrarySymlinksAndSpecialFiles(t *testing.T) {
 	for _, ext := range []string{"m4a", "mkv"} {
 		t.Run(ext, func(t *testing.T) {
 			root := t.TempDir()
 			targets := t.TempDir()
 			target := filepath.Join(targets, "target")
-			err := os.WriteFile(target, []byte("target content with a different size than its link"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
+			scannertest.WriteFile(t, target, "target content with a different size than its link")
 			regular := filepath.Join(root, "regular."+ext)
-			err = os.WriteFile(regular, []byte("regular"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
+			scannertest.WriteFile(t, regular, "regular")
 			link := filepath.Join(root, "linked."+ext)
 			broken := filepath.Join(root, "broken."+ext)
 			directory := filepath.Join(root, "directory."+ext)
 			fifo := filepath.Join(root, "fifo."+ext)
-			err = syscall.Mkfifo(fifo, 0600)
+			err := syscall.Mkfifo(fifo, 0600)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -207,10 +174,7 @@ func TestWalkMediaLibrarySymlinksAndSpecialFiles(t *testing.T) {
 				}
 			}
 			// A directory link must never expose descendants to the walker.
-			err = os.WriteFile(filepath.Join(targets, "hidden."+ext), []byte("hidden"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
+			scannertest.WriteFile(t, filepath.Join(targets, "hidden."+ext), "hidden")
 			var failures []error
 			var files []ScanFile
 			err = WalkMediaLibraryContext(context.Background(), root, map[string]bool{ext: true}, func(_ string, err error) { failures = append(failures, err) }, func(file ScanFile) error { files = append(files, file); return nil })
@@ -230,5 +194,35 @@ func TestWalkMediaLibrarySymlinksAndSpecialFiles(t *testing.T) {
 				t.Fatalf("walk errors=%v", failures)
 			}
 		})
+	}
+}
+
+// An overlay reads through to the scan-lifetime cache but keeps its own
+// writes private until the transaction that made them commits and merges.
+func TestScanCacheOverlayIsolatesWritesUntilMerged(t *testing.T) {
+	base := NewScanCache[string, int]()
+	base.Set("committed", 1)
+	overlay := base.Overlay()
+	value, ok := overlay.Get("committed")
+	if !ok || value != 1 {
+		t.Fatalf("overlay Get(committed) = %d, %v, want the base entry", value, ok)
+	}
+	overlay.Set("pending", 2)
+	_, ok = base.Get("pending")
+	if ok {
+		t.Fatal("overlay write reached the base cache before merge")
+	}
+	value, ok = overlay.Get("pending")
+	if !ok || value != 2 {
+		t.Fatalf("overlay Get(pending) = %d, %v, want its own write", value, ok)
+	}
+	_, ok = overlay.Get("missing")
+	if ok {
+		t.Fatal("missing key reported as present")
+	}
+	base.MergeFrom(overlay)
+	value, ok = base.Get("pending")
+	if !ok || value != 2 {
+		t.Fatalf("base Get(pending) after merge = %d, %v", value, ok)
 	}
 }

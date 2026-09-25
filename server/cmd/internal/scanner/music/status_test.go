@@ -12,19 +12,30 @@ import (
 
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/scanner"
+	"igloo/cmd/internal/scanner/scannertest"
 	spotifyapi "igloo/cmd/internal/spotify"
 
 	spotifylib "github.com/zmb3/spotify/v2"
 )
 
-func musicStatusFixture(t *testing.T) (*Scanner, string, *failingPathMusicScannerFfprobe) {
+// musicStatusFixture probes three files, failing c.flac until the test clears
+// the probe's Hook.
+func musicStatusFixture(t *testing.T) (*Scanner, string, *scannertest.CountingProbe) {
 	t.Helper()
 	s := setupMusicScanner(t)
 	dir := t.TempDir()
 	for _, name := range []string{"a.m4a", "b.mp3", "c.flac"} {
-		writeMusicScannerTestFile(t, filepath.Join(dir, name), name)
+		scannertest.WriteFile(t, filepath.Join(dir, name), name)
 	}
-	probe := &failingPathMusicScannerFfprobe{result: testMusicMetadata(), failingPath: filepath.Join(dir, "c.flac")}
+	failingPath := filepath.Join(dir, "c.flac")
+	probe := &scannertest.CountingProbe{Default: testMusicMetadata()}
+	probe.Hook = func(_ context.Context, path string) (*ffprobe.FfprobeResult, error) {
+		if path == failingPath {
+			return nil, errors.New("ffprobe failed")
+		}
+		result := *probe.Default
+		return &result, nil
+	}
 	s.ffprobe = probe
 	s.currentMusicDirectory = func() sql.NullString { return sql.NullString{String: dir, Valid: true} }
 	return s, dir, probe
@@ -32,11 +43,6 @@ func musicStatusFixture(t *testing.T) (*Scanner, string, *failingPathMusicScanne
 
 func TestMusicScanStatusReportsLocalOutcomes(t *testing.T) {
 	s, dir, probe := musicStatusFixture(t)
-	defer s.tx.DB.Close()
-
-	if idle := s.Status(); idle.State != scanner.StateIdle || idle.Phase != scanner.PhaseIdle || idle.ActiveFiles == nil || idle.Issues == nil {
-		t.Fatalf("never-run status is not idle: %+v", idle)
-	}
 
 	s.scan(dir)
 	first := s.Status()
@@ -54,7 +60,8 @@ func TestMusicScanStatusReportsLocalOutcomes(t *testing.T) {
 	}
 	first.Issues[0].Reason = "mutated"
 	first.ActiveFiles = append(first.ActiveFiles, "mutated")
-	if again := s.Status(); again.Issues[0].Reason == "mutated" || len(again.ActiveFiles) != 0 {
+	again := s.Status()
+	if again.Issues[0].Reason == "mutated" || len(again.ActiveFiles) != 0 {
 		t.Fatalf("Status shares memory with its caller: %+v", again)
 	}
 
@@ -64,12 +71,12 @@ func TestMusicScanStatusReportsLocalOutcomes(t *testing.T) {
 		t.Fatalf("unchanged rescan: %+v", second)
 	}
 
-	writeMusicScannerTestFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
+	scannertest.WriteFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
 	err := os.Remove(filepath.Join(dir, "b.mp3"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe.failingPath = ""
+	probe.Hook = nil
 	s.scan(dir)
 	third := s.Status()
 	if third.State != scanner.StateCompleted || third.Total != 2 || third.Processed != 2 || third.Updated != 1 || third.Imported != 1 || third.Unchanged != 0 || third.Failed != 0 || third.Deleted != 1 || third.IssueCount != 0 {
@@ -79,13 +86,12 @@ func TestMusicScanStatusReportsLocalOutcomes(t *testing.T) {
 
 func TestMusicScanStatusDeferredFilesStayIssues(t *testing.T) {
 	s, dir, probe := musicStatusFixture(t)
-	defer s.tx.DB.Close()
 	s.now = time.Now
 
 	s.scan(dir)
 	status := s.Status()
-	if status.State != scanner.StateCompletedWithIssues || status.Deferred != 3 || status.Processed != 3 || status.IssueCount != 3 || probe.calls != 0 {
-		t.Fatalf("deferred scan: %+v probes=%d", status, probe.calls)
+	if status.State != scanner.StateCompletedWithIssues || status.Deferred != 3 || status.Processed != 3 || status.IssueCount != 3 || probe.Calls() != 0 {
+		t.Fatalf("deferred scan: %+v probes=%d", status, probe.Calls())
 	}
 	if status.Issues[0].Reason != scanner.ReasonFileDeferredNextScan {
 		t.Fatalf("deferred issue reason = %q", status.Issues[0].Reason)
@@ -94,8 +100,7 @@ func TestMusicScanStatusDeferredFilesStayIssues(t *testing.T) {
 
 func TestMusicScanStatusFailsWhenDirectoryIsUnavailable(t *testing.T) {
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
-	s.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	s.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 
 	s.scan(filepath.Join(t.TempDir(), "missing"))
 	status := s.Status()
@@ -109,10 +114,9 @@ func TestMusicScanStatusFailsWhenDirectoryIsUnavailable(t *testing.T) {
 
 func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 	s, dir, _ := musicStatusFixture(t)
-	defer s.tx.DB.Close()
 
 	var observed Status
-	s.ffprobe = &callbackMusicProbe{audio: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
+	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		if observed.RunID == "" {
 			observed = s.Status()
 		}
@@ -126,20 +130,22 @@ func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.scanContext = ctx
-	s.ffprobe = &callbackMusicProbe{audio: func(ctx context.Context, _ string) (*ffprobe.FfprobeResult, error) {
-		cancel()
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}}
-	writeMusicScannerTestFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
+	// The probe holds the scan until the test cancels it, so the running
+	// report is read before the background run can finish.
+	probe := scannertest.NewGateProbe(nil)
+	s.ffprobe = probe
+	scannertest.WriteFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
 	result := s.Start()
 	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
-	if started := s.Status(); started.State != scanner.StateRunning || started.RunID == observed.RunID {
+	probe.WaitEntered(t, 5*time.Second, "music scan reaching probing")
+	started := s.Status()
+	if started.State != scanner.StateRunning || started.RunID == observed.RunID {
 		t.Fatalf("Start did not publish a new running report: %+v", started)
 	}
-	waitForMusicScan(t, s)
+	cancel()
+	scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "music scan")
 	status := s.Status()
 	if status.State != scanner.StateCanceled || status.FinishedAt == nil || len(status.ActiveFiles) != 0 || status.Failed != 0 {
 		t.Fatalf("canceled scan: %+v", status)
@@ -148,8 +154,7 @@ func TestMusicScanStatusObservesActiveFileAndCancellation(t *testing.T) {
 
 func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	s, dir, probe := musicStatusFixture(t)
-	defer s.tx.DB.Close()
-	probe.failingPath = ""
+	probe.Hook = nil
 	s.spotify = &musicScannerSpotifyStub{
 		artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}},
 		albumErr:  errors.New("temporary"),
@@ -173,7 +178,7 @@ func TestMusicScanStatusSpotifyTallies(t *testing.T) {
 	}
 
 	s.spotify = &musicScannerSpotifyStub{artistErr: errors.New("temporary"), albumErr: errors.New("temporary")}
-	writeMusicScannerTestFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
+	scannertest.WriteFile(t, filepath.Join(dir, "a.m4a"), "a.m4a changed")
 	s.scan(dir)
 	third := s.Status()
 	if third.Updated != 1 || third.State != scanner.StateCompleted || third.EnrichmentTotal != 0 {

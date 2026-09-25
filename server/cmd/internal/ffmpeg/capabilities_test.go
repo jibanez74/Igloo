@@ -404,6 +404,7 @@ func TestCapabilityLookupsNormalizeNamesAndHandleNilMaps(t *testing.T) {
 		CLIOptions:     map[string]bool{"readrate": true},
 		FilterOptions:  map[string]map[string]bool{"scale_cuda": {"format": true}},
 		EncoderOptions: map[string]map[string]bool{"h264_qsv": {"look_ahead": true}},
+		MuxerFlags:     map[string]map[string]bool{"hls": {"temp_file": true}},
 	}
 
 	if !caps.SupportsEncoder(" H264_NVENC ") || !caps.SupportsFilter(" SCALE_CUDA ") {
@@ -418,6 +419,9 @@ func TestCapabilityLookupsNormalizeNamesAndHandleNilMaps(t *testing.T) {
 	if !caps.SupportsEncoderOption(" H264_QSV ", " LOOK_AHEAD ") {
 		t.Fatal("encoder option names were not normalized")
 	}
+	if !caps.SupportsMuxerFlag(" HLS ", " TEMP_FILE ") {
+		t.Fatal("muxer flag names were not normalized")
+	}
 
 	empty := Capabilities{}
 	if empty.SupportsEncoder("x") || empty.SupportsFilter("x") || empty.SupportsHWAccel("x") {
@@ -426,8 +430,53 @@ func TestCapabilityLookupsNormalizeNamesAndHandleNilMaps(t *testing.T) {
 	if empty.SupportsCLIOption("x") || empty.SupportsFilterOption("x", "y") {
 		t.Fatal("nil option maps reported support")
 	}
-	if empty.SupportsEncoderOption("x", "y") {
-		t.Fatal("nil encoder option map reported support")
+	if empty.SupportsEncoderOption("x", "y") || empty.SupportsMuxerFlag("x", "y") {
+		t.Fatal("nil encoder option/muxer flag maps reported support")
+	}
+}
+
+// Capabilities() hands out a copy: a caller that edits the maps it gets back
+// must not change what the next caller sees, and cloning must not turn an
+// unprobed instance's nil maps into empty ones.
+func TestCapabilitiesReturnsIndependentSnapshot(t *testing.T) {
+	original := Capabilities{
+		Probed:         true,
+		Encoders:       map[string]bool{"libx264": true},
+		Filters:        map[string]bool{"scale": true},
+		HWAccels:       map[string]bool{"cuda": true},
+		CLIOptions:     map[string]bool{"readrate": true},
+		FilterOptions:  map[string]map[string]bool{"scale_cuda": {"format": true}},
+		EncoderOptions: map[string]map[string]bool{"h264_qsv": {"preset": true}},
+		MuxerFlags:     map[string]map[string]bool{"hls": {"temp_file": true}},
+	}
+	f := &ffmpeg{capabilities: original}
+
+	first := f.Capabilities()
+	delete(first.Encoders, "libx264")
+	delete(first.Filters, "scale")
+	delete(first.HWAccels, "cuda")
+	delete(first.CLIOptions, "readrate")
+	delete(first.FilterOptions["scale_cuda"], "format")
+	delete(first.EncoderOptions["h264_qsv"], "preset")
+	delete(first.MuxerFlags["hls"], "temp_file")
+
+	second := f.Capabilities()
+	if !second.Encoders["libx264"] || !second.Filters["scale"] || !second.HWAccels["cuda"] {
+		t.Fatalf("top-level maps were mutated through snapshot: %#v", second)
+	}
+	if !second.CLIOptions["readrate"] || !second.FilterOptions["scale_cuda"]["format"] {
+		t.Fatalf("filter/CLI maps were mutated through snapshot: %#v", second)
+	}
+	if !second.EncoderOptions["h264_qsv"]["preset"] || !second.MuxerFlags["hls"]["temp_file"] {
+		t.Fatalf("nested encoder/muxer maps were mutated through snapshot: %#v", second)
+	}
+
+	empty := (&ffmpeg{}).Capabilities()
+	if empty.Encoders != nil || empty.Filters != nil || empty.HWAccels != nil || empty.CLIOptions != nil {
+		t.Fatalf("nil top-level maps changed while cloning: %#v", empty)
+	}
+	if empty.FilterOptions != nil || empty.EncoderOptions != nil || empty.MuxerFlags != nil {
+		t.Fatalf("nil nested maps changed while cloning: %#v", empty)
 	}
 }
 
@@ -453,25 +502,5 @@ Encoders:
 	hwaccels := parseFFmpegHWAccels("Hardware acceleration methods:\n CUDA \nQSV\n\n")
 	if !hwaccels["cuda"] || !hwaccels["qsv"] || len(hwaccels) != 2 {
 		t.Fatalf("parsed hardware accelerators = %#v", hwaccels)
-	}
-}
-
-// The -encoders parse must keep recognizing the legacy AAC encoder alongside
-// the explicit Dolby encoders the audio-profile feature gates on.
-func TestCapabilityParsingRecognizesAudioEncoders(t *testing.T) {
-	named := parseFFmpegNamedRows(`
-Encoders:
- A....D aac AAC (Advanced Audio Coding)
- A....D ac3 ATSC A/52A (AC-3)
- A....D eac3 ATSC A/52 E-AC-3
-`)
-	caps := Capabilities{Probed: true, Encoders: named}
-	for _, encoder := range []string{"aac", "ac3", "eac3"} {
-		if !caps.SupportsEncoder(encoder) {
-			t.Fatalf("SupportsEncoder(%q) = false, want true: %#v", encoder, named)
-		}
-	}
-	if caps.SupportsEncoder("dca") {
-		t.Fatal("an unlisted encoder must not report as supported")
 	}
 }

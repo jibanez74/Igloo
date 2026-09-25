@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,6 @@ import (
 
 func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "Mapped Track.flac")
 	metadata := &ffprobe.FfprobeResult{
@@ -120,7 +120,6 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 
 func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	trackPath := filepath.Join(t.TempDir(), "No Tags.mp3")
 	app.ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
@@ -167,6 +166,9 @@ func TestResolveTrackFileFallsBackToFilenameAndNumericDefaults(t *testing.T) {
 	if resolved.album != nil {
 		t.Fatalf("album = %#v, want none without album tag", resolved.album)
 	}
+	if !app.logger.(*scannertest.Logger).DebugMentions("unreadable audio tag", "not-a-duration") {
+		t.Fatalf("unparsable duration was not logged: %+v", app.logger.(*scannertest.Logger).DebugEntries)
+	}
 }
 
 func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
@@ -174,10 +176,9 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 	for _, streams := range [][]ffprobe.Stream{nil, {{CodecType: "video", CodecName: "mjpeg"}}, {{CodecType: "subtitle"}}} {
 		t.Run(fmt.Sprint(streams), func(t *testing.T) {
 			s := setupMusicScanner(t)
-			defer s.tx.DB.Close()
 			metadata := testMusicMetadata()
 			metadata.Streams = streams
-			s.ffprobe = &countingMusicScannerFfprobe{result: metadata}
+			s.ffprobe = &scannertest.CountingProbe{Default: metadata}
 			spotify := &musicScannerSpotifyStub{}
 			s.spotify = spotify
 			scanned, _, failures := s.processMusicFixtureBatch(t, context.Background(), newMusicScanContext(nil), []scanner.ScanFile{{Path: musicDir + "/no-audio.m4a", Ext: "m4a", Size: 1}})
@@ -201,10 +202,9 @@ func TestAudioStreamRequiredBeforeResolution(t *testing.T) {
 func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 	musicDir := t.TempDir()
 	s := setupMusicScanner(t)
-	defer s.tx.DB.Close()
 	metadata := testMusicMetadata()
 	metadata.Streams = []ffprobe.Stream{{CodecType: "video", CodecName: "mjpeg"}, {CodecType: "audio", CodecName: "aac", Channels: 2}, {CodecType: "audio", CodecName: "mp3", Channels: 1}}
-	s.ffprobe = &countingMusicScannerFfprobe{result: metadata}
+	s.ffprobe = &scannertest.CountingProbe{Default: metadata}
 	resolved, err := s.resolveTrackFile(context.Background(), newMusicScanContext(nil), scanner.ScanFile{Path: musicDir + "/art.m4a", Ext: "m4a", Size: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -221,5 +221,45 @@ func TestAudioWithArtworkSelectsFirstAudioStream(t *testing.T) {
 	_, err = s.persistResolvedTrack(context.Background(), newMusicScanContext(nil), resolved)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTrackLanguageImportAndChange(t *testing.T) {
+	cases := []struct{ stream, format, want string }{
+		{"eng", "spa", "eng"}, {"", "spa", "spa"}, {"UnD", "spa", "spa"}, {"zxx", "spa", "zxx"}, {"und", "zxx", "zxx"}, {"", "UND", ""}, {"und", "", ""}, {"und", "und", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.stream+"/"+tc.format, func(t *testing.T) {
+			s := setupMusicScanner(t)
+			path := filepath.Join(t.TempDir(), "track.m4a")
+			scan := newMusicScanContext(nil)
+			var id int64
+			for pass := 0; pass < 2; pass++ {
+				metadata := testMusicMetadataWithTags(ffprobe.FormatTags{Title: "Track", Language: tc.format})
+				metadata.Streams[0].Tags.Language = tc.stream
+				metadata.Streams = append([]ffprobe.Stream{{CodecType: "video", Tags: ffprobe.StreamTags{Language: "ita"}}}, metadata.Streams...)
+				metadata.Streams = append(metadata.Streams, ffprobe.Stream{CodecType: "audio", Tags: ffprobe.StreamTags{Language: "deu"}})
+				s.ffprobe = &scannertest.CountingProbe{Default: metadata}
+				n, _, failures := s.processMusicFixtureBatch(t, context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "m4a", Size: int64(pass + 1)}})
+				if n != 1 || failures != 0 {
+					t.Fatalf("scan %d: %d/%d", pass, n, failures)
+				}
+				var got sql.NullString
+				var currentID int64
+				err := s.tx.DB.QueryRow("SELECT id,language FROM tracks WHERE file_path=?", path).Scan(&currentID, &got)
+				if err != nil || got.String != tc.want || got.Valid != (tc.want != "") {
+					t.Fatalf("language %+v want %q: %v", got, tc.want, err)
+				}
+				if pass == 1 && currentID != id {
+					t.Fatal("changed track ID")
+				}
+				id = currentID
+				// Ensure changed-file processing replaces an existing explicit language.
+				_, err = s.tx.DB.Exec("UPDATE tracks SET language='fra' WHERE id=?", id)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 }

@@ -81,18 +81,23 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 
 	path := filepath.Join(cfg.LogDir, logFile)
 
-	rw, err := newRotatingWriter(path, loggerMaxBytes)
+	rw, err := newRotatingWriter(path, loggerMaxBytes, loggerFlushInterval)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
 	closer = rw.Close
 
+	return slog.New(newFileHandler(rw, level)), closer, nil
+}
+
+// newFileHandler writes JSON records to rw and flushes it after severe ones.
+func newFileHandler(rw *rotatingWriter, level slog.Level) slog.Handler {
 	handler := slog.NewJSONHandler(rw, &slog.HandlerOptions{
 		Level: level,
 	})
 
-	return slog.New(flushOnSevereHandler{Handler: handler, flush: rw.Flush}), closer, nil
+	return flushOnSevereHandler{Handler: handler, flush: rw.Flush}
 }
 
 // flushOnSevereHandler flushes the rotating writer after WARN and ERROR

@@ -69,23 +69,18 @@ func formatShellPath(path string) string {
 
 // --- RunHLS drivers ---
 
-// startFakeHLS launches params and returns the channel exit callbacks land on,
+// startHLS launches params and returns the channel exit callbacks land on,
 // so callers can also assert that no second callback arrives.
-func startFakeHLS(t *testing.T, f *ffmpeg, params HLSParams) chan hlsExitResult {
+func startHLS(t *testing.T, ctx context.Context, f *ffmpeg, params HLSParams) (chan hlsExitResult, *exec.Cmd) {
 	t.Helper()
 	results := make(chan hlsExitResult, 2)
-	_, err := f.RunHLS(context.Background(), params, func(exitErr error, stderrTail []string) {
+	cmd, err := f.RunHLS(ctx, params, func(exitErr error, stderrTail []string) {
 		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
 	})
 	if err != nil {
 		t.Fatalf("RunHLS: %v", err)
 	}
-	return results
-}
-
-func runFakeHLS(t *testing.T, f *ffmpeg, params HLSParams) hlsExitResult {
-	t.Helper()
-	return waitForHLSExit(t, startFakeHLS(t, f, params))
+	return results, cmd
 }
 
 func waitForHLSExit(t *testing.T, results <-chan hlsExitResult) hlsExitResult {
@@ -115,6 +110,17 @@ func waitForCommandExit(t *testing.T, cmd *exec.Cmd) {
 }
 
 // --- FFmpeg argument assertions ---
+
+// countArgument counts how many times an option name appears in args.
+func countArgument(args []string, name string) int {
+	count := 0
+	for _, arg := range args {
+		if arg == name {
+			count++
+		}
+	}
+	return count
+}
 
 func requireArgumentValue(t *testing.T, args []string, flag string, want string) {
 	t.Helper()
@@ -167,6 +173,12 @@ func requireArgSubstrings(t *testing.T, args []string, want []string, notWant []
 
 // --- HLS parameter and capability fixtures ---
 
+// testHLSOutDir stands in for the output directory in argument-only tests;
+// buildHLSArgs never touches the filesystem, and the space checks quoting.
+const testHLSOutDir = "/hls out"
+
+// basicHLSParams describes a CPU 720p transcode of a probed build with one
+// video and one audio stream; tests override the fields they exercise.
 func basicHLSParams(outDir string) HLSParams {
 	return HLSParams{
 		SourcePath:       "/tmp/source file.mkv",
@@ -220,6 +232,21 @@ func hlsTestCapabilitiesForDevice(device string) Capabilities {
 		caps.EncoderOptions["h264_nvenc"] = map[string]bool{"forced-idr": true}
 	}
 
+	return caps
+}
+
+// nvidiaWithoutForcedIDR and intelWithoutForcedIDR describe builds whose
+// encoder exists but exposes no options, so forced IDR frames cannot be
+// promised.
+func nvidiaWithoutForcedIDR() Capabilities {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	caps.EncoderOptions["h264_nvenc"] = map[string]bool{}
+	return caps
+}
+
+func intelWithoutForcedIDR() Capabilities {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
+	caps.EncoderOptions["h264_qsv"] = map[string]bool{}
 	return caps
 }
 
@@ -282,8 +309,31 @@ func appendNALForTest(destination []byte, width int, payload []byte) []byte {
 	return append(destination, payload...)
 }
 
-func updateTestBoxSize(data []byte, start int, size int) {
-	binary.BigEndian.PutUint32(data[start:start+4], uint32(size))
+// videoTrakForTest resolves moov and its video trak in an init segment.
+func videoTrakForTest(t *testing.T, initData []byte) (mp4Box, mp4Box) {
+	t.Helper()
+	moov, found, err := findDirectChildBox(initData, 0, len(initData), "moov")
+	if err != nil || !found {
+		t.Fatalf("find moov: found=%v err=%v", found, err)
+	}
+	traks, err := listDirectChildBoxes(initData, moov.PayloadStart, moov.End)
+	if err != nil {
+		t.Fatalf("list traks: %v", err)
+	}
+	for _, trak := range traks {
+		if trak.Type != "trak" {
+			continue
+		}
+		_, handlerType, parseErr := parseTrackHeader(initData, trak)
+		if parseErr != nil {
+			t.Fatalf("parseTrackHeader: %v", parseErr)
+		}
+		if handlerType == "vide" {
+			return moov, trak
+		}
+	}
+	t.Fatal("init segment has no video track")
+	return mp4Box{}, mp4Box{}
 }
 
 // firstBoxInTrafForTest resolves moof -> traf -> typ in a generated segment.
@@ -325,25 +375,3 @@ const (
 	trunFirstSampleSizeOffset  = 12
 	trunFirstSampleFlagsOffset = 16
 )
-
-// writeRemuxFixtureFiles writes an init segment plus the supplied media
-// segments under the names ValidateRemuxSafety expects.
-func writeRemuxFixtureFiles(t *testing.T, dir string, initData []byte, segments ...[]byte) {
-	t.Helper()
-	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
-	if err != nil {
-		t.Fatalf("write init segment: %v", err)
-	}
-	for i, segment := range segments {
-		name := fmt.Sprintf(
-			"%s%d%s",
-			helpers.HLS_SEGMENT_FILENAME_PREFIX,
-			i,
-			helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-		)
-		err = os.WriteFile(filepath.Join(dir, name), segment, 0644)
-		if err != nil {
-			t.Fatalf("write segment %d: %v", i, err)
-		}
-	}
-}

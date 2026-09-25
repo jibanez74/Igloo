@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -18,9 +20,8 @@ import (
 
 func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{
@@ -45,11 +46,7 @@ func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -77,38 +74,10 @@ func TestProcessMusicBatchAssignsFirstSpotifyImages(t *testing.T) {
 
 func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	seededMusicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "file:///music/artist.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-	seededMusician, err := app.queries.GetMusicianByID(context.Background(), seededMusicianIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	seededMusician, seededAlbum := seedMatchedSpotifyEntities(t, app)
 
-	seededAlbumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-	seededAlbum, err := app.queries.GetAlbumByID(context.Background(), seededAlbumIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{
@@ -126,11 +95,7 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -138,7 +103,7 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 	}
 
 	var albumCover sql.NullString
-	err = app.tx.DB.QueryRow("SELECT cover FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumCover)
+	err := app.tx.DB.QueryRow("SELECT cover FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumCover)
 	if err != nil {
 		t.Fatalf("get album cover: %v", err)
 	}
@@ -158,7 +123,6 @@ func TestProcessMusicBatchRefreshesExistingSpotifyImages(t *testing.T) {
 
 func TestProcessMusicBatchPreservesExistingImagesWithoutSpotifyMatch(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	_, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:     "Test Artist",
@@ -180,17 +144,13 @@ func TestProcessMusicBatchPreservesExistingImagesWithoutSpotifyMatch(t *testing.
 	}
 
 	noSpotifyMatch := errors.New("no spotify match")
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artistErr: noSpotifyMatch,
 		albumErr:  noSpotifyMatch,
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -218,38 +178,10 @@ func TestProcessMusicBatchPreservesExistingImagesWithoutSpotifyMatch(t *testing.
 
 func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	seededMusicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:      "Existing Artist",
-		SortName:  "Existing Artist",
-		SpotifyID: sql.NullString{String: "artist123", Valid: true},
-		Thumb:     sql.NullString{String: "file:///music/artist.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-	seededMusician, err := app.queries.GetMusicianByID(context.Background(), seededMusicianIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	seededMusician, seededAlbum := seedMatchedSpotifyEntities(t, app)
 
-	seededAlbumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Existing Album",
-		SortTitle: "Existing Album",
-		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
-		SpotifyID: sql.NullString{String: "album123", Valid: true},
-		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-	seededAlbum, err := app.queries.GetAlbumByID(context.Background(), seededAlbumIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{
@@ -265,11 +197,7 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -277,7 +205,7 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 	}
 
 	var albumCover sql.NullString
-	err = app.tx.DB.QueryRow("SELECT cover FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumCover)
+	err := app.tx.DB.QueryRow("SELECT cover FROM albums WHERE id = ?", seededAlbum.ID).Scan(&albumCover)
 	if err != nil {
 		t.Fatalf("get album cover: %v", err)
 	}
@@ -297,7 +225,6 @@ func TestProcessMusicBatchPreservesExistingImagesWhenSpotifyMatchHasNoImages(t *
 
 func TestProcessMusicBatchIgnoresEmbeddedArtworkWithoutSpotifyMatch(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	metadata := testMusicMetadata()
 	metadata.Streams = append(metadata.Streams, ffprobe.Stream{
@@ -308,13 +235,9 @@ func TestProcessMusicBatchIgnoresEmbeddedArtworkWithoutSpotifyMatch(t *testing.T
 			AttachedPic: 1,
 		},
 	})
-	app.ffprobe = &countingMusicScannerFfprobe{result: metadata}
+	app.ffprobe = &scannertest.CountingProbe{Default: metadata}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -342,34 +265,10 @@ func TestProcessMusicBatchIgnoresEmbeddedArtworkWithoutSpotifyMatch(t *testing.T
 
 func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     "Test Artist",
-		SortName: "Test Artist",
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-	musician, err := app.queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	musician, album := seedLocalMusicianAndAlbum(t, app)
 
-	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Test Album",
-		SortTitle: "Test Album",
-		Musician:  sql.NullString{String: "Test Artist", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-	album, err := app.queries.GetAlbumByID(context.Background(), albumIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = app.queries.SaveMusicArtistIdentity(context.Background(), database.SaveMusicArtistIdentityParams{IdentityKey: scanner.NormalizedScanCacheKey(musician.Name), MusicianID: musician.ID})
+	err := app.queries.SaveMusicArtistIdentity(context.Background(), database.SaveMusicArtistIdentityParams{IdentityKey: scanner.NormalizedScanCacheKey(musician.Name), MusicianID: musician.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,14 +301,10 @@ func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
 		artistErr: errors.New("should not search artist"),
 		albumErr:  errors.New("should not search album"),
 	}
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = spotifyStub
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -425,34 +320,10 @@ func TestProcessMusicBatchRespectsPersistedSpotifyUnmatchedRows(t *testing.T) {
 
 func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     "Test Artist",
-		SortName: "Test Artist",
-	})
-	if err != nil {
-		t.Fatalf("seed musician: %v", err)
-	}
-	musician, err := app.queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	musician, album := seedLocalMusicianAndAlbum(t, app)
 
-	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     "Test Album",
-		SortTitle: "Test Album",
-		Musician:  sql.NullString{String: "Test Artist", Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seed album: %v", err)
-	}
-	album, err := app.queries.GetAlbumByID(context.Background(), albumIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = app.queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
+	err := app.queries.UpsertMusicSpotifyMatch(context.Background(), database.UpsertMusicSpotifyMatchParams{
 		EntityType: musicSpotifyEntityMusician,
 		EntityID:   musician.ID,
 		Status:     musicSpotifyStatusFailed,
@@ -474,14 +345,10 @@ func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 		artistErr: errors.New("artist still unavailable"),
 		albumErr:  errors.New("album still unavailable"),
 	}
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = spotifyStub
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -497,7 +364,6 @@ func TestProcessMusicBatchRetriesPersistedSpotifyFailedRows(t *testing.T) {
 
 func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
 	_, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
 		Name:      "Existing Artist",
@@ -529,7 +395,7 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{
@@ -547,11 +413,7 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
@@ -566,9 +428,8 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 
 func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{
@@ -584,11 +445,7 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -627,9 +484,8 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 
 func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{
@@ -661,11 +517,7 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -734,31 +586,35 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 		t.Fatalf("album cover = %#v, want Spotify album image", cover)
 	}
 
-	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag IN (?, ?, ?)", "music", "dream pop", "indie rock", "shoegaze"); got != 3 {
+	got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag IN (?, ?, ?)", "music", "dream pop", "indie rock", "shoegaze")
+	if got != 3 {
 		t.Fatalf("Spotify genre count = %d, want 3", got)
 	}
-	if got := scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag = ?", "music", "dream pop"); got != 1 {
+	got = scannertest.CountRows(t, app.tx.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag = ?", "music", "dream pop")
+	if got != 1 {
 		t.Fatalf("shared dream pop genre rows = %d, want 1", got)
 	}
-	if got := scannertest.CountRows(t, app.tx.DB, `
+	got = scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM musician_genres AS mg
 		INNER JOIN musicians AS m ON m.id = mg.musician_id
 		INNER JOIN genres AS g ON g.id = mg.genre_id
 		WHERE m.name = ? AND g.tag IN (?, ?)
-	`, "Test Artist", "dream pop", "indie rock"); got != 2 {
+	`, "Test Artist", "dream pop", "indie rock")
+	if got != 2 {
 		t.Fatalf("musician_genres count = %d, want 2", got)
 	}
-	if got := scannertest.CountRows(t, app.tx.DB, `
+	got = scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM album_genres AS ag
 		INNER JOIN albums AS a ON a.id = ag.album_id
 		INNER JOIN genres AS g ON g.id = ag.genre_id
 		WHERE a.title = ? AND a.musician = ? AND g.tag IN (?, ?)
-	`, "Test Album", "Test Artist", "dream pop", "shoegaze"); got != 2 {
+	`, "Test Album", "Test Artist", "dream pop", "shoegaze")
+	if got != 2 {
 		t.Fatalf("album_genres count = %d, want 2", got)
 	}
-	if got := scannertest.CountRows(t, app.tx.DB, `
+	got = scannertest.CountRows(t, app.tx.DB, `
 		SELECT COUNT(*)
 		FROM musician_genres AS mg
 		INNER JOIN musicians AS m ON m.id = mg.musician_id
@@ -766,16 +622,16 @@ func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
 		INNER JOIN albums AS a ON a.id = ag.album_id
 		INNER JOIN genres AS g ON g.id = mg.genre_id
 		WHERE m.name = ? AND a.title = ? AND a.musician = ? AND g.tag = ?
-	`, "Test Artist", "Test Album", "Test Artist", "dream pop"); got != 1 {
+	`, "Test Artist", "Test Album", "Test Artist", "dream pop")
+	if got != 1 {
 		t.Fatalf("shared dream pop relationship count = %d, want 1", got)
 	}
 }
 
 func TestProcessMusicBatchPersistsSpotifyUnmatchedReasons(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artistErr: &spotifyapi.MatchError{
 			Info: spotifyapi.MatchDebugInfo{
@@ -802,11 +658,7 @@ func TestProcessMusicBatchPersistsSpotifyUnmatchedReasons(t *testing.T) {
 		},
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -844,19 +696,14 @@ func TestProcessMusicBatchPersistsSpotifyUnmatchedReasons(t *testing.T) {
 
 func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artistErr: errors.New("artist temporary failure"),
 		albumErr:  errors.New("album temporary failure"),
 	}
 
-	file := scanner.ScanFile{
-		Path: filepath.Join(t.TempDir(), "Test Track.m4a"),
-		Ext:  "m4a",
-		Size: 5,
-	}
+	file := testTrackFile(t)
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, context.Background(), []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -896,7 +743,6 @@ func TestProcessMusicBatchPersistsSpotifyFailedRows(t *testing.T) {
 // erased values a previous, richer match had stored.
 func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing.T) {
 	app := setupMusicScanner(t)
-	defer app.tx.DB.Close()
 	ctx := context.Background()
 
 	musician, err := app.queries.UpsertMusician(ctx, database.UpsertMusicianParams{
@@ -922,7 +768,7 @@ func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing
 		t.Fatalf("seed album: %v", err)
 	}
 
-	app.ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.ffprobe = &scannertest.CountingProbe{Default: testMusicMetadata()}
 	app.spotify = &musicScannerSpotifyStub{
 		artist: &spotifylib.FullArtist{
 			SimpleArtist: spotifylib.SimpleArtist{ID: spotifylib.ID("artist123"), Name: "Test Artist"},
@@ -932,7 +778,7 @@ func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing
 		},
 	}
 
-	file := scanner.ScanFile{Path: filepath.Join(t.TempDir(), "Test Track.m4a"), Ext: "m4a", Size: 5}
+	file := testTrackFile(t)
 	scanned, skipped, errCount := app.processMusicBatchForTest(t, ctx, []scanner.ScanFile{file})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -960,4 +806,192 @@ func TestProcessMusicBatchPreservesEnrichmentWhenSpotifyReportsZeroes(t *testing
 	if albumPopularity.Float64 != 55 || totalTracks.Int64 != 12 {
 		t.Fatalf("album enrichment = %#v %#v, want the stored values preserved", albumPopularity, totalTracks)
 	}
+}
+
+// Enrichment writes stamp updated_at so clients can poll for changed
+// artists and albums; derived-value and image writes are covered by the
+// unchanged-metadata tests above.
+func TestSpotifyEnrichmentWritesAdvanceUpdatedAt(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name, table, predicate string
+		update                 func(*database.Queries) error
+	}{
+		{"artist enrichment", "musicians", "summary='Summary' AND spotify_popularity=42 AND spotify_followers=100", func(q *database.Queries) error {
+			return q.UpdateMusicArtistEnrichment(ctx, database.UpdateMusicArtistEnrichmentParams{ID: 1, Summary: sql.NullString{String: "Summary", Valid: true}, SpotifyPopularity: sql.NullFloat64{Float64: 42, Valid: true}, SpotifyFollowers: sql.NullInt64{Int64: 100, Valid: true}})
+		}},
+		{"album enrichment", "albums", "spotify_popularity=42 AND total_tracks=10", func(q *database.Queries) error {
+			return q.UpdateMusicAlbumEnrichment(ctx, database.UpdateMusicAlbumEnrichmentParams{ID: 1, SpotifyPopularity: sql.NullFloat64{Float64: 42, Valid: true}, TotalTracks: sql.NullInt64{Int64: 10, Valid: true}})
+		}},
+		{"artist Spotify ID", "musicians", "spotify_id='artist'", func(q *database.Queries) error {
+			return q.SetMusicArtistSpotifyID(ctx, database.SetMusicArtistSpotifyIDParams{ID: 1, SpotifyID: sql.NullString{String: "artist", Valid: true}})
+		}},
+		{"album Spotify ID", "albums", "spotify_id='album'", func(q *database.Queries) error {
+			return q.SetMusicAlbumSpotifyID(ctx, database.SetMusicAlbumSpotifyIDParams{ID: 1, SpotifyID: sql.NullString{String: "album", Valid: true}})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := setupMusicScanner(t)
+			_, err := s.tx.DB.Exec(`INSERT INTO musicians(id,name,sort_name,updated_at) VALUES(1,'Artist','Artist',datetime('now','-1 hour'));
+ INSERT INTO albums(id,title,sort_title,updated_at) VALUES(1,'Album','Album',datetime('now','-1 hour'));`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var old string
+			err = s.tx.DB.QueryRow("SELECT updated_at FROM " + tc.table + " WHERE id=1").Scan(&old)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = tc.update(s.queries)
+			if err != nil {
+				t.Fatal(err)
+			}
+			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM "+tc.table+" WHERE id=1 AND updated_at>? AND ("+tc.predicate+")", old)
+			if count != 1 {
+				t.Fatal("metadata or timestamp did not update")
+			}
+		})
+	}
+}
+
+func TestArtistSortPersistenceAndSpotifyReconciliation(t *testing.T) {
+	cases := []struct {
+		artist, sorts string
+		want          map[string]string
+	}{
+		{"Artist One, Artist Two, Artist One", "Z & Middle & A", map[string]string{"Artist One": "A", "Artist Two": "Middle"}},
+		{"Artist One, Artist Two", "Same & Same", map[string]string{"Artist One": "Same", "Artist Two": "Same"}},
+		{"Artist One, Artist Two, Artist Three", " & Middle & ", map[string]string{"Artist One": "Artist One", "Artist Two": "Middle", "Artist Three": "Artist Three"}},
+		{"Artist One, Artist Two", "One, Artist & Two, Artist", map[string]string{"Artist One": "One, Artist", "Artist Two": "Two, Artist"}},
+		{"Artist One, Artist Two", "One, Artist, Two, Artist", map[string]string{"Artist One": "Artist One", "Artist Two": "Artist Two"}},
+	}
+	for i, tc := range cases {
+		for _, retry := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%d/retry=%v", i, retry), func(t *testing.T) {
+				s := setupMusicScanner(t)
+				artist := tc.artist
+				if retry {
+					// Ampersand-only credits remain combined offline.
+					artist = strings.ReplaceAll(artist, ", ", " & ")
+				}
+				scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(t.TempDir(), "track"), 1, ffprobe.FormatTags{Title: "Track", Artist: artist, SortArtist: tc.sorts})
+				if retry {
+					s.spotify = &musicScannerSpotifyStub{artistErr: &spotifyapi.MatchError{Info: spotifyapi.MatchDebugInfo{Reason: spotifyapi.MatchReasonNoResults}}}
+					err := s.retrySpotify(context.Background(), newMusicScanContext(nil), newScanReport(Status{}))
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				for name, want := range tc.want {
+					var got string
+					err := s.tx.DB.QueryRow("SELECT sort_name FROM musicians WHERE name=?", name).Scan(&got)
+					if err != nil || got != want {
+						t.Fatalf("%s: %q want %q: %v", name, got, want, err)
+					}
+				}
+				var raw string
+				err := s.tx.DB.QueryRow("SELECT artist_sort FROM music_track_metadata").Scan(&raw)
+				if err != nil || raw != tc.sorts {
+					t.Fatalf("raw sort lost: %q: %v", raw, err)
+				}
+			})
+		}
+	}
+}
+
+func TestMergedArtistSortVotesOncePerTrack(t *testing.T) {
+	s := setupMusicScanner(t)
+	s.spotify = &musicScannerSpotifyStub{artist: &spotifylib.FullArtist{SimpleArtist: spotifylib.SimpleArtist{ID: "shared"}}}
+	dir := t.TempDir()
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "one"), 1,
+		ffprobe.FormatTags{Title: "One", Artist: "Artist One, Artist Two, Artist One", SortArtist: "Z & A & Z"})
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "two"), 1,
+		ffprobe.FormatTags{Title: "Two", Artist: "Artist Two", SortArtist: "Z"})
+	var sort string
+	err := s.tx.DB.QueryRow("SELECT sort_name FROM musicians").Scan(&sort)
+	if err != nil || sort != "A" {
+		t.Fatalf("one vote per track tie: %q: %v", sort, err)
+	}
+	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM musicians")
+	if count != 1 {
+		t.Fatal("artists did not merge")
+	}
+	scanTaggedTrack(t, s, newMusicScanContext(nil), filepath.Join(dir, "three"), 1,
+		ffprobe.FormatTags{Title: "Three", Artist: "Artist One", SortArtist: "Z"})
+	err = s.tx.DB.QueryRow("SELECT sort_name FROM musicians").Scan(&sort)
+	if err != nil || sort != "Z" {
+		t.Fatalf("majority: %q: %v", sort, err)
+	}
+}
+
+// seedMatchedSpotifyEntities stores an artist and album that were already
+// matched to Spotify and carry local images, and returns their rows.
+func seedMatchedSpotifyEntities(t *testing.T, app *Scanner) (database.Musician, database.Album) {
+	t.Helper()
+	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+		Name:      "Existing Artist",
+		SortName:  "Existing Artist",
+		SpotifyID: sql.NullString{String: "artist123", Valid: true},
+		Thumb:     sql.NullString{String: "file:///music/artist.jpg", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seed musician: %v", err)
+	}
+	musician, err := app.queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+		Title:     "Existing Album",
+		SortTitle: "Existing Album",
+		Musician:  sql.NullString{String: "Existing Artist", Valid: true},
+		SpotifyID: sql.NullString{String: "album123", Valid: true},
+		Cover:     sql.NullString{String: "file:///music/cover.jpg", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seed album: %v", err)
+	}
+	album, err := app.queries.GetAlbumByID(context.Background(), albumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return musician, album
+}
+
+// testTrackFile is the one-track library every Spotify test scans.
+func testTrackFile(t *testing.T) scanner.ScanFile {
+	t.Helper()
+	return scanner.ScanFile{Path: filepath.Join(t.TempDir(), "Test Track.m4a"), Ext: "m4a", Size: 5}
+}
+
+// seedLocalMusicianAndAlbum stores an artist and album that have never been
+// matched to Spotify and returns their rows.
+func seedLocalMusicianAndAlbum(t *testing.T, app *Scanner) (database.Musician, database.Album) {
+	t.Helper()
+	musicianIdentity, err := app.queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
+		Name:     "Test Artist",
+		SortName: "Test Artist",
+	})
+	if err != nil {
+		t.Fatalf("seed musician: %v", err)
+	}
+	musician, err := app.queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	albumIdentity, err := app.queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+		Title:     "Test Album",
+		SortTitle: "Test Album",
+		Musician:  sql.NullString{String: "Test Artist", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seed album: %v", err)
+	}
+	album, err := app.queries.GetAlbumByID(context.Background(), albumIdentity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return musician, album
 }

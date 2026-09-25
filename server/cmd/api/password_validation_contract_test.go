@@ -33,16 +33,16 @@ func TestPasswordLimitsConformToOpenAPI(t *testing.T) {
 		{"literal whitespace and combining characters", " ée\u0301🔒abcd ", ""},
 	}
 	for _, operation := range []string{"adminCreateUser", "adminResetUserPassword", "updateUserPassword"} {
-		for _, tc := range passwords {
+		// One application per operation; every case gets its own user because a
+		// successful password change would otherwise invalidate the next login.
+		app := setupSessionTestApp(t)
+		app.InitRouter()
+		for i, tc := range passwords {
 			t.Run(operation+"/"+tc.name, func(t *testing.T) {
-				app := setupSessionTestApp(t)
-				defer app.DB.Close()
-				user := createTestUserWithPassword(t, app, "Password User", "password-limit@example.com", "correct horse")
-				_, err := app.DB.Exec(`UPDATE users SET is_admin = 1 WHERE id = ?`, user.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				app.InitRouter()
+				// Device logins are rate limited per client IP, which every case
+				// here shares.
+				app.AuthLimiter = newRateLimiter()
+				user := createTestUser(t, app, "Password User", fmt.Sprintf("password-limit-%d@example.com", i), true)
 				cookie := newAuthSessionCookie(t, app, user.ID)
 				method, path := http.MethodPut, fmt.Sprintf("/api/admin/users/%d/password", user.ID)
 				body := fmt.Sprintf(`{"password":%q}`, tc.password)
@@ -51,12 +51,12 @@ func TestPasswordLimitsConformToOpenAPI(t *testing.T) {
 				switch operation {
 				case "adminCreateUser":
 					method, path = http.MethodPost, "/api/admin/users"
-					email = "new-limit@example.com"
+					email = fmt.Sprintf("new-limit-%d@example.com", i)
 					body = fmt.Sprintf(`{"name":"New User","email":%q,"password":%q,"is_admin":false}`, email, tc.password)
 					wantStatus = http.StatusCreated
 				case "updateUserPassword":
 					path, label = "/api/user/password", "new password"
-					body = fmt.Sprintf(`{"current_password":"correct horse","new_password":%q}`, tc.password)
+					body = fmt.Sprintf(`{"current_password":%q,"new_password":%q}`, testUserPassword, tc.password)
 				}
 				invalid := tc.errorSuffix != ""
 				if invalid {

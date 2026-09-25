@@ -38,24 +38,32 @@ func (s *Scanner) prepareEnrichment(ctx context.Context, job enrichmentJob) enri
 		result.err = &scanner.FileDeferral{Reason: scanner.FileChanged}
 		return result
 	}
-	titleYear := movieTitleYear(job.file.Path)
-	searchTitle := tmdbmatch.NormalizeTitleForSearch(titleYear.Title)
-	if searchTitle == "" {
-		searchTitle = titleYear.Title
-	}
-	// A file whose name is nothing but release noise has nothing to search for;
-	// it is recorded as a miss instead of querying TMDB for an empty title.
+	searchTitle, year := tmdbSearchTitle(job.file.Path)
+	// A file with no title at all (an extension-only name) has nothing to
+	// search for; it is recorded as a miss instead of querying TMDB for an
+	// empty title. Release-noise-only names still search their raw title.
 	var details *tmdb.TmdbMovie
 	var err error
 	searchable := searchTitle != "" || job.baseline.TmdbID.Valid
 	if searchable {
-		details, err = s.lookupTmdbMovie(ctx, job.file.Path, searchTitle, titleYear.Year, job.baseline.TmdbID)
+		details, err = s.lookupTmdbMovie(ctx, job.file.Path, searchTitle, year, job.baseline.TmdbID)
 	}
 	result.err, result.providerErr = err, err
 	if err == nil {
 		result.resolved = &enrichedMovie{baseline: job.baseline, inspection: result.inspection, tmdbMovie: details}
 	}
 	return result
+}
+
+// tmdbSearchTitle derives the TMDB query for a file: the normalised parsed
+// title, or the raw parsed title when normalisation strips it to nothing.
+func tmdbSearchTitle(path string) (string, int) {
+	titleYear := movieTitleYear(path)
+	searchTitle := tmdbmatch.NormalizeTitleForSearch(titleYear.Title)
+	if searchTitle == "" {
+		searchTitle = titleYear.Title
+	}
+	return searchTitle, titleYear.Year
 }
 
 func (s *Scanner) enrichMovies(ctx context.Context, scan *movieScanContext, report *scanReport, files []localFile) {

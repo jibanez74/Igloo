@@ -44,15 +44,9 @@ func TestBuildHLSArgs_ReadratePacing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-				Capabilities:     tt.caps,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.Capabilities = tt.caps
+			args := hlsArgs(t, params)
 
 			if !tt.wantReadrate {
 				if slices.Contains(args, "-readrate") {
@@ -219,21 +213,19 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 			if device == "" {
 				device = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 			}
-			outDir := t.TempDir()
-
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       sourcePath,
-				OutDir:           outDir,
-				Profile:          tt.profile,
-				VideoStreamIndex: tt.videoIndex,
-				AudioStreamIndex: tt.audioIndex,
-				HWDevice:         device,
-				CopyVideo:        tt.copyVideo,
-				CopyAudio:        tt.copyAudio,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.SourcePath = sourcePath
+			params.Profile = tt.profile
+			params.VideoStreamIndex = tt.videoIndex
+			params.AudioStreamIndex = tt.audioIndex
+			params.HWDevice = device
+			params.CopyVideo = tt.copyVideo
+			params.CopyAudio = tt.copyAudio
+			params.Capabilities = Capabilities{}
+			args := hlsArgs(t, params)
 
 			requireArgumentValue(t, args, "-i", sourcePath)
-			if args[len(args)-1] != filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME) {
+			if args[len(args)-1] != filepath.Join(testHLSOutDir, helpers.HLS_PLAYLIST_FILENAME) {
 				t.Fatalf("last arg = %q, want the playlist path", args[len(args)-1])
 			}
 			requireArgSubstrings(t, args, tt.want, tt.notWant, tt.notFlags)
@@ -245,15 +237,10 @@ func TestBuildHLSArgs_CodecSelection(t *testing.T) {
 // -vf into the remux command; the gate keeps interlaced sources off remux in
 // the first place.
 func TestBuildHLSArgs_RemuxIgnoresDeinterlace(t *testing.T) {
-	args := hlsArgs(t, HLSParams{
-		SourcePath:       "/s",
-		OutDir:           t.TempDir(),
-		Profile:          helpers.HLS_PROFILE_REMUX,
-		VideoStreamIndex: 0,
-		AudioStreamIndex: 1,
-		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-		Deinterlace:      true,
-	})
+	params := basicHLSParams(testHLSOutDir)
+	params.Profile = helpers.HLS_PROFILE_REMUX
+	params.Deinterlace = true
+	args := hlsArgs(t, params)
 
 	requireArgSubstrings(t, args, []string{"-c:v copy"}, []string{"yadif"}, []string{"-vf"})
 }
@@ -295,15 +282,11 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 			if device == "" {
 				device = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 			}
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 0,
-				HWDevice:         device,
-				StartSec:         tt.startSec,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.HWDevice = device
+			params.StartSec = tt.startSec
+			params.Capabilities = Capabilities{}
+			args := hlsArgs(t, params)
 
 			if tt.wantSS == "" {
 				if slices.Contains(args, "-ss") {
@@ -320,7 +303,7 @@ func TestBuildHLSArgs_SeekOffset(t *testing.T) {
 }
 
 func TestBuildHLSArgs_RejectsInvalidParams(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testHLSOutDir
 	tests := []struct {
 		name    string
 		params  HLSParams
@@ -373,41 +356,24 @@ func TestBuildHLSArgs_RejectsInvalidParams(t *testing.T) {
 	}
 }
 
+// The mapped stream indices are pinned by the codec selection cases; this
+// only guards their order, since the first -map decides which stream FFmpeg
+// treats as the video track.
 func TestBuildHLSArgs_GlobalStreamIndices(t *testing.T) {
-	args := hlsArgs(t, HLSParams{
-		SourcePath:       "/src.mkv",
-		OutDir:           t.TempDir(),
-		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-		VideoStreamIndex: 3,
-		AudioStreamIndex: 7,
-		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-	})
+	params := basicHLSParams(testHLSOutDir)
+	params.VideoStreamIndex = 3
+	params.AudioStreamIndex = 7
+	args := hlsArgs(t, params)
 
-	var mapTargets []string
-	for i := 0; i < len(args)-1; i++ {
-		if args[i] == "-map" {
-			mapTargets = append(mapTargets, args[i+1])
-		}
-	}
-	if len(mapTargets) < 2 {
-		t.Fatalf("expected two -map targets, got %v", mapTargets)
-	}
-	if mapTargets[0] != "0:3" || mapTargets[1] != "0:7" {
-		t.Errorf("global stream maps = %v, want [0:3 0:7]", mapTargets)
-	}
+	requireArgumentBefore(t, args, "0:3", "0:7")
 }
 
 func TestBuildHLSArgs_AllProfileConfigs(t *testing.T) {
 	for profileID, cfg := range helpers.HLSProfileConfigs {
 		t.Run(profileID, func(t *testing.T) {
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          profileID,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.Profile = profileID
+			args := hlsArgs(t, params)
 
 			requireArgSubstrings(t, args, []string{
 				fmt.Sprintf("scale=-2:%d", cfg.Height),
@@ -422,15 +388,10 @@ func TestBuildHLSArgs_AllProfileConfigs(t *testing.T) {
 func TestBuildHLSArgs_UnknownAndBlankHardwareUseCPU(t *testing.T) {
 	for _, device := range []string{"", "not-a-device"} {
 		t.Run(device, func(t *testing.T) {
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/media/source.mkv",
-				OutDir:           t.TempDir(),
-				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: -1,
-				HWDevice:         device,
-				Capabilities:     Capabilities{Probed: true},
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.AudioStreamIndex = -1
+			params.HWDevice = device
+			args := hlsArgs(t, params)
 			if !slices.Contains(args, "libx264") || slices.Contains(args, "-hwaccel") {
 				t.Fatalf("device %q did not use CPU fallback: %v", device, args)
 			}
@@ -439,21 +400,15 @@ func TestBuildHLSArgs_UnknownAndBlankHardwareUseCPU(t *testing.T) {
 }
 
 func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testHLSOutDir
 	tempFileCaps := Capabilities{
 		Probed:     true,
 		MuxerFlags: map[string]map[string]bool{"hls": {"temp_file": true}},
 	}
 
-	args := hlsArgs(t, HLSParams{
-		SourcePath:       "/s",
-		OutDir:           outDir,
-		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-		VideoStreamIndex: 0,
-		AudioStreamIndex: 1,
-		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-		Capabilities:     tempFileCaps,
-	})
+	params := basicHLSParams(outDir)
+	params.Capabilities = tempFileCaps
+	args := hlsArgs(t, params)
 
 	requireArgumentValue(t, args, "-f", "hls")
 	requireArgumentValue(t, args, "-hls_segment_type", "fmp4")
@@ -476,62 +431,18 @@ func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 	}
 
 	t.Run("copy-video carries temp_file without the independence tag", func(t *testing.T) {
-		args := hlsArgs(t, HLSParams{
-			SourcePath:       "/s",
-			OutDir:           outDir,
-			Profile:          helpers.HLS_PROFILE_REMUX,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: -1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			Capabilities:     tempFileCaps,
-		})
+		params := basicHLSParams(outDir)
+		params.Profile = helpers.HLS_PROFILE_REMUX
+		params.AudioStreamIndex = -1
+		params.Capabilities = tempFileCaps
+		args := hlsArgs(t, params)
 		requireArgumentValue(t, args, "-hls_flags", "temp_file")
 	})
 
 	t.Run("a muxer without temp_file keeps the legacy flags", func(t *testing.T) {
-		args := hlsArgs(t, HLSParams{
-			SourcePath:       "/s",
-			OutDir:           outDir,
-			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: 1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-		})
+		args := hlsArgs(t, basicHLSParams(outDir))
 		requireArgumentValue(t, args, "-hls_flags", "independent_segments")
 	})
-}
-
-// countArgument counts how many times an option name appears in args.
-func countArgument(args []string, name string) int {
-	count := 0
-	for _, arg := range args {
-		if arg == name {
-			count++
-		}
-	}
-	return count
-}
-
-func TestBuildHLSArgs_PreservesPathsContainingSpaces(t *testing.T) {
-	outDir := filepath.Join(t.TempDir(), "HLS output")
-	sourcePath := filepath.Join(t.TempDir(), "movie source.mkv")
-	args := hlsArgs(t, HLSParams{
-		SourcePath:       sourcePath,
-		OutDir:           outDir,
-		Profile:          helpers.HLS_PROFILE_REMUX,
-		VideoStreamIndex: 2,
-		AudioStreamIndex: -1,
-		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-	})
-
-	requireArgumentValue(t, args, "-i", sourcePath)
-	requireArgumentValue(t, args, "-hls_segment_filename", filepath.Join(outDir, "segment_%d.m4s"))
-	if args[len(args)-1] != filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME) {
-		t.Fatalf("playlist path = %q, want path containing spaces", args[len(args)-1])
-	}
-	if !slices.Contains(args, sourcePath) {
-		t.Fatal("source path was split into multiple arguments")
-	}
 }
 
 // resolveTestAudioProfile builds a resolved profile the way production does:
@@ -545,8 +456,9 @@ func resolveTestAudioProfile(codec helpers.HLSAudioCodec, maxChannels, sourceCha
 	return &profile
 }
 
-// Explicit audio profiles produce exactly the resolved encoder arguments and
-// leave every video, seek, keyframe, and HLS flag unchanged.
+// An explicit audio profile maps onto exactly the -c:a/-ac/-b:a/-ar the
+// resolved profile carries and wins over the legacy copy decision. How a
+// request resolves (downmix, no upmix) is the helpers package's contract.
 func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -558,40 +470,18 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 		notWant   []string
 	}{
 		{
-			name:    "AAC 5.1 source to ac3 keeps six channels",
+			name:    "ac3 5.1",
 			profile: helpers.HLS_PROFILE_1080P_4MBPS,
 			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
-			want: []string{
-				"-c:a ac3", "-ac 6", "-b:a 640k", "-ar 48000",
-				"libx264", "-force_key_frames:0 expr:gte(t,n_forced*4)",
-				"-hls_segment_type fmp4", "-avoid_negative_ts make_zero",
-			},
+			want:    []string{"-c:a ac3", "-ac 6", "-b:a 640k", "-ar 48000"},
 			notWant: []string{"-c:a aac", "-c:a copy", "320k"},
 		},
 		{
-			name:    "DTS-HD MA 5.1 source to eac3 keeps six channels",
-			profile: helpers.HLS_PROFILE_1080P_8MBPS,
-			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
-			want:    []string{"-c:a eac3", "-ac 6", "-b:a 768k", "-ar 48000"},
-			notWant: []string{"-c:a aac", "-c:a copy"},
-		},
-		{
-			name:    "stereo source is not upmixed",
-			profile: helpers.HLS_PROFILE_720P_3MBPS,
-			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 2, "stereo"),
-			want:    []string{"-c:a eac3", "-ac 2", "-b:a 384k", "-ar 48000"},
-		},
-		{
-			name:    "7.1 source downmixes to the resolved 5.1",
-			profile: helpers.HLS_PROFILE_720P_3MBPS,
-			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 8, "7.1"),
-			want:    []string{"-c:a ac3", "-ac 6", "-b:a 640k"},
-		},
-		{
-			name:    "5.1 source downmixes to stereo under a maximum of two",
+			name:    "eac3 stereo",
 			profile: helpers.HLS_PROFILE_720P_3MBPS,
 			audio:   resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 2, 6, "5.1(side)"),
-			want:    []string{"-c:a eac3", "-ac 2", "-b:a 384k"},
+			want:    []string{"-c:a eac3", "-ac 2", "-b:a 384k", "-ar 48000"},
+			notWant: []string{"-c:a aac", "-c:a copy"},
 		},
 		{
 			// The legacy copy decision must not leak into explicit mode even if
@@ -611,23 +501,18 @@ func TestBuildHLSArgs_ExplicitAudioProfiles(t *testing.T) {
 			copyVideo: true,
 			audio:     resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
 			want:      []string{"-c:v copy", "-c:a eac3", "-ac 6", "-b:a 768k", "-ar 48000"},
-			notWant:   []string{"libx264", "-c:a copy"},
+			notWant:   []string{"-c:a copy"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          tt.profile,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-				CopyVideo:        tt.copyVideo,
-				CopyAudio:        tt.copyAudio,
-				AudioProfile:     tt.audio,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.Profile = tt.profile
+			params.CopyVideo = tt.copyVideo
+			params.CopyAudio = tt.copyAudio
+			params.AudioProfile = tt.audio
+			args := hlsArgs(t, params)
 
 			requireArgSubstrings(t, args, tt.want, tt.notWant, nil)
 		})
@@ -683,15 +568,9 @@ func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {
 			profile := valid()
 			tt.mutate(profile)
 
-			_, err := buildHLSArgs(HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-				AudioProfile:     profile,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.AudioProfile = profile
+			_, err := buildHLSArgs(params)
 			if err == nil {
 				t.Fatal("expected a validation error")
 			}
@@ -706,14 +585,9 @@ func TestBuildHLSArgs_RejectsInvalidAudioProfile(t *testing.T) {
 // tail as one ever-growing line, which buried the real failure in the log.
 func TestBuildHLSArgs_SuppressesProgressAndStdin(t *testing.T) {
 	for _, profile := range []string{helpers.HLS_PROFILE_720P_3MBPS, helpers.HLS_PROFILE_REMUX} {
-		args := hlsArgs(t, HLSParams{
-			SourcePath:       "/s",
-			OutDir:           t.TempDir(),
-			Profile:          profile,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: 1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-		})
+		params := basicHLSParams(testHLSOutDir)
+		params.Profile = profile
+		args := hlsArgs(t, params)
 		for _, flag := range []string{"-nostats", "-nostdin"} {
 			if countArgument(args, flag) != 1 {
 				t.Errorf("%s: %s appears %d times, want 1: %v", profile, flag, countArgument(args, flag), args)

@@ -22,7 +22,6 @@ import (
 
 func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	payload := []byte("0123456789abcdef")
 	dir := t.TempDir()
@@ -243,7 +242,6 @@ func TestMediaResponsesConformToOpenAPI(t *testing.T) {
 
 func TestNonJSONRoutesMiddlewareErrorsConformToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	app.InitRouter()
 	endpoints := []struct{ path, operation string }{
 		{"/api/static/poster.png", "serveStaticFiles"},

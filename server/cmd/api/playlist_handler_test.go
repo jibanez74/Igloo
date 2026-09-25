@@ -4,15 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
-
-	"github.com/go-chi/chi/v5"
+	"igloo/cmd/internal/helpers"
 )
 
 func TestValidatePlaylistMetadataCountsUnicodeCodePoints(t *testing.T) {
@@ -89,20 +90,9 @@ func TestValidatePlaylistMetadataCountsUnicodeCodePoints(t *testing.T) {
 }
 
 func TestPlaylistMutationHandlersCountUnicodeCodePoints(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "Playlist Tester",
-		Email:    "playlist-tester@example.com",
-		Password: "hashed",
-		IsAdmin:  false,
-		Avatar:   sql.NullString{},
-	})
-	if err != nil {
-		t.Fatalf("create playlist test user: %v", err)
-	}
+	user := createTestUser(t, app, "Playlist Tester", "playlist-tester@example.com", false)
 
 	trackPlaylist, err := app.Queries.CreatePlaylist(context.Background(), database.CreatePlaylistParams{
 		UserID:      user.ID,
@@ -127,19 +117,7 @@ func TestPlaylistMutationHandlersCountUnicodeCodePoints(t *testing.T) {
 		t.Fatalf("create movie playlist: %v", err)
 	}
 
-	authenticated := func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), cookieUserID, user.ID)
-			next(w, r)
-		}
-	}
-
-	router := chi.NewRouter()
-	router.Post("/api/music/playlists/", authenticated(app.CreatePlaylist))
-	router.Put("/api/music/playlists/{id}", authenticated(app.UpdatePlaylist))
-	router.Post("/api/movies/playlists/", authenticated(app.CreateMoviePlaylist))
-	router.Put("/api/movies/playlists/{id}", authenticated(app.UpdateMoviePlaylist))
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	validUnicodeName := strings.Repeat("😀", playlistNameMaxLength)
 	overLimitUnicodeName := strings.Repeat("😀", playlistNameMaxLength+1)
@@ -230,67 +208,6 @@ func TestPlaylistMutationHandlersCountUnicodeCodePoints(t *testing.T) {
 	}
 }
 
-func playlistTestHandler(app *Application) http.Handler {
-	app.InitSession()
-
-	router := chi.NewRouter()
-	router.Route("/api/music/playlists", func(r chi.Router) {
-		r.Get("/", app.GetPlaylists)
-		r.Post("/", app.CreatePlaylist)
-		r.Get("/{id}", app.GetPlaylist)
-		r.Put("/{id}", app.UpdatePlaylist)
-		r.Delete("/{id}", app.DeletePlaylist)
-		r.Get("/{id}/tracks", app.GetPlaylistTracks)
-		r.Post("/{id}/tracks", app.AddTracksToPlaylist)
-		r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
-		r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
-		r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
-		r.Post("/{id}/collaborators", app.AddCollaborator)
-		r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
-	})
-	router.Route("/api/movies/playlists", func(r chi.Router) {
-		r.Get("/", app.GetMoviePlaylists)
-		r.Post("/", app.CreateMoviePlaylist)
-		r.Get("/{id}", app.GetMoviePlaylist)
-		r.Put("/{id}", app.UpdateMoviePlaylist)
-		r.Delete("/{id}", app.DeleteMoviePlaylist)
-		r.Get("/{id}/movies", app.GetMoviePlaylistMovies)
-		r.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)
-		r.Delete("/{id}/movies/{movieId}", app.RemoveMovieFromMoviePlaylist)
-		r.Get("/{id}/collaborators", app.GetMoviePlaylistCollaborators)
-		r.Post("/{id}/collaborators", app.AddMoviePlaylistCollaborator)
-		r.Delete("/{id}/collaborators/{userId}", app.RemoveMoviePlaylistCollaborator)
-	})
-
-	return app.SessionManager.LoadAndSave(router)
-}
-
-func performPlaylistRequest(
-	t *testing.T,
-	app *Application,
-	handler http.Handler,
-	userID int64,
-	method string,
-	path string,
-	body string,
-) *httptest.ResponseRecorder {
-	t.Helper()
-
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if userID != 0 {
-		for _, cookie := range authSessionCookies(t, app, userID) {
-			req.AddCookie(cookie)
-		}
-	}
-
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	return w
-}
-
 type playlistFixtures struct {
 	owner         database.User
 	editor        database.User
@@ -351,10 +268,10 @@ func createPlaylistFixtures(t *testing.T, app *Application) playlistFixtures {
 		}
 	}
 
-	musicianID := createSearchMusician(t, app, "Playlist Artist")
-	albumID := createSearchAlbum(t, app, "Playlist Album", "Playlist Artist")
-	trackID := createSearchTrack(t, app, "Playlist Track", "/music/playlist-track.flac", albumID, musicianID)
-	movieID := createSearchMovie(t, app, "Playlist Movie", "/movies/playlist-movie.mkv")
+	musicianID := createTestMusician(t, app, "Playlist Artist")
+	albumID := createTestAlbum(t, app, "Playlist Album", "Playlist Artist")
+	trackID := createTestTrack(t, app, "Playlist Track", "/music/playlist-track.flac", albumID, musicianID)
+	movieID := createTestMovie(t, app, "Playlist Movie", "/movies/playlist-movie.mkv")
 
 	return playlistFixtures{
 		owner:         owner,
@@ -370,8 +287,6 @@ func createPlaylistFixtures(t *testing.T, app *Application) playlistFixtures {
 
 func TestPlaylistAccessAndContentTypes(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	handler := playlistTestHandler(app)
 	fixtures := createPlaylistFixtures(t, app)
 
 	type detailEnvelope struct {
@@ -400,7 +315,7 @@ func TestPlaylistAccessAndContentTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := performPlaylistRequest(t, app, handler, tt.userID, http.MethodGet, tt.path, "")
+			w := serveAs(t, app, tt.userID, http.MethodGet, tt.path, "")
 			if w.Code != tt.wantCode {
 				t.Fatalf("status = %d, want %d: %s", w.Code, tt.wantCode, w.Body.String())
 			}
@@ -422,8 +337,6 @@ func TestPlaylistAccessAndContentTypes(t *testing.T) {
 
 func TestPlaylistListsExposeOwnerAndEditorAccess(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	handler := playlistTestHandler(app)
 	fixtures := createPlaylistFixtures(t, app)
 
 	type playlistAccess struct {
@@ -455,7 +368,7 @@ func TestPlaylistListsExposeOwnerAndEditorAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := performPlaylistRequest(t, app, handler, tt.userID, http.MethodGet, tt.path, "")
+			w := serveAs(t, app, tt.userID, http.MethodGet, tt.path, "")
 			if w.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 			}
@@ -478,35 +391,33 @@ func TestPlaylistListsExposeOwnerAndEditorAccess(t *testing.T) {
 
 func TestPlaylistEditorsCanMutateContentButViewersCannot(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	handler := playlistTestHandler(app)
 	fixtures := createPlaylistFixtures(t, app)
 
 	trackPath := "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10) + "/tracks"
 	moviePath := "/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10) + "/movies"
 
-	w := performPlaylistRequest(t, app, handler, fixtures.viewer.ID, http.MethodPost, trackPath, `{"track_ids":[`+strconv.FormatInt(fixtures.trackID, 10)+`]}`)
+	w := serveAs(t, app, fixtures.viewer.ID, http.MethodPost, trackPath, `{"track_ids":[`+strconv.FormatInt(fixtures.trackID, 10)+`]}`)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("viewer add track status = %d, want 403: %s", w.Code, w.Body.String())
 	}
-	w = performPlaylistRequest(t, app, handler, fixtures.editor.ID, http.MethodPost, trackPath, `{"track_ids":[`+strconv.FormatInt(fixtures.trackID, 10)+`]}`)
+	w = serveAs(t, app, fixtures.editor.ID, http.MethodPost, trackPath, `{"track_ids":[`+strconv.FormatInt(fixtures.trackID, 10)+`]}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("editor add track status = %d, want 200: %s", w.Code, w.Body.String())
 	}
-	w = performPlaylistRequest(t, app, handler, fixtures.editor.ID, http.MethodDelete, trackPath+"/"+strconv.FormatInt(fixtures.trackID, 10), "")
+	w = serveAs(t, app, fixtures.editor.ID, http.MethodDelete, trackPath+"/"+strconv.FormatInt(fixtures.trackID, 10), "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("editor remove track status = %d, want 200: %s", w.Code, w.Body.String())
 	}
 
-	w = performPlaylistRequest(t, app, handler, fixtures.viewer.ID, http.MethodPost, moviePath, `{"movie_ids":[`+strconv.FormatInt(fixtures.movieID, 10)+`]}`)
+	w = serveAs(t, app, fixtures.viewer.ID, http.MethodPost, moviePath, `{"movie_ids":[`+strconv.FormatInt(fixtures.movieID, 10)+`]}`)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("viewer add movie status = %d, want 403: %s", w.Code, w.Body.String())
 	}
-	w = performPlaylistRequest(t, app, handler, fixtures.editor.ID, http.MethodPost, moviePath, `{"movie_ids":[`+strconv.FormatInt(fixtures.movieID, 10)+`]}`)
+	w = serveAs(t, app, fixtures.editor.ID, http.MethodPost, moviePath, `{"movie_ids":[`+strconv.FormatInt(fixtures.movieID, 10)+`]}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("editor add movie status = %d, want 200: %s", w.Code, w.Body.String())
 	}
-	w = performPlaylistRequest(t, app, handler, fixtures.editor.ID, http.MethodDelete, moviePath+"/"+strconv.FormatInt(fixtures.movieID, 10), "")
+	w = serveAs(t, app, fixtures.editor.ID, http.MethodDelete, moviePath+"/"+strconv.FormatInt(fixtures.movieID, 10), "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("editor remove movie status = %d, want 200: %s", w.Code, w.Body.String())
 	}
@@ -514,18 +425,15 @@ func TestPlaylistEditorsCanMutateContentButViewersCannot(t *testing.T) {
 
 func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	handler := playlistTestHandler(app)
 	fixtures := createPlaylistFixtures(t, app)
 
 	moviePlaylistID := strconv.FormatInt(fixtures.moviePlaylist.ID, 10)
 	collaboratorsPath := "/api/movies/playlists/" + moviePlaylistID + "/collaborators"
 	outsiderID := strconv.FormatInt(fixtures.outsider.ID, 10)
 
-	w := performPlaylistRequest(
+	w := serveAs(
 		t,
 		app,
-		handler,
 		fixtures.owner.ID,
 		http.MethodPost,
 		collaboratorsPath,
@@ -535,7 +443,7 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 		t.Fatalf("owner add collaborator status = %d, want 201: %s", w.Code, w.Body.String())
 	}
 
-	w = performPlaylistRequest(t, app, handler, fixtures.owner.ID, http.MethodGet, collaboratorsPath, "")
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodGet, collaboratorsPath, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("owner list collaborators status = %d, want 200: %s", w.Code, w.Body.String())
 	}
@@ -564,10 +472,9 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 	}
 
 	moviesPath := "/api/movies/playlists/" + moviePlaylistID + "/movies"
-	w = performPlaylistRequest(
+	w = serveAs(
 		t,
 		app,
-		handler,
 		fixtures.outsider.ID,
 		http.MethodPost,
 		moviesPath,
@@ -587,7 +494,7 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 			path += "/" + outsiderID
 		}
 
-		w = performPlaylistRequest(t, app, handler, fixtures.viewer.ID, method, path, body)
+		w = serveAs(t, app, fixtures.viewer.ID, method, path, body)
 		if w.Code != http.StatusForbidden {
 			t.Fatalf("viewer %s collaborators status = %d, want 403: %s", method, w.Code, w.Body.String())
 		}
@@ -606,16 +513,15 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 			path += "/" + outsiderID
 		}
 
-		w = performPlaylistRequest(t, app, handler, fixtures.owner.ID, method, path, body)
+		w = serveAs(t, app, fixtures.owner.ID, method, path, body)
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("movie route %s track playlist status = %d, want 400: %s", method, w.Code, w.Body.String())
 		}
 	}
 
-	w = performPlaylistRequest(
+	w = serveAs(
 		t,
 		app,
-		handler,
 		fixtures.owner.ID,
 		http.MethodDelete,
 		collaboratorsPath+"/"+outsiderID,
@@ -625,7 +531,7 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 		t.Fatalf("owner remove collaborator status = %d, want 200: %s", w.Code, w.Body.String())
 	}
 
-	w = performPlaylistRequest(t, app, handler, fixtures.outsider.ID, http.MethodGet, moviesPath, "")
+	w = serveAs(t, app, fixtures.outsider.ID, http.MethodGet, moviesPath, "")
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("removed collaborator movie access status = %d, want 403: %s", w.Code, w.Body.String())
 	}
@@ -633,12 +539,9 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 
 func TestPlaylistHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	owner := createTestUser(t, app, "Contract Owner", "contract-owner@example.com", false)
 	outsider := createTestUser(t, app, "Contract Outsider", "contract-outsider@example.com", false)
-	app.InitSession()
-	app.InitRouter()
-	cookies := authSessionCookies(t, app, owner.ID)
+	handler := authenticatedRouter(t, app, owner.ID)
 
 	request := func(operationID, method, path, body string, wantStatus int) *httptest.ResponseRecorder {
 		t.Helper()
@@ -648,25 +551,16 @@ func TestPlaylistHandlers_ConformToOpenAPI(t *testing.T) {
 		} else {
 			req = newOpenAPIJSONRequest(method, path, body)
 		}
-		for _, cookie := range cookies {
-			req.AddCookie(cookie)
-		}
-		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, req)
-		if response.Code != wantStatus {
-			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-		return response
+		return serveOpenAPIExchange(t, handler, operationID, req, wantStatus)
 	}
 
 	request("getPlaylists", http.MethodGet, "/api/music/playlists", "", http.StatusOK)
 	request("getMoviePlaylists", http.MethodGet, "/api/movies/playlists", "", http.StatusOK)
 
-	musicianID := createSearchMusician(t, app, "Contract Playlist Artist")
-	albumID := createSearchAlbum(t, app, "Contract Playlist Album", "Contract Playlist Artist")
-	trackIDValue := createSearchTrack(t, app, "Contract Playlist Track", "/music/playlist-contract.flac", albumID, musicianID)
-	movieIDValue := createSearchMovie(t, app, "Contract Playlist Movie", "/movies/playlist-contract.mkv")
+	musicianID := createTestMusician(t, app, "Contract Playlist Artist")
+	albumID := createTestAlbum(t, app, "Contract Playlist Album", "Contract Playlist Artist")
+	trackIDValue := createTestTrack(t, app, "Contract Playlist Track", "/music/playlist-contract.flac", albumID, musicianID)
+	movieIDValue := createTestMovie(t, app, "Contract Playlist Movie", "/movies/playlist-contract.mkv")
 	trackID := strconv.FormatInt(trackIDValue, 10)
 	movieID := strconv.FormatInt(movieIDValue, 10)
 	outsiderID := strconv.FormatInt(outsider.ID, 10)
@@ -717,4 +611,150 @@ func TestPlaylistHandlers_ConformToOpenAPI(t *testing.T) {
 
 	request("deletePlaylist", http.MethodDelete, "/api/music/playlists/"+trackPlaylistID, "", http.StatusOK)
 	request("deleteMoviePlaylist", http.MethodDelete, "/api/movies/playlists/"+moviePlaylistID, "", http.StatusOK)
+}
+
+// playlistTrackIDs returns the track ids a playlist serves, in playlist order.
+func playlistTrackIDs(t *testing.T, app *Application, userID, playlistID int64) []int64 {
+	t.Helper()
+
+	w := serveAs(t, app, userID, http.MethodGet, "/api/music/playlists/"+strconv.FormatInt(playlistID, 10)+"/tracks", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("list tracks status = %d: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Data struct {
+			Tracks []struct {
+				ID int64 `json:"id"`
+			} `json:"tracks"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &body)
+	if err != nil {
+		t.Fatalf("decode tracks: %v", err)
+	}
+	ids := make([]int64, 0, len(body.Data.Tracks))
+	for _, track := range body.Data.Tracks {
+		ids = append(ids, track.ID)
+	}
+	return ids
+}
+
+func TestReorderPlaylistTracks_AppliesTheRequestedOrderForEditors(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	musicianID := createTestMusician(t, app, "Reorder Artist")
+	albumID := createTestAlbum(t, app, "Reorder Album", "Reorder Artist")
+	second := createTestTrack(t, app, "Reorder Two", "/music/reorder-2.flac", albumID, musicianID)
+	third := createTestTrack(t, app, "Reorder Three", "/music/reorder-3.flac", albumID, musicianID)
+	playlistPath := "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10)
+
+	w := serveAs(t, app, fixtures.owner.ID, http.MethodPost, playlistPath+"/tracks",
+		fmt.Sprintf(`{"track_ids":[%d,%d,%d]}`, fixtures.trackID, second, third))
+	if w.Code != http.StatusOK {
+		t.Fatalf("add tracks status = %d: %s", w.Code, w.Body.String())
+	}
+	if got := playlistTrackIDs(t, app, fixtures.owner.ID, fixtures.trackPlaylist.ID); !slices.Equal(got, []int64{fixtures.trackID, second, third}) {
+		t.Fatalf("initial order = %v, want insertion order", got)
+	}
+
+	reordered := fmt.Sprintf(`{"track_ids":[%d,%d,%d]}`, third, fixtures.trackID, second)
+	w = serveAs(t, app, fixtures.viewer.ID, http.MethodPut, playlistPath+"/tracks/reorder", reordered)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("viewer reorder status = %d, want 403: %s", w.Code, w.Body.String())
+	}
+	w = serveAs(t, app, fixtures.editor.ID, http.MethodPut, playlistPath+"/tracks/reorder", reordered)
+	if w.Code != http.StatusOK {
+		t.Fatalf("editor reorder status = %d: %s", w.Code, w.Body.String())
+	}
+	if got := playlistTrackIDs(t, app, fixtures.owner.ID, fixtures.trackPlaylist.ID); !slices.Equal(got, []int64{third, fixtures.trackID, second}) {
+		t.Fatalf("order after reorder = %v, want %v", got, []int64{third, fixtures.trackID, second})
+	}
+}
+
+func TestDeletePlaylists_OnlyTheOwnerMay(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	paths := map[string]string{
+		"track playlist": "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10),
+		"movie playlist": "/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10),
+	}
+	for name, path := range paths {
+		t.Run(name, func(t *testing.T) {
+			for _, collaborator := range []database.User{fixtures.editor, fixtures.viewer} {
+				w := serveAs(t, app, collaborator.ID, http.MethodDelete, path, "")
+				if w.Code != http.StatusForbidden {
+					t.Fatalf("%s delete status = %d, want 403: %s", collaborator.Name, w.Code, w.Body.String())
+				}
+			}
+			w := serveAs(t, app, fixtures.owner.ID, http.MethodDelete, path, "")
+			if w.Code != http.StatusOK {
+				t.Fatalf("owner delete status = %d: %s", w.Code, w.Body.String())
+			}
+			w = serveAs(t, app, fixtures.owner.ID, http.MethodGet, path, "")
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("status after delete = %d, want 404: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestMoviePlaylistUpdateAndRemove_ErrorPaths(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	playlistPath := "/api/movies/playlists/" + strconv.FormatInt(fixtures.moviePlaylist.ID, 10)
+	movieID := strconv.FormatInt(fixtures.movieID, 10)
+
+	w := serveAs(t, app, fixtures.owner.ID, http.MethodPost, playlistPath+"/movies", `{"movie_ids":[`+movieID+`]}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("add movie status = %d: %s", w.Code, w.Body.String())
+	}
+
+	tests := []struct {
+		name        string
+		userID      int64
+		method      string
+		path        string
+		body        string
+		wantStatus  int
+		wantMessage string
+	}{
+		{"update with a non-numeric id", fixtures.owner.ID, http.MethodPut, "/api/movies/playlists/abc", `{"name":"Renamed"}`, http.StatusBadRequest, invalidPlaylistIDMessage},
+		{"update an unknown playlist", fixtures.owner.ID, http.MethodPut, "/api/movies/playlists/999999", `{"name":"Renamed"}`, http.StatusNotFound, playlistNotFoundMessage},
+		{"update by an editor", fixtures.editor.ID, http.MethodPut, playlistPath, `{"name":"Renamed"}`, http.StatusForbidden, "only the playlist owner can update metadata"},
+		{"update with a malformed body", fixtures.owner.ID, http.MethodPut, playlistPath, `{"name":`, http.StatusBadRequest, invalidRequestBodyMessage},
+		{"update with an empty name", fixtures.owner.ID, http.MethodPut, playlistPath, `{"name":""}`, http.StatusBadRequest, "playlist name is required"},
+		{"update with an unknown movie", fixtures.owner.ID, http.MethodPut, playlistPath, `{"name":"Renamed","movie_id":999999}`, http.StatusBadRequest, movieNotFoundMessage},
+		{"remove with a non-numeric playlist id", fixtures.owner.ID, http.MethodDelete, "/api/movies/playlists/abc/movies/" + movieID, "", http.StatusBadRequest, invalidPlaylistIDMessage},
+		{"remove with a non-numeric movie id", fixtures.owner.ID, http.MethodDelete, playlistPath + "/movies/abc", "", http.StatusBadRequest, invalidMovieIDMessage},
+		{"remove from an unknown playlist", fixtures.owner.ID, http.MethodDelete, "/api/movies/playlists/999999/movies/" + movieID, "", http.StatusNotFound, playlistNotFoundMessage},
+		{"remove by a viewer", fixtures.viewer.ID, http.MethodDelete, playlistPath + "/movies/" + movieID, "", http.StatusForbidden, "you don't have permission to edit this playlist"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := serveAs(t, app, tt.userID, tt.method, tt.path, tt.body)
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tt.wantStatus, w.Body.String())
+			}
+			var resp helpers.JSONResponse
+			err := json.Unmarshal(w.Body.Bytes(), &resp)
+			if err != nil || !resp.Error || resp.Message != tt.wantMessage {
+				t.Fatalf("response = %s (%v), want %q", w.Body.String(), err, tt.wantMessage)
+			}
+		})
+	}
+
+	// The owner can pin the playlist to a movie that exists.
+	w = serveAs(t, app, fixtures.owner.ID, http.MethodPut, playlistPath, `{"name":"Renamed","movie_id":`+movieID+`}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("owner update status = %d: %s", w.Code, w.Body.String())
+	}
+	var updatedName string
+	var updatedMovieID sql.NullInt64
+	err := app.DB.QueryRowContext(context.Background(), "SELECT name, movie_id FROM playlists WHERE id = ?", fixtures.moviePlaylist.ID).Scan(&updatedName, &updatedMovieID)
+	if err != nil {
+		t.Fatalf("read updated playlist: %v", err)
+	}
+	if updatedName != "Renamed" || !updatedMovieID.Valid || updatedMovieID.Int64 != fixtures.movieID {
+		t.Fatalf("updated playlist = (%q, %+v), want Renamed pinned to movie %d", updatedName, updatedMovieID, fixtures.movieID)
+	}
 }

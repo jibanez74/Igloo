@@ -9,26 +9,6 @@ import (
 	"testing"
 )
 
-func newAuthSessionCookie(t *testing.T, app *Application, userID int64) *http.Cookie {
-	t.Helper()
-
-	ctx, err := app.SessionManager.Load(context.Background(), "")
-	if err != nil {
-		t.Fatalf("load test session: %v", err)
-	}
-
-	app.SessionManager.Put(ctx, cookieUserID, userID)
-	token, _, err := app.SessionManager.Commit(ctx)
-	if err != nil {
-		t.Fatalf("commit test session: %v", err)
-	}
-
-	return &http.Cookie{
-		Name:  app.SessionManager.Cookie.Name,
-		Value: token,
-	}
-}
-
 type authUserResponse struct {
 	Error   bool   `json:"error"`
 	Message string `json:"message"`
@@ -53,9 +33,7 @@ func decodeAuthUserResponse(t *testing.T, w *httptest.ResponseRecorder) authUser
 }
 
 func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedWhenUnauthenticated(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
@@ -73,9 +51,7 @@ func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedWhenUnauthenticated(t *testin
 }
 
 func TestGetCurrentAuthUser_HTTPReturnsCurrentUser(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
@@ -99,9 +75,7 @@ func TestGetCurrentAuthUser_HTTPReturnsCurrentUser(t *testing.T) {
 }
 
 func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedForStaleSession(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
@@ -120,9 +94,7 @@ func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedForStaleSession(t *testing.T)
 }
 
 func TestLogout_DeviceTokenRevokesDevice(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "TV User", "tv@example.com", false)
@@ -161,9 +133,7 @@ func TestLogout_DeviceTokenRevokesDevice(t *testing.T) {
 }
 
 func TestLogout_SessionCookieDoesNotRevokeDevices(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Web User", "web@example.com", false)

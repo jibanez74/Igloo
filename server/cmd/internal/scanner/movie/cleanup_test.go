@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/scannertest"
+
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 func TestMissingMovieCleanupLifecycle(t *testing.T) {
@@ -22,7 +23,6 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
-			defer s.tx.DB.Close()
 			root := t.TempDir()
 			directory := filepath.Join(root, "library")
 			err := os.Mkdir(directory, 0700)
@@ -44,11 +44,8 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 				}
 				path = filepath.Join(directory+"-other", "media.mkv")
 			}
-			err = os.WriteFile(path, []byte("media"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			probe := &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+			scannertest.WriteFile(t, path, "media")
+			probe := &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 			s.ffprobe = probe
 			scan := newMovieScanContext(nil)
 			imported, _, failures, _ := s.processMoviesBatch(context.Background(), scan, []scanner.ScanFile{{Path: path, Ext: "mkv"}})
@@ -87,8 +84,8 @@ func TestMissingMovieCleanupLifecycle(t *testing.T) {
 				wantRows, wantInvalidations = 1, 0
 			}
 			count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies")
-			if count != wantRows || invalidations != wantInvalidations || probe.calls != 1 {
-				t.Fatalf("rows=%d invalidations=%d probes=%d", count, invalidations, probe.calls)
+			if count != wantRows || invalidations != wantInvalidations || probe.Calls() != 1 {
+				t.Fatalf("rows=%d invalidations=%d probes=%d", count, invalidations, probe.Calls())
 			}
 		})
 	}
@@ -99,7 +96,6 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
-			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
@@ -108,11 +104,8 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(root, "media.mkv")
-			err = os.WriteFile(path, []byte("media"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
-			s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+			scannertest.WriteFile(t, path, "media")
+			s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 			scan := newMovieScanContext(nil)
 			imported, _, failures, _ := s.processMoviesBatch(ctx, scan, []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 			if imported != 1 || failures != 0 {
@@ -148,10 +141,7 @@ func TestMissingMovieDeletionTransaction(t *testing.T) {
 				// This fixture has cascading dependents; changing the identity requires a fresh row.
 				_, err = s.tx.DB.Exec("DELETE FROM movies WHERE id = ?", files[0].ID)
 				if err == nil {
-					err = os.WriteFile(path, []byte("replacement"), 0600)
-					if err != nil {
-						t.Fatal(err)
-					}
+					scannertest.WriteFile(t, path, "replacement")
 					imported, _, failures, _ = s.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 					if imported != 1 || failures != 0 {
 						t.Fatal("replacement import failed")
@@ -248,10 +238,9 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			fixture := setupMovieScanner(t)
 			s := fixture.scanner
 			var now atomic.Int64
-			now.Store(time.Now().Add(2 * time.Minute).UnixNano())
+			now.Store(scannertest.SettledNow().UnixNano())
 			s.now = func() time.Time { return time.Unix(0, now.Load()) }
 			s.waitForRetry = func(ctx context.Context, delay time.Duration) error { now.Add(int64(delay)); return ctx.Err() }
-			defer s.tx.DB.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			root := filepath.Join(t.TempDir(), "library")
@@ -266,10 +255,7 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 				return movieScannerMetadataFixture("120"), nil
 			}}
 			for _, path := range []string{seenPath, triggerPath, missingPath} {
-				err = os.WriteFile(path, []byte("media"), 0600)
-				if err != nil {
-					t.Fatal(err)
-				}
+				scannertest.WriteFile(t, path, "media")
 				imported, _, failures, _ := s.processMoviesBatch(ctx, newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 				if imported != 1 || failures != 0 {
 					t.Fatalf("import=%d errors=%d", imported, failures)
@@ -279,15 +265,9 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = os.WriteFile(triggerPath, []byte("changed trigger"), 0600)
-			if err != nil {
-				t.Fatal(err)
-			}
+			scannertest.WriteFile(t, triggerPath, "changed trigger")
 			if scenario == "failed" {
-				err = os.WriteFile(seenPath, []byte("changed seen"), 0600)
-				if err != nil {
-					t.Fatal(err)
-				}
+				scannertest.WriteFile(t, seenPath, "changed seen")
 			}
 			if scenario == "deferred" {
 				future := time.Now().Add(24 * time.Hour)
@@ -340,22 +320,18 @@ func TestMovieCleanupProtectsSeenFilesAndInterruptedScans(t *testing.T) {
 func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	defer s.tx.DB.Close()
 	first, second := t.TempDir(), t.TempDir()
 	s.ffprobe = &scannertest.Probe{Callback: func(context.Context, string) (*ffprobe.FfprobeResult, error) {
 		return movieScannerMetadataFixture("120"), nil
 	}}
 	for _, root := range []string{first, second} {
 		path := filepath.Join(root, "missing.mkv")
-		err := os.WriteFile(path, []byte("media"), 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
+		scannertest.WriteFile(t, path, "media")
 		imported, _, failures, _ := s.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 		if imported != 1 || failures != 0 {
 			t.Fatal("import failed")
 		}
-		err = os.Remove(path)
+		err := os.Remove(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -373,7 +349,7 @@ func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 	if result.Status != scanner.StartStarted {
 		t.Fatal(result)
 	}
-	s.launcher.Wait.Wait()
+	scannertest.WaitForGroup(t, s.launcher.Wait, 5*time.Second, "movie scan")
 	count := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies WHERE file_path = ?", filepath.Join(second, "missing.mkv"))
 	total := scannertest.CountRows(t, s.tx.DB, "SELECT count(*) FROM movies")
 	if calls != 1 || count != 1 || total != 1 {
@@ -384,19 +360,15 @@ func TestMovieCleanupCapturesConfiguredDirectory(t *testing.T) {
 func TestMovieCleanupCascadesDependentRows(t *testing.T) {
 	fixture := setupMovieScanner(t)
 	s := fixture.scanner
-	defer s.tx.DB.Close()
 	root := t.TempDir()
 	path := filepath.Join(root, "UniqueMovie.mkv")
-	err := os.WriteFile(path, []byte("media"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("120")}
+	scannertest.WriteFile(t, path, "media")
+	s.ffprobe = &scannertest.CountingProbe{Default: movieScannerMetadataFixture("120")}
 	imported, _, failures, _ := s.processMoviesBatch(context.Background(), newMovieScanContext(nil), []scanner.ScanFile{{Path: path, Ext: "mkv"}})
 	if imported != 1 || failures != 0 {
 		t.Fatal("import failed")
 	}
-	_, err = s.tx.DB.Exec(`
+	_, err := s.tx.DB.Exec(`
  INSERT INTO users(id,name,email,password) VALUES(1,'Viewer','viewer@example.test','unused');
  INSERT INTO playlists(id,user_id,name,content_type) VALUES(1,1,'Favorites','movie');
  INSERT INTO playlist_movies(playlist_id,movie_id,position) SELECT 1,id,1 FROM movies;

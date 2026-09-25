@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"igloo/cmd/internal/scanner/scannertest"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -29,18 +31,10 @@ func inspectTestFile(t testing.TB, path string, previous *FileFingerprint) *File
 	return result
 }
 
-func writeFingerprintFile(t testing.TB, path string, data []byte) {
-	t.Helper()
-	err := os.WriteFile(path, data, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestInspectSinglePathAndFullContent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "track")
 	content := bytes.Repeat([]byte("a"), 3*256*1024)
-	writeFingerprintFile(t, path, content)
+	scannertest.WriteFile(t, path, string(content))
 	first := inspectTestFile(t, path, nil)
 	if first.Outcome != FileNeedsProcessing || first.Fingerprint.SHA256 != sha256.Sum256(content) {
 		t.Fatalf("initial inspection: %+v", first)
@@ -53,7 +47,7 @@ func TestInspectSinglePathAndFullContent(t *testing.T) {
 	for _, offset := range []int{0, len(content) / 2, len(content) - 1} {
 		baseline := first.Fingerprint
 		content[offset]++
-		writeFingerprintFile(t, path, content)
+		scannertest.WriteFile(t, path, string(content))
 		mtime := time.Unix(0, baseline.MtimeNS)
 		err := os.Chtimes(path, mtime, mtime)
 		if err != nil {
@@ -70,7 +64,7 @@ func TestInspectIdenticalBytes(t *testing.T) {
 	for _, change := range []string{"mtime", "permissions", "replacement"} {
 		t.Run(change, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "movie")
-			writeFingerprintFile(t, path, []byte("media"))
+			scannertest.WriteFile(t, path, "media")
 			first := inspectTestFile(t, path, nil)
 			var err error
 			switch change {
@@ -80,7 +74,7 @@ func TestInspectIdenticalBytes(t *testing.T) {
 			case "permissions":
 				err = os.Chmod(path, 0640)
 			case "replacement":
-				writeFingerprintFile(t, path+".new", []byte("media"))
+				scannertest.WriteFile(t, path+".new", "media")
 				err = os.Rename(path+".new", path)
 			}
 			if err != nil {
@@ -100,7 +94,7 @@ func TestInspectIdenticalBytes(t *testing.T) {
 
 func TestInspectQuietPeriod(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file")
-	writeFingerprintFile(t, path, []byte("media"))
+	scannertest.WriteFile(t, path, "media")
 	baseline := inspectTestFile(t, path, nil).Fingerprint
 	eligible := time.Unix(0, max(baseline.MtimeNS, baseline.CtimeNS)).Add(FileQuietPeriod)
 	for _, delta := range []time.Duration{-time.Nanosecond, 0, time.Nanosecond} {
@@ -150,7 +144,7 @@ func TestInspectionRejectsChangesBeforeCommit(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "file")
-			writeFingerprintFile(t, path, []byte("media"))
+			scannertest.WriteFile(t, path, "media")
 			if change == "symlink" || change == "same target symlink" {
 				err := os.Symlink(path, path+".link")
 				if err != nil {
@@ -170,9 +164,9 @@ func TestInspectionRejectsChangesBeforeCommit(t *testing.T) {
 			var err error
 			switch change {
 			case "write":
-				writeFingerprintFile(t, path, []byte("edited"))
+				scannertest.WriteFile(t, path, "edited")
 			case "replace":
-				writeFingerprintFile(t, path+".new", []byte("other"))
+				scannertest.WriteFile(t, path+".new", "other")
 				err = os.Rename(path+".new", path)
 			case "remove", "fifo":
 				err = os.Remove(path)
@@ -181,7 +175,7 @@ func TestInspectionRejectsChangesBeforeCommit(t *testing.T) {
 				}
 			case "symlink", "same target symlink":
 				target := filepath.Join(dir, "other")
-				writeFingerprintFile(t, target, []byte("other"))
+				scannertest.WriteFile(t, target, "other")
 				if change == "same target symlink" {
 					target = filepath.Join(dir, "file")
 				}
@@ -191,7 +185,7 @@ func TestInspectionRejectsChangesBeforeCommit(t *testing.T) {
 				}
 			case "directory symlink":
 				other := t.TempDir()
-				writeFingerprintFile(t, filepath.Join(other, "file"), []byte("other"))
+				scannertest.WriteFile(t, filepath.Join(other, "file"), "other")
 				err = os.Remove(dir + ".link")
 				if err == nil {
 					err = os.Symlink(other, dir+".link")
@@ -211,7 +205,7 @@ func TestInspectionRejectsChangesBeforeCommit(t *testing.T) {
 
 func TestInspectionRacedOpenAndFailures(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "file")
-	writeFingerprintFile(t, path, []byte("media"))
+	scannertest.WriteFile(t, path, "media")
 	// The clock is called between initial stat and open; replace with a FIFO at
 	// that boundary to verify the open cannot hang and the race is deferred.
 	clock := func() time.Time {
@@ -251,7 +245,7 @@ func TestInspectionRacedOpenAndFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFingerprintFile(t, path, []byte("media"))
+	scannertest.WriteFile(t, path, "media")
 	err = os.Chmod(path, 0000)
 	if err != nil {
 		t.Fatal(err)
@@ -282,7 +276,7 @@ func TestStreamingHashFailuresAndCancellation(t *testing.T) {
 	}
 	// Validate observes a write interleaved with streaming reads on the held FD.
 	path := filepath.Join(t.TempDir(), "file")
-	writeFingerprintFile(t, path, bytes.Repeat([]byte("a"), 512*1024))
+	scannertest.WriteFile(t, path, strings.Repeat("a", 512*1024))
 	r := inspectTestFile(t, path, nil)
 	_, err = r.file.Seek(0, io.SeekStart)
 	if err != nil {
@@ -293,7 +287,7 @@ func TestStreamingHashFailuresAndCancellation(t *testing.T) {
 		n, readErr := r.file.Read(b)
 		if !wrote {
 			wrote = true
-			writeFingerprintFile(t, path, []byte("changed"))
+			scannertest.WriteFile(t, path, "changed")
 		}
 		return n, readErr
 	}})
@@ -309,7 +303,7 @@ func TestStreamingHashFailuresAndCancellation(t *testing.T) {
 
 func BenchmarkInspectUnchanged(b *testing.B) {
 	path := filepath.Join(b.TempDir(), "file")
-	writeFingerprintFile(b, path, []byte("media"))
+	scannertest.WriteFile(b, path, "media")
 	baseline := inspectTestFile(b, path, nil).Fingerprint
 	now := func() time.Time { return time.Now().Add(time.Hour) }
 	b.ReportAllocs()
@@ -324,7 +318,7 @@ func BenchmarkInspectUnchanged(b *testing.B) {
 
 func BenchmarkStreamingHash(b *testing.B) {
 	path := filepath.Join(b.TempDir(), "file")
-	writeFingerprintFile(b, path, bytes.Repeat([]byte("a"), 8*1024*1024))
+	scannertest.WriteFile(b, path, strings.Repeat("a", 8*1024*1024))
 	f, err := os.Open(path)
 	if err != nil {
 		b.Fatal(err)

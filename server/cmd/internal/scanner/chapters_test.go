@@ -6,14 +6,14 @@ import (
 	"igloo/cmd/internal/ffprobe"
 )
 
+// Parsed start times are asserted through the movie and show persistence
+// tests; only the fallbacks for missing or unparsable values live here.
 func TestChapterStartTimeSeconds(t *testing.T) {
 	tests := []struct {
 		name    string
 		chapter ffprobe.Chapter
 		want    int64
 	}{
-		{"prefers start_time seconds over raw ffprobe ticks", ffprobe.Chapter{StartTime: "573.114208"}, 573},
-		{"returns zero when chapter starts at zero", ffprobe.Chapter{StartTime: "0.000000"}, 0},
 		{"returns zero when start_time is absent", ffprobe.Chapter{}, 0},
 		{"returns zero when start_time is unparsable", ffprobe.Chapter{StartTime: "not-a-number"}, 0},
 	}

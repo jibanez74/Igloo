@@ -11,7 +11,6 @@ import (
 type countingStore struct {
 	data    map[string][]byte
 	finds   int
-	commits int
 	deletes int
 }
 
@@ -26,7 +25,6 @@ func (s *countingStore) Find(token string) ([]byte, bool, error) {
 }
 
 func (s *countingStore) Commit(token string, b []byte, expiry time.Time) error {
-	s.commits++
 	s.data[token] = b
 	return nil
 }

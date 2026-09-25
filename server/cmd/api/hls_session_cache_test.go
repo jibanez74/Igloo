@@ -13,7 +13,6 @@ import (
 
 func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	audioTrack := 0
@@ -41,7 +40,6 @@ func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
 
 func TestCleanupPersonalHLSSessionsForOwner_ReleasesLockBeforeTeardown(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	audioTrack := 0
@@ -85,7 +83,6 @@ func TestCleanupPersonalHLSSessionsForOwner_ReleasesLockBeforeTeardown(t *testin
 
 func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	personalKey := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, 100)
@@ -122,7 +119,6 @@ func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 
 func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, &audioTrack, nil, testPlaybackSessionID, 0, 100)
@@ -145,9 +141,7 @@ func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T
 
 func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.HLSMaxPersonalSessionsPerUser = 2
-	app.DB.SetMaxOpenConns(1)
 
 	started := make(chan struct{}, 2)
 	continueStarts := make(chan struct{})
@@ -234,7 +228,6 @@ func TestGetOrCreateHLSSession_ReservationsCapConcurrentRemuxStarts(t *testing.T
 
 func TestReservePersonalHLSSession_UpdatesCapacityBeforeBlockingTeardown(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.HLSMaxPersonalSessionsPerUser = 1
 
 	userID := int64(100)
@@ -291,7 +284,6 @@ func TestReservePersonalHLSSession_UpdatesCapacityBeforeBlockingTeardown(t *test
 
 func TestPersonalHLSSessionReservationCommit_UpdatesAccountingBeforeBlockingTeardown(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	movieID := int64(5)
@@ -355,7 +347,6 @@ func TestPersonalHLSSessionReservationCommit_UpdatesAccountingBeforeBlockingTear
 
 func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	movieID := int64(5)
@@ -404,7 +395,6 @@ func TestReclaimIdlePersonalHLSSession_ReleasesLockBeforeTeardown(t *testing.T) 
 
 func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.HLSMaxPersonalSessionsPerUser = 1
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
 		{StartErr: errors.New("ffmpeg startup failed")},
@@ -452,7 +442,6 @@ func TestGetOrCreateHLSSession_FailedCreationReleasesReservation(t *testing.T) {
 
 func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.HLSMaxPersonalSessionsPerUser = 1
 
 	started := make(chan struct{}, 1)
@@ -529,16 +518,12 @@ func TestGetOrCreateHLSSession_EvictsLRUBeforeStartingReplacement(t *testing.T) 
 
 func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	// A completed session sorts first but no longer owns a permit. A later idle,
 	// still-running session owns the only permit and must be the reclaim victim.
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 	var releaseOnce sync.Once
 	releaseRunningPermit := func() {
 		releaseOnce.Do(release)
@@ -590,7 +575,6 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 
 func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	// Another device on the same account is actively playing (its TTL is fresh
@@ -599,11 +583,7 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	withTestHLSTranscodeAcquireWait(t, 50*time.Millisecond)
 
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
-	defer release()
+	holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -618,7 +598,7 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 	}
 	app.HLSSessionCache.Set(activeKey, activeSession, hlsPersonalSessionTTL)
 
-	_, _, err = app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	_, _, err := app.GetOrCreateHLSSession(context.Background(), movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
 	var capacityErr *hlsTranscodeCapacityError
 	if !errors.As(err, &capacityErr) {
 		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
@@ -633,7 +613,6 @@ func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.
 // meant a queued stream never started at all. It must wait its turn instead.
 func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
 	withTestHLSTranscodeAcquireWait(t, 10*time.Second)
@@ -642,10 +621,7 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 	// session that is genuinely playing, which is precisely the case reclaim
 	// cannot resolve.
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
-	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
-	if err != nil {
-		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
-	}
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
 
 	userID := int64(100)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -700,7 +676,6 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 // one, so killing it would interrupt playback and buy nothing.
 func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
@@ -727,7 +702,6 @@ func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {
 // candidate than a pure copy.
 func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoAudioEncode(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
@@ -756,7 +730,6 @@ func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoAudioEncode(t *testing.T) {
 // searched.
 func TestReclaimIdlePersonalHLSSession_OnlyReclaimsTheRequestedPool(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	key := HLSSessionKey(movieRef(5), helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testOtherPlaybackSessionID, 0, userID)
@@ -811,7 +784,6 @@ func TestHLSMaxPersonalSessionsPerUser(t *testing.T) {
 
 func TestDeleteHLSSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	t.Run("returns nil for a key that is not cached", func(t *testing.T) {
 		if session := app.deleteHLSSession("missing"); session != nil {
@@ -845,7 +817,6 @@ func TestDeleteHLSSession(t *testing.T) {
 
 func TestGetOrCreateHLSSession_WarmPathNeedsNoDatabase(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 	app.FFmpeg = fake
 
@@ -901,7 +872,6 @@ func TestGetOrCreateHLSSession_WarmPathNeedsNoDatabase(t *testing.T) {
 
 func TestGetOrCreateHLSSession_SingleflightSharesIdenticalOwnerRequest(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	started := make(chan struct{}, 1)
 	continueStart := make(chan struct{})
@@ -956,7 +926,6 @@ func TestGetOrCreateHLSSession_SingleflightSharesIdenticalOwnerRequest(t *testin
 
 func TestGetOrCreateHLSSession_SingleflightIsolatedByOwner(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	started := make(chan struct{}, 2)
 	continueStarts := make(chan struct{})
@@ -1027,7 +996,6 @@ func TestGetOrCreateHLSSession_SingleflightIsolatedByOwner(t *testing.T) {
 // superseded-window cleanup.
 func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{
 		hlsRunPlan(transcodeFixture),
 		hlsRunPlan(transcodeFixture),
@@ -1107,7 +1075,6 @@ func TestGetOrCreateHLSSession_AudioProfileIsolation(t *testing.T) {
 // each of the owner's cached sessions in turn and then refused the request.
 func TestReservePersonalHLSSession_ReservationsAtLimitKeepCachedSessions(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.HLSMaxPersonalSessionsPerUser = 2
 
 	userID := int64(100)
@@ -1166,7 +1133,6 @@ func TestGetOrCreateHLSSession_ReplacesOnlyFailedSessions(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := setupTestApp(t)
-			defer app.DB.Close()
 			fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
 			app.FFmpeg = fake
 

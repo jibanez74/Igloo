@@ -14,9 +14,8 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func addMembersToRoom(t *testing.T, app *Application, roomID int64, userIDs ...int64) {
@@ -34,73 +33,20 @@ func addMembersToRoom(t *testing.T, app *Application, roomID int64, userIDs ...i
 	}
 }
 
-func TestWatchRoom_OwnerInsertedAsMember(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	handler := mountWatchRoomRouter(t, app, ownerID)
-
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
-	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
-	}
-
-	rooms, err := app.Queries.GetWatchRoomsForUser(context.Background(), ownerID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomsForUser failed: %v", err)
-	}
-	if len(rooms) != 1 {
-		t.Fatalf("expected 1 room for owner, got %d", len(rooms))
-	}
-	room := rooms[0]
-
-	members, err := app.Queries.GetWatchRoomMembers(context.Background(), room.ID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomMembers failed: %v", err)
-	}
-
-	if len(members) != 1 {
-		t.Fatalf("expected 1 member (owner), got %d", len(members))
-	}
-	if members[0].ID != ownerID {
-		t.Errorf("expected member ID %d (owner), got %d", ownerID, members[0].ID)
-	}
-}
-
 func TestWatchRoom_InvitedUsersAddedAsMembers(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
 
-	guest1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Guest One",
-		Email:    "guest1@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest1: %v", err)
-	}
-	guest2, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Guest Two",
-		Email:    "guest2@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest2: %v", err)
-	}
+	guest1 := createTestUser(t, app, "Guest One", "guest1@example.com", false)
+	guest2 := createTestUser(t, app, "Guest Two", "guest2@example.com", false)
 
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d,%d]}`, movieID, guest1.ID, guest2.ID)
+	// The owner and a repeated guest are filtered out of the invite list.
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d,%d,%d,%d]}`, movieID, guest1.ID, guest2.ID, guest2.ID, ownerID)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -125,157 +71,6 @@ func TestWatchRoom_InvitedUsersAddedAsMembers(t *testing.T) {
 
 	if len(members) != 3 {
 		t.Fatalf("expected 3 members (owner + 2 guests), got %d", len(members))
-	}
-}
-
-func TestWatchRoom_DuplicateMemberRejected(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID)
-
-	err := app.Queries.AddWatchRoomMember(ctx, database.AddWatchRoomMemberParams{
-		RoomID: room.ID,
-		UserID: ownerID,
-	})
-	if err == nil {
-		t.Fatal("expected error inserting duplicate member, got nil")
-	}
-}
-
-func TestWatchRoom_ListForInvitedUser(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-
-	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Guest",
-		Email:    "guest@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest: %v", err)
-	}
-
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-
-	rooms, err := app.Queries.GetWatchRoomsForUser(ctx, guest.ID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomsForUser for guest failed: %v", err)
-	}
-
-	if len(rooms) != 1 {
-		t.Fatalf("expected 1 room for invited guest, got %d", len(rooms))
-	}
-}
-
-func TestWatchRoom_ListExcludesUnrelatedRooms(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-
-	outsider, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Outsider",
-		Email:    "outsider@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create outsider: %v", err)
-	}
-
-	createTestRoom(t, app, ownerID, movieID)
-
-	rooms, err := app.Queries.GetWatchRoomsForUser(ctx, outsider.ID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomsForUser for outsider failed: %v", err)
-	}
-
-	if len(rooms) != 0 {
-		t.Fatalf("expected 0 rooms for outsider, got %d", len(rooms))
-	}
-}
-
-func TestWatchRoom_DeleteRemovesRoomAndMembers(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-
-	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Guest",
-		Email:    "guest@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest: %v", err)
-	}
-
-	room := createTestRoom(t, app, ownerID, movieID)
-	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-
-	err = app.Queries.DeleteWatchRoom(ctx, room.ID)
-	if err != nil {
-		t.Fatalf("DeleteWatchRoom failed: %v", err)
-	}
-
-	_, err = app.Queries.GetWatchRoomByID(ctx, room.ID)
-	if err != sql.ErrNoRows {
-		t.Errorf("expected room to be deleted (sql.ErrNoRows), got: %v", err)
-	}
-
-	members, err := app.Queries.GetWatchRoomMembers(ctx, room.ID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomMembers after delete failed: %v", err)
-	}
-	if len(members) != 0 {
-		t.Errorf("expected 0 members after room delete, got %d", len(members))
-	}
-}
-
-func TestWatchRoom_CascadeDeleteMovie(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	room := createTestRoom(t, app, ownerID, movieID)
-
-	err := app.Queries.DeleteMovie(ctx, movieID)
-	if err != nil {
-		t.Fatalf("DeleteMovie failed: %v", err)
-	}
-
-	_, err = app.Queries.GetWatchRoomByID(ctx, room.ID)
-	if err != sql.ErrNoRows {
-		t.Errorf("expected room to be cascade-deleted with movie, got: %v", err)
-	}
-}
-
-func TestWatchRoom_CascadeDeleteUser(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	room := createTestRoom(t, app, ownerID, movieID)
-
-	err := app.Queries.DeleteUser(ctx, ownerID)
-	if err != nil {
-		t.Fatalf("DeleteUser failed: %v", err)
-	}
-
-	_, err = app.Queries.GetWatchRoomByID(ctx, room.ID)
-	if err != sql.ErrNoRows {
-		t.Errorf("expected room to be cascade-deleted with owner user, got: %v", err)
 	}
 }
 
@@ -331,48 +126,6 @@ func TestIsValidPlaybackMode(t *testing.T) {
 	}
 }
 
-type authenticatedWatchRoomRouter struct {
-	app    *Application
-	cookie *http.Cookie
-}
-
-func (h authenticatedWatchRoomRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.cookie != nil {
-		r.AddCookie(h.cookie)
-	}
-	h.app.Router.ServeHTTP(w, r)
-}
-
-func mountWatchRoomRouter(t *testing.T, app *Application, userID int64) http.Handler {
-	t.Helper()
-
-	if app.Router == nil {
-		app.InitRouter()
-	}
-
-	return authenticatedWatchRoomRouter{
-		app:    app,
-		cookie: newAuthSessionCookie(t, app, userID),
-	}
-}
-
-func performWatchRoomHTTPRequest(t *testing.T, app *Application, userID int64, method string, path string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	if app.Router == nil {
-		app.InitRouter()
-	}
-
-	req := httptest.NewRequest(method, path, nil)
-	if userID > 0 {
-		req.AddCookie(newAuthSessionCookie(t, app, userID))
-	}
-
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-	return w
-}
-
 // createTestRoom builds the common direct-playback room.
 func createTestRoom(t *testing.T, app *Application, ownerID, movieID int64) database.WatchRoom {
 	t.Helper()
@@ -398,11 +151,10 @@ func createTestRoomWithMode(t *testing.T, app *Application, ownerID, movieID int
 
 func TestCreateWatchRoom_HTTP_Success(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
@@ -410,7 +162,7 @@ func TestCreateWatchRoom_HTTP_Success(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
-		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	assertOpenAPIExchange(t, "createWatchRoom", req, w)
 
@@ -421,34 +173,30 @@ func TestCreateWatchRoom_HTTP_Success(t *testing.T) {
 	if resp.Error {
 		t.Errorf("expected error=false, got error=true: %s", resp.Message)
 	}
+
+	rooms, err := app.Queries.GetWatchRoomsForUser(context.Background(), ownerID)
+	if err != nil {
+		t.Fatalf("GetWatchRoomsForUser failed: %v", err)
+	}
+	if len(rooms) != 1 {
+		t.Fatalf("expected 1 room for owner, got %d", len(rooms))
+	}
+	members, err := app.Queries.GetWatchRoomMembers(context.Background(), rooms[0].ID)
+	if err != nil {
+		t.Fatalf("GetWatchRoomMembers failed: %v", err)
+	}
+	if len(members) != 1 || members[0].ID != ownerID {
+		t.Fatalf("members = %+v, want only the owner", members)
+	}
 }
 
 func TestCreateWatchRoom_HTTP_InvalidMode(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"badmode","audio_track":0}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestCreateWatchRoom_HTTP_NegativeAudioTrackRejected(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
-
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":-1}`, movieID)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -487,21 +235,6 @@ func TestDirectPlayAudioSelectionUnambiguous(t *testing.T) {
 	}
 }
 
-func insertWatchRoomTestAudioStream(t *testing.T, app *Application, movieID int64, streamIndex int64, isDefault bool) {
-	t.Helper()
-
-	err := app.Queries.InsertAudioStream(context.Background(), database.InsertAudioStreamParams{
-		MovieID:     movieID,
-		StreamIndex: streamIndex,
-		Codec:       "aac",
-		Channels:    2,
-		IsDefault:   isDefault,
-	})
-	if err != nil {
-		t.Fatalf("insert audio stream: %v", err)
-	}
-}
-
 func insertWatchRoomTestVideoStream(t *testing.T, app *Application, movieID int64, codecProfile string) {
 	t.Helper()
 
@@ -520,29 +253,13 @@ func insertWatchRoomTestVideoStream(t *testing.T, app *Application, movieID int6
 
 func TestCreateWatchRoom_HTTP_DirectForNonMP4Rejected(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, _ := createTestUserAndMovie(t, app)
-	mkvMovieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
-		Title:     "Matroska Movie",
-		FilePath:  "/movies/matroska.mkv",
-		FileName:  "matroska.mkv",
-		Size:      2048,
-		Container: "mkv",
-		MimeType:  helpers.VideoMimeTypes["mkv"],
-	})
-	if err != nil {
-		t.Fatalf("insert mkv movie: %v", err)
-	}
-	mkvMovie, err := app.Queries.GetMovieByID(context.Background(), mkvMovieID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	mkvMovieID := createTestMovie(t, app, "Matroska Movie", "/movies/matroska.mkv")
+	handler := authenticatedRouter(t, app, ownerID)
 
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, mkvMovie.ID)
+	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, mkvMovieID)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	assertOpenAPIExchange(t, "createWatchRoom", req, w)
@@ -554,15 +271,13 @@ func TestCreateWatchRoom_HTTP_DirectForNonMP4Rejected(t *testing.T) {
 
 func TestCreateWatchRoom_HTTP_DirectWithNonBrowserSafeH264Rejected(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High 10")
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	assertOpenAPIExchange(t, "createWatchRoom", req, w)
@@ -578,7 +293,6 @@ func TestCreateWatchRoom_HTTP_DirectWithNonBrowserSafeH264Rejected(t *testing.T)
 // direct-plays fine.
 func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 
@@ -605,7 +319,7 @@ func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
 		t.Fatalf("insert feature video stream: %v", err)
 	}
 
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -622,14 +336,12 @@ func TestCreateWatchRoom_HTTP_DirectSkipsCoverArtVideoStream(t *testing.T) {
 // video streams cannot be direct-played, so a direct room must be refused.
 func TestCreateWatchRoom_HTTP_DirectWithNoVideoStreamsRejected(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	assertOpenAPIExchange(t, "createWatchRoom", req, w)
@@ -641,16 +353,14 @@ func TestCreateWatchRoom_HTTP_DirectWithNoVideoStreamsRejected(t *testing.T) {
 
 func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	insertWatchRoomTestAudioStream(t, app, movieID, 1, false)
-	insertWatchRoomTestAudioStream(t, app, movieID, 2, true)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 1})
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 2, IsDefault: true})
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":null,"invited_user_ids":[]}`, movieID)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	assertOpenAPIExchange(t, "createWatchRoom", req, w)
@@ -662,13 +372,12 @@ func TestCreateWatchRoom_HTTP_DirectWithAmbiguousAudioRejected(t *testing.T) {
 
 func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	insertWatchRoomTestAudioStream(t, app, movieID, 1, true)
-	insertWatchRoomTestAudioStream(t, app, movieID, 2, false)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 1, IsDefault: true})
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{MovieID: movieID, StreamIndex: 2})
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0}`, movieID)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -681,30 +390,11 @@ func TestCreateWatchRoom_HTTP_DirectWithFirstStreamDefaultAccepted(t *testing.T)
 	}
 }
 
-func TestCreateWatchRoom_HTTP_NegativeSubtitleTrackRejected(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
-
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":-1}`, movieID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
 func TestCreateWatchRoom_HTTP_MovieNotFound(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, _ := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := `{"movie_id":99999,"mode":"direct","audio_track":0}`
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -719,10 +409,9 @@ func TestCreateWatchRoom_HTTP_MovieNotFound(t *testing.T) {
 
 func TestCreateWatchRoom_HTTP_InvalidInvitedUser(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[99999]}`, movieID)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -735,59 +424,8 @@ func TestCreateWatchRoom_HTTP_InvalidInvitedUser(t *testing.T) {
 	}
 }
 
-func TestCreateWatchRoom_HTTP_OwnerInviteDeduplication(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	ownerID, movieID := createTestUserAndMovie(t, app)
-	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	handler := mountWatchRoomRouter(t, app, ownerID)
-
-	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d]}`, movieID, ownerID)
-	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
-	}
-
-	rooms, err := app.Queries.GetWatchRoomsForUser(ctx, ownerID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomsForUser: %v", err)
-	}
-	if len(rooms) != 1 {
-		t.Fatalf("expected 1 room, got %d", len(rooms))
-	}
-
-	members, err := app.Queries.GetWatchRoomMembers(ctx, rooms[0].ID)
-	if err != nil {
-		t.Fatalf("GetWatchRoomMembers: %v", err)
-	}
-	if len(members) != 1 {
-		t.Errorf("expected 1 member (owner once), got %d", len(members))
-	}
-}
-
-func TestWatchRoom_HTTP_ProductionRouterRequiresAuthentication(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	app.InitRouter()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/watch-rooms", nil)
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without session cookie, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
 func TestGetWatchRooms_HTTP_ProductionRouterResponseShape(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
@@ -845,11 +483,33 @@ func TestGetWatchRooms_HTTP_ProductionRouterResponseShape(t *testing.T) {
 	if members[1].(map[string]any)["avatar"] != "avatars/guest.webp" {
 		t.Fatalf("expected guest avatar in members response, got %#v", members[1])
 	}
+
+	// An invited guest sees the room without owning it; an outsider sees nothing.
+	roomsFor := func(userID int64) []any {
+		t.Helper()
+		response := serveAs(t, app, userID, http.MethodGet, "/api/watch-rooms", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("user %d list status = %d: %s", userID, response.Code, response.Body.String())
+		}
+		var listed helpers.JSONResponse
+		decodeErr := json.NewDecoder(response.Body).Decode(&listed)
+		if decodeErr != nil {
+			t.Fatalf("decode rooms for user %d: %v", userID, decodeErr)
+		}
+		return listed.Data.(map[string]any)["rooms"].([]any)
+	}
+	guestRooms := roomsFor(guest.ID)
+	if len(guestRooms) != 1 || guestRooms[0].(map[string]any)["is_owner"] != false {
+		t.Fatalf("guest rooms = %#v, want the one room with is_owner=false", guestRooms)
+	}
+	outsider := createTestUser(t, app, "Outsider", "outsider-shape@example.com", false)
+	if outsiderRooms := roomsFor(outsider.ID); len(outsiderRooms) != 0 {
+		t.Fatalf("outsider rooms = %#v, want none", outsiderRooms)
+	}
 }
 
 func TestGetWatchRoom_HTTP_DetailIncludesPlaybackAndNullableFields(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
@@ -870,7 +530,7 @@ func TestGetWatchRoom_HTTP_DetailIncludesPlaybackAndNullableFields(t *testing.T)
 	}
 	addMembersToRoom(t, app, room.ID, ownerID)
 
-	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d", room.ID))
+	w := serveAs(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d", room.ID), "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -899,13 +559,11 @@ func TestGetWatchRoom_HTTP_DetailIncludesPlaybackAndNullableFields(t *testing.T)
 
 func TestCreateWatchRoom_HTTP_HLSWarmUpStoresRoomSession(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	app.SetSettings(&database.Setting{})
 	app.FFmpeg = &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
 			{
 				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
+					return fmp4testutil.WriteHLSFixture(outDir, fmp4testutil.Fixture{
 						SafeVideo: true,
 						Segments:  1,
 					})
@@ -914,16 +572,9 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpStoresRoomSession(t *testing.T) {
 		},
 	}
 
-	owner, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "HLS Owner",
-		Email:    "hls-owner@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create owner: %v", err)
-	}
+	owner := createTestUser(t, app, "HLS Owner", "hls-owner@example.com", false)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
-	handler := mountWatchRoomRouter(t, app, owner.ID)
+	handler := authenticatedRouter(t, app, owner.ID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":0,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -950,11 +601,9 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpStoresRoomSession(t *testing.T) {
 
 func TestCreateWatchRoom_HTTP_HLSWarmUpFailureRollsBackRoom(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	app.SetSettings(&database.Setting{})
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":0,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -980,10 +629,9 @@ func TestCreateWatchRoom_HTTP_HLSWarmUpFailureRollsBackRoom(t *testing.T) {
 // The other room endpoints have always behaved this way.
 func TestGetWatchRoom_HTTP_UnknownRoomIsForbidden(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, _ := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/watch-rooms/99999", nil)
 	w := httptest.NewRecorder()
@@ -996,22 +644,13 @@ func TestGetWatchRoom_HTTP_UnknownRoomIsForbidden(t *testing.T) {
 
 func TestGetWatchRoom_HTTP_ForbiddenForNonMember(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	outsider, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Outsider",
-		Email:    "outsider@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create outsider: %v", err)
-	}
+	outsider := createTestUser(t, app, "Outsider", "outsider@example.com", false)
 
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, outsider.ID)
+	handler := authenticatedRouter(t, app, outsider.ID)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d", room.ID), nil)
 	w := httptest.NewRecorder()
@@ -1024,12 +663,11 @@ func TestGetWatchRoom_HTTP_ForbiddenForNonMember(t *testing.T) {
 
 func TestGetWatchRoom_HTTP_SuccessForMember(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d", room.ID), nil)
 	w := httptest.NewRecorder()
@@ -1043,12 +681,11 @@ func TestGetWatchRoom_HTTP_SuccessForMember(t *testing.T) {
 
 func TestJoinWatchRoom_HTTP_SuccessForMember(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/watch-rooms/%d/join", room.ID), nil)
 	w := httptest.NewRecorder()
@@ -1062,22 +699,13 @@ func TestJoinWatchRoom_HTTP_SuccessForMember(t *testing.T) {
 
 func TestJoinWatchRoom_HTTP_ForbiddenForNonMember(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	outsider, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Outsider",
-		Email:    "outsider@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create outsider: %v", err)
-	}
+	outsider := createTestUser(t, app, "Outsider", "outsider@example.com", false)
 
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, outsider.ID)
+	handler := authenticatedRouter(t, app, outsider.ID)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/watch-rooms/%d/join", room.ID), nil)
 	w := httptest.NewRecorder()
@@ -1090,12 +718,11 @@ func TestJoinWatchRoom_HTTP_ForbiddenForNonMember(t *testing.T) {
 
 func TestDeleteWatchRoom_HTTP_SuccessForOwner(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/watch-rooms/%d", room.ID), nil)
 	w := httptest.NewRecorder()
@@ -1110,16 +737,22 @@ func TestDeleteWatchRoom_HTTP_SuccessForOwner(t *testing.T) {
 	if err != sql.ErrNoRows {
 		t.Errorf("expected room to be deleted, got: %v", err)
 	}
+	members, err := app.Queries.GetWatchRoomMembers(context.Background(), room.ID)
+	if err != nil {
+		t.Fatalf("GetWatchRoomMembers after delete failed: %v", err)
+	}
+	if len(members) != 0 {
+		t.Errorf("expected 0 members after room delete, got %d", len(members))
+	}
 }
 
 func TestDeleteWatchRoom_HTTP_InvalidatesCachedAuthorization(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoomWithMode(t, app, ownerID, movieID, watchRoomPlaybackModeDirect)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 	detailPath := fmt.Sprintf("/api/watch-rooms/%d", room.ID)
 	streamPath := fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID)
 
@@ -1149,12 +782,11 @@ func TestDeleteWatchRoom_HTTP_InvalidatesCachedAuthorization(t *testing.T) {
 
 func TestDeleteWatchRoom_HTTP_CleansUpRoomHLSSession(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(room.ID), &HLSSession{
 		TempDir: "",
@@ -1175,22 +807,13 @@ func TestDeleteWatchRoom_HTTP_CleansUpRoomHLSSession(t *testing.T) {
 
 func TestDeleteWatchRoom_HTTP_ForbiddenForInvitedMember(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Guest",
-		Email:    "guest@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest: %v", err)
-	}
+	guest := createTestUser(t, app, "Guest", "guest@example.com", false)
 
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-	handler := mountWatchRoomRouter(t, app, guest.ID)
+	handler := authenticatedRouter(t, app, guest.ID)
 
 	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/watch-rooms/%d", room.ID), nil)
 	w := httptest.NewRecorder()
@@ -1203,10 +826,9 @@ func TestDeleteWatchRoom_HTTP_ForbiddenForInvitedMember(t *testing.T) {
 
 func TestDeleteWatchRoom_HTTP_NotFound(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, _ := createTestUserAndMovie(t, app)
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/watch-rooms/99999", nil)
 	w := httptest.NewRecorder()
@@ -1219,7 +841,6 @@ func TestDeleteWatchRoom_HTTP_NotFound(t *testing.T) {
 
 func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	moviePath := filepath.Join(t.TempDir(), "watch-room-direct.mp4")
@@ -1237,20 +858,13 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 	if err != nil {
 		t.Fatalf("update movie path: %v", err)
 	}
-	outsider, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Stream Outsider",
-		Email:    "stream-outsider@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create outsider: %v", err)
-	}
+	outsider := createTestUser(t, app, "Stream Outsider", "stream-outsider@example.com", false)
 
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 
 	path := fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID)
-	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, path)
+	w := serveAs(t, app, ownerID, http.MethodGet, path, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for direct stream, got %d: %s", w.Code, w.Body.String())
 	}
@@ -1264,7 +878,7 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 		t.Fatal("direct stream response has no ETag")
 	}
 
-	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodHead, path)
+	w = serveAs(t, app, ownerID, http.MethodHead, path, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for direct stream HEAD, got %d", w.Code)
 	}
@@ -1275,14 +889,14 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 		t.Fatalf("HEAD body = %d bytes, want empty", w.Body.Len())
 	}
 
-	w = performWatchRoomHTTPRequest(t, app, outsider.ID, http.MethodGet, path)
+	w = serveAs(t, app, outsider.ID, http.MethodGet, path, "")
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-member stream, got %d: %s", w.Code, w.Body.String())
 	}
 
 	hlsRoom := createTestRoomWithMode(t, app, ownerID, movieID, helpers.HLS_PROFILE_720P_3MBPS)
 	addMembersToRoom(t, app, hlsRoom.ID, ownerID)
-	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", hlsRoom.ID))
+	w = serveAs(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", hlsRoom.ID), "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when streaming an HLS room directly, got %d: %s", w.Code, w.Body.String())
 	}
@@ -1290,7 +904,6 @@ func TestStreamWatchRoomMovie_HTTP_DirectStreamUsesRealMembershipAndMode(t *test
 
 func TestStreamWatchRoomMovie_HTTP_DeletedMovieReturns404(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
@@ -1314,7 +927,7 @@ func TestStreamWatchRoomMovie_HTTP_DeletedMovieReturns404(t *testing.T) {
 		t.Fatalf("re-enable foreign keys: %v", err)
 	}
 
-	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID))
+	w := serveAs(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/stream", room.ID), "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for a room whose movie is gone, got %d: %s", w.Code, w.Body.String())
 	}
@@ -1322,22 +935,13 @@ func TestStreamWatchRoomMovie_HTTP_DeletedMovieReturns404(t *testing.T) {
 
 func TestWatchRoomHLS_HTTP_RequiresMembershipModeAndManifestBeforeSegments(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	outsider, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "HLS Outsider",
-		Email:    "hls-outsider@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create outsider: %v", err)
-	}
+	outsider := createTestUser(t, app, "HLS Outsider", "hls-outsider@example.com", false)
 
 	directRoom := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, directRoom.ID, ownerID)
-	w := performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/playlist.m3u8", directRoom.ID))
+	w := serveAs(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/playlist.m3u8", directRoom.ID), "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for HLS manifest on direct room, got %d: %s", w.Code, w.Body.String())
 	}
@@ -1345,180 +949,19 @@ func TestWatchRoomHLS_HTTP_RequiresMembershipModeAndManifestBeforeSegments(t *te
 	hlsRoom := createTestRoomWithMode(t, app, ownerID, movieID, helpers.HLS_PROFILE_720P_3MBPS)
 	addMembersToRoom(t, app, hlsRoom.ID, ownerID)
 
-	w = performWatchRoomHTTPRequest(t, app, outsider.ID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/segment_0.m4s", hlsRoom.ID))
+	w = serveAs(t, app, outsider.ID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/segment_0.m4s", hlsRoom.ID), "")
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-member HLS segment, got %d: %s", w.Code, w.Body.String())
 	}
 
-	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/bad_name.m4s", hlsRoom.ID))
+	w = serveAs(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/bad_name.m4s", hlsRoom.ID), "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected invalid segment request to be rejected, got %d: %s", w.Code, w.Body.String())
 	}
 
-	w = performWatchRoomHTTPRequest(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/segment_0.m4s", hlsRoom.ID))
+	w = serveAs(t, app, ownerID, http.MethodGet, fmt.Sprintf("/api/watch-rooms/%d/hls/segment_0.m4s", hlsRoom.ID), "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 before manifest/session creation, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestGetUsers_HTTP_ExcludesCurrentUser(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	user1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Alice",
-		Email:    "alice@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user1: %v", err)
-	}
-	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Bob",
-		Email:    "bob@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user2: %v", err)
-	}
-
-	r := chi.NewRouter()
-	r.Get("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, user1.ID)
-		app.GetUsers(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(r)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
-	addOpenAPITestCookie(req)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	assertOpenAPIExchange(t, "getUsers", req, w)
-
-	var resp helpers.JSONResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	data, ok := resp.Data.(map[string]any)
-	if !ok {
-		t.Fatal("expected data to be an object")
-	}
-
-	users, ok := data["users"].([]any)
-	if !ok {
-		t.Fatal("expected users array")
-	}
-
-	if len(users) != 1 {
-		t.Errorf("expected 1 user in response (excluding self), got %d", len(users))
-	}
-}
-
-func TestGetUsers_HTTP_SearchTreatsLikeMetacharactersLiterally(t *testing.T) {
-	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	ctx := context.Background()
-
-	user1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Alice Smith",
-		Email:    "alice@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user1: %v", err)
-	}
-	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Bob_One",
-		Email:    "bob_one@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user2: %v", err)
-	}
-	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "BobXOne",
-		Email:    "bobxone@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user3: %v", err)
-	}
-	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Carol%Two",
-		Email:    "carol%two@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user4: %v", err)
-	}
-	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "CarolTwo",
-		Email:    "caroltwo@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create user5: %v", err)
-	}
-
-	r := chi.NewRouter()
-	r.Get("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, user1.ID)
-		app.GetUsers(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(r)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/users?q=carol%25", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for percent search, got %d", w.Code)
-	}
-
-	var resp helpers.JSONResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode percent search response: %v", err)
-	}
-
-	data := resp.Data.(map[string]any)
-	users := data["users"].([]any)
-	if len(users) != 1 {
-		t.Fatalf("expected 1 user matching literal percent, got %d", len(users))
-	}
-
-	percentMatch := users[0].(map[string]any)
-	if percentMatch["name"] != "Carol%Two" {
-		t.Fatalf("expected Carol%%Two for percent search, got %#v", percentMatch["name"])
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/users?q=bob_", nil)
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for underscore search, got %d", w.Code)
-	}
-
-	resp = helpers.JSONResponse{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode underscore search response: %v", err)
-	}
-
-	data = resp.Data.(map[string]any)
-	users = data["users"].([]any)
-	if len(users) != 1 {
-		t.Fatalf("expected 1 user matching literal underscore, got %d", len(users))
-	}
-
-	underscoreMatch := users[0].(map[string]any)
-	if underscoreMatch["name"] != "Bob_One" {
-		t.Fatalf("expected Bob_One for underscore search, got %#v", underscoreMatch["name"])
 	}
 }
 
@@ -1526,21 +969,15 @@ func TestGetUsers_HTTP_SearchTreatsLikeMetacharactersLiterally(t *testing.T) {
 // ffprobe indices deliberately start at 1, so an ordinal is never its own index.
 func insertWatchRoomAudioStreams(t *testing.T, app *Application, movieID int64, count int) {
 	t.Helper()
-	ctx := context.Background()
 	languages := []string{"eng", "spa", "fra"}
 
 	for i := 0; i < count; i++ {
-		err := app.Queries.InsertAudioStream(ctx, database.InsertAudioStreamParams{
+		insertTestAudioStream(t, app, database.InsertAudioStreamParams{
 			MovieID:     movieID,
 			StreamIndex: int64(i + 1),
-			Codec:       "aac",
 			BitRate:     192000,
-			Channels:    2,
 			Language:    sql.NullString{String: languages[i%len(languages)], Valid: true},
 		})
-		if err != nil {
-			t.Fatalf("insert audio stream %d: %v", i, err)
-		}
 	}
 }
 
@@ -1551,29 +988,35 @@ func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
 		mode       string
 		audioTrack int
 		wantStatus int
+		// outsideSchema marks requests the contract already rejects, so only
+		// the response is validated against it.
+		outsideSchema bool
 	}{
 		{name: "first track accepted for direct", audioCount: 3, mode: "direct", audioTrack: 0, wantStatus: http.StatusCreated},
 		{name: "out of range rejected", audioCount: 2, mode: "remux", audioTrack: 2, wantStatus: http.StatusBadRequest},
 		{name: "non first track rejected for direct", audioCount: 3, mode: "direct", audioTrack: 1, wantStatus: http.StatusBadRequest},
 		{name: "non zero track rejected without audio", audioCount: 0, mode: "remux", audioTrack: 1, wantStatus: http.StatusBadRequest},
+		{name: "negative track rejected", audioCount: 1, mode: "direct", audioTrack: -1, wantStatus: http.StatusBadRequest, outsideSchema: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := setupSessionTestApp(t)
-			defer app.DB.Close()
 
 			ownerID, movieID := createTestUserAndMovie(t, app)
 			insertWatchRoomTestVideoStream(t, app, movieID, "High")
 			insertWatchRoomAudioStreams(t, app, movieID, tt.audioCount)
-			handler := mountWatchRoomRouter(t, app, ownerID)
+			handler := authenticatedRouter(t, app, ownerID)
 
 			body := fmt.Sprintf(`{"movie_id":%d,"mode":%q,"audio_track":%d,"subtitle_track":null,"invited_user_ids":[]}`, movieID, tt.mode, tt.audioTrack)
 			req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
-			assertOpenAPIExchange(t, "createWatchRoom", req, w)
+			if tt.outsideSchema {
+				assertOpenAPIResponse(t, "createWatchRoom", req, w)
+			} else {
+				assertOpenAPIExchange(t, "createWatchRoom", req, w)
+			}
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("expected %d, got %d: %s", tt.wantStatus, w.Code, w.Body.String())
@@ -1586,13 +1029,11 @@ func TestCreateWatchRoom_HTTP_AudioTrackValidation(t *testing.T) {
 // reach warm-up, which is the combination the settings dialog now produces.
 func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	app.SetSettings(&database.Setting{})
 	app.FFmpeg = &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
 			{
 				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
+					return fmp4testutil.WriteHLSFixture(outDir, fmp4testutil.Fixture{
 						SafeVideo: true,
 						Segments:  1,
 					})
@@ -1601,19 +1042,12 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 		},
 	}
 
-	owner, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "Multi Audio Owner",
-		Email:    "multi-audio-owner@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create owner: %v", err)
-	}
+	owner := createTestUser(t, app, "Multi Audio Owner", "multi-audio-owner@example.com", false)
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
 	// The fixture already holds one audio stream at index 1; add a second so
 	// ordinal 1 resolves to absolute ffprobe index 2.
-	_, err = app.DB.Exec(`
+	_, err := app.DB.Exec(`
 		INSERT INTO audio_streams (movie_id, stream_index, codec, bit_rate, channels, language)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, movieID, 2, "aac", 192000, 2, "spa")
@@ -1621,7 +1055,7 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 		t.Fatalf("insert second audio stream: %v", err)
 	}
 
-	handler := mountWatchRoomRouter(t, app, owner.ID)
+	handler := authenticatedRouter(t, app, owner.ID)
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":1,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1650,49 +1084,44 @@ func TestCreateWatchRoom_HTTP_NonFirstAudioTrackAcceptedForHLS(t *testing.T) {
 	}
 }
 
-func insertWatchRoomTestSubtitle(t *testing.T, app *Application, movieID int64, streamIndex int64, language string) {
-	t.Helper()
-
-	err := app.Queries.InsertSubtitle(context.Background(), database.InsertSubtitleParams{
-		MovieID:     movieID,
-		StreamIndex: streamIndex,
-		Codec:       "subrip",
-		Language:    sql.NullString{String: language, Valid: language != ""},
-	})
-	if err != nil {
-		t.Fatalf("insert subtitle: %v", err)
-	}
-}
-
 func TestCreateWatchRoom_HTTP_SubtitleTrackOutOfRangeRejected(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	handler := authenticatedRouter(t, app, ownerID)
 
-	postRoom := func(body string) *httptest.ResponseRecorder {
+	// withinSchema is false for requests the contract already rejects, so only
+	// the response is validated against it.
+	postRoom := func(body string, withinSchema bool) *httptest.ResponseRecorder {
 		req := newOpenAPIJSONRequest(http.MethodPost, "/api/watch-rooms", body)
-		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
-		assertOpenAPIExchange(t, "createWatchRoom", req, w)
+		if withinSchema {
+			assertOpenAPIExchange(t, "createWatchRoom", req, w)
+		} else {
+			assertOpenAPIResponse(t, "createWatchRoom", req, w)
+		}
 		return w
 	}
 
-	noSubtitles := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0,"invited_user_ids":[]}`, movieID))
+	negative := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":-1,"invited_user_ids":[]}`, movieID), false)
+	if negative.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a negative subtitle_track, got %d: %s", negative.Code, negative.Body.String())
+	}
+
+	noSubtitles := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0,"invited_user_ids":[]}`, movieID), true)
 	if noSubtitles.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for a movie without subtitles, got %d: %s", noSubtitles.Code, noSubtitles.Body.String())
 	}
 
-	insertWatchRoomTestSubtitle(t, app, movieID, 2, "eng")
-	outOfRange := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":3,"invited_user_ids":[]}`, movieID))
+	insertTestSubtitle(t, app, movieID, 2, "subrip", "eng")
+	outOfRange := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":3,"invited_user_ids":[]}`, movieID), true)
 	if outOfRange.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for out-of-range subtitle_track, got %d: %s", outOfRange.Code, outOfRange.Body.String())
 	}
 
-	valid := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0,"invited_user_ids":[]}`, movieID))
+	valid := postRoom(fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0,"invited_user_ids":[]}`, movieID), true)
 	if valid.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for in-range subtitle_track, got %d: %s", valid.Code, valid.Body.String())
 	}
@@ -1700,7 +1129,6 @@ func TestCreateWatchRoom_HTTP_SubtitleTrackOutOfRangeRejected(t *testing.T) {
 
 func TestCreateWatchRoom_PersistsStreamPins(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	insertWatchRoomTestVideoStream(t, app, movieID, "High")
@@ -1714,8 +1142,8 @@ func TestCreateWatchRoom_PersistsStreamPins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert audio stream: %v", err)
 	}
-	insertWatchRoomTestSubtitle(t, app, movieID, 3, "spa")
-	handler := mountWatchRoomRouter(t, app, ownerID)
+	insertTestSubtitle(t, app, movieID, 3, "subrip", "spa")
+	handler := authenticatedRouter(t, app, ownerID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"subtitle_track":0}`, movieID)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -1756,7 +1184,6 @@ func TestCreateWatchRoom_PersistsStreamPins(t *testing.T) {
 
 func TestVerifyWatchRoomStreamPins(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	_, movieID := createTestUserAndMovie(t, app)
 	ctx := context.Background()
@@ -1770,7 +1197,7 @@ func TestVerifyWatchRoomStreamPins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert audio stream: %v", err)
 	}
-	insertWatchRoomTestSubtitle(t, app, movieID, 5, "eng")
+	insertTestSubtitle(t, app, movieID, 5, "subrip", "eng")
 
 	pinInt := func(v int64) sql.NullInt64 { return sql.NullInt64{Int64: v, Valid: true} }
 	pinStr := func(v string) sql.NullString { return sql.NullString{String: v, Valid: true} }
@@ -1853,13 +1280,11 @@ func TestVerifyWatchRoomStreamPins(t *testing.T) {
 
 func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
-	app.SetSettings(&database.Setting{})
 	app.FFmpeg = &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
 			{
 				WriteFiles: func(outDir string) error {
-					return writeTestHLSFixture(outDir, testFMP4Fixture{
+					return fmp4testutil.WriteHLSFixture(outDir, fmp4testutil.Fixture{
 						SafeVideo: true,
 						Segments:  1,
 					})
@@ -1868,16 +1293,9 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 		},
 	}
 
-	owner, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "Drift Owner",
-		Email:    "drift-owner@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create owner: %v", err)
-	}
+	owner := createTestUser(t, app, "Drift Owner", "drift-owner@example.com", false)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
-	handler := mountWatchRoomRouter(t, app, owner.ID)
+	handler := authenticatedRouter(t, app, owner.ID)
 
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"%s","audio_track":0,"invited_user_ids":[]}`, movieID, helpers.HLS_PROFILE_720P_3MBPS)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
@@ -1913,7 +1331,7 @@ func TestWatchRoomHLSManifest_ReturnsConflictOnStreamDrift(t *testing.T) {
 
 	// Simulate a rescan of a replaced file whose track layout differs: the
 	// ordinal still resolves, but to a different absolute stream index.
-	_, err = app.DB.Exec(`UPDATE audio_streams SET stream_index = 2 WHERE movie_id = ?`, movieID)
+	_, err := app.DB.Exec(`UPDATE audio_streams SET stream_index = 2 WHERE movie_id = ?`, movieID)
 	if err != nil {
 		t.Fatalf("shift audio stream index: %v", err)
 	}
@@ -1942,9 +1360,8 @@ func TestWatchRoomMediaSubtitleDriftConformsToOpenAPI(t *testing.T) {
 		for _, mode := range []string{"direct", helpers.HLS_PROFILE_720P_3MBPS} {
 			t.Run(mode+"/"+mutation.name, func(t *testing.T) {
 				app := setupSessionTestApp(t)
-				defer app.DB.Close()
 				ownerID, movieID := createTestUserAndMovie(t, app)
-				insertWatchRoomTestSubtitle(t, app, movieID, 5, "eng")
+				insertTestSubtitle(t, app, movieID, 5, "subrip", "eng")
 				room := createTestRoomWithMode(t, app, ownerID, movieID, mode)
 				addMembersToRoom(t, app, room.ID, ownerID)
 				_, err := app.DB.Exec(`UPDATE watch_rooms SET subtitle_track = 0, subtitle_stream_index = 5, subtitle_language = 'eng' WHERE id = ?`, room.ID)
@@ -1964,7 +1381,7 @@ func TestWatchRoomMediaSubtitleDriftConformsToOpenAPI(t *testing.T) {
 				}
 				request := httptest.NewRequest(http.MethodGet, path, nil)
 				response := httptest.NewRecorder()
-				mountWatchRoomRouter(t, app, ownerID).ServeHTTP(response, request)
+				authenticatedRouter(t, app, ownerID).ServeHTTP(response, request)
 				if response.Code != http.StatusConflict {
 					t.Fatalf("status = %d: %s", response.Code, response.Body.String())
 				}

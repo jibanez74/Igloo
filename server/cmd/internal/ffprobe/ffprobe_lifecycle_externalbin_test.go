@@ -72,3 +72,118 @@ func TestNewRejectsInvalidExecutableAndCanRetry(t *testing.T) {
 		t.Fatalf("retry binary = %q, want %q", retried.(*ffprobe).bin, goodPath)
 	}
 }
+
+func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
+	prepareSingletonLifecycleTest(t)
+	script := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test"})
+	t.Setenv("IGLOO_FFPROBE_PATH", "  "+script+"  ")
+
+	candidate, err := resolveBinaryCandidate()
+	if err != nil {
+		t.Fatalf("resolveBinaryCandidate: %v", err)
+	}
+	if candidate.path != script {
+		t.Fatalf("candidate path = %q, want %q", candidate.path, script)
+	}
+	if candidate.extractedDir != "" {
+		t.Fatalf("external candidate extractedDir = %q, want empty", candidate.extractedDir)
+	}
+}
+
+func countVersionCalls(t *testing.T, callLog string) int {
+	t.Helper()
+	calls := 0
+	for _, line := range readArgumentLog(t, callLog) {
+		if line == "-version" {
+			calls++
+		}
+	}
+	return calls
+}
+
+func TestNewVerifiesAndReusesSingleton(t *testing.T) {
+	prepareSingletonLifecycleTest(t)
+	callLog := filepath.Join(t.TempDir(), "calls.log")
+	script := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test", callLog: callLog})
+	t.Setenv("IGLOO_FFPROBE_PATH", script)
+
+	first, err := New()
+	if err != nil {
+		t.Fatalf("first New: %v", err)
+	}
+	second, err := New()
+	if err != nil {
+		t.Fatalf("second New: %v", err)
+	}
+	if first != second {
+		t.Fatal("New did not reuse the singleton instance")
+	}
+	versionCalls := countVersionCalls(t, callLog)
+	if versionCalls != 1 {
+		t.Fatalf("version calls = %d, want 1", versionCalls)
+	}
+}
+
+func TestCleanupResetsSingletonAndRemovesOwnedDirectory(t *testing.T) {
+	prepareSingletonLifecycleTest(t)
+	ownedDir := filepath.Join(t.TempDir(), "extracted")
+	err := os.Mkdir(ownedDir, 0755)
+	if err != nil {
+		t.Fatalf("mkdir extracted dir: %v", err)
+	}
+
+	instance = &ffprobe{bin: "/unused"}
+	extractedDir = ownedDir
+	err = Cleanup()
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	if instance != nil || extractedDir != "" {
+		t.Fatalf("singleton state was not reset: instance=%v extractedDir=%q", instance, extractedDir)
+	}
+	_, err = os.Stat(ownedDir)
+	if !os.IsNotExist(err) {
+		t.Fatalf("owned extraction directory still exists: %v", err)
+	}
+
+	// With nothing initialized, Cleanup is a no-op.
+	err = Cleanup()
+	if err != nil {
+		t.Fatalf("idle Cleanup: %v", err)
+	}
+}
+
+func TestCleanupAllowsFreshInitialization(t *testing.T) {
+	prepareSingletonLifecycleTest(t)
+	firstScript := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test"})
+	t.Setenv("IGLOO_FFPROBE_PATH", firstScript)
+	first, err := New()
+	if err != nil {
+		t.Fatalf("first New: %v", err)
+	}
+	err = Cleanup()
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	if instance != nil {
+		t.Fatal("Cleanup left the singleton in place")
+	}
+
+	callLog := filepath.Join(t.TempDir(), "calls.log")
+	secondScript := writeFakeFFprobe(t, fakeFFprobeSpec{stdout: "ffprobe version test", callLog: callLog})
+	t.Setenv("IGLOO_FFPROBE_PATH", secondScript)
+	second, err := New()
+	if err != nil {
+		t.Fatalf("second New: %v", err)
+	}
+	if first == second {
+		t.Fatal("Cleanup did not permit a fresh singleton")
+	}
+	if second.(*ffprobe).bin != secondScript {
+		t.Fatalf("fresh singleton binary = %q, want %q", second.(*ffprobe).bin, secondScript)
+	}
+	versionCalls := countVersionCalls(t, callLog)
+	if versionCalls != 1 {
+		t.Fatalf("fresh singleton verified the binary %d times, want 1", versionCalls)
+	}
+}

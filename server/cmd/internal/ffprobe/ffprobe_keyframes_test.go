@@ -117,7 +117,22 @@ func TestKeyframeAtOrBeforeUsesAbsoluteBoundedInterval(t *testing.T) {
 		t.Fatalf("keyframe = %.3f, want 599", keyframe)
 	}
 
-	requireArgumentValue(t, readArgumentLog(t, argsLog), "-read_intervals", "570.000%601.000")
+	args := readArgumentLog(t, argsLog)
+	requireArgumentValue(t, args, "-select_streams", "2")
+	requireArgumentValue(t, args, "-read_intervals", "570.000%601.000")
+	requireArgumentValue(t, args, "-show_entries", "packet=pts_time,flags")
+}
+
+func TestKeyframeAtOrBeforeReportsProbeFailure(t *testing.T) {
+	probe := &ffprobe{bin: writeFakeFFprobe(t, fakeFFprobeSpec{
+		stderr:   "movie.mkv: Invalid data found when processing input",
+		exitCode: 1,
+	})}
+
+	_, err := probe.KeyframeAtOrBefore(context.Background(), "/tmp/movie.mkv", 0, 600)
+	if err == nil || !strings.Contains(err.Error(), "ffprobe keyframe lookup failed") {
+		t.Fatalf("error = %v, want probe failure", err)
+	}
 }
 
 func TestKeyframeAtOrBeforeClampsNearZeroInterval(t *testing.T) {

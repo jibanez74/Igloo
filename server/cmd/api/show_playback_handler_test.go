@@ -15,8 +15,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/keyframeindex"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // playbackEpisodeFixture is one show with one combined file backing two
@@ -24,13 +22,12 @@ import (
 // video, an audio and a subtitle stream plus a chapter, and both episodes
 // resolve to it.
 type playbackEpisodeFixture struct {
-	ShowID    int64
-	SeasonID  int64
-	FileID    int64
-	Episode1  int64
-	Episode2  int64
-	FilePath  string
-	Container string
+	ShowID   int64
+	SeasonID int64
+	FileID   int64
+	Episode1 int64
+	Episode2 int64
+	FilePath string
 }
 
 func seedPlaybackEpisode(t *testing.T, app *Application) playbackEpisodeFixture {
@@ -143,13 +140,12 @@ func seedPlaybackEpisodeAt(t *testing.T, app *Application, path string, containe
 	}
 
 	return playbackEpisodeFixture{
-		ShowID:    show.ID,
-		SeasonID:  season.ID,
-		FileID:    file.ID,
-		Episode1:  episodeIDs[0],
-		Episode2:  episodeIDs[1],
-		FilePath:  path,
-		Container: container,
+		ShowID:   show.ID,
+		SeasonID: season.ID,
+		FileID:   file.ID,
+		Episode1: episodeIDs[0],
+		Episode2: episodeIDs[1],
+		FilePath: path,
 	}
 }
 
@@ -164,20 +160,16 @@ func episodePlaybackSource(t *testing.T, app *Application, episodeID int64) play
 
 func TestGetShowEpisode_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode User", "episode@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
 	chain := seedNextEpisodeChain(t, app, fixture)
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d", fixture.Episode1), nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
@@ -286,7 +278,6 @@ func seedNextEpisodeChain(t *testing.T, app *Application, fixture playbackEpisod
 
 func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Next User", "next@example.com", false)
 	other := createTestUser(t, app, "Other User", "other@example.com", false)
@@ -299,7 +290,7 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 		EpisodeID:     chain.S1E3,
 		ProgressSec:   600,
 		DurationSec:   2700,
-		SaveSessionID: "11111111-1111-4111-8111-111111111111",
+		SaveSessionID: testWatchProgressSaveSessionID,
 		SaveSequence:  1,
 	})
 	if err != nil {
@@ -339,13 +330,10 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 	}
 
 	// The header route serves null after the last episode.
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d", chain.S0E1), nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"next_episode":null`) {
 		t.Fatalf("last episode header = %d %s, want next_episode null", response.Code, response.Body.String())
 	}
@@ -354,7 +342,6 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 
 func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Gap User", "gap@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -409,7 +396,6 @@ func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
 
 func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Dupe User", "dupe@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -420,31 +406,7 @@ func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testi
 	// combined file, it carries the higher file id and so loses the
 	// lowest-id race GetShowFileForEpisode runs: owning a file of its own
 	// does not make S1E2 playable as anything but the file that just ended.
-	path := fmt.Sprintf("/tmp/%s-S01E02.mkv", sanitizeTestPathComponent(t.Name()))
-	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
-		SeasonID:  fixture.SeasonID,
-		FilePath:  path,
-		FileName:  filepath.Base(path),
-		Size:      1_000_000,
-		Container: "mkv",
-		MimeType:  helpers.VideoMimeTypes["mkv"],
-		Duration:  sql.NullFloat64{Float64: 2700, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("upsert duplicate file: %v", err)
-	}
-	if duplicate.ID <= fixture.FileID {
-		t.Fatalf("duplicate file id = %d, want one above the combined file %d", duplicate.ID, fixture.FileID)
-	}
-	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
-		EpisodeID:    fixture.Episode2,
-		FileID:       duplicate.ID,
-		SeasonID:     fixture.SeasonID,
-		EpisodeOrder: 0,
-	})
-	if err != nil {
-		t.Fatalf("link duplicate file: %v", err)
-	}
+	linkDuplicateEpisodeFile(t, app, fixture, fixture.Episode2, fmt.Sprintf("/tmp/%s-S01E02.mkv", sanitizeTestPathComponent(t.Name())), 2700)
 
 	selected, err := app.Queries.GetShowFileForEpisode(ctx, fixture.Episode2)
 	if err != nil {
@@ -471,12 +433,9 @@ func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testi
 
 func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode User", "episode@example.com", false)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	for _, tc := range []struct {
 		path   string
@@ -491,9 +450,8 @@ func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 		{"/api/shows/episodes/999999/subtitles/0/web.vtt", http.StatusNotFound, "episode not found"},
 	} {
 		request := httptest.NewRequest(http.MethodGet, tc.path, nil)
-		request.AddCookie(cookie)
 		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, request)
+		handler.ServeHTTP(response, request)
 		if response.Code != tc.status || !strings.Contains(response.Body.String(), tc.body) {
 			t.Fatalf("%s: response = %d %s, want %d %q", tc.path, response.Code, response.Body.String(), tc.status, tc.body)
 		}
@@ -502,14 +460,11 @@ func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 
 func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode Tech User", "episode-tech@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
 
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	type techBody struct {
 		Data struct {
@@ -535,9 +490,8 @@ func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 	var bodies []techBody
 	for _, episodeID := range []int64{fixture.Episode1, fixture.Episode2} {
 		request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d/technical-details", episodeID), nil)
-		request.AddCookie(cookie)
 		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, request)
+		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusOK {
 			t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 		}
@@ -570,42 +524,26 @@ func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 
 func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode Progress User", "episode-progress@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
-
-	exchange := func(operationID string, req *http.Request) *httptest.ResponseRecorder {
-		t.Helper()
-		req.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		app.Router.ServeHTTP(response, req)
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, body = %s", operationID, response.Code, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-		return response
-	}
+	handler := authenticatedRouter(t, app, user.ID)
 
 	progressPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress", fixture.Episode1)
-	empty := exchange("getEpisodeWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil))
+	empty := serveOpenAPIExchange(t, handler, "getEpisodeWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
 	if !strings.Contains(empty.Body.String(), `"progress_sec":null`) {
 		t.Fatalf("fresh progress = %s, want nulls", empty.Body.String())
 	}
 
 	updateBody := `{"progress_sec":120,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`
-	exchange("updateEpisodeWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody))
+	serveOpenAPIExchange(t, handler, "updateEpisodeWatchProgress", newOpenAPIJSONRequest(http.MethodPut, progressPath, updateBody), http.StatusOK)
 
 	// The season listing carries the position for the same user, and only for
 	// the episode that was played: the other episode of the combined file is
 	// its own logical episode.
 	listRequest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/%d/seasons/1/episodes", fixture.ShowID), nil)
-	listRequest.AddCookie(cookie)
 	listResponse := httptest.NewRecorder()
-	app.Router.ServeHTTP(listResponse, listRequest)
+	handler.ServeHTTP(listResponse, listRequest)
 	if listResponse.Code != http.StatusOK {
 		t.Fatalf("season list status = %d, body = %s", listResponse.Code, listResponse.Body.String())
 	}
@@ -636,13 +574,21 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	assertOpenAPIExchange(t, "getShowSeasonEpisodes", listRequest, listResponse)
 
 	watchedPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress/watched", fixture.Episode2)
-	watched := exchange("setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":true}`))
+	watched := serveOpenAPIExchange(t, handler, "setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":true}`), http.StatusOK)
 	if !strings.Contains(watched.Body.String(), fmt.Sprintf(`"episode_id":%d`, fixture.Episode2)) {
 		t.Fatalf("watched response = %s, want the episode id", watched.Body.String())
 	}
 	row, err := app.Queries.GetShowEpisodeWatchProgress(context.Background(), database.GetShowEpisodeWatchProgressParams{UserID: user.ID, EpisodeID: fixture.Episode2})
 	if err != nil || !row.Watched {
 		t.Fatalf("watched row = %+v, %v", row, err)
+	}
+	unwatched := serveOpenAPIExchange(t, handler, "setEpisodeWatched", newOpenAPIJSONRequest(http.MethodPut, watchedPath, `{"watched":false}`), http.StatusOK)
+	if !strings.Contains(unwatched.Body.String(), `"watched":false`) {
+		t.Fatalf("unwatched response = %s, want watched false", unwatched.Body.String())
+	}
+	row, err = app.Queries.GetShowEpisodeWatchProgress(context.Background(), database.GetShowEpisodeWatchProgressParams{UserID: user.ID, EpisodeID: fixture.Episode2})
+	if err != nil || row.Watched {
+		t.Fatalf("row after unwatched = %+v, %v, want watched false", row, err)
 	}
 
 	// Another user sees none of it.
@@ -655,7 +601,7 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 		t.Fatalf("other user's progress = %s, want nulls", otherResponse.Body.String())
 	}
 
-	exchange("deleteEpisodeWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil))
+	serveOpenAPIExchange(t, handler, "deleteEpisodeWatchProgress", httptest.NewRequest(http.MethodDelete, progressPath, nil), http.StatusOK)
 	_, err = app.Queries.GetShowEpisodeWatchProgress(context.Background(), database.GetShowEpisodeWatchProgressParams{UserID: user.ID, EpisodeID: fixture.Episode1})
 	if err != sql.ErrNoRows {
 		t.Fatalf("progress after delete: err = %v, want no rows", err)
@@ -664,28 +610,23 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 
 func TestEpisodeWatchProgress_CompletionMarksWatchedAndCascades(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Completion User", "completion@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	progressPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress", fixture.Episode1)
 	request := newOpenAPIJSONRequest(http.MethodPut, progressPath, `{"progress_sec":7150,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"watched":true`) {
 		t.Fatalf("completion response = %d %s", response.Code, response.Body.String())
 	}
 
 	// An unknown episode is a 404 on the write path via the foreign key.
 	missing := newOpenAPIJSONRequest(http.MethodPut, "/api/shows/episodes/999999/watch-progress", `{"progress_sec":10,"duration_sec":7200,"save_session_id":"11111111-1111-4111-8111-111111111111","save_sequence":1}`)
-	missing.AddCookie(cookie)
 	missingResponse := httptest.NewRecorder()
-	app.Router.ServeHTTP(missingResponse, missing)
+	handler.ServeHTTP(missingResponse, missing)
 	if missingResponse.Code != http.StatusNotFound {
 		t.Fatalf("unknown episode write = %d %s, want 404", missingResponse.Code, missingResponse.Body.String())
 	}
@@ -708,13 +649,10 @@ func TestEpisodeWatchProgress_CompletionMarksWatchedAndCascades(t *testing.T) {
 
 func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Stop User", "stop@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
-	app.InitSession()
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	media := episodeRef(fixture.Episode1)
 	key := HLSSessionKey(media, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), nil, testPlaybackSessionID, 0, user.ID)
@@ -725,9 +663,8 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	app.HLSSessionCache.SetDefault(movieKey, &HLSSession{Media: movieRef(fixture.Episode1), FileID: fixture.Episode1, OwnerUserID: user.ID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
 
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/shows/episodes/%d/hls/session/stop?playback_session=%s", fixture.Episode1, testPlaybackSessionID), nil)
-	request.AddCookie(cookie)
 	response := httptest.NewRecorder()
-	app.Router.ServeHTTP(response, request)
+	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
@@ -741,15 +678,9 @@ func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	}
 }
 
-func TestHLSSessionKey_SeparatesMediaKinds(t *testing.T) {
-	movieKey := HLSSessionKey(movieRef(9), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
-	episodeKey := HLSSessionKey(episodeRef(9), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
-	if movieKey == episodeKey {
-		t.Fatalf("movie and episode keys collide: %q", movieKey)
-	}
-	if !strings.Contains(movieKey, ":movie:9:") || !strings.Contains(episodeKey, ":episode:9:") {
-		t.Fatalf("keys do not name their kind: %q %q", movieKey, episodeKey)
-	}
+// The key itself separates media kinds (TestHLSSessionKey); access checks
+// must too, so a movie ref never reaches an episode session with the same id.
+func TestCanAccessPersonalHLSSession_SeparatesMediaKinds(t *testing.T) {
 	session := &HLSSession{Media: episodeRef(9), OwnerUserID: 1}
 	if canAccessPersonalHLSSession(session, movieRef(9), 1) {
 		t.Fatal("a movie ref must not access an episode session")
@@ -761,7 +692,6 @@ func TestHLSSessionKey_SeparatesMediaKinds(t *testing.T) {
 
 func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 	ctx := context.Background()
 
@@ -794,7 +724,6 @@ func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 
 func TestEpisodeKeyframeAndRemuxPersistenceUseTheShowTables(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 	ctx := context.Background()
 	source := episodePlaybackSource(t, app, fixture.Episode1)
@@ -833,7 +762,6 @@ func TestEpisodeKeyframeAndRemuxPersistenceUseTheShowTables(t *testing.T) {
 
 func TestInvalidateCommittedShowFile_EvictsOnlyThatFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 
 	episodeKey := HLSSessionKey(episodeRef(fixture.Episode1), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
@@ -872,9 +800,9 @@ func TestInvalidateCommittedShowFile_EvictsOnlyThatFile(t *testing.T) {
 	}
 }
 
-func serveEpisodeSubtitleWebVTT(app *Application, episodeID int64, trackIndex string, query string) *httptest.ResponseRecorder {
-	router := chi.NewRouter()
-	router.Get("/api/shows/episodes/{id}/subtitles/{trackIndex}/web.vtt", app.EpisodeSubtitleWebVTT)
+func serveEpisodeSubtitleWebVTT(t *testing.T, app *Application, userID int64, episodeID int64, trackIndex string, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	router := authenticatedRouter(t, app, userID)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d/subtitles/%s/web.vtt%s", episodeID, trackIndex, query), nil)
 	recorder := httptest.NewRecorder()
@@ -884,17 +812,17 @@ func serveEpisodeSubtitleWebVTT(app *Application, episodeID int64, trackIndex st
 
 func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	fake := &fakeFFmpeg{}
 	app.FFmpeg = fake
 	fixture := seedPlaybackEpisode(t, app)
 
-	first := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "0", "")
+	first := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "0", "")
 	if first.Code != http.StatusOK || first.Body.String() != "WEBVTT\n" {
 		t.Fatalf("first = %d %q", first.Code, first.Body.String())
 	}
 	// The sibling episode is the same file, so its track is already cached.
-	second := serveEpisodeSubtitleWebVTT(app, fixture.Episode2, "0", "")
+	second := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode2, "0", "")
 	if second.Code != http.StatusOK || fake.SubtitleCallCount() != 1 {
 		t.Fatalf("sibling = %d, extractor calls = %d, want one extraction", second.Code, fake.SubtitleCallCount())
 	}
@@ -902,11 +830,11 @@ func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *te
 		t.Fatal("cache is not keyed on the episode's file")
 	}
 
-	shifted := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "0", "?start=-1")
+	shifted := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "0", "?start=-1")
 	if shifted.Code != http.StatusBadRequest {
 		t.Fatalf("negative start = %d, want 400", shifted.Code)
 	}
-	outOfRange := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "3", "")
+	outOfRange := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "3", "")
 	if outOfRange.Code != http.StatusBadRequest {
 		t.Fatalf("track out of range = %d, want 400", outOfRange.Code)
 	}
@@ -915,7 +843,7 @@ func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	bitmap := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "0", "")
+	bitmap := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "0", "")
 	if bitmap.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("bitmap = %d, want 415", bitmap.Code)
 	}
@@ -923,9 +851,8 @@ func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *te
 
 func TestEpisodeHLSManifest_ValidatesParamsAgainstTheEpisodeRoute(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
-	handler := newMediaHLSTestHandler(t, app, 42, mediaKindEpisode)
+	handler := authenticatedRouter(t, app, 42)
 
 	for _, tc := range []struct {
 		name   string
@@ -954,12 +881,11 @@ func TestEpisodeHLSManifest_ValidatesParamsAgainstTheEpisodeRoute(t *testing.T) 
 // notice.
 func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture), hlsRunPlan(transcodeFixture)}}
 	app.FFmpeg = ffmpegRunner
 	fixture := seedPlaybackEpisode(t, app)
 	userID := int64(42)
-	handler := newMediaHLSTestHandler(t, app, userID, mediaKindEpisode)
+	handler := authenticatedRouter(t, app, userID)
 
 	// Both episodes of the combined file start a session on that one file.
 	for _, episodeID := range []int64{fixture.Episode1, fixture.Episode2} {
@@ -1007,30 +933,30 @@ func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
 // An episode with two copies on disk resolves to the lowest file id every
 // time, on both the HLS/subtitle path (loadPlaybackSource) and the direct
 // stream path (episodeStreamFile).
-func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	fixture := seedPlaybackEpisode(t, app)
+// linkDuplicateEpisodeFile scans a second copy of an episode's file into the
+// fixture's season. It is inserted after the combined file, so it carries the
+// higher file id and loses the lowest-id choice GetShowFileForEpisode makes.
+func linkDuplicateEpisodeFile(t *testing.T, app *Application, fixture playbackEpisodeFixture, episodeID int64, path string, durationSec float64) {
+	t.Helper()
 	ctx := context.Background()
 
-	copyPath := strings.TrimSuffix(fixture.FilePath, ".mkv") + " (copy).mkv"
 	duplicate, err := app.Queries.UpsertShowFile(ctx, database.UpsertShowFileParams{
 		SeasonID:  fixture.SeasonID,
-		FilePath:  copyPath,
-		FileName:  filepath.Base(copyPath),
-		Size:      2_000_000,
+		FilePath:  path,
+		FileName:  filepath.Base(path),
+		Size:      1_000_000,
 		Container: "mkv",
 		MimeType:  helpers.VideoMimeTypes["mkv"],
-		Duration:  sql.NullFloat64{Float64: 7200, Valid: true},
+		Duration:  sql.NullFloat64{Float64: durationSec, Valid: true},
 	})
 	if err != nil {
 		t.Fatalf("upsert duplicate file: %v", err)
 	}
 	if duplicate.ID <= fixture.FileID {
-		t.Fatalf("duplicate id %d is not above the original %d", duplicate.ID, fixture.FileID)
+		t.Fatalf("duplicate file id = %d, want one above the original %d", duplicate.ID, fixture.FileID)
 	}
 	err = app.Queries.LinkShowEpisodeFile(ctx, database.LinkShowEpisodeFileParams{
-		EpisodeID:    fixture.Episode1,
+		EpisodeID:    episodeID,
 		FileID:       duplicate.ID,
 		SeasonID:     fixture.SeasonID,
 		EpisodeOrder: 0,
@@ -1038,6 +964,14 @@ func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing
 	if err != nil {
 		t.Fatalf("link duplicate file: %v", err)
 	}
+}
+
+func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing.T) {
+	app := setupTestApp(t)
+	fixture := seedPlaybackEpisode(t, app)
+	ctx := context.Background()
+
+	linkDuplicateEpisodeFile(t, app, fixture, fixture.Episode1, strings.TrimSuffix(fixture.FilePath, ".mkv")+" (copy).mkv", 7200)
 
 	source := episodePlaybackSource(t, app, fixture.Episode1)
 	if source.FileID != fixture.FileID || source.FilePath != fixture.FilePath {

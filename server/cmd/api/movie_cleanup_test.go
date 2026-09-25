@@ -21,7 +21,6 @@ import (
 
 func TestMovieScanDeletionTearsDownWatchRooms(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 	ctx := context.Background()
 	ownerID, unrelatedMovieID := createTestUserAndMovie(t, app)
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 720)
@@ -37,7 +36,6 @@ func TestMovieScanDeletionTearsDownWatchRooms(t *testing.T) {
 		createTestRoom(t, app, ownerID, unrelatedMovieID),
 	}
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 	var sockets []*websocket.Conn
 	for _, room := range rooms {
 		addMembersToRoom(t, app, room.ID, ownerID)
@@ -208,7 +206,6 @@ func (p *cleanupRescanProbe) GetMetadata(context.Context, string) (*ffprobe.Ffpr
 
 func TestMovieRescanPreservesWatchRooms(t *testing.T) {
 	app := setupTestApp(t)
-	defer closeWatchRoomWSTestApp(t, app)
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	root := t.TempDir()
 	path := filepath.Join(root, "movie.mp4")
@@ -227,7 +224,6 @@ func TestMovieRescanPreservesWatchRooms(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := setupWatchRoomWSTestServer(t, app)
-	defer server.Close()
 	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
 	defer conn.Close()
 	readUntilEventType(t, conn, "room_snapshot")

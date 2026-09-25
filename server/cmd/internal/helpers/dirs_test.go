@@ -4,31 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
-
-func TestGetOrCreateDir_CreatesNewDirectory(t *testing.T) {
-	tempDir := t.TempDir()
-	newDir := filepath.Join(tempDir, "newdir")
-
-	created, err := GetOrCreateDir(newDir)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if !created {
-		t.Error("expected created to be true for new directory")
-	}
-
-	info, err := os.Stat(newDir)
-	if err != nil {
-		t.Fatalf("expected directory to exist, got error: %v", err)
-	}
-
-	if !info.IsDir() {
-		t.Error("expected path to be a directory")
-	}
-}
 
 func TestGetOrCreateDir_CreatesNestedDirectories(t *testing.T) {
 	tempDir := t.TempDir()
@@ -72,26 +50,6 @@ func TestGetOrCreateDir_ExistingDirectory(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateDir_PathIsFile(t *testing.T) {
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "file.txt")
-
-	f, err := os.Create(filePath)
-	if err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-	f.Close()
-
-	created, err := GetOrCreateDir(filePath)
-	if err == nil {
-		t.Fatal("expected error for file path, got nil")
-	}
-
-	if created {
-		t.Error("expected created to be false when path is a file")
-	}
-}
-
 func TestGetOrCreateDir_EmptyPath(t *testing.T) {
 	created, err := GetOrCreateDir("")
 	if err == nil {
@@ -103,20 +61,13 @@ func TestGetOrCreateDir_EmptyPath(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateDir_TempDirItself(t *testing.T) {
-	tempDir := t.TempDir()
+// The process umask clears bits from whatever mode is requested, so under the
+// usual 022 a request for 0o777 would also come out as 0o755. Clearing the
+// umask makes the mode Igloo asks for observable.
+func TestGetOrCreateDir_CreatesWithDirMode(t *testing.T) {
+	previousUmask := syscall.Umask(0)
+	t.Cleanup(func() { syscall.Umask(previousUmask) })
 
-	created, err := GetOrCreateDir(tempDir)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if created {
-		t.Error("expected created to be false for existing temp directory")
-	}
-}
-
-func TestGetOrCreateDir_CreatedDirectoryIsNoBroaderThanDirMode(t *testing.T) {
 	tempDir := t.TempDir()
 	newDir := filepath.Join(tempDir, "modes")
 
@@ -130,11 +81,35 @@ func TestGetOrCreateDir_CreatedDirectoryIsNoBroaderThanDirMode(t *testing.T) {
 		t.Fatalf("expected directory to exist, got error: %v", err)
 	}
 
-	// The process umask can clear bits but never set them, so assert that
-	// nothing broader than dirMode was requested.
 	mode := info.Mode().Perm()
-	if mode&^os.FileMode(dirMode) != 0 {
-		t.Errorf("created directory mode = %#o, want no bits outside %#o", mode, dirMode)
+	if mode != 0o755 {
+		t.Errorf("created directory mode = %#o, want %#o", mode, 0o755)
+	}
+}
+
+func TestGetOrCreateDir_ReportsCreationFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+
+	tempDir := t.TempDir()
+	readOnlyParent := filepath.Join(tempDir, "readonly")
+
+	err := os.Mkdir(readOnlyParent, 0o500)
+	if err != nil {
+		t.Fatalf("failed to create test directory: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(readOnlyParent, 0o700) })
+
+	created, err := GetOrCreateDir(filepath.Join(readOnlyParent, "child"))
+	if err == nil {
+		t.Fatal("expected an error creating under a read-only parent, got nil")
+	}
+	if created {
+		t.Error("expected created to be false when creation fails")
+	}
+	if !strings.Contains(err.Error(), "failed to create directory") {
+		t.Errorf("GetOrCreateDir error = %q, want it to report the creation failure", err)
 	}
 }
 

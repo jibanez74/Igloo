@@ -125,3 +125,74 @@ func TestShiftWebVTT_EmptyInputIsUnchanged(t *testing.T) {
 		t.Fatalf("empty input must stay empty, got %q", string(got))
 	}
 }
+
+// Dropping a cue removes the line before its timing only when that line is a
+// cue identifier; a header or structural block immediately before it stays.
+func TestShiftWebVTT_DroppedCueKeepsStructuralLineBeforeIt(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+	}{
+		{name: "header", line: "WEBVTT"},
+		{name: "note", line: "NOTE early cue follows"},
+		{name: "style", line: "STYLE"},
+		{name: "region", line: "REGION id:r1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := []byte(tt.line + "\n" +
+				"00:00:01.000 --> 00:00:02.000\nEarly\n\n" +
+				"00:10:05.000 --> 00:10:07.000\nKept\n")
+
+			got := string(ShiftWebVTT(raw, 600))
+
+			if !strings.HasPrefix(got, tt.line+"\n") {
+				t.Fatalf("structural line was dropped with the cue: %s", got)
+			}
+			if strings.Contains(got, "Early") {
+				t.Fatalf("early cue survived: %s", got)
+			}
+			if !strings.Contains(got, "00:00:05.000 --> 00:00:07.000\nKept") {
+				t.Fatalf("kept cue was not rebased: %s", got)
+			}
+		})
+	}
+}
+
+func TestShiftWebVTT_FormatsHoursAndRoundsToMilliseconds(t *testing.T) {
+	tests := []struct {
+		name   string
+		raw    string
+		offset float64
+		want   string
+	}{
+		{
+			name:   "an hour or more keeps the hour field",
+			raw:    "01:10:05.000 --> 01:10:07.000",
+			offset: 600,
+			want:   "01:00:05.000 --> 01:00:07.000",
+		},
+		{
+			name:   "sub-millisecond remainders round to the nearest millisecond",
+			raw:    "00:10:05.000 --> 00:10:07.000",
+			offset: 599.9994,
+			want:   "00:00:05.001 --> 00:00:07.001",
+		},
+		{
+			name:   "rounding down does not borrow from the seconds field",
+			raw:    "00:00:10.000 --> 00:00:12.000",
+			offset: 0.0006,
+			want:   "00:00:09.999 --> 00:00:11.999",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := string(ShiftWebVTT([]byte("WEBVTT\n\n"+tt.raw+"\nLine\n"), tt.offset))
+			if !strings.Contains(got, tt.want) {
+				t.Fatalf("ShiftWebVTT(%q, %v) = %s, want it to contain %q", tt.raw, tt.offset, got, tt.want)
+			}
+		})
+	}
+}

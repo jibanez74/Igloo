@@ -14,11 +14,11 @@ func TestBuildHLSAssetQuerySuffix(t *testing.T) {
 	got := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      testIntPtr(2),
 		StartSec:        testIntPtr(120),
-		PlaybackSession: "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
+		PlaybackSession: testPlaybackSessionID,
 		Reload:          "7",
 	})
 
-	if got != "?audio_track=2&playback_session=4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4&reload=7&start=120" {
+	if got != "?audio_track=2&playback_session="+testPlaybackSessionID+"&reload=7&start=120" {
 		t.Fatalf("buildHLSAssetQuerySuffix() = %q", got)
 	}
 
@@ -31,11 +31,11 @@ func TestBuildHLSAssetQuerySuffix(t *testing.T) {
 			MaxChannels: 6,
 		},
 		StartSec:        testIntPtr(120),
-		PlaybackSession: "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4",
+		PlaybackSession: testPlaybackSessionID,
 		Reload:          "7",
 	})
 
-	if got != "?audio_channels=6&audio_codec=eac3&audio_track=2&playback_session=4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4&reload=7&start=120" {
+	if got != "?audio_channels=6&audio_codec=eac3&audio_track=2&playback_session="+testPlaybackSessionID+"&reload=7&start=120" {
 		t.Fatalf("buildHLSAssetQuerySuffix() with audio profile = %q", got)
 	}
 }

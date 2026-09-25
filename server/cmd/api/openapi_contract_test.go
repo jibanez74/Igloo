@@ -45,10 +45,6 @@ func newOpenAPIRequest(method, target, contentType string, body []byte) *http.Re
 	return request
 }
 
-func addOpenAPITestCookie(request *http.Request) {
-	request.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
-}
-
 // assertOpenAPIExchange validates the observable HTTP boundary rather than a
 // handler implementation detail. Call it from endpoint tests after the real
 // request has been served. Requests carrying a body must come from
@@ -56,6 +52,21 @@ func addOpenAPITestCookie(request *http.Request) {
 func assertOpenAPIExchange(t *testing.T, operationID string, request *http.Request, response *httptest.ResponseRecorder) {
 	t.Helper()
 	assertOpenAPIHTTPExchange(t, operationID, request, response, true)
+}
+
+// serveOpenAPIExchange serves req through handler, requires wantStatus, and
+// validates the exchange against the contract. Requests carrying a body must
+// come from newOpenAPIJSONRequest so the consumed body can be replayed.
+func serveOpenAPIExchange(t *testing.T, handler http.Handler, operationID string, req *http.Request, wantStatus int) *httptest.ResponseRecorder {
+	t.Helper()
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != wantStatus {
+		t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
+	}
+	assertOpenAPIExchange(t, operationID, req, response)
+	return response
 }
 
 // A list operation validated against an empty array proves nothing about its
@@ -239,20 +250,47 @@ func loadOpenAPIContract(t *testing.T) (*openapi3.T, routers.Router) {
 	return openAPIContractDoc, openAPIContractRouter
 }
 
+// openAPIDocumentPath locates docs/openapi.json relative to this package so
+// the contract tests run from any working directory.
+func openAPIDocumentPath() (string, error) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", errors.New("failed to locate the OpenAPI contract tests")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
+	return filepath.Join(repoRoot, "docs", "openapi.json"), nil
+}
+
+// readOpenAPIDocumentJSON decodes docs/openapi.json into target for tests that
+// inspect the raw document rather than the validated contract.
+func readOpenAPIDocumentJSON(t *testing.T, target any) {
+	t.Helper()
+
+	documentPath, err := openAPIDocumentPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(documentPath)
+	if err != nil {
+		t.Fatalf("read OpenAPI document: %v", err)
+	}
+	err = json.Unmarshal(raw, target)
+	if err != nil {
+		t.Fatalf("parse OpenAPI document: %v", err)
+	}
+}
+
 func loadOpenAPIContractOnce() {
 	// kin-openapi does not register Apple's HLS playlist media type by
 	// default. It is a textual response, so validate it with the same decoder
 	// used for text/plain instead of skipping the response body.
 	openapi3filter.RegisterBodyDecoder(hlsPlaylistContentType, openapi3filter.PlainBodyDecoder)
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		openAPIContractErr = errors.New("failed to locate OpenAPI contract test")
+	documentPath, err := openAPIDocumentPath()
+	if err != nil {
+		openAPIContractErr = err
 		return
 	}
-
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
-	documentPath := filepath.Join(repoRoot, "docs", "openapi.json")
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
 	document, err := loader.LoadFromFile(documentPath)
@@ -279,7 +317,6 @@ func loadOpenAPIContractOnce() {
 
 func TestHealthCheckConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	t.Cleanup(func() { _ = app.DB.Close() })
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	response := httptest.NewRecorder()
 
@@ -368,7 +405,7 @@ func TestStopPersonalHLSSession_AuthenticationDatabaseFailure(t *testing.T) {
 			if credential == "bearer" {
 				request.Header.Set("Authorization", "Bearer igd_contract-database-failure")
 			} else {
-				addOpenAPITestCookie(request)
+				request.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 			}
 			response := httptest.NewRecorder()
 
@@ -392,14 +429,13 @@ func TestStopPersonalHLSSession_AuthenticationDatabaseFailure(t *testing.T) {
 
 func TestLoginSessionCommitFailureConformsToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	t.Cleanup(func() { _ = app.DB.Close() })
 	app.InitRouter()
-	createTestUserWithPassword(t, app, "Contract User", "contract@example.com", "correct horse")
+	createTestUser(t, app, "Contract User", "contract@example.com", false)
 	_, err := app.DB.Exec(`CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'private session storage failure'); END`)
 	if err != nil {
 		t.Fatalf("install session failure trigger: %v", err)
 	}
-	request := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", `{"email":"contract@example.com","password":"correct horse"}`)
+	request := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", fmt.Sprintf(`{"email":"contract@example.com","password":%q}`, testUserPassword))
 	response := httptest.NewRecorder()
 	app.Router.ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError {
@@ -424,13 +460,13 @@ func TestMain(m *testing.M) {
 	if code == 0 && openAPITestRunIsUnfiltered() {
 		openAPIContractOnce.Do(loadOpenAPIContractOnce)
 		if openAPIContractErr != nil {
-			fmt.Fprintf(os.Stderr, "load OpenAPI contract for exchange coverage: %v\\n", openAPIContractErr)
+			fmt.Fprintf(os.Stderr, "load OpenAPI contract for exchange coverage: %v\n", openAPIContractErr)
 			code = 1
 		} else {
 			observed := validatedOpenAPIExchanges.snapshot()
 			missing := missingOpenAPIJSONOperations(openAPIContractDoc, observed)
 			if len(missing) > 0 {
-				fmt.Fprintf(os.Stderr, "JSON OpenAPI operations without a validated successful handler exchange: %s\\n", strings.Join(missing, ", "))
+				fmt.Fprintf(os.Stderr, "JSON OpenAPI operations without a validated successful handler exchange: %s\n", strings.Join(missing, ", "))
 				code = 1
 			}
 		}

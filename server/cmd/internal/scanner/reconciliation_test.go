@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"errors"
+	"igloo/cmd/internal/scanner/scannertest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -171,10 +172,7 @@ func TestReconciliationRevalidatesRootAndAbsence(t *testing.T) {
 func TestReconciliationUsesCleanedAbsolutePaths(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "file.mkv")
-	err := os.WriteFile(path, []byte("existing"), 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	scannertest.WriteFile(t, path, "existing")
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

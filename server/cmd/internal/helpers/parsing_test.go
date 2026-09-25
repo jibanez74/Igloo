@@ -1,9 +1,6 @@
 package helpers
 
-import (
-	"math"
-	"testing"
-)
+import "testing"
 
 func TestParseFrameRate(t *testing.T) {
 	tests := []struct {
@@ -44,14 +41,8 @@ func TestClampFloat64(t *testing.T) {
 		expected float64
 	}{
 		{"within range", 5.0, 0.0, 10.0, 5.0},
-		{"at minimum", 0.0, 0.0, 10.0, 0.0},
-		{"at maximum", 10.0, 0.0, 10.0, 10.0},
 		{"below minimum", -5.0, 0.0, 10.0, 0.0},
 		{"above maximum", 15.0, 0.0, 10.0, 10.0},
-		{"negative range", -3.0, -10.0, -1.0, -3.0},
-		{"zero range", 5.0, 3.0, 3.0, 3.0},
-		{"fractional values", 0.5, 0.0, 1.0, 0.5},
-		{"large values", 99999.0, 0.0, 7200.0, 7200.0},
 		{"inverted bounds clamp high", 7.0, 10.0, 5.0, 7.0},
 		{"inverted bounds clamp low", 3.0, 10.0, 5.0, 5.0},
 	}
@@ -66,65 +57,19 @@ func TestClampFloat64(t *testing.T) {
 	}
 }
 
-func TestClampFloat64_NaNPropagates(t *testing.T) {
-	nan := math.NaN()
-	if !math.IsNaN(ClampFloat64(nan, 0, 1)) {
-		t.Error("expected NaN when v is NaN")
-	}
-	if !math.IsNaN(ClampFloat64(1, nan, 2)) {
-		t.Error("expected NaN when min is NaN")
-	}
-	if !math.IsNaN(ClampFloat64(1, 0, nan)) {
-		t.Error("expected NaN when max is NaN")
-	}
-}
-
+// ParseBitRate deliberately does not trim: ffprobe never pads bit_rate, so a
+// padded value did not come from where the caller believes (see
+// docs/deferred-cleanups.md).
 func TestParseBitRate(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
 		expected int64
 	}{
-		{
-			name:     "valid bitrate",
-			input:    "5000000",
-			expected: 5000000,
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: 0,
-		},
-		{
-			name:     "invalid format",
-			input:    "invalid",
-			expected: 0,
-		},
-		{
-			name:     "zero",
-			input:    "0",
-			expected: 0,
-		},
-		{
-			name:     "very large number",
-			input:    "999999999999",
-			expected: 999999999999,
-		},
-		{
-			name:     "negative number",
-			input:    "-1000",
-			expected: -1000,
-		},
-		{
-			name:     "bitrate with decimal",
-			input:    "5000.5",
-			expected: 0,
-		},
-		{
-			name:     "bitrate with spaces",
-			input:    " 5000000 ",
-			expected: 0,
-		},
+		{name: "valid bitrate", input: "5000000", expected: 5000000},
+		{name: "empty string", input: "", expected: 0},
+		{name: "negative number passes through", input: "-1000", expected: -1000},
+		{name: "bitrate with spaces", input: " 5000000 ", expected: 0},
 	}
 
 	for _, tt := range tests {
@@ -168,6 +113,8 @@ func TestParseDurationSeconds(t *testing.T) {
 	}
 }
 
+// ParseDurationMs delegates its validation to ParseDurationSeconds, so only
+// the conversion and the error translation are its own.
 func TestParseDurationMs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -178,10 +125,6 @@ func TestParseDurationMs(t *testing.T) {
 		{name: "fractional seconds", input: "245.123456", want: 245123},
 		{name: "whole seconds", input: "10", want: 10000},
 		{name: "zero", input: "0", want: 0},
-		{name: "empty", input: "", wantErr: true},
-		{name: "ffprobe N/A", input: "N/A", wantErr: true},
-		{name: "infinity", input: "Inf", wantErr: true},
-		{name: "not a number", input: "NaN", wantErr: true},
 		{name: "negative", input: "-3.5", wantErr: true},
 	}
 

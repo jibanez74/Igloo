@@ -2,23 +2,15 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
-	"igloo/cmd/internal/scanner/movie"
-	"igloo/cmd/internal/scanner/music"
-	"igloo/cmd/internal/scanner/show"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func generalSettingsBody(staticDir string) string {
@@ -38,22 +30,12 @@ func generalSettingsBody(staticDir string) string {
 	}`, staticDir, transcodeDir)
 }
 
-func performUpdateGeneralSettings(app *Application, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	app.UpdateGeneralSettings(w, req)
-
-	return w
-}
-
 func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -97,38 +79,16 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 }
 
 func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
-	app.Wait = &sync.WaitGroup{}
-	app.MusicScanner = music.New(music.Dependencies{
-		DB: app.DB, Queries: app.Queries, Logger: app.Logger, Wait: app.Wait,
-		ScannerDBMu:           &app.ScannerDBMu,
-		CurrentMusicDirectory: func() sql.NullString { return app.CurrentSettings().MusicDir },
-	})
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
+	handler := authenticatedRouter(t, app, admin.ID)
 
-	app.ShowScanner = show.New(show.Dependencies{
-		DB: app.DB, Queries: app.Queries, Logger: app.Logger, Wait: app.Wait,
-		ScannerDBMu:           &app.ScannerDBMu,
-		CurrentShowsDirectory: func() sql.NullString { return app.CurrentSettings().ShowsDir },
-	})
-
-	assertRequest := func(operationID string, req *http.Request, serve func(http.ResponseWriter, *http.Request), wantStatus int) {
-		t.Helper()
-		addOpenAPITestCookie(req)
-		response := httptest.NewRecorder()
-		serve(response, req)
-		if response.Code != wantStatus {
-			t.Fatalf("%s status = %d, want %d, body = %s", operationID, response.Code, wantStatus, response.Body.String())
-		}
-		assertOpenAPIExchange(t, operationID, req, response)
-	}
-
-	assertRequest("getSettings", httptest.NewRequest(http.MethodGet, "/api/settings", nil), app.GetSettings, http.StatusOK)
-	assertRequest("getGeneralSettings", httptest.NewRequest(http.MethodGet, "/api/settings/general", nil), app.GetGeneralSettings, http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getSettings", httptest.NewRequest(http.MethodGet, "/api/settings", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getGeneralSettings", httptest.NewRequest(http.MethodGet, "/api/settings/general", nil), http.StatusOK)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
 	generalReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
-	assertRequest("updateGeneralSettings", generalReq, app.UpdateGeneralSettings, http.StatusOK)
+	serveOpenAPIExchange(t, handler, "updateGeneralSettings", generalReq, http.StatusOK)
 
 	mediaRoot := t.TempDir()
 	moviesDir := filepath.Join(mediaRoot, "movies")
@@ -142,14 +102,14 @@ func TestSettingsHandlers_ConformToOpenAPI(t *testing.T) {
 	}
 	libraryBody := fmt.Sprintf(`{"movies_dir":%q,"shows_dir":%q,"music_dir":%q}`, moviesDir, showsDir, musicDir)
 	libraryReq := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/libraries", libraryBody)
-	assertRequest("updateLibrarySettings", libraryReq, app.UpdateLibrarySettings, http.StatusOK)
+	serveOpenAPIExchange(t, handler, "updateLibrarySettings", libraryReq, http.StatusOK)
 
-	assertRequest("triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), app.TriggerMusicScan, http.StatusOK)
-	assertRequest("getMusicScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/music", nil), app.GetMusicScanStatus, http.StatusOK)
-	assertRequest("getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), app.GetMovieScanStatus, http.StatusOK)
-	assertRequest("triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), app.TriggerMovieScan, http.StatusOK)
-	assertRequest("triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), app.TriggerShowScan, http.StatusOK)
-	assertRequest("getShowScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/shows", nil), app.GetShowScanStatus, http.StatusOK)
+	serveOpenAPIExchange(t, handler, "triggerMusicScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getMusicScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/music", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getMovieScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/movies", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "triggerMovieScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "triggerShowScan", httptest.NewRequest(http.MethodPost, "/api/settings/scan/shows", nil), http.StatusOK)
+	serveOpenAPIExchange(t, handler, "getShowScanStatus", httptest.NewRequest(http.MethodGet, "/api/settings/scan/shows", nil), http.StatusOK)
 	app.Wait.Wait()
 }
 
@@ -178,12 +138,12 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupSettingsTestApp(t)
-			defer app.DB.Close()
+			app := setupSessionTestApp(t)
+			admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 			staticDir := filepath.Join(t.TempDir(), "static")
 			body := strings.Replace(generalSettingsBody(staticDir), tc.old, tc.new, 1)
-			w := performUpdateGeneralSettings(app, body)
+			w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", body)
 
 			if w.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -193,11 +153,11 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 }
 
 func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(staticDir))
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected setup update 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -215,7 +175,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 		"static_dir": %q,
 		"transcode_dir": %q
 	}`, staticDir, filepath.Join(filepath.Dir(staticDir), "transcode"))
-	w = performUpdateGeneralSettings(app, clearBody)
+	w = serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", clearBody)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected clear update 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -233,29 +193,19 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 }
 
 func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
-	w := performUpdateGeneralSettings(app, generalSettingsBody(""))
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/general", generalSettingsBody(""))
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func performUpdateLibrarySettings(app *Application, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/libraries", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	app.UpdateLibrarySettings(w, req)
-
-	return w
-}
-
 func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	root := t.TempDir()
 	moviesDir := filepath.Join(root, "movies")
@@ -272,7 +222,7 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 		"shows_dir": %q,
 		"music_dir": %q
 	}`, moviesDir, showsDir, musicDir)
-	w := performUpdateLibrarySettings(app, body)
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -295,10 +245,10 @@ func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
 }
 
 func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
-	w := performUpdateLibrarySettings(app, `{
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", `{
 		"movies_dir": "",
 		"shows_dir": null,
 		"music_dir": ""
@@ -319,152 +269,27 @@ func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
 }
 
 func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
+	admin := createTestUser(t, app, "Settings Admin", "settings-admin@example.com", true)
 
 	body := fmt.Sprintf(`{
 		"movies_dir": %q,
 		"shows_dir": null,
 		"music_dir": null
 	}`, filepath.Join(t.TempDir(), "missing"))
-	w := performUpdateLibrarySettings(app, body)
+	w := serveAs(t, app, admin.ID, http.MethodPut, "/api/settings/libraries", body)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
-	current := *app.CurrentSettings()
-	current.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
-	app.SetSettings(&current)
-
-	app.MusicScanner = musicStartFunc(func() scanner.StartResult { return scanner.StartResult{Status: scanner.StartAlreadyRunning} })
-
-	req := httptest.NewRequest(http.MethodPost, "/api/scan/music", nil)
-	w := httptest.NewRecorder()
-
-	app.TriggerMusicScan(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
-	current := *app.CurrentSettings()
-	current.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
-	app.SetSettings(&current)
-
-	app.MovieScanner = movieStartResultStub{result: scanner.StartResult{Status: scanner.StartAlreadyRunning}}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/scan/movies", nil)
-	w := httptest.NewRecorder()
-
-	app.TriggerMovieScan(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestTriggerMovieScanMapsStartStatusesToAdminResponses(t *testing.T) {
-	tests := []struct {
-		name       string
-		result     scanner.StartResult
-		wantStatus int
-	}{
-		{"started", scanner.StartResult{Directory: "/movies", Status: scanner.StartStarted}, http.StatusOK},
-		{"not configured", scanner.StartResult{Status: scanner.StartNotConfigured}, http.StatusInternalServerError},
-		{"already running", scanner.StartResult{Status: scanner.StartAlreadyRunning}, http.StatusConflict},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			app := setupSettingsTestApp(t)
-			defer app.DB.Close()
-			app.MovieScanner = movieStartResultStub{result: tc.result}
-
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/movies", nil)
-			app.TriggerMovieScan(w, req)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-func TestTriggerMusicScanMapsStartStatusesToAdminResponses(t *testing.T) {
-	tests := []struct {
-		name       string
-		result     scanner.StartResult
-		wantStatus int
-	}{
-		{"started", scanner.StartResult{Directory: "/music", Status: scanner.StartStarted}, http.StatusOK},
-		{"not configured", scanner.StartResult{Status: scanner.StartNotConfigured}, http.StatusInternalServerError},
-		{"already running", scanner.StartResult{Status: scanner.StartAlreadyRunning}, http.StatusConflict},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			app := setupSettingsTestApp(t)
-			defer app.DB.Close()
-			app.MusicScanner = musicStartFunc(func() scanner.StartResult { return tc.result })
-
-			w := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/api/settings/scan/music", nil)
-			app.TriggerMusicScan(w, req)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-type movieStartResultStub struct {
-	result scanner.StartResult
-}
-
-func (s movieStartResultStub) Start() scanner.StartResult {
-	return s.result
-}
-
-func mountGeneralSettingsRouter(app *Application, userID int64) http.Handler {
-	r := chi.NewRouter()
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), cookieUserID, userID)
-			next.ServeHTTP(w, r)
-		})
-	})
-	r.With(app.RequireAdmin).Put("/api/settings/general", app.UpdateGeneralSettings)
-
-	return app.SessionManager.LoadAndSave(r)
-}
-
 func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "Regular User",
-		Email:    "regular@example.com",
-		Password: "hashed",
-		IsAdmin:  false,
-		Avatar:   sql.NullString{},
-	})
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
+	user := createTestUser(t, app, "Regular User", "regular@example.com", false)
 
-	handler := mountGeneralSettingsRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(generalSettingsBody(
 		filepath.Join(t.TempDir(), "static"),
 	)))
@@ -478,17 +303,11 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 	}
 }
 
-func (movieStartResultStub) Status() movie.Status {
-	return movie.Status{Progress: scanner.Progress{State: scanner.StateIdle, Phase: scanner.PhaseIdle, ActiveFiles: []string{}, Issues: []scanner.Issue{}}}
-}
-
 func TestScanStatusAuthorization(t *testing.T) {
 	for _, path := range []string{"/api/settings/scan/movies", "/api/settings/scan/music", "/api/settings/scan/shows"} {
 		for _, role := range []string{"anonymous", "user", "admin"} {
 			t.Run(path+"/"+role, func(t *testing.T) {
-				app := setupTestApp(t)
-				defer app.DB.Close()
-				app.InitSession()
+				app := setupSessionTestApp(t)
 				app.InitRouter()
 				request := httptest.NewRequest(http.MethodGet, path, nil)
 				expected := http.StatusUnauthorized
@@ -505,6 +324,59 @@ func TestScanStatusAuthorization(t *testing.T) {
 				app.Router.ServeHTTP(response, request)
 				if response.Code != expected {
 					t.Fatalf("status=%d want=%d body=%s", response.Code, expected, response.Body.String())
+				}
+			})
+		}
+	}
+}
+
+// The trigger endpoints map the scanner's start result to the admin response
+// and sit behind RequireAdmin, for all three libraries alike.
+func TestTriggerScan_MapsStartStatusesAndRequiresAdmin(t *testing.T) {
+	kinds := []struct {
+		name    string
+		path    string
+		install func(app *Application, start func() scanner.StartResult)
+	}{
+		{"movies", "/api/settings/scan/movies", func(app *Application, start func() scanner.StartResult) { app.MovieScanner = movieStartFunc(start) }},
+		{"music", "/api/settings/scan/music", func(app *Application, start func() scanner.StartResult) { app.MusicScanner = musicStartFunc(start) }},
+		{"shows", "/api/settings/scan/shows", func(app *Application, start func() scanner.StartResult) { app.ShowScanner = showStartFunc(start) }},
+	}
+	cases := []struct {
+		name                 string
+		authenticated, admin bool
+		status               scanner.StartStatus
+		want                 int
+	}{
+		{"unauthenticated", false, false, scanner.StartStarted, http.StatusUnauthorized},
+		{"non-admin", true, false, scanner.StartStarted, http.StatusForbidden},
+		{"started", true, true, scanner.StartStarted, http.StatusOK},
+		{"already running", true, true, scanner.StartAlreadyRunning, http.StatusConflict},
+		{"unconfigured", true, true, scanner.StartNotConfigured, http.StatusInternalServerError},
+	}
+	for _, kind := range kinds {
+		for _, tc := range cases {
+			t.Run(kind.name+"/"+tc.name, func(t *testing.T) {
+				app := setupSessionTestApp(t)
+				var userID int64
+				if tc.authenticated {
+					user := createTestUser(t, app, "User", "scan@example.com", tc.admin)
+					userID = user.ID
+				}
+				calls := 0
+				kind.install(app, func() scanner.StartResult {
+					calls++
+					return scanner.StartResult{Directory: "/media", Status: tc.status}
+				})
+
+				w := httptest.NewRecorder()
+				authenticatedRouter(t, app, userID).ServeHTTP(w, httptest.NewRequest(http.MethodPost, kind.path, nil))
+				if w.Code != tc.want {
+					t.Fatalf("status %d want %d: %s", w.Code, tc.want, w.Body.String())
+				}
+				allowed := tc.authenticated && tc.admin
+				if allowed && calls != 1 || !allowed && calls != 0 {
+					t.Fatalf("scanner invoked %d times", calls)
 				}
 			})
 		}

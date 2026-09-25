@@ -5,20 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -122,7 +119,7 @@ func (f *fakeFFmpeg) Calls() []ffmpeg.HLSParams {
 }
 
 // createTestHLSSession mirrors the production call sequence: load and
-// normalize via loadHLSMovieForSession, then create the session. Audio stays
+// normalize via loadHLSSourceForSession, then create the session. Audio stays
 // in legacy mode; explicit-profile tests use createTestHLSSessionWithAudio.
 func createTestHLSSession(
 	app *Application,
@@ -172,74 +169,22 @@ func holdHLSTranscodePermit(t *testing.T, app *Application, pool hlsTranscodePoo
 	return release
 }
 
-// setTestHardwareAccelerationDevice switches the Settings device. The fake
-// FFmpeg reports unprobed capabilities, which ResolveHLSDevice trusts, so the
-// configured device is also the effective one.
-func setTestHardwareAccelerationDevice(t *testing.T, app *Application, device string) {
-	t.Helper()
-
-	current := *app.CurrentSettings()
-	current.HardwareAccelerationDevice = sql.NullString{String: device, Valid: true}
-	app.SetSettings(&current)
-}
-
-type testFMP4Fixture = fmp4testutil.Fixture
-
-func writeTestHLSFixture(outDir string, fixture testFMP4Fixture) error {
-	return fmp4testutil.WriteHLSFixture(outDir, fixture)
-}
-
 // The output shapes the HLS tests script FFmpeg to produce, named for the
 // behaviour they stand in for. Remux preflight inspects the first
 // HLS_REMUX_PREVALIDATE_SEGMENTS segments, so a remux verdict needs all of
 // them; a transcode session is only ever asked whether it started.
 var (
-	safeRemuxFixture   = testFMP4Fixture{SafeVideo: true, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS}
-	unsafeRemuxFixture = testFMP4Fixture{SafeVideo: false, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS}
-	transcodeFixture   = testFMP4Fixture{SafeVideo: true, Segments: 1}
+	safeRemuxFixture   = fmp4testutil.Fixture{SafeVideo: true, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS}
+	unsafeRemuxFixture = fmp4testutil.Fixture{SafeVideo: false, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS}
+	transcodeFixture   = fmp4testutil.Fixture{SafeVideo: true, Segments: 1}
 )
 
-func hlsRunPlan(fixture testFMP4Fixture) fakeFFmpegRunPlan {
+func hlsRunPlan(fixture fmp4testutil.Fixture) fakeFFmpegRunPlan {
 	return fakeFFmpegRunPlan{
 		WriteFiles: func(outDir string) error {
-			return writeTestHLSFixture(outDir, fixture)
+			return fmp4testutil.WriteHLSFixture(outDir, fixture)
 		},
 	}
-}
-
-// newHLSTestHandler wires the three personal movie HLS routes behind the
-// session middleware with userID already authenticated, mirroring the paths
-// registered in routes.go.
-func newHLSTestHandler(t *testing.T, app *Application, userID int64) http.Handler {
-	t.Helper()
-	return newMediaHLSTestHandler(t, app, userID, mediaKindMovie)
-}
-
-// newMediaHLSTestHandler is newHLSTestHandler for either media kind: the
-// episode routes are the movie routes under /api/shows/episodes/{id}.
-func newMediaHLSTestHandler(t *testing.T, app *Application, userID int64, kind mediaKind) http.Handler {
-	t.Helper()
-
-	app.InitSession()
-	authenticated := func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), cookieUserID, userID)
-			handler(w, r)
-		}
-	}
-
-	router := chi.NewRouter()
-	if kind == mediaKindEpisode {
-		router.Post("/api/shows/episodes/{id}/hls/session/stop", authenticated(app.StopEpisodeHLSSession))
-		router.Get("/api/shows/episodes/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.EpisodeHLSManifest))
-		router.Get("/api/shows/episodes/{id}/hls/{profile}/{filename}", authenticated(app.EpisodeHLSSegment))
-	} else {
-		router.Post("/api/movies/{id}/hls/session/stop", authenticated(app.StopPersonalHLSSession))
-		router.Get("/api/movies/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.HLSManifest))
-		router.Get("/api/movies/{id}/hls/{profile}/{filename}", authenticated(app.HLSSegment))
-	}
-
-	return app.SessionManager.LoadAndSave(router)
 }
 
 // noMetadataProbe completes ffprobe.FfprobeInterface for stubs that only serve
@@ -412,6 +357,23 @@ func insertTestHLSMovieFixtureAt(
 	return movieID
 }
 
+// insertTestSecondaryAudioStream adds a second audio track at absolute stream
+// index 3, so audio ordinal 1 has to resolve past the fixture's index-1 track.
+// An empty channelLayout models a row scanned before that column existed.
+func insertTestSecondaryAudioStream(t *testing.T, app *Application, movieID int64, codec string, bitRate int64, channels int64, channelLayout string) {
+	t.Helper()
+
+	insertTestAudioStream(t, app, database.InsertAudioStreamParams{
+		MovieID:       movieID,
+		StreamIndex:   3,
+		Codec:         codec,
+		BitRate:       bitRate,
+		Channels:      channels,
+		ChannelLayout: sql.NullString{String: channelLayout, Valid: channelLayout != ""},
+		Language:      sql.NullString{String: "spa", Valid: true},
+	})
+}
+
 // setTestHLSAudioStream rewrites the fixture's audio row so audio tests can
 // model arbitrary source codecs and channel layouts. codecProfile and
 // channelLayout accept nil to model rows scanned before those columns existed.
@@ -434,14 +396,4 @@ func setTestHLSAudioStream(
 	if err != nil {
 		t.Fatalf("update audio stream: %v", err)
 	}
-}
-
-func testIntPtr(v int) *int {
-	return &v
-}
-
-func sanitizeTestPathComponent(value string) string {
-	value = strings.ReplaceAll(value, "/", "_")
-	value = strings.ReplaceAll(value, " ", "_")
-	return value
 }

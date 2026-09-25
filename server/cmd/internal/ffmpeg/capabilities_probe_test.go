@@ -102,24 +102,14 @@ func TestProbeCapabilitiesSuccessfulStaticAndRuntimeProbes(t *testing.T) {
 	if !caps.NvidiaCUDATonemapRuntimeUsable || !caps.H264QSVRuntimeUsable || !caps.QSVScaleRuntimeUsable {
 		t.Fatalf("tone-map/QSV runtime probes did not succeed: %#v", caps)
 	}
-}
 
-// NVENC refuses an H.264 frame below a minimum that depends on the GPU and
-// driver; 145x49 is the one the QA server's GTX 1660 SUPER enforces. A probe
-// that hands it a smaller frame fails on hardware that works, and the only
-// symptom is that every transcode quietly runs on libx264. The frame each
-// probe encodes is its lavfi source, or the scale_cuda output when the chain
-// rescales it.
-func TestNvidiaRuntimeProbesEncodeAFrameNVENCAccepts(t *testing.T) {
+	// NVENC refuses an H.264 frame below a minimum that depends on the GPU
+	// and driver; 145x49 is the one the QA server's GTX 1660 SUPER enforces.
+	// A probe that hands it a smaller frame fails on hardware that works, and
+	// the only symptom is that every transcode quietly runs on libx264. The
+	// frame each probe encodes is its lavfi source, or the scale_cuda output
+	// when the chain rescales it.
 	const nvencMinWidth, nvencMinHeight = 145, 49
-	logPath := filepath.Join(t.TempDir(), "probes.log")
-	script := fullCapabilityProbeFake(t, 0, logPath)
-
-	caps := probeCapabilities(script, fakeFFmpegVersionBanner)
-	if !caps.NvidiaCUDATonemapRuntimeUsable {
-		t.Fatalf("the NVIDIA runtime probes did not all run: %#v", caps)
-	}
-
 	sourceSize := regexp.MustCompile(`testsrc2=s=(\d+)x(\d+)`)
 	scaledHeight := regexp.MustCompile(`scale_cuda=w=-2:h=(\d+)`)
 	nvencProbes := 0
@@ -218,8 +208,25 @@ func TestProbeCapabilitiesRecordsBoundedEncoderDiagnostics(t *testing.T) {
 	if len(caps.H264NVENCProbeError) > 240 || len(caps.H264QSVProbeError) > 240 {
 		t.Fatalf("encoder diagnostics were not bounded: nvenc=%d qsv=%d", len(caps.H264NVENCProbeError), len(caps.H264QSVProbeError))
 	}
-	if compactProbeError(nil) != "" {
-		t.Fatalf("a successful probe must compact to an empty diagnostic, got %q", compactProbeError(nil))
+}
+
+func TestCompactProbeError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "success is empty"},
+		{name: "surrounding whitespace is trimmed", err: errors.New("  no device \n"), want: "no device"},
+		{name: "long diagnostics are cut at 240 bytes", err: errors.New(strings.Repeat("x", 300)), want: strings.Repeat("x", 240)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := compactProbeError(tt.err); got != tt.want {
+				t.Fatalf("compactProbeError() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -250,9 +257,6 @@ func TestCapabilityRecordersTolerateProbeFailuresAndNilMaps(t *testing.T) {
 		t.Fatalf("failed help probes populated options: %#v", caps)
 	}
 
-	caps.recordFilterOptions(script, "missing", []string{"format"})
-	caps.recordEncoderOptions(script, "missing", []string{"preset"})
-
 	successScript := writeFakeFFmpeg(t, "probe ffmpeg", "printf '%s\\n' 'format value' '-preset value'\n")
 	caps.recordFilterOptions(successScript, "scale_cuda", []string{"format"})
 	caps.recordEncoderOptions(successScript, "h264_qsv", []string{"preset"})
@@ -261,6 +265,14 @@ func TestCapabilityRecordersTolerateProbeFailuresAndNilMaps(t *testing.T) {
 	}
 	if !caps.EncoderOptions["h264_qsv"]["preset"] {
 		t.Fatalf("nil encoder option map was not initialized: %#v", caps.EncoderOptions)
+	}
+
+	// Options are only recorded for filters and encoders the build lists, so
+	// the help probe is never run for an unknown name.
+	caps.recordFilterOptions(successScript, "missing", []string{"format"})
+	caps.recordEncoderOptions(successScript, "missing", []string{"preset"})
+	if caps.FilterOptions["missing"] != nil || caps.EncoderOptions["missing"] != nil {
+		t.Fatalf("options were recorded for names the build does not list: %#v %#v", caps.FilterOptions, caps.EncoderOptions)
 	}
 }
 

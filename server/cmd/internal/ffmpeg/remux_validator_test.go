@@ -15,7 +15,6 @@ func TestValidateRemuxSafetyAcceptsSafeFixtures(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture fmp4testutil.Fixture
-		wantErr bool
 	}{
 		{
 			name:    "safe fragments",
@@ -24,11 +23,6 @@ func TestValidateRemuxSafetyAcceptsSafeFixtures(t *testing.T) {
 		{
 			name:    "audio track noise is ignored",
 			fixture: fmp4testutil.Fixture{SafeVideo: true, AudioNoise: true, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS},
-		},
-		{
-			name:    "unsafe sync sample metadata",
-			fixture: fmp4testutil.Fixture{SafeVideo: false, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS},
-			wantErr: true,
 		},
 	}
 
@@ -41,12 +35,6 @@ func TestValidateRemuxSafetyAcceptsSafeFixtures(t *testing.T) {
 			}
 
 			summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected unsafe remux validation error")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("ValidateRemuxSafety returned error: %v", err)
 			}
@@ -57,6 +45,26 @@ func TestValidateRemuxSafetyAcceptsSafeFixtures(t *testing.T) {
 				t.Fatalf("CheckedSyncSamples = %d, want %d", summary.CheckedSyncSamples, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
 			}
 		})
+	}
+}
+
+// The unsafe fixture flags its samples as sync samples but starts them on a
+// non-IDR slice, which is exactly the remux hazard the validator exists for.
+func TestValidateRemuxSafetyRejectsNonIDRSyncSample(t *testing.T) {
+	dir := t.TempDir()
+	fixture := fmp4testutil.Fixture{SafeVideo: false, Segments: helpers.HLS_REMUX_PREVALIDATE_SEGMENTS}
+	err := fmp4testutil.WriteHLSFixture(dir, fixture)
+	if err != nil {
+		t.Fatalf("WriteHLSFixture: %v", err)
+	}
+
+	summary, err := ValidateRemuxSafety(dir, helpers.HLS_REMUX_PREVALIDATE_SEGMENTS)
+	want := "validate segment 0: sync sample starts with non-IDR VCL NAL type 1"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+	if summary.CheckedSegments != 0 || summary.CheckedSyncSamples != 0 {
+		t.Fatalf("summary = %#v, want nothing counted before the first rejection", summary)
 	}
 }
 
@@ -87,8 +95,8 @@ func TestValidateRemuxSafetyRejectsMissingAndInvalidInitSegments(t *testing.T) {
 			t.Fatalf("write invalid init: %v", err)
 		}
 		_, err = ValidateRemuxSafety(dir, 1)
-		if err == nil {
-			t.Fatal("expected invalid init failure")
+		if err == nil || !strings.Contains(err.Error(), "invalid MP4 box bounds") {
+			t.Fatalf("error = %v, want the init segment rejected as a malformed box", err)
 		}
 	})
 }
@@ -96,30 +104,13 @@ func TestValidateRemuxSafetyRejectsMissingAndInvalidInitSegments(t *testing.T) {
 func TestValidateRemuxSafetyRejectsMissingVideoConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	initData := fmp4testutil.BuildInitMP4()
-	moov, found, err := findDirectChildBox(initData, 0, len(initData), "moov")
+	_, videoTrak := videoTrakForTest(t, initData)
+	avcC, found, err := findAVCConfigBox(initData, videoTrak)
 	if err != nil || !found {
-		t.Fatalf("find moov: found=%v err=%v", found, err)
-	}
-	traks, err := listDirectChildBoxes(initData, moov.PayloadStart, moov.End)
-	if err != nil {
-		t.Fatalf("list tracks: %v", err)
+		t.Fatalf("fixture did not contain avcC: found=%v err=%v", found, err)
 	}
 	mutated := append([]byte(nil), initData...)
-	foundConfig := false
-	for _, trak := range traks {
-		if trak.Type != "trak" {
-			continue
-		}
-		avcC, configFound, findErr := findAVCConfigBox(initData, trak)
-		if findErr == nil && configFound {
-			copy(mutated[avcC.Start+4:avcC.Start+8], []byte("free"))
-			foundConfig = true
-			break
-		}
-	}
-	if !foundConfig {
-		t.Fatal("fixture did not contain avcC")
-	}
+	copy(mutated[avcC.Start+4:avcC.Start+8], []byte("free"))
 	err = os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), mutated, 0644)
 	if err != nil {
 		t.Fatalf("write init: %v", err)
@@ -179,7 +170,10 @@ func TestValidateRemuxSafetyRejectsCorruptFragments(t *testing.T) {
 			dir := t.TempDir()
 			segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
 			tt.mutate(t, segment)
-			writeRemuxFixtureFiles(t, dir, fmp4testutil.BuildInitMP4(), segment)
+			err := fmp4testutil.WriteFragmentFiles(dir, fmp4testutil.BuildInitMP4(), segment)
+			if err != nil {
+				t.Fatalf("write fixture: %v", err)
+			}
 
 			summary, err := ValidateRemuxSafety(dir, 1)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
@@ -222,7 +216,10 @@ func TestValidateRemuxSafetyReturnsPartialSummaryOnLaterSegmentFailure(t *testin
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			writeRemuxFixtureFiles(t, dir, fmp4testutil.BuildInitMP4(), tt.segments...)
+			err := fmp4testutil.WriteFragmentFiles(dir, fmp4testutil.BuildInitMP4(), tt.segments...)
+			if err != nil {
+				t.Fatalf("write fixture: %v", err)
+			}
 
 			summary, err := ValidateRemuxSafety(dir, tt.requestCount)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {

@@ -6,32 +6,74 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
-// newTestWriter creates a rotatingWriter over a temp file, seeding the file
-// first when seed is not empty.
-func newTestWriter(t *testing.T, maxBytes int64, seed string) (*rotatingWriter, string) {
-	t.Helper()
+// idleFlushInterval keeps the background ticker out of a test's way, so only
+// the test's own writes, flushes and closes decide what reaches the file.
+const idleFlushInterval = time.Hour
 
-	path := filepath.Join(t.TempDir(), "test.log")
+// newTestWriter creates a rotatingWriter over a temp file, seeding the file
+// first when seed is not empty. The writer is closed at cleanup, so a test
+// that closes it itself is fine: the second close only reports an error.
+func newTestWriter(tb testing.TB, maxBytes int64, seed string, flushInterval time.Duration) (*rotatingWriter, string) {
+	tb.Helper()
+
+	path := filepath.Join(tb.TempDir(), "test.log")
 
 	if seed != "" {
 		err := os.WriteFile(path, []byte(seed), 0o644)
 		if err != nil {
-			t.Fatalf("seed log file: %v", err)
+			tb.Fatalf("seed log file: %v", err)
 		}
 	}
 
-	rw, err := newRotatingWriter(path, maxBytes)
+	rw, err := newRotatingWriter(path, maxBytes, flushInterval)
 	if err != nil {
-		t.Fatalf("create rotating writer: %v", err)
+		tb.Fatalf("create rotating writer: %v", err)
 	}
 
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		rw.Close()
 	})
 
 	return rw, path
+}
+
+// failOpen makes openLogFile return the error fail picks for each open flag
+// set, deferring to os.OpenFile when it picks nil, until the test ends.
+func failOpen(t *testing.T, fail func(flag int) error) {
+	t.Helper()
+
+	t.Cleanup(func() { openLogFile = os.OpenFile })
+	openLogFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		err := fail(flag)
+		if err != nil {
+			return nil, err
+		}
+		return os.OpenFile(name, flag, perm)
+	}
+}
+
+// requireWriterRecovered proves a writer is usable again after a failed
+// rotation: a new entry is accepted and reaches the end of the live file.
+func requireWriterRecovered(t *testing.T, rw *rotatingWriter, path string) {
+	t.Helper()
+
+	_, err := rw.Write([]byte("recovered\n"))
+	if err != nil {
+		t.Fatalf("write after a failed rotation: %v", err)
+	}
+
+	err = rw.Flush()
+	if err != nil {
+		t.Fatalf("flush after a failed rotation: %v", err)
+	}
+
+	lines := readLogLines(t, path)
+	if len(lines) == 0 || lines[len(lines)-1] != "recovered" {
+		t.Fatalf("live file = %q, want it to end with the recovered entry", lines)
+	}
 }
 
 // writeRegularFile creates a regular file and returns its path, for the cases
@@ -114,10 +156,4 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 
 	return output
-}
-
-// longLine is larger than bufio's default read buffer, which forces the line
-// readers to stitch one line back together across several reads.
-func longLine() string {
-	return strings.Repeat("x", 70*1024)
 }

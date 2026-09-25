@@ -7,7 +7,6 @@ import (
 	"igloo/cmd/internal/database"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -45,11 +44,10 @@ func searchEntityResults[T any](t *testing.T, app *Application, e searchEntity[T
 
 func TestSearchMoviesStagedMatching(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	createSearchMovie(t, app, "Casino Nights", "/movies/casino-nights.mkv")
-	createSearchMovie(t, app, "Royale Tenenbaums", "/movies/royale-tenenbaums.mkv")
-	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+	createTestMovie(t, app, "Casino Nights", "/movies/casino-nights.mkv")
+	createTestMovie(t, app, "Royale Tenenbaums", "/movies/royale-tenenbaums.mkv")
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	// A well-spelled multi-token query resolves at stage 1 (AND) and only
 	// returns documents containing every token.
@@ -69,28 +67,10 @@ func TestSearchMoviesStagedMatching(t *testing.T) {
 	}
 }
 
-func TestSearchMoviesTypoInOneTokenRanksTargetFirst(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
-	createSearchMovie(t, app, "A Time to Kill", "/movies/a-time-to-kill.mkv")
-
-	results := searchEntityResults(t, app, movieSearchEntity, "License to Kill")
-	if len(results) == 0 {
-		t.Fatal("expected typo-corrected search to return results")
-	}
-	if results[0].Title != "Licence to Kill" {
-		t.Fatalf("expected Licence to Kill first, got %q", results[0].Title)
-	}
-}
-
 func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+	createTestMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
 
 	for _, query := range []string{"Lisence", "Lisense"} {
 		t.Run(query, func(t *testing.T) {
@@ -107,7 +87,6 @@ func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
 
 func TestSearchShowsStagedMatching(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchShow(t, app, "Breaking Bad", "/shows/Breaking Bad", "", "")
 	createSearchShow(t, app, "Breaking Point", "/shows/Breaking Point", "", "")
@@ -132,7 +111,6 @@ func TestSearchShowsStagedMatching(t *testing.T) {
 
 func TestSearchShowsMatchesOverviewAndTagline(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchShow(
 		t, app,
@@ -159,7 +137,6 @@ func TestSearchShowsMatchesOverviewAndTagline(t *testing.T) {
 
 func TestSearchShowsTypoInOneTokenRanksTargetFirst(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
 	createSearchShow(t, app, "Deliverance Bay", "/shows/Deliverance Bay", "", "")
@@ -177,7 +154,6 @@ func TestSearchShowsTypoInOneTokenRanksTargetFirst(t *testing.T) {
 // for libraries scanned before it existed.
 func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	// Simulate a database whose shows predate the index.
 	_, err := app.DB.Exec("DROP TRIGGER shows_ai; DROP TRIGGER shows_au")
@@ -228,11 +204,10 @@ func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
 
 func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	musicianID := createSearchMusician(t, app, "Adele")
-	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Adele")
+	albumID := createTestAlbum(t, app, "Twenty Five", "Adele")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
 	results := searchEntityResults(t, app, trackSearchEntity, "Adelle")
 	if len(results) != 1 {
@@ -245,9 +220,8 @@ func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 
 func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	results := searchEntityResults(t, app, movieSearchEntity, `"Casino" OR title:royale`)
 	if len(results) == 0 || results[0].Title != "Casino Royale" {
@@ -257,11 +231,10 @@ func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 
 func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	musicianID := createSearchMusician(t, app, "Adele")
-	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Adele")
+	albumID := createTestAlbum(t, app, "Twenty Five", "Adele")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
 
 	for _, query := range []string{"Hello", "Twenty", "Adele"} {
 		t.Run(query, func(t *testing.T) {
@@ -278,19 +251,18 @@ func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 
 func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	originalMusicianID := createSearchMusician(t, app, "Adele")
-	updatedMusicianID := createSearchMusician(t, app, "Sia")
-	albumID := createSearchAlbum(t, app, "Power Ballads", "Various Artists")
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, originalMusicianID)
+	originalMusicianID := createTestMusician(t, app, "Adele")
+	updatedMusicianID := createTestMusician(t, app, "Sia")
+	albumID := createTestAlbum(t, app, "Power Ballads", "Various Artists")
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, originalMusicianID)
 
 	results := searchEntityResults(t, app, trackSearchEntity, "Sia")
 	if len(results) != 0 {
 		t.Fatalf("expected no Sia results before update, got %#v", results)
 	}
 
-	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, updatedMusicianID)
+	createTestTrack(t, app, "Hello", "/music/hello.flac", albumID, updatedMusicianID)
 
 	results = searchEntityResults(t, app, trackSearchEntity, "Sia")
 	if len(results) != 1 || results[0].Title != "Hello" {
@@ -305,10 +277,9 @@ func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 
 func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	userID := createSearchUser(t, app)
-	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
+	createTestMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	app.InitSession()
 	app.InitRouter()
@@ -316,7 +287,7 @@ func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 	var previous *searchAllData
 	for _, path := range []string{"/api/search?q=casino", "/api/search/?q=casino"} {
 		t.Run(path, func(t *testing.T) {
-			w := performAuthenticatedSearchRequest(t, app, userID, path)
+			w := serveAs(t, app, userID, http.MethodGet, path, "")
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 			}
@@ -349,16 +320,15 @@ func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 
 func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	userID := createSearchUser(t, app)
-	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
-	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
+	createTestMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+	createTestMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
 
 	app.InitSession()
 	app.InitRouter()
 
-	w := performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=License+to+Kill")
+	w := serveAs(t, app, userID, http.MethodGet, "/api/search/movies?q=License+to+Kill", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 	}
@@ -381,17 +351,16 @@ func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
 
 func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	userID := createSearchUser(t, app)
-	createSearchMovie(t, app, "Pageable Movie One", "/movies/pageable-1.mkv")
-	createSearchMovie(t, app, "Pageable Movie Two", "/movies/pageable-2.mkv")
-	createSearchMovie(t, app, "Pageable Movie Three", "/movies/pageable-3.mkv")
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
+	createTestMovie(t, app, "Pageable Movie One", "/movies/pageable-1.mkv")
+	createTestMovie(t, app, "Pageable Movie Two", "/movies/pageable-2.mkv")
+	createTestMovie(t, app, "Pageable Movie Three", "/movies/pageable-3.mkv")
 
 	app.InitSession()
 	app.InitRouter()
 
-	w := performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=Pageable&page=999&per_page=2")
+	w := serveAs(t, app, userID, http.MethodGet, "/api/search/movies?q=Pageable&page=999&per_page=2", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 	}
@@ -417,7 +386,7 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 		t.Fatalf("expected last page to contain 1 result, got %d", len(resp.Data.Results))
 	}
 
-	w = performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=Pageable&page=1&per_page=999")
+	w = serveAs(t, app, userID, http.MethodGet, "/api/search/movies?q=Pageable&page=1&per_page=999", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
 	}
@@ -430,21 +399,6 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	if resp.Data.PerPage != libraryMaxPerPage {
 		t.Fatalf("per_page = %d, want cap %d", resp.Data.PerPage, libraryMaxPerPage)
 	}
-}
-
-func createSearchUser(t *testing.T, app *Application) int64 {
-	t.Helper()
-
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "Search User",
-		Email:    "search@example.com",
-		Password: "hashed",
-		IsAdmin:  false,
-	})
-	if err != nil {
-		t.Fatalf("create search user: %v", err)
-	}
-	return user.ID
 }
 
 // createSearchShow seeds a show the way the scanner does: UpsertLocalShow
@@ -478,120 +432,19 @@ func createSearchShow(t *testing.T, app *Application, name, directory, overview,
 	return show.ID
 }
 
-func createSearchMovie(t *testing.T, app *Application, title, filePath string) int64 {
-	t.Helper()
-
-	movieID, err := app.Queries.UpsertMovie(context.Background(), database.UpsertMovieParams{
-		Title:     title,
-		FilePath:  filePath,
-		FileName:  strings.TrimPrefix(filePath, "/movies/"),
-		Size:      1,
-		Container: "mkv",
-		MimeType:  "video/x-matroska",
-		Adult:     false,
-	})
-	if err != nil {
-		t.Fatalf("create movie %q: %v", title, err)
-	}
-	movie, err := app.Queries.GetMovieByID(context.Background(), movieID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return movie.ID
-}
-
-func createSearchMusician(t *testing.T, app *Application, name string) int64 {
-	t.Helper()
-
-	musicianIdentity, err := app.Queries.UpsertMusician(context.Background(), database.UpsertMusicianParams{
-		Name:     name,
-		SortName: strings.ToLower(name),
-	})
-	if err != nil {
-		t.Fatalf("create musician %q: %v", name, err)
-	}
-	musician, err := app.Queries.GetMusicianByID(context.Background(), musicianIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return musician.ID
-}
-
-func createSearchAlbum(t *testing.T, app *Application, title, musician string) int64 {
-	t.Helper()
-
-	albumIdentity, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
-		Title:     title,
-		SortTitle: strings.ToLower(title),
-		Musician:  sql.NullString{String: musician, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("create album %q: %v", title, err)
-	}
-	album, err := app.Queries.GetAlbumByID(context.Background(), albumIdentity.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return album.ID
-}
-
-func createSearchTrack(t *testing.T, app *Application, title, filePath string, albumID, musicianID int64) int64 {
-	t.Helper()
-
-	track, err := app.Queries.UpsertTrack(context.Background(), database.UpsertTrackParams{
-		Title:         title,
-		SortTitle:     strings.ToLower(title),
-		FilePath:      filePath,
-		FileName:      strings.TrimPrefix(filePath, "/music/"),
-		Container:     "flac",
-		MimeType:      "audio/flac",
-		Codec:         "flac",
-		Size:          1,
-		TrackIndex:    1,
-		Duration:      180,
-		Disc:          1,
-		Channels:      "2",
-		ChannelLayout: "stereo",
-		BitRate:       1000,
-		Profile:       "",
-		AlbumID:       sql.NullInt64{Int64: albumID, Valid: true},
-		MusicianID:    sql.NullInt64{Int64: musicianID, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("create track %q: %v", title, err)
-	}
-	return track
-}
-
-func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID int64, path string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	for _, cookie := range authSessionCookies(t, app, userID) {
-		req.AddCookie(cookie)
-	}
-
-	w := httptest.NewRecorder()
-	app.Router.ServeHTTP(w, req)
-	return w
-}
-
 func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	userID := createSearchUser(t, app)
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
 
 	// Search scans into the same row types as the list endpoints, so a hit in
 	// every category is what validates those item schemas here.
-	createSearchMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
+	createTestMovie(t, app, "Contract Movie", "/movies/search-contract.mkv")
 	createSearchShow(t, app, "Contract Show", "/shows/Contract Show (2024)", "A contract show.", "Contract taglines.")
-	musicianID := createSearchMusician(t, app, "Contract Artist")
-	albumID := createSearchAlbum(t, app, "Contract Album", "Contract Artist")
-	createSearchTrack(t, app, "Contract Track", "/music/search-contract.flac", albumID, musicianID)
+	musicianID := createTestMusician(t, app, "Contract Artist")
+	albumID := createTestAlbum(t, app, "Contract Album", "Contract Artist")
+	createTestTrack(t, app, "Contract Track", "/music/search-contract.flac", albumID, musicianID)
 
-	app.InitSession()
-	app.InitRouter()
-	cookies := authSessionCookies(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 
 	tests := []struct {
 		operationID string
@@ -608,11 +461,8 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.operationID, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, test.path, nil)
-			for _, cookie := range cookies {
-				req.AddCookie(cookie)
-			}
 			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, req)
+			handler.ServeHTTP(response, req)
 			if response.Code != http.StatusOK {
 				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 			}

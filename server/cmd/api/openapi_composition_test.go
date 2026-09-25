@@ -1,11 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -116,21 +112,7 @@ func propertyNames(schema map[string]any) map[string]bool {
 func loadRawOpenAPIDocument(t *testing.T) map[string]any {
 	t.Helper()
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("failed to locate test file")
-	}
-
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "docs", "openapi.json"))
-	if err != nil {
-		t.Fatalf("read OpenAPI document: %v", err)
-	}
-
 	var document map[string]any
-	err = json.Unmarshal(raw, &document)
-	if err != nil {
-		t.Fatalf("parse OpenAPI document: %v", err)
-	}
+	readOpenAPIDocumentJSON(t, &document)
 	return document
 }

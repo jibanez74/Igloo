@@ -9,32 +9,18 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestToggleLikeMovie_HTTPPersistsLikeAndUnlike(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	userID, movieID := createTestUserAndMovie(t, app)
 
-	r := chi.NewRouter()
-	r.Get("/api/movies/{id}/like-status", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.GetMovieLikeStatus(w, r)
-	})
-	r.Post("/api/movies/{id}/like", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), cookieUserID, userID)
-		app.ToggleLikeMovie(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(r)
+	handler := authenticatedRouter(t, app, userID)
 
 	postLike := func(t *testing.T) bool {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/movies/%d/like", movieID), nil)
-		addOpenAPITestCookie(req)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
@@ -66,7 +52,6 @@ func TestToggleLikeMovie_HTTPPersistsLikeAndUnlike(t *testing.T) {
 		t.Fatal("first like toggle returned is_liked=false, want true")
 	}
 	statusReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/movies/%d/like-status", movieID), nil)
-	addOpenAPITestCookie(statusReq)
 	statusResponse := httptest.NewRecorder()
 	handler.ServeHTTP(statusResponse, statusReq)
 	if statusResponse.Code != http.StatusOK {

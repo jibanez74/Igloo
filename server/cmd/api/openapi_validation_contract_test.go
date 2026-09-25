@@ -35,8 +35,7 @@ func TestDeviceNameValidationConformsToOpenAPI(t *testing.T) {
 		for _, tc := range names {
 			t.Run(endpoint.schema+"/"+tc.label, func(t *testing.T) {
 				app := setupSessionTestApp(t)
-				defer app.DB.Close()
-				user := createTestUserWithPassword(t, app, "Device User", "device-name@example.com", "correct horse")
+				user := createTestUser(t, app, "Device User", "device-name@example.com", false)
 				path := endpoint.path
 				var deviceID int64
 				if endpoint.schema == "RenameDeviceRequest" {
@@ -52,7 +51,7 @@ func TestDeviceNameValidationConformsToOpenAPI(t *testing.T) {
 				body := map[string]any{endpoint.field: tc.name}
 				if endpoint.schema == "DeviceLoginRequest" {
 					body["email"] = user.Email
-					body["password"] = "correct horse"
+					body["password"] = testUserPassword
 				}
 				data, err := json.Marshal(body)
 				if err != nil {
@@ -110,10 +109,8 @@ func TestDeviceNameValidationConformsToOpenAPI(t *testing.T) {
 
 func TestEmptyPlaylistArraysRejectedByHandlerAndOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	fixtures := createPlaylistFixtures(t, app)
-	app.InitRouter()
-	cookie := newAuthSessionCookie(t, app, fixtures.owner.ID)
+	handler := authenticatedRouter(t, app, fixtures.owner.ID)
 	document, _ := loadOpenAPIContract(t)
 	cases := []struct{ schema, operation, method, path, field string }{
 		{"AddTracksRequest", "addTracksToPlaylist", http.MethodPost, fmt.Sprintf("/api/music/playlists/%d/tracks", fixtures.trackPlaylist.ID), "track_ids"},
@@ -134,9 +131,8 @@ func TestEmptyPlaylistArraysRejectedByHandlerAndOpenAPI(t *testing.T) {
 				t.Fatalf("schema rejected nonempty array: %v", err)
 			}
 			request := newOpenAPIJSONRequest(tc.method, tc.path, fmt.Sprintf(`{"%s":[]}`, tc.field))
-			request.AddCookie(cookie)
 			response := httptest.NewRecorder()
-			app.Router.ServeHTTP(response, request)
+			handler.ServeHTTP(response, request)
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d: %s", response.Code, response.Body.String())
 			}

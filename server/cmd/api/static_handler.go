@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -98,23 +97,18 @@ type frontendAsset struct {
 	etag        string
 }
 
-var (
-	frontendAssetsOnce sync.Once
-	frontendAssets     map[string]*frontendAsset
-)
-
-// loadFrontendAssets walks the embedded webdist once. webdist is ~3 MB, so
+// loadFrontendAssets walks the webdist tree of fsys once. webdist is ~3 MB, so
 // holding the decoded copies in memory is cheap next to re-reading and
 // re-allocating them per request.
-func loadFrontendAssets() map[string]*frontendAsset {
+func loadFrontendAssets(fsys fs.FS) map[string]*frontendAsset {
 	assets := make(map[string]*frontendAsset)
 
-	walkErr := fs.WalkDir(FrontendFS, "webdist", func(path string, d fs.DirEntry, err error) error {
+	walkErr := fs.WalkDir(fsys, "webdist", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 
-		content, err := fs.ReadFile(FrontendFS, path)
+		content, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return err
 		}
@@ -141,12 +135,12 @@ func loadFrontendAssets() map[string]*frontendAsset {
 	return assets
 }
 
-func frontendAssetFor(fsPath string) (*frontendAsset, bool) {
-	frontendAssetsOnce.Do(func() {
-		frontendAssets = loadFrontendAssets()
+func (app *Application) frontendAssetFor(fsPath string) (*frontendAsset, bool) {
+	app.frontendAssetsOnce.Do(func() {
+		app.frontendAssets = loadFrontendAssets(app.FrontendAssets)
 	})
 
-	asset, ok := frontendAssets[fsPath]
+	asset, ok := app.frontendAssets[fsPath]
 	return asset, ok
 }
 
@@ -199,13 +193,13 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	fsPath := filepath.Join("webdist", requestedPath)
 	fsPath = filepath.ToSlash(fsPath)
 
-	if asset, ok := frontendAssetFor(fsPath); ok {
+	if asset, ok := app.frontendAssetFor(fsPath); ok {
 		serveFrontendAsset(w, r, asset, strings.HasSuffix(fsPath, ".html"))
 		return
 	}
 
 	// A directory request serves its own index.html when one exists.
-	if asset, ok := frontendAssetFor(fsPath + "/index.html"); ok {
+	if asset, ok := app.frontendAssetFor(fsPath + "/index.html"); ok {
 		serveFrontendAsset(w, r, asset, true)
 		return
 	}
@@ -224,7 +218,7 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// SPA fallback: any other path serves the root index.html.
-	asset, ok := frontendAssetFor("webdist/index.html")
+	asset, ok := app.frontendAssetFor("webdist/index.html")
 	if !ok {
 		app.Logger.Error("failed to find index.html in embedded filesystem")
 		http.Error(w, "Frontend not found. Please build the web application and rebuild the binary.", http.StatusNotFound)

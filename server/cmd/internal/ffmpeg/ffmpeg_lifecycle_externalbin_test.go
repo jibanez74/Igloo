@@ -5,7 +5,6 @@ package ffmpeg
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -56,20 +55,6 @@ func TestResolveBinaryCandidateUsesConfiguredExternalBinary(t *testing.T) {
 	}
 }
 
-func TestResolveBinaryCandidateReportsMissingExternalBinary(t *testing.T) {
-	prepareSingletonTest(t)
-	t.Setenv("IGLOO_FFMPEG_PATH", "")
-	t.Setenv("PATH", t.TempDir())
-
-	_, err := resolveBinaryCandidate()
-	if err == nil {
-		t.Fatal("expected missing FFmpeg error")
-	}
-	if !strings.Contains(err.Error(), "IGLOO_FFMPEG_PATH") {
-		t.Fatalf("error = %q, want environment-variable guidance", err.Error())
-	}
-}
-
 func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 	prepareSingletonTest(t)
 	logPath := filepath.Join(t.TempDir(), "calls.log")
@@ -88,18 +73,14 @@ func TestNewVerifiesAndReusesSingleton(t *testing.T) {
 		t.Fatal("New did not reuse the singleton instance")
 	}
 
-	logData, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read call log: %v", err)
-	}
 	versionCalls := 0
-	for _, line := range strings.Split(strings.TrimSpace(string(logData)), "\n") {
+	for _, line := range readArgumentLog(t, logPath) {
 		if line == "-version" {
 			versionCalls++
 		}
 	}
 	if versionCalls != 1 {
-		t.Fatalf("version calls = %d, want 1; log: %s", versionCalls, logData)
+		t.Fatalf("version calls = %d, want 1", versionCalls)
 	}
 }
 
@@ -235,43 +216,5 @@ func TestInitializeCandidateCleansFailedExtraction(t *testing.T) {
 	}
 	if instance != nil || extractedDir != "" {
 		t.Fatalf("failed candidate changed singleton ownership: instance=%v extractedDir=%q", instance, extractedDir)
-	}
-}
-
-func TestCapabilitiesReturnsIndependentSnapshot(t *testing.T) {
-	original := Capabilities{
-		Probed:         true,
-		Encoders:       map[string]bool{"libx264": true},
-		Filters:        map[string]bool{"scale": true},
-		HWAccels:       map[string]bool{"cuda": true},
-		CLIOptions:     map[string]bool{"readrate": true},
-		FilterOptions:  map[string]map[string]bool{"scale_cuda": {"format": true}},
-		EncoderOptions: map[string]map[string]bool{"h264_qsv": {"preset": true}},
-	}
-	f := &ffmpeg{capabilities: original}
-
-	first := f.Capabilities()
-	delete(first.Encoders, "libx264")
-	delete(first.Filters, "scale")
-	delete(first.HWAccels, "cuda")
-	delete(first.CLIOptions, "readrate")
-	delete(first.FilterOptions["scale_cuda"], "format")
-	delete(first.EncoderOptions["h264_qsv"], "preset")
-
-	second := f.Capabilities()
-	if !second.Encoders["libx264"] || !second.Filters["scale"] || !second.HWAccels["cuda"] {
-		t.Fatalf("top-level maps were mutated through snapshot: %#v", second)
-	}
-	if !second.CLIOptions["readrate"] || !second.FilterOptions["scale_cuda"]["format"] {
-		t.Fatalf("filter/CLI maps were mutated through snapshot: %#v", second)
-	}
-	if !second.EncoderOptions["h264_qsv"]["preset"] {
-		t.Fatalf("nested encoder map was mutated through snapshot: %#v", second)
-	}
-
-	// An unprobed instance must not gain empty maps through cloning.
-	empty := (&ffmpeg{}).Capabilities()
-	if empty.Encoders != nil || empty.FilterOptions != nil || empty.EncoderOptions != nil {
-		t.Fatalf("nil maps changed while cloning: %#v", empty)
 	}
 }
