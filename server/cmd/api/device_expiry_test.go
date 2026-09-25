@@ -28,9 +28,7 @@ func setDeviceLastUsedForTest(t *testing.T, app *Application, token, lastUsedAt 
 }
 
 func TestDeviceTokenAuth_RejectsAndDeletesStaleDevice(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -54,9 +52,7 @@ func TestDeviceTokenAuth_RejectsAndDeletesStaleDevice(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_DeviceInsideCutoffAuthenticates(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -78,9 +74,7 @@ func TestDeviceTokenAuth_DeviceInsideCutoffAuthenticates(t *testing.T) {
 }
 
 func TestSweepStaleDevices_RemovesOnlyStaleRows(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)

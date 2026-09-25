@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
-
-	"igloo/cmd/internal/database"
 
 	"github.com/gorilla/websocket"
 )
@@ -168,16 +165,8 @@ func TestWatchRoomWebSocket_RoomsAreIsolated(t *testing.T) {
 	app := setupTestApp(t)
 	defer closeWatchRoomWSTestApp(t, app)
 
-	ctx := context.Background()
 	ownerAID, movieID := createTestUserAndMovie(t, app)
-	ownerB, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Owner B",
-		Email:    "owner-b-isolated@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create owner b: %v", err)
-	}
+	ownerB := createTestUser(t, app, "Owner B", "owner-b-isolated@example.com", false)
 
 	roomA := createTestRoom(t, app, ownerAID, movieID)
 	addMembersToRoom(t, app, roomA.ID, ownerAID)
@@ -211,21 +200,13 @@ func TestWatchRoomWebSocket_ConcurrentPlaybackEventsDoNotDeadlock(t *testing.T) 
 	app := setupTestApp(t)
 	defer closeWatchRoomWSTestApp(t, app)
 
-	ctx := context.Background()
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	room := createTestRoom(t, app, ownerID, movieID)
 
 	const guestCount = 2
 	userIDs := []int64{ownerID}
 	for i := 0; i < guestCount; i++ {
-		guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-			Name:     fmt.Sprintf("Storm Guest %d", i),
-			Email:    fmt.Sprintf("storm-guest-%d@example.com", i),
-			Password: "hashed",
-		})
-		if err != nil {
-			t.Fatalf("create guest %d: %v", i, err)
-		}
+		guest := createTestUser(t, app, fmt.Sprintf("Storm Guest %d", i), fmt.Sprintf("storm-guest-%d@example.com", i), false)
 		userIDs = append(userIDs, guest.ID)
 	}
 	addMembersToRoom(t, app, room.ID, userIDs...)
@@ -292,16 +273,8 @@ func TestWatchRoomWebSocket_PlaybackStateSurvivesPartialDisconnectAndResetsWhenE
 	app := setupTestApp(t)
 	defer closeWatchRoomWSTestApp(t, app)
 
-	ctx := context.Background()
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
-		Name:     "Lifecycle Guest",
-		Email:    "lifecycle-guest@example.com",
-		Password: "hashed",
-	})
-	if err != nil {
-		t.Fatalf("create guest: %v", err)
-	}
+	guest := createTestUser(t, app, "Lifecycle Guest", "lifecycle-guest@example.com", false)
 
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)

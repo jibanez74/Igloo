@@ -15,7 +15,6 @@ import (
 // array elements are validated against the contract.
 func TestMovieListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "List User", "movie-list-contract@example.com", false)
 	movieID := createSearchMovie(t, app, "Contract List Movie", "/movies/contract-list.mkv")

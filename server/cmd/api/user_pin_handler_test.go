@@ -10,8 +10,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestValidatePin(t *testing.T) {
@@ -41,28 +39,6 @@ func TestValidatePin(t *testing.T) {
 			}
 		})
 	}
-}
-
-// mountPinRouter serves the PIN routes behind a session-injecting middleware,
-// mirroring mountPlaybackRouter. userID 0 leaves the request unauthenticated.
-func mountPinRouter(app *Application, userID int64) http.Handler {
-	r := chi.NewRouter()
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if userID != 0 {
-				app.SessionManager.Put(r.Context(), cookieUserID, userID)
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
-	r.Group(func(r chi.Router) {
-		r.Use(app.IsAuth)
-		r.Get("/api/user/pin", app.GetUserPin)
-		r.Put("/api/user/pin", app.UpdateUserPin)
-		r.Post("/api/user/pin/verify", app.VerifyUserPin)
-	})
-
-	return app.SessionManager.LoadAndSave(r)
 }
 
 func pinRequest(t *testing.T, handler http.Handler, method, target, body string) *httptest.ResponseRecorder {
@@ -105,10 +81,9 @@ func decodeHasPin(t *testing.T, body []byte) bool {
 
 func TestUpdateUserPin_SetViaSession(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	w := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if w.Code != http.StatusOK {
@@ -131,13 +106,11 @@ func TestUpdateUserPin_SetViaSession(t *testing.T) {
 
 func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Contract User", "contract@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	updateReq := newOpenAPIJSONRequest(http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
-	addOpenAPITestCookie(updateReq)
 	updateResponse := httptest.NewRecorder()
 	handler.ServeHTTP(updateResponse, updateReq)
 	if updateResponse.Code != http.StatusOK {
@@ -146,7 +119,6 @@ func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 	assertOpenAPIExchange(t, "updateUserPin", updateReq, updateResponse)
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/user/pin", nil)
-	addOpenAPITestCookie(getReq)
 	getResponse := httptest.NewRecorder()
 	handler.ServeHTTP(getResponse, getReq)
 	if getResponse.Code != http.StatusOK {
@@ -155,7 +127,6 @@ func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 	assertOpenAPIExchange(t, "getUserPin", getReq, getResponse)
 
 	verifyReq := newOpenAPIJSONRequest(http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
-	addOpenAPITestCookie(verifyReq)
 	verifyResponse := httptest.NewRecorder()
 	handler.ServeHTTP(verifyResponse, verifyReq)
 	if verifyResponse.Code != http.StatusOK {
@@ -166,7 +137,6 @@ func TestUserPinHandlers_ConformToOpenAPI(t *testing.T) {
 
 func TestUpdateUserPin_SetViaDeviceToken(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	app.InitRouter()
 
 	user := createTestUser(t, app, "TV Owner", "tv@example.com", false)
@@ -196,10 +166,9 @@ func TestUpdateUserPin_InvalidFormatRejected(t *testing.T) {
 	}
 
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	for _, body := range cases {
 		w := pinRequest(t, handler, http.MethodPut, "/api/user/pin", body)
@@ -216,10 +185,9 @@ func TestUpdateUserPin_InvalidFormatRejected(t *testing.T) {
 
 func TestUpdateUserPin_ChangeRequiresCurrentPin(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
@@ -249,10 +217,9 @@ func TestUpdateUserPin_ChangeRequiresCurrentPin(t *testing.T) {
 
 func TestUpdateUserPin_RemoveClearsPin(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
@@ -275,10 +242,9 @@ func TestUpdateUserPin_RemoveClearsPin(t *testing.T) {
 
 func TestUpdateUserPin_RemoveWhenUnsetIsIdempotent(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	w := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":""}`)
 	if w.Code != http.StatusOK {
@@ -288,10 +254,9 @@ func TestUpdateUserPin_RemoveWhenUnsetIsIdempotent(t *testing.T) {
 
 func TestGetUserPin_SessionOnly(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	empty := pinRequest(t, handler, http.MethodGet, "/api/user/pin", "")
 	if empty.Code != http.StatusOK {
@@ -321,7 +286,6 @@ func TestGetUserPin_SessionOnly(t *testing.T) {
 
 func TestGetUserPin_RejectsDeviceToken(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	app.InitRouter()
 
 	user := createTestUser(t, app, "TV Owner", "tv@example.com", false)
@@ -350,10 +314,9 @@ func TestGetUserPin_RejectsDeviceToken(t *testing.T) {
 
 func TestVerifyUserPin(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	noPin := pinRequest(t, handler, http.MethodPost, "/api/user/pin/verify", `{"pin":"1234"}`)
 	if noPin.Code != http.StatusBadRequest {
@@ -389,7 +352,6 @@ func TestVerifyUserPin(t *testing.T) {
 
 func TestVerifyUserPin_ViaDeviceToken(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	app.InitRouter()
 
 	user := createTestUser(t, app, "TV Owner", "tv@example.com", false)
@@ -419,10 +381,9 @@ func TestVerifyUserPin_ViaDeviceToken(t *testing.T) {
 
 func TestPinAttempts_RateLimited(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPinRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	seed := pinRequest(t, handler, http.MethodPut, "/api/user/pin", `{"pin":"1234"}`)
 	if seed.Code != http.StatusOK {
@@ -451,7 +412,6 @@ func TestPinAttempts_RateLimited(t *testing.T) {
 
 func TestGetCurrentAuthUser_IncludesHasPin(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	app.InitRouter()
 
 	user := createTestUser(t, app, "TV Owner", "tv@example.com", false)

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -17,8 +16,6 @@ import (
 	"igloo/cmd/internal/ffmpeg/fmp4testutil"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -205,41 +202,6 @@ func hlsRunPlan(fixture testFMP4Fixture) fakeFFmpegRunPlan {
 			return writeTestHLSFixture(outDir, fixture)
 		},
 	}
-}
-
-// newHLSTestHandler wires the three personal movie HLS routes behind the
-// session middleware with userID already authenticated, mirroring the paths
-// registered in routes.go.
-func newHLSTestHandler(t *testing.T, app *Application, userID int64) http.Handler {
-	t.Helper()
-	return newMediaHLSTestHandler(t, app, userID, mediaKindMovie)
-}
-
-// newMediaHLSTestHandler is newHLSTestHandler for either media kind: the
-// episode routes are the movie routes under /api/shows/episodes/{id}.
-func newMediaHLSTestHandler(t *testing.T, app *Application, userID int64, kind mediaKind) http.Handler {
-	t.Helper()
-
-	app.InitSession()
-	authenticated := func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), cookieUserID, userID)
-			handler(w, r)
-		}
-	}
-
-	router := chi.NewRouter()
-	if kind == mediaKindEpisode {
-		router.Post("/api/shows/episodes/{id}/hls/session/stop", authenticated(app.StopEpisodeHLSSession))
-		router.Get("/api/shows/episodes/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.EpisodeHLSManifest))
-		router.Get("/api/shows/episodes/{id}/hls/{profile}/{filename}", authenticated(app.EpisodeHLSSegment))
-	} else {
-		router.Post("/api/movies/{id}/hls/session/stop", authenticated(app.StopPersonalHLSSession))
-		router.Get("/api/movies/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, authenticated(app.HLSManifest))
-		router.Get("/api/movies/{id}/hls/{profile}/{filename}", authenticated(app.HLSSegment))
-	}
-
-	return app.SessionManager.LoadAndSave(router)
 }
 
 // noMetadataProbe completes ffprobe.FfprobeInterface for stubs that only serve

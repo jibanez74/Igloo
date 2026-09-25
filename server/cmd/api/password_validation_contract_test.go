@@ -36,12 +36,7 @@ func TestPasswordLimitsConformToOpenAPI(t *testing.T) {
 		for _, tc := range passwords {
 			t.Run(operation+"/"+tc.name, func(t *testing.T) {
 				app := setupSessionTestApp(t)
-				defer app.DB.Close()
-				user := createTestUserWithPassword(t, app, "Password User", "password-limit@example.com", "correct horse")
-				_, err := app.DB.Exec(`UPDATE users SET is_admin = 1 WHERE id = ?`, user.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
+				user := createTestUser(t, app, "Password User", "password-limit@example.com", true)
 				app.InitRouter()
 				cookie := newAuthSessionCookie(t, app, user.ID)
 				method, path := http.MethodPut, fmt.Sprintf("/api/admin/users/%d/password", user.ID)
@@ -56,7 +51,7 @@ func TestPasswordLimitsConformToOpenAPI(t *testing.T) {
 					wantStatus = http.StatusCreated
 				case "updateUserPassword":
 					path, label = "/api/user/password", "new password"
-					body = fmt.Sprintf(`{"current_password":"correct horse","new_password":%q}`, tc.password)
+					body = fmt.Sprintf(`{"current_password":%q,"new_password":%q}`, testUserPassword, tc.password)
 				}
 				invalid := tc.errorSuffix != ""
 				if invalid {

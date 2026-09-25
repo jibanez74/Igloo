@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 )
 
 // createTestDevice inserts a device row directly and returns its bearer token.
@@ -37,31 +35,6 @@ func createTestDevice(t *testing.T, app *Application, userID int64, name, platfo
 	return token
 }
 
-func createTestUserWithPassword(t *testing.T, app *Application, name, email, password string) database.User {
-	t.Helper()
-
-	hashed, err := helpers.HashPassword(password)
-	if err != nil {
-		t.Fatalf("hash password: %v", err)
-	}
-
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     name,
-		Email:    email,
-		Password: hashed,
-		IsAdmin:  false,
-		Avatar:   sql.NullString{},
-	})
-	if err != nil {
-		t.Fatalf("create user %q: %v", email, err)
-	}
-	stored, err := app.Queries.GetUser(context.Background(), user.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return stored
-}
-
 type deviceListResponse struct {
 	Data struct {
 		Devices []struct {
@@ -75,14 +48,12 @@ type deviceListResponse struct {
 }
 
 func TestAuthenticateDevice_IssuesToken(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	createTestUserWithPassword(t, app, "Device User", "device@example.com", "correct horse")
+	createTestUser(t, app, "Device User", "device@example.com", false)
 
-	body := `{"email":"device@example.com","password":"correct horse","device_name":"Pixel","platform":"android"}`
+	body := fmt.Sprintf(`{"email":"device@example.com","password":%q,"device_name":"Pixel","platform":"android"}`, testUserPassword)
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/device-login", body)
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
@@ -110,12 +81,10 @@ func TestAuthenticateDevice_IssuesToken(t *testing.T) {
 }
 
 func TestAuthenticateDevice_RejectsWrongPassword(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	createTestUserWithPassword(t, app, "Device User", "device@example.com", "correct horse")
+	createTestUser(t, app, "Device User", "device@example.com", false)
 
 	body := `{"email":"device@example.com","password":"wrong","device_name":"Pixel"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/device-login", strings.NewReader(body))
@@ -128,9 +97,7 @@ func TestAuthenticateDevice_RejectsWrongPassword(t *testing.T) {
 }
 
 func TestAuthenticateDevice_IsRateLimited(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	body := `{"email":"nobody@example.com","password":"wrong","device_name":"Pixel"}`
@@ -152,9 +119,7 @@ func TestAuthenticateDevice_IsRateLimited(t *testing.T) {
 }
 
 func TestGetDevices_SessionListsOwnDevices(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -191,9 +156,7 @@ func TestGetDevices_SessionListsOwnDevices(t *testing.T) {
 }
 
 func TestDeviceRoutes_RejectDeviceTokenAuth(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -256,9 +219,7 @@ func TestDeviceRoutes_RejectDeviceTokenAuth(t *testing.T) {
 }
 
 func TestRevokeDevice_InvalidatesToken(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -301,9 +262,7 @@ func TestRevokeDevice_InvalidatesToken(t *testing.T) {
 // Devices cascade away with their user, so the cached bearer resolution has to
 // go with them; otherwise a deleted user's token keeps authenticating.
 func TestDeleteUserAccount_InvalidatesDeviceTokens(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Leaving", "leaving@example.com", false)
@@ -336,9 +295,7 @@ func TestDeleteUserAccount_InvalidatesDeviceTokens(t *testing.T) {
 }
 
 func TestRevokeDevice_CannotRevokeOtherUsersDevice(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	owner := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -361,9 +318,7 @@ func TestRevokeDevice_CannotRevokeOtherUsersDevice(t *testing.T) {
 }
 
 func TestRenameDevice_CannotRenameOtherUsersDevice(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	owner := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -400,9 +355,7 @@ func TestRenameDevice_CannotRenameOtherUsersDevice(t *testing.T) {
 }
 
 func TestRenameDevice_RenamesOwnDevice(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)

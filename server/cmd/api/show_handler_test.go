@@ -18,7 +18,6 @@ import (
 // the contract. The unenriched row exercises the nullable poster and premiere year.
 func TestGetLatestShows_ConformsToOpenAPIWithRows(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Shows Contract User", "shows-contract@example.com", false)
 
@@ -333,7 +332,6 @@ type showDetailsBody struct {
 
 func TestGetShowDetails_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Show Details User", "show-details@example.com", false)
 	showID := seedContractShow(t, app)
@@ -422,7 +420,6 @@ func TestGetShowDetails_ConformsToOpenAPI(t *testing.T) {
 
 func TestGetShowDetails_RejectsUnparsableID(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Show Bad ID User", "show-bad-id@example.com", false)
 
@@ -444,7 +441,6 @@ func TestGetShowDetails_RejectsUnparsableID(t *testing.T) {
 
 func TestGetShowDetails_UnknownShowIsNotFound(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Show Missing User", "show-missing@example.com", false)
 
@@ -466,7 +462,6 @@ func TestGetShowDetails_UnknownShowIsNotFound(t *testing.T) {
 
 func TestGetShowDetails_RequiresAuthentication(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	showID := seedContractShow(t, app)
 
@@ -501,7 +496,6 @@ type showSeasonEpisodesBody struct {
 
 func TestGetShowSeasonEpisodes_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Season Episodes User", "season-episodes@example.com", false)
 	showID := seedContractShow(t, app)
@@ -546,7 +540,6 @@ func TestGetShowSeasonEpisodes_ConformsToOpenAPI(t *testing.T) {
 // than as a missing or invalid one.
 func TestGetShowSeasonEpisodes_SpecialsAreSeasonZero(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Specials User", "specials@example.com", false)
 	showID := seedContractShow(t, app)
@@ -582,7 +575,6 @@ func TestGetShowSeasonEpisodes_SpecialsAreSeasonZero(t *testing.T) {
 
 func TestGetShowSeasonEpisodes_UnknownSeasonIsNotFound(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Missing Season User", "missing-season@example.com", false)
 	showID := seedContractShow(t, app)
@@ -606,7 +598,6 @@ func TestGetShowSeasonEpisodes_UnknownSeasonIsNotFound(t *testing.T) {
 // A season number that exists for some other show must not leak across shows.
 func TestGetShowSeasonEpisodes_UnknownShowIsNotFound(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Missing Show Season User", "missing-show-season@example.com", false)
 	seedContractShow(t, app)
@@ -629,7 +620,6 @@ func TestGetShowSeasonEpisodes_UnknownShowIsNotFound(t *testing.T) {
 
 func TestGetShowSeasonEpisodes_RejectsUnparsableSeasonNumber(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Bad Season User", "bad-season@example.com", false)
 	showID := seedContractShow(t, app)
@@ -654,7 +644,6 @@ func TestGetShowSeasonEpisodes_RejectsUnparsableSeasonNumber(t *testing.T) {
 // so it is rejected as invalid rather than looked up and reported missing.
 func TestGetShowSeasonEpisodes_RejectsNegativeSeasonNumber(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Negative Season User", "negative-season@example.com", false)
 	showID := seedContractShow(t, app)
@@ -677,7 +666,6 @@ func TestGetShowSeasonEpisodes_RejectsNegativeSeasonNumber(t *testing.T) {
 
 func TestGetShowSeasonEpisodes_RequiresAuthentication(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	showID := seedContractShow(t, app)
 

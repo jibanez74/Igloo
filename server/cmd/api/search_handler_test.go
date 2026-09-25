@@ -45,7 +45,6 @@ func searchEntityResults[T any](t *testing.T, app *Application, e searchEntity[T
 
 func TestSearchMoviesStagedMatching(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchMovie(t, app, "Casino Nights", "/movies/casino-nights.mkv")
 	createSearchMovie(t, app, "Royale Tenenbaums", "/movies/royale-tenenbaums.mkv")
@@ -71,7 +70,6 @@ func TestSearchMoviesStagedMatching(t *testing.T) {
 
 func TestSearchMoviesTypoInOneTokenRanksTargetFirst(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
 	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
@@ -88,7 +86,6 @@ func TestSearchMoviesTypoInOneTokenRanksTargetFirst(t *testing.T) {
 
 func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
 
@@ -107,7 +104,6 @@ func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
 
 func TestSearchShowsStagedMatching(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchShow(t, app, "Breaking Bad", "/shows/Breaking Bad", "", "")
 	createSearchShow(t, app, "Breaking Point", "/shows/Breaking Point", "", "")
@@ -132,7 +128,6 @@ func TestSearchShowsStagedMatching(t *testing.T) {
 
 func TestSearchShowsMatchesOverviewAndTagline(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchShow(
 		t, app,
@@ -159,7 +154,6 @@ func TestSearchShowsMatchesOverviewAndTagline(t *testing.T) {
 
 func TestSearchShowsTypoInOneTokenRanksTargetFirst(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
 	createSearchShow(t, app, "Deliverance Bay", "/shows/Deliverance Bay", "", "")
@@ -177,7 +171,6 @@ func TestSearchShowsTypoInOneTokenRanksTargetFirst(t *testing.T) {
 // for libraries scanned before it existed.
 func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	// Simulate a database whose shows predate the index.
 	_, err := app.DB.Exec("DROP TRIGGER shows_ai; DROP TRIGGER shows_au")
@@ -228,7 +221,6 @@ func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
 
 func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	musicianID := createSearchMusician(t, app, "Adele")
 	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
@@ -245,7 +237,6 @@ func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 
 func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
@@ -257,7 +248,6 @@ func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 
 func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	musicianID := createSearchMusician(t, app, "Adele")
 	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
@@ -278,7 +268,6 @@ func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 
 func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	originalMusicianID := createSearchMusician(t, app, "Adele")
 	updatedMusicianID := createSearchMusician(t, app, "Sia")
@@ -305,9 +294,8 @@ func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 
 func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	userID := createSearchUser(t, app)
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
 	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
 	app.InitSession()
@@ -349,9 +337,8 @@ func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 
 func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	userID := createSearchUser(t, app)
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
 	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
 	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
 
@@ -381,9 +368,8 @@ func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
 
 func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	userID := createSearchUser(t, app)
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
 	createSearchMovie(t, app, "Pageable Movie One", "/movies/pageable-1.mkv")
 	createSearchMovie(t, app, "Pageable Movie Two", "/movies/pageable-2.mkv")
 	createSearchMovie(t, app, "Pageable Movie Three", "/movies/pageable-3.mkv")
@@ -430,21 +416,6 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	if resp.Data.PerPage != libraryMaxPerPage {
 		t.Fatalf("per_page = %d, want cap %d", resp.Data.PerPage, libraryMaxPerPage)
 	}
-}
-
-func createSearchUser(t *testing.T, app *Application) int64 {
-	t.Helper()
-
-	user, err := app.Queries.CreateUser(context.Background(), database.CreateUserParams{
-		Name:     "Search User",
-		Email:    "search@example.com",
-		Password: "hashed",
-		IsAdmin:  false,
-	})
-	if err != nil {
-		t.Fatalf("create search user: %v", err)
-	}
-	return user.ID
 }
 
 // createSearchShow seeds a show the way the scanner does: UpsertLocalShow
@@ -567,9 +538,7 @@ func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID in
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodGet, path, nil)
-	for _, cookie := range authSessionCookies(t, app, userID) {
-		req.AddCookie(cookie)
-	}
+	req.AddCookie(newAuthSessionCookie(t, app, userID))
 
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
@@ -578,8 +547,7 @@ func performAuthenticatedSearchRequest(t *testing.T, app *Application, userID in
 
 func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	userID := createSearchUser(t, app)
+	userID := createTestUser(t, app, "Search User", "search@example.com", false).ID
 
 	// Search scans into the same row types as the list endpoints, so a hit in
 	// every category is what validates those item schemas here.
@@ -591,7 +559,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 
 	app.InitSession()
 	app.InitRouter()
-	cookies := authSessionCookies(t, app, userID)
+	cookie := newAuthSessionCookie(t, app, userID)
 
 	tests := []struct {
 		operationID string
@@ -608,9 +576,7 @@ func TestSearchRoutes_ConformToOpenAPI(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.operationID, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, test.path, nil)
-			for _, cookie := range cookies {
-				req.AddCookie(cookie)
-			}
+			req.AddCookie(cookie)
 			response := httptest.NewRecorder()
 			app.Router.ServeHTTP(response, req)
 			if response.Code != http.StatusOK {

@@ -30,7 +30,6 @@ func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 
 func TestCleanupRoomHLSSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	t.Run("removes the cached session and tombstones the room", func(t *testing.T) {
 		const roomID = int64(42)
@@ -62,7 +61,6 @@ func TestCleanupRoomHLSSession(t *testing.T) {
 
 func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	const roomID = int64(24)
 	key := RoomHLSSessionKey(roomID)
@@ -138,7 +136,6 @@ func TestStoreRoomHLSSessionIfActive_TearsDownAnExpiredPredecessor(t *testing.T)
 
 func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	const roomID = int64(52)
 	key := RoomHLSSessionKey(roomID)
@@ -164,7 +161,6 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 
 func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	_, err := app.DB.Exec(`
@@ -197,7 +193,6 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 
 func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	const roomID = int64(7)
 	key := RoomHLSSessionKey(roomID)
@@ -221,7 +216,6 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 
 func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -275,7 +269,6 @@ func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testi
 
 func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	fake := &fakeFFmpeg{
 		plans: []fakeFFmpegRunPlan{
@@ -334,7 +327,6 @@ func TestGetOrCreateRoomHLSSession_UsesPreloadedMovieAndAudioStreams(t *testing.
 
 func TestInvalidateHLSSessionsForMovie(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	const roomA = int64(41)
 	const roomB = int64(42)
@@ -377,7 +369,6 @@ func TestInvalidateHLSSessionsForMovie(t *testing.T) {
 // path keeps serving what it wrote; the next manifest request replaces it.
 func TestGetOrCreateRoomHLSSession_ReplacesFailedSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
 	app.FFmpeg = fake
 
@@ -418,5 +409,40 @@ func TestGetOrCreateRoomHLSSession_ReplacesFailedSession(t *testing.T) {
 	}
 	if _, statErr := os.Stat(oldDir); !os.IsNotExist(statErr) {
 		t.Fatalf("failed room session temp dir still exists (stat error %v)", statErr)
+	}
+}
+
+func TestHLSSessionCacheExpirationDoesNotWaitForTeardown(t *testing.T) {
+	app := &Application{Wait: &sync.WaitGroup{}}
+	app.initRuntimeCaches()
+
+	session := &HLSSession{TempDir: t.TempDir()}
+	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, session)
+	app.HLSSessionCache.Set("expired-session", session, time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
+
+	deleteDone := make(chan struct{})
+	go func() {
+		app.HLSSessionCache.DeleteExpired()
+		close(deleteDone)
+	}()
+	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
+	select {
+	case <-deleteDone:
+	default:
+		releaseCleanup()
+		t.Fatal("DeleteExpired waited for HLS session teardown")
+	}
+	_, cached := app.HLSSessionCache.Get("expired-session")
+	if cached {
+		releaseCleanup()
+		t.Fatal("expired session remained cached while teardown was blocked")
+	}
+
+	releaseCleanup()
+	cleanupHLSSession(session)
+	_, err := os.Stat(session.TempDir)
+	if !os.IsNotExist(err) {
+		t.Fatalf("expired session temp dir still exists after cleanup: %v", err)
 	}
 }

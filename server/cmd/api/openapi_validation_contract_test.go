@@ -35,8 +35,7 @@ func TestDeviceNameValidationConformsToOpenAPI(t *testing.T) {
 		for _, tc := range names {
 			t.Run(endpoint.schema+"/"+tc.label, func(t *testing.T) {
 				app := setupSessionTestApp(t)
-				defer app.DB.Close()
-				user := createTestUserWithPassword(t, app, "Device User", "device-name@example.com", "correct horse")
+				user := createTestUser(t, app, "Device User", "device-name@example.com", false)
 				path := endpoint.path
 				var deviceID int64
 				if endpoint.schema == "RenameDeviceRequest" {
@@ -52,7 +51,7 @@ func TestDeviceNameValidationConformsToOpenAPI(t *testing.T) {
 				body := map[string]any{endpoint.field: tc.name}
 				if endpoint.schema == "DeviceLoginRequest" {
 					body["email"] = user.Email
-					body["password"] = "correct horse"
+					body["password"] = testUserPassword
 				}
 				data, err := json.Marshal(body)
 				if err != nil {
@@ -110,7 +109,6 @@ func TestDeviceNameValidationConformsToOpenAPI(t *testing.T) {
 
 func TestEmptyPlaylistArraysRejectedByHandlerAndOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	fixtures := createPlaylistFixtures(t, app)
 	app.InitRouter()
 	cookie := newAuthSessionCookie(t, app, fixtures.owner.ID)

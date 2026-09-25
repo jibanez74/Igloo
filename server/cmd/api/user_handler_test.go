@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"context"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -50,18 +50,10 @@ func TestValidatePasswordCountsRunes(t *testing.T) {
 }
 
 func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	app.Config.StaticDir = t.TempDir()
-	err := app.InitSettings(context.Background())
-	if err != nil {
-		t.Fatalf("initialize settings: %v", err)
-	}
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	user := createTestUserWithPassword(t, app, "Original", "original@example.com", "current password")
+	user := createTestUser(t, app, "Original", "original@example.com", false)
 	cookie := newAuthSessionCookie(t, app, user.ID)
 
 	tests := []struct {
@@ -72,7 +64,7 @@ func TestUserProfileMutationHandlers_ConformToOpenAPI(t *testing.T) {
 	}{
 		{name: "name", operationID: "updateUserName", target: "/api/user/name", body: `{"name":"Updated Name"}`},
 		{name: "email", operationID: "updateUserEmail", target: "/api/user/email", body: `{"email":"updated@example.com"}`},
-		{name: "password", operationID: "updateUserPassword", target: "/api/user/password", body: `{"current_password":"current password","new_password":"updated password"}`},
+		{name: "password", operationID: "updateUserPassword", target: "/api/user/password", body: fmt.Sprintf(`{"current_password":%q,"new_password":"updated password"}`, testUserPassword)},
 		{name: "avatar", operationID: "updateUserAvatar", target: "/api/user/avatar", body: `{"avatar":"https://example.com/avatar.png"}`},
 	}
 	for _, test := range tests {

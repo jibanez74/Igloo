@@ -15,7 +15,6 @@ import (
 
 func TestLibraryAndStatisticsHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Contract User", "contract-user@example.com", false)
 
@@ -303,7 +302,6 @@ func seedTrackRelationships(t *testing.T, app *Application, trackID, musicianID 
 
 func TestListeningStatisticsPaginationConformsToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	user := createTestUser(t, app, "Listener", "listener@example.com", false)
 	app.InitRouter()
 	cookie := newAuthSessionCookie(t, app, user.ID)
@@ -368,7 +366,6 @@ func TestListeningStatisticsPaginationConformsToOpenAPI(t *testing.T) {
 
 func TestRecordPlayEventDurationBoundaries(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 	user := createTestUser(t, app, "Listener", "duration@example.com", false)
 	musicianID := createSearchMusician(t, app, "Artist")
 	albumID := createSearchAlbum(t, app, "Album", "Artist")

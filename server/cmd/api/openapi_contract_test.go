@@ -45,10 +45,6 @@ func newOpenAPIRequest(method, target, contentType string, body []byte) *http.Re
 	return request
 }
 
-func addOpenAPITestCookie(request *http.Request) {
-	request.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
-}
-
 // assertOpenAPIExchange validates the observable HTTP boundary rather than a
 // handler implementation detail. Call it from endpoint tests after the real
 // request has been served. Requests carrying a body must come from
@@ -279,7 +275,6 @@ func loadOpenAPIContractOnce() {
 
 func TestHealthCheckConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	t.Cleanup(func() { _ = app.DB.Close() })
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	response := httptest.NewRecorder()
 
@@ -368,7 +363,7 @@ func TestStopPersonalHLSSession_AuthenticationDatabaseFailure(t *testing.T) {
 			if credential == "bearer" {
 				request.Header.Set("Authorization", "Bearer igd_contract-database-failure")
 			} else {
-				addOpenAPITestCookie(request)
+				request.AddCookie(&http.Cookie{Name: "session", Value: "openapi-contract"})
 			}
 			response := httptest.NewRecorder()
 
@@ -392,14 +387,13 @@ func TestStopPersonalHLSSession_AuthenticationDatabaseFailure(t *testing.T) {
 
 func TestLoginSessionCommitFailureConformsToOpenAPI(t *testing.T) {
 	app := setupSessionTestApp(t)
-	t.Cleanup(func() { _ = app.DB.Close() })
 	app.InitRouter()
-	createTestUserWithPassword(t, app, "Contract User", "contract@example.com", "correct horse")
+	createTestUser(t, app, "Contract User", "contract@example.com", false)
 	_, err := app.DB.Exec(`CREATE TRIGGER fail_session_insert BEFORE INSERT ON sessions BEGIN SELECT RAISE(FAIL, 'private session storage failure'); END`)
 	if err != nil {
 		t.Fatalf("install session failure trigger: %v", err)
 	}
-	request := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", `{"email":"contract@example.com","password":"correct horse"}`)
+	request := newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", fmt.Sprintf(`{"email":"contract@example.com","password":%q}`, testUserPassword))
 	response := httptest.NewRecorder()
 	app.Router.ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError {
@@ -424,13 +418,13 @@ func TestMain(m *testing.M) {
 	if code == 0 && openAPITestRunIsUnfiltered() {
 		openAPIContractOnce.Do(loadOpenAPIContractOnce)
 		if openAPIContractErr != nil {
-			fmt.Fprintf(os.Stderr, "load OpenAPI contract for exchange coverage: %v\\n", openAPIContractErr)
+			fmt.Fprintf(os.Stderr, "load OpenAPI contract for exchange coverage: %v\n", openAPIContractErr)
 			code = 1
 		} else {
 			observed := validatedOpenAPIExchanges.snapshot()
 			missing := missingOpenAPIJSONOperations(openAPIContractDoc, observed)
 			if len(missing) > 0 {
-				fmt.Fprintf(os.Stderr, "JSON OpenAPI operations without a validated successful handler exchange: %s\\n", strings.Join(missing, ", "))
+				fmt.Fprintf(os.Stderr, "JSON OpenAPI operations without a validated successful handler exchange: %s\n", strings.Join(missing, ", "))
 				code = 1
 			}
 		}

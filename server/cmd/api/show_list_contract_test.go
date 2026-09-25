@@ -13,7 +13,6 @@ import (
 // exercised. These run with a seeded show so the elements are validated too.
 func TestShowListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Show List User", "show-list-contract@example.com", false)
 	showID := seedContractShow(t, app)
@@ -57,7 +56,6 @@ func TestShowListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 // Sorting is case-insensitive on name and per_page is clamped, never rejected.
 func TestGetShowsLibrary_SortsAndClampsPerPage(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Show Sort User", "show-sort@example.com", false)
 

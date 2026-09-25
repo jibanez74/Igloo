@@ -27,7 +27,6 @@ func TestKeyframeIndexFingerprint(t *testing.T) {
 
 func TestKeyframeIndexStore(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	ctx := context.Background()
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
@@ -199,7 +198,6 @@ func writeTestMKVFixture(t *testing.T, app *Application, cueTimesSec []float64) 
 // the header lands on the first manifest response.
 func TestStartHLSSession_KeyframeIndexHitNeedsNoProbe(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{err: os.ErrInvalid}
@@ -242,7 +240,6 @@ func TestStartHLSSession_KeyframeIndexHitNeedsNoProbe(t *testing.T) {
 // the result, and answers the seek — still without ffprobe.
 func TestStartHLSSession_KeyframeIndexMissExtractsFromContainer(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{err: os.ErrInvalid}
@@ -293,7 +290,6 @@ func TestStartHLSSession_KeyframeIndexMissExtractsFromContainer(t *testing.T) {
 // index was rarely persisted and every play paid to extract it again.
 func TestStartHLSSession_PersistsKeyframeIndexAfterSessionTeardown(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 	app.Wait = &sync.WaitGroup{}
 	app.Ffprobe = &stubKeyframeFfprobe{err: os.ErrInvalid}
@@ -327,7 +323,6 @@ func TestStartHLSSession_PersistsKeyframeIndexAfterSessionTeardown(t *testing.T)
 // the seek and nothing is persisted.
 func TestStartHLSSession_AviFallsBackToProbeWithoutPersisting(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{keyframeSec: 96}
@@ -371,7 +366,6 @@ func TestStartHLSSession_AviFallsBackToProbeWithoutPersisting(t *testing.T) {
 // so the first real seek answers synchronously.
 func TestStartHLSSession_PrefetchesIndexAtStartZero(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(safeRemuxFixture)}}
 	app.Wait = &sync.WaitGroup{}
 	prober := &stubKeyframeFfprobe{err: os.ErrInvalid}

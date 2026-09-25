@@ -120,3 +120,39 @@ func TestClientIPFallsBackToRemoteAddr(t *testing.T) {
 		t.Fatalf("clientIP() = %q, want parsed RemoteAddr host", got)
 	}
 }
+
+func TestRateLimiter_WindowRollsOver(t *testing.T) {
+	limiter := newRateLimiter()
+
+	current := time.Now()
+	limiter.now = func() time.Time { return current }
+
+	for i := 0; i < 3; i++ {
+		if !limiter.Allow("key", 3, time.Minute) {
+			t.Fatalf("attempt %d unexpectedly limited", i+1)
+		}
+	}
+	if limiter.Allow("key", 3, time.Minute) {
+		t.Fatal("4th attempt in window should be limited")
+	}
+
+	// A new window admits attempts again.
+	current = current.Add(time.Minute + time.Second)
+	if !limiter.Allow("key", 3, time.Minute) {
+		t.Fatal("attempt after window rollover should be allowed")
+	}
+}
+
+func TestRateLimiter_KeysAreIndependent(t *testing.T) {
+	limiter := newRateLimiter()
+
+	if !limiter.Allow("a", 1, time.Minute) {
+		t.Fatal("first attempt for key a should be allowed")
+	}
+	if limiter.Allow("a", 1, time.Minute) {
+		t.Fatal("second attempt for key a should be limited")
+	}
+	if !limiter.Allow("b", 1, time.Minute) {
+		t.Fatal("key b should be unaffected by key a")
+	}
+}

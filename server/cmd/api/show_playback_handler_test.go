@@ -15,8 +15,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/keyframeindex"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // playbackEpisodeFixture is one show with one combined file backing two
@@ -164,7 +162,6 @@ func episodePlaybackSource(t *testing.T, app *Application, episodeID int64) play
 
 func TestGetShowEpisode_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode User", "episode@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -286,7 +283,6 @@ func seedNextEpisodeChain(t *testing.T, app *Application, fixture playbackEpisod
 
 func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Next User", "next@example.com", false)
 	other := createTestUser(t, app, "Other User", "other@example.com", false)
@@ -354,7 +350,6 @@ func TestGetShowNextEpisode_FollowsListingOrderAndSkipsTheCombinedFile(t *testin
 
 func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Gap User", "gap@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -409,7 +404,6 @@ func TestGetShowNextEpisode_SkipsEpisodesWithoutAPlayableFile(t *testing.T) {
 
 func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Dupe User", "dupe@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -471,7 +465,6 @@ func TestGetShowNextEpisode_SkipsASiblingThatWouldReplayTheCombinedFile(t *testi
 
 func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode User", "episode@example.com", false)
 	app.InitSession()
@@ -502,7 +495,6 @@ func TestGetShowEpisode_UnknownAndMalformed(t *testing.T) {
 
 func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode Tech User", "episode-tech@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -570,7 +562,6 @@ func TestGetShowEpisodeTechnicalDetails_ConformsToOpenAPI(t *testing.T) {
 
 func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Episode Progress User", "episode-progress@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -664,7 +655,6 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 
 func TestEpisodeWatchProgress_CompletionMarksWatchedAndCascades(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Completion User", "completion@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -708,7 +698,6 @@ func TestEpisodeWatchProgress_CompletionMarksWatchedAndCascades(t *testing.T) {
 
 func TestStopEpisodeHLSSession_ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "Stop User", "stop@example.com", false)
 	fixture := seedPlaybackEpisode(t, app)
@@ -761,7 +750,6 @@ func TestHLSSessionKey_SeparatesMediaKinds(t *testing.T) {
 
 func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 	ctx := context.Background()
 
@@ -794,7 +782,6 @@ func TestLoadHLSSourceForSession_Episode(t *testing.T) {
 
 func TestEpisodeKeyframeAndRemuxPersistenceUseTheShowTables(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 	ctx := context.Background()
 	source := episodePlaybackSource(t, app, fixture.Episode1)
@@ -833,7 +820,6 @@ func TestEpisodeKeyframeAndRemuxPersistenceUseTheShowTables(t *testing.T) {
 
 func TestInvalidateCommittedShowFile_EvictsOnlyThatFile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 
 	episodeKey := HLSSessionKey(episodeRef(fixture.Episode1), helpers.HLS_PROFILE_REMUX, nil, nil, testPlaybackSessionID, 0, 1)
@@ -872,9 +858,9 @@ func TestInvalidateCommittedShowFile_EvictsOnlyThatFile(t *testing.T) {
 	}
 }
 
-func serveEpisodeSubtitleWebVTT(app *Application, episodeID int64, trackIndex string, query string) *httptest.ResponseRecorder {
-	router := chi.NewRouter()
-	router.Get("/api/shows/episodes/{id}/subtitles/{trackIndex}/web.vtt", app.EpisodeSubtitleWebVTT)
+func serveEpisodeSubtitleWebVTT(t *testing.T, app *Application, userID int64, episodeID int64, trackIndex string, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	router := authenticatedRouter(t, app, userID)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/shows/episodes/%d/subtitles/%s/web.vtt%s", episodeID, trackIndex, query), nil)
 	recorder := httptest.NewRecorder()
@@ -884,17 +870,17 @@ func serveEpisodeSubtitleWebVTT(app *Application, episodeID int64, trackIndex st
 
 func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
 	fake := &fakeFFmpeg{}
 	app.FFmpeg = fake
 	fixture := seedPlaybackEpisode(t, app)
 
-	first := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "0", "")
+	first := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "0", "")
 	if first.Code != http.StatusOK || first.Body.String() != "WEBVTT\n" {
 		t.Fatalf("first = %d %q", first.Code, first.Body.String())
 	}
 	// The sibling episode is the same file, so its track is already cached.
-	second := serveEpisodeSubtitleWebVTT(app, fixture.Episode2, "0", "")
+	second := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode2, "0", "")
 	if second.Code != http.StatusOK || fake.SubtitleCallCount() != 1 {
 		t.Fatalf("sibling = %d, extractor calls = %d, want one extraction", second.Code, fake.SubtitleCallCount())
 	}
@@ -902,11 +888,11 @@ func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *te
 		t.Fatal("cache is not keyed on the episode's file")
 	}
 
-	shifted := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "0", "?start=-1")
+	shifted := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "0", "?start=-1")
 	if shifted.Code != http.StatusBadRequest {
 		t.Fatalf("negative start = %d, want 400", shifted.Code)
 	}
-	outOfRange := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "3", "")
+	outOfRange := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "3", "")
 	if outOfRange.Code != http.StatusBadRequest {
 		t.Fatalf("track out of range = %d, want 400", outOfRange.Code)
 	}
@@ -915,7 +901,7 @@ func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	bitmap := serveEpisodeSubtitleWebVTT(app, fixture.Episode1, "0", "")
+	bitmap := serveEpisodeSubtitleWebVTT(t, app, viewer.ID, fixture.Episode1, "0", "")
 	if bitmap.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("bitmap = %d, want 415", bitmap.Code)
 	}
@@ -923,9 +909,8 @@ func TestEpisodeSubtitleWebVTT_ExtractsSharesTheFileCacheAndRejectsBitmaps(t *te
 
 func TestEpisodeHLSManifest_ValidatesParamsAgainstTheEpisodeRoute(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
-	handler := newMediaHLSTestHandler(t, app, 42, mediaKindEpisode)
+	handler := authenticatedRouter(t, app, 42)
 
 	for _, tc := range []struct {
 		name   string
@@ -954,12 +939,11 @@ func TestEpisodeHLSManifest_ValidatesParamsAgainstTheEpisodeRoute(t *testing.T) 
 // notice.
 func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture), hlsRunPlan(transcodeFixture)}}
 	app.FFmpeg = ffmpegRunner
 	fixture := seedPlaybackEpisode(t, app)
 	userID := int64(42)
-	handler := newMediaHLSTestHandler(t, app, userID, mediaKindEpisode)
+	handler := authenticatedRouter(t, app, userID)
 
 	// Both episodes of the combined file start a session on that one file.
 	for _, episodeID := range []int64{fixture.Episode1, fixture.Episode2} {
@@ -1009,7 +993,6 @@ func TestEpisodeHLSManifest_StartsFFmpegFromTheShowStreams(t *testing.T) {
 // stream path (episodeStreamFile).
 func TestGetShowFileForEpisode_PicksTheLowestFileIDForDuplicateCopies(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fixture := seedPlaybackEpisode(t, app)
 	ctx := context.Background()
 

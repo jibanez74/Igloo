@@ -12,8 +12,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func seedStreamTestMovie(t *testing.T, app *Application, container, mimeType string, content []byte) database.Movie {
@@ -44,20 +42,18 @@ func seedStreamTestMovie(t *testing.T, app *Application, container, mimeType str
 	return movie
 }
 
-func streamTestHandler(app *Application) http.Handler {
-	r := chi.NewRouter()
-	r.Get("/api/movies/{id}/stream", app.StreamMovie)
-	r.Head("/api/movies/{id}/stream", app.StreamMovie)
-	return r
+func streamTestHandler(t *testing.T, app *Application) http.Handler {
+	t.Helper()
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	return authenticatedRouter(t, app, viewer.ID)
 }
 
 func TestStreamMovieServesFullFileWithPinnedContentType(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	content := bytes.Repeat([]byte("0123456789"), 30)
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-	handler := streamTestHandler(app)
+	handler := streamTestHandler(t, app)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
 	w := httptest.NewRecorder()
@@ -82,13 +78,12 @@ func TestStreamMovieServesFullFileWithPinnedContentType(t *testing.T) {
 
 func TestStreamMovieDerivesContentTypeFromContainer(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	// A pre-fix row scanned on a host without /etc/mime.types stored
 	// application/octet-stream; the handler must still answer from the
 	// pinned container map.
 	movie := seedStreamTestMovie(t, app, "mkv", "application/octet-stream", []byte("matroska"))
-	handler := streamTestHandler(app)
+	handler := streamTestHandler(t, app)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
 	w := httptest.NewRecorder()
@@ -104,11 +99,10 @@ func TestStreamMovieDerivesContentTypeFromContainer(t *testing.T) {
 
 func TestStreamMovieServesRanges(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	content := bytes.Repeat([]byte("0123456789"), 30)
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-	handler := streamTestHandler(app)
+	handler := streamTestHandler(t, app)
 	size := len(content)
 
 	cases := []struct {
@@ -169,11 +163,10 @@ func TestStreamMovieServesRanges(t *testing.T) {
 
 func TestStreamMovieHead(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	content := bytes.Repeat([]byte("0123456789"), 30)
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-	handler := streamTestHandler(app)
+	handler := streamTestHandler(t, app)
 
 	t.Run("plain head", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodHead, fmt.Sprintf("/api/movies/%d/stream", movie.ID), nil)
@@ -222,18 +215,11 @@ func TestStreamMovieHead(t *testing.T) {
 // InitRouter installs.
 func TestStreamMovieOverSessionMiddleware(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
 
 	content := bytes.Repeat([]byte("0123456789"), 4096)
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
 
-	router := chi.NewRouter()
-	router.Use(app.LoadAndSaveSession)
-	router.Use(restoreSendfile)
-	router.Get("/api/movies/{id}/stream", app.StreamMovie)
-
-	server := httptest.NewServer(router)
+	server := httptest.NewServer(streamTestHandler(t, app))
 	defer server.Close()
 
 	streamURL := fmt.Sprintf("%s/api/movies/%d/stream", server.URL, movie.ID)
@@ -287,11 +273,10 @@ func TestStreamMovieOverSessionMiddleware(t *testing.T) {
 
 func TestStreamMovieETagValidation(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	content := bytes.Repeat([]byte("0123456789"), 30)
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", content)
-	handler := streamTestHandler(app)
+	handler := streamTestHandler(t, app)
 	target := fmt.Sprintf("/api/movies/%d/stream", movie.ID)
 
 	fetchETag := func(t *testing.T, method string) string {
@@ -369,14 +354,13 @@ func TestStreamMovieETagValidation(t *testing.T) {
 
 func TestStreamMovieErrorPaths(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", []byte("gone soon"))
 	err := os.Remove(movie.FilePath)
 	if err != nil {
 		t.Fatalf("remove movie file: %v", err)
 	}
-	handler := streamTestHandler(app)
+	handler := streamTestHandler(t, app)
 
 	cases := []struct {
 		name       string

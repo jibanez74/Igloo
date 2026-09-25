@@ -18,7 +18,8 @@ func BenchmarkServeFrontend(b *testing.B) {
 
 	b.Setenv("VITE_DEV_SERVER", "")
 	app := &Application{
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		FrontendAssets: FrontendFS,
 	}
 
 	b.ResetTimer()

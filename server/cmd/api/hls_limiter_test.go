@@ -379,7 +379,6 @@ func TestHLSTranscodeLimiterAcquire(t *testing.T) {
 
 func TestAcquireHLSTranscodeSlot_InstallsMissingLimiters(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.HLSCPUTranscodeLimiter = nil
 	app.HLSHWTranscodeLimiter = nil
 

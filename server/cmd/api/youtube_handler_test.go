@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestProxyYouTubeThumbnail_HTTPSuccessStreamsImage(t *testing.T) {
@@ -25,12 +23,11 @@ func TestProxyYouTubeThumbnail_HTTPSuccessStreamsImage(t *testing.T) {
 	defer upstream.Close()
 
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.YouTubeThumbBaseURL = upstream.URL
 	app.YouTubeThumbHTTPClient = upstream.Client()
 
-	router := chi.NewRouter()
-	router.Get("/api/youtube/thumbnails/{key}", app.ProxyYouTubeThumbnail)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/youtube/thumbnails/dQw4w9WgXcQ", nil)
@@ -52,10 +49,9 @@ func TestProxyYouTubeThumbnail_HTTPSuccessStreamsImage(t *testing.T) {
 
 func TestProxyYouTubeThumbnail_HTTPRejectsInvalidKey(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	router := chi.NewRouter()
-	router.Get("/api/youtube/thumbnails/{key}", app.ProxyYouTubeThumbnail)
+	viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	router := authenticatedRouter(t, app, viewer.ID)
 
 	tests := []string{
 		"/api/youtube/thumbnails/bad$key",
@@ -90,14 +86,13 @@ func TestProxyYouTubeThumbnail_HTTPReturnsErrorForUpstreamFailures(t *testing.T)
 		defer upstream.Close()
 
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		app.YouTubeThumbBaseURL = upstream.URL
 		app.YouTubeThumbHTTPClient = upstream.Client()
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/youtube/thumbnails/dQw4w9WgXcQ", nil)
-		router := chi.NewRouter()
-		router.Get("/api/youtube/thumbnails/{key}", app.ProxyYouTubeThumbnail)
+		viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+		router := authenticatedRouter(t, app, viewer.ID)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusBadGateway {
@@ -107,14 +102,13 @@ func TestProxyYouTubeThumbnail_HTTPReturnsErrorForUpstreamFailures(t *testing.T)
 
 	t.Run("fetch error", func(t *testing.T) {
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		app.YouTubeThumbBaseURL = "https://i.ytimg.com/vi"
 		app.YouTubeThumbHTTPClient = &http.Client{Transport: failingRoundTripper{}}
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/youtube/thumbnails/dQw4w9WgXcQ", nil)
-		router := chi.NewRouter()
-		router.Get("/api/youtube/thumbnails/{key}", app.ProxyYouTubeThumbnail)
+		viewer := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+		router := authenticatedRouter(t, app, viewer.ID)
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusBadGateway {

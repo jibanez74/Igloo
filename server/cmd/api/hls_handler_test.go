@@ -907,7 +907,6 @@ func TestServeReadyHLSSegment(t *testing.T) {
 
 func TestPersonalHLSAssetResponsesConformToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	const userID = int64(42)
 	const movieID = int64(7)
@@ -935,7 +934,7 @@ func TestPersonalHLSAssetResponsesConformToOpenAPI(t *testing.T) {
 	}
 	key := HLSSessionKey(movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS, &audioTrack, nil, testPlaybackSessionID, 0, userID)
 	app.HLSSessionCache.SetDefault(key, session)
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 	target := fmt.Sprintf(
 		"/api/movies/%d/hls/%s/%s?audio_track=0&playback_session=%s&start=0",
 		movieID,
@@ -961,7 +960,6 @@ func TestPersonalHLSAssetResponsesConformToOpenAPI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, target, nil)
-			addOpenAPITestCookie(request)
 			if tt.header != "" {
 				request.Header.Set(tt.header, tt.value)
 			}
@@ -977,7 +975,6 @@ func TestPersonalHLSAssetResponsesConformToOpenAPI(t *testing.T) {
 
 func TestHLSRetryable503ConformsToOpenAPI(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{}
 	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
 	release, err := app.acquireHLSTranscodeSlot(context.Background(), hlsTranscodePoolCPU, 0)
@@ -998,9 +995,8 @@ func TestHLSRetryable503ConformsToOpenAPI(t *testing.T) {
 		testPlaybackSessionID,
 	)
 	request := httptest.NewRequest(http.MethodGet, target, nil)
-	addOpenAPITestCookie(request)
 	response := httptest.NewRecorder()
-	newHLSTestHandler(t, app, 42).ServeHTTP(response, request)
+	authenticatedRouter(t, app, 42).ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503: %s", response.Code, response.Body.String())
 	}
@@ -1283,7 +1279,6 @@ func TestSegmentComplete(t *testing.T) {
 
 func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	userID := int64(42)
@@ -1306,10 +1301,9 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		fmt.Sprintf("/api/movies/%d/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=0", movieID, testPlaybackSessionID),
 		nil,
 	)
-	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
-	newHLSTestHandler(t, app, userID).ServeHTTP(recorder, req)
+	authenticatedRouter(t, app, userID).ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
@@ -1328,7 +1322,6 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 
 func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
 		WriteFiles: func(outDir string) error {
 			// The full fixture first, so the session models a transcode that
@@ -1348,7 +1341,7 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 	audioTrack := 0
 	effectiveStart := 7200 - hlsStartClampTailSec
 
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 
 	manifestURL := fmt.Sprintf(
 		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=9000",
@@ -1401,14 +1394,13 @@ func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing
 
 func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
 	app.FFmpeg = ffmpegRunner
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	userID := int64(42)
 
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 
 	manifestURL := fmt.Sprintf(
 		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=590",
@@ -1439,7 +1431,6 @@ func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 
 func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	userID := int64(43)
@@ -1467,10 +1458,9 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
 		nil,
 	)
-	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
-	newHLSTestHandler(t, app, userID).ServeHTTP(recorder, req)
+	authenticatedRouter(t, app, userID).ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
@@ -1482,7 +1472,6 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 
 func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	userID := int64(100)
 	audioTrack := 0
@@ -1501,13 +1490,12 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 	app.HLSSessionCache.SetDefault(otherPlaybackKey, &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(roomKey, &HLSSession{Media: movieRef(5), FileID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true})
 
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 	req := httptest.NewRequest(
 		http.MethodPost,
 		fmt.Sprintf("/api/movies/5/hls/session/stop?playback_session=%s", testPlaybackSessionID),
 		nil,
 	)
-	addOpenAPITestCookie(req)
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, req)
@@ -1531,9 +1519,8 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 
 func TestStopPersonalHLSSession_InvalidPlaybackSession(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
-	handler := newHLSTestHandler(t, app, 100)
+	handler := authenticatedRouter(t, app, 100)
 	req := httptest.NewRequest(http.MethodPost, "/api/movies/5/hls/session/stop?playback_session=not-a-uuid", nil)
 	recorder := httptest.NewRecorder()
 
@@ -1546,7 +1533,6 @@ func TestStopPersonalHLSSession_InvalidPlaybackSession(t *testing.T) {
 
 func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	userID := int64(100)
@@ -1561,7 +1547,7 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 		ExitMu:          sync.Mutex{},
 	})
 
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 	req := httptest.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
@@ -1581,7 +1567,6 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 
 func TestHLSSegment_ResolvesAuthenticatedOwnersCacheEntry(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	userIDs := []int64{100, 200}
@@ -1610,7 +1595,7 @@ func TestHLSSegment_ResolvesAuthenticatedOwnersCacheEntry(t *testing.T) {
 	)
 	for _, userID := range userIDs {
 		recorder := httptest.NewRecorder()
-		newHLSTestHandler(t, app, userID).ServeHTTP(
+		authenticatedRouter(t, app, userID).ServeHTTP(
 			recorder,
 			httptest.NewRequest(http.MethodGet, url, nil),
 		)
@@ -1625,13 +1610,9 @@ func TestHLSSegment_ResolvesAuthenticatedOwnersCacheEntry(t *testing.T) {
 }
 
 func TestHLSManifest_RejectsUnauthenticatedRequests(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
-	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, app.HLSManifest)
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := authenticatedRouter(t, app, 0)
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(
@@ -1647,7 +1628,6 @@ func TestHLSManifest_RejectsUnauthenticatedRequests(t *testing.T) {
 
 func TestHLSManifest_SurfacesSessionCreationFailure(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{}
 
 	result, err := app.DB.Exec(`
@@ -1663,7 +1643,7 @@ func TestHLSManifest_SurfacesSessionCreationFailure(t *testing.T) {
 	}
 
 	recorder := httptest.NewRecorder()
-	newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(
+	authenticatedRouter(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("/api/movies/%d/hls/720p_3mbps/playlist.m3u8?playback_session=%s&start=0", movieID, testPlaybackSessionID),
 		nil,
@@ -1680,7 +1660,6 @@ func TestHLSManifest_SurfacesSessionCreationFailure(t *testing.T) {
 func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 	t.Run("missing movie returns 404", func(t *testing.T) {
 		app := setupTestApp(t)
-		defer app.DB.Close()
 
 		target := fmt.Sprintf(
 			"/api/movies/999999/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
@@ -1688,7 +1667,7 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 			testPlaybackSessionID,
 		)
 		recorder := httptest.NewRecorder()
-		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		authenticatedRouter(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
 		if recorder.Code != http.StatusNotFound || !strings.Contains(recorder.Body.String(), "movie not found") {
 			t.Fatalf("response = %d %s, want safe movie 404", recorder.Code, recorder.Body.String())
 		}
@@ -1696,7 +1675,6 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 
 	t.Run("invalid audio selection returns 400", func(t *testing.T) {
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 
 		target := fmt.Sprintf(
@@ -1706,7 +1684,7 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 			testPlaybackSessionID,
 		)
 		recorder := httptest.NewRecorder()
-		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		authenticatedRouter(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
 		if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "audio_track is out of range") {
 			t.Fatalf("response = %d %s, want audio selection 400", recorder.Code, recorder.Body.String())
 		}
@@ -1714,7 +1692,6 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 
 	t.Run("unexpected ffmpeg failure returns a sanitized 500", func(t *testing.T) {
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
 			StartErr: errors.New("ffmpeg failed to open /private/media/movie.mkv"),
 		}}}
@@ -1727,7 +1704,7 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 			testPlaybackSessionID,
 		)
 		recorder := httptest.NewRecorder()
-		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		authenticatedRouter(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
 		if recorder.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body.String())
 		}
@@ -1738,7 +1715,6 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 
 	t.Run("missing requested encoder returns a non-retryable 500", func(t *testing.T) {
 		app := setupTestApp(t)
-		defer app.DB.Close()
 		app.FFmpeg = &fakeFFmpeg{capabilities: &ffmpeg.Capabilities{
 			Probed:   true,
 			Encoders: map[string]bool{"aac": true},
@@ -1752,7 +1728,7 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 			testPlaybackSessionID,
 		)
 		recorder := httptest.NewRecorder()
-		newHLSTestHandler(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		authenticatedRouter(t, app, 42).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
 		if recorder.Code != http.StatusInternalServerError || recorder.Header().Get("Retry-After") != "" {
 			t.Fatalf("response = %d Retry-After %q, want non-retryable 500: %s", recorder.Code, recorder.Header().Get("Retry-After"), recorder.Body.String())
 		}
@@ -1761,11 +1737,10 @@ func TestHLSManifest_StatusClassificationAndSanitization(t *testing.T) {
 
 func TestHLSSegment_RejectsBadRequests(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	audioTrack := 0
 	userID := int64(100)
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 	segmentURL := func(filename string) string {
 		return fmt.Sprintf(
 			"/api/movies/5/hls/remux/%s?audio_track=0&playback_session=%s&start=0",
@@ -1815,15 +1790,10 @@ func TestHLSSegment_RejectsBadRequests(t *testing.T) {
 
 func TestStopPersonalHLSSession_RejectsBadRequests(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	t.Run("rejects an unauthenticated caller", func(t *testing.T) {
-		app.InitSession()
-		router := chi.NewRouter()
-		router.Post("/api/movies/{id}/hls/session/stop", app.StopPersonalHLSSession)
-
 		recorder := httptest.NewRecorder()
-		app.SessionManager.LoadAndSave(router).ServeHTTP(recorder, httptest.NewRequest(
+		authenticatedRouter(t, app, 0).ServeHTTP(recorder, httptest.NewRequest(
 			http.MethodPost,
 			"/api/movies/5/hls/session/stop?playback_session="+testPlaybackSessionID,
 			nil,
@@ -1836,7 +1806,7 @@ func TestStopPersonalHLSSession_RejectsBadRequests(t *testing.T) {
 
 	t.Run("rejects a non-numeric movie id", func(t *testing.T) {
 		recorder := httptest.NewRecorder()
-		newHLSTestHandler(t, app, 100).ServeHTTP(recorder, httptest.NewRequest(
+		authenticatedRouter(t, app, 100).ServeHTTP(recorder, httptest.NewRequest(
 			http.MethodPost,
 			"/api/movies/abc/hls/session/stop?playback_session="+testPlaybackSessionID,
 			nil,
@@ -2007,7 +1977,6 @@ func TestWriteHLSPlaylistHeaders_EffectiveAudio(t *testing.T) {
 // built from those asset URLs computes the same session key.
 func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	fake := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
 		WriteFiles: func(outDir string) error {
 			err := writeTestHLSFixture(outDir, transcodeFixture)
@@ -2025,7 +1994,7 @@ func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 	userID := int64(42)
 	audioTrack := 0
 
-	handler := newHLSTestHandler(t, app, userID)
+	handler := authenticatedRouter(t, app, userID)
 
 	explicitQuery := fmt.Sprintf(
 		"audio_track=0&audio_codec=eac3&audio_channels=6&playback_session=%s&start=0",
@@ -2103,18 +2072,16 @@ func TestHLSManifest_ExplicitAudioProfile(t *testing.T) {
 // A legacy manifest must not gain the new parameters on its asset URLs.
 func TestHLSManifest_LegacyAssetsOmitAudioProfileParams(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
 
 	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
-	handler := newHLSTestHandler(t, app, 42)
+	handler := authenticatedRouter(t, app, 42)
 
 	manifestURL := fmt.Sprintf(
 		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=0",
 		movieID, helpers.HLS_PROFILE_720P_3MBPS, testPlaybackSessionID,
 	)
 	request := httptest.NewRequest(http.MethodGet, manifestURL, nil)
-	addOpenAPITestCookie(request)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {

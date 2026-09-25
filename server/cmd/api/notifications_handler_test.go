@@ -11,18 +11,14 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 
-	handler := notificationTestServer(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/notifications", `{
@@ -30,7 +26,6 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 		"message": "Requester: requester@example.com",
 		"isAdmin": true
 	}`)
-	addOpenAPITestCookie(req)
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
@@ -59,13 +54,11 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 }
 
 func TestCreateNotification_HTTPRejectsInvalidTitle(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 
-	handler := notificationTestServer(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
@@ -81,13 +74,11 @@ func TestCreateNotification_HTTPRejectsInvalidTitle(t *testing.T) {
 }
 
 func TestCreateNotification_HTTPRejectsEmptyMessage(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 
-	handler := notificationTestServer(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
@@ -103,12 +94,10 @@ func TestCreateNotification_HTTPRejectsEmptyMessage(t *testing.T) {
 }
 
 func TestCreateNotification_HTTPRejectsIsAdminFalse(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
-	handler := notificationTestServer(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
@@ -129,30 +118,6 @@ func TestCreateNotification_HTTPRejectsIsAdminFalse(t *testing.T) {
 	if !resp.Error || resp.Message != "isAdmin must be true: notifications are the shared admin queue" {
 		t.Fatalf("response = %+v, want isAdmin-required error", resp)
 	}
-}
-
-// notificationTestServer wires the notification routes behind a session that is
-// always authenticated as userID, so handlers that read chi URL params and the
-// session user work end to end.
-func notificationTestServer(app *Application, userID int64) http.Handler {
-	router := chi.NewRouter()
-
-	withUser := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), cookieUserID, userID)
-			next.ServeHTTP(w, r)
-		})
-	}
-
-	router.Group(func(r chi.Router) {
-		r.Use(withUser)
-		r.Use(app.IsAuth)
-		r.Route("/api", func(r chi.Router) {
-			app.registerNotificationRoutes(r)
-		})
-	})
-
-	return app.SessionManager.LoadAndSave(router)
 }
 
 type notificationListResponse struct {
@@ -194,9 +159,7 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 }
 
 func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
@@ -204,7 +167,7 @@ func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {
 
 	// Admin sees the admin-queue notification, unread, attributed to the requester.
 	w := httptest.NewRecorder()
-	notificationTestServer(app, admin.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications/", nil))
+	authenticatedRouter(t, app, admin.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications/", nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("admin list status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
@@ -224,7 +187,7 @@ func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {
 
 	// The non-admin requester does not see the admin queue.
 	w = httptest.NewRecorder()
-	notificationTestServer(app, requester.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications/", nil))
+	authenticatedRouter(t, app, requester.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications/", nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("requester list status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
@@ -238,9 +201,7 @@ func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {
 }
 
 func TestListNotifications_AcceptsCanonicalNoTrailingSlash(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
@@ -248,8 +209,7 @@ func TestListNotifications_AcceptsCanonicalNoTrailingSlash(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
-	addOpenAPITestCookie(req)
-	notificationTestServer(app, admin.ID).ServeHTTP(w, req)
+	authenticatedRouter(t, app, admin.ID).ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
@@ -265,9 +225,7 @@ func TestListNotifications_AcceptsCanonicalNoTrailingSlash(t *testing.T) {
 }
 
 func TestListNotifications_ReturnsUnauthorizedForStaleSession(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	cookie := newAuthSessionCookie(t, app, 999)
@@ -298,18 +256,15 @@ func TestListNotifications_ReturnsUnauthorizedForStaleSession(t *testing.T) {
 }
 
 func TestMarkNotificationRead_DropsUnreadCount(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
 	n := seedAdminQueueNotification(t, app, requester.ID, "please add a movie")
-	server := notificationTestServer(app, admin.ID)
+	server := authenticatedRouter(t, app, admin.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications/"+strconv.FormatInt(n.ID, 10)+"/read", nil)
-	addOpenAPITestCookie(req)
 	server.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("mark read status = %d, want 200, body = %s", w.Code, w.Body.String())
@@ -331,19 +286,16 @@ func TestMarkNotificationRead_DropsUnreadCount(t *testing.T) {
 }
 
 func TestMarkAllNotificationsRead_ZeroesUnread(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
 	seedAdminQueueNotification(t, app, requester.ID, "request one")
 	seedAdminQueueNotification(t, app, requester.ID, "request two")
-	server := notificationTestServer(app, admin.ID)
+	server := authenticatedRouter(t, app, admin.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications/read-all", nil)
-	addOpenAPITestCookie(req)
 	server.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("mark all status = %d, want 200, body = %s", w.Code, w.Body.String())
@@ -352,7 +304,6 @@ func TestMarkAllNotificationsRead_ZeroesUnread(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil)
-	addOpenAPITestCookie(req)
 	server.ServeHTTP(w, req)
 	assertOpenAPIExchange(t, "getUnreadNotificationCount", req, w)
 	var resp struct {
@@ -369,19 +320,16 @@ func TestMarkAllNotificationsRead_ZeroesUnread(t *testing.T) {
 }
 
 func TestDeleteNotification_RemovesAndThen404(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
 	n := seedAdminQueueNotification(t, app, requester.ID, "delete me")
-	server := notificationTestServer(app, admin.ID)
+	server := authenticatedRouter(t, app, admin.ID)
 	idPath := "/api/notifications/" + strconv.FormatInt(n.ID, 10)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, idPath, nil)
-	addOpenAPITestCookie(req)
 	server.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, want 200, body = %s", w.Code, w.Body.String())
@@ -400,9 +348,7 @@ func TestDeleteNotification_RemovesAndThen404(t *testing.T) {
 // statement, so both halves need pinning: an admin sees the queue, and a
 // non-admin sees zero rather than the admin queue's backlog.
 func TestUnreadNotificationCount_CountsForAdminAndZeroesForNonAdmin(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
@@ -414,8 +360,7 @@ func TestUnreadNotificationCount_CountsForAdminAndZeroesForNonAdmin(t *testing.T
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil)
-		addOpenAPITestCookie(req)
-		notificationTestServer(app, userID).ServeHTTP(w, req)
+		authenticatedRouter(t, app, userID).ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
 			t.Fatalf("unread-count status = %d, want 200, body = %s", w.Code, w.Body.String())
 		}

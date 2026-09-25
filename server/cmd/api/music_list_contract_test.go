@@ -17,7 +17,6 @@ import (
 // movie_list_contract_test.go.
 func TestMusicListHandlers_ConformToOpenAPIWithRows(t *testing.T) {
 	app := setupSessionTestApp(t)
-	defer app.DB.Close()
 
 	user := createTestUser(t, app, "List User", "music-list-contract@example.com", false)
 	collaborator := createTestUser(t, app, "List Collaborator", "music-list-collaborator@example.com", false)

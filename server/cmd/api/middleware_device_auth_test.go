@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,9 +12,7 @@ import (
 )
 
 func TestDeviceTokenAuth_RejectsUnknownToken(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
@@ -27,9 +26,7 @@ func TestDeviceTokenAuth_RejectsUnknownToken(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_IgnoresNonDeviceBearerTokens(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	// A bearer token without the device prefix is not ours to judge; the
@@ -45,16 +42,14 @@ func TestDeviceTokenAuth_IgnoresNonDeviceBearerTokens(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_StaleTokenAllowsDeviceLogin(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	createTestUserWithPassword(t, app, "Revoked TV", "revoked@example.com", "correct horse")
+	createTestUser(t, app, "Revoked TV", "revoked@example.com", false)
 
 	// A client whose token was revoked still sends it; device login must
 	// authenticate the credentials instead of rejecting the stale token.
-	body := `{"email":"revoked@example.com","password":"correct horse","device_name":"TV","platform":"android_tv"}`
+	body := fmt.Sprintf(`{"email":"revoked@example.com","password":%q,"device_name":"TV","platform":"android_tv"}`, testUserPassword)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/device-login", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"stale-token")
 	w := httptest.NewRecorder()
@@ -75,9 +70,7 @@ func TestDeviceTokenAuth_StaleTokenAllowsDeviceLogin(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_StaleTokenAllowsQuickConnectRecovery(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	stale := "Bearer " + deviceTokenPrefix + "stale-token"
@@ -105,12 +98,10 @@ func TestDeviceTokenAuth_StaleTokenAllowsQuickConnectRecovery(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
-	createTestUserWithPassword(t, app, "Login User", "login@example.com", "correct horse")
+	createTestUser(t, app, "Login User", "login@example.com", false)
 
 	stale := "Bearer " + deviceTokenPrefix + "stale-token"
 
@@ -123,7 +114,7 @@ func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
 		t.Fatalf("health status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
 
-	body := `{"email":"login@example.com","password":"correct horse"}`
+	body := fmt.Sprintf(`{"email":"login@example.com","password":%q}`, testUserPassword)
 	req = newOpenAPIJSONRequest(http.MethodPost, "/api/auth/login", body)
 	req.Header.Set("Authorization", stale)
 	w = httptest.NewRecorder()
@@ -136,9 +127,7 @@ func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_ProtectedRouteRejectsUnknownToken(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/devices/", nil)
@@ -152,9 +141,7 @@ func TestDeviceTokenAuth_ProtectedRouteRejectsUnknownToken(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_WebSocketRouteRejectsUnknownToken(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/watch-rooms/1/ws", nil)
@@ -168,9 +155,7 @@ func TestDeviceTokenAuth_WebSocketRouteRejectsUnknownToken(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_NonAdminDeviceCannotUseAdminRoutes(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
@@ -187,9 +172,7 @@ func TestDeviceTokenAuth_NonAdminDeviceCannotUseAdminRoutes(t *testing.T) {
 }
 
 func TestDeviceTokenAuth_ThrottlesLastUsedWrites(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
@@ -241,41 +224,5 @@ func TestDeviceTokenAuth_ThrottlesLastUsedWrites(t *testing.T) {
 	}
 	if second.LastUsedAt != backdated {
 		t.Fatalf("second request wrote last_used_at = %q despite throttle", second.LastUsedAt)
-	}
-}
-
-func TestRateLimiter_WindowRollsOver(t *testing.T) {
-	limiter := newRateLimiter()
-
-	current := time.Now()
-	limiter.now = func() time.Time { return current }
-
-	for i := 0; i < 3; i++ {
-		if !limiter.Allow("key", 3, time.Minute) {
-			t.Fatalf("attempt %d unexpectedly limited", i+1)
-		}
-	}
-	if limiter.Allow("key", 3, time.Minute) {
-		t.Fatal("4th attempt in window should be limited")
-	}
-
-	// A new window admits attempts again.
-	current = current.Add(time.Minute + time.Second)
-	if !limiter.Allow("key", 3, time.Minute) {
-		t.Fatal("attempt after window rollover should be allowed")
-	}
-}
-
-func TestRateLimiter_KeysAreIndependent(t *testing.T) {
-	limiter := newRateLimiter()
-
-	if !limiter.Allow("a", 1, time.Minute) {
-		t.Fatal("first attempt for key a should be allowed")
-	}
-	if limiter.Allow("a", 1, time.Minute) {
-		t.Fatal("second attempt for key a should be limited")
-	}
-	if !limiter.Allow("b", 1, time.Minute) {
-		t.Fatal("key b should be unaffected by key a")
 	}
 }

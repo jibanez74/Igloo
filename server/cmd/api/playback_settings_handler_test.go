@@ -12,30 +12,7 @@ import (
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	"github.com/go-chi/chi/v5"
 )
-
-// mountPlaybackRouter mirrors registerSettingsRoutes: the GET is available to
-// any authenticated user, the PUT is admin-gated by middleware.
-func mountPlaybackRouter(app *Application, userID int64) http.Handler {
-	r := chi.NewRouter()
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if userID != 0 {
-				app.SessionManager.Put(r.Context(), cookieUserID, userID)
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
-	r.Group(func(r chi.Router) {
-		r.Use(app.IsAuth)
-		r.Get("/api/settings/playback", app.GetPlaybackSettings)
-		r.With(app.RequireAdmin).Put("/api/settings/playback", app.UpdatePlaybackSettings)
-	})
-
-	return app.SessionManager.LoadAndSave(r)
-}
 
 type playbackSettingsEnvelope struct {
 	Data struct {
@@ -75,14 +52,12 @@ func putPlayback(t *testing.T, handler http.Handler, body string) *httptest.Resp
 }
 
 func TestGetPlaybackSettings_ReturnsProfileCatalog(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPlaybackRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
-	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -111,11 +86,10 @@ func TestGetPlaybackSettings_ReturnsProfileCatalog(t *testing.T) {
 // The response carries only server-owned data: per-device preferences live in
 // the client's local storage and must never reappear on this contract.
 func TestGetPlaybackSettings_OmitsPerDevicePreferences(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPlaybackRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
 	w := httptest.NewRecorder()
@@ -160,10 +134,9 @@ func TestGetPlaybackSettings_OmitsPerDevicePreferences(t *testing.T) {
 }
 
 func TestPlaybackSettings_RequiresAuth(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
-	handler := mountPlaybackRouter(app, 0)
+	handler := authenticatedRouter(t, app, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
 	w := httptest.NewRecorder()
@@ -180,11 +153,10 @@ func TestPlaybackSettings_RequiresAuth(t *testing.T) {
 }
 
 func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 
 	performGet := func(t *testing.T) playbackSettingsResponse {
 		t.Helper()
@@ -227,14 +199,12 @@ func TestPlaybackSettings_AdminServerSettingsRoundTrip(t *testing.T) {
 // The PUT echoes the same envelope the GET returns, so the client can seed its
 // cache straight from the response.
 func TestUpdatePlaybackSettings_ReturnsFullSettingsEnvelope(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 
 	req := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/playback", `{"server_upload_mbps": 40, "hardware_acceleration_device": "intel"}`)
-	addOpenAPITestCookie(req)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -256,15 +226,14 @@ func TestUpdatePlaybackSettings_ReturnsFullSettingsEnvelope(t *testing.T) {
 }
 
 func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	current := *app.CurrentSettings()
 	current.ServerUploadMbps = sql.NullFloat64{Float64: 30, Valid: true}
 	app.SetSettings(&current)
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPlaybackRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
 	w := httptest.NewRecorder()
@@ -281,11 +250,10 @@ func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 
 	w := putPlayback(t, handler, `{"server_upload_mbps": 12.5}`)
 	if w.Code != http.StatusOK {
@@ -305,13 +273,12 @@ func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RegularUserForbidden(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	seedServerPlaybackSettings(t, app, 22)
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
-	handler := mountPlaybackRouter(app, user.ID)
+	handler := authenticatedRouter(t, app, user.ID)
 
 	for _, body := range []string{
 		`{"server_upload_mbps": 10}`,
@@ -356,13 +323,12 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := setupSettingsTestApp(t)
-			defer app.DB.Close()
+			app := setupSessionTestApp(t)
 
 			seedServerPlaybackSettings(t, app, 25)
 
 			admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-			handler := mountPlaybackRouter(app, admin.ID)
+			handler := authenticatedRouter(t, app, admin.ID)
 
 			w := putPlayback(t, handler, `{"server_upload_mbps": `+tc.value+`}`)
 			if w.Code != tc.wantStatus {
@@ -384,11 +350,10 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 
 	w := putPlayback(t, handler, `{"hardware_acceleration_device": "apple"}`)
 	if w.Code != http.StatusOK {
@@ -408,11 +373,10 @@ func TestUpdatePlaybackSettings_AdminCanUpdateHardwareDevice(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 
 	for _, body := range []string{
 		`{"hardware_acceleration_device": "unsupported"}`,
@@ -429,11 +393,10 @@ func TestUpdatePlaybackSettings_RejectsInvalidHardwareDevice(t *testing.T) {
 // both columns, so without serializing the read-modify-write one request would
 // restore the other's column to the value it read before either wrote.
 func TestUpdatePlaybackSettings_ConcurrentPartialUpdatesBothLand(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 	seedServerPlaybackSettings(t, app, 25)
 
 	bodies := []string{
@@ -478,14 +441,12 @@ func TestUpdatePlaybackSettings_ConcurrentPartialUpdatesBothLand(t *testing.T) {
 }
 
 func TestUpdatePlaybackSettings_RejectsUnknownFieldsAndNullBody(t *testing.T) {
-	app := setupSettingsTestApp(t)
-	defer app.DB.Close()
+	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Admin", "contract-admin@example.com", true)
-	handler := mountPlaybackRouter(app, admin.ID)
+	handler := authenticatedRouter(t, app, admin.ID)
 	seedServerPlaybackSettings(t, app, 25)
 	for _, body := range []string{`null`, `{"server_upload_mbps":42,"unexpected":true}`} {
 		request := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/playback", body)
-		addOpenAPITestCookie(request)
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusBadRequest {

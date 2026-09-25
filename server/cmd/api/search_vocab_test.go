@@ -99,7 +99,6 @@ func TestSearchVocabIndexConcurrentLookups(t *testing.T) {
 
 func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	movieID := createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
@@ -164,7 +163,6 @@ func TestVocabCorrectionsRefreshesAfterMovieChanges(t *testing.T) {
 
 func TestVocabCorrectionsRefreshesAfterShowChanges(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	showID := createSearchShow(t, app, "Severance", "/shows/Severance", "", "")
@@ -229,7 +227,6 @@ func TestVocabCorrectionsRefreshesAfterShowChanges(t *testing.T) {
 
 func TestTrackVocabRefreshesAfterMusicianRename(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 	ctx := context.Background()
 
 	musicianID := createSearchMusician(t, app, "Adele")

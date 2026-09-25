@@ -112,9 +112,7 @@ func redeemQuickConnectForTest(t *testing.T, app *Application, code, secret stri
 }
 
 func TestQuickConnect_FullPairingFlow(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -198,9 +196,7 @@ func TestQuickConnect_FullPairingFlow(t *testing.T) {
 }
 
 func TestQuickConnect_RedeemRejectsWrongSecret(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -218,9 +214,7 @@ func TestQuickConnect_RedeemRejectsWrongSecret(t *testing.T) {
 }
 
 func TestQuickConnect_ApproveUnknownCodeReturnsNotFound(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -232,9 +226,7 @@ func TestQuickConnect_ApproveUnknownCodeReturnsNotFound(t *testing.T) {
 }
 
 func TestQuickConnect_ApproveRejectsDeviceTokenAuth(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -254,9 +246,7 @@ func TestQuickConnect_ApproveRejectsDeviceTokenAuth(t *testing.T) {
 }
 
 func TestQuickConnect_LookupDoesNotBindOrConsumeCode(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -289,9 +279,7 @@ func TestQuickConnect_LookupDoesNotBindOrConsumeCode(t *testing.T) {
 }
 
 func TestQuickConnect_LookupUnknownCodeReturnsNotFound(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -303,9 +291,7 @@ func TestQuickConnect_LookupUnknownCodeReturnsNotFound(t *testing.T) {
 }
 
 func TestQuickConnect_LookupApprovedCodeReturnsNotFound(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -325,9 +311,7 @@ func TestQuickConnect_LookupApprovedCodeReturnsNotFound(t *testing.T) {
 }
 
 func TestQuickConnect_LookupRejectsDeviceTokenAuth(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -347,9 +331,7 @@ func TestQuickConnect_LookupRejectsDeviceTokenAuth(t *testing.T) {
 }
 
 func TestQuickConnect_LookupSharesApproveRateLimit(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -374,9 +356,7 @@ func TestQuickConnect_LookupSharesApproveRateLimit(t *testing.T) {
 }
 
 func TestQuickConnect_ExpiredCodeCannotBeApprovedOrRedeemed(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -403,9 +383,7 @@ func TestQuickConnect_ExpiredCodeCannotBeApprovedOrRedeemed(t *testing.T) {
 }
 
 func TestQuickConnect_ApproveIsRateLimited(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	user := createTestUser(t, app, "Approver", "approver@example.com", false)
@@ -425,9 +403,7 @@ func TestQuickConnect_ApproveIsRateLimited(t *testing.T) {
 }
 
 func TestQuickConnect_InitiateRequiresDeviceName(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/initiate", strings.NewReader(`{"platform":"ios"}`))

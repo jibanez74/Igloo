@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"igloo/cmd/internal/database"
-
-	"github.com/go-chi/chi/v5"
 )
 
 type streamTestTrack struct {
@@ -57,13 +55,12 @@ func seedStreamTestTrack(t *testing.T, app *Application, albumID sql.NullInt64, 
 // music side of that helper: content type, validator and range support.
 func TestStreamTrackServesFileWithRangeSupport(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	content := bytes.Repeat([]byte("abcdefghij"), 30)
 	track := seedStreamTestTrack(t, app, sql.NullInt64{}, content)
 
-	router := chi.NewRouter()
-	router.Get("/api/music/tracks/{id}/stream", app.StreamTrack)
+	listener := createTestUser(t, app, "Listener", "listener@example.com", false)
+	router := authenticatedRouter(t, app, listener.ID)
 	target := fmt.Sprintf("/api/music/tracks/%d/stream", track.ID)
 
 	t.Run("full body", func(t *testing.T) {
@@ -112,7 +109,6 @@ func TestStreamTrackServesFileWithRangeSupport(t *testing.T) {
 
 func TestMovieStreamFileServesFromCacheUntilEvicted(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	movie := seedStreamTestMovie(t, app, "mp4", "video/mp4", []byte("payload"))
 	ctx := context.Background()
@@ -147,7 +143,6 @@ func TestMovieStreamFileServesFromCacheUntilEvicted(t *testing.T) {
 
 func TestTrackStreamFileServesFromCacheUntilEvicted(t *testing.T) {
 	app := setupTestApp(t)
-	defer app.DB.Close()
 
 	track := seedStreamTestTrack(t, app, sql.NullInt64{}, []byte("payload"))
 	ctx := context.Background()
@@ -182,9 +177,7 @@ func TestTrackStreamFileServesFromCacheUntilEvicted(t *testing.T) {
 // Deleting a movie must drop its resolved file the same way it drops cached
 // subtitles, so a re-added movie at the same id cannot serve the old path.
 func TestDeleteMovieEvictsStreamFileCache(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
@@ -221,9 +214,7 @@ func TestDeleteMovieEvictsStreamFileCache(t *testing.T) {
 // Albums cascade to their tracks, so the resolved files of those tracks must go
 // with them. Without this the deleted tracks stay streamable until the TTL.
 func TestDeleteAlbumEvictsTrackStreamFileCache(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.InitSession()
+	app := setupSessionTestApp(t)
 	app.InitRouter()
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
