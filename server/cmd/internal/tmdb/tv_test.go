@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
+
+	cache "github.com/patrickmn/go-cache"
 )
 
 func TestTVRequestsCachingAndFallback(t *testing.T) {
@@ -132,14 +135,21 @@ func TestTVRateLimitAndMissingResults(t *testing.T) {
 	}
 }
 
-func TestTVSeasonNumberValidationAndCancellation(t *testing.T) {
-	for _, body := range []string{
-		`{"id":1,"season_number":2,"episodes":[],"aggregate_credits":{},"videos":{}}`,
-		`{"id":1,"season_number":1,"episodes":[{"id":2,"season_number":2,"episode_number":1}],"aggregate_credits":{},"videos":{}}`,
-		`{"id":1,"season_number":1,"episodes":[{"id":2,"season_number":1,"episode_number":1},{"id":3,"season_number":1,"episode_number":1}],"aggregate_credits":{},"videos":{}}`,
-	} {
-		t.Run(body, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) }))
+func TestTVSeasonNumberValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"season id missing", `{"id":0,"season_number":1,"episodes":[],"aggregate_credits":{},"videos":{}}`},
+		{"season number mismatch", `{"id":1,"season_number":2,"episodes":[],"aggregate_credits":{},"videos":{}}`},
+		{"episode id missing", `{"id":1,"season_number":1,"episodes":[{"id":0,"season_number":1,"episode_number":1}],"aggregate_credits":{},"videos":{}}`},
+		{"episode season mismatch", `{"id":1,"season_number":1,"episodes":[{"id":2,"season_number":2,"episode_number":1}],"aggregate_credits":{},"videos":{}}`},
+		{"episode number missing", `{"id":1,"season_number":1,"episodes":[{"id":2,"season_number":1,"episode_number":0}],"aggregate_credits":{},"videos":{}}`},
+		{"episode number duplicated", `{"id":1,"season_number":1,"episodes":[{"id":2,"season_number":1,"episode_number":1},{"id":3,"season_number":1,"episode_number":1}],"aggregate_credits":{},"videos":{}}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, tc.body) }))
 			defer server.Close()
 			_, err := newTestClient(server.URL).GetSeasonDetails(context.Background(), 7, 1)
 			if err == nil {
@@ -147,18 +157,125 @@ func TestTVSeasonNumberValidationAndCancellation(t *testing.T) {
 			}
 		})
 	}
-	entered := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(entered); <-r.Context().Done() }))
+}
+
+func TestTVArgumentValidationSkipsTheNetwork(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
 	defer server.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan error, 1)
 	client := newTestClient(server.URL)
-	go func() { _, err := client.GetSeasonDetails(ctx, 7, 1); done <- err }()
-	<-entered
-	cancel()
-	err := <-done
-	if !errors.Is(err, context.Canceled) {
-		t.Fatal("in-flight TV request ignored cancellation", err)
+	ctx := context.Background()
+
+	_, err := client.SearchShowsByTitleAndYear(ctx, "  \t ")
+	if err == nil || err.Error() != "show title is required" {
+		t.Fatalf("blank title error = %v", err)
+	}
+	_, err = client.GetShowDetails(ctx, 0)
+	if err == nil || err.Error() != "show ID is required" {
+		t.Fatalf("show id 0 error = %v", err)
+	}
+	_, err = client.GetSeasonDetails(ctx, 0, 1)
+	if err == nil || err.Error() != "invalid show ID or season" {
+		t.Fatalf("season with show id 0 error = %v", err)
+	}
+	_, err = client.GetSeasonDetails(ctx, 7, -1)
+	if err == nil || err.Error() != "invalid show ID or season" {
+		t.Fatalf("negative season error = %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("expected no HTTP requests, got %d", calls.Load())
+	}
+}
+
+func TestTVResponseErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		wantErr string
+	}{
+		{"not found", http.StatusNotFound, `{"status_message":"missing"}`, "tmdb status 404: unable to get TV metadata from tmdb"},
+		{"malformed json", http.StatusOK, `{"id":`, "unexpected end of JSON input"},
+		{"required field null", http.StatusOK, `{"id":7,"name":"Example","aggregate_credits":null,"content_ratings":{},"external_ids":{},"videos":{}}`, "missing TMDB TV field aggregate_credits"},
+		{"identity mismatch", http.StatusOK, `{"id":8,"name":"Example","aggregate_credits":{},"content_ratings":{},"external_ids":{},"videos":{}}`, "invalid TMDB show identity or name"},
+		{"blank name", http.StatusOK, `{"id":7,"name":" ","aggregate_credits":{},"content_ratings":{},"external_ids":{},"videos":{}}`, "invalid TMDB show identity or name"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			_, err := newTestClient(server.URL).GetShowDetails(context.Background(), 7)
+			if err == nil || err.Error() != tc.wantErr {
+				t.Fatalf("error = %v, want %q", err, tc.wantErr)
+			}
+			if tc.status == http.StatusOK {
+				return
+			}
+			var status *StatusError
+			if !errors.As(err, &status) || status.StatusCode != tc.status {
+				t.Fatalf("expected StatusError with %d, got %v", tc.status, err)
+			}
+		})
+	}
+}
+
+func TestTVSearchRejectsResultWithoutIdentity(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"results":[{"id":7,"name":"Example"},{"id":0,"name":"Nameless"}]}`)
+	}))
+	defer server.Close()
+	_, err := newTestClient(server.URL).SearchShowsByTitleAndYear(context.Background(), "Example")
+	if err == nil || err.Error() != "invalid TMDB show identity" {
+		t.Fatalf("error = %v, want invalid TMDB show identity", err)
+	}
+}
+
+// A cached value that is not a byte slice (another cache user's type under a
+// colliding key) is refetched instead of decoded.
+func TestTVCacheEntryOfWrongTypeIsRefetched(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		fmt.Fprint(w, `{"id":7,"name":"Example","aggregate_credits":{},"content_ratings":{},"external_ids":{},"videos":{}}`)
+	}))
+	defer server.Close()
+	client := newTestClient(server.URL)
+	params := url.Values{"append_to_response": {"aggregate_credits,content_ratings,external_ids,videos"}, "language": {tmdbRequestLanguage}}
+	client.movieCache.Set("tv:/tv/7?"+params.Encode(), &TmdbMovie{}, cache.DefaultExpiration)
+
+	show, err := client.GetShowDetails(context.Background(), 7)
+	if err != nil || show.Name != "Example" {
+		t.Fatalf("GetShowDetails = %+v, %v", show, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("expected the wrong-type entry to force one request, got %d", calls.Load())
+	}
+	_, err = client.GetShowDetails(context.Background(), 7)
+	if err != nil || calls.Load() != 1 {
+		t.Fatalf("expected the refetched body to be cached, got %d calls, %v", calls.Load(), err)
+	}
+}
+
+func TestTVCertificationFallsBackToFirstRating(t *testing.T) {
+	var show TVShow
+	show.ContentRatings.Results = []struct {
+		Country string `json:"iso_3166_1"`
+		Rating  string `json:"rating"`
+	}{
+		{Country: "GB", Rating: " "},
+		{Country: "DE", Rating: "16"},
+		{Country: "FR", Rating: "12"},
+	}
+	got := show.Certification()
+	if got != "16" {
+		t.Fatalf("Certification() = %q, want the first non-blank rating 16", got)
+	}
+	show.ContentRatings.Results = nil
+	got = show.Certification()
+	if got != "" {
+		t.Fatalf("Certification() = %q, want empty without ratings", got)
 	}
 }

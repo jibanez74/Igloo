@@ -11,15 +11,15 @@ import (
 )
 
 const (
-	mp4TestBoxHeaderSize = 8
+	boxHeaderSize = 8
 
-	// mp4TestNonIDRSampleFlags marks a sample whose first VCL NAL is not an IDR.
+	// nonIDRSampleFlags marks a sample whose first VCL NAL is not an IDR.
 	// It deliberately leaves the sample_is_non_sync bit (0x00010000, see
 	// isSyncSample in remux_validator.go) clear, so the validator reads these
 	// samples as sync samples and rejects the fixture for starting a sync sample
 	// on a non-IDR NAL. Setting the real non-sync bit would make the unsafe
 	// fixture produce no sync samples at all and test a different path.
-	mp4TestNonIDRSampleFlags = 0x00000001
+	nonIDRSampleFlags = 0x00000001
 )
 
 type Fixture struct {
@@ -29,9 +29,9 @@ type Fixture struct {
 }
 
 type sampleSpec struct {
-	Data       []byte
-	Flags      uint32
-	DataOffset int32
+	data       []byte
+	flags      uint32
+	dataOffset int32
 }
 
 type fragmentTrack struct {
@@ -44,44 +44,56 @@ func WriteHLSFixture(outDir string, fixture Fixture) error {
 		return fmt.Errorf("segments must be positive")
 	}
 
-	initData := BuildInitMP4()
-	err := os.WriteFile(filepath.Join(outDir, helpers.HLS_INIT_FILENAME), initData, 0o644)
+	videoSample := BuildVideoSample(fixture.SafeVideo)
+	segments := make([][]byte, 0, fixture.Segments)
+	for i := 0; i < fixture.Segments; i++ {
+		segments = append(segments, BuildSegment(videoSample, fixture.AudioNoise))
+	}
+	err := WriteFragmentFiles(outDir, BuildInitMP4(), segments...)
 	if err != nil {
 		return err
-	}
-
-	videoSample := BuildVideoSample(fixture.SafeVideo)
-	for i := 0; i < fixture.Segments; i++ {
-		segmentData := BuildSegment(videoSample, fixture.AudioNoise)
-		name := fmt.Sprintf(
-			"%s%d%s",
-			helpers.HLS_SEGMENT_FILENAME_PREFIX,
-			i,
-			helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-		)
-		err = os.WriteFile(filepath.Join(outDir, name), segmentData, 0o644)
-		if err != nil {
-			return err
-		}
 	}
 
 	playlist := buildEventPlaylist(fixture.Segments)
 	return os.WriteFile(filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), []byte(playlist), 0o644)
 }
 
+// WriteFragmentFiles writes an init segment plus the supplied media segments
+// under the names ValidateRemuxSafety reads, so tests can hand it segments
+// they have corrupted on purpose.
+func WriteFragmentFiles(outDir string, initData []byte, segments ...[]byte) error {
+	err := os.WriteFile(filepath.Join(outDir, helpers.HLS_INIT_FILENAME), initData, 0o644)
+	if err != nil {
+		return err
+	}
+	for i, segment := range segments {
+		name := fmt.Sprintf(
+			"%s%d%s",
+			helpers.HLS_SEGMENT_FILENAME_PREFIX,
+			i,
+			helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+		)
+		err = os.WriteFile(filepath.Join(outDir, name), segment, 0o644)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func BuildInitMP4() []byte {
 	videoTrack := Box(
 		"trak",
-		mp4TestTKHD(1),
+		tkhd(1),
 		Box(
 			"mdia",
-			mp4TestHDLR("vide"),
+			hdlr("vide"),
 			Box(
 				"minf",
 				Box(
 					"stbl",
-					mp4TestSTSD(
-						mp4TestAVCSampleEntry(
+					stsd(
+						avcSampleEntry(
 							"avc1",
 							Box("avcC", []byte{1, 0x64, 0x00, 0x1f, 0xff}),
 						),
@@ -93,12 +105,12 @@ func BuildInitMP4() []byte {
 
 	audioTrack := Box(
 		"trak",
-		mp4TestTKHD(2),
-		Box("mdia", mp4TestHDLR("soun")),
+		tkhd(2),
+		Box("mdia", hdlr("soun")),
 	)
 
-	moov := Box("moov", mp4TestMVHD(), videoTrack, audioTrack)
-	return append(mp4TestFTYP(), moov...)
+	moov := Box("moov", mvhd(), videoTrack, audioTrack)
+	return append(ftyp(), moov...)
 }
 
 func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
@@ -110,8 +122,8 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 		tracks = append(tracks, fragmentTrack{
 			trackID: 2,
 			sample: sampleSpec{
-				Data:  audioSample,
-				Flags: 0,
+				data:  audioSample,
+				flags: 0,
 			},
 		})
 		mdatPayload = append(mdatPayload, audioSample...)
@@ -120,33 +132,30 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 	tracks = append(tracks, fragmentTrack{
 		trackID: 1,
 		sample: sampleSpec{
-			Data:  videoSample,
-			Flags: mp4TestVideoSampleFlags(videoSample),
+			data:  videoSample,
+			flags: videoSampleFlags(videoSample),
 		},
 	})
 	mdatPayload = append(mdatPayload, videoSample...)
 
-	mfhd := mp4TestMFHD()
-	moofSize := mp4TestBoxHeaderSize + len(mfhd)
-	for range tracks {
-		moofSize += mp4TestTrafSize(1)
-	}
+	mfhdBox := mfhd()
+	moofSize := boxHeaderSize + len(mfhdBox) + len(tracks)*trafSize()
 
 	trafsWithOffsets := make([][]byte, 0, len(tracks))
-	currentOffset := moofSize + mp4TestBoxHeaderSize
+	currentOffset := moofSize + boxHeaderSize
 	for _, track := range tracks {
 		sample := track.sample
-		sample.DataOffset = int32(currentOffset)
+		sample.dataOffset = int32(currentOffset)
 		trafsWithOffsets = append(trafsWithOffsets, Box(
 			"traf",
-			mp4TestTFHD(track.trackID),
-			mp4TestTFDT(),
-			mp4TestTRUN([]sampleSpec{sample}),
+			tfhd(track.trackID),
+			tfdt(),
+			trun(sample),
 		))
-		currentOffset += len(sample.Data)
+		currentOffset += len(sample.data)
 	}
 
-	moof := Box("moof", append([][]byte{mfhd}, trafsWithOffsets...)...)
+	moof := Box("moof", append([][]byte{mfhdBox}, trafsWithOffsets...)...)
 	mdat := Box("mdat", mdatPayload)
 
 	return append(moof, mdat...)
@@ -161,8 +170,8 @@ func BuildVideoSample(safe bool) []byte {
 	}
 
 	out := make([]byte, 0, 16)
-	out = append(out, mp4TestNALU(sps)...)
-	out = append(out, mp4TestNALU(vcl)...)
+	out = append(out, nalu(sps)...)
+	out = append(out, nalu(vcl)...)
 	return out
 }
 
@@ -181,37 +190,36 @@ func buildEventPlaylist(segments int) string {
 	return builder.String()
 }
 
-func mp4TestNALU(payload []byte) []byte {
+func nalu(payload []byte) []byte {
 	out := make([]byte, 4+len(payload))
 	binary.BigEndian.PutUint32(out[:4], uint32(len(payload)))
 	copy(out[4:], payload)
 	return out
 }
 
-func mp4TestTKHD(trackID uint32) []byte {
+func tkhd(trackID uint32) []byte {
 	payload := make([]byte, 20)
 	binary.BigEndian.PutUint32(payload[12:16], trackID)
 	return Box("tkhd", payload)
 }
 
-func mp4TestHDLR(handlerType string) []byte {
+func hdlr(handlerType string) []byte {
 	payload := make([]byte, 12)
 	copy(payload[8:12], []byte(handlerType))
 	return Box("hdlr", payload)
 }
 
-func mp4TestSTSD(entries ...[]byte) []byte {
-	payload := FullBoxPayload(0, U32(uint32(len(entries))))
-	return Box("stsd", append([][]byte{payload}, entries...)...)
+func stsd(entry []byte) []byte {
+	return Box("stsd", FullBoxPayload(0, U32(1)), entry)
 }
 
-func mp4TestAVCSampleEntry(typ string, childBoxes ...[]byte) []byte {
+func avcSampleEntry(typ string, childBoxes ...[]byte) []byte {
 	header := make([]byte, 78)
 	binary.BigEndian.PutUint16(header[6:8], 1)
 	return Box(typ, append([][]byte{header}, childBoxes...)...)
 }
 
-func mp4TestFTYP() []byte {
+func ftyp() []byte {
 	payload := make([]byte, 16)
 	copy(payload[0:4], []byte("isom"))
 	binary.BigEndian.PutUint32(payload[4:8], 512)
@@ -220,9 +228,8 @@ func mp4TestFTYP() []byte {
 	return Box("ftyp", payload)
 }
 
-func mp4TestMVHD() []byte {
+func mvhd() []byte {
 	payload := make([]byte, 84)
-	payload[0] = 0
 	binary.BigEndian.PutUint32(payload[4:8], 1000)
 	binary.BigEndian.PutUint32(payload[12:16], 0x00010000)
 	binary.BigEndian.PutUint16(payload[16:18], 0x0100)
@@ -233,32 +240,32 @@ func mp4TestMVHD() []byte {
 	return Box("mvhd", payload)
 }
 
-// mp4TestMFHD and mp4TestTFDT write the single-fragment values the fixtures
+// mfhd and tfdt write the single-fragment values the fixtures
 // need: sequence number 0 and base media decode time 0.
-func mp4TestMFHD() []byte {
+func mfhd() []byte {
 	return Box("mfhd", FullBoxPayload(0, U32(0)))
 }
 
-func mp4TestTFDT() []byte {
+func tfdt() []byte {
 	return Box("tfdt", FullBoxPayload(0, U32(0)))
 }
 
-func mp4TestTFHD(trackID uint32) []byte {
+func tfhd(trackID uint32) []byte {
 	return Box("tfhd", FullBoxPayload(0, U32(trackID)))
 }
 
-func mp4TestVideoSampleFlags(sample []byte) uint32 {
+func videoSampleFlags(sample []byte) uint32 {
 	offset := 0
 	for offset < len(sample) {
 		if offset+4 > len(sample) {
-			return mp4TestNonIDRSampleFlags
+			return nonIDRSampleFlags
 		}
 
 		naluLen := int(binary.BigEndian.Uint32(sample[offset : offset+4]))
 		offset += 4
 
 		if naluLen == 0 || offset+naluLen > len(sample) {
-			return mp4TestNonIDRSampleFlags
+			return nonIDRSampleFlags
 		}
 
 		nalType := sample[offset] & 0x1F
@@ -269,31 +276,25 @@ func mp4TestVideoSampleFlags(sample []byte) uint32 {
 		offset += naluLen
 	}
 
-	return mp4TestNonIDRSampleFlags
+	return nonIDRSampleFlags
 }
 
-func mp4TestTRUN(samples []sampleSpec) []byte {
+// trun writes a single-sample run with an explicit data offset, sample size
+// and sample flags; trafSize is the size of the traf such a run produces.
+func trun(sample sampleSpec) []byte {
 	flags := uint32(0x000001 | 0x000200 | 0x000400)
-
-	dataOffset := int32(0)
-	if len(samples) > 0 {
-		dataOffset = samples[0].DataOffset
-	}
-
-	parts := [][]byte{U32(uint32(len(samples))), U32(uint32(dataOffset))}
-	for _, sample := range samples {
-		parts = append(parts, U32(uint32(len(sample.Data))), U32(sample.Flags))
-	}
-
-	return Box("trun", FullBoxPayload(flags, parts...))
+	return Box("trun", FullBoxPayload(
+		flags,
+		U32(1),
+		U32(uint32(sample.dataOffset)),
+		U32(uint32(len(sample.data))),
+		U32(sample.flags),
+	))
 }
 
-func mp4TestTRUNSize(sampleCount int) int {
-	return mp4TestBoxHeaderSize + 12 + sampleCount*8
-}
-
-func mp4TestTrafSize(sampleCount int) int {
-	return mp4TestBoxHeaderSize + len(mp4TestTFHD(0)) + len(mp4TestTFDT()) + mp4TestTRUNSize(sampleCount)
+func trafSize() int {
+	trunSize := boxHeaderSize + 12 + 8
+	return boxHeaderSize + len(tfhd(0)) + len(tfdt()) + trunSize
 }
 
 // FullBoxPayload builds an ISO-BMFF full-box payload: a zero version byte, the
@@ -327,11 +328,11 @@ func Box(typ string, payloadParts ...[]byte) []byte {
 		payloadLen += len(part)
 	}
 
-	out := make([]byte, mp4TestBoxHeaderSize+payloadLen)
+	out := make([]byte, boxHeaderSize+payloadLen)
 	binary.BigEndian.PutUint32(out[:4], uint32(len(out)))
 	copy(out[4:8], []byte(typ))
 
-	offset := mp4TestBoxHeaderSize
+	offset := boxHeaderSize
 	for _, part := range payloadParts {
 		copy(out[offset:], part)
 		offset += len(part)

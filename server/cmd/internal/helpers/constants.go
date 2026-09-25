@@ -2,10 +2,6 @@ package helpers
 
 import "time"
 
-// ENV_FILE is read by cmd/api at startup and by the tmdb integration tests,
-// which cannot import cmd/api. It stays here for that second consumer.
-const ENV_FILE = ".env"
-
 // Hardware acceleration device identifiers accepted by transcoding settings.
 const (
 	HARDWARE_ACCELERATION_DEVICE_CPU    = "cpu"

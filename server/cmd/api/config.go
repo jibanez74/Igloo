@@ -85,17 +85,20 @@ type RuntimeConfig struct {
 	MusicDir                   string
 }
 
+// envFile is the optional startup seed file, read from the working directory.
+const envFile = ".env"
+
 func LoadRuntimeEnvFile() (string, bool, error) {
-	err := helpers.LoadEnvFile(helpers.ENV_FILE)
+	err := helpers.LoadEnvFile(envFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", false, nil
 		}
 
-		return "", false, fmt.Errorf("failed to load %s: %w", helpers.ENV_FILE, err)
+		return "", false, fmt.Errorf("failed to load %s: %w", envFile, err)
 	}
 
-	return helpers.ENV_FILE, true, nil
+	return envFile, true, nil
 }
 
 // viteDevServerURL returns the configured Vite dev server origin, trimmed and

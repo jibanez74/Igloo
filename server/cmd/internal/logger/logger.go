@@ -81,7 +81,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 
 	path := filepath.Join(cfg.LogDir, logFile)
 
-	rw, err := newRotatingWriter(path, loggerMaxBytes)
+	rw, err := newRotatingWriter(path, loggerMaxBytes, loggerFlushInterval)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}

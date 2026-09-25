@@ -12,40 +12,7 @@ import (
 
 func TestParseVideoTrackConfig_IgnoresFakeAvcCBytePatternOutsideSampleEntry(t *testing.T) {
 	initData := fmp4testutil.BuildInitMP4()
-
-	moov, found, err := findDirectChildBox(initData, 0, len(initData), "moov")
-	if err != nil {
-		t.Fatalf("find moov: %v", err)
-	}
-	if !found {
-		t.Fatal("missing moov box")
-	}
-
-	traks, err := listDirectChildBoxes(initData, moov.PayloadStart, moov.End)
-	if err != nil {
-		t.Fatalf("list traks: %v", err)
-	}
-
-	videoTrak := mp4Box{}
-	foundVideoTrak := false
-	for _, trak := range traks {
-		if trak.Type != "trak" {
-			continue
-		}
-
-		trackID, handlerType, parseErr := parseTrackHeader(initData, trak)
-		if parseErr != nil {
-			t.Fatalf("parseTrackHeader: %v", parseErr)
-		}
-		if trackID == 1 && handlerType == "vide" {
-			videoTrak = trak
-			foundVideoTrak = true
-			break
-		}
-	}
-	if !foundVideoTrak {
-		t.Fatal("missing video track")
-	}
+	moov, videoTrak := videoTrakForTest(t, initData)
 
 	tkhd, found, err := findDirectChildBox(initData, videoTrak.PayloadStart, videoTrak.End, "tkhd")
 	if err != nil {
@@ -66,8 +33,8 @@ func TestParseVideoTrackConfig_IgnoresFakeAvcCBytePatternOutsideSampleEntry(t *t
 	mutated = append(mutated, fakeBox...)
 	mutated = append(mutated, initData[tkhd.End:]...)
 
-	updateTestBoxSize(mutated, moov.Start, moov.End-moov.Start+len(fakeBox))
-	updateTestBoxSize(mutated, videoTrak.Start, videoTrak.End-videoTrak.Start+len(fakeBox))
+	binary.BigEndian.PutUint32(mutated[moov.Start:], uint32(moov.End-moov.Start+len(fakeBox)))
+	binary.BigEndian.PutUint32(mutated[videoTrak.Start:], uint32(videoTrak.End-videoTrak.Start+len(fakeBox)))
 
 	trackID, nalLengthSize, err := parseVideoTrackConfig(mutated)
 	if err != nil {
@@ -131,22 +98,22 @@ func TestReadBoxRejectsMalformedSizesAndBounds(t *testing.T) {
 		data  []byte
 		start int
 		end   int
+		want  string
 	}{
-		{name: "truncated header", data: []byte{0, 0, 0, 8}, end: 4},
-		{name: "undersized", data: undersized, end: len(undersized)},
-		{name: "oversized", data: oversized, end: len(oversized)},
-		{name: "truncated extended", data: truncatedExtended, end: len(truncatedExtended)},
-		{name: "extended integer overflow", data: extendedTooLarge, end: len(extendedTooLarge)},
-		{name: "negative start", data: oversized, start: -1, end: len(oversized)},
-		{name: "end before start", data: oversized, start: 7, end: 6},
-		{name: "end beyond data", data: oversized, end: len(oversized) + 1},
+		{name: "truncated header", data: []byte{0, 0, 0, 8}, end: 4, want: "invalid MP4 box bounds"},
+		{name: "undersized", data: undersized, end: len(undersized), want: "invalid MP4 box size"},
+		{name: "oversized", data: oversized, end: len(oversized), want: "MP4 box exceeds parent bounds"},
+		{name: "truncated extended", data: truncatedExtended, end: len(truncatedExtended), want: "invalid extended MP4 box"},
+		{name: "extended integer overflow", data: extendedTooLarge, end: len(extendedTooLarge), want: "MP4 box exceeds parent bounds"},
+		{name: "negative start", data: oversized, start: -1, end: len(oversized), want: "invalid MP4 box bounds"},
+		{name: "end beyond data", data: oversized, end: len(oversized) + 1, want: "invalid MP4 box bounds"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := readBox(tt.data, tt.start, tt.end)
-			if err == nil {
-				t.Fatal("expected malformed MP4 box error")
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
 			}
 		})
 	}

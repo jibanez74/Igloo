@@ -1,18 +1,11 @@
 package logger
 
-import (
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 // Benchmarks the request-logging hot path: one JSON line per HTTP request,
-// including the rotation cost once the line cap is reached.
+// including the rotation cost each time the byte cap is reached.
 func BenchmarkRotatingWriterWrite(b *testing.B) {
-	path := filepath.Join(b.TempDir(), "bench.log")
-	w, err := newRotatingWriter(path, loggerMaxBytes)
-	if err != nil {
-		b.Fatal(err)
-	}
+	w, _ := newTestWriter(b, loggerMaxBytes, "")
 
 	line := []byte(`{"time":"2026-08-12T00:00:00Z","level":"INFO","msg":"request completed","method":"GET","path":"/api/movies/latest","status":200,"duration_ms":12}` + "\n")
 
@@ -28,7 +21,7 @@ func BenchmarkRotatingWriterWrite(b *testing.B) {
 	// per-line measurement.
 	b.StopTimer()
 
-	err = w.Close()
+	err := w.Close()
 	if err != nil {
 		b.Fatal(err)
 	}

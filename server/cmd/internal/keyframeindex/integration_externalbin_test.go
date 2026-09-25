@@ -15,21 +15,24 @@ import (
 	"time"
 
 	"igloo/cmd/internal/keyframeindex"
+	"igloo/cmd/internal/mediabin"
 )
 
 const integrationTimeout = 60 * time.Second
 
 // TestExtractMatchesFfprobeGroundTruth generates real mkv and mp4 files with
 // the host ffmpeg and verifies the container-index extraction agrees with an
-// ffprobe packet walk — the same ground truth the HLS session fallback uses.
+// ffprobe packet walk over the whole file. The HLS session fallback asks
+// ffprobe the same question one bounded interval at a time
+// (ffprobe.KeyframeAtOrBefore), reading the packet flags the same way.
 func TestExtractMatchesFfprobeGroundTruth(t *testing.T) {
-	ffmpegPath, err := exec.LookPath("ffmpeg")
+	ffmpegPath, err := mediabin.ResolveExternal("ffmpeg", "IGLOO_FFMPEG_PATH")
 	if err != nil {
-		t.Skip("host ffmpeg not on PATH")
+		t.Fatalf("resolve ffmpeg: %v", err)
 	}
-	ffprobePath, err := exec.LookPath("ffprobe")
+	ffprobePath, err := mediabin.ResolveExternal("ffprobe", "IGLOO_FFPROBE_PATH")
 	if err != nil {
-		t.Skip("host ffprobe not on PATH")
+		t.Fatalf("resolve ffprobe: %v", err)
 	}
 
 	workspace := t.TempDir()
@@ -109,7 +112,8 @@ func generateSample(t *testing.T, ffmpegPath, outPath string, extraArgs []string
 }
 
 // ffprobeKeyframes runs the packet-walk ground truth: every video packet's
-// pts_time whose flags start with K (newer ffprobe appends extra characters).
+// pts_time whose flags carry K, read as the production keyframe lookup reads
+// them (ffprobe.parseKeyframePacket).
 func ffprobeKeyframes(t *testing.T, ffprobePath, sourcePath string) []float64 {
 	t.Helper()
 
@@ -129,10 +133,10 @@ func ffprobeKeyframes(t *testing.T, ffprobePath, sourcePath string) []float64 {
 	keyframes := make([]float64, 0, 16)
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Split(strings.TrimSpace(line), ",")
-		if len(fields) < 2 || !strings.HasPrefix(fields[1], "K") {
+		if len(fields) < 2 || !strings.Contains(fields[1], "K") {
 			continue
 		}
-		pts, parseErr := strconv.ParseFloat(fields[0], 64)
+		pts, parseErr := strconv.ParseFloat(strings.TrimSpace(fields[0]), 64)
 		if parseErr != nil {
 			continue
 		}

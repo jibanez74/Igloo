@@ -16,15 +16,19 @@ type fakeFFprobeSpec struct {
 	stderr   string // printed to stderr with a trailing newline
 	exitCode int
 	argsLog  string // when set, the script writes one line per argument here
+	callLog  string // when set, the script appends one line per invocation holding the whole argument list
 }
 
 func writeFakeFFprobe(t *testing.T, spec fakeFFprobeSpec) string {
 	t.Helper()
 
 	var body strings.Builder
-	body.WriteString("#!/bin/sh\n")
+	body.WriteString("#!/bin/sh\nset -eu\n")
 	if spec.argsLog != "" {
 		body.WriteString("printf '%s\\n' \"$@\" > " + shellQuote(spec.argsLog) + "\n")
+	}
+	if spec.callLog != "" {
+		body.WriteString("printf '%s\\n' \"$*\" >> " + shellQuote(spec.callLog) + "\n")
 	}
 	if spec.stdout != "" {
 		body.WriteString("printf '%s\\n' " + shellQuote(spec.stdout) + "\n")

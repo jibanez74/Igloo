@@ -29,53 +29,15 @@ func TestParseHLSAudioCodec(t *testing.T) {
 
 func TestIsAllowedHLSAudioMaxChannels(t *testing.T) {
 	for channels, want := range map[int]bool{0: false, 1: false, 2: true, 4: false, 6: true, 8: false} {
-		if got := IsAllowedHLSAudioMaxChannels(channels); got != want {
+		got := IsAllowedHLSAudioMaxChannels(channels)
+		if got != want {
 			t.Errorf("IsAllowedHLSAudioMaxChannels(%d) = %v, want %v", channels, got, want)
 		}
 	}
 }
 
-// The full server-owned bitrate table from the specification.
-func TestHLSAudioBitrate(t *testing.T) {
-	tests := []struct {
-		codec    HLSAudioCodec
-		channels int
-		want     string
-	}{
-		{HLSAudioCodecAC3, 1, "192k"},
-		{HLSAudioCodecAC3, 2, "384k"},
-		{HLSAudioCodecAC3, 3, "448k"},
-		{HLSAudioCodecAC3, 4, "448k"},
-		{HLSAudioCodecAC3, 5, "640k"},
-		{HLSAudioCodecAC3, 6, "640k"},
-		{HLSAudioCodecEAC3, 1, "192k"},
-		{HLSAudioCodecEAC3, 2, "384k"},
-		{HLSAudioCodecEAC3, 3, "512k"},
-		{HLSAudioCodecEAC3, 4, "512k"},
-		{HLSAudioCodecEAC3, 5, "768k"},
-		{HLSAudioCodecEAC3, 6, "768k"},
-	}
-
-	for _, tt := range tests {
-		if got := HLSAudioBitrate(tt.codec, tt.channels); got != tt.want {
-			t.Errorf("HLSAudioBitrate(%s, %d) = %q, want %q", tt.codec, tt.channels, got, tt.want)
-		}
-	}
-}
-
-func TestHLSAudioEncoder(t *testing.T) {
-	if got := HLSAudioEncoder(HLSAudioCodecAC3); got != "ac3" {
-		t.Errorf("HLSAudioEncoder(ac3) = %q, want ac3", got)
-	}
-	if got := HLSAudioEncoder(HLSAudioCodecEAC3); got != "eac3" {
-		t.Errorf("HLSAudioEncoder(eac3) = %q, want eac3", got)
-	}
-	// The legacy AAC marker has no explicit encoder mapping.
-	if got := HLSAudioEncoder(HLSAudioCodecAAC); got != "" {
-		t.Errorf("HLSAudioEncoder(aac) = %q, want empty", got)
-	}
-}
-
+// The resolved profile carries the encoder and the server-owned bitrate table
+// from the specification, so every bitrate tier is pinned through a row here.
 func TestResolveHLSAudioProfile(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -115,6 +77,26 @@ func TestResolveHLSAudioProfile(t *testing.T) {
 			},
 		},
 		{
+			name:           "three channels of AC-3 take the small surround tier",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecAC3, MaxChannels: 6},
+			sourceChannels: 3,
+			sourceLayout:   "",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecAC3, Encoder: "ac3", Channels: 3,
+				ChannelLayout: "3.0", Bitrate: "448k", SampleRate: 48000,
+			},
+		},
+		{
+			name:           "four channels of E-AC-3 take the small surround tier",
+			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecEAC3, MaxChannels: 6},
+			sourceChannels: 4,
+			sourceLayout:   "quad",
+			want: HLSResolvedAudioProfile{
+				Codec: HLSAudioCodecEAC3, Encoder: "eac3", Channels: 4,
+				ChannelLayout: "quad", Bitrate: "512k", SampleRate: 48000,
+			},
+		},
+		{
 			name:           "7.1 downmixes to standard 5.1",
 			request:        HLSAudioProfileRequest{Codec: HLSAudioCodecEAC3, MaxChannels: 6},
 			sourceChannels: 8,
@@ -146,6 +128,15 @@ func TestResolveHLSAudioProfile(t *testing.T) {
 	}
 }
 
+// The legacy AAC marker describes copied or stereo-encoded output and must
+// never resolve to an explicit encoder.
+func TestHLSAudioEncoderHasNoLegacyMapping(t *testing.T) {
+	got := HLSAudioEncoder(HLSAudioCodecAAC)
+	if got != "" {
+		t.Errorf("HLSAudioEncoder(aac) = %q, want empty", got)
+	}
+}
+
 func TestHLSDefaultChannelLayoutName(t *testing.T) {
 	tests := []struct {
 		channels int
@@ -165,15 +156,5 @@ func TestHLSDefaultChannelLayoutName(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("HLSDefaultChannelLayoutName(%d) = %q, want %q", tt.channels, got, tt.want)
 		}
-	}
-}
-
-// The legacy fallback describes one output in two places: the FFmpeg arguments
-// and the X-Igloo-Effective-Audio-* headers. Its channel count must keep naming
-// a real layout.
-func TestLegacyAudioChannelsHaveADefaultLayout(t *testing.T) {
-	layout := HLSDefaultChannelLayoutName(HLS_LEGACY_AUDIO_CHANNELS)
-	if layout != "stereo" {
-		t.Fatalf("HLSDefaultChannelLayoutName(HLS_LEGACY_AUDIO_CHANNELS) = %q, want %q", layout, "stereo")
 	}
 }

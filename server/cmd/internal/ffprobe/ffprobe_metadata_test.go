@@ -276,9 +276,10 @@ func TestStreamRotationFromSideDataList(t *testing.T) {
 		wantMatrix bool
 	}{
 		{
-			// Captured verbatim from the bundled ffprobe 7.1.4-Jellyfin on an
-			// mp4 written with -display_rotation 90; the displaymatrix dump is
-			// deliberately unparsed noise.
+			// Trimmed from what the bundled ffprobe (8.1.2-Jellyfin) prints
+			// for an mp4 written with -display_rotation 90: one displaymatrix
+			// row kept as deliberately unparsed noise, other stream fields
+			// dropped.
 			name:       "display matrix rotation",
 			payload:    `{"field_order": "progressive", "side_data_list": [{"side_data_type": "Display Matrix", "displaymatrix": "\n00000000:            0      -65536           0\n", "rotation": 90}]}`,
 			wantDeg:    90,

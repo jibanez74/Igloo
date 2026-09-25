@@ -44,17 +44,10 @@ func TestExternalFFmpegCPUHLSRemuxAndSubtitles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("mkdir CPU output: %v", err)
 		}
-		params := HLSParams{
-			SourcePath:       sourcePath,
-			OutDir:           outDir,
-			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: 1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			CopyAudio:        true,
-			SourceFrameRate:  24,
-			Capabilities:     Capabilities{Probed: true},
-		}
+		params := basicHLSParams(outDir)
+		params.SourcePath = sourcePath
+		params.CopyAudio = true
+		params.SourceFrameRate = 24
 		runExternalHLSAndWait(t, f, params)
 		segments := assertCompleteSequentialHLSOutput(t, outDir)
 		if len(segments) < 2 {
@@ -72,17 +65,11 @@ func TestExternalFFmpegCPUHLSRemuxAndSubtitles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("mkdir remux output: %v", err)
 		}
-		params := HLSParams{
-			SourcePath:       sourcePath,
-			OutDir:           outDir,
-			Profile:          helpers.HLS_PROFILE_REMUX,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: 1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			CopyVideo:        true,
-			CopyAudio:        true,
-			Capabilities:     Capabilities{Probed: true},
-		}
+		params := basicHLSParams(outDir)
+		params.SourcePath = sourcePath
+		params.Profile = helpers.HLS_PROFILE_REMUX
+		params.CopyVideo = true
+		params.CopyAudio = true
 		runExternalHLSAndWait(t, f, params)
 		segments := assertCompleteSequentialHLSOutput(t, outDir)
 		summary, validationErr := ValidateRemuxSafety(outDir, len(segments))
@@ -143,7 +130,7 @@ func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
 		sourcePath := filepath.Join(workspace, "interlaced source.mkv")
 		generateInterlacedH264AACSource(t, candidate.path, sourcePath)
 
-		sourceVideo := probeExternalVideoStream(t, prober, sourcePath)
+		sourceVideo := probeExternalStream(t, prober, sourcePath, "video")
 		if !isInterlacedFieldOrder(sourceVideo.FieldOrder) {
 			t.Fatalf("generated source field_order = %q, want an interlaced value", sourceVideo.FieldOrder)
 		}
@@ -153,21 +140,14 @@ func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("mkdir output: %v", err)
 		}
-		params := HLSParams{
-			SourcePath:       sourcePath,
-			OutDir:           outDir,
-			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: 1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			Deinterlace:      true,
-			SourceFrameRate:  25,
-			Capabilities:     Capabilities{Probed: true},
-		}
+		params := basicHLSParams(outDir)
+		params.SourcePath = sourcePath
+		params.Deinterlace = true
+		params.SourceFrameRate = 25
 		runExternalHLSAndWait(t, f, params)
 		assertCompleteSequentialHLSOutput(t, outDir)
 
-		outVideo := probeExternalVideoStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME))
+		outVideo := probeExternalStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), "video")
 		if isInterlacedFieldOrder(outVideo.FieldOrder) {
 			t.Fatalf("output field_order = %q, want progressive after yadif", outVideo.FieldOrder)
 		}
@@ -189,7 +169,7 @@ func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
 			"-c", "copy", rotatedPath,
 		)
 
-		sourceVideo := probeExternalVideoStream(t, prober, rotatedPath)
+		sourceVideo := probeExternalStream(t, prober, rotatedPath, "video")
 		rotationDeg, hasMatrix := sourceVideo.Rotation()
 		if !hasMatrix || rotationDeg%180 == 0 {
 			t.Fatalf("rotated source Rotation() = (%d, %v), want a quarter-turn display matrix", rotationDeg, hasMatrix)
@@ -200,17 +180,10 @@ func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("mkdir output: %v", err)
 		}
-		params := HLSParams{
-			SourcePath:       rotatedPath,
-			OutDir:           outDir,
-			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-			VideoStreamIndex: 0,
-			AudioStreamIndex: 1,
-			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			CopyAudio:        true,
-			SourceFrameRate:  24,
-			Capabilities:     Capabilities{Probed: true},
-		}
+		params := basicHLSParams(outDir)
+		params.SourcePath = rotatedPath
+		params.CopyAudio = true
+		params.SourceFrameRate = 24
 		runExternalHLSAndWait(t, f, params)
 		assertCompleteSequentialHLSOutput(t, outDir)
 
@@ -218,7 +191,7 @@ func TestExternalFFmpegDeinterlaceAndAutorotation(t *testing.T) {
 		// honors it produces portrait output with the matrix consumed; a
 		// leftover matrix would rotate the already-rotated frames again in the
 		// player.
-		outVideo := probeExternalVideoStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME))
+		outVideo := probeExternalStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), "video")
 		if outVideo.Width >= outVideo.Height {
 			t.Fatalf("output = %dx%d, want portrait after autorotation of a landscape source", outVideo.Width, outVideo.Height)
 		}
@@ -266,13 +239,10 @@ func TestExternalFFmpegHLSSegmentCountMatchesMuxer(t *testing.T) {
 	for index, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sourcePath := filepath.Join(workspace, fmt.Sprintf("count source %d.mkv", index))
-			runExternalFFmpegCommand(t, candidate.path,
-				"-y", "-v", "error",
-				"-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration="+tt.videoDuration,
-				"-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration="+tt.audioDuration,
-				"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+			generateLavfiSample(t, candidate.path, sourcePath,
+				"testsrc2=size=320x180:rate=24:duration="+tt.videoDuration,
+				"sine=frequency=1000:sample_rate=48000:duration="+tt.audioDuration,
 				"-c:a", "aac",
-				sourcePath,
 			)
 
 			meta, err := prober.GetMetadata(context.Background(), sourcePath)
@@ -283,7 +253,7 @@ func TestExternalFFmpegHLSSegmentCountMatchesMuxer(t *testing.T) {
 			if !ok {
 				t.Fatalf("source duration %q did not parse", meta.Format.Duration)
 			}
-			video := probeExternalVideoStream(t, prober, sourcePath)
+			video := probeExternalStream(t, prober, sourcePath, "video")
 			frameRate := helpers.ParseFrameRate(video.FrameRate)
 
 			outDir := filepath.Join(workspace, fmt.Sprintf("count HLS %d", index))
@@ -291,17 +261,10 @@ func TestExternalFFmpegHLSSegmentCountMatchesMuxer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("mkdir output: %v", err)
 			}
-			params := HLSParams{
-				SourcePath:       sourcePath,
-				OutDir:           outDir,
-				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-				CopyAudio:        true,
-				SourceFrameRate:  frameRate,
-				Capabilities:     Capabilities{Probed: true},
-			}
+			params := basicHLSParams(outDir)
+			params.SourcePath = sourcePath
+			params.CopyAudio = true
+			params.SourceFrameRate = frameRate
 			runExternalHLSAndWait(t, f, params)
 			segments := assertCompleteSequentialHLSOutput(t, outDir)
 
@@ -324,36 +287,54 @@ func isInterlacedFieldOrder(fieldOrder string) bool {
 	return false
 }
 
-func probeExternalVideoStream(t *testing.T, prober ffprobe.FfprobeInterface, path string) ffprobe.Stream {
+// probeExternalStream returns the first stream of codecType ("video" or
+// "audio") that the real ffprobe reports for path.
+func probeExternalStream(t *testing.T, prober ffprobe.FfprobeInterface, path string, codecType string) ffprobe.Stream {
 	t.Helper()
 	meta, err := prober.GetMetadata(context.Background(), path)
 	if err != nil {
 		t.Fatalf("probe %s: %v", path, err)
 	}
 	for _, stream := range meta.Streams {
-		if stream.CodecType == "video" {
+		if stream.CodecType == codecType {
 			return stream
 		}
 	}
-	t.Fatalf("no video stream in %s", path)
+	t.Fatalf("no %s stream in %s", codecType, path)
 	return ffprobe.Stream{}
+}
+
+// lavfiSampleArgs builds the FFmpeg command line for a short libx264 sample
+// synthesized from a lavfi video and audio source; extra options land between
+// the video encoder and the destination.
+func lavfiSampleArgs(destination string, videoSource string, audioSource string, extra ...string) []string {
+	args := []string{
+		"-y", "-v", "error",
+		"-f", "lavfi", "-i", videoSource,
+		"-f", "lavfi", "-i", audioSource,
+		"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+	}
+	args = append(args, extra...)
+	return append(args, destination)
+}
+
+func generateLavfiSample(t *testing.T, binary string, destination string, videoSource string, audioSource string, extra ...string) {
+	t.Helper()
+	runExternalFFmpegCommand(t, binary, lavfiSampleArgs(destination, videoSource, audioSource, extra...)...)
+	assertNonemptyFile(t, destination)
 }
 
 func generateInterlacedH264AACSource(t *testing.T, binary string, destination string) {
 	t.Helper()
 	// tinterlace weaves frame pairs (50fps in, 25fps interlaced out) and the
 	// +ildct+ilme flags make x264 mark the stream interlaced in the container.
-	args := []string{
-		"-y", "-v", "error",
-		"-f", "lavfi", "-i", "testsrc2=size=320x360:rate=50:duration=5.2",
-		"-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration=5.2",
+	generateLavfiSample(t, binary, destination,
+		"testsrc2=size=320x360:rate=50:duration=5.2",
+		"sine=frequency=1000:sample_rate=48000:duration=5.2",
 		"-vf", "tinterlace=mode=interleave_top,setfield=tff",
-		"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
 		"-flags", "+ildct+ilme",
 		"-c:a", "aac", "-shortest",
-		destination,
-	}
-	runExternalFFmpegCommand(t, binary, args...)
+	)
 }
 
 func runExternalFFmpegCommand(t *testing.T, binary string, args ...string) {
@@ -369,37 +350,21 @@ func runExternalFFmpegCommand(t *testing.T, binary string, args ...string) {
 
 func generateTinyH264AACSource(t *testing.T, binary string, destination string) {
 	t.Helper()
-	args := []string{
-		"-y", "-v", "error",
-		"-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=5.2",
-		"-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration=5.2",
-		"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+	generateLavfiSample(t, binary, destination,
+		"testsrc2=size=320x180:rate=24:duration=5.2",
+		"sine=frequency=1000:sample_rate=48000:duration=5.2",
 		"-g", "24", "-keyint_min", "24", "-sc_threshold", "0",
 		"-c:a", "aac", "-shortest", "-movflags", "+faststart",
-		destination,
-	}
-	runExternalFFmpegCommand(t, binary, args...)
-
-	info, err := os.Stat(destination)
-	if err != nil {
-		t.Fatalf("stat generated source: %v", err)
-	}
-	if info.Size() == 0 {
-		t.Fatal("generated source is empty")
-	}
+	)
 }
 
+// runExternalHLSAndWait runs the real FFmpeg to completion and fails with
+// its stderr tail on a nonzero exit.
 func runExternalHLSAndWait(t *testing.T, f *ffmpeg, params HLSParams) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
 	defer cancel()
-	results := make(chan hlsExitResult, 1)
-	_, err := f.RunHLS(ctx, params, func(exitErr error, stderrTail []string) {
-		results <- hlsExitResult{exitErr: exitErr, stderrTail: stderrTail}
-	})
-	if err != nil {
-		t.Fatalf("RunHLS: %v", err)
-	}
+	results, _ := startHLS(t, ctx, f, params)
 
 	select {
 	case result := <-results:
@@ -509,16 +474,14 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 			return path
 		}
 		path := filepath.Join(workspace, name+".mkv")
-		args := []string{
-			"-y", "-v", "error",
-			"-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=5.2",
-			"-f", "lavfi", "-i", "anullsrc=channel_layout=" + layout + ":sample_rate=48000",
-			"-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-			"-g", "24", "-keyint_min", "24", "-sc_threshold", "0",
-			"-c:a", audioCodec,
-		}
-		args = append(args, extraAudioArgs...)
-		args = append(args, "-shortest", path)
+		extra := []string{"-g", "24", "-keyint_min", "24", "-sc_threshold", "0", "-c:a", audioCodec}
+		extra = append(extra, extraAudioArgs...)
+		extra = append(extra, "-shortest")
+		args := lavfiSampleArgs(path,
+			"testsrc2=size=320x180:rate=24:duration=5.2",
+			"anullsrc=channel_layout="+layout+":sample_rate=48000",
+			extra...,
+		)
 		ctx, cancel := context.WithTimeout(context.Background(), externalFFmpegIntegrationTimeout)
 		defer cancel()
 		output, genErr := exec.CommandContext(ctx, candidate.path, args...).CombinedOutput()
@@ -528,15 +491,6 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 		}
 		sources[name] = path
 		return path
-	}
-
-	explicit := func(codec helpers.HLSAudioCodec, maxChannels, sourceChannels int, layout string) *helpers.HLSResolvedAudioProfile {
-		profile := helpers.ResolveHLSAudioProfile(
-			helpers.HLSAudioProfileRequest{Codec: codec, MaxChannels: maxChannels},
-			sourceChannels,
-			layout,
-		)
-		return &profile
 	}
 
 	tests := []struct {
@@ -554,14 +508,14 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 			name:       "DTS 5.1 to eac3 5.1",
 			sourceName: "dts51", sourceCodec: "dca", sourceLayout: "5.1(side)",
 			sourceArgs:   []string{"-strict", "experimental"},
-			audioProfile: explicit(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1(side)"),
 			wantCodec:    "eac3", wantChannels: 6,
 		},
 		{
 			name:       "DTS 5.1 to ac3 5.1",
 			sourceName: "dts51", sourceCodec: "dca", sourceLayout: "5.1(side)",
 			sourceArgs:   []string{"-strict", "experimental"},
-			audioProfile: explicit(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1(side)"),
 			wantCodec:    "ac3", wantChannels: 6,
 		},
 		{
@@ -581,31 +535,31 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 		{
 			name:       "AAC 5.1 to ac3 5.1",
 			sourceName: "aac51", sourceCodec: "aac", sourceLayout: "5.1",
-			audioProfile: explicit(helpers.HLSAudioCodecAC3, 6, 6, "5.1"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 6, "5.1"),
 			wantCodec:    "ac3", wantChannels: 6,
 		},
 		{
 			name:       "AAC 5.1 to eac3 5.1",
 			sourceName: "aac51", sourceCodec: "aac", sourceLayout: "5.1",
-			audioProfile: explicit(helpers.HLSAudioCodecEAC3, 6, 6, "5.1"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 6, "5.1"),
 			wantCodec:    "eac3", wantChannels: 6,
 		},
 		{
 			name:       "AAC stereo to eac3 is not upmixed",
 			sourceName: "aacstereo", sourceCodec: "aac", sourceLayout: "stereo",
-			audioProfile: explicit(helpers.HLSAudioCodecEAC3, 6, 2, "stereo"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 2, "stereo"),
 			wantCodec:    "eac3", wantChannels: 2,
 		},
 		{
 			name:       "mono to ac3 is not upmixed",
 			sourceName: "aacmono", sourceCodec: "aac", sourceLayout: "mono",
-			audioProfile: explicit(helpers.HLSAudioCodecAC3, 6, 1, "mono"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecAC3, 6, 1, "mono"),
 			wantCodec:    "ac3", wantChannels: 1,
 		},
 		{
 			name:       "7.1 to eac3 downmixes to 5.1",
 			sourceName: "aac71", sourceCodec: "aac", sourceLayout: "7.1",
-			audioProfile: explicit(helpers.HLSAudioCodecEAC3, 6, 8, "7.1"),
+			audioProfile: resolveTestAudioProfile(helpers.HLSAudioCodecEAC3, 6, 8, "7.1"),
 			wantCodec:    "eac3", wantChannels: 6,
 		},
 	}
@@ -619,22 +573,16 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("mkdir output: %v", err)
 			}
-			params := HLSParams{
-				SourcePath:       sourcePath,
-				OutDir:           outDir,
-				Profile:          helpers.HLS_PROFILE_REMUX,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-				CopyVideo:        true,
-				CopyAudio:        tt.copyAudio,
-				AudioProfile:     tt.audioProfile,
-				Capabilities:     Capabilities{Probed: true},
-			}
+			params := basicHLSParams(outDir)
+			params.SourcePath = sourcePath
+			params.Profile = helpers.HLS_PROFILE_REMUX
+			params.CopyVideo = true
+			params.CopyAudio = tt.copyAudio
+			params.AudioProfile = tt.audioProfile
 			runExternalHLSAndWait(t, f, params)
 			assertCompleteSequentialHLSOutput(t, outDir)
 
-			audio := probeExternalAudioStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME))
+			audio := probeExternalStream(t, prober, filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), "audio")
 			if audio.CodecName != tt.wantCodec {
 				t.Fatalf("output audio codec = %q, want %q", audio.CodecName, tt.wantCodec)
 			}
@@ -643,19 +591,4 @@ func TestExternalFFmpegExplicitAudioProfiles(t *testing.T) {
 			}
 		})
 	}
-}
-
-func probeExternalAudioStream(t *testing.T, prober ffprobe.FfprobeInterface, path string) ffprobe.Stream {
-	t.Helper()
-	meta, err := prober.GetMetadata(context.Background(), path)
-	if err != nil {
-		t.Fatalf("probe %s: %v", path, err)
-	}
-	for _, stream := range meta.Streams {
-		if stream.CodecType == "audio" {
-			return stream
-		}
-	}
-	t.Fatalf("no audio stream in %s", path)
-	return ffprobe.Stream{}
 }

@@ -16,6 +16,7 @@ func TestIsBitmapSubtitleCodec(t *testing.T) {
 		{name: "PGS", codec: "hdmv_pgs_subtitle", want: true},
 		{name: "DVD", codec: "dvd_subtitle", want: true},
 		{name: "DVB case insensitive", codec: "DVB_SUBTITLE", want: true},
+		{name: "surrounding whitespace", codec: " dvd_subtitle ", want: true},
 		{name: "text subtitle", codec: "subrip", want: false},
 	}
 
@@ -31,41 +32,20 @@ func TestIsBitmapSubtitleCodec(t *testing.T) {
 	}
 }
 
-func TestIsBitmapSubtitleCodecIgnoresSurroundingWhitespace(t *testing.T) {
-	t.Parallel()
-
-	if !IsBitmapSubtitleCodec(" dvd_subtitle ") {
-		t.Error("IsBitmapSubtitleCodec(\" dvd_subtitle \") = false, want true")
-	}
-}
-
-func TestSubtitleCacheKey(t *testing.T) {
+// The key format is pinned as a literal: kind separates the movie and episode
+// file id spaces, and the trailing stream index must be present, or every
+// track of one file would share a cache entry.
+func TestSubtitleCacheKeyAndPrefix(t *testing.T) {
 	t.Parallel()
 
 	key := SubtitleCacheKey("movie", 12, 3)
+	if key != "sub:movie:12:3" {
+		t.Fatalf("SubtitleCacheKey(movie, 12, 3) = %q, want %q", key, "sub:movie:12:3")
+	}
+
 	prefix := SubtitleCachePrefix("movie", 12)
-
-	if !strings.HasPrefix(key, prefix) {
-		t.Fatalf("SubtitleCacheKey(...) = %q, want it to start with %q", key, prefix)
-	}
-	if key == prefix {
-		t.Fatal("SubtitleCacheKey(...) did not append the stream index to the prefix")
-	}
-}
-
-// kind separates the movie and show file id spaces, so the same file id and
-// stream index in each must never produce the same cache entry.
-func TestSubtitleCacheKeySeparatesMediaKinds(t *testing.T) {
-	t.Parallel()
-
-	movieKey := SubtitleCacheKey("movie", 12, 3)
-	showKey := SubtitleCacheKey("show", 12, 3)
-	if movieKey == showKey {
-		t.Fatalf("movie and show cache keys collide: %q", movieKey)
-	}
-
-	if strings.HasPrefix(showKey, SubtitleCachePrefix("movie", 12)) {
-		t.Errorf("show key %q matches the movie prefix", showKey)
+	if prefix != "sub:movie:12:" {
+		t.Fatalf("SubtitleCachePrefix(movie, 12) = %q, want %q", prefix, "sub:movie:12:")
 	}
 }
 

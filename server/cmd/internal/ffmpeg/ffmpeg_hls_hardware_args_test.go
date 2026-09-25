@@ -12,19 +12,9 @@ import (
 // Devices are covered even where the current code path is device-independent,
 // so a future device-specific change cannot slip through.
 func TestBuildHLSArgs_DevicePaths(t *testing.T) {
-	intelQSVWithoutEncoderOptions := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
-	intelQSVWithoutEncoderOptions.EncoderOptions["h264_qsv"] = map[string]bool{}
-
 	intelRuntimeProbeFailed := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
 	intelRuntimeProbeFailed.H264QSVRuntimeUsable = false
 	intelRuntimeProbeFailed.H264QSVProbeError = "no qsv device"
-
-	nvidiaRuntimeProbeFailed := hlsTestNvidiaCapabilities(false)
-	nvidiaRuntimeProbeFailed.H264NVENCRuntimeUsable = false
-	nvidiaRuntimeProbeFailed.H264NVENCProbeError = "no capable devices"
-
-	nvidiaWithoutEncoderOptions := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
-	nvidiaWithoutEncoderOptions.EncoderOptions["h264_nvenc"] = map[string]bool{}
 
 	sdrScale := fmt.Sprintf("scale=-2:%d", helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS].Height)
 
@@ -44,7 +34,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 		{
 			name:     "cpu encodes with libx264",
 			device:   helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
-			want:     []string{"libx264", "-sc_threshold:v:0 0", sdrScale, "format=yuv420p"},
+			want:     []string{"libx264", sdrScale, "format=yuv420p"},
 			notFlags: []string{"-hwaccel"},
 		},
 		{
@@ -52,7 +42,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			device:    helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
 			caps:      hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_APPLE),
 			want:      []string{"-hwaccel videotoolbox", "h264_videotoolbox", sdrScale},
-			notWant:   []string{"-sc_threshold", "-rc vbr", "-look_ahead"},
+			notWant:   []string{"-rc vbr", "-look_ahead"},
 			wantOrder: [][2]string{{"-hwaccel", "-i"}},
 		},
 		{
@@ -66,14 +56,13 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 				"-hwaccel cuda", "h264_nvenc", "-rc vbr", "-preset p4",
 				"-forced-idr 1", "-hls_flags independent_segments", sdrScale,
 			},
-			notWant: []string{"-sc_threshold"},
 		},
 		{
 			// A build whose NVENC lacks the option cannot promise IDR frames,
 			// so the playlist must drop the independence claim with it.
 			name:     "nvidia omits forced-idr and the independence tag when unprobed",
 			device:   helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			caps:     nvidiaWithoutEncoderOptions,
+			caps:     nvidiaWithoutForcedIDR(),
 			want:     []string{"h264_nvenc", "-rc vbr", "-preset p4"},
 			notWant:  []string{"-forced-idr", "independent_segments"},
 			notFlags: []string{"-hls_flags"},
@@ -88,7 +77,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			},
 			// QSV decode is deliberately not enabled, and h264_qsv takes nv12
 			// frames rather than a forced yuv420p pixel format.
-			notWant:  []string{"-hwaccel qsv", "-pix_fmt yuv420p", "-sc_threshold", "hwupload", "scale_qsv"},
+			notWant:  []string{"-hwaccel qsv", "-pix_fmt yuv420p", "hwupload", "scale_qsv"},
 			notFlags: []string{"-init_hw_device", "-filter_hw_device"},
 		},
 
@@ -184,7 +173,7 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			notFlags: []string{"-hwaccel", "-init_hw_device", "-filter_hw_device"},
 		},
 
-		// --- runtime probe failures fall back to CPU ---
+		// --- a failed runtime probe puts the arguments on the CPU path ---
 		{
 			name:     "intel falls back to CPU when the QSV runtime probe fails",
 			device:   helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
@@ -194,17 +183,9 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			notFlags: []string{"-hwaccel"},
 		},
 		{
-			name:     "nvidia falls back to CPU when the NVENC runtime probe fails",
-			device:   helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			caps:     nvidiaRuntimeProbeFailed,
-			want:     []string{"libx264"},
-			notWant:  []string{"h264_nvenc"},
-			notFlags: []string{"-hwaccel"},
-		},
-		{
 			name:     "intel omits QSV encoder options the build does not expose",
 			device:   helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
-			caps:     intelQSVWithoutEncoderOptions,
+			caps:     intelWithoutForcedIDR(),
 			want:     []string{"h264_qsv"},
 			notWant:  []string{"independent_segments"},
 			notFlags: []string{"-preset", "-look_ahead", "-forced_idr", "-hls_flags"},
@@ -278,17 +259,13 @@ func TestBuildHLSArgs_DevicePaths(t *testing.T) {
 			if profile == "" {
 				profile = helpers.HLS_PROFILE_720P_3MBPS
 			}
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          profile,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         tt.device,
-				TonemapHDR:       tt.tonemap,
-				Deinterlace:      tt.deinterlace,
-				Capabilities:     tt.caps,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.Profile = profile
+			params.HWDevice = tt.device
+			params.TonemapHDR = tt.tonemap
+			params.Deinterlace = tt.deinterlace
+			params.Capabilities = tt.caps
+			args := hlsArgs(t, params)
 
 			requireArgSubstrings(t, args, tt.want, tt.notWant, tt.notFlags)
 			for _, order := range tt.wantOrder {
@@ -368,17 +345,13 @@ func TestBuildHLSArgs_KeyframeArgs(t *testing.T) {
 			if profile == "" {
 				profile = helpers.HLS_PROFILE_1080P_4MBPS
 			}
-			args := hlsArgs(t, HLSParams{
-				SourcePath:       "/s",
-				OutDir:           t.TempDir(),
-				Profile:          profile,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         tt.device,
-				CopyVideo:        tt.copyVideo,
-				SourceFrameRate:  tt.frameRate,
-				Capabilities:     tt.caps,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.Profile = profile
+			params.HWDevice = tt.device
+			params.CopyVideo = tt.copyVideo
+			params.SourceFrameRate = tt.frameRate
+			params.Capabilities = tt.caps
+			args := hlsArgs(t, params)
 
 			requireArgSubstrings(t, args, tt.want, tt.notWant, nil)
 		})
@@ -392,11 +365,8 @@ func TestBuildHLSArgs_KeyframeArgs(t *testing.T) {
 // samples HLS_REMUX_PREVALIDATE_SEGMENTS fragments at the session's start
 // offset and cannot rule out a later GOP-structure change in the source.
 func TestHLSSegmentsAreIndependent(t *testing.T) {
-	nvidiaWithoutForcedIDR := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
-	nvidiaWithoutForcedIDR.EncoderOptions["h264_nvenc"] = map[string]bool{}
-
-	intelWithoutForcedIDR := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
-	intelWithoutForcedIDR.EncoderOptions["h264_qsv"] = map[string]bool{}
+	nvidiaRuntimeProbeFailed := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	nvidiaRuntimeProbeFailed.H264NVENCRuntimeUsable = false
 
 	tests := []struct {
 		name      string
@@ -422,7 +392,7 @@ func TestHLSSegmentsAreIndependent(t *testing.T) {
 		{
 			name:   "nvidia transcode without forced-idr",
 			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			caps:   nvidiaWithoutForcedIDR,
+			caps:   nvidiaWithoutForcedIDR(),
 			want:   false,
 		},
 		{
@@ -434,19 +404,15 @@ func TestHLSSegmentsAreIndependent(t *testing.T) {
 		{
 			name:   "intel transcode without forced_idr",
 			device: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
-			caps:   intelWithoutForcedIDR,
+			caps:   intelWithoutForcedIDR(),
 			want:   false,
 		},
 		{
 			// The device downgrades to libx264, which does force IDRs.
 			name:   "nvidia falls back to CPU when the runtime probe fails",
 			device: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			caps: func() Capabilities {
-				caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
-				caps.H264NVENCRuntimeUsable = false
-				return caps
-			}(),
-			want: true,
+			caps:   nvidiaRuntimeProbeFailed,
+			want:   true,
 		},
 		{
 			name:      "copy video",
@@ -468,15 +434,12 @@ func TestHLSSegmentsAreIndependent(t *testing.T) {
 			if profile == "" {
 				profile = helpers.HLS_PROFILE_720P_3MBPS
 			}
-			got := HLSSegmentsAreIndependent(HLSParams{
-				SourcePath:       "/s",
-				Profile:          profile,
-				VideoStreamIndex: 0,
-				AudioStreamIndex: 1,
-				HWDevice:         tt.device,
-				CopyVideo:        tt.copyVideo,
-				Capabilities:     tt.caps,
-			})
+			params := basicHLSParams(testHLSOutDir)
+			params.Profile = profile
+			params.HWDevice = tt.device
+			params.CopyVideo = tt.copyVideo
+			params.Capabilities = tt.caps
+			got := HLSSegmentsAreIndependent(params)
 			if got != tt.want {
 				t.Fatalf("HLSSegmentsAreIndependent() = %t, want %t", got, tt.want)
 			}

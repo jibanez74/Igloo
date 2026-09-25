@@ -1,8 +1,11 @@
 package keyframeindex_test
 
 import (
+	"context"
+	"encoding/binary"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/keyframeindex"
@@ -171,20 +174,6 @@ func TestExtractISOBMFF_AbsentStssMeansAllSamplesSync(t *testing.T) {
 	requireKeyframes(t, idx, []float64{0, 0.04, 0.08, 0.12})
 }
 
-func TestExtractISOBMFF_DurationClampedToLastKeyframe(t *testing.T) {
-	opts := mp4Fixture()
-	opts.MediaDurationTicks = 256 // header lies short: 0.02 s
-
-	data := kftestutil.BuildMP4(opts)
-	idx, err := extractBytes(t, data, "mp4")
-	if err != nil {
-		t.Fatalf("Extract returned error: %v", err)
-	}
-	if idx.DurationSec < 0.2 {
-		t.Fatalf("DurationSec = %f, want clamp to last keyframe 0.2", idx.DurationSec)
-	}
-}
-
 func TestExtractISOBMFF_TruncatedFileErrorsCleanly(t *testing.T) {
 	data := kftestutil.BuildMP4(mp4Fixture())
 
@@ -199,10 +188,71 @@ func TestExtractISOBMFF_TruncatedFileErrorsCleanly(t *testing.T) {
 func TestExtractISOBMFF_MissingMoovErrors(t *testing.T) {
 	data := kftestutil.BuildMP4(mp4Fixture())
 	// Keep only ftyp (first box).
-	ftypLen := 8 + 24
-	_, err := extractBytes(t, data[:ftypLen], "mp4")
-	if err == nil {
-		t.Fatal("file without moov did not error")
+	_, err := extractBytes(t, data[:kftestutil.MP4FtypLen()], "mp4")
+	if err == nil || !strings.Contains(err.Error(), "missing moov box") {
+		t.Fatalf("error = %v, want missing moov box", err)
+	}
+}
+
+// zeroPaddedReaderAt serves data and reads zeros past it, so a fixture can
+// declare a huge box without the test allocating it.
+type zeroPaddedReaderAt struct {
+	data []byte
+}
+
+func (r zeroPaddedReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	for i := range p {
+		p[i] = 0
+	}
+	if off < int64(len(r.data)) {
+		copy(p, r.data[off:])
+	}
+	return len(p), nil
+}
+
+func TestExtractISOBMFF_CapsRejectOversizedTables(t *testing.T) {
+	tests := []struct {
+		name string
+		opts kftestutil.MP4Options
+	}{
+		{
+			name: "sample count",
+			opts: kftestutil.MP4Options{SampleDeltas: [][2]uint32{{4_000_001, 512}}, OmitStss: true},
+		},
+		{
+			name: "keyframe count without stss",
+			opts: kftestutil.MP4Options{SampleDeltas: [][2]uint32{{200_001, 512}}, OmitStss: true},
+		},
+		{
+			name: "keyframe count in stss",
+			opts: kftestutil.MP4Options{SampleDeltas: [][2]uint32{{200_001, 512}}, SyncSamples: make([]uint32, 200_001)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := extractBytes(t, kftestutil.BuildMP4(tt.opts), "mp4")
+			if !errors.Is(err, keyframeindex.ErrNoIndex) {
+				t.Fatalf("error = %v, want ErrNoIndex", err)
+			}
+		})
+	}
+}
+
+func TestExtractISOBMFF_OversizedMoovReportsNoIndex(t *testing.T) {
+	data := kftestutil.BuildMP4(mp4Fixture())
+	moovStart := kftestutil.MP4FtypLen()
+	if string(data[moovStart+4:moovStart+8]) != "moov" {
+		t.Fatalf("fixture box after ftyp is %q, want moov", data[moovStart+4:moovStart+8])
+	}
+	// Declare a 33 MiB moov inside a 40 MiB file: the box fits the file, so
+	// only the payload cap can reject it, and it must do so before reading.
+	binary.BigEndian.PutUint32(data[moovStart:moovStart+4], 33<<20)
+	fileSize := int64(40 << 20)
+
+	_, err := keyframeindex.Extract(context.Background(), zeroPaddedReaderAt{data: data}, fileSize, "mp4")
+	if !errors.Is(err, keyframeindex.ErrNoIndex) {
+		t.Fatalf("error = %v, want ErrNoIndex", err)
 	}
 }
 

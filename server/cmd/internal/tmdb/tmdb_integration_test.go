@@ -4,6 +4,7 @@ package tmdb
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,20 +13,23 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+// loadIntegrationEnv reads TMDB_API_KEY from the environment, seeded from the
+// repo root .env when one exists. A missing key fails rather than skips: the
+// live suite is opt-in through make test-tmdb-integration, and a silent skip
+// would report a green run that tested nothing.
 func loadIntegrationEnv(t *testing.T) string {
 	t.Helper()
 
 	_, currentFile, _, _ := runtime.Caller(0)
-	serverDir := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
-	envPath := filepath.Join(serverDir, ".env")
-	err := helpers.LoadEnvFile(envPath)
-	if err != nil {
-		_ = helpers.LoadEnvFile(helpers.ENV_FILE)
+	repoRoot := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
+	err := helpers.LoadEnvFile(filepath.Join(repoRoot, ".env"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("load repo .env: %v", err)
 	}
 
 	apiKey := os.Getenv("TMDB_API_KEY")
 	if apiKey == "" {
-		t.Skip("TMDB_API_KEY not set")
+		t.Fatal("TMDB_API_KEY is not set")
 	}
 
 	return apiKey
@@ -149,7 +153,7 @@ func TestSearchMoviesByTitleAndYearIntegration(t *testing.T) {
 	})
 
 	t.Run("returns broad results when no movies match year exactly", func(t *testing.T) {
-		movies, err := client.SearchMoviesByTitleAndYear(context.Background(), "The Matrix", 1850)
+		movies, err := client.SearchMoviesByTitleAndYear(context.Background(), "The Matrix", yearWithNoReleases)
 		if err != nil {
 			t.Fatalf("Expected broad results, got error: %v", err)
 		}

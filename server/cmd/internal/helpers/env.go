@@ -161,10 +161,6 @@ func parseDoubleQuotedEnvValue(value string) (string, error) {
 		}
 	}
 
-	if escaped {
-		builder.WriteByte('\\')
-	}
-
 	return "", fmt.Errorf("unterminated double-quoted env value")
 }
 

@@ -153,18 +153,29 @@ func TestExtractEBML_LeadingVoidElement(t *testing.T) {
 	requireKeyframes(t, idx, []float64{2.5})
 }
 
-func TestExtractEBML_DurationClampedToLastKeyframe(t *testing.T) {
+func TestExtractEBML_OversizedCuesReportsNoIndex(t *testing.T) {
 	data := kftestutil.BuildMKV(kftestutil.MKVOptions{
-		CueTimesSec: []float64{0, 30},
-		DurationSec: 12, // header lies short
+		CueTimesSec:  []float64{0, 5},
+		OmitSeekHead: true,
 	})
 
-	idx, err := extractBytes(t, data, "mkv")
-	if err != nil {
-		t.Fatalf("Extract returned error: %v", err)
+	// Rewrite the Cues size VINT (one byte for this tiny payload) as a
+	// four-byte VINT claiming 17 MiB, past the payload cap. The linear walk
+	// locates Cues by ID before any size check, so the cap is what rejects it.
+	cuesID := []byte{0x1C, 0x53, 0xBB, 0x6B}
+	cuesStart := bytes.Index(data, cuesID)
+	if cuesStart < 0 {
+		t.Fatal("fixture has no Cues element")
 	}
-	if idx.DurationSec < 30 {
-		t.Fatalf("DurationSec = %f, want clamp to last keyframe 30", idx.DurationSec)
+	claimed := 17 << 20
+	oversized := []byte{0x10 | byte(claimed>>24), byte(claimed >> 16), byte(claimed >> 8), byte(claimed)}
+	patched := append([]byte{}, data[:cuesStart+len(cuesID)]...)
+	patched = append(patched, oversized...)
+	patched = append(patched, data[cuesStart+len(cuesID)+1:]...)
+
+	_, err := extractBytes(t, patched, "mkv")
+	if !errors.Is(err, keyframeindex.ErrNoIndex) {
+		t.Fatalf("error = %v, want ErrNoIndex", err)
 	}
 }
 

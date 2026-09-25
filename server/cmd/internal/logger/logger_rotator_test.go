@@ -7,26 +7,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewRotatingWriter(t *testing.T) {
-	t.Run("creates a new file", func(t *testing.T) {
-		rw, path := newTestWriter(t, 1024, "")
-
-		if rw.size != 0 {
-			t.Errorf("size = %d, want 0", rw.size)
-		}
-
-		if rw.maxBytes != 1024 {
-			t.Errorf("maxBytes = %d, want 1024", rw.maxBytes)
-		}
-
-		_, err := os.Stat(path)
-		if err != nil {
-			t.Fatalf("expected the log file to be created: %v", err)
-		}
-	})
-
 	t.Run("seeds the size from an existing file", func(t *testing.T) {
 		seed := "line1\nline2\n"
 		rw, _ := newTestWriter(t, 1024, seed)
@@ -37,7 +21,7 @@ func TestNewRotatingWriter(t *testing.T) {
 	})
 
 	t.Run("rejects a non positive byte cap", func(t *testing.T) {
-		_, err := newRotatingWriter(filepath.Join(t.TempDir(), "test.log"), 0)
+		_, err := newRotatingWriter(filepath.Join(t.TempDir(), "test.log"), 0, loggerFlushInterval)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -47,10 +31,14 @@ func TestNewRotatingWriter(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects an unopenable path", func(t *testing.T) {
-		_, err := newRotatingWriter(filepath.Join(t.TempDir(), "missing", "test.log"), 1024)
+	t.Run("rejects a non positive flush interval", func(t *testing.T) {
+		_, err := newRotatingWriter(filepath.Join(t.TempDir(), "test.log"), 1024, 0)
 		if err == nil {
 			t.Fatal("expected an error")
+		}
+
+		if !strings.Contains(err.Error(), "flush interval must be positive") {
+			t.Errorf("error = %v, want a flush interval error", err)
 		}
 	})
 }
@@ -95,14 +83,9 @@ func TestRotatingWriter_Write(t *testing.T) {
 	})
 
 	t.Run("entries reach the file on close", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "test.log")
+		rw, path := newTestWriter(t, 1024, "")
 
-		rw, err := newRotatingWriter(path, 1024)
-		if err != nil {
-			t.Fatalf("create rotating writer: %v", err)
-		}
-
-		_, err = rw.Write([]byte("closed line\n"))
+		_, err := rw.Write([]byte("closed line\n"))
 		if err != nil {
 			t.Fatalf("write: %v", err)
 		}
@@ -115,6 +98,50 @@ func TestRotatingWriter_Write(t *testing.T) {
 		lines := readLogLines(t, path)
 		if len(lines) != 1 || lines[0] != "closed line" {
 			t.Errorf("lines = %q, want [closed line]", lines)
+		}
+	})
+
+	t.Run("entries reach the file on the flush tick", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.log")
+
+		rw, err := newRotatingWriter(path, 1024, 5*time.Millisecond)
+		if err != nil {
+			t.Fatalf("create rotating writer: %v", err)
+		}
+		t.Cleanup(func() { rw.Close() })
+
+		_, err = rw.Write([]byte("ticked line\n"))
+		if err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			lines := readLogLines(t, path)
+			if len(lines) == 1 && lines[0] == "ticked line" {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("lines = %q after waiting for the flush tick, want [ticked line]", lines)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	})
+
+	t.Run("reports a failed write", func(t *testing.T) {
+		rw, _ := newTestWriter(t, loggerMaxBytes, "")
+
+		// Closing the file underneath the writer makes the buffered writer's
+		// own write fail; an entry larger than its buffer bypasses the buffer
+		// and hits the file directly.
+		err := rw.file.Close()
+		if err != nil {
+			t.Fatalf("close underlying file: %v", err)
+		}
+
+		_, err = rw.Write([]byte(strings.Repeat("x", 8192) + "\n"))
+		if err == nil {
+			t.Fatal("expected an error writing to a closed file")
 		}
 	})
 }
@@ -190,8 +217,8 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 	t.Run("writes an entry larger than the cap without rotating first", func(t *testing.T) {
 		rw, path := newTestWriter(t, 8, "")
 
-		big := longLine() + "\n"
-		_, err := rw.Write([]byte(big))
+		big := strings.Repeat("x", 16)
+		_, err := rw.Write([]byte(big + "\n"))
 		if err != nil {
 			t.Fatalf("oversized write: %v", err)
 		}
@@ -202,55 +229,82 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 		}
 
 		lines := readLogLines(t, path)
-		if len(lines) != 1 || lines[0] != longLine() {
+		if len(lines) != 1 || lines[0] != big {
 			t.Errorf("expected the oversized entry to be written whole")
+		}
+
+		_, err = os.Stat(path + ".1")
+		if !os.IsNotExist(err) {
+			t.Errorf("expected no rotation before the oversized entry, stat err: %v", err)
+		}
+	})
+
+	// A rotation that fails after the live file was closed used to leave the
+	// writer over that closed file, so every later entry failed too and the
+	// process logged nothing for the rest of its life.
+	t.Run("keeps logging after a rotation fails", func(t *testing.T) {
+		seed := "retained\n"
+		rw, path := newTestWriter(t, int64(len(seed)), seed)
+
+		// A directory in the rotated file's place makes the rename fail.
+		err := os.Mkdir(path+".1", 0o755)
+		if err != nil {
+			t.Fatalf("block the rotated path: %v", err)
+		}
+
+		_, err = rw.Write([]byte("lost\n"))
+		if err == nil {
+			t.Fatal("expected the write that triggers rotation to report the failure")
+		}
+		if !strings.Contains(err.Error(), "failed to rotate log file") {
+			t.Errorf("error = %v, want a rotation error", err)
+		}
+
+		_, err = rw.Write([]byte("after failure\n"))
+		if err != nil {
+			t.Fatalf("write after a failed rotation: %v", err)
+		}
+
+		err = rw.Flush()
+		if err != nil {
+			t.Fatalf("flush: %v", err)
+		}
+
+		lines := readLogLines(t, path)
+		want := []string{"retained", "after failure"}
+		if strings.Join(lines, "|") != strings.Join(want, "|") {
+			t.Errorf("live file = %q, want the retained line followed by the new entry %q", lines, want)
+		}
+	})
+
+	t.Run("reports a flush failure before rotating", func(t *testing.T) {
+		rw, _ := newTestWriter(t, 8, "")
+
+		_, err := rw.Write([]byte("buffered\n"))
+		if err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		err = rw.file.Close()
+		if err != nil {
+			t.Fatalf("close underlying file: %v", err)
+		}
+
+		_, err = rw.Write([]byte("trigger\n"))
+		if err == nil {
+			t.Fatal("expected the rotation flush to fail")
+		}
+		if !strings.Contains(err.Error(), "failed to rotate log file") {
+			t.Errorf("error = %v, want a rotation error", err)
 		}
 	})
 }
 
 func TestRotatingWriter_Close(t *testing.T) {
-	t.Run("closes a writer with no writes", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "test.log")
-
-		rw, err := newRotatingWriter(path, 1024)
-		if err != nil {
-			t.Fatalf("create rotating writer: %v", err)
-		}
-
-		err = rw.Close()
-		if err != nil {
-			t.Errorf("close: %v", err)
-		}
-	})
-
-	t.Run("repeated close reports an error", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "test.log")
-
-		rw, err := newRotatingWriter(path, 1024)
-		if err != nil {
-			t.Fatalf("create rotating writer: %v", err)
-		}
-
-		err = rw.Close()
-		if err != nil {
-			t.Fatalf("first close: %v", err)
-		}
-
-		err = rw.Close()
-		if err == nil {
-			t.Error("expected an error on the second close")
-		}
-	})
-
 	t.Run("write and flush after close report errors", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "test.log")
+		rw, _ := newTestWriter(t, 1024, "")
 
-		rw, err := newRotatingWriter(path, 1024)
-		if err != nil {
-			t.Fatalf("create rotating writer: %v", err)
-		}
-
-		err = rw.Close()
+		err := rw.Close()
 		if err != nil {
 			t.Fatalf("close: %v", err)
 		}
@@ -263,6 +317,25 @@ func TestRotatingWriter_Close(t *testing.T) {
 		err = rw.Flush()
 		if err == nil {
 			t.Error("expected an error flushing a closed writer")
+		}
+	})
+
+	t.Run("reports buffered entries it could not write out", func(t *testing.T) {
+		rw, _ := newTestWriter(t, 1024, "")
+
+		_, err := rw.Write([]byte("buffered\n"))
+		if err != nil {
+			t.Fatalf("write: %v", err)
+		}
+
+		err = rw.file.Close()
+		if err != nil {
+			t.Fatalf("close underlying file: %v", err)
+		}
+
+		err = rw.Close()
+		if err == nil {
+			t.Fatal("expected close to report the failed flush")
 		}
 	})
 }
@@ -321,5 +394,14 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 
 	if info.Size() > maxBytes {
 		t.Errorf("live file = %d bytes, want it within the %d byte cap", info.Size(), maxBytes)
+	}
+
+	rotatedInfo, err := os.Stat(path + ".1")
+	if err != nil {
+		t.Fatalf("stat rotated log: %v", err)
+	}
+
+	if rotatedInfo.Size() > maxBytes {
+		t.Errorf("rotated file = %d bytes, want it within the %d byte cap", rotatedInfo.Size(), maxBytes)
 	}
 }

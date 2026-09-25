@@ -9,25 +9,26 @@ import (
 )
 
 // newTestWriter creates a rotatingWriter over a temp file, seeding the file
-// first when seed is not empty.
-func newTestWriter(t *testing.T, maxBytes int64, seed string) (*rotatingWriter, string) {
-	t.Helper()
+// first when seed is not empty. The writer is closed at cleanup, so a test
+// that closes it itself is fine: the second close only reports an error.
+func newTestWriter(tb testing.TB, maxBytes int64, seed string) (*rotatingWriter, string) {
+	tb.Helper()
 
-	path := filepath.Join(t.TempDir(), "test.log")
+	path := filepath.Join(tb.TempDir(), "test.log")
 
 	if seed != "" {
 		err := os.WriteFile(path, []byte(seed), 0o644)
 		if err != nil {
-			t.Fatalf("seed log file: %v", err)
+			tb.Fatalf("seed log file: %v", err)
 		}
 	}
 
-	rw, err := newRotatingWriter(path, maxBytes)
+	rw, err := newRotatingWriter(path, maxBytes, loggerFlushInterval)
 	if err != nil {
-		t.Fatalf("create rotating writer: %v", err)
+		tb.Fatalf("create rotating writer: %v", err)
 	}
 
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		rw.Close()
 	})
 
@@ -114,10 +115,4 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 
 	return output
-}
-
-// longLine is larger than bufio's default read buffer, which forces the line
-// readers to stitch one line back together across several reads.
-func longLine() string {
-	return strings.Repeat("x", 70*1024)
 }
