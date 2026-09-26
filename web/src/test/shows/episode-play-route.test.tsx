@@ -364,6 +364,9 @@ describe("episode play route", () => {
     expect(router.state.location.pathname).toBe(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play`,
     );
+    // The focused Cancel button is gone, so focus returns to the player
+    // rather than falling to the document.
+    await waitFor(() => expect(player).toHaveFocus());
   });
 
   it("brings the fullscreen chrome back when the card is cancelled", async () => {
@@ -451,6 +454,9 @@ describe("episode play route", () => {
     );
     expect(
       screen.getByText(/The episode could not be found/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Back to previous page" }),
     ).toBeInTheDocument();
   });
 });

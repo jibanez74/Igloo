@@ -1,163 +1,21 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  SHOW_ID,
+  seasonEpisodes,
+  showDetails,
+} from "../src/test/helpers/show-details";
 import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
-import {
-  apiResponse,
-  fulfillJSON,
-  nullableFloat64,
-  nullableInt64,
-  nullableString,
-} from "./e2e-api";
+import { apiResponse, fulfillJSON } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 
-const showId = 401;
-
-// Specials last, matching GetShowSeasonSummaries. Season 2 is partial on
-// purpose, so the availability chips have something to say.
-const seasons = [
-  {
-    id: 5001,
-    season_number: 1,
-    name: "Season 1",
-    overview: nullableString("The harbor freezes."),
-    air_date: nullableString("2026-03-01"),
-    poster_path: nullableString("/frost-harbor.jpg"),
-    tmdb_episode_count: nullableInt64(2),
-    available_episode_count: 2,
-  },
-  {
-    id: 5002,
-    season_number: 2,
-    name: "Season 2",
-    overview: nullableString("The thaw begins."),
-    air_date: nullableString("2026-09-01"),
-    poster_path: nullableString("/frost-harbor.jpg"),
-    tmdb_episode_count: nullableInt64(8),
-    available_episode_count: 1,
-  },
-  {
-    id: 5000,
-    season_number: 0,
-    name: "Specials",
-    overview: nullableString("Behind the ice."),
-    air_date: nullableString("2026-02-01"),
-    poster_path: nullableString("/frost-harbor.jpg"),
-    tmdb_episode_count: nullableInt64(1),
-    available_episode_count: 1,
-  },
-];
-
-function episode(seasonNumber: number, episodeNumber: number) {
-  return {
-    id: 70000 + seasonNumber * 100 + episodeNumber,
-    episode_number: episodeNumber,
-    name: `Season ${seasonNumber} Episode ${episodeNumber}`,
-    overview: nullableString("Something happens in the harbor."),
-    air_date: nullableString("2026-03-08"),
-    still_path: nullableString("/still.jpg"),
-    tmdb_runtime: nullableInt64(47),
-    vote_average: nullableFloat64(8.1),
-    vote_count: nullableInt64(220),
-    progress_sec: nullableFloat64(null),
-    duration_sec: nullableFloat64(null),
-    watched: false,
-  };
-}
-
-const showDetailsPayload = {
-  show: {
-    id: showId,
-    name: "Frost Harbor",
-    original_name: nullableString("Frost Harbor"),
-    premiere_year: nullableInt64(2026),
-    tmdb_id: nullableInt64(90210),
-    overview: nullableString(
-      "A harbor freezes over and the town changes with it.",
-    ),
-    tagline: nullableString("The ice remembers."),
-    language: nullableString("en"),
-    origin_countries: nullableString("US"),
-    first_air_date: nullableString("2026-03-01"),
-    last_air_date: nullableString("2026-11-20"),
-    status: nullableString("Returning Series"),
-    type: nullableString("Scripted"),
-    poster_path: nullableString("/frost-harbor.jpg"),
-    backdrop_path: nullableString("/frost-harbor-backdrop.jpg"),
-    vote_average: nullableFloat64(8.4),
-    vote_count: nullableInt64(1200),
-    certification: nullableString("TV-14"),
-    tmdb_season_count: nullableInt64(2),
-    tmdb_episode_count: nullableInt64(10),
-  },
-  seasons,
-  cast: [
-    {
-      credit_id: "credit-lead-1",
-      artist_id: 900,
-      character: "Harbor Master",
-      cast_order: 0,
-      episode_count: 10,
-      artist_name: "Ada Frost",
-      artist_profile: nullableString("/ada.jpg"),
-    },
-    {
-      // Same artist, second role: the rows are keyed on credit_id.
-      credit_id: "credit-lead-2",
-      artist_id: 900,
-      character: "The Stranger",
-      cast_order: 1,
-      episode_count: 2,
-      artist_name: "Ada Frost",
-      artist_profile: nullableString("/ada.jpg"),
-    },
-  ],
-  crew: [
-    {
-      credit_id: "crew-1",
-      artist_id: 901,
-      department: "Directing",
-      job: "Director",
-      episode_count: 6,
-      artist_name: "Bo Winter",
-      artist_profile: nullableString(""),
-    },
-  ],
-  creators: [{ id: 900, name: "Ada Frost", profile: nullableString("/ada.jpg") }],
-  genres: [{ id: 1, tag: "Drama" }],
-  networks: [
-    {
-      id: 77,
-      name: "Glacier Network",
-      logo: nullableString("/network.png"),
-      country: nullableString("US"),
-    },
-  ],
-  production_companies: [{ id: 88, name: "Glacier Pictures" }],
-  extra_videos: [
-    {
-      id: 1,
-      title: "Frost Harbor Trailer",
-      key: "frost-harbor-trailer",
-      type: "trailer",
-      site: "youtube",
-    },
-  ],
-};
-
-function seasonEpisodesPayload(seasonNumber: number) {
-  const season = seasons.find(s => s.season_number === seasonNumber);
-  if (!season) return null;
-
-  return {
-    season,
-    episodes: Array.from({ length: season.available_episode_count }, (_, i) =>
-      episode(seasonNumber, i + 1),
-    ),
-  };
-}
+// The page's content, seasons and URL state are unit-tested
+// (src/test/shows/show-details-route.test.tsx and the show component tests);
+// this covers what needs a browser: the layout at real widths and the season
+// tabs under a real keyboard.
 
 async function mockShowDetailsApi(page: Page) {
   const { unexpectedApiRequests } = await mockApi(page, {
@@ -166,8 +24,8 @@ async function mockShowDetailsApi(page: Page) {
         return false;
       }
 
-      if (url.pathname === `/api/shows/details/${showId}`) {
-        await fulfillJSON(route, apiResponse(showDetailsPayload));
+      if (url.pathname === `/api/shows/details/${SHOW_ID}`) {
+        await fulfillJSON(route, apiResponse(showDetails()));
         return true;
       }
 
@@ -177,18 +35,12 @@ async function mockShowDetailsApi(page: Page) {
       if (episodesMatch) {
         // Validate the show id too: a season fixture served for any id would
         // hide an episode URL built against the wrong show.
-        if (Number(episodesMatch[1]) !== showId) {
+        if (Number(episodesMatch[1]) !== SHOW_ID) {
           await fulfillJSON(route, { error: true, message: "show not found" }, 404);
           return true;
         }
 
-        const payload = seasonEpisodesPayload(Number(episodesMatch[2]));
-        if (payload === null) {
-          await fulfillJSON(route, { error: true, message: "season not found" }, 404);
-          return true;
-        }
-
-        await fulfillJSON(route, apiResponse(payload));
+        await fulfillJSON(route, apiResponse(seasonEpisodes(Number(episodesMatch[2]))));
         return true;
       }
 
@@ -199,103 +51,39 @@ async function mockShowDetailsApi(page: Page) {
   return unexpectedApiRequests;
 }
 
-test("show details renders hero, seasons, and credits without console issues", async ({
-  page,
-}) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockShowDetailsApi(page);
+/** Presses Tab until `target` has focus, failing after `maxPresses`. */
+async function tabTo(page: Page, target: Locator, maxPresses = 40) {
+  for (let presses = 0; presses < maxPresses; presses++) {
+    await page.keyboard.press("Tab");
+    if (await target.evaluate(element => element === document.activeElement)) {
+      return;
+    }
+  }
+  throw new Error(`Tab did not reach the target within ${maxPresses} presses`);
+}
 
-  await page.setViewportSize({ width: 1440, height: 1200 });
-  await page.goto(`/tv-shows/${showId}`);
+for (const { label, viewport } of [
+  { label: "desktop", viewport: VIEWPORTS.desktop },
+  { label: "phone", viewport: VIEWPORTS.phone },
+]) {
+  test(`show details holds its layout at ${label} width`, async ({ page }) => {
+    const browserIssues = trackBrowserIssues(page);
+    const unexpectedApiRequests = await mockShowDetailsApi(page);
 
-  await expect(
-    page.getByRole("heading", { level: 1, name: /Frost Harbor/ }),
-  ).toBeVisible();
+    await page.setViewportSize(viewport);
+    await page.goto(`/tv-shows/${SHOW_ID}`);
 
-  // Availability is stated in words, not by color alone.
-  await expect(page.getByText("2 seasons in this library")).toBeVisible();
-  await expect(
-    page.getByText("3 of 10 episodes available in this library"),
-  ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Frost Harbor/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: /Season 1 episodes, 2 in this library/ }),
+    ).toBeVisible();
 
-  // Specials sort last, so season 1 is selected by default.
-  await expect(page.getByRole("tab", { name: "Season 1" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await expect(
-    page.getByRole("list", { name: /Season 1 episodes, 2 in this library/ }),
-  ).toBeVisible();
-
-  // Nothing is watched, so the hero starts the season from its first episode
-  // and every row links to its own player. The hero and the first row share
-  // a target, so each is scoped to its own region.
-  const rows = page.getByRole("tabpanel");
-  await expect(
-    page.locator("header").getByRole("link", { name: "Play S1 E1 Season 1 Episode 1" }),
-  ).toHaveAttribute("href", /^\/tv-shows\/401\/episodes\/70101\/play(\?|$)/);
-  await expect(
-    rows.getByRole("link", { name: "Play S1 E1 Season 1 Episode 1" }),
-  ).toHaveAttribute("href", /^\/tv-shows\/401\/episodes\/70101\/play(\?|$)/);
-  await expect(
-    rows.getByRole("link", { name: "Play S1 E2 Season 1 Episode 2" }),
-  ).toHaveAttribute("href", /^\/tv-shows\/401\/episodes\/70102\/play(\?|$)/);
-
-  await expect(
-    page.getByRole("heading", { name: "About Frost Harbor" }),
-  ).toBeVisible();
-  await expect(page.getByText("Glacier Network")).toBeVisible();
-
-  // Both roles of one artist render; keying on credit_id keeps them distinct.
-  await expect(
-    page.getByRole("article", { name: /Ada Frost as Harbor Master, 10 episodes/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("article", { name: /Ada Frost as The Stranger, 2 episodes/ }),
-  ).toBeVisible();
-
-  await expectPageHasNoHorizontalScroll(page);
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("selecting a season puts it in the URL and loads its episodes", async ({
-  page,
-}) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockShowDetailsApi(page);
-
-  await page.goto(`/tv-shows/${showId}`);
-
-  await expect(
-    page.getByRole("heading", { level: 1, name: /Frost Harbor/ }),
-  ).toBeVisible();
-
-  await page.getByRole("tab", { name: "Specials" }).click();
-
-  await expect(page).toHaveURL(new RegExp(`/tv-shows/${showId}\\?season=0$`));
-  await expect(
-    page.getByRole("list", { name: /Specials episodes, 1 in this library/ }),
-  ).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("the season in the URL is what the page opens on", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockShowDetailsApi(page);
-
-  await page.goto(`/tv-shows/${showId}?season=2`);
-
-  await expect(page.getByRole("tab", { name: "Season 2" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await expect(
-    page.getByRole("list", { name: /Season 2 episodes, 1 in this library/ }),
-  ).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
+    await expectPageHasNoHorizontalScroll(page);
+    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+  });
+}
 
 test("season tabs are reachable and operable from the keyboard", async ({
   page,
@@ -303,47 +91,30 @@ test("season tabs are reachable and operable from the keyboard", async ({
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockShowDetailsApi(page);
 
-  await page.goto(`/tv-shows/${showId}`);
+  await page.goto(`/tv-shows/${SHOW_ID}`);
 
   const season1 = page.getByRole("tab", { name: "Season 1" });
+  const season2 = page.getByRole("tab", { name: "Season 2" });
   await expect(season1).toBeVisible();
 
-  await season1.focus();
-  await expect(season1).toBeFocused();
+  // Only the selected tab is in the Tab order (roving tabindex).
+  await tabTo(page, season1);
 
   // Radix tabs move selection with the arrow keys.
   await page.keyboard.press("ArrowRight");
-  const season2 = page.getByRole("tab", { name: "Season 2" });
   await expect(season2).toBeFocused();
+  await expect(season2).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(new RegExp(`/tv-shows/${SHOW_ID}\\?season=2$`));
 
   // The episode list is the tabpanel the selected tab controls.
   const panel = page.getByRole("tabpanel");
-  await expect(panel).toBeVisible();
+  await expect(
+    panel.getByRole("list", { name: /Season 2 episodes, 1 in this library/ }),
+  ).toBeVisible();
   await expect(season2).toHaveAttribute(
     "aria-controls",
     (await panel.getAttribute("id")) ?? "",
   );
-  await expect(
-    panel.getByRole("list", { name: /Season 2 episodes/ }),
-  ).toBeVisible();
 
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("show details holds its layout at phone width", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockShowDetailsApi(page);
-
-  await page.setViewportSize(VIEWPORTS.phone);
-  await page.goto(`/tv-shows/${showId}`);
-
-  await expect(
-    page.getByRole("heading", { level: 1, name: /Frost Harbor/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("list", { name: /Season 1 episodes/ }),
-  ).toBeVisible();
-
-  await expectPageHasNoHorizontalScroll(page);
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

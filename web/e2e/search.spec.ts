@@ -94,65 +94,36 @@ const allResults = apiResponse<SearchAllResponseType>({
   },
 });
 
-const movieResults = apiResponse<SearchMoviesResponseType>({
-  query: "Casino",
-  results: [movieResult],
-  total: 1,
-  page: 1,
-  per_page: SEARCH_PER_PAGE,
-  total_pages: 1,
-});
-
-const showResults = apiResponse<SearchShowsResponseType>({
-  query: "Casino",
-  results: [showResult],
-  total: 1,
-  page: 1,
-  per_page: SEARCH_PER_PAGE,
-  total_pages: 1,
-});
-
-const albumResults = apiResponse<SearchAlbumsResponseType>({
-  query: "Casino",
-  results: [albumResult],
-  total: 1,
-  page: 1,
-  per_page: SEARCH_PER_PAGE,
-  total_pages: 1,
-});
-
-const musicianResults = apiResponse<SearchMusiciansResponseType>({
-  query: "Casino",
-  results: [musicianResult],
-  total: 1,
-  page: 1,
-  per_page: SEARCH_PER_PAGE,
-  total_pages: 1,
-});
-
-const trackResults = apiResponse<SearchTracksResponseType>({
-  query: "Casino",
-  results: [trackResult],
-  total: 1,
-  page: 1,
-  per_page: SEARCH_PER_PAGE,
-  total_pages: 1,
-});
+/** One page of results, as every per-kind search endpoint returns them. */
+function searchPage<T>(results: T[]) {
+  return {
+    query: "Casino",
+    results,
+    total: results.length,
+    page: 1,
+    per_page: SEARCH_PER_PAGE,
+    total_pages: 1,
+  };
+}
 
 async function mockSearchApi(page: Page) {
   const requestedSearchRequests: string[] = [];
   const resultsByPath: Record<string, unknown> = {
     "/api/search": allResults,
-    "/api/search/movies": movieResults,
-    "/api/search/shows": showResults,
-    "/api/search/albums": albumResults,
-    "/api/search/musicians": musicianResults,
-    "/api/search/tracks": trackResults,
+    "/api/search/movies": apiResponse<SearchMoviesResponseType>(searchPage([movieResult])),
+    "/api/search/shows": apiResponse<SearchShowsResponseType>(searchPage([showResult])),
+    "/api/search/albums": apiResponse<SearchAlbumsResponseType>(searchPage([albumResult])),
+    "/api/search/musicians": apiResponse<SearchMusiciansResponseType>(searchPage([musicianResult])),
+    "/api/search/tracks": apiResponse<SearchTracksResponseType>(searchPage([trackResult])),
   };
 
   const { unexpectedApiRequests } = await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url, method }) => {
+      if (method !== "GET") {
+        return false;
+      }
+
       const results = resultsByPath[url.pathname];
       if (results) {
         requestedSearchRequests.push(`${url.pathname}${url.search}`);
@@ -160,7 +131,7 @@ async function mockSearchApi(page: Page) {
         return true;
       }
 
-      if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
+      if (url.pathname === "/api/music/tracks/liked-ids") {
         await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
         return true;
       }
@@ -224,6 +195,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
 
   await page.getByRole("tab", { name: "Albums" }).click();
   await expect(page).toHaveURL(/tab=albums/);
+  await expect(page.getByRole("tabpanel", { name: "Albums" })).toBeVisible();
   await expect(
     page.getByRole("link", {
       name: "Casino Original Soundtrack by Various Artists",
@@ -232,6 +204,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
 
   await page.getByRole("tab", { name: "Musicians" }).click();
   await expect(page).toHaveURL(/tab=musicians/);
+  await expect(page.getByRole("tabpanel", { name: "Musicians" })).toBeVisible();
   await expect(
     page.getByRole("link", {
       name: "Casino House Band, 2 albums, 18 tracks",
@@ -240,6 +213,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
 
   await page.getByRole("tab", { name: "Tracks" }).click();
   await expect(page).toHaveURL(/tab=tracks/);
+  await expect(page.getByRole("tabpanel", { name: "Tracks" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Track results" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Play Casino Theme" })).toBeVisible();
 

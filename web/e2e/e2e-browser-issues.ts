@@ -15,6 +15,16 @@ function isIgnorableFailedRequest(request: Request) {
     return true;
   }
 
+  // hls.js loads playlists and segments over XHR/fetch and aborts them when
+  // the player is torn down or re-sourced, e.g. a seek that restarts the
+  // session.
+  if (
+    ["fetch", "xhr"].includes(request.resourceType()) &&
+    url.pathname.includes("/hls/")
+  ) {
+    return true;
+  }
+
   // A media fetch is aborted whenever its element is torn down or reloaded,
   // e.g. the episode hand-off unmounting a player whose stream was pending.
   return ["font", "image", "media", "script", "stylesheet"].includes(

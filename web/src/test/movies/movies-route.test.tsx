@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -377,6 +377,18 @@ describe("movies route library refresh", () => {
       error: true,
       message: "Movie stats are unavailable.",
     });
+  });
+});
+
+describe("movies route genres", () => {
+  it("counts the selected genre's movies from the list response", async () => {
+    await renderMoviesRoute("/movies/?tab=genres&genreId=10");
+
+    // The row beside Clear counts the list response (1), not the chip (2).
+    const clearButton = await screen.findByRole("button", { name: "Clear genre filter" });
+    expect(
+      await within(clearButton.parentElement as HTMLElement).findByText("1 movie"),
+    ).toBeInTheDocument();
   });
 });
 

@@ -1,14 +1,70 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { readJSON } from "./e2e-api";
 
-// Shared player helpers. The locator and request helpers serve the mocked
-// player specs as well; the fetch/progress helpers below serve only the
+// Shared player helpers. The locator, URL and request helpers serve the
+// mocked player specs as well; the fetch/progress helpers below serve only the
 // opt-in real-media suites (hls-transcode, direct-play-media), which run
 // against a live instance via E2E_BASE_URL.
 
 /** The player's play toggle, which appears once the chrome is ready. */
 export function playButton(page: Page) {
   return page.getByRole("button", { name: "Play (Space or K)" });
+}
+
+function searchParamsOf(url: string) {
+  const parsed = new URL(url, "http://localhost");
+  return { pathname: parsed.pathname, ...Object.fromEntries(parsed.searchParams) };
+}
+
+/**
+ * Waits until the page URL carries `params`. Routes canonicalize their search
+ * after the first render, so a single read of `page.url()` can race them.
+ */
+export async function expectURLParams(page: Page, params: Record<string, string>) {
+  await expect.poll(() => searchParamsOf(page.url())).toMatchObject(params);
+}
+
+/** Waits until the link points at `pathname` with `params` in its query. */
+export async function expectHref(
+  link: Locator,
+  pathname: string,
+  params: Record<string, string>,
+) {
+  await expect
+    .poll(async () => searchParamsOf((await link.getAttribute("href")) ?? ""))
+    .toMatchObject({ pathname, ...params });
+}
+
+/**
+ * Holds the media's raw stream and HLS requests pending, so the player chrome
+ * reaches its ready state from the metadata queries alone, and returns every
+ * URL asked for. With `streamBody`, the raw stream is answered with that body
+ * instead, e.g. bytes the browser cannot decode.
+ */
+export async function holdMediaRequests(
+  page: Page,
+  media: E2EMedia,
+  { streamBody }: { streamBody?: string } = {},
+) {
+  const mediaRequests: string[] = [];
+  const apiPath = mediaApiPath(media);
+
+  await page.route(`**${apiPath}/stream*`, async route => {
+    mediaRequests.push(route.request().url());
+    if (streamBody !== undefined) {
+      await route.fulfill({
+        status: 200,
+        contentType: "video/mp4",
+        body: Buffer.from(streamBody),
+      });
+    }
+  });
+  // hls.js is happy with a pending manifest.
+  await page.route(`**${apiPath}/hls/**`, route => {
+    mediaRequests.push(route.request().url());
+  });
+
+  return mediaRequests;
 }
 
 /**

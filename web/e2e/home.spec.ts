@@ -4,8 +4,10 @@ import {
   trackBrowserIssues,
 } from "./e2e-browser-issues";
 import {
+  BREAKPOINTS,
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
 } from "./e2e-layout";
 import {
   apiResponse,
@@ -14,13 +16,21 @@ import {
   nullableString,
 } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
-import type { SimpleAlbumType } from "../src/types";
+import type {
+  ContinueWatchingItemType,
+  LatestMovieType,
+  LatestShowType,
+  SimpleAlbumType,
+  TheaterMovieType,
+  WatchRoomType,
+} from "../src/types";
 
-type MockHomeApiOptions = {
-  continueWatching?: unknown[];
-};
+// The home sections' content, motion and empty states are unit-tested
+// (src/test/app/home-route.test.tsx); this covers what needs a browser: the
+// shell's landmarks and skip link, the layout at every breakpoint, and the
+// mobile navigation sheet.
 
-const defaultContinueWatchingItems = [
+const continueWatchingItems: ContinueWatchingItemType[] = [
   {
     kind: "movie",
     id: 104,
@@ -54,10 +64,32 @@ const defaultContinueWatchingItems = [
   },
 ];
 
-async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
-  const continueWatching =
-    options.continueWatching ?? defaultContinueWatchingItems;
+function theaterMovie(
+  id: number,
+  title: string,
+  posterPath: string,
+  voteAverage: number,
+  releaseDate: string,
+): TheaterMovieType {
+  return {
+    id,
+    title,
+    original_title: title,
+    overview: `${title} overview`,
+    release_date: releaseDate,
+    poster_path: posterPath,
+    backdrop_path: "",
+    popularity: 10,
+    vote_average: voteAverage,
+    vote_count: 100,
+    adult: false,
+    original_language: "en",
+    genre_ids: [],
+    video: false,
+  };
+}
 
+async function mockHomeApi(page: Page) {
   const { unexpectedApiRequests } = await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url }) => {
@@ -83,15 +115,17 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
                 { id: 4, name: "Luis Ortiz", avatar: null },
                 { id: 5, name: "Ava Bell", avatar: null },
               ],
+              playback_mode: "direct",
               is_owner: true,
+              created_at: "2026-01-01T00:00:00Z",
             },
-          ],
+          ] satisfies WatchRoomType[],
         }));
         return true;
       }
 
       if (pathname === "/api/continue-watching") {
-        await fulfillJSON(route, apiResponse({ items: continueWatching }));
+        await fulfillJSON(route, apiResponse({ items: continueWatchingItems }));
         return true;
       }
 
@@ -116,7 +150,7 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
               poster_path: nullableString(),
               year: nullableInt64(2024),
             },
-          ],
+          ] satisfies LatestMovieType[],
         }));
         return true;
       }
@@ -142,7 +176,7 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
               poster_path: nullableString(),
               premiere_year: nullableInt64(),
             },
-          ],
+          ] satisfies LatestShowType[],
         }));
         return true;
       }
@@ -179,68 +213,9 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
       if (pathname === "/api/tmdb/movies/in-theaters") {
         await fulfillJSON(route, apiResponse({
           movies: [
-            {
-              id: 301,
-              title: "Northbound",
-              poster_path: "/northbound.jpg",
-              vote_average: 7.6,
-              release_date: "2026-06-01",
-            },
-            {
-              id: 302,
-              title: "Glass Harbor",
-              poster_path: "/glass-harbor.jpg",
-              vote_average: 6.2,
-              release_date: "2026-05-16",
-            },
-            {
-              id: 303,
-              title: "Red Echo",
-              poster_path: "",
-              vote_average: 4.8,
-              release_date: "2026-04-08",
-            },
-          ],
-        }));
-        return true;
-      }
-
-      if (/^\/api\/movies\/details\/\d+$/.test(pathname)) {
-        const movieId = Number(pathname.split("/").pop());
-
-        await fulfillJSON(route, apiResponse({
-          movie: {
-            id: movieId,
-            title: movieId === 101 ? "Signal Fire" : "Prefetched Movie",
-          },
-        }));
-        return true;
-      }
-
-      if (/^\/api\/music\/albums\/details\/\d+$/.test(pathname)) {
-        const albumId = Number(pathname.split("/").pop());
-
-        await fulfillJSON(route, apiResponse({
-          album: {
-            id: albumId,
-            title: albumId === 201 ? "Blue Record" : "Prefetched Album",
-            cover: nullableString("albums/blue-record.jpg"),
-            musician: nullableString("Aurora Pines"),
-          },
-          tracks: [
-            {
-              id: 1,
-              title: "Alabaster",
-              duration: 180,
-              codec: "flac",
-              bit_rate: 900000,
-              file_path: "/music/alabaster.flac",
-              album_id: nullableInt64(albumId),
-              album_title: nullableString("Blue Record"),
-              album_cover: nullableString("albums/blue-record.jpg"),
-              musician_id: nullableInt64(1),
-              musician_name: nullableString("Aurora Pines"),
-            },
+            theaterMovie(301, "Northbound", "/northbound.jpg", 7.6, "2026-06-01"),
+            theaterMovie(302, "Glass Harbor", "/glass-harbor.jpg", 6.2, "2026-05-16"),
+            theaterMovie(303, "Red Echo", "", 4.8, "2026-04-08"),
           ],
         }));
         return true;
@@ -253,24 +228,17 @@ async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
   return unexpectedApiRequests;
 }
 
-test("home page is clean, responsive, and accessible", async ({ page }) => {
+test("home page is clean, responsive, and keyboard reachable", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockHomeApi(page);
 
-  await page.addInitScript(() => {
-    window.localStorage.removeItem("igloo-theme");
-  });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/");
 
   await expect(page).toHaveTitle("Home - Igloo");
   await expect(
     page.getByRole("heading", { name: "Welcome to Igloo" }),
   ).toBeVisible();
-  const dashboardHero = page
-    .getByRole("heading", { name: "Welcome to Igloo" })
-    .locator("xpath=ancestor::section[1]");
-  await expect(dashboardHero).toHaveClass(/animate-in/);
-  await expect(dashboardHero).toHaveClass(/fade-in-0/);
   await expect(page.getByRole("main")).toBeVisible();
   await expect(
     page.getByRole("search", { name: "Search library" }),
@@ -278,10 +246,10 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Notifications" }),
   ).toBeVisible();
-  const themeToggle = page.getByRole("button", {
-    name: "Switch to light theme",
-  });
-  await expect(themeToggle).toBeVisible();
+  // The unit tests mock the top bar, so this is what proves it mounts.
+  await expect(
+    page.getByRole("button", { name: "Switch to light theme" }),
+  ).toBeVisible();
 
   for (const name of [
     "Watch Rooms",
@@ -291,10 +259,7 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
     "Recently Added Albums",
     "Now Playing in Theaters",
   ]) {
-    const region = page.getByRole("region", { name });
-
-    await expect(region).toBeVisible();
-    await expect(region).toHaveClass(/delay-75/);
+    await expect(page.getByRole("region", { name })).toBeVisible();
   }
 
   await page.keyboard.press("Tab");
@@ -303,36 +268,28 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
 
-  await themeToggle.click();
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("igloo-theme")))
-    .toBe("light");
-  await expect(
-    page.getByRole("button", { name: "Switch to dark theme" }),
-  ).toBeVisible();
-
   const main = page.getByRole("main");
-  for (const viewport of [
-    { width: 375, height: 900, label: "mobile" },
-    { width: 768, height: 1024, label: "tablet" },
-    { width: 1280, height: 900, label: "desktop" },
-  ]) {
-    await page.setViewportSize({
-      width: viewport.width,
-      height: viewport.height,
-    });
+  const emberCard = page
+    .getByRole("region", { name: "Continue Watching" })
+    .getByRole("link", { name: "Ember Line 2026, 34% watched" });
+  for (const { label, size } of BREAKPOINTS) {
+    await page.setViewportSize(size);
 
-    await expectPageHasNoHorizontalScroll(page);
-    await expectNoHorizontalOverflow(
-      main,
-      `main content at ${viewport.label} width`,
-    );
     await expect(
       page.getByRole("heading", { name: "Welcome to Igloo" }),
     ).toBeVisible();
+    await expectPageHasNoHorizontalScroll(page);
+    await expectNoHorizontalOverflow(main, `main content at ${label} width`);
+    // Sparse sections must not stretch posters across the content column:
+    // the auto-fill grid keeps cards near the track's minimum width.
+    await expect
+      .poll(async () => (await emberCard.boundingBox())?.width, {
+        message: `continue watching card width at ${label} width`,
+      })
+      .toBeLessThan(300);
   }
 
-  await page.setViewportSize({ width: 375, height: 900 });
+  await page.setViewportSize(VIEWPORTS.phone);
   const sidebarToggle = page.getByRole("button", { name: "Toggle Sidebar" });
   await expect(sidebarToggle).toBeVisible();
   await sidebarToggle.click();
@@ -347,62 +304,6 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await expect(
     page.getByRole("dialog", { name: "Navigation" }),
   ).toBeHidden();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("continue watching section announces progress", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockHomeApi(page);
-
-  await page.goto("/");
-
-  const watchingRegion = page.getByRole("region", {
-    name: "Continue Watching",
-  });
-  await expect(watchingRegion).toBeVisible();
-  const emberCard = watchingRegion.getByRole("link", {
-    name: "Ember Line 2026, 34% watched",
-  });
-  await expect(emberCard).toBeVisible();
-
-  // Sparse sections must not stretch posters across the content column —
-  // the auto-fill grid keeps cards near the track min width.
-  const box = await emberCard.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.width).toBeLessThan(300);
-
-  // Episodes share the row with the movies, ordered by the server.
-  await expect(
-    watchingRegion.getByRole("link", {
-      name: "Frost Harbor, S1 E4 · Thin Ice, 25% watched",
-    }),
-  ).toBeVisible();
-  await expect(
-    watchingRegion.getByRole("link", {
-      name: "Resume Frost Harbor S1 E4 · Thin Ice",
-    }),
-  ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("continue watching section is hidden when nothing is in progress", async ({
-  page,
-}) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockHomeApi(page, {
-    continueWatching: [],
-  });
-
-  await page.goto("/");
-
-  await expect(
-    page.getByRole("region", { name: "Recently Added Movies" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Continue Watching" }),
-  ).toHaveCount(0);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

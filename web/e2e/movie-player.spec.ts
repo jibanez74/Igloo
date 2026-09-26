@@ -1,48 +1,67 @@
-import { expect, test, type Page } from "@playwright/test";
-import { gateRoute } from "./e2e-api";
+import { expect, test, type Page, type Route } from "@playwright/test";
+import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
+import type { MovieTechnicalDetailsResponse } from "../src/types";
+import { gateRoute, nullableString, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { playButton } from "./media-e2e-helpers";
+import { requireMockApi } from "./e2e-env";
+import {
+  expectURLParams,
+  holdMediaRequests,
+  playButton,
+} from "./media-e2e-helpers";
 import { MOCK_MOVIE_ID } from "./fixtures/movies";
 
+// Drives the movie play route against the mock API server. The stream and HLS
+// requests are held pending: the player chrome reaches its ready state from
+// the metadata queries alone, and with the media stuck at HAVE_NOTHING a seek
+// sets the element's default playback start position, which currentTime
+// reads back — enough to prove the chapter-seek flow without real media.
+
+const movie = { kind: "movie", id: MOCK_MOVIE_ID } as const;
 const moviePath = `/movies/${MOCK_MOVIE_ID}`;
 const movieApiPath = `/api/movies/${MOCK_MOVIE_ID}`;
 
-// Drives the movie play route against the mock API server. The stream request
-// is intentionally left pending: the player chrome reaches its ready state
-// from the metadata queries alone, and with the media stuck at HAVE_NOTHING a
-// seek sets the element's default playback start position, which currentTime
-// reads back — enough to prove the chapter-seek flow without real media.
-async function openMoviePlayer(page: Page) {
+requireMockApi();
+
+test.beforeEach(async ({ page }) => {
   await loginPageViaApi(page);
+});
 
-  await page.route("**/api/movies/*/stream*", () => {
-    // Never fulfilled: keeps the player ready without firing a media error.
-  });
-
-  await page.goto(
-    `${moviePath}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
-  );
-
-  await expect(playButton(page)).toBeVisible();
-}
-
-// hls.js is happy with a pending manifest, so the request is recorded and left
-// unanswered.
-async function recordHlsManifestRequests(
+async function openMoviePlayer(
   page: Page,
-  manifestRequests: string[],
+  search: string,
+  options?: Parameters<typeof holdMediaRequests>[2],
 ) {
-  await page.route(`**${movieApiPath}/hls/*/playlist.m3u8*`, route => {
-    manifestRequests.push(route.request().url());
+  const mediaRequests = await holdMediaRequests(page, movie, options);
+  await page.goto(`${moviePath}/play?${search}`);
+  return mediaRequests;
+}
+
+/**
+ * Holds the technical details until `release()`, then answers with the mock
+ * server's body after `mutate` has edited it.
+ */
+function gateTechnicalDetails(
+  page: Page,
+  mutate: (details: MovieTechnicalDetailsResponse) => void,
+) {
+  return gateRoute(page, `**${movieApiPath}/technical-details`, async (route: Route) => {
+    const response = await route.fetch();
+    const body = await readJSON<MovieTechnicalDetailsResponse>(response);
+    mutate(body.data!);
+    await route.fulfill({ response, json: body });
   });
 }
 
-for (const {
-  label,
-  mode,
-  expectedRequestPath,
-} of [
+/** While a gate holds, the player shows its placeholder and asks for no media. */
+async function expectPreparingPlayback(page: Page, mediaRequests: string[]) {
+  await expect(page.getByText("Preparing playback...")).toBeVisible();
+  await expect(page.locator("video")).toHaveCount(0);
+  expect(mediaRequests).toEqual([]);
+}
+
+for (const { label, mode, expectedRequestPath } of [
   {
     label: "direct",
     mode: "direct",
@@ -57,235 +76,170 @@ for (const {
   test(`${label} playback waits for the server catalog when device speed needs it`, async ({
     page,
   }) => {
-    await loginPageViaApi(page);
+    const browserIssues = trackBrowserIssues(page);
 
     // Device language/profile preferences are synchronous. A configured speed
     // with no stored profile is the path that needs the asynchronous catalog.
-    await page.addInitScript(() => {
-      localStorage.setItem("igloo-playback-prefs:1", JSON.stringify({
+    await page.addInitScript(key => {
+      localStorage.setItem(key, JSON.stringify({
         preferredProfile: null,
         downloadMbps: 5,
         preferredAudioLanguage: null,
         preferredSubtitleLanguage: null,
       }));
-    });
+    }, `${PLAYBACK_PREFERENCES_STORAGE_PREFIX}1`);
 
     const playbackSettings = await gateRoute(page, "**/api/settings/playback");
-
-    const mediaRequests: string[] = [];
-    await page.route(`**${movieApiPath}/stream*`, route => {
-      mediaRequests.push(route.request().url());
-    });
-    await recordHlsManifestRequests(page, mediaRequests);
-
-    await page.goto(`${moviePath}/play?mode=${mode}&audio_track=0&start=0`);
+    const mediaRequests = await openMoviePlayer(page, `mode=${mode}&audio_track=0&start=0`);
 
     await expect.poll(playbackSettings.requested).toBe(true);
-    await expect(page.getByText("Preparing playback...")).toBeVisible();
-    await expect(page.locator("video")).toHaveCount(0);
-    expect(mediaRequests).toEqual([]);
+    await expectPreparingPlayback(page, mediaRequests);
 
     playbackSettings.release();
 
     await expect.poll(() => mediaRequests.length).toBe(1);
-    expect(mediaRequests).toHaveLength(1);
-    for (const request of mediaRequests) {
-      expect(request).toContain(expectedRequestPath);
-    }
+    expect(new URL(mediaRequests[0]).pathname).toBe(expectedRequestPath);
+    browserIssues.assertClean();
   });
 }
 
-test("omitted subtitle state synchronizes to the canonical off URL", async ({
-  page,
-}) => {
-  await loginPageViaApi(page);
+for (const { label, search } of [
+  { label: "an omitted subtitle track", search: "mode=direct&audio_track=0&start=0" },
+  { label: "the loader's default-settings redirect", search: "start=0" },
+]) {
+  test(`${label} settles on the canonical subtitle-off URL`, async ({ page }) => {
+    const browserIssues = trackBrowserIssues(page);
 
-  await page.route("**/api/movies/*/stream*", () => {
-    // Keep direct media pending while the route synchronizes its search state.
+    await openMoviePlayer(page, search);
+
+    await expect(playButton(page)).toBeVisible();
+    await expectURLParams(page, {
+      mode: "direct",
+      audio_track: "0",
+      subtitle_track: "off",
+    });
+    browserIssues.assertClean();
   });
-
-  await page.goto(`${moviePath}/play?mode=direct&audio_track=0&start=0`);
-  await expect(playButton(page)).toBeVisible();
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("subtitle_track"))
-    .toBe("off");
-});
-
-test("loader redirect serializes subtitle-off canonically", async ({ page }) => {
-  await loginPageViaApi(page);
-
-  await page.route("**/api/movies/*/stream*", () => {
-    // Keep direct media pending after the loader's default-settings redirect.
-  });
-
-  await page.goto(`${moviePath}/play?start=0`);
-  await expect(playButton(page)).toBeVisible();
-
-  const url = new URL(page.url());
-  expect(url.searchParams.get("mode")).toBe("direct");
-  expect(url.searchParams.get("audio_track")).toBe("0");
-  expect(url.searchParams.get("subtitle_track")).toBe("off");
-});
+}
 
 test("cold non-first audio waits for metadata and never requests the raw stream", async ({
   page,
 }) => {
-  await loginPageViaApi(page);
+  const browserIssues = trackBrowserIssues(page);
 
-  const technicalDetails = await gateRoute(
-    page,
-    `**${movieApiPath}/technical-details`,
-    async route => {
-      const response = await route.fetch();
-      const body = (await response.json()) as {
-        data: {
-          audio_streams: Array<Record<string, unknown>>;
-        };
-      };
-      body.data.audio_streams.push({
-        ...body.data.audio_streams[0],
-        id: 2,
-        stream_index: 2,
-        language: { String: "spa", Valid: true },
-        title: { String: "Spanish", Valid: true },
-      });
-      await route.fulfill({ response, json: body });
-    },
-  );
-
-  const mediaRequests: string[] = [];
-  await page.route(`**${movieApiPath}/stream*`, route => {
-    mediaRequests.push(route.request().url());
+  const technicalDetails = await gateTechnicalDetails(page, details => {
+    details.audio_streams.push({
+      ...details.audio_streams[0],
+      id: 2,
+      stream_index: 2,
+      language: nullableString("spa"),
+      title: nullableString("Spanish"),
+    });
   });
-  await recordHlsManifestRequests(page, mediaRequests);
-
-  await page.goto(
-    `${moviePath}/play?mode=direct&audio_track=1&subtitle_track=off&start=0`,
+  const mediaRequests = await openMoviePlayer(
+    page,
+    "mode=direct&audio_track=1&subtitle_track=off&start=0",
   );
 
   await expect.poll(technicalDetails.requested).toBe(true);
-  await expect(page.getByText("Preparing playback...")).toBeVisible();
-  await expect(page.locator("video")).toHaveCount(0);
-  expect(mediaRequests).toEqual([]);
+  await expectPreparingPlayback(page, mediaRequests);
 
   technicalDetails.release();
 
+  // Direct play can only deliver the first audio track, so the player goes
+  // straight to remux instead of asking for the raw file first.
   await expect.poll(() => mediaRequests.length).toBe(1);
-  expect(mediaRequests).toHaveLength(1);
   const requestUrl = new URL(mediaRequests[0]);
   expect(requestUrl.pathname).toBe(`${movieApiPath}/hls/remux/playlist.m3u8`);
   expect(requestUrl.searchParams.get("audio_track")).toBe("1");
-  expect(mediaRequests.every(url => url === mediaRequests[0])).toBe(true);
-  expect(
-    mediaRequests.some(url => new URL(url).pathname.endsWith("/stream")),
-  ).toBe(false);
+  browserIssues.assertClean();
 });
 
 test("cold direct deep link to an ineligible file never requests the raw stream", async ({
   page,
 }) => {
-  await loginPageViaApi(page);
+  const browserIssues = trackBrowserIssues(page);
 
-  // Serve the movie as MKV with delayed technical details: a bookmarked
-  // ?mode=direct&audio_track=0 link must wait for eligibility instead of
-  // optimistically firing /stream (audit D16, matrix row 18c).
-  const technicalDetails = await gateRoute(
-    page,
-    `**${movieApiPath}/technical-details`,
-    async route => {
-      const response = await route.fetch();
-      const body = (await response.json()) as {
-        data: {
-          movie: Record<string, unknown>;
-        };
-      };
-      body.data.movie.container = "mkv";
-      body.data.movie.mime_type = "video/x-matroska";
-      await route.fulfill({ response, json: body });
-    },
-  );
-
-  const mediaRequests: string[] = [];
-  await page.route(`**${movieApiPath}/stream*`, route => {
-    mediaRequests.push(route.request().url());
+  // A bookmarked ?mode=direct link to an MKV must wait for the technical
+  // details to learn the browser cannot play it, rather than optimistically
+  // asking for the raw file.
+  const technicalDetails = await gateTechnicalDetails(page, details => {
+    details.movie.container = "mkv";
+    details.movie.mime_type = "video/x-matroska";
   });
-  await recordHlsManifestRequests(page, mediaRequests);
-
-  await page.goto(
-    `${moviePath}/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
+  const mediaRequests = await openMoviePlayer(
+    page,
+    "mode=direct&audio_track=0&subtitle_track=off&start=0",
   );
 
   await expect.poll(technicalDetails.requested).toBe(true);
-  await expect(page.getByText("Preparing playback...")).toBeVisible();
-  await expect(page.locator("video")).toHaveCount(0);
-  expect(mediaRequests).toEqual([]);
+  await expectPreparingPlayback(page, mediaRequests);
 
   technicalDetails.release();
 
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("mode"))
-    .toBe("remux");
+  await expectURLParams(page, { mode: "remux" });
   await expect.poll(() => mediaRequests.length).toBe(1);
-  expect(mediaRequests).toHaveLength(1);
   expect(new URL(mediaRequests[0]).pathname).toBe(
     `${movieApiPath}/hls/remux/playlist.m3u8`,
   );
-  expect(mediaRequests.every(url => url === mediaRequests[0])).toBe(true);
-  expect(
-    mediaRequests.some(url => new URL(url).pathname.endsWith("/stream")),
-  ).toBe(false);
   // The pre-emptive mode resolution is silent: it must not read as an
   // error-driven fallback announcement.
   await expect(page.getByText(/can't be played directly/)).toHaveCount(0);
+  browserIssues.assertClean();
+});
+
+test("failed direct play falls back to remux once at the preserved position", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+
+  // The mock movie is direct-play eligible (MP4, H.264 High 4.1, AAC LC —
+  // Chromium's canPlayType approves it), but the bytes are not a video, so the
+  // media element raises a source or decode error and the player must switch
+  // to remux exactly once, keeping the position and tracks.
+  const mediaRequests = await openMoviePlayer(
+    page,
+    "mode=direct&audio_track=0&subtitle_track=off&start=120",
+    { streamBody: "this is not an mp4 file" },
+  );
+
+  await expectURLParams(page, {
+    mode: "remux",
+    start: "120",
+    audio_track: "0",
+    subtitle_track: "off",
+  });
+
+  // The switch is announced, not silently swallowed.
+  await expect(
+    page
+      .getByRole("region", { name: /^Notifications/ })
+      .getByText(/can't be played directly by your browser/),
+  ).toBeVisible();
+
+  // Exactly one direct attempt, then only remux manifests: no bounce back.
+  await expect
+    .poll(() => mediaRequests.filter(url => url.includes("/hls/")).length)
+    .toBeGreaterThan(0);
+  const [streamRequest, ...hlsRequests] = mediaRequests;
+  expect(new URL(streamRequest).pathname).toBe(`${movieApiPath}/stream`);
+  expect(
+    hlsRequests.every(url => new URL(url).pathname.endsWith("/hls/remux/playlist.m3u8")),
+  ).toBe(true);
+  await expectURLParams(page, { mode: "remux" });
+  browserIssues.assertClean();
 });
 
 test("HLS seek navigation preserves canonical subtitle-off", async ({ page }) => {
-  await loginPageViaApi(page);
+  const browserIssues = trackBrowserIssues(page);
 
-  await page.route(`**${movieApiPath}/hls/*/playlist.m3u8*`, () => {
-    // Keep HLS pending; player controls and route navigation remain testable.
-  });
-
-  await page.goto(
-    `${moviePath}/play?mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0`,
-  );
+  await openMoviePlayer(page, "mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0");
   await expect(playButton(page)).toBeVisible();
 
   await page.getByRole("button", { name: "Chapters, 2 chapters" }).click();
   await page.getByRole("menuitem", { name: /The Journey/ }).click();
 
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("start"))
-    .toBe("372");
-  expect(new URL(page.url()).searchParams.get("subtitle_track")).toBe("off");
-});
-
-test("chapter menu lists chapters with spoken labels and marks the current one", async ({
-  page,
-}) => {
-  const browserIssues = trackBrowserIssues(page);
-
-  await openMoviePlayer(page);
-
-  const chapterTrigger = page.getByRole("button", {
-    name: "Chapters, 2 chapters",
-  });
-  await expect(chapterTrigger).toBeVisible();
-  await chapterTrigger.click();
-
-  const firstChapter = page.getByRole("menuitem", {
-    name: "Chapter 1 of 2, Opening Credits, starts at 0 seconds, current chapter",
-  });
-  await expect(firstChapter).toBeVisible();
-  await expect(firstChapter).toHaveAttribute("aria-current", "true");
-
-  const secondChapter = page.getByRole("menuitem", {
-    name: "Chapter 2 of 2, The Journey, starts at 6 minutes 12 seconds",
-  });
-  await expect(secondChapter).toBeVisible();
-  await expect(secondChapter).not.toHaveAttribute("aria-current", "true");
-
-  await page.keyboard.press("Escape");
+  await expectURLParams(page, { start: "372", subtitle_track: "off" });
   browserIssues.assertClean();
 });
 
@@ -294,12 +248,11 @@ test("selecting a chapter seeks to its start and announces the jump", async ({
 }) => {
   const browserIssues = trackBrowserIssues(page);
 
-  await openMoviePlayer(page);
+  await openMoviePlayer(page, "mode=direct&audio_track=0&subtitle_track=off&start=0");
+  await expect(playButton(page)).toBeVisible();
 
   await page.getByRole("button", { name: "Chapters, 2 chapters" }).click();
-  await page
-    .getByRole("menuitem", { name: /The Journey/ })
-    .click();
+  await page.getByRole("menuitem", { name: /The Journey/ }).click();
 
   await expect
     .poll(() =>

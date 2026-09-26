@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import type {
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
   PlaybackSettingsType,
+  WatchProgressType,
 } from "@/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -190,7 +191,79 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
   };
 }
 
-function mockMovieDetailsFetch() {
+// A fully populated movie: every lower section renders, so each skip link has
+// a target.
+const SIGNAL_FIRE_ID = 59;
+
+function signalFireDetails(): LibraryMovieDetailsResponse {
+  const base = movieDetailsResponse(
+    SIGNAL_FIRE_ID,
+    "Signal Fire",
+    "A rescue pilot returns to a coastal town.",
+    "2024-07-04T12:00:00Z",
+    "en",
+  );
+
+  return {
+    ...base,
+    movie: {
+      ...base.movie,
+      revenue: nullableFloat64(215000000),
+      budget: nullableFloat64(95000000),
+      run_time: nullableInt64(126),
+      duration: nullableFloat64(7560),
+    },
+    cast: [
+      {
+        id: 1,
+        character: "Mara Voss",
+        cast_order: 0,
+        artist_name: "Alex Vega",
+        artist_profile: nullableString("/alex-vega.jpg"),
+      },
+    ],
+    crew: [
+      { id: 10, job: "Director", department: "Directing", artist_name: "Jordan Lee" },
+      { id: 11, job: "Writer", department: "Writing", artist_name: "Casey North" },
+    ],
+    production_companies: [{ id: 20, name: "Northwind Pictures" }],
+    extra_videos: [
+      {
+        id: 30,
+        title: "Official Trailer",
+        key: "signal-fire-trailer",
+        type: "trailer",
+        site: "youtube",
+      },
+    ],
+  };
+}
+
+function signalFireTechnicalDetails(): MovieTechnicalDetailsResponse {
+  return {
+    ...technicalDetailsResponse(SIGNAL_FIRE_ID),
+    chapters: [
+      {
+        id: 50,
+        title: "Opening Credits",
+        start_time: 372,
+        thumb: nullableString("/opening-credits.jpg"),
+        movie_id: nullableInt64(SIGNAL_FIRE_ID),
+      },
+    ],
+  };
+}
+
+const NO_WATCH_PROGRESS: WatchProgressType = {
+  progress_sec: null,
+  duration_sec: null,
+  watched: false,
+  updated_at: null,
+};
+
+function mockMovieDetailsFetch(
+  { watchProgress = NO_WATCH_PROGRESS }: { watchProgress?: WatchProgressType } = {},
+) {
   const detailsById = new Map<number, LibraryMovieDetailsResponse>([
     [
       57,
@@ -212,10 +285,12 @@ function mockMovieDetailsFetch() {
         "fr",
       ),
     ],
+    [SIGNAL_FIRE_ID, signalFireDetails()],
   ]);
   const technicalById = new Map<number, MovieTechnicalDetailsResponse>([
     [57, technicalDetailsResponse(57)],
     [58, technicalDetailsResponse(58)],
+    [SIGNAL_FIRE_ID, signalFireTechnicalDetails()],
   ]);
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -281,12 +356,7 @@ function mockMovieDetailsFetch() {
     if (watchProgressMatch) {
       return jsonResponse({
         error: false,
-        data: {
-          progress_sec: null,
-          duration_sec: null,
-          watched: false,
-          updated_at: null,
-        },
+        data: watchProgress,
       });
     }
 
@@ -405,6 +475,77 @@ describe("movie details route motion", () => {
     expect(
       screen.queryByText("Arrival overview for motion verification."),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("movie details route content", () => {
+  it("renders every detail section behind its skip link", async () => {
+    await renderMovieDetailsRoute(`/movies/${SIGNAL_FIRE_ID}/`);
+
+    expect(
+      await screen.findByRole("heading", { name: /Signal Fire/i, level: 1 }),
+    ).toBeInTheDocument();
+
+    const metadata = screen.getByRole("list", { name: "Movie details" });
+    expect(within(metadata).getByText("PG-13")).toBeInTheDocument();
+    expect(within(metadata).getByText("2 hr 6 min")).toBeInTheDocument();
+    expect(within(metadata).getByText("July 4, 2024")).toBeInTheDocument();
+    expect(
+      within(metadata).getByText("Runtime: 2 hours 6 minutes").closest("time"),
+    ).toHaveAttribute("datetime", "PT126M");
+
+    const skipLinks = screen.getByRole("navigation", { name: "Skip to section" });
+    for (const [label, href] of [
+      ["Skip to movie info", "#movie-title"],
+      ["Skip to overview", "#overview-heading"],
+      ["Skip to key crew", "#crew-heading"],
+      ["Skip to cast", "#cast-heading"],
+      ["Skip to chapters", "#chapters-heading"],
+      ["Skip to extra videos", "#extra-videos-heading"],
+      ["Skip to about", "#details-heading"],
+    ] as const) {
+      const link = within(skipLinks).getByRole("link", { name: label });
+      expect(link).toHaveAttribute("href", href);
+      expect(document.getElementById(href.slice(1))).not.toBeNull();
+    }
+
+    expect(screen.getByRole("heading", { name: "Key Crew" })).toBeInTheDocument();
+    expect(screen.getByText("Jordan Lee")).toBeInTheDocument();
+    expect(screen.getByText("Casey North")).toBeInTheDocument();
+    expect(
+      screen.getByRole("article", { name: "Alex Vega as Mara Voss" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("list", { name: "Chapters, 1 total" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Extra videos, 1 clips" }),
+    ).toBeInTheDocument();
+
+    const about = screen
+      .getByRole("heading", { name: "About Signal Fire" })
+      .closest("section");
+    expect(about).not.toBeNull();
+    const aboutSection = within(about as HTMLElement);
+    expect(aboutSection.getByText(/^Original language/)).toBeInTheDocument();
+    expect(aboutSection.getByText("EN", { exact: true })).toBeInTheDocument();
+    expect(aboutSection.getByText("$95,000,000")).toBeInTheDocument();
+    expect(aboutSection.getByText("$215,000,000")).toBeInTheDocument();
+    expect(aboutSection.getByText("Northwind Pictures")).toBeInTheDocument();
+  });
+
+  it("shows the resume strip for an eligible watch position", async () => {
+    mockMovieDetailsFetch({
+      watchProgress: {
+        progress_sec: 1890,
+        duration_sec: 7560,
+        watched: false,
+        updated_at: "2026-07-16T12:00:00Z",
+      },
+    });
+    await renderRoute(`/movies/${SIGNAL_FIRE_ID}/`);
+
+    expect(await screen.findByText("1 hr 35 min left")).toBeInTheDocument();
   });
 });
 

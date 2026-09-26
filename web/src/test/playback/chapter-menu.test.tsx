@@ -85,6 +85,31 @@ describe("ChapterMenu", () => {
     ).toBeInTheDocument();
   });
 
+  it("marks the first chapter current at the start of playback, and only it", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ChapterMenu
+        chapters={chapters}
+        currentTimeSec={0}
+        onSelectChapter={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Chapters, 3 chapters" }));
+
+    expect(
+      await screen.findByRole("menuitem", {
+        name: "Chapter 1 of 3, Opening Credits, starts at 0 seconds, current chapter",
+      }),
+    ).toHaveAttribute("aria-current", "true");
+    expect(
+      screen.getByRole("menuitem", {
+        name: "Chapter 2 of 3, starts at 1 minute 23 seconds",
+      }),
+    ).not.toHaveAttribute("aria-current", "true");
+  });
+
   it("passes the resolved label when an untitled chapter is selected", async () => {
     const user = userEvent.setup();
     const onSelectChapter = vi.fn();

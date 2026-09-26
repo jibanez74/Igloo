@@ -1,13 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import {
-  AUDIO_TRACK_MODE_NOTE,
-  MOVIES_PER_PAGE,
-} from "../src/lib/constants";
-import type { WatchProgressType } from "../src/types";
+import { MOVIES_PER_PAGE } from "../src/lib/constants";
+import type {
+  LibraryMovieDetailsResponse,
+  MovieTechnicalDetailsResponse,
+  WatchProgressType,
+} from "../src/types";
 import {
   apiResponse,
   fulfillJSON,
@@ -18,19 +19,23 @@ import {
 } from "./e2e-api";
 import { VIEWPORTS } from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
+import { expectHref, playButton } from "./media-e2e-helpers";
+import { mockYouTubePlayer } from "./mock-youtube-player";
 import { libraryMovie } from "./fixtures/movies";
+
+// The details page's sections are unit-tested (src/test/movies/
+// movie-details-route.test.tsx); this covers what needs a browser: keyboard
+// navigation from the index, the hero's breakpoints, Chromium's direct-play
+// verdict in the play links, the playback settings dialog, and the extra
+// video player.
 
 const moviesAllPath =
   "/movies?tab=all&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
 const movieId = 711;
+const moviePath = `/movies/${movieId}`;
+const playPath = `${moviePath}/play`;
 const chapterStartSeconds = 372;
 const extraVideoKey = "signal-fire-trailer";
-const noWatchProgress: WatchProgressType = {
-  progress_sec: null,
-  duration_sec: null,
-  watched: false,
-  updated_at: null,
-};
 
 const signalFire = libraryMovie(
   movieId,
@@ -43,11 +48,6 @@ const movieDetailsPayload = {
   movie: {
     id: movieId,
     title: signalFire.title,
-    file_path: "/library/movies/signal-fire.mp4",
-    file_name: "signal-fire.mp4",
-    size: 5_100_000_000,
-    container: "mp4",
-    mime_type: "video/mp4",
     adult: false,
     tmdb_id: nullableInt64(1711),
     imdb_id: nullableString("tt1711000"),
@@ -67,14 +67,10 @@ const movieDetailsPayload = {
     budget: nullableFloat64(95000000),
     run_time: nullableInt64(126),
     duration: nullableFloat64(7560),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
   },
   cast: [
     {
       id: 1,
-      movie_id: movieId,
-      artist_id: 1001,
       character: "Mara Voss",
       cast_order: 0,
       artist_name: "Alex Vega",
@@ -82,59 +78,57 @@ const movieDetailsPayload = {
     },
   ],
   crew: [
-    {
-      id: 10,
-      movie_id: movieId,
-      artist_id: 2001,
-      job: "Director",
-      department: "Directing",
-      artist_name: "Jordan Lee",
-      artist_profile: nullableString("/jordan-lee.jpg"),
-    },
-    {
-      id: 11,
-      movie_id: movieId,
-      artist_id: 2002,
-      job: "Writer",
-      department: "Writing",
-      artist_name: "Casey North",
-      artist_profile: nullableString("/casey-north.jpg"),
-    },
+    { id: 10, job: "Director", department: "Directing", artist_name: "Jordan Lee" },
   ],
-  genres: [
-    {
-      id: 30,
-      tag: "Thriller",
-    },
-  ],
-  production_companies: [
-    {
-      id: 20,
-      name: "Northwind Pictures",
-      tmdb_id: 2020,
-      logo: nullableString("/northwind-pictures.png"),
-      country: nullableString("US"),
-    },
-  ],
+  genres: [{ id: 30, tag: "Thriller" }],
+  production_companies: [{ id: 20, name: "Northwind Pictures" }],
   extra_videos: [
     {
       id: 30,
       title: "Official Trailer",
-      external_id: nullableString("yt-signal-fire-trailer"),
       key: extraVideoKey,
       type: "trailer",
       site: "youtube",
-      official: true,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
     },
   ],
-};
+} satisfies LibraryMovieDetailsResponse;
 
+function audioStream(id: number, streamIndex: number, language: string, title: string) {
+  return {
+    id,
+    movie_id: movieId,
+    stream_index: streamIndex,
+    codec: "aac",
+    codec_profile: nullableString("LC"),
+    bit_rate: 192000,
+    sample_rate: nullableInt64(48000),
+    channels: 2,
+    channel_layout: nullableString("stereo"),
+    language: nullableString(language),
+    title: nullableString(title),
+    is_default: streamIndex === 1,
+  };
+}
+
+function subtitle(id: number, streamIndex: number, codec: string, title: string) {
+  return {
+    id,
+    movie_id: movieId,
+    stream_index: streamIndex,
+    codec,
+    language: nullableString("en"),
+    title: nullableString(title),
+    is_forced: false,
+    is_default: false,
+  };
+}
+
+// 1080p H.264 High and AAC LC in MP4: Chromium plays it as-is, so direct play
+// is the default. The Spanish track and the image-based subtitle exercise the
+// playback settings dialog.
 const technicalDetailsPayload = {
   movie: {
     file_name: "signal-fire.mp4",
-    file_path: "/library/movies/signal-fire.mp4",
     size: 5_100_000_000,
     container: "mp4",
     mime_type: "video/mp4",
@@ -147,56 +141,35 @@ const technicalDetailsPayload = {
       movie_id: movieId,
       stream_index: 0,
       codec: "h264",
+      codec_profile: nullableString("High"),
+      codec_level: nullableInt64(41),
       bit_rate: 6000000,
       width: 1920,
       height: 1080,
+      coded_width: nullableInt64(1920),
+      coded_height: nullableInt64(1080),
+      aspect_ratio: nullableString("16:9"),
+      frame_rate: 24,
+      avg_frame_rate: nullableString("24/1"),
+      bit_depth: nullableInt64(8),
+      pixel_format: nullableString("yuv420p"),
+      color_range: nullableString("tv"),
+      color_space: nullableString("bt709"),
+      color_primaries: nullableString("bt709"),
+      color_transfer: nullableString("bt709"),
+      field_order: nullableString("progressive"),
+      rotation: nullableInt64(),
+      language: nullableString("en"),
+      title: nullableString(),
     },
   ],
   audio_streams: [
-    {
-      id: 41,
-      movie_id: movieId,
-      stream_index: 1,
-      codec: "aac",
-      bit_rate: 192000,
-      channels: 2,
-      channel_layout: nullableString("stereo"),
-      language: nullableString("en"),
-      title: nullableString("English Stereo"),
-    },
-    {
-      id: 42,
-      movie_id: movieId,
-      stream_index: 2,
-      codec: "aac",
-      bit_rate: 192000,
-      channels: 2,
-      channel_layout: nullableString("stereo"),
-      language: nullableString("es"),
-      title: nullableString("Spanish Stereo"),
-    },
+    audioStream(41, 1, "en", "English Stereo"),
+    audioStream(42, 2, "es", "Spanish Stereo"),
   ],
   subtitles: [
-    {
-      id: 60,
-      movie_id: movieId,
-      stream_index: 2,
-      codec: "subrip",
-      language: nullableString("en"),
-      title: nullableString("English"),
-      is_forced: false,
-      is_default: false,
-    },
-    {
-      id: 61,
-      movie_id: movieId,
-      stream_index: 3,
-      codec: "hdmv_pgs_subtitle",
-      language: nullableString("en"),
-      title: nullableString("English Signs"),
-      is_forced: false,
-      is_default: false,
-    },
+    subtitle(60, 3, "subrip", "English"),
+    subtitle(61, 4, "hdmv_pgs_subtitle", "English Signs"),
   ],
   chapters: [
     {
@@ -207,88 +180,78 @@ const technicalDetailsPayload = {
       movie_id: nullableInt64(movieId),
     },
   ],
+} satisfies MovieTechnicalDetailsResponse;
+
+const noWatchProgress: WatchProgressType = {
+  progress_sec: null,
+  duration_sec: null,
+  watched: false,
+  updated_at: null,
 };
 
-async function mockMovieDetailsApi(
-  page: Page,
-  watchProgress: WatchProgressType = noWatchProgress,
-) {
+async function mockMovieDetailsApi(page: Page) {
   const { unexpectedApiRequests } = await mockApi(page, {
     handle: async ({ route, url, method }) => {
       if (method !== "GET") {
         return false;
       }
 
-      if (url.pathname === "/api/movies/stats") {
-        await fulfillJSON(route, apiResponse({ total_movies: 1 }));
-        return true;
-      }
-
-      if (url.pathname === "/api/tmdb/status") {
-        await fulfillJSON(route, apiResponse({ available: false }));
-        return true;
-      }
-
-      if (url.pathname === "/api/movies/library") {
-        const movies = pagedList(url, "movies", [signalFire], {
+      const bodies: Record<string, unknown> = {
+        "/api/movies/stats": { total_movies: 1 },
+        "/api/tmdb/status": { available: false },
+        "/api/movies/library": pagedList(url, "movies", [signalFire], {
           total: 1,
           perPage: MOVIES_PER_PAGE,
-        });
-        await fulfillJSON(route, apiResponse(movies));
-        return true;
-      }
-
-      if (url.pathname === `/api/movies/details/${movieId}`) {
-        await fulfillJSON(route, apiResponse(movieDetailsPayload));
-        return true;
-      }
-
-      if (url.pathname === `/api/movies/${movieId}/technical-details`) {
-        await fulfillJSON(route, apiResponse(technicalDetailsPayload));
-        return true;
-      }
-
-      if (url.pathname === `/api/movies/${movieId}/like-status`) {
-        await fulfillJSON(route, apiResponse({ is_liked: false }));
-        return true;
-      }
-
-      if (url.pathname === `/api/movies/${movieId}/watch-progress`) {
-        await fulfillJSON(route, apiResponse(watchProgress));
-        return true;
-      }
-
-      if (url.pathname === "/api/settings/playback") {
-        await fulfillJSON(route, apiResponse({
+        }),
+        [`/api/movies/details/${movieId}`]: movieDetailsPayload,
+        [`/api/movies/${movieId}/technical-details`]: technicalDetailsPayload,
+        [`/api/movies/${movieId}/like-status`]: { is_liked: false },
+        [`/api/movies/${movieId}/watch-progress`]: noWatchProgress,
+        "/api/settings/playback": {
           settings: {
             profiles: [],
             server_upload_mbps: null,
             hardware_acceleration_device: "cpu",
           },
-        }));
-        return true;
+        },
+      };
+
+      if (!(url.pathname in bodies)) {
+        return false;
       }
 
-      return false;
+      await fulfillJSON(route, apiResponse(bodies[url.pathname]));
+      return true;
     },
   });
 
   return unexpectedApiRequests;
 }
 
-test("movie details page renders the mocked success path from the movies index", async ({
+async function openPlaybackSettings(page: Page) {
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Playback Settings" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function pickOption(page: Page, trigger: Locator, option: string) {
+  await trigger.click();
+  await page.getByRole("listbox").getByRole("option", { name: option, exact: true }).click();
+}
+
+test("opens a movie from the index by keyboard and defaults its play links to direct play", async ({
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockMovieDetailsApi(page);
 
-  await page.setViewportSize({ width: 1440, height: 1200 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesAllPath);
 
   await expect(page).toHaveTitle("Movies - Igloo");
-  await expect(
-    page.getByRole("heading", { name: "Movie Library", level: 1 }),
-  ).toBeVisible();
 
   const movieTitleLink = page.getByRole("link", {
     name: "Signal Fire 2024",
@@ -299,16 +262,11 @@ test("movie details page renders the mocked success path from the movies index",
   await page.keyboard.press("Enter");
 
   await expect(page).toHaveTitle("Signal Fire (2024) - Igloo");
-  expect(new URL(page.url()).pathname).toMatch(/^\/movies\/711\/?$/);
-
+  await expect(page).toHaveURL(new RegExp(`${moviePath}/?$`));
   await expect(
     page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
   ).toBeVisible();
-  await expect(
-    page.getByText(
-      "A rescue pilot returns to a coastal town and uncovers the wildfire cover-up that drove her family apart.",
-    ),
-  ).toBeVisible();
+
   // The hero drops the poster at lg+ (backdrop-as-hero); it only renders on
   // small viewports.
   const heroPoster = page.getByRole("img", {
@@ -317,340 +275,105 @@ test("movie details page renders the mocked success path from the movies index",
   await expect(heroPoster).toBeHidden();
   await page.setViewportSize(VIEWPORTS.phone);
   await expect(heroPoster).toBeVisible();
-  await page.setViewportSize({ width: 1440, height: 1200 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await expect(heroPoster).toBeHidden();
 
-  const metadataRow = page.getByRole("list", { name: "Movie details" });
-  await expect(metadataRow).toBeVisible();
-  await expect(metadataRow).toContainText("PG-13");
-  await expect(metadataRow).toContainText("2 hr 6 min");
-  await expect(metadataRow).toContainText("July 4, 2024");
-  await expect(metadataRow).toContainText("Runtime: 2 hours 6 minutes");
-  const runtime = metadataRow.locator('time[datetime="PT126M"]');
-  await expect(runtime).toHaveAttribute("datetime", "PT126M");
-
-  const playLink = page.getByRole("link", { name: "Play" });
-  const watchButton = page.getByRole("button", {
-    name: "Mark movie as watched",
+  // The file is direct-play eligible in Chromium, so the play and chapter
+  // links start the original file with its first audio track.
+  const directPlay = { mode: "direct", audio_track: "0", subtitle_track: "off" };
+  await expectHref(page.getByRole("link", { name: "Play", exact: true }), playPath, directPlay);
+  await expectHref(page.getByRole("link", { name: /Opening Credits/i }), playPath, {
+    ...directPlay,
+    start: String(chapterStartSeconds),
   });
-  const likeButton = page.getByRole("button", { name: "Like this movie" });
-  const moreOptionsButton = page.getByRole("button", { name: "More options" });
-
-  await expect(playLink).toBeVisible();
-  await expect(watchButton).toBeVisible();
-  await expect(likeButton).toBeVisible();
-  await expect(moreOptionsButton).toBeVisible();
-
-  const skipLinksNav = page.getByRole("navigation", { name: "Skip to section" });
-  await expect(skipLinksNav).toHaveCount(1);
-
-  for (const [label, href] of [
-    ["Skip to movie info", "#movie-title"],
-    ["Skip to overview", "#overview-heading"],
-    ["Skip to key crew", "#crew-heading"],
-    ["Skip to cast", "#cast-heading"],
-    ["Skip to chapters", "#chapters-heading"],
-    ["Skip to extra videos", "#extra-videos-heading"],
-    ["Skip to about", "#details-heading"],
-  ] as const) {
-    await expect(skipLinksNav.getByRole("link", { name: label })).toHaveAttribute(
-      "href",
-      href,
-    );
-  }
-
-  await expect(page.getByRole("heading", { name: "Key Crew" })).toBeVisible();
-  await expect(page.getByText("Jordan Lee")).toBeVisible();
-  await expect(page.getByText("Casey North")).toBeVisible();
-
-  await expect(page.getByRole("heading", { name: "Cast" })).toBeVisible();
-  await expect(
-    page.getByRole("article", { name: "Alex Vega as Mara Voss" }),
-  ).toBeVisible();
-
-  await expect(page.getByRole("heading", { name: "Chapters" })).toBeVisible();
-  await expect(
-    page.getByRole("list", { name: "Chapters, 1 total" }),
-  ).toBeVisible();
-
-  await expect(
-    page.getByRole("heading", { name: "Extra Videos" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("list", { name: "Extra videos, 1 clips" }),
-  ).toBeVisible();
-
-  await expect(
-    page.getByRole("heading", { name: "About Signal Fire" }),
-  ).toBeVisible();
-  const aboutSection = page.locator("section", {
-    has: page.getByRole("heading", { name: "About Signal Fire" }),
-  });
-  await expect(aboutSection.getByText("Original language")).toBeVisible();
-  await expect(aboutSection.getByText("EN", { exact: true })).toBeVisible();
-  await expect(aboutSection.getByText("$95,000,000")).toBeVisible();
-  await expect(aboutSection.getByText("$215,000,000")).toBeVisible();
-  await expect(aboutSection.getByText("Northwind Pictures")).toBeVisible();
-
-  const playHref = await playLink.getAttribute("href");
-  expect(playHref).not.toBeNull();
-  const playUrl = new URL(playHref ?? "", "http://localhost");
-  expect(playUrl.pathname).toBe(`/movies/${movieId}/play`);
-  expect(playUrl.searchParams.get("mode")).toBe("direct");
-  expect(playUrl.searchParams.get("audio_track")).toBe("0");
-  expect(playUrl.searchParams.get("subtitle_track")).toBe("off");
-
-  const chapterLink = page.getByRole("link", { name: /Opening Credits/i });
-  await expect(chapterLink).toBeVisible();
-  const chapterHref = await chapterLink.getAttribute("href");
-  expect(chapterHref).not.toBeNull();
-  const chapterUrl = new URL(chapterHref ?? "", "http://localhost");
-  expect(chapterUrl.pathname).toBe(`/movies/${movieId}/play`);
-  expect(chapterUrl.searchParams.get("mode")).toBe("direct");
-  expect(chapterUrl.searchParams.get("audio_track")).toBe("0");
-  expect(chapterUrl.searchParams.get("subtitle_track")).toBe("off");
-  expect(chapterUrl.searchParams.get("start")).toBe(
-    String(chapterStartSeconds),
-  );
-
-  const extraVideoLink = page.getByRole("link", { name: /Official Trailer/i });
-  await expect(extraVideoLink).toBeVisible();
-  const extraVideoHref = await extraVideoLink.getAttribute("href");
-  expect(extraVideoHref).not.toBeNull();
-  const extraVideoUrl = new URL(extraVideoHref ?? "", "http://localhost");
-  expect(extraVideoUrl.pathname).toBe("/trailer");
-  expect(extraVideoUrl.searchParams.get("videoKey")).toBe(extraVideoKey);
-  expect(extraVideoUrl.searchParams.get("returnTo")).toBe(`/movies/${movieId}`);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
-test("playback settings dialog saves a selection that drives the play link", async ({
+test("playback settings dialog saves a selection that drives the play links", async ({
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockMovieDetailsApi(page);
 
-  await page.goto(`/movies/${movieId}`);
+  await page.goto(moviePath);
   await expect(
     page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
   ).toBeVisible();
 
   const moreOptionsButton = page.getByRole("button", { name: "More options" });
-  await moreOptionsButton.click();
-  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
+  const playLink = page.getByRole("link", { name: "Play", exact: true });
+  const chapterLink = page.getByRole("link", { name: /Opening Credits/i });
 
-  const dialog = page.getByRole("dialog", { name: "Playback Settings" });
-  await expect(dialog).toBeVisible();
-
-  const modeSelect = dialog.getByLabel("Playback");
-  const audioSelect = dialog.getByLabel("Audio Track");
-  const subtitleSelect = dialog.getByLabel("Subtitles");
-  await expect(modeSelect).toBeVisible();
-  await expect(audioSelect).toBeVisible();
-  await expect(subtitleSelect).toBeVisible();
-
-  // The source is 1080p h264/aac in mp4: direct plays by default and no 4K
-  // transcode may be offered.
-  await expect(modeSelect).toContainText("Original file — plays as-is");
-  await modeSelect.click();
-  const modeListbox = page.getByRole("listbox");
-  await expect(modeListbox).toBeVisible();
-  await expect(
-    modeListbox.getByRole("option", { name: /4K — highest quality/ }),
-  ).toHaveCount(0);
-  await modeListbox
-    .getByRole("option", { name: "720p — lower bandwidth" })
-    .click();
-
-  await subtitleSelect.click();
-  const subtitleListbox = page.getByRole("listbox");
-  await expect(
-    subtitleListbox.getByRole("option", {
-      name: "English · English Signs (image-based)",
-    }),
-  ).toBeDisabled();
-  await subtitleListbox
-    .getByRole("option", { name: "English", exact: true })
-    .click();
-
+  let dialog = await openPlaybackSettings(page);
+  await expect(dialog.getByLabel("Playback")).toContainText("Original file — plays as-is");
+  await pickOption(page, dialog.getByLabel("Playback"), "720p — lower bandwidth");
+  await pickOption(page, dialog.getByLabel("Subtitles"), "English");
   await dialog.getByRole("button", { name: "Done" }).click();
+
   await expect(dialog).toBeHidden();
   // Closing the dialog must return focus to the menu trigger.
   await expect(moreOptionsButton).toBeFocused();
+  await expectHref(playLink, playPath, {
+    mode: "720p_3mbps",
+    audio_track: "0",
+    subtitle_track: "0",
+  });
 
-  const playLink = page.getByRole("link", { name: "Play" });
-  const playHref = await playLink.getAttribute("href");
-  expect(playHref).not.toBeNull();
-  const playUrl = new URL(playHref ?? "", "http://localhost");
-  expect(playUrl.searchParams.get("mode")).toBe("720p_3mbps");
-  expect(playUrl.searchParams.get("audio_track")).toBe("0");
-  expect(playUrl.searchParams.get("subtitle_track")).toBe("0");
-
-  // Reopening shows the saved selection as the draft, and explicitly choosing
-  // None must remain authoritative in every generated playback link.
-  await moreOptionsButton.click();
-  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Playback")).toContainText(
-    "720p — lower bandwidth",
-  );
-  await dialog.getByLabel("Subtitles").click();
-  await page
-    .getByRole("listbox")
-    .getByRole("option", { name: "None", exact: true })
-    .click();
+  // Reopening shows the saved selection as the draft. Direct play can only
+  // deliver the container's first audio track, so choosing Spanish moves the
+  // mode to remux; explicitly choosing no subtitles must stay authoritative in
+  // every generated link.
+  dialog = await openPlaybackSettings(page);
+  await expect(dialog.getByLabel("Playback")).toContainText("720p — lower bandwidth");
+  await pickOption(page, dialog.getByLabel("Playback"), "Original file — plays as-is");
+  await pickOption(page, dialog.getByLabel("Audio Track"), "Spanish · Stereo");
+  await expect(dialog.getByLabel("Playback")).toContainText("Original video, adjusted audio");
+  await pickOption(page, dialog.getByLabel("Subtitles"), "None");
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
 
-  const subtitleOffPlayUrl = new URL(
-    (await playLink.getAttribute("href")) ?? "",
-    "http://localhost",
-  );
-  expect(subtitleOffPlayUrl.searchParams.get("subtitle_track")).toBe("off");
-
-  const subtitleOffChapterUrl = new URL(
-    (await page
-      .getByRole("link", { name: /Opening Credits/i })
-      .getAttribute("href")) ?? "",
-    "http://localhost",
-  );
-  expect(subtitleOffChapterUrl.searchParams.get("subtitle_track")).toBe("off");
+  const remuxSpanish = { mode: "remux", audio_track: "1", subtitle_track: "off" };
+  await expectHref(playLink, playPath, remuxSpanish);
+  await expectHref(chapterLink, playPath, {
+    ...remuxSpanish,
+    start: String(chapterStartSeconds),
+  });
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
-test("picking a non-first audio track moves direct play to remux", async ({
+test("plays an extra video in the YouTube player and returns to the details page", async ({
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockMovieDetailsApi(page);
+  await mockYouTubePlayer(page);
 
-  await page.goto(`/movies/${movieId}`);
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto(moviePath);
+
+  await expect(page).toHaveTitle("Signal Fire (2024) - Igloo");
+  await page.getByRole("link", { name: /Official Trailer/i }).click();
+
+  // The clip opens the shared trailer dialog with the YouTube player.
+  await expect(page).toHaveURL(
+    `/trailer?videoKey=${extraVideoKey}&returnTo=${encodeURIComponent(moviePath)}`,
+  );
+  await expect(page.getByRole("dialog", { name: "Trailer" })).toBeVisible();
+
+  // Starting playback flips the control to Pause, proving the player is playing.
+  await playButton(page).click();
+  await expect(
+    page.getByRole("button", { name: "Pause (Space or K)" }),
+  ).toBeVisible();
+
+  // Closing the player returns to the originating movie details page.
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(moviePath);
   await expect(
     page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
   ).toBeVisible();
 
-  const moreOptionsButton = page.getByRole("button", { name: "More options" });
-  await moreOptionsButton.click();
-  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
-
-  const dialog = page.getByRole("dialog", { name: "Playback Settings" });
-  await expect(dialog).toBeVisible();
-
-  const modeSelect = dialog.getByLabel("Playback");
-  const audioSelect = dialog.getByLabel("Audio Track");
-  await expect(modeSelect).toContainText("Original file — plays as-is");
-  await expect(dialog.getByText(AUDIO_TRACK_MODE_NOTE)).toBeHidden();
-
-  // Direct play can only deliver the container's first track, so choosing
-  // Spanish must move the mode to remux rather than silently play English.
-  await audioSelect.click();
-  await page.getByRole("listbox").getByRole("option", { name: "Spanish · Stereo" }).click();
-
-  await expect(modeSelect).toContainText("Original video, adjusted audio");
-  const note = dialog.getByText(AUDIO_TRACK_MODE_NOTE);
-  await expect(note).toBeVisible();
-  const noteId = await note.getAttribute("id");
-  expect(noteId).not.toBeNull();
-  await expect(audioSelect).toHaveAttribute("aria-describedby", noteId ?? "");
-  await expect(modeSelect).toHaveAttribute("aria-describedby", noteId ?? "");
-
-  await dialog.getByRole("button", { name: "Done" }).click();
-  await expect(dialog).toBeHidden();
-
-  const playHref = await page.getByRole("link", { name: "Play" }).getAttribute("href");
-  const playUrl = new URL(playHref ?? "", "http://localhost");
-  expect(playUrl.searchParams.get("mode")).toBe("remux");
-  expect(playUrl.searchParams.get("audio_track")).toBe("1");
-
-  // Choosing direct play again snaps the audio track back to the first stream.
-  await moreOptionsButton.click();
-  await page.getByRole("menuitem", { name: "Playback Settings" }).click();
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Playback").click();
-  await page
-    .getByRole("listbox")
-    .getByRole("option", { name: "Original file — plays as-is" })
-    .click();
-
-  await expect(dialog.getByLabel("Audio Track")).toContainText("English · Stereo");
-  await expect(dialog.getByText(AUDIO_TRACK_MODE_NOTE)).toBeHidden();
-  await dialog.getByRole("button", { name: "Cancel" }).click();
-  await expect(dialog).toBeHidden();
-
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
-
-test("movie details page renders eligible resume progress", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockMovieDetailsApi(page, {
-    progress_sec: 1890,
-    duration_sec: 7560,
-    watched: false,
-    updated_at: "2026-07-16T12:00:00Z",
-  });
-
-  await page.goto(`/movies/${movieId}`);
-
-  // 5670 seconds still to go, so the strip reads it as hours and minutes; the
-  // abbreviated text is aria-hidden beside an sr-only span holding the words.
-  const timeLeft = page.getByText("1 hr 35 min left", { exact: true });
-  await expect(timeLeft).toBeVisible();
-  await expect(
-    page.getByText("1 hour 35 minutes left", { exact: true }),
-  ).toHaveCount(1);
-
-  const progressFill = timeLeft
-    .locator("..")
-    .locator("..")
-    .locator(":scope > div[aria-hidden='true'] > div");
-  await expect(progressFill).toHaveAttribute("style", /width:\s*25%/);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-for (const { state, watchProgress, watchedButtonName } of [
-  {
-    state: "watched",
-    watchProgress: {
-      progress_sec: 1890,
-      duration_sec: 7560,
-      watched: true,
-      updated_at: "2026-07-16T12:00:00Z",
-    },
-    watchedButtonName: "Mark movie as unwatched",
-  },
-  {
-    state: "completed",
-    watchProgress: {
-      progress_sec: 980,
-      duration_sec: 1000,
-      watched: false,
-      updated_at: "2026-07-16T12:00:00Z",
-    },
-    watchedButtonName: "Mark movie as watched",
-  },
-] satisfies {
-  state: string;
-  watchProgress: WatchProgressType;
-  watchedButtonName: string;
-}[]) {
-  test(`movie details page suppresses resume progress when ${state}`, async ({
-    page,
-  }) => {
-    const browserIssues = trackBrowserIssues(page);
-    const unexpectedApiRequests = await mockMovieDetailsApi(page, watchProgress);
-
-    await page.goto(`/movies/${movieId}`);
-
-    await expect(
-      page.getByRole("button", { name: watchedButtonName }),
-    ).toBeEnabled();
-    await expect(
-      page.getByText(/\b(hr|min|sec|hours?|minutes?|seconds?) left$/),
-    ).toHaveCount(0);
-
-    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-  });
-}
