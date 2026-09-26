@@ -1,12 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { IDLE_SCAN } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-import { readE2EEnv } from "./e2e-env";
 import { showScanStatus } from "../src/test/helpers/show-scan";
 
 test("TV shows scan progress keeps the scan button busy and reports unmatched shows", async ({ page }) => {
-  const env = readE2EEnv();
-  await loginPageViaApi(page, env);
-  let status = showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
+  await loginPageViaApi(page);
+  let status = showScanStatus(IDLE_SCAN);
   let starts = 0;
   await page.route("**/api/settings", route => route.fulfill({ json: { error: false, data: { movies_dir: null, shows_dir: "/media/shows", music_dir: null } } }));
   await page.route("**/api/settings/scan/shows", route => {

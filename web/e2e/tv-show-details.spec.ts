@@ -3,18 +3,15 @@ import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
+import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 import {
-  fulfillIdleScanStatus,
+  apiResponse,
   fulfillJSON,
   nullableFloat64,
   nullableInt64,
   nullableString,
 } from "./e2e-api";
-
-function apiResponse(data: unknown) {
-  return { error: false, data };
-}
+import { mockApi } from "./e2e-mock-api";
 
 const showId = 401;
 
@@ -163,88 +160,40 @@ function seasonEpisodesPayload(seasonNumber: number) {
 }
 
 async function mockShowDetailsApi(page: Page) {
-  const unexpectedApiRequests: string[] = [];
+  const { unexpectedApiRequests } = await mockApi(page, {
+    handle: async ({ route, url, method }) => {
+      if (method !== "GET") {
+        return false;
+      }
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+      if (url.pathname === `/api/shows/details/${showId}`) {
+        await fulfillJSON(route, apiResponse(showDetailsPayload));
+        return true;
+      }
 
-    if (
-      url.pathname.startsWith("/api/tmdb/images/") ||
-      url.pathname.startsWith("/api/youtube/thumbnails/")
-    ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240"><rect width="160" height="240" fill="#0f172a"/></svg>`,
-      });
-      return;
-    }
-
-    // The app shell polls every scan-status endpoint for admins on every route.
-    if (await fulfillIdleScanStatus(route, url.pathname)) {
-      return;
-    }
-
-    if (method !== "GET") {
-      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-      unexpectedApiRequests.push(message);
-      await fulfillJSON(route, { error: true, message }, 405);
-      return;
-    }
-
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(
-        route,
-        apiResponse({
-          user: {
-            id: 1,
-            name: "Show User",
-            email: "shows@example.com",
-            is_admin: false,
-            avatar: null,
-            created_at: "2026-01-01T00:00:00Z",
-            updated_at: "2026-01-01T00:00:00Z",
-          },
-        }),
+      const episodesMatch = url.pathname.match(
+        /^\/api\/shows\/(\d+)\/seasons\/(\d+)\/episodes$/,
       );
-      return;
-    }
+      if (episodesMatch) {
+        // Validate the show id too: a season fixture served for any id would
+        // hide an episode URL built against the wrong show.
+        if (Number(episodesMatch[1]) !== showId) {
+          await fulfillJSON(route, { error: true, message: "show not found" }, 404);
+          return true;
+        }
 
-    if (url.pathname === "/api/notifications/unread-count") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
+        const payload = seasonEpisodesPayload(Number(episodesMatch[2]));
+        if (payload === null) {
+          await fulfillJSON(route, { error: true, message: "season not found" }, 404);
+          return true;
+        }
 
-    if (url.pathname === `/api/shows/details/${showId}`) {
-      await fulfillJSON(route, apiResponse(showDetailsPayload));
-      return;
-    }
-
-    const episodesMatch = url.pathname.match(
-      /^\/api\/shows\/(\d+)\/seasons\/(\d+)\/episodes$/,
-    );
-    if (episodesMatch) {
-      // Validate the show id too: a season fixture served for any id would
-      // hide an episode URL built against the wrong show.
-      if (Number(episodesMatch[1]) !== showId) {
-        await fulfillJSON(route, { error: true, message: "show not found" }, 404);
-        return;
+        await fulfillJSON(route, apiResponse(payload));
+        return true;
       }
 
-      const payload = seasonEpisodesPayload(Number(episodesMatch[2]));
-      if (payload === null) {
-        await fulfillJSON(route, { error: true, message: "season not found" }, 404);
-        return;
-      }
-
-      await fulfillJSON(route, apiResponse(payload));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
@@ -385,7 +334,7 @@ test("show details holds its layout at phone width", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockShowDetailsApi(page);
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(VIEWPORTS.phone);
   await page.goto(`/tv-shows/${showId}`);
 
   await expect(

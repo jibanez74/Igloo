@@ -6,15 +6,20 @@ import {
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
 } from "./e2e-layout";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
+import type { MoviesLibraryListItemType } from "../src/types";
 import {
+  apiResponse,
   fulfillJSON,
   nullableFloat64,
   nullableInt64,
   nullableString,
-  fulfillIdleScanStatus,
+  pagedList,
 } from "./e2e-api";
+import { mockApi } from "./e2e-mock-api";
+import { fillLibraryPage, libraryMovie } from "./fixtures/movies";
 
 type CreateMoviePlaylistRequest = {
   name: string;
@@ -23,48 +28,16 @@ type CreateMoviePlaylistRequest = {
   movie_id?: number;
 };
 
-function apiResponse(data: unknown) {
-  return {
-    error: false,
-    data,
-  };
-}
-
-function movie(
-  id: number,
-  title: string,
-  year: number,
-  posterPath = "",
-) {
-  return {
-    id,
-    title,
-    poster_path: nullableString(posterPath),
-    year: nullableInt64(year),
-    certification: nullableString("PG-13"),
-  };
-}
-
 function buildMoviePage(
-  featuredMovies: ReturnType<typeof movie>[],
-  fillerPrefix: string,
-  fillerStartId: number,
+  featuredMovies: MoviesLibraryListItemType[],
+  prefix: string,
+  startId: number,
 ) {
-  return [
-    ...featuredMovies,
-    ...Array.from(
-      { length: MOVIES_PER_PAGE - featuredMovies.length },
-      (_, index) =>
-        movie(
-          fillerStartId + index,
-          `${fillerPrefix} ${index + 1}`,
-          2000 + ((index + 1) % 20),
-          index % 2 === 0
-            ? `/${fillerPrefix.toLowerCase().replaceAll(" ", "-")}-${index + 1}.jpg`
-            : "",
-        ),
-    ),
-  ];
+  return fillLibraryPage(
+    featuredMovies,
+    { prefix, startId, perPage: MOVIES_PER_PAGE },
+    libraryMovie,
+  );
 }
 
 function moviePlaylist(
@@ -101,45 +74,45 @@ const moviesPlaylistsPath =
 
 const libraryPageOneMovies = buildMoviePage(
   [
-    movie(101, "Signal Fire", 2024, "/signal-fire.jpg"),
-    movie(102, "Quiet Harbor", 2022),
+    libraryMovie(101, "Signal Fire", 2024, "/signal-fire.jpg"),
+    libraryMovie(102, "Quiet Harbor", 2022),
   ],
   "Library Mock",
   1000,
 );
 
 const libraryPageTwoMovies = [
-  movie(201, "Verdant Run", 2025, "/verdant-run.jpg"),
+  libraryMovie(201, "Verdant Run", 2025, "/verdant-run.jpg"),
 ];
 
 const actionPageOneMovies = buildMoviePage(
   [
-    movie(301, "Sky Relay", 2025, "/sky-relay.jpg"),
-    movie(302, "Cinder Avenue", 2021),
+    libraryMovie(301, "Sky Relay", 2025, "/sky-relay.jpg"),
+    libraryMovie(302, "Cinder Avenue", 2021),
   ],
   "Action Mock",
   2000,
 );
 
 const actionPageTwoMovies = [
-  movie(325, "Afterburn", 2020, "/afterburn.jpg"),
+  libraryMovie(325, "Afterburn", 2020, "/afterburn.jpg"),
 ];
 
 const dramaPageOneMovies = [
-  movie(401, "Quiet Harbor", 2022),
+  libraryMovie(401, "Quiet Harbor", 2022),
 ];
 
 const likedPageOneMovies = buildMoviePage(
   [
-    movie(101, "Signal Fire", 2024, "/signal-fire.jpg"),
-    movie(102, "Quiet Harbor", 2022),
+    libraryMovie(101, "Signal Fire", 2024, "/signal-fire.jpg"),
+    libraryMovie(102, "Quiet Harbor", 2022),
   ],
   "Liked Mock",
   3000,
 );
 
 const likedPageTwoMovies = [
-  movie(201, "Verdant Run", 2025, "/verdant-run.jpg"),
+  libraryMovie(201, "Verdant Run", 2025, "/verdant-run.jpg"),
 ];
 
 const movieGenres = [
@@ -184,7 +157,7 @@ const mockMoviesById = new Map(
   ].map(movieEntry => [movieEntry.id, movieEntry]),
 );
 
-function movieDetails(movieSummary: ReturnType<typeof movie>) {
+function movieDetails(movieSummary: MoviesLibraryListItemType) {
   return {
     movie: {
       id: movieSummary.id,
@@ -229,251 +202,171 @@ async function mockMoviesApi(
   createdPlaylistRequests: CreateMoviePlaylistRequest[] = [],
 ) {
   const playlists = [...initialPlaylists];
-  const unexpectedApiRequests: string[] = [];
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+  const { unexpectedApiRequests } = await mockApi(page, {
+    user: { is_admin: true },
+    handle: async ({ route, url, method }) => {
+      const secondPage = url.searchParams.get("page") === "2";
 
-    if (await fulfillIdleScanStatus(route, url.pathname)) {
-      return;
-    }
-
-    if (url.pathname.startsWith("/api/tmdb/images/")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150" viewBox="0 0 100 150"><rect width="100" height="150" fill="#f59e0b"/><rect x="12" y="12" width="76" height="126" rx="10" fill="#0f172a"/><circle cx="50" cy="50" r="18" fill="#f8fafc"/><rect x="24" y="92" width="52" height="10" rx="5" fill="#f8fafc"/><rect x="30" y="110" width="40" height="8" rx="4" fill="#fbbf24"/></svg>`,
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Movies User",
-          email: "movies@example.com",
-          is_admin: true,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/notifications/unread-count") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
-
-    if (url.pathname === "/api/movies/stats") {
-      await fulfillJSON(route, apiResponse({ total_movies: 25 }));
-      return;
-    }
-
-    const movieDetailsMatch = url.pathname.match(/^\/api\/movies\/details\/(\d+)$/);
-    if (movieDetailsMatch) {
-      const movieId = Number(movieDetailsMatch[1]);
-      const movieSummary = mockMoviesById.get(movieId);
-
-      if (!movieSummary) {
-        await fulfillJSON(
-          route,
-          {
-            error: true,
-            message: `Movie ${movieId} not found`,
-          },
-          404,
-        );
-        return;
+      if (url.pathname === "/api/movies/stats") {
+        await fulfillJSON(route, apiResponse({ total_movies: 25 }));
+        return true;
       }
 
-      await fulfillJSON(route, apiResponse(movieDetails(movieSummary)));
-      return;
-    }
+      const movieDetailsMatch = url.pathname.match(/^\/api\/movies\/details\/(\d+)$/);
+      if (movieDetailsMatch) {
+        const movieId = Number(movieDetailsMatch[1]);
+        const movieSummary = mockMoviesById.get(movieId);
 
-    if (url.pathname === "/api/movies/library") {
-      const libraryPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-      requestedLibraryRequests.push(`${url.pathname}${url.search}`);
+        if (!movieSummary) {
+          await fulfillJSON(
+            route,
+            {
+              error: true,
+              message: `Movie ${movieId} not found`,
+            },
+            404,
+          );
+          return true;
+        }
 
-      await fulfillJSON(route, apiResponse({
-        movies: libraryPage === 2 ? libraryPageTwoMovies : libraryPageOneMovies,
-        total: 25,
-        page: libraryPage,
-        per_page: perPage,
-        total_pages: 2,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/movies/genres") {
-      await fulfillJSON(route, apiResponse({ genres: movieGenres }));
-      return;
-    }
-
-    if (url.pathname === "/api/movies/genres/10/movies") {
-      const genrePage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-      requestedGenreRequests.push(`${url.pathname}${url.search}`);
-
-      await fulfillJSON(route, apiResponse({
-        movies: genrePage === 2 ? actionPageTwoMovies : actionPageOneMovies,
-        total: 25,
-        page: genrePage,
-        per_page: perPage,
-        total_pages: 2,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/movies/genres/20/movies") {
-      const genrePage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-      requestedGenreRequests.push(`${url.pathname}${url.search}`);
-
-      await fulfillJSON(route, apiResponse({
-        movies: dramaPageOneMovies,
-        total: 1,
-        page: genrePage,
-        per_page: perPage,
-        total_pages: 1,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/movies/playlists") {
-      if (method === "GET") {
-        await fulfillJSON(route, apiResponse({ playlists }));
-        return;
+        await fulfillJSON(route, apiResponse(movieDetails(movieSummary)));
+        return true;
       }
 
-      if (method === "POST") {
-        const body = route.request().postDataJSON() as CreateMoviePlaylistRequest;
-        createdPlaylistRequests.push(body);
+      if (url.pathname === "/api/movies/library") {
+        requestedLibraryRequests.push(`${url.pathname}${url.search}`);
 
-        const playlist = moviePlaylist(
-          600 + playlists.length,
-          body.name,
-          0,
-          true,
-          body.description ?? "",
-        );
-
-        playlists.push(playlist);
-        await fulfillJSON(route, apiResponse({ playlist }));
-        return;
+        const movies = secondPage ? libraryPageTwoMovies : libraryPageOneMovies;
+        await fulfillJSON(route, apiResponse(pagedList(url, "movies", movies, {
+          total: 25,
+          perPage: MOVIES_PER_PAGE,
+        })));
+        return true;
       }
 
-      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-      unexpectedApiRequests.push(message);
-      await fulfillJSON(route, { error: true, message }, 405);
-      return;
-    }
-
-    const playlistDetailsMatch = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)$/);
-    if (playlistDetailsMatch) {
-      const playlistId = Number(playlistDetailsMatch[1]);
-      const playlist = playlists.find(candidate => candidate.id === playlistId);
-
-      if (!playlist) {
-        await fulfillJSON(
-          route,
-          {
-            error: true,
-            message: `Movie playlist ${playlistId} not found`,
-          },
-          404,
-        );
-        return;
+      if (url.pathname === "/api/movies/genres") {
+        await fulfillJSON(route, apiResponse({ genres: movieGenres }));
+        return true;
       }
 
-      const { movie_count, is_owner, can_edit, ...playlistRow } = playlist;
-      await fulfillJSON(route, apiResponse({
-        playlist: playlistRow,
-        movie_count,
-        is_owner,
-        can_edit,
-        collaborators: null,
-      }));
-      return;
-    }
+      if (url.pathname === "/api/movies/genres/10/movies") {
+        requestedGenreRequests.push(`${url.pathname}${url.search}`);
 
-    const playlistMoviesMatch = url.pathname.match(
-      /^\/api\/movies\/playlists\/(\d+)\/movies$/,
-    );
-    if (playlistMoviesMatch) {
-      const playlistId = Number(playlistMoviesMatch[1]);
-      const playlist = playlists.find(candidate => candidate.id === playlistId);
-      const page = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+        const movies = secondPage ? actionPageTwoMovies : actionPageOneMovies;
+        await fulfillJSON(route, apiResponse(pagedList(url, "movies", movies, {
+          total: 25,
+          perPage: MOVIES_PER_PAGE,
+        })));
+        return true;
+      }
+
+      if (url.pathname === "/api/movies/genres/20/movies") {
+        requestedGenreRequests.push(`${url.pathname}${url.search}`);
+
+        await fulfillJSON(route, apiResponse(pagedList(url, "movies", dramaPageOneMovies, {
+          total: 1,
+          perPage: MOVIES_PER_PAGE,
+        })));
+        return true;
+      }
+
+      if (url.pathname === "/api/movies/playlists") {
+        if (method === "GET") {
+          await fulfillJSON(route, apiResponse({ playlists }));
+          return true;
+        }
+
+        if (method === "POST") {
+          const body = route.request().postDataJSON() as CreateMoviePlaylistRequest;
+          createdPlaylistRequests.push(body);
+
+          const playlist = moviePlaylist(
+            600 + playlists.length,
+            body.name,
+            0,
+            true,
+            body.description ?? "",
+          );
+
+          playlists.push(playlist);
+          await fulfillJSON(route, apiResponse({ playlist }));
+          return true;
+        }
+
+        return false;
+      }
+
+      const playlistDetailsMatch = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)$/);
+      if (playlistDetailsMatch) {
+        const playlistId = Number(playlistDetailsMatch[1]);
+        const playlist = playlists.find(candidate => candidate.id === playlistId);
+
+        if (!playlist) {
+          await fulfillJSON(
+            route,
+            {
+              error: true,
+              message: `Movie playlist ${playlistId} not found`,
+            },
+            404,
+          );
+          return true;
+        }
+
+        const { movie_count, is_owner, can_edit, ...playlistRow } = playlist;
+        await fulfillJSON(route, apiResponse({
+          playlist: playlistRow,
+          movie_count,
+          is_owner,
+          can_edit,
+          collaborators: null,
+        }));
+        return true;
+      }
+
+      const playlistMoviesMatch = url.pathname.match(
+        /^\/api\/movies\/playlists\/(\d+)\/movies$/,
       );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+      if (playlistMoviesMatch) {
+        const playlistId = Number(playlistMoviesMatch[1]);
+        const playlist = playlists.find(candidate => candidate.id === playlistId);
 
-      if (!playlist) {
-        await fulfillJSON(
-          route,
-          {
-            error: true,
-            message: `Movie playlist ${playlistId} not found`,
-          },
-          404,
-        );
-        return;
+        if (!playlist) {
+          await fulfillJSON(
+            route,
+            {
+              error: true,
+              message: `Movie playlist ${playlistId} not found`,
+            },
+            404,
+          );
+          return true;
+        }
+
+        await fulfillJSON(route, apiResponse(pagedList(url, "movies", [], {
+          total: playlist.movie_count,
+          perPage: MOVIES_PER_PAGE,
+        })));
+        return true;
       }
 
-      await fulfillJSON(route, apiResponse({
-        movies: [],
-        total: playlist.movie_count,
-        page,
-        per_page: perPage,
-        total_pages: Math.max(1, Math.ceil(playlist.movie_count / perPage)),
-        sort,
-      }));
-      return;
-    }
+      if (url.pathname === "/api/movies/liked") {
+        const movies = secondPage ? likedPageTwoMovies : likedPageOneMovies;
+        await fulfillJSON(route, apiResponse(pagedList(url, "movies", movies, {
+          total: 25,
+          perPage: MOVIES_PER_PAGE,
+        })));
+        return true;
+      }
 
-    if (url.pathname === "/api/movies/liked") {
-      const likedPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+      if (url.pathname === "/api/tmdb/status") {
+        await fulfillJSON(route, apiResponse({ available: true }));
+        return true;
+      }
 
-      await fulfillJSON(route, apiResponse({
-        movies: likedPage === 2 ? likedPageTwoMovies : likedPageOneMovies,
-        total: 25,
-        page: likedPage,
-        per_page: perPage,
-        total_pages: 2,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/tmdb/status") {
-      await fulfillJSON(route, apiResponse({ available: true }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
@@ -489,7 +382,7 @@ test("movies library shell and URL-backed tabs render accessibly", async ({ page
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesAllPath);
 
   await expect(page).toHaveTitle("Movies - Igloo");
@@ -543,7 +436,7 @@ test("all movies tab renders accessible movie cards and URL-backed pagination", 
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesAllPath);
 
   const signalFireLink = page.getByRole("link", {
@@ -599,7 +492,7 @@ test("genres tab renders accessible counts, filtering, and URL-backed pagination
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesGenresPath);
 
   const genresTab = page.getByRole("tab", { name: "Genres" });
@@ -663,7 +556,7 @@ test("movies tabs avoid horizontal overflow on mobile", async ({ page }) => {
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(VIEWPORTS.phone);
   await page.goto(moviesAllPath);
 
   const tablist = page.getByRole("tablist");
@@ -759,7 +652,7 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
     requestedGenreRequests,
     createdPlaylistRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesPlaylistsPath);
 
   const playlistsTab = page.getByRole("tab", { name: "Playlists" });
@@ -810,7 +703,7 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(moviesPlaylistsPath);
 
   await page.getByRole("button", { name: "Liked movies" }).click();

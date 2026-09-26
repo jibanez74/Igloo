@@ -1,6 +1,6 @@
 import { type Page } from "@playwright/test";
 
-export type MockYouTubePlayerOptions = {
+type MockYouTubePlayerOptions = {
   failFirstLoad?: boolean;
 };
 

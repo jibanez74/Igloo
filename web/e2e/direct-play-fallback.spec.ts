@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { readE2EEnv } from "./e2e-env";
-import { loginWithCredentials } from "./media-e2e-helpers";
+import { loginPageViaApi } from "./e2e-auth";
+import { trackStreamRequests } from "./media-e2e-helpers";
+import { MOCK_MOVIE_ID } from "./fixtures/movies";
 
 // Drives the one-shot direct→remux fallback (audit D-FB): the mock movie is
 // direct-play eligible (MP4, H.264 High 4.1, AAC LC — Chromium's canPlayType
@@ -11,11 +12,13 @@ import { loginWithCredentials } from "./media-e2e-helpers";
 test("failed direct play falls back to remux once at the preserved position", async ({
   page,
 }) => {
-  await loginWithCredentials(page, readE2EEnv());
+  await loginPageViaApi(page);
 
-  const streamRequests: string[] = [];
-  await page.route("**/api/movies/101/stream*", async route => {
-    streamRequests.push(route.request().url());
+  const streamRequests = trackStreamRequests(
+    page,
+    `/api/movies/${MOCK_MOVIE_ID}/stream`,
+  );
+  await page.route(`**/api/movies/${MOCK_MOVIE_ID}/stream*`, async route => {
     await route.fulfill({
       status: 200,
       contentType: "video/mp4",
@@ -26,12 +29,12 @@ test("failed direct play falls back to remux once at the preserved position", as
   // The mock API server serves no HLS endpoints; keep the remux playlist
   // pending so the player stays mounted without real media.
   const playlistRequests: string[] = [];
-  await page.route("**/api/movies/101/hls/*/playlist.m3u8*", route => {
+  await page.route(`**/api/movies/${MOCK_MOVIE_ID}/hls/*/playlist.m3u8*`, route => {
     playlistRequests.push(route.request().url());
   });
 
   await page.goto(
-    "/movies/101/play?mode=direct&audio_track=0&subtitle_track=off&start=120",
+    `/movies/${MOCK_MOVIE_ID}/play?mode=direct&audio_track=0&subtitle_track=off&start=120`,
   );
 
   // The fallback rewrites the mode in place, preserving position and tracks.

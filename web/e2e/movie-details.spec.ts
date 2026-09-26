@@ -9,18 +9,16 @@ import {
 } from "../src/lib/constants";
 import type { WatchProgressType } from "../src/types";
 import {
+  apiResponse,
   fulfillJSON,
   nullableFloat64,
   nullableInt64,
   nullableString,
+  pagedList,
 } from "./e2e-api";
-
-function apiResponse(data: unknown) {
-  return {
-    error: false,
-    data,
-  };
-}
+import { VIEWPORTS } from "./e2e-layout";
+import { mockApi } from "./e2e-mock-api";
+import { libraryMovie } from "./fixtures/movies";
 
 const moviesAllPath =
   "/movies?tab=all&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
@@ -34,18 +32,17 @@ const noWatchProgress: WatchProgressType = {
   updated_at: null,
 };
 
-const libraryMovie = {
-  id: movieId,
-  title: "Signal Fire",
-  poster_path: nullableString("/signal-fire-poster.jpg"),
-  year: nullableInt64(2024),
-  certification: nullableString("PG-13"),
-};
+const signalFire = libraryMovie(
+  movieId,
+  "Signal Fire",
+  2024,
+  "/signal-fire-poster.jpg",
+);
 
 const movieDetailsPayload = {
   movie: {
     id: movieId,
-    title: libraryMovie.title,
+    title: signalFire.title,
     file_path: "/library/movies/signal-fire.mp4",
     file_name: "signal-fire.mp4",
     size: 5_100_000_000,
@@ -54,16 +51,16 @@ const movieDetailsPayload = {
     adult: false,
     tmdb_id: nullableInt64(1711),
     imdb_id: nullableString("tt1711000"),
-    poster_path: libraryMovie.poster_path,
+    poster_path: signalFire.poster_path,
     backdrop_path: nullableString("/signal-fire-backdrop.jpg"),
     language: nullableString("en"),
-    year: libraryMovie.year,
+    year: signalFire.year,
     release_date: nullableString("2024-07-04T12:00:00Z"),
     overview: nullableString(
       "A rescue pilot returns to a coastal town and uncovers the wildfire cover-up that drove her family apart.",
     ),
     tag_line: nullableString("Some fires never fade."),
-    certification: libraryMovie.certification,
+    certification: signalFire.certification,
     critic_rating: nullableFloat64(8.7),
     audience_rating: nullableFloat64(8.2),
     revenue: nullableFloat64(215000000),
@@ -216,113 +213,64 @@ async function mockMovieDetailsApi(
   page: Page,
   watchProgress: WatchProgressType = noWatchProgress,
 ) {
-  const unexpectedApiRequests: string[] = [];
+  const { unexpectedApiRequests } = await mockApi(page, {
+    handle: async ({ route, url, method }) => {
+      if (method !== "GET") {
+        return false;
+      }
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+      if (url.pathname === "/api/movies/stats") {
+        await fulfillJSON(route, apiResponse({ total_movies: 1 }));
+        return true;
+      }
 
-    if (
-      url.pathname.startsWith("/api/tmdb/images/") ||
-      url.pathname.startsWith("/api/youtube/thumbnails/")
-    ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240"><rect width="160" height="240" fill="#f59e0b"/><rect x="14" y="14" width="132" height="212" rx="12" fill="#0f172a"/><circle cx="80" cy="78" r="26" fill="#f8fafc"/><rect x="34" y="146" width="92" height="14" rx="7" fill="#f8fafc"/><rect x="42" y="170" width="76" height="10" rx="5" fill="#fbbf24"/></svg>`,
-      });
-      return;
-    }
+      if (url.pathname === "/api/tmdb/status") {
+        await fulfillJSON(route, apiResponse({ available: false }));
+        return true;
+      }
 
-    if (method !== "GET") {
-      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-      unexpectedApiRequests.push(message);
-      await fulfillJSON(route, { error: true, message }, 405);
-      return;
-    }
+      if (url.pathname === "/api/movies/library") {
+        const movies = pagedList(url, "movies", [signalFire], {
+          total: 1,
+          perPage: MOVIES_PER_PAGE,
+        });
+        await fulfillJSON(route, apiResponse(movies));
+        return true;
+      }
 
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Movie User",
-          email: "movies@example.com",
-          is_admin: false,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
+      if (url.pathname === `/api/movies/details/${movieId}`) {
+        await fulfillJSON(route, apiResponse(movieDetailsPayload));
+        return true;
+      }
 
-    if (url.pathname === "/api/notifications/unread-count") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
+      if (url.pathname === `/api/movies/${movieId}/technical-details`) {
+        await fulfillJSON(route, apiResponse(technicalDetailsPayload));
+        return true;
+      }
 
-    if (url.pathname === "/api/movies/stats") {
-      await fulfillJSON(route, apiResponse({ total_movies: 1 }));
-      return;
-    }
+      if (url.pathname === `/api/movies/${movieId}/like-status`) {
+        await fulfillJSON(route, apiResponse({ is_liked: false }));
+        return true;
+      }
 
-    if (url.pathname === "/api/tmdb/status") {
-      await fulfillJSON(route, apiResponse({ available: false }));
-      return;
-    }
+      if (url.pathname === `/api/movies/${movieId}/watch-progress`) {
+        await fulfillJSON(route, apiResponse(watchProgress));
+        return true;
+      }
 
-    if (url.pathname === "/api/movies/library") {
-      const pageNumber = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+      if (url.pathname === "/api/settings/playback") {
+        await fulfillJSON(route, apiResponse({
+          settings: {
+            profiles: [],
+            server_upload_mbps: null,
+            hardware_acceleration_device: "cpu",
+          },
+        }));
+        return true;
+      }
 
-      await fulfillJSON(route, apiResponse({
-        movies: [libraryMovie],
-        total: 1,
-        page: pageNumber,
-        per_page: perPage,
-        total_pages: 1,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/details/${movieId}`) {
-      await fulfillJSON(route, apiResponse(movieDetailsPayload));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/${movieId}/technical-details`) {
-      await fulfillJSON(route, apiResponse(technicalDetailsPayload));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/${movieId}/like-status`) {
-      await fulfillJSON(route, apiResponse({ is_liked: false }));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/${movieId}/watch-progress`) {
-      await fulfillJSON(route, apiResponse(watchProgress));
-      return;
-    }
-
-    if (url.pathname === "/api/settings/playback") {
-      await fulfillJSON(route, apiResponse({
-        settings: {
-          profiles: [],
-          server_upload_mbps: null,
-          hardware_acceleration_device: "cpu",
-        },
-      }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
@@ -367,7 +315,7 @@ test("movie details page renders the mocked success path from the movies index",
     name: "Movie poster for Signal Fire",
   });
   await expect(heroPoster).toBeHidden();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(VIEWPORTS.phone);
   await expect(heroPoster).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1200 });
   await expect(heroPoster).toBeHidden();

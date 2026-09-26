@@ -1,13 +1,14 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 
-import { readE2EEnv, type E2EEnv } from "./e2e-env";
+import { loginPageViaApi } from "./e2e-auth";
+import { intEnv, readE2EEnv, type E2EEnv } from "./e2e-env";
 import {
   clearWatchProgress,
   expectVideoAdvances,
   fetchTechnicalDetails,
-  loginWithCredentials,
   mediaApiPath,
   mediaPlayPath,
+  playButton,
   type E2EMedia,
 } from "./media-e2e-helpers";
 
@@ -48,14 +49,6 @@ const coverArtCodecs = new Set(["mjpeg", "png", "gif", "bmp"]);
 const playbackSessionPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-function positiveIntEnv(name: string, fallback?: number) {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 function profileEnv(name: string, fallback: HlsProfile): HlsProfile {
   const raw = process.env[name];
   if (!raw) return fallback;
@@ -68,12 +61,12 @@ function profileEnv(name: string, fallback: HlsProfile): HlsProfile {
 
 function readHlsEnv(): HlsEnv | null {
   const e2eEnv = readE2EEnv();
-  const fourKMovieId = positiveIntEnv("E2E_HLS_4K_MOVIE_ID");
-  const secondMovieId = positiveIntEnv("E2E_HLS_SECOND_MOVIE_ID");
+  const fourKMovieId = intEnv("E2E_HLS_4K_MOVIE_ID");
+  const secondMovieId = intEnv("E2E_HLS_SECOND_MOVIE_ID");
   const fourKProfile = profileEnv("E2E_HLS_4K_PROFILE", "2160p_16mbps");
   const secondProfile = profileEnv("E2E_HLS_SECOND_PROFILE", "720p_3mbps");
   // Optional: a TV episode transcoded through the episode HLS routes.
-  const episodeId = positiveIntEnv("E2E_EPISODE_ID");
+  const episodeId = intEnv("E2E_EPISODE_ID");
   const episodeProfile = profileEnv("E2E_HLS_EPISODE_PROFILE", "720p_3mbps");
 
   // The two movie cases come as a pair (the second exists to prove profile
@@ -113,9 +106,8 @@ function readHlsEnv(): HlsEnv | null {
   return {
     email: e2eEnv.email,
     password: e2eEnv.password,
-    audioTrack: positiveIntEnv("E2E_HLS_AUDIO_TRACK", 0) ?? 0,
-    responseTimeoutMs:
-      positiveIntEnv("E2E_HLS_RESPONSE_TIMEOUT_MS", 240_000) ?? 240_000,
+    audioTrack: intEnv("E2E_HLS_AUDIO_TRACK", 0, 0),
+    responseTimeoutMs: intEnv("E2E_HLS_RESPONSE_TIMEOUT_MS", 240_000),
     cases,
   };
 }
@@ -258,15 +250,13 @@ const hlsCases: HlsCase[] = hlsEnv?.cases ?? [
   },
 ];
 
-test.describe.configure({ mode: "serial" });
-
 test.describe("HLS transcoding playback", () => {
   test.skip(
     !hlsEnv,
     "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID, or E2E_EPISODE_ID, to run HLS e2e tests.",
   );
   test.beforeEach(async ({ page }) => {
-    await loginWithCredentials(page, hlsEnv!);
+    await loginPageViaApi(page, hlsEnv!);
   });
 
   test.beforeAll(() => {
@@ -329,11 +319,10 @@ test.describe("HLS transcoding playback", () => {
         start: "0",
       };
 
-      const playButton = page.getByRole("button", { name: "Play (Space or K)" });
-      await expect(playButton).toBeVisible({
+      await expect(playButton(page)).toBeVisible({
         timeout: hlsEnv!.responseTimeoutMs,
       });
-      await playButton.click();
+      await playButton(page).click();
 
       const initResponse = await page.waitForResponse(
         response =>

@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { apiURL, readE2EEnv } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { loginPageViaApi } from "./e2e-auth";
 
@@ -76,15 +75,14 @@ test.describe("Reduced motion", () => {
   test("ComingSoon pages keep content visible and stop decorative loops", async ({
     page,
   }) => {
-    const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await loginPageViaApi(page, env);
+    await loginPageViaApi(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ width: 1280, height: 900 });
 
     for (const comingSoonPage of comingSoonPages) {
-      await page.goto(apiURL(env, comingSoonPage.path), {
+      await page.goto(comingSoonPage.path, {
         waitUntil: "networkidle",
       });
 

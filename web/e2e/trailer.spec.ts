@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
-import { apiURL, readE2EEnv } from "./e2e-env";
+import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
+import { playButton } from "./media-e2e-helpers";
 import { mockYouTubePlayer } from "./mock-youtube-player";
 import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
 import { loginPageViaApi } from "./e2e-auth";
@@ -14,9 +14,7 @@ async function expectTrailerChrome(page: Page) {
   await expect(
     page.getByRole("slider", { name: "Seek through trailer" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Play (Space or K)" }),
-  ).toBeVisible();
+  await expect(playButton(page)).toBeVisible();
   await expect(
     page.getByRole("button", {
       name: `Rewind ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`,
@@ -38,28 +36,24 @@ test.describe("Trailer playback chrome", () => {
   for (const { name, viewport, reducedMotion } of [
     {
       name: "desktop",
-      viewport: { width: 1440, height: 900 },
+      viewport: VIEWPORTS.desktop,
       reducedMotion: "no-preference" as const,
     },
     {
       name: "mobile reduced motion",
-      viewport: { width: 390, height: 844 },
+      viewport: VIEWPORTS.phone,
       reducedMotion: "reduce" as const,
     },
   ]) {
     test(`renders labelled trailer controls on ${name}`, async ({ page }) => {
-      const env = readE2EEnv();
       const browserIssues = trackBrowserIssues(page);
 
-      await loginPageViaApi(page, env, { assertBody: false });
+      await loginPageViaApi(page);
       await mockYouTubePlayer(page);
       await page.emulateMedia({ reducedMotion });
       await page.setViewportSize(viewport);
       await page.goto(
-        apiURL(
-          env,
-          "/trailer?videoKey=signal-fire-trailer&returnTo=/movies/101",
-        ),
+        "/trailer?videoKey=signal-fire-trailer&returnTo=/movies/101",
         { waitUntil: "domcontentloaded" },
       );
 
@@ -71,16 +65,14 @@ test.describe("Trailer playback chrome", () => {
   test("keeps keyboard focus in the trailer dialog and closes on Escape", async ({
     page,
   }) => {
-    const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await loginPageViaApi(page, env, { assertBody: false });
+    await loginPageViaApi(page);
     await mockYouTubePlayer(page);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(
-      apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
-      { waitUntil: "domcontentloaded" },
-    );
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto("/trailer?videoKey=signal-fire-trailer&returnTo=/", {
+      waitUntil: "domcontentloaded",
+    });
 
     await expectTrailerChrome(page);
 
@@ -103,16 +95,14 @@ test.describe("Trailer playback chrome", () => {
   test("lets Space activate the focused retry button after a playback error", async ({
     page,
   }) => {
-    const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await loginPageViaApi(page, env, { assertBody: false });
+    await loginPageViaApi(page);
     await mockYouTubePlayer(page, { failFirstLoad: true });
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(
-      apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
-      { waitUntil: "domcontentloaded" },
-    );
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto("/trailer?videoKey=signal-fire-trailer&returnTo=/", {
+      waitUntil: "domcontentloaded",
+    });
 
     await expect(
       page.getByRole("dialog", { name: "Unable to Play Trailer" }),
@@ -130,16 +120,14 @@ test.describe("Trailer playback chrome", () => {
   test("keeps Space as a playback shortcut outside interactive controls", async ({
     page,
   }) => {
-    const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await loginPageViaApi(page, env, { assertBody: false });
+    await loginPageViaApi(page);
     await mockYouTubePlayer(page);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(
-      apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
-      { waitUntil: "domcontentloaded" },
-    );
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto("/trailer?videoKey=signal-fire-trailer&returnTo=/", {
+      waitUntil: "domcontentloaded",
+    });
 
     await expectTrailerChrome(page);
 

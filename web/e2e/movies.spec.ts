@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { apiURL, readE2EEnv } from "./e2e-env";
-import { loginViaApi } from "./e2e-auth";
+import { loginPageViaApi } from "./e2e-auth";
 
 const desktopViewport = { width: 1440, height: 1200 };
 const moviesAllPath =
@@ -159,12 +158,11 @@ test.describe("movies page", () => {
   test("loads live tabs and handles empty or populated genres and playlists", async ({
     page,
   }) => {
-    const env = readE2EEnv();
-    await loginViaApi(page.context().request, env);
+    await loginPageViaApi(page);
 
     const browserIssues = trackBrowserIssues(page);
     await page.setViewportSize(desktopViewport);
-    await page.goto(apiURL(env, moviesAllPath));
+    await page.goto(moviesAllPath);
 
     await expectMoviesPageLoaded(page);
     await expectGenresSmoke(page);

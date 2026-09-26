@@ -1,6 +1,13 @@
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
 import { musicScanStatus } from "../src/test/helpers/music-scan";
 import { showScanStatus } from "../src/test/helpers/show-scan";
+import { IDLE_SCAN } from "./e2e-api";
+import { MOCK_MOVIE_ID } from "./fixtures/movies";
+import {
+  MOCK_EPISODE_ID,
+  MOCK_NEXT_EPISODE_ID,
+  MOCK_SHOW_ID,
+} from "./fixtures/shows";
 import { randomUUID } from "node:crypto";
 import {
   createServer,
@@ -196,7 +203,7 @@ function nullableFloat(value: number | null) {
 
 const libraryMovies = [
   {
-    id: 101,
+    id: MOCK_MOVIE_ID,
     title: "Signal Fire",
     poster_path: nullableString("/signal-fire.jpg"),
     year: nullableInt(2024),
@@ -237,7 +244,7 @@ const latestAlbums = [
 
 const latestShows = [
   {
-    id: 401,
+    id: MOCK_SHOW_ID,
     name: "Frost Harbor",
     poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
     premiere_year: nullableInt(2026),
@@ -1071,7 +1078,7 @@ async function handleSettingsRoutes(
       sendFailure(response, 403, "Movie scan status is admin-only.");
       return true;
     }
-    sendSuccess(response, movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+    sendSuccess(response, movieScanStatus(IDLE_SCAN));
     return true;
   }
 
@@ -1080,7 +1087,7 @@ async function handleSettingsRoutes(
       sendFailure(response, 403, "Music scan status is admin-only.");
       return true;
     }
-    sendSuccess(response, musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+    sendSuccess(response, musicScanStatus(IDLE_SCAN));
     return true;
   }
 
@@ -1089,7 +1096,7 @@ async function handleSettingsRoutes(
       sendFailure(response, 403, "TV shows scan status is admin-only.");
       return true;
     }
-    sendSuccess(response, showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+    sendSuccess(response, showScanStatus(IDLE_SCAN));
     return true;
   }
 
@@ -1246,14 +1253,11 @@ async function handleSettingsRoutes(
 // show and season, the file mirrors the movie technical fixture keyed by
 // file_id instead of movie_id, and the first episode hands off to the second
 // so the up-next flow has somewhere to go.
-const mockEpisodeId = 70103;
-const mockNextEpisodeId = 70104;
-
 function showEpisodePlayback(episodeId: number) {
-  const isNext = episodeId === mockNextEpisodeId;
+  const isNext = episodeId === MOCK_NEXT_EPISODE_ID;
   return {
     show: {
-      id: 401,
+      id: MOCK_SHOW_ID,
       name: "Frost Harbor",
       poster_path: nullableString("/frost-harbor.jpg"),
       backdrop_path: nullableString("/frost-harbor-backdrop.jpg"),
@@ -1273,7 +1277,7 @@ function showEpisodePlayback(episodeId: number) {
     next_episode: isNext
       ? null
       : {
-          id: mockNextEpisodeId,
+          id: MOCK_NEXT_EPISODE_ID,
           season_number: 1,
           episode_number: 4,
           name: "The Long Night",
@@ -1286,7 +1290,7 @@ function showEpisodePlayback(episodeId: number) {
 }
 
 function episodeTechnicalDetails(episodeId: number) {
-  const { movie, ...streams } = movieTechnicalDetails(101);
+  const { movie, ...streams } = movieTechnicalDetails(MOCK_MOVIE_ID);
   const fileId = episodeId;
   const withFileId = <T extends { movie_id: unknown }>(rows: T[]) =>
     rows.map(({ movie_id, ...row }) => {
@@ -1367,7 +1371,7 @@ function handleShowsRoutes(
     const genreId = Number(showsByGenreMatch[1]);
     const { page, perPage, sort } = paginationParams(url);
     const shows = sortedShows(sort).filter(
-      show => genreId === 30 || (genreId === 40 && show.id === 401),
+      show => genreId === 30 || (genreId === 40 && show.id === MOCK_SHOW_ID),
     );
     const { items, total, total_pages } = paginate(shows, page, perPage);
     sendSuccess(response, {
@@ -1384,7 +1388,7 @@ function handleShowsRoutes(
   const episodeMatch = url.pathname.match(/^\/api\/shows\/episodes\/(\d+)$/);
   if (episodeMatch && method === "GET") {
     const episodeId = Number(episodeMatch[1]);
-    if (episodeId !== mockEpisodeId && episodeId !== mockNextEpisodeId) {
+    if (episodeId !== MOCK_EPISODE_ID && episodeId !== MOCK_NEXT_EPISODE_ID) {
       sendJSON(response, 404, { error: true, message: "episode not found" });
       return true;
     }
@@ -1486,7 +1490,7 @@ function handleContinueWatchingRoute(
     items: [
       {
         kind: "episode",
-        id: mockEpisodeId,
+        id: MOCK_EPISODE_ID,
         title: latestShows[0].name,
         poster_path: latestShows[0].poster_path,
         year: latestShows[0].premiere_year,

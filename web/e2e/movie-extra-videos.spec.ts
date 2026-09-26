@@ -6,36 +6,33 @@ import {
 import { mockYouTubePlayer } from "./mock-youtube-player";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
 import {
+  apiResponse,
   fulfillJSON,
   nullableFloat64,
   nullableInt64,
   nullableString,
+  pagedList,
 } from "./e2e-api";
-
-function apiResponse(data: unknown) {
-  return {
-    error: false,
-    data,
-  };
-}
+import { mockApi } from "./e2e-mock-api";
+import { playButton } from "./media-e2e-helpers";
+import { libraryMovie } from "./fixtures/movies";
 
 const movieId = 711;
 const moviePath = `/movies/${movieId}`;
 const extraVideoKey = "signal-fire-trailer";
 const extraVideoTitle = "Official Trailer";
 
-const libraryMovie = {
-  id: movieId,
-  title: "Signal Fire",
-  poster_path: nullableString("/signal-fire-poster.jpg"),
-  year: nullableInt64(2024),
-  certification: nullableString("PG-13"),
-};
+const signalFire = libraryMovie(
+  movieId,
+  "Signal Fire",
+  2024,
+  "/signal-fire-poster.jpg",
+);
 
 const movieDetailsPayload = {
   movie: {
     id: movieId,
-    title: libraryMovie.title,
+    title: signalFire.title,
     file_path: "/library/movies/signal-fire.mp4",
     file_name: "signal-fire.mp4",
     size: 5_100_000_000,
@@ -44,16 +41,16 @@ const movieDetailsPayload = {
     adult: false,
     tmdb_id: nullableInt64(1711),
     imdb_id: nullableString("tt1711000"),
-    poster_path: libraryMovie.poster_path,
+    poster_path: signalFire.poster_path,
     backdrop_path: nullableString("/signal-fire-backdrop.jpg"),
     language: nullableString("en"),
-    year: libraryMovie.year,
+    year: signalFire.year,
     release_date: nullableString("2024-07-04T12:00:00Z"),
     overview: nullableString(
       "A rescue pilot returns to a coastal town and uncovers the wildfire cover-up that drove her family apart.",
     ),
     tag_line: nullableString("Some fires never fade."),
-    certification: libraryMovie.certification,
+    certification: signalFire.certification,
     critic_rating: nullableFloat64(8.7),
     audience_rating: nullableFloat64(8.2),
     revenue: nullableFloat64(215000000),
@@ -154,118 +151,69 @@ const technicalDetailsPayload = {
 };
 
 async function mockMovieDetailsApi(page: Page) {
-  const unexpectedApiRequests: string[] = [];
+  const { unexpectedApiRequests } = await mockApi(page, {
+    handle: async ({ route, url, method }) => {
+      if (method !== "GET") {
+        return false;
+      }
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+      if (url.pathname === "/api/movies/stats") {
+        await fulfillJSON(route, apiResponse({ total_movies: 1 }));
+        return true;
+      }
 
-    if (
-      url.pathname.startsWith("/api/tmdb/images/") ||
-      url.pathname.startsWith("/api/youtube/thumbnails/")
-    ) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240"><rect width="160" height="240" fill="#f59e0b"/><rect x="14" y="14" width="132" height="212" rx="12" fill="#0f172a"/></svg>`,
-      });
-      return;
-    }
+      if (url.pathname === "/api/tmdb/status") {
+        await fulfillJSON(route, apiResponse({ available: false }));
+        return true;
+      }
 
-    if (method !== "GET") {
-      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-      unexpectedApiRequests.push(message);
-      await fulfillJSON(route, { error: true, message }, 405);
-      return;
-    }
+      if (url.pathname === "/api/movies/library") {
+        const movies = pagedList(url, "movies", [signalFire], {
+          total: 1,
+          perPage: MOVIES_PER_PAGE,
+        });
+        await fulfillJSON(route, apiResponse(movies));
+        return true;
+      }
 
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Movie User",
-          email: "movies@example.com",
-          is_admin: false,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
+      if (url.pathname === `/api/movies/details/${movieId}`) {
+        await fulfillJSON(route, apiResponse(movieDetailsPayload));
+        return true;
+      }
 
-    if (url.pathname === "/api/notifications/unread-count") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
+      if (url.pathname === `/api/movies/${movieId}/technical-details`) {
+        await fulfillJSON(route, apiResponse(technicalDetailsPayload));
+        return true;
+      }
 
-    if (url.pathname === "/api/movies/stats") {
-      await fulfillJSON(route, apiResponse({ total_movies: 1 }));
-      return;
-    }
+      if (url.pathname === `/api/movies/${movieId}/like-status`) {
+        await fulfillJSON(route, apiResponse({ is_liked: false }));
+        return true;
+      }
 
-    if (url.pathname === "/api/tmdb/status") {
-      await fulfillJSON(route, apiResponse({ available: false }));
-      return;
-    }
+      if (url.pathname === `/api/movies/${movieId}/watch-progress`) {
+        await fulfillJSON(route, apiResponse({
+          progress_sec: null,
+          duration_sec: null,
+          watched: false,
+          updated_at: null,
+        }));
+        return true;
+      }
 
-    if (url.pathname === "/api/movies/library") {
-      const pageNumber = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+      if (url.pathname === "/api/settings/playback") {
+        await fulfillJSON(route, apiResponse({
+          settings: {
+            profiles: [],
+            server_upload_mbps: null,
+            hardware_acceleration_device: "cpu",
+          },
+        }));
+        return true;
+      }
 
-      await fulfillJSON(route, apiResponse({
-        movies: [libraryMovie],
-        total: 1,
-        page: pageNumber,
-        per_page: perPage,
-        total_pages: 1,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/details/${movieId}`) {
-      await fulfillJSON(route, apiResponse(movieDetailsPayload));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/${movieId}/technical-details`) {
-      await fulfillJSON(route, apiResponse(technicalDetailsPayload));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/${movieId}/like-status`) {
-      await fulfillJSON(route, apiResponse({ is_liked: false }));
-      return;
-    }
-
-    if (url.pathname === `/api/movies/${movieId}/watch-progress`) {
-      await fulfillJSON(route, apiResponse({
-        progress_sec: null,
-        duration_sec: null,
-        watched: false,
-        updated_at: null,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/settings/playback") {
-      await fulfillJSON(route, apiResponse({
-        settings: {
-          profiles: [],
-          server_upload_mbps: null,
-          hardware_acceleration_device: "cpu",
-        },
-      }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
@@ -301,11 +249,10 @@ test("plays a movie extra video in the YouTube player and returns to the details
   );
   await expect(page.getByRole("dialog", { name: "Trailer" })).toBeVisible();
 
-  const playButton = page.getByRole("button", { name: "Play (Space or K)" });
-  await expect(playButton).toBeVisible();
+  await expect(playButton(page)).toBeVisible();
 
   // Starting playback flips the control to Pause, proving the player is playing.
-  await playButton.click();
+  await playButton(page).click();
   await expect(
     page.getByRole("button", { name: "Pause (Space or K)" }),
   ).toBeVisible();

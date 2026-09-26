@@ -6,52 +6,25 @@ import {
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
 } from "./e2e-layout";
 import { SHOWS_PER_PAGE } from "../src/lib/constants";
-import {
-  fulfillJSON,
-  nullableInt64,
-  nullableString,
-  fulfillIdleScanStatus,
-} from "./e2e-api";
-
-function apiResponse(data: unknown) {
-  return {
-    error: false,
-    data,
-  };
-}
-
-function show(id: number, name: string, year: number, posterPath = "") {
-  return {
-    id,
-    name,
-    poster_path: nullableString(posterPath),
-    premiere_year: nullableInt64(year),
-    certification: nullableString("TV-14"),
-  };
-}
+import type { ShowLibraryItemType } from "../src/types";
+import { apiResponse, fulfillJSON, pagedList } from "./e2e-api";
+import { mockApi } from "./e2e-mock-api";
+import { fillLibraryPage } from "./fixtures/movies";
+import { libraryShow } from "./fixtures/shows";
 
 function buildShowPage(
-  featuredShows: ReturnType<typeof show>[],
-  fillerPrefix: string,
-  fillerStartId: number,
+  featuredShows: ShowLibraryItemType[],
+  prefix: string,
+  startId: number,
 ) {
-  return [
-    ...featuredShows,
-    ...Array.from(
-      { length: SHOWS_PER_PAGE - featuredShows.length },
-      (_, index) =>
-        show(
-          fillerStartId + index,
-          `${fillerPrefix} ${index + 1}`,
-          2000 + ((index + 1) % 20),
-          index % 2 === 0
-            ? `/${fillerPrefix.toLowerCase().replaceAll(" ", "-")}-${index + 1}.jpg`
-            : "",
-        ),
-    ),
-  ];
+  return fillLibraryPage(
+    featuredShows,
+    { prefix, startId, perPage: SHOWS_PER_PAGE },
+    libraryShow,
+  );
 }
 
 const showsAllPath = "/tv-shows?tab=all&allPage=1&sort=asc&genresPage=1";
@@ -59,32 +32,32 @@ const showsGenresPath = "/tv-shows?tab=genres&allPage=1&sort=asc&genresPage=1";
 
 const libraryPageOneShows = buildShowPage(
   [
-    show(101, "Frost Harbor", 2024, "/frost-harbor.jpg"),
-    show(102, "Quiet Channel", 2022),
+    libraryShow(101, "Frost Harbor", 2024, "/frost-harbor.jpg"),
+    libraryShow(102, "Quiet Channel", 2022),
   ],
   "Library Mock",
   1000,
 );
 
 const libraryPageTwoShows = [
-  show(201, "Verdant Coast", 2025, "/verdant-coast.jpg"),
+  libraryShow(201, "Verdant Coast", 2025, "/verdant-coast.jpg"),
 ];
 
 const dramaPageOneShows = buildShowPage(
   [
-    show(301, "Sky Relay", 2025, "/sky-relay.jpg"),
-    show(302, "Cinder Avenue", 2021),
+    libraryShow(301, "Sky Relay", 2025, "/sky-relay.jpg"),
+    libraryShow(302, "Cinder Avenue", 2021),
   ],
   "Drama Mock",
   2000,
 );
 
 const dramaPageTwoShows = [
-  show(325, "Afterglow", 2020, "/afterglow.jpg"),
+  libraryShow(325, "Afterglow", 2020, "/afterglow.jpg"),
 ];
 
 const comedyPageOneShows = [
-  show(401, "Quiet Channel", 2022),
+  libraryShow(401, "Quiet Channel", 2022),
 ];
 
 const showGenres = [
@@ -105,115 +78,55 @@ async function mockShowsApi(
   requestedLibraryRequests: string[],
   requestedGenreRequests: string[],
 ) {
-  const unexpectedApiRequests: string[] = [];
+  const { unexpectedApiRequests } = await mockApi(page, {
+    user: { is_admin: true },
+    handle: async ({ route, url }) => {
+      const secondPage = url.searchParams.get("page") === "2";
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+      if (url.pathname === "/api/shows/stats") {
+        await fulfillJSON(route, apiResponse({ total_shows: 25 }));
+        return true;
+      }
 
-    if (await fulfillIdleScanStatus(route, url.pathname)) {
-      return;
-    }
+      if (url.pathname === "/api/shows/library") {
+        requestedLibraryRequests.push(`${url.pathname}${url.search}`);
 
-    if (url.pathname.startsWith("/api/tmdb/images/")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150" viewBox="0 0 100 150"><rect width="100" height="150" fill="#0ea5e9"/><rect x="12" y="12" width="76" height="126" rx="10" fill="#0f172a"/><circle cx="50" cy="50" r="18" fill="#f8fafc"/><rect x="24" y="92" width="52" height="10" rx="5" fill="#f8fafc"/><rect x="30" y="110" width="40" height="8" rx="4" fill="#7dd3fc"/></svg>`,
-      });
-      return;
-    }
+        const shows = secondPage ? libraryPageTwoShows : libraryPageOneShows;
+        await fulfillJSON(route, apiResponse(pagedList(url, "shows", shows, {
+          total: 25,
+          perPage: SHOWS_PER_PAGE,
+        })));
+        return true;
+      }
 
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Shows User",
-          email: "shows@example.com",
-          is_admin: true,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
+      if (url.pathname === "/api/shows/genres") {
+        await fulfillJSON(route, apiResponse({ genres: showGenres }));
+        return true;
+      }
 
-    if (url.pathname === "/api/notifications/unread-count") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
+      if (url.pathname === "/api/shows/genres/10/shows") {
+        requestedGenreRequests.push(`${url.pathname}${url.search}`);
 
-    if (url.pathname === "/api/shows/stats") {
-      await fulfillJSON(route, apiResponse({ total_shows: 25 }));
-      return;
-    }
+        const shows = secondPage ? dramaPageTwoShows : dramaPageOneShows;
+        await fulfillJSON(route, apiResponse(pagedList(url, "shows", shows, {
+          total: 25,
+          perPage: SHOWS_PER_PAGE,
+        })));
+        return true;
+      }
 
-    if (url.pathname === "/api/shows/library") {
-      const libraryPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(SHOWS_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-      requestedLibraryRequests.push(`${url.pathname}${url.search}`);
+      if (url.pathname === "/api/shows/genres/20/shows") {
+        requestedGenreRequests.push(`${url.pathname}${url.search}`);
 
-      await fulfillJSON(route, apiResponse({
-        shows: libraryPage === 2 ? libraryPageTwoShows : libraryPageOneShows,
-        total: 25,
-        page: libraryPage,
-        per_page: perPage,
-        total_pages: 2,
-        sort,
-      }));
-      return;
-    }
+        await fulfillJSON(route, apiResponse(pagedList(url, "shows", comedyPageOneShows, {
+          total: 1,
+          perPage: SHOWS_PER_PAGE,
+        })));
+        return true;
+      }
 
-    if (url.pathname === "/api/shows/genres") {
-      await fulfillJSON(route, apiResponse({ genres: showGenres }));
-      return;
-    }
-
-    if (url.pathname === "/api/shows/genres/10/shows") {
-      const genrePage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(SHOWS_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-      requestedGenreRequests.push(`${url.pathname}${url.search}`);
-
-      await fulfillJSON(route, apiResponse({
-        shows: genrePage === 2 ? dramaPageTwoShows : dramaPageOneShows,
-        total: 25,
-        page: genrePage,
-        per_page: perPage,
-        total_pages: 2,
-        sort,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/shows/genres/20/shows") {
-      const genrePage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(SHOWS_PER_PAGE),
-      );
-      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-      requestedGenreRequests.push(`${url.pathname}${url.search}`);
-
-      await fulfillJSON(route, apiResponse({
-        shows: comedyPageOneShows,
-        total: 1,
-        page: genrePage,
-        per_page: perPage,
-        total_pages: 1,
-        sort,
-      }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
@@ -229,7 +142,7 @@ test("tv shows library shell and URL-backed tabs render accessibly", async ({ pa
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(showsAllPath);
 
   await expect(page).toHaveTitle("TV Shows - Igloo");
@@ -273,7 +186,7 @@ test("all shows tab renders accessible show cards and URL-backed pagination", as
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(showsAllPath);
 
   const frostHarborLink = page.getByRole("link", {
@@ -357,7 +270,7 @@ test("genres tab renders accessible counts, filtering, and URL-backed pagination
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto(showsGenresPath);
 
   const genresTab = page.getByRole("tab", { name: "Genres" });
@@ -441,7 +354,7 @@ test("tv shows tabs avoid horizontal overflow on mobile", async ({ page }) => {
     requestedLibraryRequests,
     requestedGenreRequests,
   );
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(VIEWPORTS.phone);
   await page.goto(showsAllPath);
 
   const tablist = page.getByRole("tablist");

@@ -1,45 +1,35 @@
 import { expect, test, type Page } from "@playwright/test";
+import { loginPageViaApi } from "./e2e-auth";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { readE2EEnv } from "./e2e-env";
-import { loginWithCredentials } from "./media-e2e-helpers";
+import { playButton, trackStreamRequests } from "./media-e2e-helpers";
+import {
+  MOCK_EPISODE_ID,
+  MOCK_NEXT_EPISODE_ID,
+  MOCK_SHOW_ID,
+} from "./fixtures/shows";
 
 // Drives the episode play route against the mock API server, the way
 // movie-player.spec.ts drives the movie route: the stream request is left
 // pending so the player chrome reaches its ready state from the metadata
 // queries alone. The mock server knows one episode (70103 of show 401).
-const showId = 401;
-const episodeId = 70103;
+const showId = MOCK_SHOW_ID;
+const episodeId = MOCK_EPISODE_ID;
 const playPath = `/tv-shows/${showId}/episodes/${episodeId}/play`;
 
 const streamPath = `/api/shows/episodes/${episodeId}/stream`;
 const manifestPath = `/api/shows/episodes/${episodeId}/hls/720p_3mbps/playlist.m3u8`;
 
-// Every request for the episode's direct stream, whether or not a route
-// handler answers it, so a test can prove the stream was (or was not) asked
-// for.
-function trackStreamRequests(page: Page) {
-  const streamRequests: string[] = [];
-  page.on("request", request => {
-    if (new URL(request.url()).pathname === streamPath) {
-      streamRequests.push(request.url());
-    }
-  });
-  return streamRequests;
-}
-
 async function openEpisodePlayer(page: Page, search: string) {
-  await loginWithCredentials(page, readE2EEnv());
+  await loginPageViaApi(page);
 
-  const streamRequests = trackStreamRequests(page);
+  const streamRequests = trackStreamRequests(page, streamPath);
   await page.route("**/api/shows/episodes/*/stream*", () => {
     // Never fulfilled: keeps the player ready without firing a media error.
   });
 
   await page.goto(`${playPath}?${search}`);
 
-  await expect(
-    page.getByRole("button", { name: "Play (Space or K)" }),
-  ).toBeVisible();
+  await expect(playButton(page)).toBeVisible();
 
   return streamRequests;
 }
@@ -90,42 +80,19 @@ test("loader redirect canonicalizes the episode's default settings", async ({
 test("HLS mode requests the episode manifest with the shared query contract", async ({
   page,
 }) => {
-  await loginWithCredentials(page, readE2EEnv());
+  await loginPageViaApi(page);
 
-  const streamRequests = trackStreamRequests(page);
-  const usesNativeHls = await page.evaluate(() => {
-    // Mirrors shouldPreferNativeHls: native HLS only without usable MSE.
-    const video = document.createElement("video");
-    const reportsNativeHls =
-      video.canPlayType("application/vnd.apple.mpegurl") !== "" ||
-      video.canPlayType("application/x-mpegURL") !== "";
-    return (
-      reportsNativeHls &&
-      !window.MediaSource?.isTypeSupported(
-        'video/mp4; codecs="avc1.42E01E,mp4a.40.2"',
-      )
-    );
-  });
+  const streamRequests = trackStreamRequests(page, streamPath);
   const manifestRequests: string[] = [];
-  await page.route("**/api/shows/episodes/*/hls/**", async route => {
+  await page.route("**/api/shows/episodes/*/hls/**", route => {
+    // hls.js is happy with a pending manifest.
     manifestRequests.push(route.request().url());
-    // hls.js is happy with a pending manifest; a native HLS engine needs a
-    // real (empty) playlist or its metadata preflight never settles.
-    if (usesNativeHls && route.request().resourceType() === "fetch") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/vnd.apple.mpegurl",
-        body: "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:1\n#EXT-X-ENDLIST\n",
-      });
-    }
   });
 
   await page.goto(
     `${playPath}?mode=720p_3mbps&audio_track=0&subtitle_track=off&start=0`,
   );
-  await expect(
-    page.getByRole("button", { name: "Play (Space or K)" }),
-  ).toBeVisible();
+  await expect(playButton(page)).toBeVisible();
 
   await expect.poll(() => manifestRequests.length).toBeGreaterThan(0);
   const manifest = new URL(manifestRequests[0]);
@@ -142,7 +109,7 @@ test("HLS mode requests the episode manifest with the shared query contract", as
 test("an unknown episode lands on the player's not-found screen", async ({
   page,
 }) => {
-  await loginWithCredentials(page, readE2EEnv());
+  await loginPageViaApi(page);
 
   await page.goto(
     `/tv-shows/${showId}/episodes/999999/play?mode=direct&audio_track=0&subtitle_track=off&start=0`,
@@ -157,7 +124,7 @@ test("an unknown episode lands on the player's not-found screen", async ({
 // The mock server hands 70103 off to 70104 (S1 E4). Playback never really
 // runs here, so the end of the episode is the media element's own `ended`
 // event, exactly the signal the player listens for.
-const nextEpisodeId = 70104;
+const nextEpisodeId = MOCK_NEXT_EPISODE_ID;
 const nextPlayPath = `/tv-shows/${showId}/episodes/${nextEpisodeId}/play`;
 
 async function endEpisode(page: Page) {
@@ -227,7 +194,7 @@ test("cancelling the up-next card keeps the finished episode", async ({
   ).toBeFocused();
   // The transport chrome, which yields the bottom edge while the card
   // stands, is back.
-  await expect(page.getByRole("button", { name: "Play (Space or K)" })).toBeVisible();
+  await expect(playButton(page)).toBeVisible();
 
   browserIssues.assertClean();
 });

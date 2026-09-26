@@ -1,23 +1,12 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
-import { readE2EEnv } from "./e2e-env";
-import type { ApiResponse } from "./e2e-api";
+import type { components } from "../src/types/openapi.gen";
+import { readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 
-type InitiateData = {
-  code: string;
-  secret: string;
-  expires_in_seconds: number;
-  poll_interval_seconds: number;
-};
+type InitiateData = components["schemas"]["QuickConnectInitiateData"];
+type RedeemData = components["schemas"]["QuickConnectRedeemData"];
 
-type RedeemData = {
-  status: "pending" | "approved";
-  token?: string;
-  device?: { id: number; name: string };
-};
-
-const env = readE2EEnv();
 const deviceName = `E2E Quick Connect ${Date.now().toString(36)}`;
 
 async function initiate(request: APIRequestContext): Promise<InitiateData> {
@@ -27,7 +16,7 @@ async function initiate(request: APIRequestContext): Promise<InitiateData> {
   });
   expect(response.status()).toBe(201);
 
-  const body = (await response.json()) as ApiResponse<InitiateData>;
+  const body = await readJSON<InitiateData>(response);
   expect(body.error).toBe(false);
   expect(body.data?.code).toBeTruthy();
   expect(body.data?.secret).toBeTruthy();
@@ -45,7 +34,7 @@ async function redeem(
   });
   expect(response.status()).toBe(200);
 
-  const body = (await response.json()) as ApiResponse<RedeemData>;
+  const body = await readJSON<RedeemData>(response);
   expect(body.error).toBe(false);
   return body.data!;
 }
@@ -66,7 +55,7 @@ test.describe("Quick Connect pairing", () => {
     expect(pending.status).toBe("pending");
 
     // The user approves the code from account settings.
-    await loginPageViaApi(page, env, { assertBody: false });
+    await loginPageViaApi(page);
     await page.goto("/settings/account");
 
     const codeInput = page.getByRole("textbox", { name: "Quick Connect code" });

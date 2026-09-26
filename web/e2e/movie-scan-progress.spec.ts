@@ -1,12 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { IDLE_SCAN } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-import { readE2EEnv } from "./e2e-env";
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
 
 test("movie scan progress survives settings navigation and reports partial completion", async ({ page }) => {
-  const env = readE2EEnv();
-  await loginPageViaApi(page, env);
-  let status = movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
+  await loginPageViaApi(page);
+  let status = movieScanStatus(IDLE_SCAN);
   let starts = 0;
   let unavailable = false;
   let statisticsRequests = 0;

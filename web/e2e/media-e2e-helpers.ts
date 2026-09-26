@@ -1,36 +1,28 @@
 import { expect, type Page } from "@playwright/test";
+import { readJSON } from "./e2e-api";
 
-// Shared media helpers. `loginWithCredentials` is used by the default mocked
-// specs too (movie-player, direct-play-fallback); the fetch/progress helpers
-// below serve only the opt-in real-media suites (hls-transcode,
-// direct-play-media), which run against a live instance via E2E_BASE_URL.
+// Shared player helpers. The locator and request helpers serve the mocked
+// player specs as well; the fetch/progress helpers below serve only the
+// opt-in real-media suites (hls-transcode, direct-play-media), which run
+// against a live instance via E2E_BASE_URL.
 
-type MediaApiResponse<T> = {
-  error: boolean;
-  message?: string;
-  data?: T;
-};
+/** The player's play toggle, which appears once the chrome is ready. */
+export function playButton(page: Page) {
+  return page.getByRole("button", { name: "Play (Space or K)" });
+}
 
-export async function loginWithCredentials(
-  page: Page,
-  credentials: { email: string; password: string },
-) {
-  const loginResponse = await page.context().request.post("/api/auth/login", {
-    data: {
-      email: credentials.email,
-      password: credentials.password,
-    },
-    failOnStatusCode: false,
+/**
+ * Every request for `pathname`, whether or not a route handler answers it, so
+ * a test can prove the stream was (or was not) asked for.
+ */
+export function trackStreamRequests(page: Page, pathname: string) {
+  const streamRequests: string[] = [];
+  page.on("request", request => {
+    if (new URL(request.url()).pathname === pathname) {
+      streamRequests.push(request.url());
+    }
   });
-  expect(loginResponse.status()).toBe(200);
-
-  const loginBody = (await loginResponse.json()) as MediaApiResponse<unknown>;
-  expect(loginBody.error, loginBody.message).toBe(false);
-
-  const authResponse = await page.context().request.get("/api/auth/user", {
-    failOnStatusCode: false,
-  });
-  expect(authResponse.status()).toBe(200);
+  return streamRequests;
 }
 
 /**
@@ -68,7 +60,7 @@ async function fetchMediaJSON<T>(page: Page, path: string): Promise<T> {
   });
   expect(response.status()).toBe(200);
 
-  const body = (await response.json()) as MediaApiResponse<T>;
+  const body = await readJSON<T>(response);
   expect(body.error, body.message).toBe(false);
   expect(body.data).toBeTruthy();
   return body.data!;

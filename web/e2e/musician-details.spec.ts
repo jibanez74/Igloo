@@ -1,78 +1,33 @@
 import { expect, test, type Page } from "@playwright/test";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
+  assertMockSuiteClean,
+  trackBrowserIssues,
+} from "./e2e-browser-issues";
+import {
+  BREAKPOINTS,
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
 import {
+  apiResponse,
   fulfillJSON,
   nullableFloat64,
   nullableInt64,
   nullableString,
 } from "./e2e-api";
-
-function apiResponse(data: unknown) {
-  return { error: false, data };
-}
-
-const MUSICIAN_ID = 7;
-const ALBUM_ID = 42;
-
-function makeMusicianTrack(overrides: Record<string, unknown>) {
-  return {
-    id: 0,
-    title: "Untitled",
-    sort_title: "Untitled",
-    duration: 200_000,
-    codec: "flac",
-    bit_rate: 900_000,
-    file_path: "/music/untitled.flac",
-    track_index: nullableInt64(1),
-    disc: nullableInt64(1),
-    album_id: nullableInt64(ALBUM_ID),
-    album_title: nullableString("Glacier Sessions"),
-    album_cover: nullableString(),
-    ...overrides,
-  };
-}
-
-const musicianDetails = {
-  musician: {
-    id: MUSICIAN_ID,
-    name: "Aurora Pines",
-    sort_name: "Aurora Pines",
-    summary: nullableString("Aurora Pines makes ambient music."),
-    spotify_popularity: nullableFloat64(82),
-    spotify_followers: nullableInt64(1_234_567),
-    spotify_id: nullableString("sp-aurora"),
-    thumb: nullableString(),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  },
-  albums: [
-    {
-      id: ALBUM_ID,
-      title: "Glacier Sessions",
-      cover: nullableString(),
-      year: nullableInt64(2026),
-      release_date: nullableString("2026-02-14"),
-      spotify_popularity: nullableFloat64(73),
-      track_count: 2,
-    },
-  ],
-  tracks: [
-    makeMusicianTrack({ id: 101, title: "Northern Drift", duration: 214_000 }),
-    makeMusicianTrack({ id: 102, title: "Cold Current", duration: 198_000 }),
-  ],
-  genres: ["Ambient", "Electronic"],
-  total_duration: 412_000,
-};
+import { mockApi } from "./e2e-mock-api";
+import {
+  AURORA_PINES_ID,
+  GLACIER_SESSIONS_ID,
+  auroraPines,
+  glacierSessions,
+} from "./fixtures/music";
 
 const EMPTY_MUSICIAN_ID = 8;
 
 const emptyMusicianDetails = {
   musician: {
-    ...musicianDetails.musician,
+    ...auroraPines.musician,
     id: EMPTY_MUSICIAN_ID,
     name: "Silent Pines",
     sort_name: "Silent Pines",
@@ -86,97 +41,42 @@ const emptyMusicianDetails = {
   total_duration: 0,
 };
 
-const albumDetails = {
-  album: {
-    id: ALBUM_ID,
-    title: "Glacier Sessions",
-    sort_title: "Glacier Sessions",
-    musician: nullableString("Aurora Pines"),
-    spotify_id: nullableString("spotify-glacier"),
-    spotify_popularity: nullableFloat64(73),
-    release_date: nullableString("2026-02-14"),
-    year: nullableInt64(2026),
-    total_tracks: nullableInt64(0),
-    cover: nullableString(),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  },
-  tracks: [],
-  artists: [
-    { id: MUSICIAN_ID, name: "Aurora Pines", thumb: nullableString(), spotify_id: nullableString("sp-aurora") },
-  ],
-  track_genres: [],
-  album_genres: [],
-  total_duration: 0,
-};
-
 async function mockMusicianDetailsApi(page: Page) {
-  const unexpectedApiRequests: string[] = [];
+  const { unexpectedApiRequests } = await mockApi(page, {
+    handle: async ({ route, url, method }) => {
+      if (url.pathname === `/api/music/musicians/${AURORA_PINES_ID}` && method === "GET") {
+        await fulfillJSON(route, apiResponse(auroraPines));
+        return true;
+      }
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+      if (url.pathname === `/api/music/musicians/${EMPTY_MUSICIAN_ID}` && method === "GET") {
+        await fulfillJSON(route, apiResponse(emptyMusicianDetails));
+        return true;
+      }
 
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Musician User",
-          email: "musician@example.com",
-          is_admin: false,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
+      if (url.pathname === `/api/music/albums/details/${GLACIER_SESSIONS_ID}` && method === "GET") {
+        await fulfillJSON(route, apiResponse(glacierSessions));
+        return true;
+      }
 
-    if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
+      if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
+        await fulfillJSON(route, apiResponse({ liked_track_ids: [101] }));
+        return true;
+      }
 
-    if (url.pathname === `/api/music/musicians/${MUSICIAN_ID}` && method === "GET") {
-      await fulfillJSON(route, apiResponse(musicianDetails));
-      return;
-    }
-
-    if (url.pathname === `/api/music/musicians/${EMPTY_MUSICIAN_ID}` && method === "GET") {
-      await fulfillJSON(route, apiResponse(emptyMusicianDetails));
-      return;
-    }
-
-    if (url.pathname === `/api/music/albums/details/${ALBUM_ID}` && method === "GET") {
-      await fulfillJSON(route, apiResponse(albumDetails));
-      return;
-    }
-
-    if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ liked_track_ids: [101] }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
 }
-
-const breakpoints = [
-  { label: "mobile", width: 375, height: 812 },
-  { label: "tablet", width: 768, height: 1024 },
-  { label: "desktop", width: 1280, height: 900 },
-];
 
 test("musician details renders hero, discography, and tracks without console issues", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockMusicianDetailsApi(page);
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/music/musician/${MUSICIAN_ID}`);
+  await page.goto(`/music/musician/${AURORA_PINES_ID}`);
 
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
   await expect(page.getByText("Aurora Pines makes ambient music.")).toBeVisible();
@@ -212,8 +112,7 @@ test("musician details renders hero, discography, and tracks without console iss
   await expect(page.getByRole("link", { name: "Back to Musicians library" })).toBeVisible();
 
   await expectPageHasNoHorizontalScroll(page);
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("skip links surface on keyboard focus and target the page sections", async ({ page }) => {
@@ -221,7 +120,7 @@ test("skip links surface on keyboard focus and target the page sections", async 
   const unexpectedApiRequests = await mockMusicianDetailsApi(page);
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/music/musician/${MUSICIAN_ID}`);
+  await page.goto(`/music/musician/${AURORA_PINES_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
 
   const skipNav = page.getByRole("navigation", { name: "Skip to section" });
@@ -234,12 +133,11 @@ test("skip links surface on keyboard focus and target the page sections", async 
 
   await skipToDiscography.click();
   await expect(page).toHaveURL(
-    new RegExp(`/music/musician/${MUSICIAN_ID}#discography-heading$`),
+    new RegExp(`/music/musician/${AURORA_PINES_ID}#discography-heading$`),
   );
   await expect(page.getByRole("heading", { name: "Discography" })).toBeInViewport();
 
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("discography cards navigate to the album details page", async ({ page }) => {
@@ -247,7 +145,7 @@ test("discography cards navigate to the album details page", async ({ page }) =>
   const unexpectedApiRequests = await mockMusicianDetailsApi(page);
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/music/musician/${MUSICIAN_ID}`);
+  await page.goto(`/music/musician/${AURORA_PINES_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
 
   const albumLink = page.getByRole("link", { name: "Glacier Sessions, 2026 · 2 tracks" });
@@ -257,11 +155,10 @@ test("discography cards navigate to the album details page", async ({ page }) =>
   // Click the card's title line: the centered hover overlay is the play
   // button, so a center click would start playback instead of navigating.
   await albumLink.getByRole("heading", { name: "Glacier Sessions" }).click();
-  await expect(page).toHaveURL(`/music/album/${ALBUM_ID}`);
+  await expect(page).toHaveURL(`/music/album/${GLACIER_SESSIONS_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
 
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("musician with no albums or tracks hides those sections and playback actions", async ({ page }) => {
@@ -278,20 +175,19 @@ test("musician with no albums or tracks hides those sections and playback action
   await expect(page.getByRole("button", { name: /Shuffle play/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Back to Musicians library" })).toBeVisible();
 
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("musician details stays inside the viewport across breakpoints", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockMusicianDetailsApi(page);
 
-  await page.setViewportSize(breakpoints[0]);
-  await page.goto(`/music/musician/${MUSICIAN_ID}`);
+  await page.setViewportSize(BREAKPOINTS[0].size);
+  await page.goto(`/music/musician/${AURORA_PINES_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
 
-  for (const bp of breakpoints) {
-    await page.setViewportSize({ width: bp.width, height: bp.height });
+  for (const bp of BREAKPOINTS) {
+    await page.setViewportSize(bp.size);
 
     const playAll = page.getByRole("button", { name: "Play all 2 tracks by Aurora Pines", exact: true });
     await expect(playAll).toBeVisible();
@@ -306,6 +202,5 @@ test("musician details stays inside the viewport across breakpoints", async ({ p
     await page.screenshot({ path: `test-results/musician-details-${bp.label}.png`, fullPage: true });
   }
 
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

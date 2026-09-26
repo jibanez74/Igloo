@@ -1,12 +1,7 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Locator,
-  type Page,
-} from "@playwright/test";
+import { expect, test, type Page, type Response } from "@playwright/test";
 
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import type { AuthUser } from "../src/types";
+import { readE2EEnv } from "./e2e-env";
 import {
   isExpectedUnauthorizedResourceMessage,
   trackBrowserIssues,
@@ -14,21 +9,16 @@ import {
 import {
   readJSON,
 } from "./e2e-api";
-import { loginViaApi, logoutViaApi } from "./e2e-auth";
-
-type AdminUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  avatar: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type UsersData = {
-  users: AdminUser[];
-};
+import { loginPageViaApi, loginViaApi, logoutViaApi } from "./e2e-auth";
+import {
+  expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
+} from "./e2e-layout";
+import {
+  createUser,
+  deleteUsersByEmailPrefix,
+  fetchAdminUsers,
+} from "./e2e-users";
 
 // "Save profile" is deliberately absent: it is disabled (untabbable) until a
 // profile field changes, and the save flow itself is asserted separately.
@@ -50,80 +40,23 @@ const requiredAccountControlNames = [
 
 const responsiveViewports = [
   { name: "small phone", width: 360, height: 800 },
-  { name: "phone", width: 390, height: 844 },
-  { name: "tablet portrait", width: 768, height: 1024 },
+  { name: "phone", ...VIEWPORTS.phone },
+  { name: "tablet portrait", ...VIEWPORTS.tablet },
   { name: "tablet landscape", width: 1024, height: 768 },
-  { name: "desktop", width: 1440, height: 900 },
+  { name: "desktop", ...VIEWPORTS.desktop },
 ];
 
-async function fetchAdminUsers(
-  request: APIRequestContext,
-  env: E2EEnv,
-) {
-  const response = await request.get(apiURL(env, "/api/admin/users"), {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<UsersData>(response);
-  expect(body.error, body.message).toBe(false);
-  return body.data?.users ?? [];
-}
-
-async function deleteUser(
-  request: APIRequestContext,
-  env: E2EEnv,
-  userId: number,
-) {
-  const response = await request.delete(
-    apiURL(env, `/api/admin/users/${userId}`),
-    { failOnStatusCode: false },
-  );
-  expect(response.status()).toBe(200);
-}
-
-async function cleanupAuditUsers(
-  request: APIRequestContext,
-  env: E2EEnv,
-  prefix: string,
-) {
-  await loginViaApi(request, env);
-  const users = await fetchAdminUsers(request, env);
-  for (const user of users) {
-    if (user.email.startsWith(prefix)) {
-      await deleteUser(request, env, user.id);
-    }
-  }
-}
-
-async function expectDescriptionIncludes(
-  page: Page,
-  locator: Locator,
-  expectedText: string,
-) {
-  const describedBy = await locator.getAttribute("aria-describedby");
-  expect(describedBy).toBeTruthy();
-
-  const descriptionText = await page.evaluate(ids => {
-    return ids
-      .split(/\s+/)
-      .map(id => document.getElementById(id)?.textContent?.trim() ?? "")
-      .filter(Boolean)
-      .join(" ");
-  }, describedBy ?? "");
-
-  expect(descriptionText).toContain(expectedText);
-}
-
-async function expectAppPath(
-  page: Page,
-  env: E2EEnv,
+function isResponseTo(
+  response: Response,
+  method: string,
   pathname: string,
+  status: number,
 ) {
-  await expect.poll(() => new URL(page.url()).origin).toBe(
-    new URL(env.baseURL).origin,
+  return (
+    response.status() === status &&
+    response.request().method() === method &&
+    new URL(response.url()).pathname === pathname
   );
-  await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
 }
 
 async function injectInvalidAvatarFile(page: Page) {
@@ -148,6 +81,8 @@ async function auditResponsiveAccountPage(page: Page) {
       height: viewport.height,
     });
     await expect(page.getByRole("tabpanel", { name: "Account" })).toBeVisible();
+
+    await expectPageHasNoHorizontalScroll(page);
 
     const audit = await page.evaluate(requiredNames => {
       const isVisible = (element: Element) => {
@@ -243,8 +178,6 @@ async function auditResponsiveAccountPage(page: Page) {
         );
 
       return {
-        noHorizontalOverflow:
-          document.documentElement.scrollWidth <= window.innerWidth + 1,
         requiredNames: Object.fromEntries(
           requiredNames.map(name => [
             name,
@@ -258,10 +191,6 @@ async function auditResponsiveAccountPage(page: Page) {
       };
     }, requiredAccountControlNames);
 
-    expect(
-      audit.noHorizontalOverflow,
-      `${viewport.name} must not horizontally overflow`,
-    ).toBe(true);
     expect(audit.unlabeled, `${viewport.name} unlabeled controls`).toEqual([]);
     expect(
       audit.clippedInteractive,
@@ -344,12 +273,15 @@ test.describe("Account settings", () => {
   }) => {
     const env = readE2EEnv();
     const tracker = trackBrowserIssues(page, {
-      minResponseStatus: 500,
-      trackConsoleWarnings: false,
       ignoreConsole: (_type, text) =>
         isExpectedUnauthorizedResourceMessage(text) ||
         text ===
           "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      // The duplicate email is refused on purpose, and the deleted account's
+      // session no longer authenticates.
+      ignoreResponse: response =>
+        isResponseTo(response, "PUT", "/api/user/email", 409) ||
+        isResponseTo(response, "GET", "/api/auth/user", 401),
     });
     const stamp = Date.now();
     const prefix = `playwright-account-settings-${stamp}`;
@@ -368,27 +300,14 @@ test.describe("Account settings", () => {
       }
     });
 
-    await cleanupAuditUsers(request, env, prefix);
-
-    await loginViaApi(request, env);
-    const createResponse = await request.post(
-      apiURL(env, "/api/admin/users"),
-      {
-        data: {
-          name,
-          email,
-          password,
-          is_admin: false,
-        },
-        failOnStatusCode: false,
-      },
-    );
-    expect(createResponse.status()).toBe(201);
-    await logoutViaApi(page.context().request, env);
-    await loginViaApi(page.context().request, env, { email, password });
+    await loginViaApi(request);
+    await deleteUsersByEmailPrefix(request, prefix);
+    await createUser(request, { name, email, password });
+    await logoutViaApi(page.context().request);
+    await loginViaApi(page.context().request, { email, password });
 
     try {
-      await page.goto(apiURL(env, "/settings/account"), {
+      await page.goto("/settings/account", {
         waitUntil: "networkidle",
       });
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -396,7 +315,7 @@ test.describe("Account settings", () => {
 
       await auditResponsiveAccountPage(page);
       await auditMobileTabOrder(page);
-      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.setViewportSize(VIEWPORTS.desktop);
 
       await page.getByRole("textbox", { name: "Your email address" }).fill(
         env.email,
@@ -425,11 +344,11 @@ test.describe("Account settings", () => {
       await expect(page.getByText(partiallyEditedName).first()).toBeVisible();
 
       const partialProfileResponse = await page.context().request.get(
-        apiURL(env, "/api/auth/user"),
+        "/api/auth/user",
         { failOnStatusCode: false },
       );
       expect(partialProfileResponse.status()).toBe(200);
-      const partialProfileBody = await readJSON<{ user: AdminUser }>(
+      const partialProfileBody = await readJSON<{ user: AuthUser }>(
         partialProfileResponse,
       );
       expect(partialProfileBody.data?.user.email).toBe(email);
@@ -460,11 +379,11 @@ test.describe("Account settings", () => {
       await expect(page.getByText(editedName).first()).toBeVisible();
 
       const profileResponse = await page.context().request.get(
-        apiURL(env, "/api/auth/user"),
+        "/api/auth/user",
         { failOnStatusCode: false },
       );
       expect(profileResponse.status()).toBe(200);
-      const profileBody = await readJSON<{ user: AdminUser }>(profileResponse);
+      const profileBody = await readJSON<{ user: AuthUser }>(profileResponse);
       expect(profileBody.data?.user.email).toBe(editedEmail);
       expect(profileBody.data?.user.name).toBe(editedName);
 
@@ -492,10 +411,8 @@ test.describe("Account settings", () => {
         }),
       ).toBeVisible();
       await expect(uploadInput).toHaveAttribute("aria-invalid", "true");
-      await expectDescriptionIncludes(
-        page,
-        uploadInput,
-        "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.",
+      await expect(uploadInput).toHaveAccessibleDescription(
+        /Invalid file type\. Allowed: JPEG, PNG, GIF, WebP, AVIF\./,
       );
       expect(avatarUploadRequestCount).toBe(0);
 
@@ -510,10 +427,8 @@ test.describe("Account settings", () => {
         }),
       ).toBeVisible();
       await expect(newPasswordInput).toHaveAttribute("aria-invalid", "true");
-      await expectDescriptionIncludes(
-        page,
-        newPasswordInput,
-        "New password must be at least 9 characters.",
+      await expect(newPasswordInput).toHaveAccessibleDescription(
+        /New password must be at least 9 characters\./,
       );
       await expect(newPasswordInput).toBeFocused();
 
@@ -532,14 +447,7 @@ test.describe("Account settings", () => {
       await expect(page.getByLabel("New password", { exact: true })).toHaveValue("");
       await expect(page.getByLabel("Confirm new password")).toHaveValue("");
 
-      const updatedLoginResponse = await request.post(
-        apiURL(env, "/api/auth/login"),
-        {
-          data: { email: editedEmail, password: newPassword },
-          failOnStatusCode: false,
-        },
-      );
-      expect(updatedLoginResponse.status()).toBe(200);
+      await loginViaApi(request, { email: editedEmail, password: newPassword });
 
       await page.getByRole("button", { name: "Delete account" }).click();
       const dialog = page.getByRole("dialog", { name: "Delete Account" });
@@ -555,10 +463,8 @@ test.describe("Account settings", () => {
         "Type DELETE to confirm account deletion",
       );
       await expect(deleteConfirmInput).toHaveAttribute("aria-invalid", "true");
-      await expectDescriptionIncludes(
-        page,
-        deleteConfirmInput,
-        "Type DELETE exactly to confirm account deletion.",
+      await expect(deleteConfirmInput).toHaveAccessibleDescription(
+        /Type DELETE exactly to confirm account deletion\./,
       );
       await expect(
         page.getByRole("alert").filter({
@@ -585,28 +491,24 @@ test.describe("Account settings", () => {
         ),
         dialog.getByRole("button", { name: "Delete Account" }).click(),
       ]);
-      await expectAppPath(page, env, "/login");
+      await expect(page).toHaveURL(/\/login(?:\?|$)/);
 
-      const deletedLogin = await request.post(apiURL(env, "/api/auth/login"), {
+      const deletedLogin = await request.post("/api/auth/login", {
         data: { email: editedEmail, password: newPassword },
         failOnStatusCode: false,
       });
       expect(deletedLogin.status()).toBe(401);
 
-      await loginViaApi(request, env);
-      const usersResponse = await request.get(apiURL(env, "/api/admin/users"), {
-        failOnStatusCode: false,
-      });
-      expect(usersResponse.status()).toBe(200);
-      const usersBody = await readJSON<UsersData>(usersResponse);
-      const userStillExists = (usersBody.data?.users ?? []).some(
+      await loginViaApi(request);
+      const userStillExists = (await fetchAdminUsers(request)).some(
         user => user.email === editedEmail || user.email === email,
       );
       expect(userStillExists).toBe(false);
 
       tracker.assertClean();
     } finally {
-      await cleanupAuditUsers(request, env, prefix);
+      await loginViaApi(request);
+      await deleteUsersByEmailPrefix(request, prefix);
     }
   });
 
@@ -614,38 +516,29 @@ test.describe("Account settings", () => {
     page,
     request,
   }) => {
-    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page, {
-      minResponseStatus: 500,
-      trackConsoleWarnings: false,
-      ignoreConsole: (_type, text) =>
-        isExpectedUnauthorizedResourceMessage(text) ||
-        text ===
-          "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      ignoreConsole: (_type, text) => isExpectedUnauthorizedResourceMessage(text),
+      // The wrong current PIN is refused on purpose.
+      ignoreResponse: response =>
+        isResponseTo(response, "PUT", "/api/user/pin", 401),
     });
     const stamp = Date.now();
     const prefix = `playwright-profile-pin-${stamp}`;
     const email = `${prefix}@example.com`;
     const password = `ProfilePinPass${stamp}!`;
 
-    await cleanupAuditUsers(request, env, prefix);
-
-    await loginViaApi(request, env);
-    const createResponse = await request.post(apiURL(env, "/api/admin/users"), {
-      data: {
-        name: `Playwright Profile PIN ${stamp}`,
-        email,
-        password,
-        is_admin: false,
-      },
-      failOnStatusCode: false,
+    await loginViaApi(request);
+    await deleteUsersByEmailPrefix(request, prefix);
+    await createUser(request, {
+      name: `Playwright Profile PIN ${stamp}`,
+      email,
+      password,
     });
-    expect(createResponse.status()).toBe(201);
-    await logoutViaApi(page.context().request, env);
-    await loginViaApi(page.context().request, env, { email, password });
+    await logoutViaApi(page.context().request);
+    await loginViaApi(page.context().request, { email, password });
 
     try {
-      await page.goto(apiURL(env, "/settings/account"), {
+      await page.goto("/settings/account", {
         waitUntil: "networkidle",
       });
       await expect(
@@ -745,24 +638,17 @@ test.describe("Account settings", () => {
 
       tracker.assertClean();
     } finally {
-      await cleanupAuditUsers(request, env, prefix);
+      await loginViaApi(request);
+      await deleteUsersByEmailPrefix(request, prefix);
     }
   });
 
   test("hides the danger zone from admin accounts", async ({ page }) => {
-    const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page, {
-      minResponseStatus: 500,
-      trackConsoleWarnings: false,
-      ignoreConsole: (_type, text) =>
-        isExpectedUnauthorizedResourceMessage(text) ||
-        text ===
-          "Failed to load resource: the server responded with a status of 409 (Conflict)",
-    });
+    const tracker = trackBrowserIssues(page);
 
-    await loginViaApi(page.context().request, env);
+    await loginPageViaApi(page);
 
-    await page.goto(apiURL(env, "/settings/account"), {
+    await page.goto("/settings/account", {
       waitUntil: "networkidle",
     });
     await expect(page.getByText("Profile Information")).toBeVisible();

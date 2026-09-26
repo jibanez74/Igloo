@@ -1,73 +1,14 @@
-import {
-  expect,
-  test,
-  type Page,
-} from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import {
-  readJSON,
-} from "./e2e-api";
 import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
-
-type AdminUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  avatar: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type UsersData = {
-  users: AdminUser[];
-};
-
-async function fetchAdminUsers(page: Page, env: E2EEnv) {
-  const response = await page.context().request.get(
-    apiURL(env, "/api/admin/users"),
-    { failOnStatusCode: false },
-  );
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<UsersData>(response);
-  expect(body.error, body.message).toBe(false);
-  return body.data?.users ?? [];
-}
-
-async function deleteUser(page: Page, env: E2EEnv, userId: number) {
-  const response = await page.context().request.delete(
-    apiURL(env, `/api/admin/users/${userId}`),
-    { failOnStatusCode: false },
-  );
-  expect(response.status()).toBe(200);
-}
-
-async function cleanupAuditUsers(page: Page, env: E2EEnv, prefix: string) {
-  const users = await fetchAdminUsers(page, env);
-  for (const user of users) {
-    if (user.email.startsWith(prefix)) {
-      await deleteUser(page, env, user.id);
-    }
-  }
-}
-
-async function expectAppPath(page: Page, env: E2EEnv, pathname: string) {
-  await expect.poll(() => new URL(page.url()).origin).toBe(
-    new URL(env.baseURL).origin,
-  );
-  await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
-}
-
-test.describe.configure({ mode: "serial" });
+import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
+import { deleteUsersByEmailPrefix } from "./e2e-users";
 
 test.describe("Users settings", () => {
   test("manages users accessibly without expected validation console noise", async ({
     page,
   }) => {
-    const env = readE2EEnv();
     const stamp = Date.now();
     const prefix = `playwright-users-settings-${stamp}`;
     const name = `Playwright Users Settings ${stamp}`;
@@ -94,11 +35,11 @@ test.describe("Users settings", () => {
       }
     });
 
-    await loginPageViaApi(page, env);
-    await cleanupAuditUsers(page, env, prefix);
+    await loginPageViaApi(page);
+    await deleteUsersByEmailPrefix(page.context().request, prefix);
 
     try {
-      await page.goto(apiURL(env, "/settings/users"), { waitUntil: "networkidle" });
+      await page.goto("/settings/users", { waitUntil: "networkidle" });
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Add User" })).toBeVisible();
 
@@ -184,20 +125,20 @@ test.describe("Users settings", () => {
       await expect(page.getByRole("dialog", { name: "Reset Password" })).toBeHidden();
       expect(resetPasswordPutCount).toBe(1);
 
-      await logoutViaApi(page.context().request, env);
-      await loginPageViaApi(page, env, {
+      await logoutViaApi(page.context().request);
+      await loginPageViaApi(page, {
         email: editedEmail,
         password: resetPassword,
       });
-      await page.goto(apiURL(env, "/settings/users"), { waitUntil: "networkidle" });
-      await expectAppPath(page, env, "/settings/account");
+      await page.goto("/settings/users", { waitUntil: "networkidle" });
+      await expect(page).toHaveURL(/\/settings\/account(?:\?|$)/);
       await expect(page.getByRole("tab", { name: "Account" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Playback" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Users" })).toHaveCount(0);
 
-      await logoutViaApi(page.context().request, env);
-      await loginPageViaApi(page, env);
-      await page.goto(apiURL(env, "/settings/users"), { waitUntil: "networkidle" });
+      await logoutViaApi(page.context().request);
+      await loginPageViaApi(page);
+      await page.goto("/settings/users", { waitUntil: "networkidle" });
       await expect(page.getByText(editedName)).toBeVisible();
 
       await page.setViewportSize({ width: 360, height: 800 });
@@ -210,14 +151,8 @@ test.describe("Users settings", () => {
       await expect(
         page.getByRole("button", { name: `Delete ${editedName}` }),
       ).toBeVisible();
-      await expect
-        .poll(() =>
-          page.evaluate(
-            () => document.documentElement.scrollWidth <= window.innerWidth + 1,
-          ),
-        )
-        .toBe(true);
-      await page.setViewportSize({ width: 1440, height: 900 });
+      await expectPageHasNoHorizontalScroll(page);
+      await page.setViewportSize(VIEWPORTS.desktop);
 
       await page.getByRole("button", { name: `Delete ${editedName}` }).click();
       await page
@@ -244,18 +179,15 @@ test.describe("Users settings", () => {
       await expect(page.getByRole("dialog", { name: "Delete User" })).toBeHidden();
       await expect(editedRow).toHaveCount(0);
 
-      const deletedLogin = await page.context().request.post(
-        apiURL(env, "/api/auth/login"),
-        {
-          data: { email: editedEmail, password: resetPassword },
-          failOnStatusCode: false,
-        },
-      );
+      const deletedLogin = await page.context().request.post("/api/auth/login", {
+        data: { email: editedEmail, password: resetPassword },
+        failOnStatusCode: false,
+      });
       expect(deletedLogin.status()).toBe(401);
     } finally {
-      await logoutViaApi(page.context().request, env);
-      await loginPageViaApi(page, env);
-      await cleanupAuditUsers(page, env, prefix);
+      await logoutViaApi(page.context().request);
+      await loginPageViaApi(page);
+      await deleteUsersByEmailPrefix(page.context().request, prefix);
     }
 
     tracker.assertClean();

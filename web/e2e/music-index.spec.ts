@@ -1,9 +1,10 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
 import {
+  VIEWPORTS,
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
@@ -14,11 +15,20 @@ import {
   TRACKS_INFINITE_PAGE_SIZE,
 } from "../src/lib/constants";
 import {
+  apiResponse,
   fulfillJSON,
+  nullableFloat64,
   nullableInt64,
   nullableString,
-  fulfillIdleScanStatus,
 } from "./e2e-api";
+import { mockApi } from "./e2e-mock-api";
+import {
+  playlistSummary,
+  simpleAlbum,
+  simpleMusician,
+  trackListItem,
+  type MusicianDetails,
+} from "./fixtures/music";
 
 type CreatePlaylistRequest = {
   name: string;
@@ -26,80 +36,37 @@ type CreatePlaylistRequest = {
   is_public: boolean;
 };
 
-function apiResponse(data: unknown) {
-  return {
-    error: false,
-    data,
-  };
-}
-
 const mockAlbums = [
-  {
+  simpleAlbum({
     id: 1,
     title: "First Mock Album",
-    cover: nullableString(),
     musician: nullableString("Aurora Pines"),
-    year: nullableInt64(2026),
-  },
+  }),
 ];
 
 const pageOneMusicians = [
-  {
-    id: 1,
-    name: "Aurora Pines",
-    sort_name: "Aurora Pines",
-    thumb: nullableString(),
-    album_count: 2,
-    track_count: 18,
-  },
-  {
-    id: 2,
-    name: "Midnight Static",
-    sort_name: "Midnight Static",
-    thumb: nullableString(),
-    album_count: 1,
-    track_count: 9,
-  },
+  simpleMusician({ id: 1, name: "Aurora Pines", album_count: 2, track_count: 18 }),
+  simpleMusician({ id: 2, name: "Midnight Static", album_count: 1, track_count: 9 }),
 ];
 
 const pageTwoMusicians = [
-  {
-    id: 3,
-    name: "Northern Signal",
-    sort_name: "Northern Signal",
-    thumb: nullableString(),
-    album_count: 3,
-    track_count: 27,
-  },
+  simpleMusician({ id: 3, name: "Northern Signal", album_count: 3, track_count: 27 }),
 ];
 
+function blueRecordTrack(id: number, title: string) {
+  return trackListItem({
+    id,
+    title,
+    album_id: nullableInt64(10),
+    album_title: nullableString("Blue Record"),
+    musician_id: nullableInt64(20),
+    musician_name: nullableString("The Band"),
+  });
+}
+
 const mockTracks = [
-  {
-    id: 1,
-    title: "Alabaster",
-    duration: 180,
-    codec: "flac",
-    bit_rate: 900000,
-    file_path: "/music/alabaster.flac",
-    album_id: nullableInt64(10),
-    album_title: nullableString("Blue Record"),
-    album_cover: nullableString(),
-    musician_id: nullableInt64(20),
-    musician_name: nullableString("The Band"),
-  },
-  {
-    id: 2,
-    title: "Borrowed Light",
-    duration: 180,
-    codec: "flac",
-    bit_rate: 900000,
-    file_path: "/music/borrowed-light.flac",
-    album_id: nullableInt64(10),
-    album_title: nullableString("Blue Record"),
-    album_cover: nullableString(),
-    musician_id: nullableInt64(20),
-    musician_name: nullableString("The Band"),
-  },
+  blueRecordTrack(1, "Alabaster"),
+  blueRecordTrack(2, "Borrowed Light"),
 ];
 
 const mockMusicianDetails = {
@@ -108,10 +75,7 @@ const mockMusicianDetails = {
     name: "Aurora Pines",
     sort_name: "Aurora Pines",
     summary: nullableString("Layered ambient pop with long descriptive copy for the tablet hero layout."),
-    spotify_popularity: {
-      Float64: 82,
-      Valid: true,
-    },
+    spotify_popularity: nullableFloat64(82),
     spotify_followers: nullableInt64(42000),
     spotify_id: nullableString("spotify-aurora-pines"),
     thumb: nullableString(),
@@ -125,95 +89,66 @@ const mockMusicianDetails = {
       cover: nullableString(),
       year: nullableInt64(2026),
       release_date: nullableString("2026-01-01"),
-      spotify_popularity: {
-        Float64: 70,
-        Valid: true,
-      },
       track_count: 2,
     },
   ],
-  tracks: mockTracks.map((track) => ({
+  tracks: mockTracks.map(track => ({
     id: track.id,
     title: track.title,
-    sort_title: track.title,
     duration: track.duration,
     codec: track.codec,
     bit_rate: track.bit_rate,
-    file_path: track.file_path,
-    track_index: track.id,
-    disc: 1,
     album_id: track.album_id,
     album_title: track.album_title,
     album_cover: track.album_cover,
   })),
   genres: ["Ambient", "Pop", "Electronic"],
   total_duration: 360000,
-};
+} satisfies MusicianDetails;
 
 const likedTrackPages = {
   1: [
-    {
+    trackListItem({
       id: 40,
       title: "Heartline",
       duration: 210,
-      codec: "flac",
-      bit_rate: 900000,
-      file_path: "/music/heartline.flac",
       album_id: nullableInt64(41),
       album_title: nullableString("Warm Static"),
-      album_cover: nullableString(),
       musician_id: nullableInt64(42),
       musician_name: nullableString("Amber Field"),
-    },
+    }),
   ],
   2: [
-    {
+    trackListItem({
       id: 41,
       title: "Second Favorite",
       duration: 195,
-      codec: "flac",
-      bit_rate: 900000,
-      file_path: "/music/second-favorite.flac",
       album_id: nullableInt64(43),
       album_title: nullableString("Late Catalog"),
-      album_cover: nullableString(),
       musician_id: nullableInt64(44),
       musician_name: nullableString("Cedar Room"),
-    },
+    }),
   ],
 };
 
 const mockPlaylists = [
-  {
+  playlistSummary({
     id: 30,
-    user_id: 1,
     name: "Morning Rotation",
     description: nullableString("Daily tracks for the first pass"),
-    cover_image: nullableString(),
-    is_public: false,
-    folder_id: nullableInt64(),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     track_count: 3,
     total_duration: 540000,
-    is_owner: true,
-    can_edit: true,
-  },
-  {
+  }),
+  playlistSummary({
     id: 31,
     user_id: 2,
     name: "Shared Discoveries",
     description: nullableString("Tracks shared by another listener"),
-    cover_image: nullableString(),
-    is_public: false,
-    folder_id: nullableInt64(),
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     track_count: 2,
     total_duration: 420000,
     is_owner: false,
     can_edit: false,
-  },
+  }),
 ];
 
 async function mockMusicIndexApi(
@@ -223,187 +158,129 @@ async function mockMusicIndexApi(
   requestedInTheatersRequests?: string[],
 ) {
   const playlists = [...mockPlaylists];
-  const unexpectedApiRequests: string[] = [];
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+  const { unexpectedApiRequests } = await mockApi(page, {
+    user: { is_admin: true },
+    handle: async ({ route, url, method }) => {
+      if (url.pathname === "/api/music/stats") {
+        await fulfillJSON(route, apiResponse({
+          total_albums: 6,
+          total_tracks: 54,
+          total_musicians: 3,
+        }));
+        return true;
+      }
 
-    if (await fulfillIdleScanStatus(route, url.pathname)) {
-      return;
-    }
+      if (url.pathname === "/api/spotify/status" && method === "GET") {
+        await fulfillJSON(route, apiResponse({ available: true }));
+        return true;
+      }
 
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Music User",
-          email: "music@example.com",
-          is_admin: true,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
+      if (url.pathname === "/api/music/albums") {
+        const pageNumber = Number(url.searchParams.get("page") ?? "1");
+        const perPage = Number(
+          url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE),
+        );
 
-    if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
+        await fulfillJSON(route, apiResponse({
+          albums: mockAlbums,
+          total: mockAlbums.length,
+          page: pageNumber,
+          per_page: perPage,
+          total_pages: 1,
+        }));
+        return true;
+      }
 
-    if (url.pathname === "/api/music/stats") {
-      await fulfillJSON(route, apiResponse({
-        total_albums: 6,
-        total_tracks: 54,
-        total_musicians: 3,
-      }));
-      return;
-    }
+      if (url.pathname === "/api/music/musicians") {
+        const musicianPage = Number(url.searchParams.get("page") ?? "1");
+        const perPage = Number(
+          url.searchParams.get("per_page") ?? String(MUSICIANS_PER_PAGE),
+        );
+        requestedMusicianRequests.push(`${url.pathname}${url.search}`);
 
-    if (url.pathname === "/api/spotify/status" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ available: true }));
-      return;
-    }
+        await fulfillJSON(route, apiResponse({
+          musicians: musicianPage === 2 ? pageTwoMusicians : pageOneMusicians,
+          total: 3,
+          page: musicianPage,
+          per_page: perPage,
+          total_pages: 2,
+        }));
+        return true;
+      }
 
-    if (url.pathname === "/api/music/albums") {
-      const pageNumber = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE),
-      );
+      if (url.pathname === "/api/music/musicians/1") {
+        await fulfillJSON(route, apiResponse(mockMusicianDetails));
+        return true;
+      }
 
-      await fulfillJSON(route, apiResponse({
-        albums: mockAlbums,
-        total: mockAlbums.length,
-        page: pageNumber,
-        per_page: perPage,
-        total_pages: 1,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/music/musicians") {
-      const musicianPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(MUSICIANS_PER_PAGE),
-      );
-      requestedMusicianRequests.push(`${url.pathname}${url.search}`);
-
-      await fulfillJSON(route, apiResponse({
-        musicians: musicianPage === 2 ? pageTwoMusicians : pageOneMusicians,
-        total: 3,
-        page: musicianPage,
-        per_page: perPage,
-        total_pages: 2,
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/music/musicians/1") {
-      await fulfillJSON(route, apiResponse(mockMusicianDetails));
-      return;
-    }
-
-    if (url.pathname === "/api/tmdb/movies/in-theaters") {
-      if (requestedInTheatersRequests) {
+      if (url.pathname === "/api/tmdb/movies/in-theaters" && requestedInTheatersRequests) {
         requestedInTheatersRequests.push(`${url.pathname}${url.search}`);
         await fulfillJSON(route, apiResponse({ movies: [] }));
-        return;
+        return true;
       }
-    }
 
-    if (url.pathname === "/api/music/playlists") {
-      if (method === "GET") {
+      if (url.pathname === "/api/music/playlists" && method === "GET") {
         await fulfillJSON(route, apiResponse({ playlists }));
-        return;
+        return true;
       }
 
-      if (method === "POST") {
+      if (url.pathname === "/api/music/playlists" && method === "POST") {
         const body = route.request().postDataJSON() as CreatePlaylistRequest;
         createdPlaylistRequests.push(body);
 
-        const playlist = {
+        const playlist = playlistSummary({
           id: 100 + playlists.length,
-          user_id: 1,
           name: body.name,
           description: nullableString(body.description ?? ""),
-          cover_image: nullableString(),
           is_public: body.is_public,
-          folder_id: nullableInt64(),
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-          track_count: 0,
-          total_duration: 0,
-          is_owner: true,
-          can_edit: true,
-        };
+        });
 
         playlists.push(playlist);
         await fulfillJSON(route, apiResponse({ playlist }));
-        return;
+        return true;
       }
 
-      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-      unexpectedApiRequests.push(message);
-      await fulfillJSON(route, { error: true, message }, 405);
-      return;
-    }
+      if (url.pathname === "/api/music/tracks/liked-ids") {
+        await fulfillJSON(route, apiResponse({ liked_track_ids: [2, 40, 41] }));
+        return true;
+      }
 
-    if (url.pathname === "/api/music/tracks/liked-ids") {
-      await fulfillJSON(route, apiResponse({ liked_track_ids: [2, 40, 41] }));
-      return;
-    }
+      if (url.pathname === "/api/music/tracks/liked") {
+        const likedTracksPage = Number(url.searchParams.get("page") ?? "1");
+        const perPage = Number(
+          url.searchParams.get("per_page") ?? String(LIKED_TRACKS_PER_PAGE),
+        );
 
-    if (url.pathname === "/api/music/tracks/liked") {
-      const likedTracksPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(
-        url.searchParams.get("per_page") ?? String(LIKED_TRACKS_PER_PAGE),
-      );
+        await fulfillJSON(route, apiResponse({
+          tracks: likedTrackPages[likedTracksPage as keyof typeof likedTrackPages] ?? [],
+          total: 2,
+          page: likedTracksPage,
+          per_page: perPage,
+          total_pages: 2,
+          has_more: likedTracksPage < 2,
+        }));
+        return true;
+      }
 
-      await fulfillJSON(route, apiResponse({
-        tracks: likedTrackPages[likedTracksPage as keyof typeof likedTrackPages] ?? [],
-        total: 2,
-        page: likedTracksPage,
-        per_page: perPage,
-        total_pages: 2,
-        has_more: likedTracksPage < 2,
-      }));
-      return;
-    }
+      if (url.pathname === "/api/music/tracks") {
+        await fulfillJSON(route, apiResponse({
+          tracks: mockTracks,
+          total: mockTracks.length,
+          offset: Number(url.searchParams.get("offset") ?? "0"),
+          limit: Number(
+            url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
+          ),
+          has_more: false,
+        }));
+        return true;
+      }
 
-    if (url.pathname === "/api/music/tracks") {
-      await fulfillJSON(route, apiResponse({
-        tracks: mockTracks,
-        total: mockTracks.length,
-        offset: Number(url.searchParams.get("offset") ?? "0"),
-        limit: Number(
-          url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
-        ),
-        has_more: false,
-      }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
-}
-
-async function expectElementInsideViewport(page: Page, locator: Locator, label: string) {
-  const viewport = page.viewportSize();
-  const box = await locator.boundingBox();
-
-  expect(box, `${label} should have a layout box`).not.toBeNull();
-  expect(viewport, "viewport should be set before measuring layout").not.toBeNull();
-
-  if (!box || !viewport) return;
-
-  expect(box.x, `${label} left edge`).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width, `${label} right edge`).toBeLessThanOrEqual(viewport.width);
 }
 
 test("musicians tab renders accessible count text and URL-backed pagination", async ({ page }) => {
@@ -414,7 +291,7 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
     page,
     requestedMusicianRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=musicians");
 
   const musiciansTab = page.getByRole("tab", { name: "Musicians" });
@@ -465,7 +342,7 @@ test("musicians tab shows an inline error with a working retry", async ({ page }
     });
   });
 
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=musicians");
 
   const alert = page.getByRole("alert");
@@ -485,7 +362,7 @@ test("musician details keeps hero controls inside tablet viewport", async ({ pag
     page,
     requestedMusicianRequests,
   );
-  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.setViewportSize(VIEWPORTS.tablet);
   await page.goto("/music/musician/1");
 
   const playAllButton = page.getByRole("button", {
@@ -499,8 +376,8 @@ test("musician details keeps hero controls inside tablet viewport", async ({ pag
 
   await expect(playAllButton).toBeVisible();
   await expect(shuffleButton).toBeVisible();
-  await expectElementInsideViewport(page, playAllButton, "Play All button");
-  await expectElementInsideViewport(page, shuffleButton, "Shuffle button");
+  await expectNoHorizontalOverflow(playAllButton, "Play All button");
+  await expectNoHorizontalOverflow(shuffleButton, "Shuffle button");
   await expectPageHasNoHorizontalScroll(page);
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
@@ -516,7 +393,7 @@ test("Home sidebar links do not preload in-theaters data from music", async ({ p
     [],
     requestedInTheatersRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=musicians");
 
   await page.getByRole("link", { name: /Igloo.*Home/ }).hover();
@@ -537,7 +414,7 @@ test("music tabs avoid horizontal overflow on mobile", async ({ page }) => {
     page,
     requestedMusicianRequests,
   );
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(VIEWPORTS.phone);
   await page.goto("/music?tab=albums");
 
   const tablist = page.getByRole("tablist");
@@ -637,7 +514,7 @@ test("tracks tab exposes accessible controls and action menu targets", async ({ 
     page,
     requestedMusicianRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=tracks");
 
   const tracksTab = page.getByRole("tab", { name: "Tracks" });
@@ -672,7 +549,7 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
     requestedMusicianRequests,
     createdPlaylistRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=playlists");
 
   const playlistsTab = page.getByRole("tab", { name: "Playlists" });
@@ -725,7 +602,7 @@ test("playlists tab opens liked tracks subview with URL-backed pagination", asyn
     page,
     requestedMusicianRequests,
   );
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=playlists");
 
   await page.getByRole("button", { name: "View liked tracks" }).click();

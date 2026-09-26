@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { apiURL, readE2EEnv } from "./e2e-env";
 import { loginPageViaApi } from "./e2e-auth";
 
 const BOOTSTRAP_DESCRIPTION =
@@ -23,10 +22,8 @@ async function readActiveHeadMetadata(page: Page) {
 test("restores bootstrap metadata on routes without page-specific head tags", async ({
   page,
 }) => {
-  const env = readE2EEnv();
-
-  await loginPageViaApi(page, env);
-  await page.goto(apiURL(env, "/movies"), { waitUntil: "networkidle" });
+  await loginPageViaApi(page);
+  await page.goto("/movies", { waitUntil: "networkidle" });
 
   await expect(page).toHaveTitle("Movies - Igloo");
   await expect

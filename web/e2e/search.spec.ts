@@ -1,8 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { trackBrowserIssues } from "./e2e-browser-issues";
+import {
+  assertMockSuiteClean,
+  trackBrowserIssues,
+} from "./e2e-browser-issues";
 import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
 } from "./e2e-layout";
 import type {
   SearchAlbumsResponseType,
@@ -14,23 +18,12 @@ import type {
 } from "../src/types/search";
 import { SEARCH_PER_PAGE } from "../src/lib/constants";
 import {
+  apiResponse,
   fulfillJSON,
   nullableInt64,
   nullableString,
-  fulfillIdleScanStatus,
 } from "./e2e-api";
-
-type ApiResponse<T> = {
-  error: false;
-  data: T;
-};
-
-function apiResponse<T>(data: T): ApiResponse<T> {
-  return {
-    error: false,
-    data,
-  };
-}
+import { mockApi } from "./e2e-mock-api";
 
 const movieResult = {
   id: 7,
@@ -148,80 +141,32 @@ const trackResults = apiResponse<SearchTracksResponseType>({
 
 async function mockSearchApi(page: Page) {
   const requestedSearchRequests: string[] = [];
-  const unexpectedApiRequests: string[] = [];
+  const resultsByPath: Record<string, unknown> = {
+    "/api/search": allResults,
+    "/api/search/movies": movieResults,
+    "/api/search/shows": showResults,
+    "/api/search/albums": albumResults,
+    "/api/search/musicians": musicianResults,
+    "/api/search/tracks": trackResults,
+  };
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+  const { unexpectedApiRequests } = await mockApi(page, {
+    user: { is_admin: true },
+    handle: async ({ route, url, method }) => {
+      const results = resultsByPath[url.pathname];
+      if (results) {
+        requestedSearchRequests.push(`${url.pathname}${url.search}`);
+        await fulfillJSON(route, results);
+        return true;
+      }
 
-    if (await fulfillIdleScanStatus(route, url.pathname)) {
-      return;
-    }
+      if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
+        await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
+        return true;
+      }
 
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Search User",
-          email: "search@example.com",
-          is_admin: true,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
-
-    if (url.pathname === "/api/search") {
-      requestedSearchRequests.push(`${url.pathname}${url.search}`);
-      await fulfillJSON(route, allResults);
-      return;
-    }
-
-    if (url.pathname === "/api/search/movies") {
-      requestedSearchRequests.push(`${url.pathname}${url.search}`);
-      await fulfillJSON(route, movieResults);
-      return;
-    }
-
-    if (url.pathname === "/api/search/shows") {
-      requestedSearchRequests.push(`${url.pathname}${url.search}`);
-      await fulfillJSON(route, showResults);
-      return;
-    }
-
-    if (url.pathname === "/api/search/albums") {
-      requestedSearchRequests.push(`${url.pathname}${url.search}`);
-      await fulfillJSON(route, albumResults);
-      return;
-    }
-
-    if (url.pathname === "/api/search/musicians") {
-      requestedSearchRequests.push(`${url.pathname}${url.search}`);
-      await fulfillJSON(route, musicianResults);
-      return;
-    }
-
-    if (url.pathname === "/api/search/tracks") {
-      requestedSearchRequests.push(`${url.pathname}${url.search}`);
-      await fulfillJSON(route, trackResults);
-      return;
-    }
-
-    if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return {
@@ -237,7 +182,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
   const { requestedSearchRequests, unexpectedApiRequests } =
     await mockSearchApi(page);
 
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/search");
 
   const searchForm = page.getByRole("search", { name: "Search library" });
@@ -298,7 +243,7 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
   await expect(page.getByRole("list", { name: "Track results" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Play Casino Theme" })).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(VIEWPORTS.phone);
   await expectPageHasNoHorizontalScroll(page);
   await expectNoHorizontalOverflow(searchForm, "header search form mobile");
   await expectNoHorizontalOverflow(tablist, "search tablist mobile");
@@ -315,6 +260,5 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
     `/api/search/musicians?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
     `/api/search/tracks?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
   ]);
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { components } from "../src/types/openapi.gen";
 import { assertMockSuiteClean, trackBrowserIssues } from "./e2e-browser-issues";
 import { apiResponse, fulfillJSON, nullableInt64, nullableString } from "./e2e-api";
+import { mockApi } from "./e2e-mock-api";
+
+type Schema = components["schemas"];
 
 const PLAYLIST_ID = 55;
 const PAGE_SIZE = 50;
@@ -9,7 +13,7 @@ const PAGE_SIZE = 50;
 // its first 50 tracks while the button promised all 120.
 const TOTAL_TRACKS = 120;
 
-function playlistTrack(position: number) {
+function playlistTrack(position: number): Schema["PlaylistTrack"] {
   const id = 1000 + position;
 
   return {
@@ -20,7 +24,6 @@ function playlistTrack(position: number) {
     id,
     title: `Track ${position}`,
     duration: 200_000,
-    file_path: `/music/track-${position}.flac`,
     codec: "flac",
     bit_rate: 900_000,
     album_id: nullableInt64(300 + (position % 3)),
@@ -43,9 +46,11 @@ const playlistDetails = {
     description: nullableString("A playlist that spans several pages."),
     cover_image: nullableString(),
     is_public: false,
+    movie_id: nullableInt64(),
+    content_type: "track",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
-  },
+  } satisfies Schema["Playlist"],
   track_count: TOTAL_TRACKS,
   duration: TOTAL_TRACKS * 200_000,
   is_owner: true,
@@ -62,89 +67,65 @@ type MockOptions = {
 };
 
 async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
-  const unexpectedApiRequests: string[] = [];
   const trackPageRequests: number[] = [];
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
-
-    if (url.pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Playlist User",
-          email: "playlist@example.com",
-          is_admin: false,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
-
-    if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
-
-    if (url.pathname === `/api/music/playlists/${PLAYLIST_ID}` && method === "GET") {
-      await fulfillJSON(route, apiResponse(playlistDetails));
-      return;
-    }
-
-    if (
-      url.pathname === `/api/music/playlists/${PLAYLIST_ID}/tracks` &&
-      method === "GET"
-    ) {
-      const offset = Number(url.searchParams.get("offset") ?? 0);
-      const limit = Number(url.searchParams.get("limit") ?? PAGE_SIZE);
-      const slice = allPlaylistTracks.slice(offset, offset + limit);
-
-      trackPageRequests.push(offset);
-
-      if (offset === options.failAtOffset) {
-        await fulfillJSON(
-          route,
-          { error: true, message: "Failed to fetch playlist tracks" },
-          500,
-        );
-        return;
+  const { unexpectedApiRequests } = await mockApi(page, {
+    handle: async ({ route, url, method }) => {
+      if (url.pathname === `/api/music/playlists/${PLAYLIST_ID}` && method === "GET") {
+        await fulfillJSON(route, apiResponse(playlistDetails));
+        return true;
       }
 
-      if (offset > 0 && options.pageDelayMs) {
-        await new Promise(resolve => setTimeout(resolve, options.pageDelayMs));
+      if (
+        url.pathname === `/api/music/playlists/${PLAYLIST_ID}/tracks` &&
+        method === "GET"
+      ) {
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        const limit = Number(url.searchParams.get("limit") ?? PAGE_SIZE);
+        const slice = allPlaylistTracks.slice(offset, offset + limit);
+
+        trackPageRequests.push(offset);
+
+        if (offset === options.failAtOffset) {
+          await fulfillJSON(
+            route,
+            { error: true, message: "Failed to fetch playlist tracks" },
+            500,
+          );
+          return true;
+        }
+
+        if (offset > 0 && options.pageDelayMs) {
+          await new Promise(resolve => setTimeout(resolve, options.pageDelayMs));
+        }
+
+        await fulfillJSON(route, apiResponse({
+          tracks: slice,
+          total: TOTAL_TRACKS,
+          has_more: offset + slice.length < TOTAL_TRACKS,
+          next_offset: offset + slice.length,
+        }));
+        return true;
       }
 
-      await fulfillJSON(route, apiResponse({
-        tracks: slice,
-        total: TOTAL_TRACKS,
-        has_more: offset + slice.length < TOTAL_TRACKS,
-        next_offset: offset + slice.length,
-      }));
-      return;
-    }
+      if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
+        await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
+        return true;
+      }
 
-    if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ liked_track_ids: [] }));
-      return;
-    }
+      // Playback starts as soon as a queue is built; the stream itself is
+      // irrelevant here, it just must not count as an unexpected request.
+      if (/^\/api\/music\/tracks\/\d+\/stream$/.test(url.pathname) && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "audio/flac",
+          body: Buffer.alloc(0),
+        });
+        return true;
+      }
 
-    // Playback starts as soon as a queue is built; the stream itself is
-    // irrelevant here, it just must not count as an unexpected request.
-    if (/^\/api\/music\/tracks\/\d+\/stream$/.test(url.pathname) && method === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "audio/flac",
-        body: Buffer.alloc(0),
-      });
-      return;
-    }
-
-    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
-    unexpectedApiRequests.push(message);
-    await fulfillJSON(route, { error: true, message }, 500);
+      return false;
+    },
   });
 
   return { unexpectedApiRequests, trackPageRequests };
@@ -182,7 +163,8 @@ test("shuffle queues every track in a multi-page playlist", async ({ page }) => 
 });
 
 test("shuffle starts somewhere other than the playlist's first track", async ({ page }) => {
-  await mockPlaylistApi(page);
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockPlaylistApi(page);
 
   await page.goto(`/music/playlist/${PLAYLIST_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
@@ -200,10 +182,13 @@ test("shuffle starts somewhere other than the playlist's first track", async ({ 
   await expect(
     page.getByRole("heading", { level: 1, name: "Track 2" }),
   ).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("each shuffled track keeps its own artist rather than the playlist name", async ({ page }) => {
-  await mockPlaylistApi(page);
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockPlaylistApi(page);
 
   await page.goto(`/music/playlist/${PLAYLIST_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
@@ -222,10 +207,13 @@ test("each shuffled track keeps its own artist rather than the playlist name", a
   await expect(player.getByText("Album 2", { exact: true })).toBeVisible();
   await expect(player.getByText("Artist 2", { exact: true })).toBeVisible();
   await expect(player.getByText("Long Haul", { exact: true })).toHaveCount(0);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("play all queues every track too", async ({ page }) => {
-  const { trackPageRequests } = await mockPlaylistApi(page);
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
 
   await page.goto(`/music/playlist/${PLAYLIST_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
@@ -235,12 +223,17 @@ test("play all queues every track too", async ({ page }) => {
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
   await expect(page.getByRole("heading", { level: 1, name: "Track 1" })).toBeVisible();
   expect(trackPageRequests).toEqual([0, 50, 100]);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playback starts on the loaded page while the rest downloads behind it", async ({
   page,
 }) => {
-  const { trackPageRequests } = await mockPlaylistApi(page, { pageDelayMs: 1500 });
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page, {
+    pageDelayMs: 1500,
+  });
 
   await page.goto(`/music/playlist/${PLAYLIST_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
@@ -259,12 +252,28 @@ test("playback starts on the loaded page while the rest downloads behind it", as
     timeout: 15_000,
   });
   expect(trackPageRequests).toEqual([0, 50, 100]);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("says so when a page of the drain fails instead of quietly playing a short queue", async ({
   page,
 }) => {
-  await mockPlaylistApi(page, { failAtOffset: 50 });
+  // The failed page is the point of the test, so its 500 is expected.
+  const failedPagePath = `/api/music/playlists/${PLAYLIST_ID}/tracks`;
+  const browserIssues = trackBrowserIssues(page, {
+    ignoreConsole: (_type, text) =>
+      text ===
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    ignoreResponse: response => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === failedPagePath &&
+        url.searchParams.get("offset") === "50"
+      );
+    },
+  });
+  const { unexpectedApiRequests } = await mockPlaylistApi(page, { failAtOffset: 50 });
 
   await page.goto(`/music/playlist/${PLAYLIST_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
@@ -278,4 +287,6 @@ test("says so when a page of the drain fails instead of quietly playing a short 
     page.getByText(`Only ${PAGE_SIZE} of ${TOTAL_TRACKS} tracks could be loaded.`),
   ).toBeVisible();
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${PAGE_SIZE}`);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

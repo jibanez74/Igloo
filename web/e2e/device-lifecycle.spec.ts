@@ -1,27 +1,13 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
-import { readE2EEnv } from "./e2e-env";
-import type { ApiResponse } from "./e2e-api";
+import type { DevicesListResponseType } from "../src/types";
+import type { components } from "../src/types/openapi.gen";
+import { readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 
-type InitiateData = {
-  code: string;
-  secret: string;
-  expires_in_seconds: number;
-  poll_interval_seconds: number;
-};
+type InitiateData = components["schemas"]["QuickConnectInitiateData"];
+type RedeemData = components["schemas"]["QuickConnectRedeemData"];
 
-type RedeemData = {
-  status: "pending" | "approved";
-  token?: string;
-  device?: { id: number; name: string };
-};
-
-type DevicesData = {
-  devices: Array<{ id: number; name: string }>;
-};
-
-const env = readE2EEnv();
 const deviceName = "Mock Living Room TV";
 const renamedDeviceName = "Mock Bedroom TV";
 
@@ -32,7 +18,7 @@ async function initiate(request: APIRequestContext): Promise<InitiateData> {
   });
   expect(response.status()).toBe(201);
 
-  const body = (await response.json()) as ApiResponse<InitiateData>;
+  const body = await readJSON<InitiateData>(response);
   expect(body.error).toBe(false);
   expect(body.data?.code).toBeTruthy();
   expect(body.data?.secret).toBeTruthy();
@@ -50,7 +36,7 @@ async function redeem(
   });
   expect(response.status()).toBe(200);
 
-  const body = (await response.json()) as ApiResponse<RedeemData>;
+  const body = await readJSON<RedeemData>(response);
   expect(body.error).toBe(false);
   return body.data!;
 }
@@ -65,12 +51,12 @@ test.describe("Device lifecycle (mocked)", () => {
 
   test.beforeEach(async ({ page }) => {
     // Mock device state persists across specs in a run; clean up leftovers.
-    await loginPageViaApi(page, env, { assertBody: false });
+    await loginPageViaApi(page);
     const response = await page.request.get("/api/devices", {
       failOnStatusCode: false,
     });
     expect(response.status()).toBe(200);
-    const body = (await response.json()) as ApiResponse<DevicesData>;
+    const body = await readJSON<DevicesListResponseType>(response);
     for (const device of body.data?.devices ?? []) {
       await page.request.delete(`/api/devices/${device.id}`, {
         failOnStatusCode: false,
@@ -145,7 +131,7 @@ test.describe("Device lifecycle (mocked)", () => {
       failOnStatusCode: false,
     });
     expect(list.status()).toBe(200);
-    const body = (await list.json()) as ApiResponse<DevicesData>;
+    const body = await readJSON<DevicesListResponseType>(list);
     expect(body.data?.devices ?? []).toHaveLength(0);
   });
 });
