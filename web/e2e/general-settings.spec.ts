@@ -118,16 +118,13 @@ async function expectScreenReaderSupport(page: Page) {
   );
   await page.getByRole("button", { name: "Save Settings" }).click();
   await expect(
-    page.locator('p[aria-live="polite"]').filter({
-      hasText: "Jellyfin base URL must start",
-    }),
+    page
+      .getByRole("tabpanel", { name: "General" })
+      .getByText("Jellyfin base URL must start with http:// or https://."),
   ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Jellyfin base URL" }),
   ).toHaveAttribute("aria-invalid", "true");
-  await expect(page.locator('p[aria-live="polite"]')).toContainText(
-    "Jellyfin base URL must start",
-  );
 }
 
 async function expectKeyboardFlow(page: Page) {
@@ -193,6 +190,16 @@ test.describe("General settings", () => {
     page,
   }) => {
     const tracker = trackBrowserIssues(page);
+    let settingsPutCount = 0;
+
+    page.on("request", request => {
+      if (
+        request.method() === "PUT" &&
+        new URL(request.url()).pathname === "/api/settings/general"
+      ) {
+        settingsPutCount += 1;
+      }
+    });
 
     await loginPageViaApi(page);
     const baselineSettings = await fetchGeneralSettings(page);
@@ -212,11 +219,13 @@ test.describe("General settings", () => {
     };
 
     try {
-      await page.goto("/settings", { waitUntil: "networkidle" });
+      await page.goto("/settings");
       await expectNewIntegrationControls(page);
       await expectScreenReaderSupport(page);
       await expectKeyboardFlow(page);
       await fillIntegrationSettings(page, nextSettings);
+      // The invalid URL was rejected before the mutation: nothing was sent.
+      expect(settingsPutCount).toBe(0);
 
       await page.route("**/api/settings/general", async route => {
         const request = route.request();
@@ -269,8 +278,7 @@ test.describe("General settings", () => {
       const putBody = await readJSON<unknown>(putResponse);
       expect(putBody.error, putBody.message).toBe(false);
 
-      await page.unroute("**/api/settings/general");
-      await expect(page.getByText("Settings saved").first()).toBeVisible();
+      await expect(page.getByText("Settings saved")).toBeVisible();
 
       const savedSettings = await fetchGeneralSettings(page);
       expect(savedSettings.jellyfin_base_url).toBe(
@@ -288,17 +296,7 @@ test.describe("General settings", () => {
       }
       await page.unroute("**/api/settings/general").catch(() => undefined);
       await restoreGeneralSettings(page, baselineRequest);
-      await page.goto("/settings", { waitUntil: "networkidle" });
     }
-
-    await expect
-      .poll(() => integrationFieldValues(page))
-      .toMatchObject({
-        jellyfin_base_url: baselineRequest.jellyfin_base_url,
-        jellyfin_api_key: baselineRequest.jellyfin_api_key,
-        immich_base_url: baselineRequest.immich_base_url,
-        immich_api_key: baselineRequest.immich_api_key,
-      });
 
     tracker.assertClean();
   });

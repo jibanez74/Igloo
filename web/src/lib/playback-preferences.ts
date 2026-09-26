@@ -17,9 +17,8 @@ import {
 } from "./constants";
 import type { DevicePlaybackPreferences } from "@/types";
 
-// Mirrored as a literal by web/e2e/playback-settings.spec.ts, which cannot
-// import from src; playback-preferences.test.ts pins the format.
-const PLAYBACK_PREFERENCES_STORAGE_PREFIX = "igloo-playback-prefs:";
+// device-playback-preferences.test.ts pins the format.
+export const PLAYBACK_PREFERENCES_STORAGE_PREFIX = "igloo-playback-prefs:";
 
 export const DEFAULT_DEVICE_PLAYBACK_PREFERENCES: DevicePlaybackPreferences = {
   preferredProfile: null,

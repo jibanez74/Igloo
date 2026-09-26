@@ -12,15 +12,15 @@ import type {
   PlaybackSettingsType,
   UpdatePlaybackSettingsRequest,
 } from "../src/types";
+import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   readJSON,
 } from "./e2e-api";
 import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
+import { requireRealInstance } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 import { createUser, deleteUser } from "./e2e-users";
-
-const DEVICE_PREFS_STORAGE_PREFIX = "igloo-playback-prefs:";
 
 async function readDevicePreferences(page: Page) {
   return page.evaluate(prefix => {
@@ -32,15 +32,7 @@ async function readDevicePreferences(page: Page) {
           | DevicePlaybackPreferences
           | null)
       : null;
-  }, DEVICE_PREFS_STORAGE_PREFIX);
-}
-
-async function clearDevicePreferences(page: Page) {
-  await page.evaluate(prefix => {
-    for (const name of Object.keys(localStorage)) {
-      if (name.startsWith(prefix)) localStorage.removeItem(name);
-    }
-  }, DEVICE_PREFS_STORAGE_PREFIX);
+  }, PLAYBACK_PREFERENCES_STORAGE_PREFIX);
 }
 
 const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
@@ -75,6 +67,28 @@ async function restorePlaybackSettings(
   expect(body.error, body.message).toBe(false);
 }
 
+type RegularUser = AdminUserType & { password: string };
+
+/** A disposable non-admin account, created through the page's admin session. */
+async function createRegularUser(page: Page): Promise<RegularUser> {
+  const stamp = Date.now();
+  const password = `PlaybackPass${stamp}!`;
+  const user = await createUser(page.context().request, {
+    name: `Playback Settings User ${stamp}`,
+    email: `playback-settings-${stamp}@example.com`,
+    password,
+  });
+  return { ...user, password };
+}
+
+async function signBackInAsAdmin(page: Page, user: RegularUser | null) {
+  await logoutViaApi(page.context().request);
+  await loginPageViaApi(page);
+  if (user) {
+    await deleteUser(page.context().request, user.id);
+  }
+}
+
 async function expectTabMovesFocus(page: Page, next: Locator) {
   await page.keyboard.press("Tab");
   await expect(next).toBeFocused();
@@ -85,28 +99,12 @@ test.describe("Playback settings", () => {
     page,
   }) => {
     const tracker = trackBrowserIssues(page);
-    const capturedRequest = {
-      body: null as UpdatePlaybackSettingsRequest | null,
-    };
-
-    page.on("request", request => {
-      const url = new URL(request.url());
-      if (
-        url.pathname === "/api/settings/playback" &&
-        request.method() === "PUT"
-      ) {
-        capturedRequest.body =
-          request.postDataJSON() as UpdatePlaybackSettingsRequest;
-      }
-    });
 
     await loginPageViaApi(page);
     const baselineSettings = await fetchPlaybackSettings(page);
 
     try {
-      await page.goto("/settings/playback", {
-        waitUntil: "networkidle",
-      });
+      await page.goto("/settings/playback");
       await expect(
         page.getByRole("heading", { name: "Streaming & bandwidth" }),
       ).toBeVisible();
@@ -159,7 +157,7 @@ test.describe("Playback settings", () => {
       await serverInput.fill("5");
       // The recommendation tracks the download speed immediately; the server
       // cap only counts once it is actually saved, below.
-      await expect(page.getByText("Recommended: 4K · 16 Mbps")).toBeVisible();
+      await expect(page.getByText("Recommended: 2160p · 16 Mbps")).toBeVisible();
 
       await page
         .getByRole("combobox", { name: "Hardware acceleration" })
@@ -186,11 +184,13 @@ test.describe("Playback settings", () => {
       const putResponse = await putResponsePromise;
       expect(putResponse.status()).toBe(200);
       // Only server-owned fields travel over the wire now.
-      expect(capturedRequest.body).toMatchObject({
+      const putBody =
+        putResponse.request().postDataJSON() as UpdatePlaybackSettingsRequest;
+      expect(putBody).toMatchObject({
         server_upload_mbps: 5,
         hardware_acceleration_device: "nvidia",
       });
-      expect(capturedRequest.body).not.toHaveProperty("download_mbps");
+      expect(putBody).not.toHaveProperty("download_mbps");
 
       await expect(page.getByText("Playback settings saved")).toBeVisible();
       const savedSettings = await fetchPlaybackSettings(page);
@@ -217,12 +217,11 @@ test.describe("Playback settings", () => {
         )
         .toBe("off");
 
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload();
       await expect(downloadInput).toHaveValue("100");
       await expect(
         page.getByRole("combobox", { name: "Subtitle language" }),
       ).toHaveText("Always off");
-      await clearDevicePreferences(page);
     } finally {
       await restorePlaybackSettings(page, baselineSettings);
     }
@@ -248,21 +247,14 @@ test.describe("Playback settings", () => {
 
     await loginPageViaApi(page);
 
-    await page.goto("/settings/playback", {
-      waitUntil: "networkidle",
-    });
+    await page.goto("/settings/playback");
     const downloadInput = page.getByRole("spinbutton", {
       name: "Download speed (Mbps)",
     });
+    const validationStatus = page.getByText(DOWNLOAD_SPEED_VALIDATION_MESSAGE);
 
-    await clearDevicePreferences(page);
     await downloadInput.fill("0");
-
-    const validationStatus = page
-      .locator("p[aria-live='polite']")
-      .filter({ hasText: DOWNLOAD_SPEED_VALIDATION_MESSAGE });
     await expect(validationStatus).toBeVisible();
-    await expect(validationStatus).toHaveAttribute("aria-live", "polite");
     await expect(downloadInput).toHaveAttribute("aria-invalid", "true");
     await expect(downloadInput).toHaveAccessibleDescription(
       DOWNLOAD_SPEED_VALIDATION_MESSAGE,
@@ -278,7 +270,13 @@ test.describe("Playback settings", () => {
       .poll(async () => (await readDevicePreferences(page))?.downloadMbps)
       .toBe(5);
 
-    await clearDevicePreferences(page);
+    // The upper bound is enforced too, and the last valid value stays stored.
+    await downloadInput.fill("10001");
+    await expect(validationStatus).toBeVisible();
+    await expect(downloadInput).toHaveAttribute("aria-invalid", "true");
+    expect((await readDevicePreferences(page))?.downloadMbps).toBe(5);
+    expect(playbackPutCount).toBe(0);
+
     tracker.assertClean();
   });
 
@@ -294,18 +292,12 @@ test.describe("Playback settings", () => {
     const secondTracker = trackBrowserIssues(second);
 
     try {
-      await page.goto("/settings/playback", {
-        waitUntil: "networkidle",
-      });
-      await clearDevicePreferences(page);
-      await page.reload({ waitUntil: "networkidle" });
+      await page.goto("/settings/playback");
       await expect(
         page.getByRole("heading", { name: "Streaming & bandwidth" }),
       ).toBeVisible();
 
-      await second.goto("/settings/playback", {
-        waitUntil: "networkidle",
-      });
+      await second.goto("/settings/playback");
       await expect(
         second.getByRole("heading", { name: "Stream defaults" }),
       ).toBeVisible();
@@ -330,26 +322,20 @@ test.describe("Playback settings", () => {
       await expect(
         second.getByRole("combobox", { name: "Audio language" }),
       ).toHaveText("English");
-
-      await clearDevicePreferences(page);
     } finally {
-      secondTracker.assertClean();
       await second.close();
     }
 
+    secondTracker.assertClean();
     tracker.assertClean();
   });
 
   test("gives regular users device-only settings with no save bar", async ({
     page,
   }) => {
-    const stamp = Date.now();
     const tracker = trackBrowserIssues(page);
-    let regularUser: AdminUserType | null = null;
-    const regularPassword = `PlaybackPass${stamp}!`;
-    const capturedRequest = {
-      body: null as UpdatePlaybackSettingsRequest | null,
-    };
+    let regularUser: RegularUser | null = null;
+    let playbackPutSent = false;
 
     page.on("request", request => {
       const url = new URL(request.url());
@@ -357,30 +343,18 @@ test.describe("Playback settings", () => {
         url.pathname === "/api/settings/playback" &&
         request.method() === "PUT"
       ) {
-        capturedRequest.body =
-          request.postDataJSON() as UpdatePlaybackSettingsRequest;
+        playbackPutSent = true;
       }
     });
 
     await loginPageViaApi(page);
-    const baselineSettings = await fetchPlaybackSettings(page);
 
     try {
-      regularUser = await createUser(page.context().request, {
-        name: `Playback Settings User ${stamp}`,
-        email: `playback-settings-${stamp}@example.com`,
-        password: regularPassword,
-      });
-
+      regularUser = await createRegularUser(page);
       await logoutViaApi(page.context().request);
-      await loginPageViaApi(page, {
-        email: regularUser.email,
-        password: regularPassword,
-      });
+      await loginPageViaApi(page, regularUser);
 
-      await page.goto("/settings/playback", {
-        waitUntil: "networkidle",
-      });
+      await page.goto("/settings/playback");
       await expect(page.getByRole("tab", { name: "Playback" })).toBeVisible();
       await expect(
         page.getByRole("spinbutton", {
@@ -405,7 +379,6 @@ test.describe("Playback settings", () => {
       ).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Reset" })).toHaveCount(0);
 
-      await clearDevicePreferences(page);
       await page
         .getByRole("spinbutton", { name: "Download speed (Mbps)" })
         .fill("30");
@@ -413,7 +386,26 @@ test.describe("Playback settings", () => {
       await expect
         .poll(async () => (await readDevicePreferences(page))?.downloadMbps)
         .toBe(30);
-      expect(capturedRequest.body).toBeNull();
+      expect(playbackPutSent).toBe(false);
+    } finally {
+      await signBackInAsAdmin(page, regularUser);
+    }
+
+    tracker.assertClean();
+  });
+
+  test("rejects a regular user's direct write to the server settings", async ({
+    page,
+  }) => {
+    requireRealInstance("the mock server's admin check is not the one under test");
+    let regularUser: RegularUser | null = null;
+
+    await loginPageViaApi(page);
+
+    try {
+      regularUser = await createRegularUser(page);
+      await logoutViaApi(page.context().request);
+      await loginPageViaApi(page, regularUser);
 
       // RequireAdmin rejects a direct PUT regardless of which field it carries.
       for (const data of [
@@ -426,17 +418,8 @@ test.describe("Playback settings", () => {
         );
         expect(forbidden.status()).toBe(403);
       }
-
-      await clearDevicePreferences(page);
     } finally {
-      await logoutViaApi(page.context().request);
-      await loginPageViaApi(page);
-      await restorePlaybackSettings(page, baselineSettings);
-      if (regularUser) {
-        await deleteUser(page.context().request, regularUser.id);
-      }
+      await signBackInAsAdmin(page, regularUser);
     }
-
-    tracker.assertClean();
   });
 });

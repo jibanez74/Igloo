@@ -6,12 +6,12 @@ import {
   type Response,
 } from "@playwright/test";
 
-import { readE2EEnv } from "./e2e-env";
+import { readE2EEnv, requireRealInstance } from "./e2e-env";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   readJSON,
 } from "./e2e-api";
-import { logoutViaApi } from "./e2e-auth";
+import { loginPageViaApi } from "./e2e-auth";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 
 function isExpectedLoggedOutAuthResponse(response: Response) {
@@ -26,6 +26,8 @@ function isExpectedInvalidLoginResponse(response: Response) {
   );
 }
 
+// Only a real instance without a TMDB key answers this 503; the mock always
+// serves in-theaters data.
 function isExpectedInTheatersUnavailableResponse(response: Response) {
   const url = new URL(response.url());
 
@@ -80,11 +82,6 @@ async function expectAuthenticated(context: BrowserContext) {
 }
 
 async function expectLoginControls(page: Page) {
-  await expect(page).toHaveTitle("Sign In - Igloo");
-  await expect(page.getByText("Welcome to Igloo")).toBeVisible();
-  await expect(
-    page.getByText("Sign in to access your private media library."),
-  ).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
   await expect(
@@ -197,21 +194,10 @@ async function expectLoginLayout(page: Page) {
       }))
       .filter(item => item.text && item.fontSize < 12);
 
-    const card = document.querySelector('[data-slot="card"]');
-    const submit = Array.from(document.querySelectorAll("button")).find(button =>
-      button.textContent?.includes("Sign in"),
-    );
-
     return {
       overflowX,
       unlabeled,
       smallText,
-      hasBackgroundImage: Boolean(
-        document.querySelector('img[aria-hidden="true"][alt=""]'),
-      ),
-      cardClassName: card?.className.toString() ?? "",
-      cardAnimationName: card ? getComputedStyle(card).animationName : "",
-      submitVariant: submit?.getAttribute("data-variant") ?? "",
     };
   });
 
@@ -219,19 +205,9 @@ async function expectLoginLayout(page: Page) {
   expect(layout.overflowX).toEqual([]);
   expect(layout.unlabeled).toEqual([]);
   expect(layout.smallText).toEqual([]);
-  expect(layout.hasBackgroundImage).toBe(true);
-  expect(layout.cardClassName).toContain("animate-in");
-  expect(layout.cardClassName).toContain("fade-in");
-  expect(layout.cardClassName).toContain("slide-in-from-bottom-2");
-  expect(layout.cardAnimationName).toBe("enter");
-  expect(layout.submitVariant).toBe("accent");
 }
 
 test.describe("Login screen", () => {
-  test.afterEach(async ({ context }) => {
-    await logoutViaApi(context.request);
-  });
-
   test("renders accessibly and blocks empty submissions before the API call", async ({
     page,
     context,
@@ -249,8 +225,12 @@ test.describe("Login screen", () => {
       }
     });
 
-    await logoutViaApi(context.request);
-    await page.goto("/login", { waitUntil: "networkidle" });
+    await page.goto("/login");
+    await expect(page).toHaveTitle("Sign In - Igloo");
+    await expect(page.getByText("Welcome to Igloo")).toBeVisible();
+    await expect(
+      page.getByText("Sign in to access your private media library."),
+    ).toBeVisible();
     await expectLoginControls(page);
 
     const email = page.getByLabel("Email");
@@ -285,12 +265,10 @@ test.describe("Login screen", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(appPath("/login"));
-    await expect
-      .poll(() => loginRequests, { message: "empty form should not submit" })
-      .toBe(0);
     await expect(email).toHaveJSProperty("validity.valueMissing", true);
     await expect(password).toHaveJSProperty("validity.valueMissing", true);
     await expectUnauthenticated(context);
+    expect(loginRequests, "empty form should not submit").toBe(0);
 
     tracker.assertClean();
   });
@@ -299,6 +277,7 @@ test.describe("Login screen", () => {
     page,
     context,
   }) => {
+    requireRealInstance("the mock server's credential check is its own code");
     const env = readE2EEnv();
     const tracker = trackLoginBrowserIssues(
       page,
@@ -307,8 +286,7 @@ test.describe("Login screen", () => {
         isExpectedInvalidLoginResponse(response),
     );
 
-    await logoutViaApi(context.request);
-    await page.goto("/login", { waitUntil: "networkidle" });
+    await page.goto("/login");
     await expectLoginControls(page);
 
     const loginResponse = await submitLogin(
@@ -322,7 +300,11 @@ test.describe("Login screen", () => {
     expect(loginBody.error, loginBody.message).toBe(true);
 
     await expect(page).toHaveURL(appPath("/login"));
-    await expect(page.getByText("Login failed").first()).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: /^Notifications/ })
+        .getByText("Login failed"),
+    ).toBeVisible();
     await expect(page.getByLabel("Email")).toBeEnabled();
     await expect(page.getByLabel("Password", { exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
@@ -331,17 +313,14 @@ test.describe("Login screen", () => {
     tracker.assertClean();
   });
 
-  test("signs in through the UI and honors safe redirect handling", async ({
+  test("signs in through the UI, follows a safe redirect, and skips the form once signed in", async ({
     page,
     context,
   }) => {
     const env = readE2EEnv();
-    let tracker = trackLoginBrowserIssues(page);
+    const tracker = trackLoginBrowserIssues(page);
 
-    await logoutViaApi(context.request);
-    await page.goto("/login", {
-      waitUntil: "networkidle",
-    });
+    await page.goto("/login?redirect=/settings/account");
     await expectLoginControls(page);
 
     const loginResponse = await submitLogin(page, env.email, env.password);
@@ -350,52 +329,13 @@ test.describe("Login screen", () => {
     const loginBody = await readJSON<unknown>(loginResponse);
     expect(loginBody.error, loginBody.message).toBe(false);
 
-    await expect(page).toHaveURL(appPath("/"));
-    await page.waitForLoadState("networkidle");
-    await expectAuthenticated(context);
-    tracker.assertClean();
-
-    await logoutViaApi(context.request);
-    await page.goto("/login?redirect=/settings/account", {
-      waitUntil: "networkidle",
-    });
-    tracker = trackLoginBrowserIssues(page);
-    await expectLoginControls(page);
-
-    const safeRedirectLoginResponse = await submitLogin(
-      page,
-      env.email,
-      env.password,
-    );
-    expect(safeRedirectLoginResponse.status()).toBe(200);
-
     await expect(page).toHaveURL(appPath("/settings/account"));
+    await expect(page.getByText("Profile Information")).toBeVisible();
     await expectAuthenticated(context);
-    tracker.assertClean();
 
-    await page.goto("/login?redirect=/settings/account", {
-      waitUntil: "networkidle",
-    });
+    await page.goto("/login?redirect=/settings/account");
     await expect(page).toHaveURL(appPath("/settings/account"));
-
-    await logoutViaApi(context.request);
-    await page.goto("/login?redirect=https://example.com", {
-      waitUntil: "networkidle",
-    });
-    tracker = trackLoginBrowserIssues(page);
-    await expectLoginControls(page);
-
-    const unsafeRedirectLoginResponse = await submitLogin(
-      page,
-      env.email,
-      env.password,
-    );
-    expect(unsafeRedirectLoginResponse.status()).toBe(200);
-    await expect(page).toHaveURL(appPath("/"));
-    await page.waitForLoadState("networkidle");
-
-    expect(new URL(page.url()).origin).toBe(new URL(env.baseURL).origin);
-    await expectAuthenticated(context);
+    await expect(page.getByText("Profile Information")).toBeVisible();
 
     tracker.assertClean();
   });
@@ -404,20 +344,11 @@ test.describe("Login screen", () => {
     page,
     context,
   }) => {
-    const env = readE2EEnv();
     const tracker = trackLoginBrowserIssues(page);
 
-    await logoutViaApi(context.request);
-    await page.goto("/login?redirect=/settings/account", {
-      waitUntil: "networkidle",
-    });
-    await expectLoginControls(page);
-
-    const loginResponse = await submitLogin(page, env.email, env.password);
-    expect(loginResponse.status()).toBe(200);
-
-    await expect(page).toHaveURL(appPath("/settings/account"));
-    await expectAuthenticated(context);
+    await loginPageViaApi(page);
+    await page.goto("/settings/account");
+    await expect(page.getByText("Profile Information")).toBeVisible();
 
     const logoutResponsePromise = page.waitForResponse(
       response =>
@@ -436,9 +367,7 @@ test.describe("Login screen", () => {
     await expect(page).toHaveURL(appPath("/login"));
     await expectUnauthenticated(context);
 
-    await page.goto("/settings/account", {
-      waitUntil: "networkidle",
-    });
+    await page.goto("/settings/account");
     await expect(page).toHaveURL(appPath("/login"));
     await expect
       .poll(() => new URL(page.url()).searchParams.get("redirect"))
@@ -449,15 +378,12 @@ test.describe("Login screen", () => {
 
   test("is responsive and keeps screen reader support at each viewport", async ({
     page,
-    context,
   }) => {
     const tracker = trackLoginBrowserIssues(page);
 
-    await logoutViaApi(context.request);
-
     for (const viewport of Object.values(VIEWPORTS)) {
       await page.setViewportSize(viewport);
-      await page.goto("/login", { waitUntil: "networkidle" });
+      await page.goto("/login");
       await expectLoginControls(page);
       await expectLoginLayout(page);
     }

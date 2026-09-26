@@ -107,7 +107,11 @@ export default function DevicesCard() {
             pair it.
           </p>
         ) : (
-          <ul className="divide-y divide-border/50">
+          <ul
+            className="divide-y divide-border/50"
+            role="list"
+            aria-label="Connected devices"
+          >
             {devices.map(device => {
               const isTv = device.platform.toLowerCase().includes("tv");
               const PlatformIcon = isTv ? Tv : Smartphone;

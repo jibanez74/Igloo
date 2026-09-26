@@ -4,16 +4,24 @@ import type { DevicesListResponseType } from "../src/types";
 import type { components } from "../src/types/openapi.gen";
 import { readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
+import { requireRealInstance } from "./e2e-env";
 
 type InitiateData = components["schemas"]["QuickConnectInitiateData"];
 type RedeemData = components["schemas"]["QuickConnectRedeemData"];
 
-const deviceName = "Mock Living Room TV";
-const renamedDeviceName = "Mock Bedroom TV";
+// Unique per run, so the flow neither trips over nor touches the devices a
+// real instance already has.
+const runId = Date.now().toString(36);
+const deviceName = `E2E Living Room TV ${runId}`;
+const renamedDeviceName = `E2E Bedroom TV ${runId}`;
+const tokenDeviceName = `E2E Token TV ${runId}`;
 
-async function initiate(request: APIRequestContext): Promise<InitiateData> {
+async function initiate(
+  request: APIRequestContext,
+  name: string,
+): Promise<InitiateData> {
   const response = await request.post("/api/quick-connect/initiate", {
-    data: { device_name: deviceName, platform: "android_tv", app_version: "e2e" },
+    data: { device_name: name, platform: "android_tv", app_version: "e2e" },
     failOnStatusCode: false,
   });
   expect(response.status()).toBe(201);
@@ -41,35 +49,42 @@ async function redeem(
   return body.data!;
 }
 
-// Runs against the mock API server only: the real-server flavor of this flow
-// lives in quick-connect.spec.ts, gated behind E2E_BASE_URL.
-test.describe("Device lifecycle (mocked)", () => {
-  test.skip(
-    Boolean(process.env.E2E_BASE_URL),
-    "Covered by quick-connect.spec.ts against a live server.",
-  );
+/** Polls like the device does until the approved code yields its token. */
+async function redeemApprovedToken(
+  request: APIRequestContext,
+  code: string,
+  secret: string,
+) {
+  let token = "";
+  await expect
+    .poll(async () => {
+      const result = await redeem(request, code, secret);
+      token = result.token ?? "";
+      return result.status;
+    })
+    .toBe("approved");
+  return token;
+}
 
-  test.beforeEach(async ({ page }) => {
-    // Mock device state persists across specs in a run; clean up leftovers.
-    await loginPageViaApi(page);
-    const response = await page.request.get("/api/devices", {
-      failOnStatusCode: false,
-    });
-    expect(response.status()).toBe(200);
-    const body = await readJSON<DevicesListResponseType>(response);
-    for (const device of body.data?.devices ?? []) {
-      await page.request.delete(`/api/devices/${device.id}`, {
-        failOnStatusCode: false,
-      });
-    }
+async function fetchDevices(request: APIRequestContext) {
+  const response = await request.get("/api/devices", {
+    failOnStatusCode: false,
   });
+  expect(response.status()).toBe(200);
 
+  const body = await readJSON<DevicesListResponseType>(response);
+  return body.data?.devices ?? [];
+}
+
+test.describe("Device lifecycle", () => {
   test("pairs, renames, and revokes a device through the settings UI", async ({
     page,
     request,
   }) => {
+    await loginPageViaApi(page);
+
     // The "device" (unauthenticated request context) starts pairing.
-    const { code, secret } = await initiate(request);
+    const { code, secret } = await initiate(request, deviceName);
 
     const pending = await redeem(request, code, secret);
     expect(pending.status).toBe("pending");
@@ -86,29 +101,25 @@ test.describe("Device lifecycle (mocked)", () => {
     await page.getByRole("button", { name: "Approve device" }).click();
 
     // While the device finishes signing in, the card shows a waiting status.
-    await expect(page.getByText(/Waiting for/)).toBeVisible();
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: `Waiting for ${deviceName}` }),
+    ).toBeVisible();
 
-    // The device polls again and receives its token.
-    let token = "";
-    await expect
-      .poll(async () => {
-        const result = await redeem(request, code, secret);
-        if (result.status === "approved" && result.token) {
-          token = result.token;
-        }
-        return result.status;
-      }, { timeout: 10_000 })
-      .toBe("approved");
-    expect(token).toMatch(/^igd_/);
+    await redeemApprovedToken(request, code, secret);
 
     // The card polls the devices list every 2 seconds while waiting, so the
     // new device shows up in the list shortly after it redeems its code.
-    // Exclude Sonner toasts: the "Device connected" toast is also a list
-    // item containing the device name.
-    const deviceItem = page.locator("li:not([data-sonner-toast])", {
-      hasText: deviceName,
-    });
-    await expect(deviceItem).toBeVisible({ timeout: 15_000 });
+    const devices = page
+      .getByRole("list", { name: "Connected devices" })
+      .getByRole("listitem");
+    const deviceItem = devices.filter({ hasText: deviceName });
+    await expect(deviceItem).toBeVisible();
+    const device = (await fetchDevices(page.request)).find(
+      candidate => candidate.name === deviceName,
+    );
+    expect(device).toBeDefined();
 
     // Rename it inline (scope Save to the row — the page has other Save buttons).
     await page.getByRole("button", { name: `Rename ${deviceName}` }).click();
@@ -116,7 +127,12 @@ test.describe("Device lifecycle (mocked)", () => {
       .getByRole("textbox", { name: `New name for ${deviceName}` })
       .fill(renamedDeviceName);
     await deviceItem.getByRole("button", { name: "Save" }).click();
-    await expect(page.locator("li", { hasText: renamedDeviceName })).toBeVisible();
+    await expect(devices.filter({ hasText: renamedDeviceName })).toBeVisible();
+    expect(
+      (await fetchDevices(page.request)).find(
+        candidate => candidate.id === device!.id,
+      )?.name,
+    ).toBe(renamedDeviceName);
 
     // Revoke it from the UI.
     await page.getByRole("button", { name: `Revoke ${renamedDeviceName}` }).click();
@@ -124,14 +140,53 @@ test.describe("Device lifecycle (mocked)", () => {
       .getByRole("alertdialog")
       .getByRole("button", { name: "Revoke" })
       .click();
-    await expect(page.locator("li", { hasText: renamedDeviceName })).toHaveCount(0);
+    await expect(devices.filter({ hasText: renamedDeviceName })).toHaveCount(0);
 
     // The backing state is gone too, not just the UI row.
-    const list = await page.request.get("/api/devices", {
+    expect(
+      (await fetchDevices(page.request)).some(
+        candidate => candidate.id === device!.id,
+      ),
+    ).toBe(false);
+  });
+
+  test("a paired device's token authenticates until it is revoked", async ({
+    page,
+    request,
+  }) => {
+    requireRealInstance("the mock server does not model device tokens");
+    await loginPageViaApi(page);
+
+    const { code, secret } = await initiate(request, tokenDeviceName);
+    const approve = await page.request.post("/api/quick-connect/approve", {
+      data: { code },
       failOnStatusCode: false,
     });
-    expect(list.status()).toBe(200);
-    const body = await readJSON<DevicesListResponseType>(list);
-    expect(body.data?.devices ?? []).toHaveLength(0);
+    expect(approve.status()).toBe(200);
+
+    const token = await redeemApprovedToken(request, code, secret);
+    expect(token).toMatch(/^igd_/);
+    const authorization = { Authorization: `Bearer ${token}` };
+
+    const me = await request.get("/api/auth/user", {
+      headers: authorization,
+      failOnStatusCode: false,
+    });
+    expect(me.status()).toBe(200);
+
+    const device = (await fetchDevices(page.request)).find(
+      candidate => candidate.name === tokenDeviceName,
+    );
+    expect(device).toBeDefined();
+    const revoke = await page.request.delete(`/api/devices/${device!.id}`, {
+      failOnStatusCode: false,
+    });
+    expect(revoke.status()).toBe(200);
+
+    const revoked = await request.get("/api/auth/user", {
+      headers: authorization,
+      failOnStatusCode: false,
+    });
+    expect(revoked.status()).toBe(401);
   });
 });

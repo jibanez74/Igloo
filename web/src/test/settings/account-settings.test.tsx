@@ -250,6 +250,17 @@ describe("Account settings", () => {
     );
   });
 
+  it("hides the danger zone from admin accounts", async () => {
+    await renderAccountRoute(testUser({ is_admin: true }));
+
+    expect(
+      screen.queryByRole("heading", { name: "Danger Zone" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete account" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("deletes the account without calling logout after the session is destroyed", async () => {
     const user = userEvent.setup();
     const { requests, router } = await renderAccountRoute();

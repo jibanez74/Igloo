@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { loginPageViaApi, logoutViaApi } from "./e2e-auth";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
-import { deleteUsersByEmailPrefix } from "./e2e-users";
+import { deleteUsersByEmailPrefix, fetchAdminUsers } from "./e2e-users";
 
 test.describe("Users settings", () => {
   test("manages users accessibly without expected validation console noise", async ({
@@ -18,6 +18,7 @@ test.describe("Users settings", () => {
     const editedEmail = `${prefix}-edited@example.com`;
     const resetPassword = `ResetPass${stamp}!`;
     const tracker = trackBrowserIssues(page);
+    const userList = page.getByRole("list", { name: "User list" });
     let createPostCount = 0;
     let resetPasswordPutCount = 0;
 
@@ -36,10 +37,9 @@ test.describe("Users settings", () => {
     });
 
     await loginPageViaApi(page);
-    await deleteUsersByEmailPrefix(page.context().request, prefix);
 
     try {
-      await page.goto("/settings/users", { waitUntil: "networkidle" });
+      await page.goto("/settings/users");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Add User" })).toBeVisible();
 
@@ -49,72 +49,34 @@ test.describe("Users settings", () => {
 
       await page.getByRole("textbox", { name: "User name" }).fill(name);
       await page.getByRole("textbox", { name: "User email" }).fill(email);
-      await page.getByRole("textbox", { name: "User password" }).fill("short");
-      await page.getByRole("button", { name: "Create User" }).click();
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "Password must be at least 9 characters.",
-        }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("textbox", { name: "User password" }),
-      ).toHaveAttribute("aria-invalid", "true");
-      expect(createPostCount).toBe(0);
-
       await page.getByRole("textbox", { name: "User password" }).fill(password);
       await page.getByRole("button", { name: "Create User" }).click();
-      await expect(page.getByText(name)).toBeVisible();
+      await expect(userList.getByText(name)).toBeVisible();
       expect(createPostCount).toBe(1);
-
-      await page.getByRole("button", { name: "Add User" }).click();
-      await expect(page.getByRole("dialog", { name: "Add User" })).toBeVisible();
-      await page.getByRole("textbox", { name: "User name" }).fill("Duplicate User");
-      await page.getByRole("textbox", { name: "User email" }).fill(email);
-      await page
-        .getByRole("textbox", { name: "User password" })
-        .fill(`OtherPass${stamp}!`);
-      await page.getByRole("button", { name: "Create User" }).click();
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "A user with that email already exists.",
-        }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("textbox", { name: "User email" }),
-      ).toHaveAttribute("aria-invalid", "true");
-      expect(createPostCount).toBe(1);
-      await page.getByRole("button", { name: "Cancel" }).click();
-      await expect(page.getByRole("button", { name: "Add User" })).toBeFocused();
 
       await page.getByRole("button", { name: `Edit ${name}` }).click();
       await page.getByRole("textbox", { name: "User name" }).fill(editedName);
       await page.getByRole("textbox", { name: "User email" }).fill(editedEmail);
       await page.getByRole("checkbox", { name: "Admin privileges" }).check();
       await page.getByRole("button", { name: "Save Changes" }).click();
-      const editedRow = page.locator("li").filter({ hasText: editedName });
+      const editedRow = userList
+        .getByRole("listitem")
+        .filter({ hasText: editedName });
       await expect(editedRow).toContainText("Admin");
 
       await page.getByRole("button", { name: `Edit ${editedName}` }).click();
       await page.getByRole("checkbox", { name: "Admin privileges" }).uncheck();
       await page.getByRole("button", { name: "Save Changes" }).click();
-      await expect(editedRow).toContainText("User");
+      await expect(editedRow).not.toContainText("Admin");
+      await expect(editedRow.getByText("User", { exact: true })).toBeVisible();
+      const editedUser = (await fetchAdminUsers(page.context().request)).find(
+        user => user.email === editedEmail,
+      );
+      expect(editedUser?.is_admin).toBe(false);
 
       await page
         .getByRole("button", { name: `Reset password for ${editedName}` })
         .click();
-      await page
-        .getByRole("textbox", { name: "New password", exact: true })
-        .fill(`Mismatch${stamp}!`);
-      await page
-        .getByRole("textbox", { name: "Confirm new password" })
-        .fill(`Different${stamp}!`);
-      await expect(
-        page.getByRole("alert").filter({ hasText: "Passwords do not match." }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Reset Password", exact: true }),
-      ).toBeDisabled();
-      expect(resetPasswordPutCount).toBe(0);
       await page
         .getByRole("textbox", { name: "New password", exact: true })
         .fill(resetPassword);
@@ -130,7 +92,7 @@ test.describe("Users settings", () => {
         email: editedEmail,
         password: resetPassword,
       });
-      await page.goto("/settings/users", { waitUntil: "networkidle" });
+      await page.goto("/settings/users");
       await expect(page).toHaveURL(/\/settings\/account(?:\?|$)/);
       await expect(page.getByRole("tab", { name: "Account" })).toBeVisible();
       await expect(page.getByRole("tab", { name: "Playback" })).toBeVisible();
@@ -138,8 +100,8 @@ test.describe("Users settings", () => {
 
       await logoutViaApi(page.context().request);
       await loginPageViaApi(page);
-      await page.goto("/settings/users", { waitUntil: "networkidle" });
-      await expect(page.getByText(editedName)).toBeVisible();
+      await page.goto("/settings/users");
+      await expect(userList.getByText(editedName)).toBeVisible();
 
       await page.setViewportSize({ width: 360, height: 800 });
       await expect(

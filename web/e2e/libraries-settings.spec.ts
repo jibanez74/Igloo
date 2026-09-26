@@ -32,6 +32,7 @@ const requiredControlNames = [
   "Clear TV shows library path",
   "Clear music library path",
   "Scan movies library",
+  "Scan TV shows library",
   "Scan music library",
   "Reset library paths",
   "Save library paths",
@@ -156,16 +157,6 @@ test.describe("Libraries settings", () => {
   test("manages library paths accessibly without console noise", async ({
     page,
   }) => {
-    const tempRoot = await mkdtemp(join(tmpdir(), "igloo-libraries-settings-"));
-    const paths = {
-      movies: join(tempRoot, "movies"),
-      shows: join(tempRoot, "shows"),
-      music: join(tempRoot, "music"),
-    };
-    await Promise.all(
-      Object.values(paths).map(path => mkdir(path, { recursive: true })),
-    );
-
     await loginPageViaApi(page);
     const baseline = await fetchLibrarySettings(page);
     const tracker = trackBrowserIssues(page);
@@ -197,12 +188,24 @@ test.describe("Libraries settings", () => {
       });
     });
 
+    let tempRoot: string | undefined;
+
     try {
-      await page.goto("/settings/libraries", {
-        waitUntil: "networkidle",
-      });
+      tempRoot = await mkdtemp(join(tmpdir(), "igloo-libraries-settings-"));
+      const paths = {
+        movies: join(tempRoot, "movies"),
+        shows: join(tempRoot, "shows"),
+        music: join(tempRoot, "music"),
+      };
+      await Promise.all(
+        Object.values(paths).map(path => mkdir(path, { recursive: true })),
+      );
+
+      await page.goto("/settings/libraries");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-      await expect(page.getByText("Library Management")).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Library Management" }),
+      ).toBeVisible();
 
       const moviesInput = page.getByRole("textbox", {
         name: "Movies library path",
@@ -257,7 +260,7 @@ test.describe("Libraries settings", () => {
         }),
       ).toBeVisible();
 
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload();
       await expect(moviesInput).toHaveValue(paths.movies);
       await expect(showsInput).toHaveValue(paths.shows);
       await expect(musicInput).toHaveValue(paths.music);
@@ -337,7 +340,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/music";
+          return url.pathname === "/api/settings/scan/music" && response.request().method() === "POST";
         }),
         page.getByRole("button", { name: "Scan music library" }).click(),
       ]);
@@ -347,8 +350,7 @@ test.describe("Libraries settings", () => {
         }),
       ).toBeVisible();
 
-      // The TV shows scan trigger is reachable by keyboard from its path input,
-      // the way the recovered scanner branch asserted before TV scanning shipped.
+      // The TV shows scan trigger is reachable by keyboard from its path input.
       const showsScanButton = page.getByRole("button", {
         name: "Scan TV shows library",
       });
@@ -378,7 +380,9 @@ test.describe("Libraries settings", () => {
     } finally {
       await page.unroute("**/api/settings/scan/**").catch(() => undefined);
       await restoreLibrarySettings(page, baseline);
-      await rm(tempRoot, { recursive: true, force: true });
+      if (tempRoot) {
+        await rm(tempRoot, { recursive: true, force: true });
+      }
     }
 
     tracker.assertClean();

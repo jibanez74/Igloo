@@ -182,7 +182,7 @@ let serverPlaybackSettings: ServerPlaybackSettings = {
 };
 
 const playbackProfiles = [
-  { id: "2160p_16mbps", label: "4K · 16 Mbps", height: 2160, video_mbps: 16 },
+  { id: "2160p_16mbps", label: "2160p · 16 Mbps", height: 2160, video_mbps: 16 },
   { id: "1080p_8mbps", label: "1080p · 8 Mbps", height: 1080, video_mbps: 8 },
   { id: "1080p_6mbps", label: "1080p · 6 Mbps", height: 1080, video_mbps: 6 },
   { id: "1080p_4mbps", label: "1080p · 4 Mbps", height: 1080, video_mbps: 4 },

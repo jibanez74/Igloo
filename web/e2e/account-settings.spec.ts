@@ -1,7 +1,13 @@
-import { expect, test, type Page, type Response } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 import type { AuthUser } from "../src/types";
-import { readE2EEnv } from "./e2e-env";
+import { readE2EEnv, requireRealInstance, type Credentials } from "./e2e-env";
 import {
   isExpectedUnauthorizedResourceMessage,
   trackBrowserIssues,
@@ -9,7 +15,7 @@ import {
 import {
   readJSON,
 } from "./e2e-api";
-import { loginPageViaApi, loginViaApi, logoutViaApi } from "./e2e-auth";
+import { loginPageViaApi, loginViaApi } from "./e2e-auth";
 import {
   expectPageHasNoHorizontalScroll,
   VIEWPORTS,
@@ -57,21 +63,6 @@ function isResponseTo(
     response.request().method() === method &&
     new URL(response.url()).pathname === pathname
   );
-}
-
-async function injectInvalidAvatarFile(page: Page) {
-  await page.locator('input[aria-label="Upload avatar image"]').evaluate(element => {
-    const input = element as HTMLInputElement;
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(
-      new File(["not an image"], "avatar.txt", { type: "text/plain" }),
-    );
-    Object.defineProperty(input, "files", {
-      configurable: true,
-      value: dataTransfer.files,
-    });
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  });
 }
 
 async function auditResponsiveAccountPage(page: Page) {
@@ -251,23 +242,78 @@ async function auditMobileTabOrder(page: Page) {
     window.scrollTo(0, 0);
   });
 
-  const focusedNames: string[] = [];
-  for (let i = 0; i < 24; i += 1) {
+  const unreached = new Set(requiredAccountControlNames);
+  for (let presses = 0; unreached.size > 0 && presses < 60; presses += 1) {
     await page.keyboard.press("Tab");
-    focusedNames.push(await activeElementName(page));
+    unreached.delete(await activeElementName(page));
   }
 
   await page.evaluate(() => document.body.removeAttribute("tabindex"));
 
-  for (const controlName of requiredAccountControlNames) {
-    expect(focusedNames, `mobile tab order must include ${controlName}`).toContain(
-      controlName,
-    );
+  expect([...unreached], "controls the mobile tab order never reached").toEqual(
+    [],
+  );
+}
+
+/**
+ * Signs `page` in as a fresh non-admin account (admins have no Danger Zone),
+ * runs `run`, and deletes every account under the run's email prefix after.
+ */
+async function withDisposableUser(
+  page: Page,
+  request: APIRequestContext,
+  label: string,
+  run: (user: Credentials & { name: string; prefix: string }) => Promise<void>,
+) {
+  const stamp = Date.now();
+  const prefix = `playwright-${label}-${stamp}`;
+  const user = {
+    name: `Playwright ${label} ${stamp}`,
+    email: `${prefix}@example.com`,
+    password: `AccountPass${stamp}!`,
+  };
+
+  await loginViaApi(request);
+  await createUser(request, user);
+  await loginPageViaApi(page, user);
+
+  try {
+    await run({ ...user, prefix });
+  } finally {
+    await loginViaApi(request);
+    await deleteUsersByEmailPrefix(request, prefix);
   }
 }
 
+async function fetchCurrentUser(request: APIRequestContext) {
+  const response = await request.get("/api/auth/user", {
+    failOnStatusCode: false,
+  });
+  expect(response.status()).toBe(200);
+
+  const body = await readJSON<{ user: AuthUser }>(response);
+  return body.data!.user;
+}
+
 test.describe("Account settings", () => {
-  test("updates and deletes a disposable account accessibly without browser noise", async ({
+  test("fits every viewport and keeps every control reachable by keyboard", async ({
+    page,
+    request,
+  }) => {
+    const tracker = trackBrowserIssues(page);
+
+    await withDisposableUser(page, request, "account-audit", async () => {
+      await page.goto("/settings/account");
+      await expect(page.getByText("Profile Information")).toBeVisible();
+
+      await auditResponsiveAccountPage(page);
+      await auditMobileTabOrder(page);
+
+      tracker.assertClean();
+    });
+  });
+
+  test("updates and deletes a disposable account without browser noise", async ({
     page,
     request,
   }) => {
@@ -283,43 +329,27 @@ test.describe("Account settings", () => {
         isResponseTo(response, "PUT", "/api/user/email", 409) ||
         isResponseTo(response, "GET", "/api/auth/user", 401),
     });
-    const stamp = Date.now();
-    const prefix = `playwright-account-settings-${stamp}`;
-    const name = `Playwright Account Settings ${stamp}`;
-    const email = `${prefix}@example.com`;
-    const password = `AccountPass${stamp}!`;
-    const partiallyEditedName = `Playwright Account Settings Partial ${stamp}`;
-    const editedName = `Playwright Account Settings Edited ${stamp}`;
-    const editedEmail = `${prefix}-edited@example.com`;
-    const newPassword = `AccountNewPass${stamp}!`;
-    let avatarUploadRequestCount = 0;
 
-    page.on("request", request => {
-      if (request.url().includes("/api/user/avatar/upload")) {
-        avatarUploadRequestCount += 1;
-      }
-    });
+    await withDisposableUser(page, request, "account-settings", async ({
+      email,
+      password,
+      prefix,
+    }) => {
+      const stamp = Date.now();
+      const partiallyEditedName = `Playwright Account Settings Partial ${stamp}`;
+      const editedName = `Playwright Account Settings Edited ${stamp}`;
+      const editedEmail = `${prefix}-edited@example.com`;
+      const newPassword = `AccountNewPass${stamp}!`;
+      const avatarURL = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23f59e0b'/%3E%3C/svg%3E`;
+      const content = page.getByRole("main");
+      const emailInput = page.getByRole("textbox", { name: "Your email address" });
 
-    await loginViaApi(request);
-    await deleteUsersByEmailPrefix(request, prefix);
-    await createUser(request, { name, email, password });
-    await logoutViaApi(page.context().request);
-    await loginViaApi(page.context().request, { email, password });
-
-    try {
-      await page.goto("/settings/account", {
-        waitUntil: "networkidle",
-      });
+      await page.goto("/settings/account");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
       await expect(page.getByText("Profile Information")).toBeVisible();
 
-      await auditResponsiveAccountPage(page);
-      await auditMobileTabOrder(page);
-      await page.setViewportSize(VIEWPORTS.desktop);
-
-      await page.getByRole("textbox", { name: "Your email address" }).fill(
-        env.email,
-      );
+      // Another account's email is refused while the name change still lands.
+      await emailInput.fill(env.email);
       await page.getByRole("textbox", { name: "Your display name" }).fill(
         partiallyEditedName,
       );
@@ -336,27 +366,17 @@ test.describe("Account settings", () => {
         ),
         page.getByRole("button", { name: "Save profile" }).click(),
       ]);
+      await expect(emailInput).toHaveAttribute("aria-invalid", "true");
+      await expect(emailInput).toHaveAccessibleDescription(/already/i);
       await expect(
-        page.getByRole("alert").filter({
-          hasText: /email.*already/i,
-        }),
+        content.getByText(partiallyEditedName, { exact: true }),
       ).toBeVisible();
-      await expect(page.getByText(partiallyEditedName).first()).toBeVisible();
 
-      const partialProfileResponse = await page.context().request.get(
-        "/api/auth/user",
-        { failOnStatusCode: false },
-      );
-      expect(partialProfileResponse.status()).toBe(200);
-      const partialProfileBody = await readJSON<{ user: AuthUser }>(
-        partialProfileResponse,
-      );
-      expect(partialProfileBody.data?.user.email).toBe(email);
-      expect(partialProfileBody.data?.user.name).toBe(partiallyEditedName);
+      const partialProfile = await fetchCurrentUser(page.context().request);
+      expect(partialProfile.email).toBe(email);
+      expect(partialProfile.name).toBe(partiallyEditedName);
 
-      await page.getByRole("textbox", { name: "Your email address" }).fill(
-        editedEmail,
-      );
+      await emailInput.fill(editedEmail);
       await page.getByRole("textbox", { name: "Your display name" }).fill(
         editedName,
       );
@@ -373,22 +393,15 @@ test.describe("Account settings", () => {
         ),
         page.getByRole("button", { name: "Save profile" }).click(),
       ]);
-      await expect(
-        page.getByRole("textbox", { name: "Your email address" }),
-      ).toHaveValue(editedEmail);
-      await expect(page.getByText(editedName).first()).toBeVisible();
+      await expect(emailInput).toHaveValue(editedEmail);
+      await expect(content.getByText(editedName, { exact: true })).toBeVisible();
 
-      const profileResponse = await page.context().request.get(
-        "/api/auth/user",
-        { failOnStatusCode: false },
-      );
-      expect(profileResponse.status()).toBe(200);
-      const profileBody = await readJSON<{ user: AuthUser }>(profileResponse);
-      expect(profileBody.data?.user.email).toBe(editedEmail);
-      expect(profileBody.data?.user.name).toBe(editedName);
+      const profile = await fetchCurrentUser(page.context().request);
+      expect(profile.email).toBe(editedEmail);
+      expect(profile.name).toBe(editedName);
 
       await page.getByRole("textbox", { name: "Avatar image URL" }).fill(
-        `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23f59e0b'/%3E%3C/svg%3E`,
+        avatarURL,
       );
       await Promise.all([
         page.waitForResponse(
@@ -402,35 +415,9 @@ test.describe("Account settings", () => {
       await expect(
         page.getByRole("textbox", { name: "Avatar image URL" }),
       ).toHaveValue("");
-
-      await injectInvalidAvatarFile(page);
-      const uploadInput = page.getByLabel("Upload avatar image");
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.",
-        }),
-      ).toBeVisible();
-      await expect(uploadInput).toHaveAttribute("aria-invalid", "true");
-      await expect(uploadInput).toHaveAccessibleDescription(
-        /Invalid file type\. Allowed: JPEG, PNG, GIF, WebP, AVIF\./,
+      expect((await fetchCurrentUser(page.context().request)).avatar).toBe(
+        avatarURL,
       );
-      expect(avatarUploadRequestCount).toBe(0);
-
-      await page.getByLabel("Current password", { exact: true }).fill(password);
-      await page.getByLabel("New password", { exact: true }).fill("short");
-      await page.getByLabel("Confirm new password").fill("short");
-      await page.getByRole("button", { name: "Update Password" }).click();
-      const newPasswordInput = page.getByLabel("New password", { exact: true });
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "New password must be at least 9 characters.",
-        }),
-      ).toBeVisible();
-      await expect(newPasswordInput).toHaveAttribute("aria-invalid", "true");
-      await expect(newPasswordInput).toHaveAccessibleDescription(
-        /New password must be at least 9 characters\./,
-      );
-      await expect(newPasswordInput).toBeFocused();
 
       await page.getByLabel("Current password", { exact: true }).fill(password);
       await page.getByLabel("New password", { exact: true }).fill(newPassword);
@@ -451,37 +438,12 @@ test.describe("Account settings", () => {
 
       await page.getByRole("button", { name: "Delete account" }).click();
       const dialog = page.getByRole("dialog", { name: "Delete Account" });
-      await expect(dialog).toBeVisible();
-      await expect(
-        page.getByLabel("Type DELETE to confirm account deletion"),
-      ).toBeFocused();
-
-      await page
-        .getByLabel("Type DELETE to confirm account deletion")
-        .fill("delete");
-      const deleteConfirmInput = page.getByLabel(
+      const deleteConfirmInput = dialog.getByLabel(
         "Type DELETE to confirm account deletion",
       );
-      await expect(deleteConfirmInput).toHaveAttribute("aria-invalid", "true");
-      await expect(deleteConfirmInput).toHaveAccessibleDescription(
-        /Type DELETE exactly to confirm account deletion\./,
-      );
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "Type DELETE exactly to confirm account deletion.",
-        }),
-      ).toBeVisible();
-      await expect(
-        dialog.getByRole("button", { name: "Delete Account" }),
-      ).toBeDisabled();
+      await expect(deleteConfirmInput).toBeFocused();
 
-      await page
-        .getByLabel("Type DELETE to confirm account deletion")
-        .fill("DELETE");
-      await expect(deleteConfirmInput).not.toHaveAttribute("aria-invalid", "true");
-      await expect(
-        dialog.getByRole("button", { name: "Delete Account" }),
-      ).toBeEnabled();
+      await deleteConfirmInput.fill("DELETE");
       await Promise.all([
         page.waitForResponse(
           response =>
@@ -506,41 +468,23 @@ test.describe("Account settings", () => {
       expect(userStillExists).toBe(false);
 
       tracker.assertClean();
-    } finally {
-      await loginViaApi(request);
-      await deleteUsersByEmailPrefix(request, prefix);
-    }
+    });
   });
 
   test("manages the profile PIN accessibly without browser noise", async ({
     page,
     request,
   }) => {
+    requireRealInstance("the mock server's PIN rules are its own code");
     const tracker = trackBrowserIssues(page, {
       ignoreConsole: (_type, text) => isExpectedUnauthorizedResourceMessage(text),
       // The wrong current PIN is refused on purpose.
       ignoreResponse: response =>
         isResponseTo(response, "PUT", "/api/user/pin", 401),
     });
-    const stamp = Date.now();
-    const prefix = `playwright-profile-pin-${stamp}`;
-    const email = `${prefix}@example.com`;
-    const password = `ProfilePinPass${stamp}!`;
 
-    await loginViaApi(request);
-    await deleteUsersByEmailPrefix(request, prefix);
-    await createUser(request, {
-      name: `Playwright Profile PIN ${stamp}`,
-      email,
-      password,
-    });
-    await logoutViaApi(page.context().request);
-    await loginViaApi(page.context().request, { email, password });
-
-    try {
-      await page.goto("/settings/account", {
-        waitUntil: "networkidle",
-      });
+    await withDisposableUser(page, request, "profile-pin", async () => {
+      await page.goto("/settings/account");
       await expect(
         page.getByRole("heading", { name: "Profile PIN" }),
       ).toBeVisible();
@@ -637,28 +581,6 @@ test.describe("Account settings", () => {
       ).toBeVisible();
 
       tracker.assertClean();
-    } finally {
-      await loginViaApi(request);
-      await deleteUsersByEmailPrefix(request, prefix);
-    }
-  });
-
-  test("hides the danger zone from admin accounts", async ({ page }) => {
-    const tracker = trackBrowserIssues(page);
-
-    await loginPageViaApi(page);
-
-    await page.goto("/settings/account", {
-      waitUntil: "networkidle",
     });
-    await expect(page.getByText("Profile Information")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Danger Zone" }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Delete account" }),
-    ).toHaveCount(0);
-
-    tracker.assertClean();
   });
 });

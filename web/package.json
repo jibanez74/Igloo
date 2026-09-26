@@ -39,7 +39,6 @@
     "test:e2e:direct-media": "playwright test e2e/direct-play-media.spec.ts",
     "test:e2e:direct-fallback": "playwright test e2e/direct-play-fallback.spec.ts",
     "test:e2e:watch-room": "playwright test e2e/watch-room.spec.ts",
-    "test:e2e:quick-connect": "playwright test e2e/quick-connect.spec.ts",
     "preview": "vite preview",
     "doctor": "bun x react-doctor@0.9.12 --yes"
   },
