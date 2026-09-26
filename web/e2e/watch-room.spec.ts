@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 import {
   intEnv,
   readE2EEnv,
+  requireRealInstance,
   type Credentials,
   type E2EEnv,
 } from "./e2e-env";
@@ -11,6 +12,7 @@ import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
 import { readJSON } from "./e2e-api";
 import { loginViaApi } from "./e2e-auth";
 import { createUser, deleteUser } from "./e2e-users";
+import { realMediaTimeouts } from "./media-e2e-helpers";
 
 type WatchRoomEnv = E2EEnv & {
   movieId: number;
@@ -204,10 +206,12 @@ async function expectWatchRoomChrome(page: Page) {
 const watchRoomEnv = readWatchRoomEnv();
 
 test.describe("Watch room realtime playback", () => {
+  requireRealInstance("watch rooms need a real websocket and media");
   test.skip(
     !watchRoomEnv,
     "Set E2E_WATCH_ROOM_MOVIE_ID to run watch-room e2e tests.",
   );
+  test.describe.configure({ timeout: realMediaTimeouts().test });
 
   test("syncs direct-room playback controls across owner and guest browsers", async ({
     browser,
@@ -267,7 +271,7 @@ test.describe("Watch room realtime playback", () => {
         .poll(() => videoCurrentTime(guestPage), {
           timeout: env.responseTimeoutMs,
         })
-        .toBeGreaterThanOrEqual(9.5);
+        .toBeGreaterThanOrEqual(WATCH_ROOM_SEEK_STEP_SEC - 0.5);
 
       await guestPage.getByRole("button", { name: "Pause playback" }).click();
       await expect(

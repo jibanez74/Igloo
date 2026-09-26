@@ -6,7 +6,12 @@ import type {
   ShowGenreWithCountType,
   ShowLibraryItemType,
 } from "../src/types";
-import { apiResponse, fulfillJSON, pagedList } from "./e2e-api";
+import {
+  apiResponse,
+  expectApiRequest,
+  fulfillJSON,
+  pagedList,
+} from "./e2e-api";
 import {
   assertMockSuiteClean,
   trackBrowserIssues,
@@ -254,23 +259,6 @@ async function mockLibraryApi(page: Page, kind: LibraryKind) {
 }
 
 /** Waits for the page to have asked for `pathname` with `params` in its query. */
-async function expectApiRequest(
-  apiRequests: URL[],
-  pathname: string,
-  params: Record<string, string>,
-) {
-  await expect
-    .poll(
-      () =>
-        apiRequests.some(
-          url =>
-            url.pathname === pathname &&
-            Object.entries(params).every(([key, value]) => url.searchParams.get(key) === value),
-        ),
-      { message: `expected a request for ${pathname} with ${JSON.stringify(params)}` },
-    )
-    .toBe(true);
-}
 
 async function expectTabShown(page: Page, tab: LibraryTab) {
   await expect(page).toHaveURL(new RegExp(`tab=${tab.param}`));

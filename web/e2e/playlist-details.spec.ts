@@ -1,17 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { components } from "../src/types/openapi.gen";
+import { PLAYLIST_TRACKS_PAGE_SIZE } from "../src/lib/constants";
 import { assertMockSuiteClean, trackBrowserIssues } from "./e2e-browser-issues";
-import { apiResponse, fulfillJSON, nullableInt64, nullableString } from "./e2e-api";
+import { apiResponse, fulfillJSON, gateRoute, nullableInt64, nullableString } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 
 type Schema = components["schemas"];
 
 const PLAYLIST_ID = 55;
-const PAGE_SIZE = 50;
 // Deliberately more than one page: the header buttons used to queue only the
 // pages the virtual list had scrolled in, so a playlist this size shuffled just
-// its first 50 tracks while the button promised all 120.
+// its first page while the button promised all 120.
 const TOTAL_TRACKS = 120;
+const TRACKS_PATH = `/api/music/playlists/${PLAYLIST_ID}/tracks`;
+const PAGE_OFFSETS = Array.from(
+  { length: Math.ceil(TOTAL_TRACKS / PLAYLIST_TRACKS_PAGE_SIZE) },
+  (_, index) => index * PLAYLIST_TRACKS_PAGE_SIZE,
+);
 
 function playlistTrack(position: number): Schema["PlaylistTrack"] {
   const id = 1000 + position;
@@ -59,9 +64,6 @@ const playlistDetails = {
 };
 
 type MockOptions = {
-  // Hold every page after the first for this long, so the test can watch
-  // playback start on what is already loaded while the rest is still coming.
-  pageDelayMs?: number;
   // Serve an error envelope for this offset, as a mid-drain network blip does.
   failAtOffset?: number;
 };
@@ -76,12 +78,9 @@ async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
         return true;
       }
 
-      if (
-        url.pathname === `/api/music/playlists/${PLAYLIST_ID}/tracks` &&
-        method === "GET"
-      ) {
+      if (url.pathname === TRACKS_PATH && method === "GET") {
         const offset = Number(url.searchParams.get("offset") ?? 0);
-        const limit = Number(url.searchParams.get("limit") ?? PAGE_SIZE);
+        const limit = Number(url.searchParams.get("limit") ?? PLAYLIST_TRACKS_PAGE_SIZE);
         const slice = allPlaylistTracks.slice(offset, offset + limit);
 
         trackPageRequests.push(offset);
@@ -93,10 +92,6 @@ async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
             500,
           );
           return true;
-        }
-
-        if (offset > 0 && options.pageDelayMs) {
-          await new Promise(resolve => setTimeout(resolve, options.pageDelayMs));
         }
 
         await fulfillJSON(route, apiResponse({
@@ -135,39 +130,22 @@ function trackCounter(page: Page) {
   return page.getByText(/^Track \d+ of \d+$/);
 }
 
-test("shuffle queues every track in a multi-page playlist", async ({ page }) => {
+async function openPlaylist(page: Page) {
+  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+}
+
+test("shuffle queues every track in a multi-page playlist and starts off the first one", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
 
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
-
-  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+  await openPlaylist(page);
 
   const shuffle = page.getByRole("button", { name: `Shuffle all ${TOTAL_TRACKS} tracks` });
   await expect(shuffle).toBeVisible();
 
   // Only the first page has been fetched at this point.
-  expect(trackPageRequests).toEqual([0]);
-
-  await shuffle.click();
-
-  // The counter's denominator is the real proof: the queue holds the whole
-  // playlist, not just the page the list had loaded.
-  await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
-
-  // Getting there required draining the remaining pages.
-  expect(trackPageRequests).toEqual([0, 50, 100]);
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("shuffle starts somewhere other than the playlist's first track", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockPlaylistApi(page);
-
-  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+  await expect.poll(() => trackPageRequests).toEqual([0]);
 
   // Pin Math.random so the shuffle is deterministic: always drawing index 0
   // rotates the queue left by one, so "Track 1" moves to the end and "Track 2"
@@ -176,28 +154,12 @@ test("shuffle starts somewhere other than the playlist's first track", async ({ 
     Math.random = () => 0;
   });
 
-  await page.getByRole("button", { name: `Shuffle all ${TOTAL_TRACKS} tracks` }).click();
+  await shuffle.click();
 
+  // The counter's denominator is the real proof: the queue holds the whole
+  // playlist, not just the page the list had loaded.
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Track 2" }),
-  ).toBeVisible();
-
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("each shuffled track keeps its own artist rather than the playlist name", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests } = await mockPlaylistApi(page);
-
-  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
-
-  await page.evaluate(() => {
-    Math.random = () => 0;
-  });
-
-  await page.getByRole("button", { name: `Shuffle all ${TOTAL_TRACKS} tracks` }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Track 2" })).toBeVisible();
 
   // Track 2 -> position 2 -> "Album 2" / "Artist 2". The player used to show
   // the playlist's own name in both slots for every track in the queue.
@@ -208,6 +170,9 @@ test("each shuffled track keeps its own artist rather than the playlist name", a
   await expect(player.getByText("Artist 2", { exact: true })).toBeVisible();
   await expect(player.getByText("Long Haul", { exact: true })).toHaveCount(0);
 
+  // Getting there required draining the remaining pages.
+  expect(trackPageRequests).toEqual(PAGE_OFFSETS);
+
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
@@ -215,14 +180,13 @@ test("play all queues every track too", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
 
-  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+  await openPlaylist(page);
 
   await page.getByRole("button", { name: `Play all ${TOTAL_TRACKS} tracks` }).click();
 
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
   await expect(page.getByRole("heading", { level: 1, name: "Track 1" })).toBeVisible();
-  expect(trackPageRequests).toEqual([0, 50, 100]);
+  expect(trackPageRequests).toEqual(PAGE_OFFSETS);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
@@ -231,12 +195,15 @@ test("playback starts on the loaded page while the rest downloads behind it", as
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
-  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page, {
-    pageDelayMs: 1500,
-  });
+  const { unexpectedApiRequests, trackPageRequests } = await mockPlaylistApi(page);
+  // Hold the second page, so the test can watch playback start on what is
+  // already loaded while the drain is still waiting on the network.
+  const secondPage = await gateRoute(
+    page,
+    new RegExp(`${TRACKS_PATH}\\?.*\\boffset=${PLAYLIST_TRACKS_PAGE_SIZE}(&|$)`),
+  );
 
-  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+  await openPlaylist(page);
 
   await page.getByRole("button", { name: `Play all ${TOTAL_TRACKS} tracks` }).click();
 
@@ -245,13 +212,13 @@ test("playback starts on the loaded page while the rest downloads behind it", as
   // all of them.
   // (The header buttons are behind the expanded player at this point, so the
   // counter is what proves playback began on the first page alone.)
-  await expect(trackCounter(page)).toHaveText(`Track 1 of ${PAGE_SIZE}`);
+  await expect(trackCounter(page)).toHaveText(`Track 1 of ${PLAYLIST_TRACKS_PAGE_SIZE}`);
+  await expect.poll(secondPage.requested).toBe(true);
 
   // ...and the rest still lands.
-  await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`, {
-    timeout: 15_000,
-  });
-  expect(trackPageRequests).toEqual([0, 50, 100]);
+  secondPage.release();
+  await expect(trackCounter(page)).toHaveText(`Track 1 of ${TOTAL_TRACKS}`);
+  expect(trackPageRequests).toEqual(PAGE_OFFSETS);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
@@ -260,7 +227,6 @@ test("says so when a page of the drain fails instead of quietly playing a short 
   page,
 }) => {
   // The failed page is the point of the test, so its 500 is expected.
-  const failedPagePath = `/api/music/playlists/${PLAYLIST_ID}/tracks`;
   const browserIssues = trackBrowserIssues(page, {
     ignoreConsole: (_type, text) =>
       text ===
@@ -268,15 +234,16 @@ test("says so when a page of the drain fails instead of quietly playing a short 
     ignoreResponse: response => {
       const url = new URL(response.url());
       return (
-        url.pathname === failedPagePath &&
-        url.searchParams.get("offset") === "50"
+        url.pathname === TRACKS_PATH &&
+        url.searchParams.get("offset") === String(PLAYLIST_TRACKS_PAGE_SIZE)
       );
     },
   });
-  const { unexpectedApiRequests } = await mockPlaylistApi(page, { failAtOffset: 50 });
+  const { unexpectedApiRequests } = await mockPlaylistApi(page, {
+    failAtOffset: PLAYLIST_TRACKS_PAGE_SIZE,
+  });
 
-  await page.goto(`/music/playlist/${PLAYLIST_ID}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Long Haul" })).toBeVisible();
+  await openPlaylist(page);
 
   await page.getByRole("button", { name: `Shuffle all ${TOTAL_TRACKS} tracks` }).click();
 
@@ -284,9 +251,9 @@ test("says so when a page of the drain fails instead of quietly playing a short 
   // feature was audited for, so a failed page has to surface.
   await expect(page.getByText("Failed to shuffle playlist")).toBeVisible();
   await expect(
-    page.getByText(`Only ${PAGE_SIZE} of ${TOTAL_TRACKS} tracks could be loaded.`),
+    page.getByText(`Only ${PLAYLIST_TRACKS_PAGE_SIZE} of ${TOTAL_TRACKS} tracks could be loaded.`),
   ).toBeVisible();
-  await expect(trackCounter(page)).toHaveText(`Track 1 of ${PAGE_SIZE}`);
+  await expect(trackCounter(page)).toHaveText(`Track 1 of ${PLAYLIST_TRACKS_PAGE_SIZE}`);
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

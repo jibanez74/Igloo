@@ -70,3 +70,14 @@ export async function expectNoOverflowingElements(page: Page) {
 
   expect(offenders).toEqual([]);
 }
+
+/** Presses Tab until `target` has focus, failing after `maxPresses`. */
+export async function tabTo(page: Page, target: Locator, maxPresses = 40) {
+  for (let presses = 0; presses < maxPresses; presses++) {
+    await page.keyboard.press("Tab");
+    if (await target.evaluate(element => element === document.activeElement)) {
+      return;
+    }
+  }
+  throw new Error(`Tab did not reach the target within ${maxPresses} presses`);
+}

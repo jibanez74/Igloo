@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { readJSON } from "./e2e-api";
+import { intEnv } from "./e2e-env";
 
 // Shared player helpers. The locator, URL and request helpers serve the
 // mocked player specs as well; the fetch/progress helpers below serve only the
@@ -126,10 +127,29 @@ export function fetchTechnicalDetails<T>(page: Page, media: E2EMedia) {
   return fetchMediaJSON<T>(page, `${mediaApiPath(media)}/technical-details`);
 }
 
+/**
+ * The server answers 200 whenever the media exists, whether or not progress
+ * was saved, so anything else means the configured id is wrong.
+ */
 export async function clearWatchProgress(page: Page, media: E2EMedia) {
-  await page.context().request.delete(`${mediaApiPath(media)}/watch-progress`, {
-    failOnStatusCode: false,
-  });
+  const response = await page.context().request.delete(
+    `${mediaApiPath(media)}/watch-progress`,
+    { failOnStatusCode: false },
+  );
+  expect(response.status(), `clear watch progress for ${mediaApiPath(media)}`).toBe(200);
+}
+
+/**
+ * Budgets for the opt-in real-media suites, which wait on ffmpeg and real
+ * decoding. `test` is applied per describe so the suites keep it whatever
+ * the config default is; `response` bounds each manifest, segment and
+ * playback wait.
+ */
+export function realMediaTimeouts() {
+  return {
+    test: intEnv("E2E_HLS_TEST_TIMEOUT_MS", 600_000),
+    response: intEnv("E2E_HLS_RESPONSE_TIMEOUT_MS", 240_000),
+  };
 }
 
 // Both waits throw on MediaError rather than polling until the timeout: a

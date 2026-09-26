@@ -297,6 +297,48 @@ describe("album details content", () => {
     });
   });
 
+  it("renders disc headers, Spotify popularity and the liked state from liked-ids", async () => {
+    const twoDiscs = albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster");
+    twoDiscs.tracks.push({
+      ...albumTrack(421, 42, "Second Disc Opener", 1),
+      disc: 2,
+    });
+
+    await renderAlbumDetailsRoute("/music/album/42", {
+      additionalAlbums: [[42, twoDiscs]],
+    });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Blue Record" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Track List" })).toBeInTheDocument();
+    expect(screen.getByText("Disc 1")).toBeInTheDocument();
+    expect(screen.getByText("Disc 2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Spotify popularity 76 out of 100" }),
+    ).toBeInTheDocument();
+
+    // Track 420 is liked in the mock; the other row offers to like.
+    expect(
+      await screen.findByRole("button", { name: "Remove Alabaster from liked" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add Second Disc Opener to liked" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the delete menu from non-admins", async () => {
+    await renderAlbumDetailsRoute("/music/album/42");
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play Album" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "More options" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the hero artist name as plain text when it matches no album artist", async () => {
     const compilation = albumDetailsResponse(
       44,

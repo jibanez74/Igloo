@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
 import { musicScanStatus } from "../src/test/helpers/music-scan";
 import { showScanStatus } from "../src/test/helpers/show-scan";
@@ -73,13 +73,36 @@ export function pagedList<K extends string, T>(
 }
 
 /**
+ * Waits until one of the recorded requests hit `pathname` with every entry of
+ * `params` in its query. Specs push each `URL` a mock handler sees, so the
+ * poll covers requests that land after the UI has already moved on.
+ */
+export async function expectApiRequest(
+  requests: URL[],
+  pathname: string,
+  params: Record<string, string>,
+) {
+  await expect
+    .poll(
+      () =>
+        requests.some(
+          url =>
+            url.pathname === pathname &&
+            Object.entries(params).every(([key, value]) => url.searchParams.get(key) === value),
+        ),
+      { message: `expected a request for ${pathname} with ${JSON.stringify(params)}` },
+    )
+    .toBe(true);
+}
+
+/**
  * Holds every request matching `pattern` until `release()`, then answers it
  * with `respond` — by default whatever the next route handler, or the server,
  * would have answered.
  */
 export async function gateRoute(
   page: Page,
-  pattern: string,
+  pattern: string | RegExp,
   respond: (route: Route) => Promise<void> = route => route.fallback(),
 ) {
   let release!: () => void;

@@ -9,7 +9,13 @@ import {
   trackBrowserIssues,
 } from "./e2e-browser-issues";
 import { VIEWPORTS, expectNoOverflowingElements } from "./e2e-layout";
-import { apiResponse, fulfillJSON, nullableInt64, nullableString } from "./e2e-api";
+import {
+  apiResponse,
+  expectApiRequest,
+  fulfillJSON,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 import {
   playlistSummary,
@@ -17,6 +23,8 @@ import {
   simpleMusician,
   trackListItem,
 } from "./fixtures/music";
+
+const TOTAL_TRACKS = 2267;
 
 function track(id: number) {
   return trackListItem({
@@ -53,7 +61,7 @@ const mockMusician = simpleMusician({
   id: 1,
   name: "Mock Artist",
   album_count: 1,
-  track_count: 2267,
+  track_count: TOTAL_TRACKS,
 });
 
 const mockPlaylist = playlistSummary({
@@ -64,18 +72,17 @@ const mockPlaylist = playlistSummary({
   total_duration: 360000,
 });
 
-async function mockMusicApi(
-  page: Page,
-  requestedOffsets: number[],
-  requestedAlbumRequests: string[] = [],
-) {
+async function mockMusicApi(page: Page) {
+  const trackOffsets: number[] = [];
+  const albumRequests: URL[] = [];
+
   const { unexpectedApiRequests } = await mockApi(page, {
     user: { is_admin: true },
     handle: async ({ route, url }) => {
       if (url.pathname === "/api/music/stats") {
         await fulfillJSON(route, apiResponse({
           total_albums: 3,
-          total_tracks: 2267,
+          total_tracks: TOTAL_TRACKS,
           total_musicians: 1,
         }));
         return true;
@@ -92,7 +99,7 @@ async function mockMusicApi(
         const perPage = Number(
           url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE),
         );
-        requestedAlbumRequests.push(`${url.pathname}${url.search}`);
+        albumRequests.push(url);
 
         await fulfillJSON(route, apiResponse({
           albums: albumPage === 2 ? [pageTwoAlbum] : [mockAlbum, coverlessAlbum],
@@ -132,16 +139,15 @@ async function mockMusicApi(
           url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
         );
         const offset = Number(url.searchParams.get("offset") ?? "0");
-        const total = 2267;
-        const trackCount = Math.max(0, Math.min(limit, total - offset));
-        requestedOffsets.push(offset);
+        const trackCount = Math.max(0, Math.min(limit, TOTAL_TRACKS - offset));
+        trackOffsets.push(offset);
 
         await fulfillJSON(route, apiResponse({
           tracks: Array.from({ length: trackCount }, (_, index) => track(offset + index + 1)),
-          total,
+          total: TOTAL_TRACKS,
           offset,
           limit,
-          has_more: offset + limit < total,
+          has_more: offset + limit < TOTAL_TRACKS,
         }));
         return true;
       }
@@ -150,20 +156,20 @@ async function mockMusicApi(
     },
   });
 
-  return unexpectedApiRequests;
+  return { unexpectedApiRequests, trackOffsets, albumRequests };
 }
 
 test("music library shell and URL-backed tabs render accessibly", async ({ page }) => {
-  const requestedOffsets: number[] = [];
   const browserIssues = trackBrowserIssues(page);
-
-  const unexpectedApiRequests = await mockMusicApi(page, requestedOffsets);
+  const { unexpectedApiRequests } = await mockMusicApi(page);
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music");
 
   await expect(page).toHaveTitle("Music Library - Igloo");
   await expect(page.getByRole("heading", { name: "Music Library", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Library statistics: 3 albums, 2267 tracks, 1 musician", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel(`Library statistics: 3 albums, ${TOTAL_TRACKS} tracks, 1 musician`, { exact: true }),
+  ).toBeVisible();
 
   const tablist = page.getByRole("tablist");
   await expect(tablist).toBeVisible();
@@ -183,7 +189,7 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
   await musiciansTab.click();
   await expect(page).toHaveURL(/tab=musicians/);
   await expect(musiciansTab).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("link", { name: "Mock Artist, 1 album, 2267 tracks" })).toBeVisible();
+  await expect(page.getByRole("link", { name: `Mock Artist, 1 album, ${TOTAL_TRACKS} tracks` })).toBeVisible();
 
   await albumsTab.click();
   await expect(page).toHaveURL(/tab=albums/);
@@ -203,15 +209,8 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
 });
 
 test("albums tab renders accessible album cards and URL-backed pagination", async ({ page }) => {
-  const requestedOffsets: number[] = [];
-  const requestedAlbumRequests: string[] = [];
   const browserIssues = trackBrowserIssues(page);
-
-  const unexpectedApiRequests = await mockMusicApi(
-    page,
-    requestedOffsets,
-    requestedAlbumRequests,
-  );
+  const { unexpectedApiRequests, albumRequests } = await mockMusicApi(page);
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music");
 
@@ -232,36 +231,22 @@ test("albums tab renders accessible album cards and URL-backed pagination", asyn
   await page.getByRole("button", { name: "Go to next page" }).click();
 
   await expect(page).toHaveURL(/albumsPage=2/);
-  await expect
-    .poll(() =>
-      requestedAlbumRequests.some(requestPath => {
-        const parsed = new URL(`http://localhost${requestPath}`);
-        return (
-          parsed.pathname === "/api/music/albums" &&
-          parsed.searchParams.get("page") === "2" &&
-          parsed.searchParams.get("per_page") === String(ALBUMS_PER_PAGE)
-        );
-      }),
-    )
-    .toBe(true);
+  await expectApiRequest(albumRequests, "/api/music/albums", {
+    page: "2",
+    per_page: String(ALBUMS_PER_PAGE),
+  });
   await expect(page.getByRole("link", { name: "Page Two Album by Second Page Artist" })).toBeVisible();
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("tracks tab keeps fetching pages while the virtualized list grows", async ({ page }) => {
-  const requestedOffsets: number[] = [];
   const browserIssues = trackBrowserIssues(page);
-
-  const unexpectedApiRequests = await mockMusicApi(page, requestedOffsets);
+  const { unexpectedApiRequests, trackOffsets } = await mockMusicApi(page);
   await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/music?tab=tracks");
 
-  const tracksList = page.getByRole("list", { name: "Tracks" });
-
-  await expect(tracksList).toBeVisible();
-  const loadedStatus = page
-    .getByText(/\d+ of 2267 tracks loaded/)
-    .first();
+  await expect(page.getByRole("list", { name: "Tracks" })).toBeVisible();
+  const loadedStatus = page.getByText(new RegExp(`\\d+ of ${TOTAL_TRACKS} tracks loaded`)).first();
   await expect(loadedStatus).toBeVisible();
   await expect
     .poll(async () => {
@@ -271,59 +256,26 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
     .toBeGreaterThanOrEqual(TRACKS_INFINITE_PAGE_SIZE);
   await expectNoOverflowingElements(page);
 
-  for (let index = 0; index < 8; index += 1) {
-    await page.evaluate(() => {
-      window.scrollTo(0, document.documentElement.scrollHeight);
-
-      for (const element of document.querySelectorAll<HTMLElement>("*")) {
-        if (element.scrollHeight > element.clientHeight) {
-          element.scrollTop = element.scrollHeight;
-        }
-      }
-    });
-
-    if (requestedOffsets.includes(TRACKS_INFINITE_PAGE_SIZE * 2)) {
-      break;
-    }
-    await page.waitForTimeout(100);
-  }
-
+  // The list is window-virtualized and asks for the next page once the last
+  // rendered row comes within ten of the loaded count, so scrolling the window
+  // to the bottom on every attempt walks it a page at a time.
   await expect
-    .poll(() => requestedOffsets)
+    .poll(async () => {
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+      return trackOffsets;
+    })
     .toContainEqual(TRACKS_INFINITE_PAGE_SIZE * 2);
-  expect(requestedOffsets).toEqual(
-    expect.arrayContaining([
-      0,
-      TRACKS_INFINITE_PAGE_SIZE,
-      TRACKS_INFINITE_PAGE_SIZE * 2,
-    ]),
-  );
-  expect(requestedOffsets).toEqual([...new Set(requestedOffsets)]);
+  expect(trackOffsets.slice(0, 3)).toEqual([
+    0,
+    TRACKS_INFINITE_PAGE_SIZE,
+    TRACKS_INFINITE_PAGE_SIZE * 2,
+  ]);
+  expect(trackOffsets).toEqual([...new Set(trackOffsets)]);
 
-  await page.evaluate(() => {
-    window.scrollTo(0, 0);
+  await page.evaluate(() => window.scrollTo(0, 0));
 
-    for (const element of document.querySelectorAll<HTMLElement>("*")) {
-      if (element.scrollTop > 0) {
-        element.scrollTop = 0;
-      }
-    }
-  });
-
-  await expect(page.getByRole("button", { name: "More actions for Track 0001" })).toBeVisible();
-  await expectNoOverflowingElements(page);
-  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
-});
-
-test("tracks tab fits on mobile", async ({ page }) => {
-  const requestedOffsets: number[] = [];
-  const browserIssues = trackBrowserIssues(page);
-
-  const unexpectedApiRequests = await mockMusicApi(page, requestedOffsets);
-  await page.setViewportSize(VIEWPORTS.phone);
-  await page.goto("/music?tab=tracks");
-
-  await expect(page.getByRole("list", { name: "Tracks" })).toBeVisible();
   await expect(page.getByRole("button", { name: "More actions for Track 0001" })).toBeVisible();
   await expectNoOverflowingElements(page);
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);

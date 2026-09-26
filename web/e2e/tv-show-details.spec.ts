@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   SHOW_ID,
   seasonEpisodes,
@@ -8,7 +8,7 @@ import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
+import { expectPageHasNoHorizontalScroll, tabTo, VIEWPORTS } from "./e2e-layout";
 import { apiResponse, fulfillJSON } from "./e2e-api";
 import { mockApi } from "./e2e-mock-api";
 
@@ -49,17 +49,6 @@ async function mockShowDetailsApi(page: Page) {
   });
 
   return unexpectedApiRequests;
-}
-
-/** Presses Tab until `target` has focus, failing after `maxPresses`. */
-async function tabTo(page: Page, target: Locator, maxPresses = 40) {
-  for (let presses = 0; presses < maxPresses; presses++) {
-    await page.keyboard.press("Tab");
-    if (await target.evaluate(element => element === document.activeElement)) {
-      return;
-    }
-  }
-  throw new Error(`Tab did not reach the target within ${maxPresses} presses`);
 }
 
 for (const { label, viewport } of [
