@@ -134,4 +134,12 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+
+  {
+    files: ["**/*.{js,jsx,cjs,mjs,ts,tsx,mts,cts}"],
+    rules: {
+      eqeqeq: ["error", "smart"],
+      curly: ["error", "multi-line"],
+    },
+  },
 ]);
