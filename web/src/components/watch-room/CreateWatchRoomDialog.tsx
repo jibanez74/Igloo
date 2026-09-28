@@ -22,6 +22,7 @@ import {
 import type { PlaybackSettings } from "@/types/playback";
 import {
   movieTechnicalDetailsQueryOpts,
+  playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
   watchRoomInviteUsersQueryOpts,
 } from "@/lib/query-opts";
@@ -110,9 +111,7 @@ export default function CreateWatchRoomDialog({
     audioStreams,
     mimeType,
     maxTranscodeHeight:
-      playbackSettingsData?.error === false
-        ? playbackSettingsData.data?.settings.max_transcode_height
-        : undefined,
+      playbackSettingsFromResponse(playbackSettingsData)?.max_transcode_height,
   });
   const resolvedSettings = resolvePlaybackSettings(
     playbackSettings,

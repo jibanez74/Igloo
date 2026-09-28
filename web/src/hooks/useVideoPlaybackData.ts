@@ -21,6 +21,7 @@ import {
   authUserQueryOpts,
   mediaTechnicalDetailsQueryOpts,
   mediaWatchProgressQueryOpts,
+  playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
   playbackTechnicalFile,
 } from "@/lib/query-opts";
@@ -83,9 +84,7 @@ export function useVideoPlaybackData({
     isPending: playbackSettingsPending,
   } = useQuery(playbackSettingsQueryOpts());
   const serverPlaybackSettings =
-    playbackSettingsData?.error === false && playbackSettingsData.data?.settings
-      ? playbackSettingsData.data.settings
-      : null;
+    playbackSettingsFromResponse(playbackSettingsData);
   const devicePrefs = useDevicePlaybackPreferences(user?.id ?? 0);
   const userPlaybackPrefs = playbackDefaultsInput(
     devicePrefs,
@@ -110,20 +109,13 @@ export function useVideoPlaybackData({
         maxTranscodeHeight: serverPlaybackSettings?.max_transcode_height,
       })
     : null;
-  // Device preferences are synchronous, so the only thing still worth waiting
-  // for is the server catalog -- and getDefaultPlaybackSettings consults it on
-  // exactly one path: the mode is not settled by a stored profile, but there is
-  // a download speed to size one against. A stored profile this file cannot
-  // serve falls through to that same path, so it leaves the mode unsettled too.
-  // Everything else (audio/subtitle language) resolves immediately.
-  const storedProfileApplies =
-    devicePrefs.preferredProfile !== null &&
-    (availableModes?.some((m) => m.id === devicePrefs.preferredProfile) ??
-      false);
-  const needsServerCatalog =
-    !storedProfileApplies && devicePrefs.downloadMbps !== null;
+  // Device preferences are synchronous, but the server's playback settings
+  // decide which transcode modes this file offers (max_transcode_height) as
+  // well as the download-speed recommendation, so a mode resolved before they
+  // arrive could start a stream their arrival restarts. The route loader
+  // fetches them alongside the technical details playback already waits for.
   const playbackPreferencesReady =
-    !authUserPending && (!needsServerCatalog || !playbackSettingsPending);
+    !authUserPending && !playbackSettingsPending;
   const resolvedPlaybackSettings =
     availableModes !== null
       ? resolvePlaybackSettings(

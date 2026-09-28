@@ -63,12 +63,6 @@ func IsAllowedHLSProfile(profile string) bool {
 // that stalls for good; 1080p on the same machine stays ahead of playback.
 const HLS_CPU_MAX_TRANSCODE_HEIGHT = 1080
 
-// HLS_BANDWIDTH_HEADROOM_FACTOR is the share of a bandwidth figure a
-// transcode may spend on video. It mirrors HEADROOM_FACTOR in the web
-// client's playback recommendation, so the server-chosen fallback and the
-// client's own pick agree on what a link can carry.
-const HLS_BANDWIDTH_HEADROOM_FACTOR = 0.8
-
 // HLSMaxTranscodeHeight returns the tallest output height a transcode may
 // target on the given effective device: the CPU cap above, or the tallest
 // configured profile for hardware encoders.

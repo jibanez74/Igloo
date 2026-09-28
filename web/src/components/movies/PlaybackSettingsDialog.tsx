@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   movieTechnicalDetailsQueryOpts,
+  playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import {
@@ -426,9 +427,7 @@ export default function PlaybackSettingsDialog({
   const { data, isPending } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
   const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
   const maxTranscodeHeight =
-    playbackSettingsData?.error === false
-      ? playbackSettingsData.data?.settings.max_transcode_height
-      : undefined;
+    playbackSettingsFromResponse(playbackSettingsData)?.max_transcode_height;
   const audioStreams = data?.data?.audio_streams ?? [];
   const subtitleStreams = data?.data?.subtitles ?? [];
   const techLoaded = Boolean(data?.data);

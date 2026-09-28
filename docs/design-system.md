@@ -910,3 +910,10 @@ require the full playback test pass.
   it lasts. Do not mix the two models inside one card — split by ownership,
   as Settings → Playback does (two "this device" cards, one admin-only
   "Server" card with the only Save bar).
+- **A setting the server may not honor says what is in force.** Under the
+  Server card's hardware acceleration select, a notice read from the saved
+  settings (not the form) names the device transcodes actually run on:
+  muted helper text when it is the stored device, and `text-destructive`
+  with the probe's reason for as long as the startup probe refuses the stored
+  one. It also names the transcode cap whenever `max_transcode_height` is
+  below the tallest catalog profile.

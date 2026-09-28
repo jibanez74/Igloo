@@ -420,18 +420,22 @@ describe("getAvailableModes canPlayType gate", () => {
 });
 
 describe("getAvailableModes server transcode cap", () => {
-  const hevc4k = h264Video({ codec: "hevc", height: 2160 });
-
-  it("offers the full ladder when the server reports no cap yet", () => {
-    const ids = modeIds(
+  const hevc4kModes = (maxTranscodeHeight?: number) =>
+    modeIds(
       getAvailableModes({
-        video: hevc4k,
+        video: h264Video({ codec: "hevc", height: 2160 }),
         videoStreamsLoaded: true,
         audioStreams: [aacAudio()],
         mimeType: "video/x-matroska",
+        maxTranscodeHeight,
       }),
     );
-    expect(ids).toEqual([
+
+  it.each([
+    ["the server reports no cap yet", undefined],
+    ["the cap allows 2160p", 2160],
+  ])("offers the full ladder when %s", (_, maxTranscodeHeight) => {
+    expect(hevc4kModes(maxTranscodeHeight)).toEqual([
       "2160p_16mbps",
       "1080p_8mbps",
       "1080p_6mbps",
@@ -441,34 +445,12 @@ describe("getAvailableModes server transcode cap", () => {
   });
 
   it("hides modes above the server's max transcode height", () => {
-    const ids = modeIds(
-      getAvailableModes({
-        video: hevc4k,
-        videoStreamsLoaded: true,
-        audioStreams: [aacAudio()],
-        mimeType: "video/x-matroska",
-        maxTranscodeHeight: 1080,
-      }),
-    );
-    expect(ids).toEqual([
+    expect(hevc4kModes(1080)).toEqual([
       "1080p_8mbps",
       "1080p_6mbps",
       "1080p_4mbps",
       "720p_3mbps",
     ]);
-  });
-
-  it("keeps 2160p when the cap allows it", () => {
-    const ids = modeIds(
-      getAvailableModes({
-        video: hevc4k,
-        videoStreamsLoaded: true,
-        audioStreams: [aacAudio()],
-        mimeType: "video/x-matroska",
-        maxTranscodeHeight: 2160,
-      }),
-    );
-    expect(ids[0]).toBe("2160p_16mbps");
   });
 
   it("never caps direct play or remux", () => {

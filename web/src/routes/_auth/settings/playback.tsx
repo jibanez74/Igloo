@@ -30,7 +30,11 @@ import {
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { parseMbpsInput } from "@/lib/playback";
-import { authUserQueryOpts, playbackSettingsQueryOpts } from "@/lib/query-opts";
+import {
+  authUserQueryOpts,
+  playbackSettingsFromResponse,
+  playbackSettingsQueryOpts,
+} from "@/lib/query-opts";
 import {
   showActionFailed,
   showSuccess,
@@ -108,8 +112,7 @@ function PlaybackSettings() {
     authData?.error === false && authData.data?.user ? authData.data.user : null;
   const { data, isLoading } = useQuery(playbackSettingsQueryOpts());
 
-  const settings =
-    data?.error === false && data.data?.settings ? data.data.settings : null;
+  const settings = playbackSettingsFromResponse(data);
 
   if (authLoading || isLoading) {
     return <SettingsLoadingCard label="Loading playback settings..." />;
@@ -157,8 +160,12 @@ type ServerPlaybackFormProps = {
   settings: PlaybackSettingsType;
 };
 
+function hardwareOption(device: HardwareAccelerationDevice | undefined) {
+  return HARDWARE_OPTIONS.find(option => option.value === device);
+}
+
 function hardwareOptionLabel(device: HardwareAccelerationDevice) {
-  return HARDWARE_OPTIONS.find(option => option.value === device)?.label ?? device;
+  return hardwareOption(device)?.label ?? device;
 }
 
 /**
@@ -167,15 +174,18 @@ function hardwareOptionLabel(device: HardwareAccelerationDevice) {
  * can refuse the stored device, so the dropdown alone can mislead. A stored
  * device the server runs is confirmed; one it refused is a standing
  * condition, so the notice is destructive for as long as it lasts (§3.7).
- * The CPU cap is named because it changes which modes a 4K file offers.
+ * A cap below the catalog is named because it changes which modes a 4K file
+ * offers; the server decides which devices are capped.
  */
 function EffectiveDeviceNotice({ settings }: { settings: PlaybackSettingsType }) {
   const effective = settings.effective_hardware_acceleration_device;
   const refused = effective !== settings.hardware_acceleration_device;
-  const cappedNote =
-    effective === "cpu"
-      ? ` Software transcodes are capped at ${settings.max_transcode_height}p.`
-      : "";
+  const capped = settings.profiles.some(
+    profile => profile.height > settings.max_transcode_height,
+  );
+  const cappedNote = capped
+    ? ` Transcodes are capped at ${settings.max_transcode_height}p.`
+    : "";
 
   if (refused) {
     return (
@@ -379,12 +389,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground">
-                {
-                  HARDWARE_OPTIONS.find(
-                    option =>
-                      option.value === form.hardware_acceleration_device,
-                  )?.description
-                }
+                {hardwareOption(form.hardware_acceleration_device)?.description}
               </p>
               <EffectiveDeviceNotice settings={syncedSettings} />
             </div>

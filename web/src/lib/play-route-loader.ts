@@ -9,6 +9,7 @@ import { getDevicePlaybackPreferences } from "@/lib/playback-preferences";
 import {
   authUserQueryOpts,
   mediaTechnicalDetailsQueryOpts,
+  playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
   playbackTechnicalFile,
 } from "@/lib/query-opts";
@@ -74,8 +75,7 @@ export async function loadPlayRoute({
   const audioStreams = techData.audio_streams ?? [];
   const subtitleStreams = techData.subtitles ?? [];
   const primaryVideo = getPrimaryVideoStream(videoStreams);
-  const serverSettings =
-    playbackRes.error === false ? (playbackRes.data?.settings ?? null) : null;
+  const serverSettings = playbackSettingsFromResponse(playbackRes);
   const availableModes = getAvailableModes({
     video: primaryVideo,
     videoStreamsLoaded: true,

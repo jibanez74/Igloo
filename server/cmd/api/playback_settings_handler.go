@@ -89,7 +89,7 @@ func formatProfileLabel(height, videoMbps int) string {
 }
 
 func (app *Application) mapPlaybackSettingsResponse(settings database.Setting) playbackSettingsResponse {
-	device := ffmpeg.ResolveHLSDevice(hardwareAccelerationDeviceOrDefault(settings), app.FFmpeg.Capabilities())
+	device := ffmpeg.ResolveHLSDevice(settings.HardwareAccelerationDevice.String, app.FFmpeg.Capabilities())
 
 	return playbackSettingsResponse{
 		Profiles:                            playbackProfileCatalog(),

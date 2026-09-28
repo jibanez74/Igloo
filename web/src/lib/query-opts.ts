@@ -3,6 +3,8 @@ import type {
   ApiResponseType,
   MovieTechnicalDetailsResponse,
   PlaybackMediaRef,
+  PlaybackSettingsResponseType,
+  PlaybackSettingsType,
   ShowEpisodeTechnicalDetailsDataType,
   WatchProgressType,
 } from "@/types";
@@ -746,6 +748,13 @@ export function playbackSettingsQueryOpts() {
     staleTime: STALE_CATALOG,
     gcTime: GC_LONG,
   });
+}
+
+/** The settings a playbackSettingsQueryOpts result carries; null while loading or after a failure. */
+export function playbackSettingsFromResponse(
+  res: ApiResponseType<PlaybackSettingsResponseType> | undefined,
+): PlaybackSettingsType | null {
+  return res?.error === false ? (res.data?.settings ?? null) : null;
 }
 
 // ============================================================================

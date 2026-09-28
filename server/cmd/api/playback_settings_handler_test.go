@@ -30,11 +30,13 @@ func decodePlaybackResponse(t *testing.T, body []byte) playbackSettingsResponse 
 	return env.Data.Settings
 }
 
-func seedServerPlaybackSettings(t *testing.T, app *Application, uploadMbps float64) {
+// seedServerPlaybackSettings stores the device and server upload the handlers
+// and the HLS planner read; an uploadMbps of 0 leaves the upload uncapped.
+func seedServerPlaybackSettings(t *testing.T, app *Application, device string, uploadMbps float64) {
 	t.Helper()
 	settings, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
 		ServerUploadMbps:           helpers.NullFloat64(uploadMbps),
-		HardwareAccelerationDevice: helpers.NullString(helpers.HARDWARE_ACCELERATION_DEVICE_CPU),
+		HardwareAccelerationDevice: helpers.NullString(device),
 	})
 	if err != nil {
 		t.Fatalf("seed server settings: %v", err)
@@ -167,7 +169,7 @@ func TestUpdatePlaybackSettings_ReturnsFullSettingsEnvelope(t *testing.T) {
 func TestUpdatePlaybackSettings_RegularUserForbidden(t *testing.T) {
 	app := setupSessionTestApp(t)
 
-	seedServerPlaybackSettings(t, app, 22)
+	seedServerPlaybackSettings(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, 22)
 
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := authenticatedRouter(t, app, user.ID)
@@ -217,7 +219,7 @@ func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := setupSessionTestApp(t)
 
-			seedServerPlaybackSettings(t, app, 25)
+			seedServerPlaybackSettings(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, 25)
 
 			admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 			handler := authenticatedRouter(t, app, admin.ID)
@@ -266,7 +268,7 @@ func TestUpdatePlaybackSettings_ConcurrentPartialUpdatesBothLand(t *testing.T) {
 
 	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
 	handler := authenticatedRouter(t, app, admin.ID)
-	seedServerPlaybackSettings(t, app, 25)
+	seedServerPlaybackSettings(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, 25)
 
 	bodies := []string{
 		`{"server_upload_mbps": 42.5}`,
@@ -313,7 +315,7 @@ func TestUpdatePlaybackSettings_RejectsUnknownFieldsAndNullBody(t *testing.T) {
 	app := setupSessionTestApp(t)
 	admin := createTestUser(t, app, "Admin", "contract-admin@example.com", true)
 	handler := authenticatedRouter(t, app, admin.ID)
-	seedServerPlaybackSettings(t, app, 25)
+	seedServerPlaybackSettings(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, 25)
 	for _, body := range []string{`null`, `{"server_upload_mbps":42,"unexpected":true}`} {
 		request := newOpenAPIJSONRequest(http.MethodPut, "/api/settings/playback", body)
 		response := httptest.NewRecorder()
@@ -371,14 +373,7 @@ func TestGetPlaybackSettings_ReportsEffectiveDevice(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := setupSessionTestApp(t)
 			app.FFmpeg = &fakeFFmpeg{capabilities: &tc.capabilities}
-
-			stored, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
-				HardwareAccelerationDevice: helpers.NullString(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
-			})
-			if err != nil {
-				t.Fatalf("seed server settings: %v", err)
-			}
-			app.SetSettings(&stored)
+			seedServerPlaybackSettings(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, 0)
 
 			user := createTestUser(t, app, "Regular", "regular@example.com", false)
 			handler := authenticatedRouter(t, app, user.ID)

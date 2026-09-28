@@ -7,21 +7,11 @@ import {
   setDevicePlaybackPreferences,
   storageKeyForUser,
 } from "@/lib/playback-preferences";
-import type { PlaybackSettingsType } from "@/types";
+import { playbackSettings } from "../helpers/fixtures";
 
 const USER_ID = 1;
 
-const SETTINGS: PlaybackSettingsType = {
-  profiles: [
-    { id: "1080p_8mbps", label: "1080p · 8 Mbps", height: 1080, video_mbps: 8 },
-    { id: "720p_3mbps", label: "720p · 3 Mbps", height: 720, video_mbps: 3 },
-  ],
-  server_upload_mbps: null,
-  hardware_acceleration_device: "cpu",
-  effective_hardware_acceleration_device: "cpu",
-  hardware_fallback_reason: "",
-  max_transcode_height: 1080,
-};
+const SETTINGS = playbackSettings();
 
 // Matches only the standing card notice: the live announcement shares the
 // "not saving settings" wording, so key off the sentence unique to the notice.

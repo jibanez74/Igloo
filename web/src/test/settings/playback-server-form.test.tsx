@@ -3,35 +3,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerNowPlayingContext } from "@/context/AudioPlayerContext";
 import type { PlaybackSettingsType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
+import { authUser, playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
-function adminUser() {
-  return {
-    id: 1,
-    name: "Admin",
-    email: "admin@example.com",
-    is_admin: true,
-    avatar: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
-}
+// A 4K-capable catalog, so a 1080p cap is below what the server offers.
+const profilesWith2160p = [
+  { id: "2160p_16mbps", label: "2160p · 16 Mbps", height: 2160, video_mbps: 16 },
+  ...playbackSettings().profiles,
+];
 
-function playbackSettings(
+function nvidiaSettings(
   overrides: Partial<PlaybackSettingsType> = {},
 ): PlaybackSettingsType {
-  return {
-    profiles: [
-      { id: "1080p_8mbps", label: "1080p · 8 Mbps", height: 1080, video_mbps: 8 },
-      { id: "720p_3mbps", label: "720p · 3 Mbps", height: 720, video_mbps: 3 },
-    ],
-    server_upload_mbps: null,
+  return playbackSettings({
+    profiles: profilesWith2160p,
     hardware_acceleration_device: "nvidia",
     effective_hardware_acceleration_device: "nvidia",
-    hardware_fallback_reason: "",
     max_transcode_height: 2160,
     ...overrides,
-  };
+  });
 }
 
 async function renderPlaybackSettings(settings: PlaybackSettingsType) {
@@ -40,7 +30,7 @@ async function renderPlaybackSettings(settings: PlaybackSettingsType) {
     vi.fn((input: RequestInfo | URL) => {
       const url = requestURL(input);
       if (url === "/api/auth/user") {
-        return jsonResponse({ error: false, data: { user: adminUser() } });
+        return jsonResponse(authUser({ is_admin: true }));
       }
       if (url === "/api/settings/playback") {
         return jsonResponse({ error: false, data: { settings } });
@@ -70,7 +60,7 @@ afterEach(() => {
 // the stored device. The notice reads from the saved settings, not the form.
 describe("server playback form effective device notice", () => {
   it("confirms the stored device when the server runs it", async () => {
-    await renderPlaybackSettings(playbackSettings());
+    await renderPlaybackSettings(nvidiaSettings());
 
     const notice = await screen.findByText(
       "In use for new transcodes: NVIDIA NVENC.",
@@ -79,24 +69,18 @@ describe("server playback form effective device notice", () => {
     expect(notice).not.toHaveTextContent("capped");
   });
 
-  it("names the CPU cap when transcodes run on the CPU", async () => {
+  it("names the cap when it is below the catalog", async () => {
     await renderPlaybackSettings(
-      playbackSettings({
-        hardware_acceleration_device: "cpu",
-        effective_hardware_acceleration_device: "cpu",
-        max_transcode_height: 1080,
-      }),
+      playbackSettings({ profiles: profilesWith2160p }),
     );
 
     const notice = await screen.findByText(/In use for new transcodes: CPU\./);
-    expect(notice).toHaveTextContent(
-      "Software transcodes are capped at 1080p.",
-    );
+    expect(notice).toHaveTextContent("Transcodes are capped at 1080p.");
   });
 
   it("flags a stored device the startup probe refused", async () => {
     await renderPlaybackSettings(
-      playbackSettings({
+      nvidiaSettings({
         effective_hardware_acceleration_device: "cpu",
         hardware_fallback_reason: "h264_nvenc runtime probe failed",
         max_transcode_height: 1080,
@@ -106,7 +90,7 @@ describe("server playback form effective device notice", () => {
     const notice = await screen.findByText(/is not available on this server/);
     expect(notice).toHaveClass("text-destructive");
     expect(notice).toHaveTextContent(
-      "NVIDIA NVENC is not available on this server (h264_nvenc runtime probe failed), so transcodes run on the CPU. Software transcodes are capped at 1080p.",
+      "NVIDIA NVENC is not available on this server (h264_nvenc runtime probe failed), so transcodes run on the CPU. Transcodes are capped at 1080p.",
     );
   });
 });

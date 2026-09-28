@@ -24,28 +24,13 @@ import {
 import type {
   AuthUser,
   DevicePlaybackPreferences,
-  PlaybackSettingsType,
   StreamModeId,
 } from "@/types";
+import { playbackSettings } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
 
 const playbackSessionId = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 const authenticatedUserId = 1;
-
-const playbackProfiles = [
-  {
-    id: "1080p_8mbps",
-    label: "1080p · 8 Mbps",
-    height: 1080,
-    video_mbps: 8,
-  },
-  {
-    id: "720p_3mbps",
-    label: "720p · 3 Mbps",
-    height: 720,
-    video_mbps: 3,
-  },
-];
 
 function nullableFloat64(value: number) {
   return { Float64: value, Valid: true };
@@ -69,20 +54,6 @@ function authenticatedUser(): AuthUser {
     has_pin: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
-  };
-}
-
-function playbackSettings(
-  overrides: Partial<PlaybackSettingsType> = {},
-): PlaybackSettingsType {
-  return {
-    profiles: playbackProfiles,
-    server_upload_mbps: null,
-    hardware_acceleration_device: "cpu",
-    effective_hardware_acceleration_device: "cpu",
-    hardware_fallback_reason: "",
-    max_transcode_height: 1080,
-    ...overrides,
   };
 }
 
@@ -113,15 +84,16 @@ function seedSettledPlaybackPreferences(
 function seedPreferenceResolutionMovie(
   queryClient: QueryClient,
   movieId: number,
+  source = { mimeType: "video/mp4", codec: "h264", height: 1080 },
 ) {
   queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, movieId], {
     error: false,
     data: {
       movie: {
-        mime_type: "video/mp4",
+        mime_type: source.mimeType,
         duration: nullableFloat64(600),
       },
-      video_streams: [{ codec: "h264", height: 1080 }],
+      video_streams: [{ codec: source.codec, height: source.height }],
       audio_streams: [
         {
           codec: "aac",
@@ -825,8 +797,8 @@ describe("useVideoPlaybackData", () => {
     expect(withoutFallback.result.current.playbackStartSec).toBe(1000);
   });
 
-  // Only one path still waits on the network: no preferred profile, but a
-  // download speed that needs the server catalog to size a recommendation.
+  // No preferred profile, but a download speed that needs the server catalog
+  // to size a recommendation.
   it("waits for the server catalog before recommending a profile from download speed", async () => {
     const movieId = 10;
     const queryClient = createTestQueryClient();
@@ -924,21 +896,28 @@ describe("useVideoPlaybackData", () => {
     });
   });
 
-  // The converse, and the point of moving these to local storage: a stored
-  // profile needs nothing from the network, so playback starts right away.
-  it("resolves immediately from a stored profile while the catalog is still loading", async () => {
+  // A stored profile the file can serve still waits, because the server
+  // settings also decide which transcode modes exist: a 4K source offers
+  // 2160p until max_transcode_height says the server is capped at 1080p, so
+  // a stream started before the settings arrive would be restarted by them.
+  it("waits for the server cap before starting a stored profile", async () => {
     const movieId = 12;
     const queryClient = createTestQueryClient();
-    seedPreferenceResolutionMovie(queryClient, movieId);
+    seedPreferenceResolutionMovie(queryClient, movieId, {
+      mimeType: "video/x-matroska",
+      codec: "hevc",
+      height: 2160,
+    });
     seedAuthenticatedUser(queryClient);
     seedDevicePreferences({
-      preferredProfile: "720p_3mbps",
+      preferredProfile: "2160p_16mbps",
       preferredAudioLanguage: "es",
       preferredSubtitleLanguage: "es",
     });
 
     const playbackSettingsRequest = createDeferredResponse();
-    vi.stubGlobal("fetch", vi.fn(() => playbackSettingsRequest.promise));
+    const fetchMock = vi.fn(() => playbackSettingsRequest.promise);
+    vi.stubGlobal("fetch", fetchMock);
     const onSyncSearch = vi.fn();
 
     const { result } = renderHook(
@@ -958,28 +937,34 @@ describe("useVideoPlaybackData", () => {
       { wrapper: wrapperFor(queryClient) },
     );
 
-    expect(result.current.playbackPreferencesReady).toBe(true);
-    expect(result.current.resolvedMode).toBe("720p_3mbps");
-    expect(result.current.resolvedAudioTrack).toBe(1);
-    expect(result.current.resolvedSubtitleTrack).toBe(1);
     await waitFor(() => {
-      expect(onSyncSearch).toHaveBeenCalledWith({
-        mode: "720p_3mbps",
-        audioTrack: 1,
-        subtitleTrack: 1,
-      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+    expect(result.current.playbackPreferencesReady).toBe(false);
+    expect(onSyncSearch).not.toHaveBeenCalled();
 
     playbackSettingsRequest.resolve(
       jsonResponse({ error: false, data: { settings: playbackSettings() } }),
     );
+
+    await waitFor(() => {
+      expect(result.current.playbackPreferencesReady).toBe(true);
+      expect(result.current.resolvedMode).toBe("1080p_8mbps");
+    });
+    expect(result.current.resolvedAudioTrack).toBe(1);
+    expect(result.current.resolvedSubtitleTrack).toBe(1);
+    // Exactly one rewrite, and never to 2160p: the cap was in hand first.
+    expect(onSyncSearch).toHaveBeenCalledTimes(1);
+    expect(onSyncSearch).toHaveBeenCalledWith({
+      mode: "1080p_8mbps",
+      audioTrack: 1,
+      subtitleTrack: 1,
+    });
   });
 
-  // The other side of the same coin: a stored profile only settles the mode
-  // when this file can actually serve it. When it cannot, resolution falls
-  // through to the download-speed branch, which needs the catalog -- so
-  // readiness has to wait rather than start a stream the settings response
-  // would immediately restart.
+  // A stored profile only settles the mode when this file can actually serve
+  // it. When it cannot, resolution falls through to the download-speed
+  // branch, sized against the catalog once it arrives.
   it("waits for the catalog when the stored profile is unavailable for the file", async () => {
     const movieId = 13;
     const queryClient = createTestQueryClient();

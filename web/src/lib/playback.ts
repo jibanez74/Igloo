@@ -275,7 +275,7 @@ export type AvailableModesArgs = {
    * is capped at 1080p, and offering 2160p there advertises a stream the
    * server lowers anyway. Absent while the settings are still loading.
    */
-  maxTranscodeHeight?: number | null;
+  maxTranscodeHeight?: number;
   /** Injectable for tests; defaults to a real `canPlayType` probe. */
   canPlay?: CanPlayProbe;
 };
@@ -324,7 +324,8 @@ export function getAvailableModes(args: AvailableModesArgs) {
       return isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
     }
     const withinServerCap =
-      args.maxTranscodeHeight == null || m.maxHeight <= args.maxTranscodeHeight;
+      args.maxTranscodeHeight === undefined ||
+      m.maxHeight <= args.maxTranscodeHeight;
     return sourceHeight > 0 && m.maxHeight <= sourceHeight && withinServerCap;
   });
 

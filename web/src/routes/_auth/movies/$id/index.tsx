@@ -8,6 +8,7 @@ import {
   movieLikeStatusQueryOpts,
   movieTechnicalDetailsQueryOpts,
   movieWatchProgressQueryOpts,
+  playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import {
@@ -139,10 +140,7 @@ function LibraryMovieDetailsContent({
       : null;
   const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
   const serverPlaybackSettings =
-    playbackSettingsData?.error === false &&
-    playbackSettingsData.data?.settings
-      ? playbackSettingsData.data.settings
-      : null;
+    playbackSettingsFromResponse(playbackSettingsData);
   const devicePrefs = useDevicePlaybackPreferences(user?.id ?? 0);
   const userPlaybackPrefs = playbackDefaultsInput(
     devicePrefs,
