@@ -25,6 +25,9 @@ type PlaybackSettings = {
   profiles: PlaybackProfile[];
   server_upload_mbps: number | null;
   hardware_acceleration_device: HardwareAccelerationDevice;
+  effective_hardware_acceleration_device: HardwareAccelerationDevice;
+  hardware_fallback_reason: string;
+  max_transcode_height: number;
 };
 
 type PlaybackSettingsData = {

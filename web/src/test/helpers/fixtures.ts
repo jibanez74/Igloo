@@ -1,5 +1,8 @@
-// Fixture builders for the Go `sql.Null*` wire shapes and the authenticated
-// user payload, both of which appear in nearly every mocked API response.
+// Fixture builders for the Go `sql.Null*` wire shapes, the authenticated user
+// payload and the server playback settings, which appear across the mocked API
+// responses.
+
+import type { PlaybackSettingsType } from "@/types";
 
 export function nullableString(value = "") {
   return {
@@ -38,5 +41,27 @@ export function authUser(overrides: Record<string, unknown> = {}) {
         ...overrides,
       },
     },
+  };
+}
+
+/**
+ * A `GET /api/settings/playback` settings object: a two-profile catalog on a
+ * CPU server, which the server caps at 1080p. Override any field via
+ * `overrides`.
+ */
+export function playbackSettings(
+  overrides: Partial<PlaybackSettingsType> = {},
+): PlaybackSettingsType {
+  return {
+    profiles: [
+      { id: "1080p_8mbps", label: "1080p · 8 Mbps", height: 1080, video_mbps: 8 },
+      { id: "720p_3mbps", label: "720p · 3 Mbps", height: 720, video_mbps: 3 },
+    ],
+    server_upload_mbps: null,
+    hardware_acceleration_device: "cpu",
+    effective_hardware_acceleration_device: "cpu",
+    hardware_fallback_reason: "",
+    max_transcode_height: 1080,
+    ...overrides,
   };
 }

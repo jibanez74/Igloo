@@ -2679,7 +2679,14 @@ export interface components {
         PlaybackSettings: {
             profiles: components["schemas"]["PlaybackProfile"][];
             server_upload_mbps: number | null;
+            /** @description The stored device, edited here. The env seed only applies to a fresh database. */
             hardware_acceleration_device: components["schemas"]["HardwareAccelerationDevice"];
+            /** @description The device new transcodes actually run on: the stored one, or cpu when the startup capability probe refused it. */
+            effective_hardware_acceleration_device: components["schemas"]["HardwareAccelerationDevice"];
+            /** @description Why the effective device differs from the stored one; empty when they match. */
+            hardware_fallback_reason: string;
+            /** @description Tallest transcode profile height the effective device serves. Software encoding is capped at 1080; requests above it are lowered to the richest profile at the cap. */
+            max_transcode_height: number;
         };
         /** @description Fields absent from the body keep their current value. */
         UpdatePlaybackSettingsRequest: {

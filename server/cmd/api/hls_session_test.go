@@ -328,6 +328,10 @@ func TestCreateHLSSession_SafeVerdictSurvivesRestart(t *testing.T) {
 	}
 }
 
+// The test app is configured for CPU encoding, and the CPU is capped at
+// 1080p, so the 4K source's best-fit 2160p fallback is lowered to the richest
+// 1080p profile. TestCreateHLSSession_CapsProfileToDeviceAndUpload covers the
+// hardware and upload variants.
 func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -353,11 +357,89 @@ func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
 	}
-	if calls[0].Profile != helpers.HLS_PROFILE_2160P_16MBPS {
-		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_2160P_16MBPS)
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
 	}
 	if calls[0].CopyVideo {
 		t.Fatal("RunHLS CopyVideo = true, want false")
+	}
+}
+
+// The planner holds a session to what the effective device and the server
+// upload can carry. The CPU tops out at 1080p; a remux fallback is also held
+// to the configured upload with the web client's 0.8 headroom, but an explicit
+// request is not, because its bitrate was the viewer's own choice.
+func TestCreateHLSSession_CapsProfileToDeviceAndUpload(t *testing.T) {
+	nvenc := &ffmpeg.Capabilities{
+		Probed:                 true,
+		Encoders:               map[string]bool{"h264_nvenc": true, "aac": true},
+		H264NVENCRuntimeUsable: true,
+	}
+
+	tests := []struct {
+		name         string
+		device       string
+		uploadMbps   float64
+		capabilities *ffmpeg.Capabilities
+		profile      string
+		want         string
+	}{
+		{
+			name:         "hardware fallback keeps 2160p",
+			device:       helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			capabilities: nvenc,
+			profile:      helpers.HLS_PROFILE_REMUX,
+			want:         helpers.HLS_PROFILE_2160P_16MBPS,
+		},
+		{
+			name:         "fallback fits the server upload",
+			device:       helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			uploadMbps:   6,
+			capabilities: nvenc,
+			profile:      helpers.HLS_PROFILE_REMUX,
+			want:         helpers.HLS_PROFILE_1080P_4MBPS,
+		},
+		{
+			name:       "explicit 2160p on cpu is capped by height only",
+			device:     helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			uploadMbps: 6,
+			profile:    helpers.HLS_PROFILE_2160P_16MBPS,
+			want:       helpers.HLS_PROFILE_1080P_8MBPS,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			seedServerPlaybackSettings(t, app, tc.device, tc.uploadMbps)
+
+			fake := &fakeFFmpeg{
+				plans: []fakeFFmpegRunPlan{
+					hlsRunPlan(transcodeFixture),
+				},
+				capabilities: tc.capabilities,
+			}
+			app.FFmpeg = fake
+
+			movieID := insertTestHLSMovieFixture(t, app, "hevc", 2160)
+
+			session, err := createTestHLSSession(app, context.Background(), movieID, tc.profile, testIntPtr(0), testPlaybackSessionID, 0, false)
+			if err != nil {
+				t.Fatalf("createHLSSession returned error: %v", err)
+			}
+			defer cleanupHLSSession(session)
+
+			if session.EffectiveProfile != tc.want {
+				t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, tc.want)
+			}
+			calls := fake.Calls()
+			if len(calls) != 1 {
+				t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+			}
+			if calls[0].Profile != tc.want {
+				t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, tc.want)
+			}
+		})
 	}
 }
 

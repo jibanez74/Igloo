@@ -9360,7 +9360,10 @@
         "required": [
           "profiles",
           "server_upload_mbps",
-          "hardware_acceleration_device"
+          "hardware_acceleration_device",
+          "effective_hardware_acceleration_device",
+          "hardware_fallback_reason",
+          "max_transcode_height"
         ],
         "properties": {
           "profiles": {
@@ -9376,7 +9379,20 @@
             ]
           },
           "hardware_acceleration_device": {
-            "$ref": "#/components/schemas/HardwareAccelerationDevice"
+            "$ref": "#/components/schemas/HardwareAccelerationDevice",
+            "description": "The stored device, edited here. The env seed only applies to a fresh database."
+          },
+          "effective_hardware_acceleration_device": {
+            "$ref": "#/components/schemas/HardwareAccelerationDevice",
+            "description": "The device new transcodes actually run on: the stored one, or cpu when the startup capability probe refused it."
+          },
+          "hardware_fallback_reason": {
+            "type": "string",
+            "description": "Why the effective device differs from the stored one; empty when they match."
+          },
+          "max_transcode_height": {
+            "type": "integer",
+            "description": "Tallest transcode profile height the effective device serves. Software encoding is capped at 1080; requests above it are lowered to the richest profile at the cap."
           }
         },
         "additionalProperties": false

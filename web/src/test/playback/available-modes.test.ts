@@ -418,3 +418,52 @@ describe("getAvailableModes canPlayType gate", () => {
     expect(ids).toContain("direct");
   });
 });
+
+describe("getAvailableModes server transcode cap", () => {
+  const hevc4kModes = (maxTranscodeHeight?: number) =>
+    modeIds(
+      getAvailableModes({
+        video: h264Video({ codec: "hevc", height: 2160 }),
+        videoStreamsLoaded: true,
+        audioStreams: [aacAudio()],
+        mimeType: "video/x-matroska",
+        maxTranscodeHeight,
+      }),
+    );
+
+  it.each([
+    ["the server reports no cap yet", undefined],
+    ["the cap allows 2160p", 2160],
+  ])("offers the full ladder when %s", (_, maxTranscodeHeight) => {
+    expect(hevc4kModes(maxTranscodeHeight)).toEqual([
+      "2160p_16mbps",
+      "1080p_8mbps",
+      "1080p_6mbps",
+      "1080p_4mbps",
+      "720p_3mbps",
+    ]);
+  });
+
+  it("hides modes above the server's max transcode height", () => {
+    expect(hevc4kModes(1080)).toEqual([
+      "1080p_8mbps",
+      "1080p_6mbps",
+      "1080p_4mbps",
+      "720p_3mbps",
+    ]);
+  });
+
+  it("never caps direct play or remux", () => {
+    const ids = modeIds(
+      getAvailableModes({
+        video: h264Video(),
+        videoStreamsLoaded: true,
+        audioStreams: [aacAudio()],
+        mimeType: "video/mp4",
+        maxTranscodeHeight: 720,
+        canPlay: () => "probably",
+      }),
+    );
+    expect(ids).toEqual(["direct", "remux", "720p_3mbps"]);
+  });
+});

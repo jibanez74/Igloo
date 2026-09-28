@@ -710,6 +710,13 @@ function playbackSettingsResponse() {
     server_upload_mbps: serverPlaybackSettings.server_upload_mbps,
     hardware_acceleration_device:
       serverPlaybackSettings.hardware_acceleration_device,
+    // The mock has no FFmpeg probe, so the stored device is the effective one
+    // and only the CPU cap applies, as the Go handler reports.
+    effective_hardware_acceleration_device:
+      serverPlaybackSettings.hardware_acceleration_device,
+    hardware_fallback_reason: "",
+    max_transcode_height:
+      serverPlaybackSettings.hardware_acceleration_device === "cpu" ? 1080 : 2160,
   };
 }
 

@@ -164,6 +164,19 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	if err == nil {
 		app.Logger.Info("loaded existing settings from database")
 		app.SetSettings(&settings)
+
+		// The env value only seeds a fresh database, so once the row exists
+		// an edit in Settings silently outlives every later change to .env.
+		// Say so at startup: a server left on CPU by mistake transcodes 4K
+		// at a fraction of realtime and looks like a broken pipeline.
+		storedDevice := hardwareAccelerationDeviceOrDefault(settings)
+		envDevice := strings.ToLower(strings.TrimSpace(os.Getenv(envHardwareAccelerationDevice)))
+		if envDevice != "" && envDevice != storedDevice {
+			app.Logger.Warn("stored hardware acceleration device differs from HARDWARE_ACCELERATION_DEVICE; the stored setting is what transcodes use",
+				"stored", storedDevice,
+				"env", envDevice,
+			)
+		}
 		return nil
 	}
 
