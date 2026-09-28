@@ -37,8 +37,8 @@ import {
 } from "node:http";
 import { MOVIES_PER_PAGE, STREAM_MODES } from "../src/lib/constants";
 
-// The stateful API behind the specs that do not stub every request
-// themselves (settings, auth, devices, the players and scan progress). It
+// The stateful API behind the specs that do not call mockApi (settings, auth,
+// devices, the players, trailer, scan progress, head metadata and motion). It
 // serves only what those specs reach; anything else answers a 404 that the
 // specs' browser-issue checks report.
 
@@ -74,11 +74,13 @@ const admin = readE2EEnv();
 const startedAt = new Date().toISOString();
 
 // Messages the Go handlers answer with, so a spec reading one sees the real text.
-const ADMIN_REQUIRED = "Admin privileges required.";
+const ADMIN_REQUIRED = "admin access required";
 const DUPLICATE_ADMIN_EMAIL = "a user with that email already exists";
 const DUPLICATE_OWN_EMAIL = "that email address is already in use";
 const INVALID_CODE = "invalid or expired code";
-const USER_NOT_FOUND = "User not found.";
+const USER_NOT_FOUND = "user not found";
+const INVALID_CREDENTIALS = "invalid email or password provided";
+const WRONG_CURRENT_PASSWORD = "current password is incorrect";
 const NAME_TOO_LONG = "must be at most 100 characters";
 
 // Both mirror UpdatePlaybackSettings in the Go server: a mock that accepts what
@@ -118,7 +120,6 @@ const sessions = new Map<string, number>();
 // by the Go integration tests and the live-gated device-lifecycle spec.
 const devices: Omit<DeviceType, "is_current">[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
-const episodeWatchProgress = new Map<number, WatchProgressType>();
 
 const users: User[] = [
   {
@@ -620,7 +621,7 @@ async function handleAuthRoutes(
     const user = findUserByEmail(stringField(body, "email"));
 
     if (!user || user.password !== stringField(body, "password")) {
-      sendFailure(response, 401, "Invalid email or password.");
+      sendFailure(response, 401, INVALID_CREDENTIALS);
       return true;
     }
 
@@ -687,7 +688,7 @@ async function handleUserRoutes(
   if (url.pathname === "/api/user/password" && method === "PUT") {
     const body = await readJSONBody(request);
     if (user.password !== stringField(body, "current_password")) {
-      sendFailure(response, 400, "Current password is incorrect.");
+      sendFailure(response, 401, WRONG_CURRENT_PASSWORD);
       return true;
     }
     user.password = stringField(body, "new_password");
@@ -787,7 +788,8 @@ async function handleAdminRoutes(
   return false;
 }
 
-// The authenticated shell polls these for admins only, so they are always idle.
+// No spec starts a scan through the mock (scan-progress stubs its own status
+// route), so the admin shell's polls always see an idle scanner.
 const IDLE_SCAN_STATUS: Record<string, () => unknown> = {
   "/api/settings/scan/movies": () => movieScanStatus(IDLE_SCAN),
   "/api/settings/scan/music": () => musicScanStatus(IDLE_SCAN),
@@ -1001,14 +1003,9 @@ function handleShowsRoutes(
   }
   const episodeId = Number(episodeMatch[1]);
 
-  // The finished-episode test saves progress when the video ends.
+  // The finished-episode test saves progress when the video ends; nothing
+  // reads it back.
   if (episodeMatch[2] === "/watch-progress" && method === "PUT") {
-    episodeWatchProgress.set(episodeId, {
-      progress_sec: 0,
-      duration_sec: 2700,
-      watched: false,
-      updated_at: new Date().toISOString(),
-    });
     sendSuccess(response, { watched: false });
     return true;
   }
@@ -1018,7 +1015,7 @@ function handleShowsRoutes(
   }
 
   if (episodeMatch[2] === "/watch-progress") {
-    sendSuccess(response, episodeWatchProgress.get(episodeId) ?? NO_PROGRESS);
+    sendSuccess(response, NO_PROGRESS);
     return true;
   }
 
@@ -1061,8 +1058,11 @@ function handleMoviesRoutes(
 
   const detailsMatch = url.pathname.match(/^\/api\/movies\/details\/(\d+)$/);
   if (detailsMatch) {
-    const movie =
-      libraryMovies.find(item => item.id === Number(detailsMatch[1])) ?? libraryMovies[0];
+    const movie = libraryMovies.find(item => item.id === Number(detailsMatch[1]));
+    if (!movie) {
+      sendFailure(response, 404, "movie not found");
+      return true;
+    }
     sendSuccess(response, libraryMovieDetails(movie));
     return true;
   }

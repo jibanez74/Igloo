@@ -475,7 +475,7 @@ test.describe("Account settings", () => {
     page,
     request,
   }) => {
-    requireRealInstance("the mock server's PIN rules are its own code");
+    requireRealInstance("the mock server does not serve PIN routes");
     const tracker = trackBrowserIssues(page, {
       ignoreConsole: (_type, text) => isExpectedUnauthorizedResourceMessage(text),
       // The wrong current PIN is refused on purpose.
