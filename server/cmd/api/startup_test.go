@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -456,6 +458,43 @@ func TestInitSettings_ExistingSettingsIgnoreConfigSeeds(t *testing.T) {
 	}
 	if app.settings.TranscodeDir != defaultTranscodeDir {
 		t.Errorf("Expected TranscodeDir to remain fixed at %q, got %q", defaultTranscodeDir, app.settings.TranscodeDir)
+	}
+}
+
+// The stored device only outlives the env seed silently when they differ; the
+// schema stores device names in lower case, so the env value's case is not a
+// difference.
+func TestInitSettings_WarnsWhenStoredDeviceDiffersFromEnv(t *testing.T) {
+	tests := []struct {
+		name     string
+		stored   string
+		env      string
+		wantWarn bool
+	}{
+		{name: "env unset", stored: "nvidia", env: "", wantWarn: false},
+		{name: "same device in another case", stored: "nvidia", env: " NVIDIA ", wantWarn: false},
+		{name: "different device", stored: "cpu", env: "nvidia", wantWarn: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupTestApp(t)
+			seedServerPlaybackSettings(t, app, tc.stored, 0)
+			t.Setenv(envHardwareAccelerationDevice, tc.env)
+
+			var buf bytes.Buffer
+			app.Logger = slog.New(slog.NewTextHandler(&buf, nil))
+
+			err := app.InitSettings(context.Background())
+			if err != nil {
+				t.Fatalf("InitSettings failed: %v", err)
+			}
+
+			warned := strings.Contains(buf.String(), "stored hardware acceleration device differs")
+			if warned != tc.wantWarn {
+				t.Fatalf("warned = %v, want %v; log:\n%s", warned, tc.wantWarn, buf.String())
+			}
+		})
 	}
 }
 

@@ -117,6 +117,10 @@ func bootTestApp(t *testing.T, db *sql.DB, config RuntimeConfig) *Application {
 		DB:             db,
 		Config:         config,
 		FrontendAssets: FrontendFS,
+		// InitApp never leaves FFmpeg nil, and handlers read its capabilities
+		// outside the HLS paths too (the playback settings report the device
+		// transcodes run on). Tests that need scripted runs replace it.
+		FFmpeg: &fakeFFmpeg{},
 		// initScanners hands this group to every scanner, and movie.New,
 		// music.New and show.New silently substitute a private one when it is
 		// nil. Leaving it unset gave every scanner its own group, so

@@ -12,6 +12,7 @@ import {
 import type { AudioPlayerNowPlaying } from "@/types";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { jsonResponse, requestURL } from "../helpers/api";
+import { playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
 const defaultMatchMedia = window.matchMedia;
@@ -44,27 +45,6 @@ function generalSettings() {
     download_images: true,
     static_dir: "/var/lib/igloo/static",
     transcode_dir: "/var/lib/igloo/transcode",
-  };
-}
-
-function playbackSettings() {
-  return {
-    profiles: [
-      {
-        id: "720p_4mbps",
-        label: "720p - 4 Mbps",
-        height: 720,
-        video_mbps: 4,
-      },
-      {
-        id: "1080p_8mbps",
-        label: "1080p - 8 Mbps",
-        height: 1080,
-        video_mbps: 8,
-      },
-    ],
-    server_upload_mbps: 20,
-    hardware_acceleration_device: "cpu",
   };
 }
 
@@ -102,7 +82,7 @@ function mockSettingsFetch() {
       return jsonResponse({
         error: false,
         data: {
-          settings: playbackSettings(),
+          settings: playbackSettings({ server_upload_mbps: 20 }),
         },
       });
     }
@@ -368,7 +348,7 @@ describe("settings form query updates", () => {
       queryClient.setQueryData([PLAYBACK_SETTINGS_KEY], {
         error: false,
         data: {
-          settings: { ...playbackSettings(), server_upload_mbps: 25 },
+          settings: playbackSettings({ server_upload_mbps: 25 }),
         },
       });
     });
@@ -394,7 +374,7 @@ describe("settings form query updates", () => {
       queryClient.setQueryData([PLAYBACK_SETTINGS_KEY], {
         error: false,
         data: {
-          settings: { ...playbackSettings(), server_upload_mbps: 25 },
+          settings: playbackSettings({ server_upload_mbps: 25 }),
         },
       });
     });

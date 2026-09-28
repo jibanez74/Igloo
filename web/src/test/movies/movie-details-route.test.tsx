@@ -11,7 +11,6 @@ import type {
   AuthUser,
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
-  PlaybackSettingsType,
   WatchProgressType,
 } from "@/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +19,12 @@ import {
   setDevicePlaybackPreferences,
 } from "@/lib/playback-preferences";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
+import {
+  nullableFloat64,
+  nullableInt64,
+  nullableString,
+  playbackSettings,
+} from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
 import { renderRoute } from "../helpers/render-route";
 import {
@@ -59,14 +63,6 @@ function authUser(): AuthUser {
     has_pin: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
-  };
-}
-
-function playbackSettings(): PlaybackSettingsType {
-  return {
-    profiles: [],
-    server_upload_mbps: null,
-    hardware_acceleration_device: "cpu",
   };
 }
 

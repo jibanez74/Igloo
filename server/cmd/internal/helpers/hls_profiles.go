@@ -57,6 +57,68 @@ func IsAllowedHLSProfile(profile string) bool {
 	return slices.Contains(HLSAllowedProfiles, profile)
 }
 
+// HLS_CPU_MAX_TRANSCODE_HEIGHT caps software transcodes. libx264 at 2160p
+// with the software tone-map chain ran at 0.64x realtime on an 8-core
+// Ryzen 7 5800X, so a CPU-only server that promises 2160p serves a stream
+// that stalls for good; 1080p on the same machine stays ahead of playback.
+const HLS_CPU_MAX_TRANSCODE_HEIGHT = 1080
+
+// HLSMaxTranscodeHeight returns the tallest output height a transcode may
+// target on the given effective device: the CPU cap above, or the tallest
+// configured profile for hardware encoders.
+func HLSMaxTranscodeHeight(effectiveDevice string) int {
+	if effectiveDevice == HARDWARE_ACCELERATION_DEVICE_CPU {
+		return HLS_CPU_MAX_TRANSCODE_HEIGHT
+	}
+
+	tallest := 0
+	for _, cfg := range HLSProfileConfigs {
+		if cfg.Height > tallest {
+			tallest = cfg.Height
+		}
+	}
+
+	return tallest
+}
+
+// ConstrainHLSProfile lowers a transcode profile until it fits within
+// maxHeight and maxVideoMbps; a zero or negative cap is no cap. The result is
+// the first allowed-list profile (tallest, then richest) at or below both the
+// original profile's height and bitrate and the caps, so a profile that
+// already fits is returned unchanged. When nothing fits, the cheapest
+// configured profile is returned. Remux and unknown ids pass through.
+func ConstrainHLSProfile(profileID string, maxHeight int, maxVideoMbps float64) string {
+	cfg, ok := HLSProfileConfigs[profileID]
+	if !ok {
+		return profileID
+	}
+
+	heightCap := cfg.Height
+	if maxHeight > 0 && maxHeight < heightCap {
+		heightCap = maxHeight
+	}
+	mbpsCap := float64(cfg.VideoMbps)
+	if maxVideoMbps > 0 && maxVideoMbps < mbpsCap {
+		mbpsCap = maxVideoMbps
+	}
+
+	var cheapest string
+	for _, candidateID := range HLSAllowedProfiles {
+		candidate, ok := HLSProfileConfigs[candidateID]
+		if !ok {
+			continue
+		}
+
+		fits := candidate.Height <= heightCap && float64(candidate.VideoMbps) <= mbpsCap
+		if fits {
+			return candidateID
+		}
+		cheapest = candidateID
+	}
+
+	return cheapest
+}
+
 // BestFitHLSFallbackProfile picks the transcode profile a session falls back
 // to when remux is refused. Selection runs in two stages.
 //

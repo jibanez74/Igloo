@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -27,6 +28,13 @@ type playbackSettingsResponse struct {
 	Profiles                   []playbackProfileResponse `json:"profiles"`
 	ServerUploadMbps           *float64                  `json:"server_upload_mbps"`
 	HardwareAccelerationDevice string                    `json:"hardware_acceleration_device"`
+	// The device new transcodes actually run on, which is the stored one
+	// unless the startup capability probe refused it, and the probe's reason
+	// when it did. MaxTranscodeHeight is the tallest profile that device may
+	// serve; the CPU is capped because it cannot sustain 2160p.
+	EffectiveHardwareAccelerationDevice string `json:"effective_hardware_acceleration_device"`
+	HardwareFallbackReason              string `json:"hardware_fallback_reason"`
+	MaxTranscodeHeight                  int    `json:"max_transcode_height"`
 }
 
 func hardwareAccelerationDeviceOrDefault(settings database.Setting) string {
@@ -80,11 +88,16 @@ func formatProfileLabel(height, videoMbps int) string {
 	return strconv.Itoa(height) + "p · " + strconv.Itoa(videoMbps) + " Mbps"
 }
 
-func mapPlaybackSettingsResponse(settings database.Setting) playbackSettingsResponse {
+func (app *Application) mapPlaybackSettingsResponse(settings database.Setting) playbackSettingsResponse {
+	device := ffmpeg.ResolveHLSDevice(settings.HardwareAccelerationDevice.String, app.FFmpeg.Capabilities())
+
 	return playbackSettingsResponse{
-		Profiles:                   playbackProfileCatalog(),
-		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
-		HardwareAccelerationDevice: hardwareAccelerationDeviceOrDefault(settings),
+		Profiles:                            playbackProfileCatalog(),
+		ServerUploadMbps:                    helpers.Float64PtrFromNull(settings.ServerUploadMbps),
+		HardwareAccelerationDevice:          device.Configured,
+		EffectiveHardwareAccelerationDevice: device.Effective,
+		HardwareFallbackReason:              device.Reason,
+		MaxTranscodeHeight:                  helpers.HLSMaxTranscodeHeight(device.Effective),
 	}
 }
 
@@ -92,7 +105,7 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"settings": mapPlaybackSettingsResponse(*app.CurrentSettings()),
+			"settings": app.mapPlaybackSettingsResponse(*app.CurrentSettings()),
 		},
 	})
 }
@@ -186,7 +199,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		Error:   false,
 		Message: "Playback settings updated",
 		Data: map[string]any{
-			"settings": mapPlaybackSettingsResponse(updated),
+			"settings": app.mapPlaybackSettingsResponse(updated),
 		},
 	})
 }

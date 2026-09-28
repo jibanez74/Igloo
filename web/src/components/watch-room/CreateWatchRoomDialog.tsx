@@ -22,6 +22,8 @@ import {
 import type { PlaybackSettings } from "@/types/playback";
 import {
   movieTechnicalDetailsQueryOpts,
+  playbackSettingsFromResponse,
+  playbackSettingsQueryOpts,
   watchRoomInviteUsersQueryOpts,
 } from "@/lib/query-opts";
 import {
@@ -72,6 +74,7 @@ export default function CreateWatchRoomDialog({
   const { data: inviteUsersData, isPending: inviteUsersPending } = useQuery(
     watchRoomInviteUsersQueryOpts(open),
   );
+  const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
   const { data: techData, isPending: techPending } = useQuery(
     movieTechnicalDetailsQueryOpts(movieId),
   );
@@ -107,6 +110,8 @@ export default function CreateWatchRoomDialog({
     videoStreamsLoaded: techLoaded,
     audioStreams,
     mimeType,
+    maxTranscodeHeight:
+      playbackSettingsFromResponse(playbackSettingsData)?.max_transcode_height,
   });
   const resolvedSettings = resolvePlaybackSettings(
     playbackSettings,
