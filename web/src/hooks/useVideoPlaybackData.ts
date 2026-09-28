@@ -107,6 +107,7 @@ export function useVideoPlaybackData({
         videoStreamsLoaded: true,
         audioStreams,
         mimeType: techFile?.mime_type,
+        maxTranscodeHeight: serverPlaybackSettings?.max_transcode_height,
       })
     : null;
   // Device preferences are synchronous, so the only thing still worth waiting

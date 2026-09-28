@@ -74,16 +74,17 @@ export async function loadPlayRoute({
   const audioStreams = techData.audio_streams ?? [];
   const subtitleStreams = techData.subtitles ?? [];
   const primaryVideo = getPrimaryVideoStream(videoStreams);
+  const serverSettings =
+    playbackRes.error === false ? (playbackRes.data?.settings ?? null) : null;
   const availableModes = getAvailableModes({
     video: primaryVideo,
     videoStreamsLoaded: true,
     audioStreams,
     mimeType: playbackTechnicalFile(techData).mime_type,
+    maxTranscodeHeight: serverSettings?.max_transcode_height,
   });
   if (availableModes.length === 0) return null;
 
-  const serverSettings =
-    playbackRes.error === false ? (playbackRes.data?.settings ?? null) : null;
   const resolved = getDefaultPlaybackSettings(
     availableModes,
     playbackDefaultsInput(

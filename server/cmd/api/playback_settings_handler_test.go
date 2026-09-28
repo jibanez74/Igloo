@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -59,6 +60,15 @@ func TestGetPlaybackSettings_ReturnsProfileCatalog(t *testing.T) {
 	settings := decodePlaybackResponse(t, w.Body.Bytes())
 	if settings.HardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
 		t.Fatalf("expected default hardware device cpu, got %q", settings.HardwareAccelerationDevice)
+	}
+	if settings.EffectiveHardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
+		t.Fatalf("expected effective device cpu, got %q", settings.EffectiveHardwareAccelerationDevice)
+	}
+	if settings.HardwareFallbackReason != "" {
+		t.Fatalf("expected no fallback reason for cpu, got %q", settings.HardwareFallbackReason)
+	}
+	if settings.MaxTranscodeHeight != helpers.HLS_CPU_MAX_TRANSCODE_HEIGHT {
+		t.Fatalf("expected cpu max transcode height %d, got %d", helpers.HLS_CPU_MAX_TRANSCODE_HEIGHT, settings.MaxTranscodeHeight)
 	}
 	if len(settings.Profiles) == 0 {
 		t.Fatal("expected non-empty profile catalog")
@@ -319,5 +329,82 @@ func TestUpdatePlaybackSettings_RejectsUnknownFieldsAndNullBody(t *testing.T) {
 		if settings.ServerUploadMbps.Float64 != 25 || app.CurrentSettings().ServerUploadMbps.Float64 != 25 {
 			t.Fatal("rejected request changed playback settings")
 		}
+	}
+}
+
+// The response reports the device transcodes actually run on, not just the
+// stored one: a stored NVIDIA that the startup probe refused is shown as CPU
+// with the probe's reason, and a usable NVIDIA lifts the 1080p CPU cap.
+func TestGetPlaybackSettings_ReportsEffectiveDevice(t *testing.T) {
+	tests := []struct {
+		name          string
+		capabilities  ffmpeg.Capabilities
+		wantEffective string
+		wantReason    string
+		wantMaxHeight int
+	}{
+		{
+			name: "probe refused nvidia",
+			capabilities: ffmpeg.Capabilities{
+				Probed:              true,
+				Encoders:            map[string]bool{"h264_nvenc": true},
+				H264NVENCProbeError: "nvenc probe failed",
+			},
+			wantEffective: helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:    "h264_nvenc runtime probe failed: nvenc probe failed",
+			wantMaxHeight: helpers.HLS_CPU_MAX_TRANSCODE_HEIGHT,
+		},
+		{
+			name: "nvidia usable",
+			capabilities: ffmpeg.Capabilities{
+				Probed:                 true,
+				Encoders:               map[string]bool{"h264_nvenc": true},
+				H264NVENCRuntimeUsable: true,
+			},
+			wantEffective: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			wantReason:    "",
+			wantMaxHeight: 2160,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSessionTestApp(t)
+			app.FFmpeg = &fakeFFmpeg{capabilities: &tc.capabilities}
+
+			stored, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), database.UpdatePlaybackServerSettingsParams{
+				HardwareAccelerationDevice: helpers.NullString(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA),
+			})
+			if err != nil {
+				t.Fatalf("seed server settings: %v", err)
+			}
+			app.SetSettings(&stored)
+
+			user := createTestUser(t, app, "Regular", "regular@example.com", false)
+			handler := authenticatedRouter(t, app, user.ID)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/settings/playback", nil)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+			assertOpenAPIExchange(t, "getPlaybackSettings", req, w)
+
+			settings := decodePlaybackResponse(t, w.Body.Bytes())
+			if settings.HardwareAccelerationDevice != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
+				t.Fatalf("stored device = %q, want nvidia", settings.HardwareAccelerationDevice)
+			}
+			if settings.EffectiveHardwareAccelerationDevice != tc.wantEffective {
+				t.Fatalf("effective device = %q, want %q", settings.EffectiveHardwareAccelerationDevice, tc.wantEffective)
+			}
+			if settings.HardwareFallbackReason != tc.wantReason {
+				t.Fatalf("fallback reason = %q, want %q", settings.HardwareFallbackReason, tc.wantReason)
+			}
+			if settings.MaxTranscodeHeight != tc.wantMaxHeight {
+				t.Fatalf("max transcode height = %d, want %d", settings.MaxTranscodeHeight, tc.wantMaxHeight)
+			}
+		})
 	}
 }

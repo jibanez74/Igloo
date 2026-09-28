@@ -315,6 +315,9 @@ async function mockMovieDetailsApi(
           profiles: [],
           server_upload_mbps: null,
           hardware_acceleration_device: "cpu",
+          effective_hardware_acceleration_device: "cpu",
+          hardware_fallback_reason: "",
+          max_transcode_height: 1080,
         },
       }));
       return;

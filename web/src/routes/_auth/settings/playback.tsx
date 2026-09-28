@@ -157,6 +157,45 @@ type ServerPlaybackFormProps = {
   settings: PlaybackSettingsType;
 };
 
+function hardwareOptionLabel(device: HardwareAccelerationDevice) {
+  return HARDWARE_OPTIONS.find(option => option.value === device)?.label ?? device;
+}
+
+/**
+ * What new transcodes actually run on, from the saved settings rather than
+ * the form: the env value only seeds a fresh database, and the startup probe
+ * can refuse the stored device, so the dropdown alone can mislead. A stored
+ * device the server runs is confirmed; one it refused is a standing
+ * condition, so the notice is destructive for as long as it lasts (§3.7).
+ * The CPU cap is named because it changes which modes a 4K file offers.
+ */
+function EffectiveDeviceNotice({ settings }: { settings: PlaybackSettingsType }) {
+  const effective = settings.effective_hardware_acceleration_device;
+  const refused = effective !== settings.hardware_acceleration_device;
+  const cappedNote =
+    effective === "cpu"
+      ? ` Software transcodes are capped at ${settings.max_transcode_height}p.`
+      : "";
+
+  if (refused) {
+    return (
+      <p className="text-sm text-destructive">
+        {hardwareOptionLabel(settings.hardware_acceleration_device)} is not
+        available on this server ({settings.hardware_fallback_reason}), so
+        transcodes run on the {hardwareOptionLabel(effective)}.
+        {cappedNote}
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-sm text-muted-foreground">
+      In use for new transcodes: {hardwareOptionLabel(effective)}.
+      {cappedNote}
+    </p>
+  );
+}
+
 type PlaybackSettingsQueryData = {
   error: false;
   message?: string;
@@ -347,6 +386,7 @@ function ServerPlaybackForm({ settings }: ServerPlaybackFormProps) {
                   )?.description
                 }
               </p>
+              <EffectiveDeviceNotice settings={syncedSettings} />
             </div>
           </PlaybackSection>
         </CardContent>

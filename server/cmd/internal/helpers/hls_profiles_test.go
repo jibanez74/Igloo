@@ -160,3 +160,43 @@ func TestIsBrowserCompatibleH264(t *testing.T) {
 		})
 	}
 }
+
+func TestHLSMaxTranscodeHeight(t *testing.T) {
+	if got := HLSMaxTranscodeHeight(HARDWARE_ACCELERATION_DEVICE_CPU); got != HLS_CPU_MAX_TRANSCODE_HEIGHT {
+		t.Fatalf("cpu max height = %d, want %d", got, HLS_CPU_MAX_TRANSCODE_HEIGHT)
+	}
+	for _, device := range []string{HARDWARE_ACCELERATION_DEVICE_NVIDIA, HARDWARE_ACCELERATION_DEVICE_INTEL, HARDWARE_ACCELERATION_DEVICE_APPLE} {
+		if got := HLSMaxTranscodeHeight(device); got != 2160 {
+			t.Fatalf("%s max height = %d, want 2160", device, got)
+		}
+	}
+}
+
+func TestConstrainHLSProfile(t *testing.T) {
+	tests := []struct {
+		name         string
+		profile      string
+		maxHeight    int
+		maxVideoMbps float64
+		want         string
+	}{
+		{name: "no caps keep the profile", profile: HLS_PROFILE_2160P_16MBPS, want: HLS_PROFILE_2160P_16MBPS},
+		{name: "profile within both caps is unchanged", profile: HLS_PROFILE_1080P_6MBPS, maxHeight: 1080, maxVideoMbps: 6.4, want: HLS_PROFILE_1080P_6MBPS},
+		{name: "cpu height cap lowers 2160p to the richest 1080p", profile: HLS_PROFILE_2160P_16MBPS, maxHeight: HLS_CPU_MAX_TRANSCODE_HEIGHT, want: HLS_PROFILE_1080P_8MBPS},
+		{name: "bandwidth cap picks the richest profile that fits", profile: HLS_PROFILE_2160P_16MBPS, maxVideoMbps: 4.8, want: HLS_PROFILE_1080P_4MBPS},
+		{name: "bandwidth cap never raises the height", profile: HLS_PROFILE_720P_3MBPS, maxVideoMbps: 100, want: HLS_PROFILE_720P_3MBPS},
+		{name: "both caps apply together", profile: HLS_PROFILE_2160P_16MBPS, maxHeight: 1080, maxVideoMbps: 6.4, want: HLS_PROFILE_1080P_6MBPS},
+		{name: "nothing fits falls to the cheapest profile", profile: HLS_PROFILE_1080P_8MBPS, maxVideoMbps: 1, want: HLS_PROFILE_720P_3MBPS},
+		{name: "remux passes through", profile: HLS_PROFILE_REMUX, maxHeight: 1080, maxVideoMbps: 1, want: HLS_PROFILE_REMUX},
+		{name: "unknown ids pass through", profile: "bogus", maxHeight: 1080, want: "bogus"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ConstrainHLSProfile(tc.profile, tc.maxHeight, tc.maxVideoMbps)
+			if got != tc.want {
+				t.Fatalf("ConstrainHLSProfile(%q, %d, %v) = %q, want %q", tc.profile, tc.maxHeight, tc.maxVideoMbps, got, tc.want)
+			}
+		})
+	}
+}

@@ -269,6 +269,13 @@ export type AvailableModesArgs = {
    */
   audioStreams?: DirectPlayAudioInfo[];
   mimeType?: string;
+  /**
+   * The server's `max_transcode_height` (Settings → Playback): the tallest
+   * profile the device new transcodes run on can serve. Software encoding
+   * is capped at 1080p, and offering 2160p there advertises a stream the
+   * server lowers anyway. Absent while the settings are still loading.
+   */
+  maxTranscodeHeight?: number | null;
   /** Injectable for tests; defaults to a real `canPlayType` probe. */
   canPlay?: CanPlayProbe;
 };
@@ -316,7 +323,9 @@ export function getAvailableModes(args: AvailableModesArgs) {
       // `resolveModeForAudioTrack` depends on.
       return isVideoDirectPlayable(video.codec) && isBrowserSafeH264(video);
     }
-    return sourceHeight > 0 && m.maxHeight <= sourceHeight;
+    const withinServerCap =
+      args.maxTranscodeHeight == null || m.maxHeight <= args.maxTranscodeHeight;
+    return sourceHeight > 0 && m.maxHeight <= sourceHeight && withinServerCap;
   });
 
   if (availableModes.length > 0 || !video) {

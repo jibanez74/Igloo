@@ -159,6 +159,7 @@ function LibraryMovieDetailsContent({
     videoStreamsLoaded: Boolean(techData?.data),
     audioStreams,
     mimeType: mimeType ?? undefined,
+    maxTranscodeHeight: serverPlaybackSettings?.max_transcode_height,
   });
   const smartDefault: PlaybackSettings = resolvePlaybackSettings(
     null,

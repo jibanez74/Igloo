@@ -1661,6 +1661,41 @@ func (app *Application) createHLSSession(
 	return app.runHLSSessionPlan(ctx, plan, acquireWait)
 }
 
+// hlsMaxTranscodeHeight is the tallest output the device new transcodes run
+// on can serve; the CPU is capped because it cannot sustain 2160p.
+func (app *Application) hlsMaxTranscodeHeight() int {
+	device := ffmpeg.ResolveHLSDevice(hardwareAccelerationDeviceOrDefault(*app.CurrentSettings()), app.FFmpeg.Capabilities())
+	return helpers.HLSMaxTranscodeHeight(device.Effective)
+}
+
+// constrainedHLSFallbackProfile is the transcode a refused remux falls back
+// to: the best fit for the source, lowered to what the effective device can
+// encode in real time and to what the configured server upload can carry.
+// A TV client asks for remux without knowing either, and a 4K source on a
+// 5 Mbps link must not be handed 16 Mbps because the source is tall.
+func (app *Application) constrainedHLSFallbackProfile(media mediaRef, primaryVideo *database.VideoStream, source playbackSource, maxHeight int) string {
+	bestFit := helpers.BestFitHLSFallbackProfile(primaryVideo.Height, sourceVideoBitRate(source, primaryVideo))
+
+	settings := app.CurrentSettings()
+	uploadCapMbps := 0.0
+	if settings.ServerUploadMbps.Valid {
+		uploadCapMbps = settings.ServerUploadMbps.Float64 * helpers.HLS_BANDWIDTH_HEADROOM_FACTOR
+	}
+
+	constrained := helpers.ConstrainHLSProfile(bestFit, maxHeight, uploadCapMbps)
+	if constrained != bestFit {
+		app.Logger.Info("hls fallback profile constrained",
+			"media", media.String(),
+			"best_fit_profile", bestFit,
+			"fallback_profile", constrained,
+			"max_transcode_height", maxHeight,
+			"server_upload_cap_mbps", uploadCapMbps,
+		)
+	}
+
+	return constrained
+}
+
 func (app *Application) planHLSSession(
 	ctx context.Context,
 	source *playbackSource,
@@ -1756,9 +1791,25 @@ func (app *Application) planHLSSession(
 
 	requestedProfile := profile
 	effectiveProfile := profile
-	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height, sourceVideoBitRate(*source, primaryVideo))
+	maxTranscodeHeight := app.hlsMaxTranscodeHeight()
+	fallbackProfile := app.constrainedHLSFallbackProfile(media, primaryVideo, *source, maxTranscodeHeight)
 	fingerprint := remuxSafetyFingerprint(*source, primaryVideo, app.FFmpeg.Capabilities().Version)
 	needsRemuxPreflight := false
+
+	// An explicit transcode request is the viewer's choice of bitrate, so only
+	// the device's height cap applies to it; the bandwidth cap is for the
+	// fallback the server picks on the viewer's behalf.
+	if requestedProfile != helpers.HLS_PROFILE_REMUX {
+		effectiveProfile = helpers.ConstrainHLSProfile(profile, maxTranscodeHeight, 0)
+		if effectiveProfile != requestedProfile {
+			app.Logger.Warn("hls transcode profile capped by the effective device",
+				"media", media.String(),
+				"requested_profile", requestedProfile,
+				"effective_profile", effectiveProfile,
+				"max_transcode_height", maxTranscodeHeight,
+			)
+		}
+	}
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
 		if ok, fallbackReason := isBrowserSafeH264RemuxCandidate(primaryVideo); !ok {

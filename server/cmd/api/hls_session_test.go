@@ -328,6 +328,9 @@ func TestCreateHLSSession_SafeVerdictSurvivesRestart(t *testing.T) {
 	}
 }
 
+// The test app is configured for CPU encoding, and the CPU is capped at
+// 1080p, so the 4K source's best-fit 2160p fallback is lowered to the richest
+// 1080p profile. The hardware variant below keeps 2160p.
 func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -353,12 +356,133 @@ func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
 	}
-	if calls[0].Profile != helpers.HLS_PROFILE_2160P_16MBPS {
-		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_2160P_16MBPS)
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
 	}
 	if calls[0].CopyVideo {
 		t.Fatal("RunHLS CopyVideo = true, want false")
 	}
+}
+
+func TestCreateHLSSession_HardwareFallbackKeeps2160p(t *testing.T) {
+	app := setupTestApp(t)
+	setTestHardwareDevice(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, 0)
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+		capabilities: &ffmpeg.Capabilities{
+			Probed:                 true,
+			Encoders:               map[string]bool{"h264_nvenc": true, "aac": true},
+			H264NVENCRuntimeUsable: true,
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "hevc", 2160)
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_2160P_16MBPS {
+		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_2160P_16MBPS)
+	}
+}
+
+// A hardware server behind a slow uplink: the fallback for a TV client's
+// remux request is lowered to what the configured upload can carry, with the
+// same 0.8 headroom the web client applies to its own recommendation.
+func TestCreateHLSSession_FallbackHonoursServerUpload(t *testing.T) {
+	app := setupTestApp(t)
+	setTestHardwareDevice(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA, 6)
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+		capabilities: &ffmpeg.Capabilities{
+			Probed:                 true,
+			Encoders:               map[string]bool{"h264_nvenc": true, "aac": true},
+			H264NVENCRuntimeUsable: true,
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "hevc", 2160)
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_4MBPS {
+		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_4MBPS)
+	}
+}
+
+// An explicit 2160p request on a CPU server is served at 1080p rather than
+// as a stream that cannot keep up; the upload cap does not touch it, because
+// the bitrate was the viewer's own choice.
+func TestCreateHLSSession_ExplicitProfileCappedOnCPU(t *testing.T) {
+	app := setupTestApp(t)
+	setTestHardwareDevice(t, app, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, 6)
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			hlsRunPlan(transcodeFixture),
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "hevc", 2160)
+
+	session, err := createTestHLSSession(app, context.Background(), movieID, helpers.HLS_PROFILE_2160P_16MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("RunHLS profile = %q, want %q", calls[0].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+}
+
+// setTestHardwareDevice stores the device and server upload cap the planner
+// reads from the settings row; an uploadMbps of 0 leaves the upload uncapped.
+func setTestHardwareDevice(t *testing.T, app *Application, device string, uploadMbps float64) {
+	t.Helper()
+
+	params := database.UpdatePlaybackServerSettingsParams{
+		HardwareAccelerationDevice: helpers.NullString(device),
+	}
+	if uploadMbps > 0 {
+		params.ServerUploadMbps = helpers.NullFloat64(uploadMbps)
+	}
+	settings, err := app.Queries.UpdatePlaybackServerSettings(context.Background(), params)
+	if err != nil {
+		t.Fatalf("update playback server settings: %v", err)
+	}
+	app.SetSettings(&settings)
 }
 
 func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
