@@ -1,47 +1,36 @@
 import { expect, test, type Page } from "@playwright/test";
-import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
+  assertMockSuiteClean,
+  trackBrowserIssues,
+} from "./e2e-browser-issues";
+import {
+  BREAKPOINTS,
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
 } from "./e2e-layout";
 import {
+  apiResponse,
   fulfillJSON,
   nullableInt64,
   nullableString,
 } from "./e2e-api";
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
+import { mockApi } from "./e2e-mock-api";
+import type {
+  ContinueWatchingItemType,
+  LatestMovieType,
+  LatestShowType,
+  SimpleAlbumType,
+  TheaterMovieType,
+  WatchRoomType,
+} from "../src/types";
 
-function apiResponse(data: unknown) {
-  return {
-    error: false,
-    data,
-  };
-}
+// The home sections' content, motion and empty states are unit-tested
+// (src/test/app/home-route.test.tsx); this covers what needs a browser: the
+// shell's landmarks and skip link, the layout at every breakpoint, and the
+// mobile navigation sheet.
 
-function placeholderSvg(label: string, background: string, foreground = "#f8fafc") {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-  <svg xmlns="http://www.w3.org/2000/svg" width="500" height="750" viewBox="0 0 500 750" role="img" aria-label="${label}">
-    <rect width="500" height="750" fill="${background}" />
-    <text
-      x="50%"
-      y="50%"
-      dominant-baseline="middle"
-      text-anchor="middle"
-      fill="${foreground}"
-      font-family="system-ui, sans-serif"
-      font-size="40"
-      font-weight="700"
-    >${label}</text>
-  </svg>`;
-}
-
-type MockHomeApiOptions = {
-  continueWatching?: unknown[];
-};
-
-const defaultContinueWatchingItems = [
+const continueWatchingItems: ContinueWatchingItemType[] = [
   {
     kind: "movie",
     id: 104,
@@ -75,279 +64,181 @@ const defaultContinueWatchingItems = [
   },
 ];
 
-async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
-  const continueWatching =
-    options.continueWatching ?? defaultContinueWatchingItems;
-  const unexpectedApiRequests: string[] = [];
+function theaterMovie(
+  id: number,
+  title: string,
+  posterPath: string,
+  voteAverage: number,
+  releaseDate: string,
+): TheaterMovieType {
+  return {
+    id,
+    title,
+    original_title: title,
+    overview: `${title} overview`,
+    release_date: releaseDate,
+    poster_path: posterPath,
+    backdrop_path: "",
+    popularity: 10,
+    vote_average: voteAverage,
+    vote_count: 100,
+    adult: false,
+    original_language: "en",
+    genre_ids: [],
+    video: false,
+  };
+}
 
-  await page.route("**/api/**", async route => {
-    const url = new URL(route.request().url());
-    const { pathname } = url;
+async function mockHomeApi(page: Page) {
+  const { unexpectedApiRequests } = await mockApi(page, {
+    user: { is_admin: true },
+    handle: async ({ route, url }) => {
+      const { pathname } = url;
 
-    if (pathname.startsWith("/api/tmdb/images/")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: placeholderSvg("Poster", "#1e293b", "#f59e0b"),
-      });
-      return;
-    }
-
-    if (pathname.startsWith("/api/static/")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "image/svg+xml",
-        body: placeholderSvg("Cover", "#334155"),
-      });
-      return;
-    }
-
-    if (pathname === "/api/auth/user") {
-      await fulfillJSON(route, apiResponse({
-        user: {
-          id: 1,
-          name: "Admin User",
-          email: "admin@example.com",
-          is_admin: true,
-          avatar: null,
-          created_at: "2026-01-01T00:00:00Z",
-          updated_at: "2026-01-01T00:00:00Z",
-        },
-      }));
-      return;
-    }
-
-    // The app shell discovers in-flight scans on every route for admins.
-    const idleScan = { run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null } as const;
-
-    if (pathname === "/api/settings/scan/movies") {
-      await fulfillJSON(route, apiResponse(movieScanStatus(idleScan)));
-      return;
-    }
-
-    if (pathname === "/api/settings/scan/music") {
-      await fulfillJSON(route, apiResponse(musicScanStatus(idleScan)));
-      return;
-    }
-
-    if (pathname === "/api/settings/scan/shows") {
-      await fulfillJSON(route, apiResponse(showScanStatus(idleScan)));
-      return;
-    }
-
-    if (pathname === "/api/notifications/unread-count") {
-      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
-      return;
-    }
-
-    if (pathname === "/api/watch-rooms") {
-      await fulfillJSON(route, apiResponse({
-        rooms: [
-          {
-            id: 7,
-            movie_id: 101,
-            movie_title: "Signal Fire",
-            movie_poster: "/signal-fire.jpg",
-            owner: {
-              id: 1,
-              name: "Admin User",
-              avatar: null,
+      if (pathname === "/api/watch-rooms") {
+        await fulfillJSON(route, apiResponse({
+          rooms: [
+            {
+              id: 7,
+              movie_id: 101,
+              movie_title: "Signal Fire",
+              movie_poster: "/signal-fire.jpg",
+              owner: {
+                id: 1,
+                name: "Admin User",
+                avatar: null,
+              },
+              members: [
+                { id: 1, name: "Admin User", avatar: null },
+                { id: 2, name: "Maya Chen", avatar: null },
+                { id: 3, name: "Rowan Price", avatar: null },
+                { id: 4, name: "Luis Ortiz", avatar: null },
+                { id: 5, name: "Ava Bell", avatar: null },
+              ],
+              playback_mode: "direct",
+              is_owner: true,
+              created_at: "2026-01-01T00:00:00Z",
             },
-            members: [
-              { id: 1, name: "Admin User", avatar: null },
-              { id: 2, name: "Maya Chen", avatar: null },
-              { id: 3, name: "Rowan Price", avatar: null },
-              { id: 4, name: "Luis Ortiz", avatar: null },
-              { id: 5, name: "Ava Bell", avatar: null },
-            ],
-            is_owner: true,
-          },
-        ],
-      }));
-      return;
-    }
+          ] satisfies WatchRoomType[],
+        }));
+        return true;
+      }
 
-    if (pathname === "/api/continue-watching") {
-      await fulfillJSON(route, apiResponse({ items: continueWatching }));
-      return;
-    }
+      if (pathname === "/api/continue-watching") {
+        await fulfillJSON(route, apiResponse({ items: continueWatchingItems }));
+        return true;
+      }
 
-    if (pathname === "/api/movies/latest") {
-      await fulfillJSON(route, apiResponse({
-        movies: [
-          {
-            id: 101,
-            title: "Signal Fire",
-            poster_path: nullableString("/signal-fire.jpg"),
-            year: nullableInt64(2026),
-          },
-          {
-            id: 102,
-            title: "Cinder Vale",
-            poster_path: nullableString("/cinder-vale.jpg"),
-            year: nullableInt64(2025),
-          },
-          {
-            id: 103,
-            title: "Mercury Harbor",
-            poster_path: nullableString(),
-            year: nullableInt64(2024),
-          },
-        ],
-      }));
-      return;
-    }
+      if (pathname === "/api/movies/latest") {
+        await fulfillJSON(route, apiResponse({
+          movies: [
+            {
+              id: 101,
+              title: "Signal Fire",
+              poster_path: nullableString("/signal-fire.jpg"),
+              year: nullableInt64(2026),
+            },
+            {
+              id: 102,
+              title: "Cinder Vale",
+              poster_path: nullableString("/cinder-vale.jpg"),
+              year: nullableInt64(2025),
+            },
+            {
+              id: 103,
+              title: "Mercury Harbor",
+              poster_path: nullableString(),
+              year: nullableInt64(2024),
+            },
+          ] satisfies LatestMovieType[],
+        }));
+        return true;
+      }
 
-    if (pathname === "/api/shows/latest") {
-      await fulfillJSON(route, apiResponse({
-        shows: [
-          {
-            id: 301,
-            name: "Frost Harbor",
-            poster_path: nullableString("/frost-harbor.jpg"),
-            premiere_year: nullableInt64(2026),
-          },
-          {
-            id: 302,
-            name: "Halcyon Drift",
-            poster_path: nullableString("/halcyon-drift.jpg"),
-            premiere_year: nullableInt64(2024),
-          },
-          {
-            id: 303,
-            name: "Lantern Bay",
-            poster_path: nullableString(),
-            premiere_year: nullableInt64(),
-          },
-        ],
-      }));
-      return;
-    }
+      if (pathname === "/api/shows/latest") {
+        await fulfillJSON(route, apiResponse({
+          shows: [
+            {
+              id: 301,
+              name: "Frost Harbor",
+              poster_path: nullableString("/frost-harbor.jpg"),
+              premiere_year: nullableInt64(2026),
+            },
+            {
+              id: 302,
+              name: "Halcyon Drift",
+              poster_path: nullableString("/halcyon-drift.jpg"),
+              premiere_year: nullableInt64(2024),
+            },
+            {
+              id: 303,
+              name: "Lantern Bay",
+              poster_path: nullableString(),
+              premiere_year: nullableInt64(),
+            },
+          ] satisfies LatestShowType[],
+        }));
+        return true;
+      }
 
-    if (pathname === "/api/music/albums/latest") {
-      await fulfillJSON(route, apiResponse({
-        albums: [
-          {
-            id: 201,
-            title: "Blue Record",
-            cover: nullableString("albums/blue-record.jpg"),
-            musician: nullableString("Aurora Pines"),
-            year: nullableInt64(2026),
-          },
-          {
-            id: 202,
-            title: "Warm Static",
-            cover: nullableString(),
-            musician: nullableString("Amber Field"),
-            year: nullableInt64(2025),
-          },
-          {
-            id: 203,
-            title: "Night Transit",
-            cover: nullableString(),
-            musician: nullableString("Cedar Room"),
-            year: nullableInt64(2024),
-          },
-        ],
-      }));
-      return;
-    }
+      if (pathname === "/api/music/albums/latest") {
+        await fulfillJSON(route, apiResponse({
+          albums: [
+            {
+              id: 201,
+              title: "Blue Record",
+              cover: nullableString("albums/blue-record.jpg"),
+              musician: nullableString("Aurora Pines"),
+              year: nullableInt64(2026),
+            },
+            {
+              id: 202,
+              title: "Warm Static",
+              cover: nullableString(),
+              musician: nullableString("Amber Field"),
+              year: nullableInt64(2025),
+            },
+            {
+              id: 203,
+              title: "Night Transit",
+              cover: nullableString(),
+              musician: nullableString("Cedar Room"),
+              year: nullableInt64(2024),
+            },
+          ] satisfies SimpleAlbumType[],
+        }));
+        return true;
+      }
 
-    if (pathname === "/api/tmdb/movies/in-theaters") {
-      await fulfillJSON(route, apiResponse({
-        movies: [
-          {
-            id: 301,
-            title: "Northbound",
-            poster_path: "/northbound.jpg",
-            vote_average: 7.6,
-            release_date: "2026-06-01",
-          },
-          {
-            id: 302,
-            title: "Glass Harbor",
-            poster_path: "/glass-harbor.jpg",
-            vote_average: 6.2,
-            release_date: "2026-05-16",
-          },
-          {
-            id: 303,
-            title: "Red Echo",
-            poster_path: "",
-            vote_average: 4.8,
-            release_date: "2026-04-08",
-          },
-        ],
-      }));
-      return;
-    }
+      if (pathname === "/api/tmdb/movies/in-theaters") {
+        await fulfillJSON(route, apiResponse({
+          movies: [
+            theaterMovie(301, "Northbound", "/northbound.jpg", 7.6, "2026-06-01"),
+            theaterMovie(302, "Glass Harbor", "/glass-harbor.jpg", 6.2, "2026-05-16"),
+            theaterMovie(303, "Red Echo", "", 4.8, "2026-04-08"),
+          ],
+        }));
+        return true;
+      }
 
-    if (/^\/api\/movies\/details\/\d+$/.test(pathname)) {
-      const movieId = Number(pathname.split("/").pop());
-
-      await fulfillJSON(route, apiResponse({
-        movie: {
-          id: movieId,
-          title: movieId === 101 ? "Signal Fire" : "Prefetched Movie",
-        },
-      }));
-      return;
-    }
-
-    if (/^\/api\/music\/albums\/details\/\d+$/.test(pathname)) {
-      const albumId = Number(pathname.split("/").pop());
-
-      await fulfillJSON(route, apiResponse({
-        album: {
-          id: albumId,
-          title: albumId === 201 ? "Blue Record" : "Prefetched Album",
-          cover: nullableString("albums/blue-record.jpg"),
-          musician: nullableString("Aurora Pines"),
-        },
-        tracks: [
-          {
-            id: 1,
-            title: "Alabaster",
-            duration: 180,
-            codec: "flac",
-            bit_rate: 900000,
-            file_path: "/music/alabaster.flac",
-            album_id: nullableInt64(albumId),
-            album_title: nullableString("Blue Record"),
-            album_cover: nullableString("albums/blue-record.jpg"),
-            musician_id: nullableInt64(1),
-            musician_name: nullableString("Aurora Pines"),
-          },
-        ],
-      }));
-      return;
-    }
-
-    unexpectedApiRequests.push(`${route.request().method()} ${pathname}`);
-    await fulfillJSON(route, apiResponse({}));
+      return false;
+    },
   });
 
   return unexpectedApiRequests;
 }
 
-test("home page is clean, responsive, and accessible", async ({ page }) => {
+test("home page is clean, responsive, and keyboard reachable", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockHomeApi(page);
 
-  await page.addInitScript(() => {
-    window.localStorage.removeItem("igloo-theme");
-  });
+  await page.setViewportSize(VIEWPORTS.desktop);
   await page.goto("/");
 
   await expect(page).toHaveTitle("Home - Igloo");
   await expect(
     page.getByRole("heading", { name: "Welcome to Igloo" }),
   ).toBeVisible();
-  const dashboardHero = page
-    .getByRole("heading", { name: "Welcome to Igloo" })
-    .locator("xpath=ancestor::section[1]");
-  await expect(dashboardHero).toHaveClass(/animate-in/);
-  await expect(dashboardHero).toHaveClass(/fade-in-0/);
   await expect(page.getByRole("main")).toBeVisible();
   await expect(
     page.getByRole("search", { name: "Search library" }),
@@ -355,10 +246,10 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Notifications" }),
   ).toBeVisible();
-  const themeToggle = page.getByRole("button", {
-    name: "Switch to light theme",
-  });
-  await expect(themeToggle).toBeVisible();
+  // The unit tests mock the top bar, so this is what proves it mounts.
+  await expect(
+    page.getByRole("button", { name: "Switch to light theme" }),
+  ).toBeVisible();
 
   for (const name of [
     "Watch Rooms",
@@ -368,10 +259,7 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
     "Recently Added Albums",
     "Now Playing in Theaters",
   ]) {
-    const region = page.getByRole("region", { name });
-
-    await expect(region).toBeVisible();
-    await expect(region).toHaveClass(/delay-75/);
+    await expect(page.getByRole("region", { name })).toBeVisible();
   }
 
   await page.keyboard.press("Tab");
@@ -380,36 +268,28 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
 
-  await themeToggle.click();
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("igloo-theme")))
-    .toBe("light");
-  await expect(
-    page.getByRole("button", { name: "Switch to dark theme" }),
-  ).toBeVisible();
-
   const main = page.getByRole("main");
-  for (const viewport of [
-    { width: 375, height: 900, label: "mobile" },
-    { width: 768, height: 1024, label: "tablet" },
-    { width: 1280, height: 900, label: "desktop" },
-  ]) {
-    await page.setViewportSize({
-      width: viewport.width,
-      height: viewport.height,
-    });
+  const emberCard = page
+    .getByRole("region", { name: "Continue Watching" })
+    .getByRole("link", { name: "Ember Line 2026, 34% watched" });
+  for (const { label, size } of BREAKPOINTS) {
+    await page.setViewportSize(size);
 
-    await expectPageHasNoHorizontalScroll(page);
-    await expectNoHorizontalOverflow(
-      main,
-      `main content at ${viewport.label} width`,
-    );
     await expect(
       page.getByRole("heading", { name: "Welcome to Igloo" }),
     ).toBeVisible();
+    await expectPageHasNoHorizontalScroll(page);
+    await expectNoHorizontalOverflow(main, `main content at ${label} width`);
+    // Sparse sections must not stretch posters across the content column:
+    // the auto-fill grid keeps cards near the track's minimum width.
+    await expect
+      .poll(async () => (await emberCard.boundingBox())?.width, {
+        message: `continue watching card width at ${label} width`,
+      })
+      .toBeLessThan(300);
   }
 
-  await page.setViewportSize({ width: 375, height: 900 });
+  await page.setViewportSize(VIEWPORTS.phone);
   const sidebarToggle = page.getByRole("button", { name: "Toggle Sidebar" });
   await expect(sidebarToggle).toBeVisible();
   await sidebarToggle.click();
@@ -425,64 +305,5 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
     page.getByRole("dialog", { name: "Navigation" }),
   ).toBeHidden();
 
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
-});
-
-test("continue watching section announces progress", async ({ page }) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockHomeApi(page);
-
-  await page.goto("/");
-
-  const watchingRegion = page.getByRole("region", {
-    name: "Continue Watching",
-  });
-  await expect(watchingRegion).toBeVisible();
-  const emberCard = watchingRegion.getByRole("link", {
-    name: "Ember Line 2026, 34% watched",
-  });
-  await expect(emberCard).toBeVisible();
-
-  // Sparse sections must not stretch posters across the content column —
-  // the auto-fill grid keeps cards near the track min width.
-  const box = await emberCard.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.width).toBeLessThan(300);
-
-  // Episodes share the row with the movies, ordered by the server.
-  await expect(
-    watchingRegion.getByRole("link", {
-      name: "Frost Harbor, S1 E4 · Thin Ice, 25% watched",
-    }),
-  ).toBeVisible();
-  await expect(
-    watchingRegion.getByRole("link", {
-      name: "Resume Frost Harbor S1 E4 · Thin Ice",
-    }),
-  ).toHaveAttribute("href", "/tv-shows/301/episodes/70103/play");
-
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
-});
-
-test("continue watching section is hidden when nothing is in progress", async ({
-  page,
-}) => {
-  const browserIssues = trackBrowserIssues(page);
-  const unexpectedApiRequests = await mockHomeApi(page, {
-    continueWatching: [],
-  });
-
-  await page.goto("/");
-
-  await expect(
-    page.getByRole("region", { name: "Recently Added Movies" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Continue Watching" }),
-  ).toHaveCount(0);
-
-  expect(unexpectedApiRequests).toEqual([]);
-  browserIssues.assertClean();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

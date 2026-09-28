@@ -1,17 +1,43 @@
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
+import type {
+  ContinueWatchingItemType,
+  DeviceType,
+  GeneralSettingsType,
+  LatestShowType,
+  MovieTechnicalDetailsResponse,
+  MusicStatsType,
+  PlaybackSettingsType,
+  SettingsType,
+  ShowEpisodePlaybackDataType,
+  ShowEpisodeTechnicalDetailsDataType,
+  WatchProgressType,
+} from "../src/types";
+import {
+  apiResponse,
+  IDLE_SCAN_STATUS_BY_PATH,
+  nullableFloat64,
+  nullableInt64,
+  nullableString,
+} from "./e2e-api";
+import { intEnv, readE2EEnv } from "./e2e-env";
+import { libraryMovie, libraryMovieDetails, MOCK_MOVIE_ID } from "./fixtures/movies";
+import {
+  libraryShow,
+  MOCK_EPISODE_ID,
+  MOCK_NEXT_EPISODE_ID,
+  MOCK_SHOW_ID,
+} from "./fixtures/shows";
 import { randomUUID } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import {
-  MOVIES_PER_PAGE,
-} from "../src/lib/constants";
+import { MOVIES_PER_PAGE, STREAM_MODES } from "../src/lib/constants";
 
-type ApiData = Record<string, unknown>;
+// The stateful API behind the specs that do not call mockApi (settings, auth,
+// devices, the players, trailer, scan progress, head metadata and motion). It
+// serves only what those specs reach; anything else answers a 404 that the
+// specs' browser-issue checks report.
 
 type User = {
   id: number;
@@ -20,36 +46,39 @@ type User = {
   password: string;
   is_admin: boolean;
   avatar: string | null;
-  pin: string | null;
   created_at: string;
   updated_at: string;
 };
 
-type LibrarySettings = {
-  movies_dir: string | null;
-  shows_dir: string | null;
-  music_dir: string | null;
+type ServerPlaybackSettings = Pick<
+  PlaybackSettingsType,
+  "server_upload_mbps" | "hardware_acceleration_device"
+>;
+
+type PendingPairing = {
+  secret: string;
+  device_name: string;
+  platform: string;
+  app_version: string | null;
+  approved: boolean;
 };
 
-type GeneralSettings = {
-  tmdb_key: string | null;
-  immich_base_url: string | null;
-  immich_api_key: string | null;
-  jellyfin_base_url: string | null;
-  jellyfin_api_key: string | null;
-  spotify_client_id: string | null;
-  spotify_client_secret: string | null;
-  enable_watcher: boolean;
-  download_images: boolean;
-  static_dir: string;
-  transcode_dir: string;
-};
+const HOST = "127.0.0.1";
+const PORT = intEnv("E2E_MOCK_API_PORT", 8080);
+const SESSION_COOKIE = "igloo_e2e_session";
+const CLEAR_SESSION_COOKIE = `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+const admin = readE2EEnv();
+const startedAt = new Date().toISOString();
 
-// Global settings served by the playback endpoint; writes are admin-only.
-type ServerPlaybackSettings = {
-  server_upload_mbps: number | null;
-  hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
-};
+// Messages the Go handlers answer with, so a spec reading one sees the real text.
+const ADMIN_REQUIRED = "admin access required";
+const DUPLICATE_ADMIN_EMAIL = "a user with that email already exists";
+const DUPLICATE_OWN_EMAIL = "that email address is already in use";
+const INVALID_CODE = "invalid or expired code";
+const USER_NOT_FOUND = "user not found";
+const INVALID_CREDENTIALS = "invalid email or password provided";
+const WRONG_CURRENT_PASSWORD = "current password is incorrect";
+const NAME_TOO_LONG = "must be at most 100 characters";
 
 // Both mirror UpdatePlaybackSettings in the Go server: a mock that accepts what
 // the real handler answers with 400 lets a spec pass against a contract that
@@ -71,38 +100,12 @@ function isHardwareAccelerationDevice(
   );
 }
 
-type MovieWatchProgress = {
-  progress_sec: number | null;
-  duration_sec: number | null;
-  watched: boolean;
-  updated_at: string | null;
-};
-
-type MockDevice = {
-  id: number;
-  name: string;
-  platform: string;
-  app_version: string | null;
-  created_at: string;
-  last_used_at: string;
-};
-
-type PendingPairing = {
-  secret: string;
-  device_name: string;
-  platform: string;
-  app_version: string | null;
-  approved: boolean;
-};
-
-type SortDirection = "asc" | "desc";
-
-const HOST = "127.0.0.1";
-const PORT = Number.parseInt(process.env.E2E_MOCK_API_PORT ?? "8080", 10);
-const SESSION_COOKIE = "igloo_e2e_session";
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@example.com";
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword";
-const startedAt = new Date().toISOString();
+const NO_PROGRESS = {
+  progress_sec: null,
+  duration_sec: null,
+  watched: false,
+  updated_at: null,
+} satisfies WatchProgressType;
 
 let nextUserId = 2;
 let nextDeviceId = 1;
@@ -111,51 +114,30 @@ const sessions = new Map<string, number>();
 // Quick Connect pairing state. Starts empty so specs that only render the
 // settings page see no devices. Bearer-token auth on other routes is
 // deliberately not simulated: token validity/revocation semantics are covered
-// by the Go integration tests and the live-gated quick-connect.spec.ts.
-const devices: MockDevice[] = [];
+// by the Go integration tests and the live-gated device-lifecycle spec.
+const devices: Omit<DeviceType, "is_current">[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
-const likedMovieIds = new Set<number>();
-const watchProgress = new Map<number, MovieWatchProgress>();
-const episodeWatchProgress = new Map<number, MovieWatchProgress>();
-const moviePlaylists = [
-  {
-    id: 1,
-    user_id: 1,
-    name: "Weekend queue",
-    description: nullableString("A few movies for E2E navigation."),
-    cover_image: nullableString("/signal-fire.jpg"),
-    is_public: false,
-    movie_id: nullableInt(null),
-    content_type: "movie",
-    created_at: startedAt,
-    updated_at: startedAt,
-    movie_count: 1,
-    is_owner: true,
-    can_edit: true,
-  },
-];
 
 const users: User[] = [
   {
     id: 1,
     name: "Igloo Admin",
-    email: ADMIN_EMAIL,
-    password: ADMIN_PASSWORD,
+    email: admin.email,
+    password: admin.password,
     is_admin: true,
     avatar: null,
-    pin: null,
     created_at: startedAt,
     updated_at: startedAt,
   },
 ];
 
-let librarySettings: LibrarySettings = {
+let librarySettings: SettingsType = {
   movies_dir: "/srv/media/movies",
   shows_dir: null,
   music_dir: "/srv/media/music",
 };
 
-let generalSettings: GeneralSettings = {
+let generalSettings: GeneralSettingsType = {
   tmdb_key: null,
   immich_base_url: null,
   immich_api_key: null,
@@ -174,49 +156,43 @@ let serverPlaybackSettings: ServerPlaybackSettings = {
   hardware_acceleration_device: "cpu",
 };
 
-const playbackProfiles = [
-  { id: "2160p_16mbps", label: "4K · 16 Mbps", height: 2160, video_mbps: 16 },
-  { id: "1080p_8mbps", label: "1080p · 8 Mbps", height: 1080, video_mbps: 8 },
-  { id: "1080p_6mbps", label: "1080p · 6 Mbps", height: 1080, video_mbps: 6 },
-  { id: "1080p_4mbps", label: "1080p · 4 Mbps", height: 1080, video_mbps: 4 },
-  { id: "720p_3mbps", label: "720p · 3 Mbps", height: 720, video_mbps: 3 },
-];
-
-function nullableString(value: string | null) {
-  return { String: value ?? "", Valid: value !== null && value !== "" };
-}
-
-function nullableInt(value: number | null) {
-  return { Int64: value ?? 0, Valid: value !== null };
-}
-
-function nullableFloat(value: number | null) {
-  return { Float64: value ?? 0, Valid: value !== null };
-}
+// The server's transcode catalog, labelled the way the Go handler labels it.
+const playbackProfiles = STREAM_MODES.filter(mode => mode.type === "transcode").map(
+  mode => {
+    const videoMbps = Number(/_(\d+)mbps$/.exec(mode.id)?.[1]);
+    return {
+      id: mode.id,
+      label: `${mode.maxHeight}p · ${videoMbps} Mbps`,
+      height: mode.maxHeight,
+      video_mbps: videoMbps,
+    };
+  },
+);
 
 const libraryMovies = [
-  {
-    id: 101,
-    title: "Signal Fire",
-    poster_path: nullableString("/signal-fire.jpg"),
-    year: nullableInt(2024),
-    certification: nullableString("PG-13"),
-  },
-  {
-    id: 102,
-    title: "Northern Relay",
-    poster_path: nullableString("/northern-relay.jpg"),
-    year: nullableInt(2023),
-    certification: nullableString("PG"),
-  },
-  {
-    id: 103,
-    title: "Harbor Lights",
-    poster_path: nullableString("/harbor-lights.jpg"),
-    year: nullableInt(2022),
-    certification: nullableString("R"),
-  },
+  libraryMovie(MOCK_MOVIE_ID, "Signal Fire", 2024, "/signal-fire.jpg"),
+  libraryMovie(102, "Northern Relay", 2023, "/northern-relay.jpg"),
+  libraryMovie(103, "Harbor Lights", 2022, "/harbor-lights.jpg"),
 ];
+
+const latestShows = [
+  {
+    id: MOCK_SHOW_ID,
+    name: "Frost Harbor",
+    poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
+    premiere_year: nullableInt64(2026),
+  },
+  {
+    id: 402,
+    name: "Halcyon Drift",
+    poster_path: nullableString("/api/static/shows/halcyon-drift.svg"),
+    premiere_year: nullableInt64(2024),
+  },
+] satisfies LatestShowType[];
+
+const libraryShows = latestShows.map(show =>
+  libraryShow(show.id, show.name, show.premiere_year.Int64, show.poster_path.String),
+);
 
 const latestAlbums = [
   {
@@ -224,89 +200,22 @@ const latestAlbums = [
     title: "Warm Static",
     cover: nullableString("/api/static/albums/warm-static.svg"),
     musician: nullableString("The Signals"),
-    year: nullableInt(2024),
+    year: nullableInt64(2024),
   },
   {
     id: 202,
     title: "Night Index",
     cover: nullableString("/api/static/albums/night-index.svg"),
     musician: nullableString("June Harbor"),
-    year: nullableInt(2023),
+    year: nullableInt64(2023),
   },
 ];
 
-const latestShows = [
-  {
-    id: 401,
-    name: "Frost Harbor",
-    poster_path: nullableString("/api/static/shows/frost-harbor.svg"),
-    premiere_year: nullableInt(2026),
-  },
-  {
-    id: 402,
-    name: "Halcyon Drift",
-    poster_path: nullableString("/api/static/shows/halcyon-drift.svg"),
-    premiere_year: nullableInt(2024),
-  },
-];
-
-const musicians = [
-  {
-    id: 301,
-    name: "The Signals",
-    sort_name: "Signals, The",
-    thumb: nullableString("/api/static/musicians/the-signals.svg"),
-    album_count: 1,
-    track_count: 2,
-  },
-  {
-    id: 302,
-    name: "June Harbor",
-    sort_name: "Harbor, June",
-    thumb: nullableString("/api/static/musicians/june-harbor.svg"),
-    album_count: 1,
-    track_count: 1,
-  },
-];
-
-const tracks = [
-  {
-    id: 401,
-    title: "Beacon Line",
-    duration: 214_000,
-    codec: "flac",
-    bit_rate: 890000,
-    album_id: nullableInt(201),
-    album_title: nullableString("Warm Static"),
-    album_cover: nullableString("/api/static/albums/warm-static.svg"),
-    musician_id: nullableInt(301),
-    musician_name: nullableString("The Signals"),
-  },
-  {
-    id: 402,
-    title: "Soft Cutoff",
-    duration: 188_000,
-    codec: "flac",
-    bit_rate: 820000,
-    album_id: nullableInt(201),
-    album_title: nullableString("Warm Static"),
-    album_cover: nullableString("/api/static/albums/warm-static.svg"),
-    musician_id: nullableInt(301),
-    musician_name: nullableString("The Signals"),
-  },
-  {
-    id: 403,
-    title: "Late Platform",
-    duration: 236_000,
-    codec: "aac",
-    bit_rate: 256000,
-    album_id: nullableInt(202),
-    album_title: nullableString("Night Index"),
-    album_cover: nullableString("/api/static/albums/night-index.svg"),
-    musician_id: nullableInt(302),
-    musician_name: nullableString("June Harbor"),
-  },
-];
+const musicStats = {
+  total_albums: latestAlbums.length,
+  total_tracks: 3,
+  total_musicians: 2,
+} satisfies MusicStatsType;
 
 const theaterMovies = [
   {
@@ -327,18 +236,10 @@ const theaterMovies = [
   },
 ];
 
-function apiSuccess(data: ApiData = {}, message?: string) {
-  return { error: false, ...(message ? { message } : {}), data };
-}
-
-function apiFailure(message: string) {
-  return { error: true, message };
-}
-
 function sendJSON(
   response: ServerResponse,
   status: number,
-  body: Record<string, unknown>,
+  body: unknown,
   headers: Record<string, string> = {},
 ) {
   response.writeHead(status, {
@@ -351,26 +252,25 @@ function sendJSON(
 
 function sendSuccess(
   response: ServerResponse,
-  data: ApiData = {},
+  data: unknown = {},
   status = 200,
   message?: string,
   headers?: Record<string, string>,
 ) {
-  sendJSON(response, status, apiSuccess(data, message), headers);
+  sendJSON(
+    response,
+    status,
+    { ...apiResponse(data), ...(message ? { message } : {}) },
+    headers,
+  );
 }
 
 function sendFailure(response: ServerResponse, status: number, message: string) {
-  sendJSON(response, status, apiFailure(message));
+  sendJSON(response, status, { error: true, message });
 }
 
-function sendNoContent(response: ServerResponse) {
-  response.writeHead(204, { "Cache-Control": "no-store" });
-  response.end();
-}
-
-function sendPlaceholderImage(response: ServerResponse, label: string) {
-  const safeLabel = label.replace(/[<>&]/g, "");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="960" viewBox="0 0 640 960"><rect width="640" height="960" fill="#0f172a"/><rect x="48" y="48" width="544" height="864" rx="24" fill="#1e293b"/><text x="320" y="480" fill="#f59e0b" font-family="Arial, sans-serif" font-size="42" font-weight="700" text-anchor="middle">${safeLabel}</text></svg>`;
+function sendPlaceholderImage(response: ServerResponse) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="960" viewBox="0 0 640 960"><rect width="640" height="960" fill="#0f172a"/><rect x="48" y="48" width="544" height="864" rx="24" fill="#1e293b"/><text x="320" y="480" fill="#f59e0b" font-family="Arial, sans-serif" font-size="42" font-weight="700" text-anchor="middle">Igloo</text></svg>`;
   response.writeHead(200, {
     "Content-Type": "image/svg+xml; charset=utf-8",
     "Cache-Control": "public, max-age=3600",
@@ -398,27 +298,18 @@ function currentUser(request: IncomingMessage) {
   return users.find(user => user.id === userId) ?? null;
 }
 
-async function readRequestBody(request: IncomingMessage) {
+async function readJSONBody(request: IncomingMessage) {
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
-  return Buffer.concat(chunks).toString("utf8");
-}
-
-async function readJSONBody(request: IncomingMessage) {
-  const raw = await readRequestBody(request);
+  const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw) return {};
 
   const parsed = JSON.parse(raw) as unknown;
-  return asRecord(parsed) ?? {};
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }
 
 function stringField(
@@ -439,23 +330,21 @@ function booleanField(
   return typeof value === "boolean" ? value : fallback;
 }
 
-function nullableStringField(body: Record<string, unknown>, key: string) {
+/**
+ * A trimmed string field where "" and null clear the value, and an absent
+ * field keeps `current`.
+ */
+function nullableStringField(
+  body: Record<string, unknown>,
+  key: string,
+  current: string | null,
+) {
   const value = body[key];
   if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed === "" ? null : trimmed;
   }
-  return value === null ? null : undefined;
-}
-
-function nullableNumberField(body: Record<string, unknown>, key: string) {
-  const value = body[key];
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  return value === null ? null : undefined;
-}
-
-function valueOrCurrent<T>(value: T | undefined, current: T) {
-  return value === undefined ? current : value;
+  return value === null ? null : current;
 }
 
 function publicUser(user: User) {
@@ -465,29 +354,19 @@ function publicUser(user: User) {
     email: user.email,
     is_admin: user.is_admin,
     avatar: user.avatar,
-    has_pin: user.pin !== null,
+    // PIN changes only run against a real instance.
+    has_pin: false,
     created_at: user.created_at,
     updated_at: user.updated_at,
   };
 }
 
-function requireAuth(request: IncomingMessage, response: ServerResponse) {
-  const user = currentUser(request);
-  if (!user) {
-    sendFailure(response, 401, "Unauthorized");
-    return null;
-  }
-  return user;
-}
-
-function requireAdmin(request: IncomingMessage, response: ServerResponse) {
-  const user = requireAuth(request, response);
-  if (!user) return null;
+/** Answers 403 and returns false unless `user` is an administrator. */
+function requireAdmin(user: User, response: ServerResponse) {
   if (!user.is_admin) {
-    sendFailure(response, 403, "Admin privileges required.");
-    return null;
+    sendFailure(response, 403, ADMIN_REQUIRED);
   }
-  return user;
+  return user.is_admin;
 }
 
 function findUserByEmail(email: string) {
@@ -495,11 +374,23 @@ function findUserByEmail(email: string) {
   return users.find(user => user.email.toLowerCase() === normalizedEmail) ?? null;
 }
 
+function findUser(response: ServerResponse, id: string) {
+  const user = users.find(item => item.id === Number(id));
+  if (!user) {
+    sendFailure(response, 404, USER_NOT_FOUND);
+  }
+  return user;
+}
+
 function touchUser(user: User) {
   user.updated_at = new Date().toISOString();
 }
 
-function removeSessionsForUser(userId: number) {
+function removeUser(userId: number) {
+  const index = users.findIndex(user => user.id === userId);
+  if (index >= 0) {
+    users.splice(index, 1);
+  }
   for (const [sessionId, sessionUserId] of sessions) {
     if (sessionUserId === userId) {
       sessions.delete(sessionId);
@@ -507,125 +398,47 @@ function removeSessionsForUser(userId: number) {
   }
 }
 
-function paginationParams(url: URL) {
+/**
+ * One page of a library list, sorted by `nameOf` in the requested direction,
+ * in the envelope the movie and show library routes share.
+ */
+function libraryList<K extends string, T>(
+  url: URL,
+  key: K,
+  items: T[],
+  nameOf: (item: T) => string,
+) {
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
   const perPage = Math.max(
     1,
-    Number.parseInt(
-      url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
-      10,
-    ),
+    Number.parseInt(url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE), 10),
   );
-  const sort: SortDirection =
-    url.searchParams.get("sort") === "desc" ? "desc" : "asc";
-  return { page, perPage, sort };
-}
-
-function paginate<T>(items: T[], page: number, perPage: number) {
-  const start = (page - 1) * perPage;
-  return {
-    items: items.slice(start, start + perPage),
-    total: items.length,
-    total_pages: Math.max(1, Math.ceil(items.length / perPage)),
-  };
-}
-
-function sortedMovies(sort: SortDirection) {
-  return [...libraryMovies].sort((a, b) => {
-    const value = a.title.localeCompare(b.title);
+  const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+  const sorted = [...items].sort((a, b) => {
+    const value = nameOf(a).localeCompare(nameOf(b));
     return sort === "asc" ? value : -value;
   });
-}
-
-function movieDetails(id: number) {
-  const baseMovie = libraryMovies.find(movie => movie.id === id) ?? libraryMovies[0];
+  const start = (page - 1) * perPage;
 
   return {
-    movie: {
-      id: baseMovie.id,
-      title: baseMovie.title,
-      adult: false,
-      tmdb_id: nullableInt(900000 + baseMovie.id),
-      imdb_id: nullableString(`tt${900000 + baseMovie.id}`),
-      poster_path: baseMovie.poster_path,
-      backdrop_path: nullableString(`/${baseMovie.title.toLowerCase().replaceAll(" ", "-")}-backdrop.jpg`),
-      language: nullableString("en"),
-      year: baseMovie.year,
-      release_date: nullableString("2024-04-12"),
-      overview: nullableString(
-        `${baseMovie.title} is a compact mock movie used by the E2E harness.`,
-      ),
-      tag_line: nullableString("Small server, big library."),
-      certification: baseMovie.certification,
-      critic_rating: nullableFloat(7.8),
-      audience_rating: nullableFloat(8.1),
-      revenue: nullableFloat(1_200_000),
-      budget: nullableFloat(750_000),
-      run_time: nullableInt(122),
-      duration: nullableFloat(7320),
-    },
-    cast: [
-      {
-        id: 1,
-        character: "Mara Voss",
-        cast_order: 0,
-        artist_name: "Alex Vega",
-        artist_profile: nullableString("/alex-vega.jpg"),
-      },
-      {
-        id: 2,
-        character: "Eli Storm",
-        cast_order: 1,
-        artist_name: "Sam Rivera",
-        artist_profile: nullableString("/sam-rivera.jpg"),
-      },
-    ],
-    crew: [
-      {
-        id: 1,
-        job: "Director",
-        department: "Directing",
-        artist_name: "Nora Finch",
-      },
-      {
-        id: 2,
-        job: "Writer",
-        department: "Writing",
-        artist_name: "Ira Chen",
-      },
-    ],
-    genres: [
-      { id: 10, tag: "Drama" },
-      { id: 20, tag: "Adventure" },
-    ],
-    production_companies: [
-      {
-        id: 1,
-        name: "Igloo Pictures",
-      },
-    ],
-    extra_videos: [
-      {
-        id: 1,
-        title: "Official Trailer",
-        key: "dQw4w9WgXcQ",
-        type: "Trailer",
-        site: "YouTube",
-      },
-    ],
+    [key]: sorted.slice(start, start + perPage),
+    total: items.length,
+    page,
+    per_page: perPage,
+    total_pages: Math.max(1, Math.ceil(items.length / perPage)),
+    sort,
   };
 }
 
 function movieTechnicalDetails(id: number) {
-  const details = movieDetails(id);
   return {
     movie: {
-      file_name: `${details.movie.title}.mp4`,
+      file_name: "Signal Fire.mp4",
       size: 4_200_000_000,
       container: "mp4",
       mime_type: "video/mp4",
-      run_time: details.movie.run_time,
-      duration: details.movie.duration,
+      run_time: nullableInt64(122),
+      duration: nullableFloat64(7320),
     },
     video_streams: [
       {
@@ -634,23 +447,23 @@ function movieTechnicalDetails(id: number) {
         stream_index: 0,
         codec: "h264",
         codec_profile: nullableString("High"),
-        codec_level: nullableInt(41),
+        codec_level: nullableInt64(41),
         bit_rate: 8_000_000,
         width: 1920,
         height: 1080,
-        coded_width: nullableInt(1920),
-        coded_height: nullableInt(1080),
+        coded_width: nullableInt64(1920),
+        coded_height: nullableInt64(1080),
         aspect_ratio: nullableString("16:9"),
         frame_rate: 23.976,
         avg_frame_rate: nullableString("24000/1001"),
-        bit_depth: nullableInt(8),
+        bit_depth: nullableInt64(8),
         pixel_format: nullableString("yuv420p"),
         color_range: nullableString("tv"),
         color_space: nullableString("bt709"),
         color_primaries: nullableString("bt709"),
         color_transfer: nullableString("bt709"),
         field_order: nullableString("progressive"),
-        rotation: nullableInt(null),
+        rotation: nullableInt64(),
         language: nullableString("eng"),
         title: nullableString("Main"),
       },
@@ -663,7 +476,7 @@ function movieTechnicalDetails(id: number) {
         codec: "aac",
         codec_profile: nullableString("LC"),
         bit_rate: 384_000,
-        sample_rate: nullableInt(48000),
+        sample_rate: nullableInt64(48000),
         channels: 6,
         channel_layout: nullableString("5.1"),
         language: nullableString("eng"),
@@ -689,27 +502,23 @@ function movieTechnicalDetails(id: number) {
         title: "Opening Credits",
         start_time: 0,
         thumb: nullableString("/api/static/chapters/opening.svg"),
-        movie_id: nullableInt(id),
+        movie_id: nullableInt64(id),
       },
       {
         id: 2,
         title: "The Journey",
         start_time: 372,
-        thumb: nullableString(null),
-        movie_id: nullableInt(id),
+        thumb: nullableString(),
+        movie_id: nullableInt64(id),
       },
     ],
-  };
+  } satisfies MovieTechnicalDetailsResponse;
 }
-
-
 
 function playbackSettingsResponse() {
   return {
     profiles: playbackProfiles,
-    server_upload_mbps: serverPlaybackSettings.server_upload_mbps,
-    hardware_acceleration_device:
-      serverPlaybackSettings.hardware_acceleration_device,
+    ...serverPlaybackSettings,
     // The mock has no FFmpeg probe, so the stored device is the effective one
     // and only the CPU cap applies, as the Go handler reports.
     effective_hardware_acceleration_device:
@@ -717,21 +526,7 @@ function playbackSettingsResponse() {
     hardware_fallback_reason: "",
     max_transcode_height:
       serverPlaybackSettings.hardware_acceleration_device === "cpu" ? 1080 : 2160,
-  };
-}
-
-function canHandleWithoutAuth(pathname: string) {
-  return (
-    pathname === "/health" ||
-    pathname === "/api/auth/login" ||
-    pathname === "/api/auth/logout" ||
-    pathname === "/api/auth/user" ||
-    pathname === "/api/quick-connect/initiate" ||
-    pathname === "/api/quick-connect/redeem" ||
-    pathname.startsWith("/api/tmdb/images/") ||
-    pathname.startsWith("/api/youtube/thumbnails/") ||
-    pathname.startsWith("/api/static/")
-  );
+  } satisfies PlaybackSettingsType;
 }
 
 // Public quick-connect routes: the pairing device is unauthenticated until it
@@ -747,11 +542,7 @@ async function handleQuickConnectPublicRoutes(
     const body = await readJSONBody(request);
     const deviceName = stringField(body, "device_name").trim();
     if (!deviceName || deviceName.length > 100) {
-      sendFailure(
-        response,
-        400,
-        "device_name is required and must be at most 100 characters",
-      );
+      sendFailure(response, 400, `device_name is required and ${NAME_TOO_LONG}`);
       return true;
     }
 
@@ -760,22 +551,18 @@ async function handleQuickConnectPublicRoutes(
       code = randomUUID().replace(/[^A-Z2-9]/gi, "").toUpperCase().slice(0, 6);
     } while (code.length < 6 || pendingPairings.has(code));
 
+    const secret = randomUUID();
     pendingPairings.set(code, {
-      secret: randomUUID(),
+      secret,
       device_name: deviceName,
       platform: stringField(body, "platform"),
-      app_version: nullableStringField(body, "app_version") ?? null,
+      app_version: nullableStringField(body, "app_version", null),
       approved: false,
     });
 
     sendSuccess(
       response,
-      {
-        code,
-        secret: pendingPairings.get(code)?.secret,
-        expires_in_seconds: 300,
-        poll_interval_seconds: 2,
-      },
+      { code, secret, expires_in_seconds: 300, poll_interval_seconds: 2 },
       201,
     );
     return true;
@@ -787,7 +574,7 @@ async function handleQuickConnectPublicRoutes(
     const pairing = pendingPairings.get(code);
 
     if (!pairing || pairing.secret !== stringField(body, "secret")) {
-      sendFailure(response, 404, "invalid or expired code");
+      sendFailure(response, 404, INVALID_CODE);
       return true;
     }
 
@@ -797,7 +584,7 @@ async function handleQuickConnectPublicRoutes(
     }
 
     const now = new Date().toISOString();
-    const device: MockDevice = {
+    const device = {
       id: nextDeviceId++,
       name: pairing.device_name,
       platform: pairing.platform,
@@ -828,26 +615,18 @@ async function handleAuthRoutes(
 
   if (url.pathname === "/api/auth/login" && method === "POST") {
     const body = await readJSONBody(request);
-    const email = stringField(body, "email").trim();
-    const password = stringField(body, "password");
-    const user = findUserByEmail(email);
+    const user = findUserByEmail(stringField(body, "email"));
 
-    if (!user || user.password !== password) {
-      sendFailure(response, 401, "Invalid email or password.");
+    if (!user || user.password !== stringField(body, "password")) {
+      sendFailure(response, 401, INVALID_CREDENTIALS);
       return true;
     }
 
     const sessionId = randomUUID();
     sessions.set(sessionId, user.id);
-    sendSuccess(
-      response,
-      { user: publicUser(user) },
-      200,
-      "Login successful",
-      {
-        "Set-Cookie": `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Lax`,
-      },
-    );
+    sendSuccess(response, { user: publicUser(user) }, 200, "Login successful", {
+      "Set-Cookie": `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Lax`,
+    });
     return true;
   }
 
@@ -856,9 +635,7 @@ async function handleAuthRoutes(
     if (sessionId) {
       sessions.delete(sessionId);
     }
-    sendSuccess(response, {}, 200, "Logged out", {
-      "Set-Cookie": `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-    });
+    sendSuccess(response, {}, 200, "Logged out", { "Set-Cookie": CLEAR_SESSION_COOKIE });
     return true;
   }
 
@@ -896,7 +673,7 @@ async function handleUserRoutes(
     const email = stringField(body, "email", user.email).trim();
     const duplicate = findUserByEmail(email);
     if (duplicate && duplicate.id !== user.id) {
-      sendFailure(response, 409, "A user with that email already exists.");
+      sendFailure(response, 409, DUPLICATE_OWN_EMAIL);
       return true;
     }
     user.email = email;
@@ -907,49 +684,13 @@ async function handleUserRoutes(
 
   if (url.pathname === "/api/user/password" && method === "PUT") {
     const body = await readJSONBody(request);
-    const currentPassword = stringField(body, "current_password");
-    const newPassword = stringField(body, "new_password");
-    if (user.password !== currentPassword) {
-      sendFailure(response, 400, "Current password is incorrect.");
+    if (user.password !== stringField(body, "current_password")) {
+      sendFailure(response, 401, WRONG_CURRENT_PASSWORD);
       return true;
     }
-    user.password = newPassword;
+    user.password = stringField(body, "new_password");
     touchUser(user);
-    sendSuccess(response, {});
-    return true;
-  }
-
-  if (url.pathname === "/api/user/pin" && method === "GET") {
-    sendSuccess(response, { pin: user.pin });
-    return true;
-  }
-
-  if (url.pathname === "/api/user/pin" && method === "PUT") {
-    const body = await readJSONBody(request);
-    const pin = stringField(body, "pin");
-    const currentPin = stringField(body, "current_pin");
-    if (pin !== "" && !/^\d{4}$/.test(pin)) {
-      sendFailure(response, 400, "pin must be exactly 4 digits");
-      return true;
-    }
-    if (user.pin !== null) {
-      if (!currentPin) {
-        sendFailure(response, 400, "current PIN is required");
-        return true;
-      }
-      if (currentPin !== user.pin) {
-        sendFailure(response, 401, "current PIN is incorrect");
-        return true;
-      }
-    }
-    user.pin = pin === "" ? null : pin;
-    touchUser(user);
-    sendSuccess(
-      response,
-      { user: publicUser(user) },
-      200,
-      pin === "" ? "PIN removed successfully" : "PIN updated successfully",
-    );
+    sendSuccess(response);
     return true;
   }
 
@@ -962,14 +703,8 @@ async function handleUserRoutes(
   }
 
   if (url.pathname === "/api/user" && method === "DELETE") {
-    const index = users.findIndex(item => item.id === user.id);
-    if (index >= 0) {
-      users.splice(index, 1);
-      removeSessionsForUser(user.id);
-    }
-    sendSuccess(response, {}, 200, "Account deleted", {
-      "Set-Cookie": `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-    });
+    removeUser(user.id);
+    sendSuccess(response, {}, 200, "Account deleted", { "Set-Cookie": CLEAR_SESSION_COOKIE });
     return true;
   }
 
@@ -980,10 +715,8 @@ async function handleAdminRoutes(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
-  admin: User,
 ) {
   const method = request.method ?? "GET";
-  if (admin.id <= 0) return false;
 
   if (url.pathname === "/api/admin/users" && method === "GET") {
     sendSuccess(response, { users: users.map(publicUser) });
@@ -994,22 +727,20 @@ async function handleAdminRoutes(
     const body = await readJSONBody(request);
     const email = stringField(body, "email").trim();
     if (findUserByEmail(email)) {
-      sendFailure(response, 409, "A user with that email already exists.");
+      sendFailure(response, 409, DUPLICATE_ADMIN_EMAIL);
       return true;
     }
     const now = new Date().toISOString();
     const user: User = {
-      id: nextUserId,
+      id: nextUserId++,
       name: stringField(body, "name", "New User").trim(),
       email,
       password: stringField(body, "password"),
       is_admin: booleanField(body, "is_admin"),
       avatar: null,
-      pin: null,
       created_at: now,
       updated_at: now,
     };
-    nextUserId += 1;
     users.push(user);
     sendSuccess(response, { user: publicUser(user) }, 201);
     return true;
@@ -1017,30 +748,24 @@ async function handleAdminRoutes(
 
   const passwordMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/password$/);
   if (passwordMatch && method === "PUT") {
-    const target = users.find(item => item.id === Number(passwordMatch[1]));
-    if (!target) {
-      sendFailure(response, 404, "User not found.");
-      return true;
-    }
+    const target = findUser(response, passwordMatch[1]);
+    if (!target) return true;
     const body = await readJSONBody(request);
     target.password = stringField(body, "password", target.password);
     touchUser(target);
-    sendSuccess(response, {});
+    sendSuccess(response);
     return true;
   }
 
   const userMatch = url.pathname.match(/^\/api\/admin\/users\/(\d+)$/);
   if (userMatch && method === "PATCH") {
-    const target = users.find(item => item.id === Number(userMatch[1]));
-    if (!target) {
-      sendFailure(response, 404, "User not found.");
-      return true;
-    }
+    const target = findUser(response, userMatch[1]);
+    if (!target) return true;
     const body = await readJSONBody(request);
     const email = stringField(body, "email", target.email).trim();
     const duplicate = findUserByEmail(email);
     if (duplicate && duplicate.id !== target.id) {
-      sendFailure(response, 409, "A user with that email already exists.");
+      sendFailure(response, 409, DUPLICATE_ADMIN_EMAIL);
       return true;
     }
     target.name = stringField(body, "name", target.name).trim();
@@ -1052,13 +777,8 @@ async function handleAdminRoutes(
   }
 
   if (userMatch && method === "DELETE") {
-    const userId = Number(userMatch[1]);
-    const index = users.findIndex(item => item.id === userId);
-    if (index >= 0) {
-      users.splice(index, 1);
-      removeSessionsForUser(userId);
-    }
-    sendSuccess(response, {});
+    removeUser(Number(userMatch[1]));
+    sendSuccess(response);
     return true;
   }
 
@@ -1073,30 +793,11 @@ async function handleSettingsRoutes(
 ) {
   const method = request.method ?? "GET";
 
-  if (url.pathname === "/api/settings/scan/movies" && method === "GET") {
-    if (!user.is_admin) {
-      sendFailure(response, 403, "Movie scan status is admin-only.");
-      return true;
-    }
-    sendSuccess(response, movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
-    return true;
-  }
-
-  if (url.pathname === "/api/settings/scan/music" && method === "GET") {
-    if (!user.is_admin) {
-      sendFailure(response, 403, "Music scan status is admin-only.");
-      return true;
-    }
-    sendSuccess(response, musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
-    return true;
-  }
-
-  if (url.pathname === "/api/settings/scan/shows" && method === "GET") {
-    if (!user.is_admin) {
-      sendFailure(response, 403, "TV shows scan status is admin-only.");
-      return true;
-    }
-    sendSuccess(response, showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0, started_at: null, updated_at: null }));
+  // No spec starts a scan through the mock (scan-progress stubs its own status
+  // route), so the admin shell's polls always see an idle scanner.
+  const scanStatus = IDLE_SCAN_STATUS_BY_PATH[url.pathname];
+  if (scanStatus && method === "GET") {
+    sendSuccess(response, scanStatus());
     return true;
   }
 
@@ -1106,85 +807,43 @@ async function handleSettingsRoutes(
   }
 
   if (url.pathname === "/api/settings/libraries" && method === "PUT") {
-    if (!user.is_admin) {
-      sendFailure(response, 403, "Admin privileges required.");
-      return true;
-    }
+    if (!requireAdmin(user, response)) return true;
     const body = await readJSONBody(request);
     librarySettings = {
-      movies_dir: valueOrCurrent(
-        nullableStringField(body, "movies_dir"),
-        librarySettings.movies_dir,
-      ),
-      shows_dir: valueOrCurrent(
-        nullableStringField(body, "shows_dir"),
-        librarySettings.shows_dir,
-      ),
-      music_dir: valueOrCurrent(
-        nullableStringField(body, "music_dir"),
-        librarySettings.music_dir,
-      ),
+      movies_dir: nullableStringField(body, "movies_dir", librarySettings.movies_dir),
+      shows_dir: nullableStringField(body, "shows_dir", librarySettings.shows_dir),
+      music_dir: nullableStringField(body, "music_dir", librarySettings.music_dir),
     };
     sendSuccess(response, { settings: librarySettings });
     return true;
   }
 
   if (url.pathname === "/api/settings/general" && method === "GET") {
-    if (!user.is_admin) {
-      sendFailure(response, 403, "Admin privileges required.");
-      return true;
-    }
+    if (!requireAdmin(user, response)) return true;
     sendSuccess(response, { settings: generalSettings });
     return true;
   }
 
   if (url.pathname === "/api/settings/general" && method === "PUT") {
-    if (!user.is_admin) {
-      sendFailure(response, 403, "Admin privileges required.");
-      return true;
-    }
+    if (!requireAdmin(user, response)) return true;
     const body = await readJSONBody(request);
+    const current = generalSettings;
     generalSettings = {
-      tmdb_key: valueOrCurrent(
-        nullableStringField(body, "tmdb_key"),
-        generalSettings.tmdb_key,
-      ),
-      immich_base_url: valueOrCurrent(
-        nullableStringField(body, "immich_base_url"),
-        generalSettings.immich_base_url,
-      ),
-      immich_api_key: valueOrCurrent(
-        nullableStringField(body, "immich_api_key"),
-        generalSettings.immich_api_key,
-      ),
-      jellyfin_base_url: valueOrCurrent(
-        nullableStringField(body, "jellyfin_base_url"),
-        generalSettings.jellyfin_base_url,
-      ),
-      jellyfin_api_key: valueOrCurrent(
-        nullableStringField(body, "jellyfin_api_key"),
-        generalSettings.jellyfin_api_key,
-      ),
-      spotify_client_id: valueOrCurrent(
-        nullableStringField(body, "spotify_client_id"),
-        generalSettings.spotify_client_id,
-      ),
-      spotify_client_secret: valueOrCurrent(
-        nullableStringField(body, "spotify_client_secret"),
-        generalSettings.spotify_client_secret,
-      ),
-      enable_watcher: booleanField(
+      tmdb_key: nullableStringField(body, "tmdb_key", current.tmdb_key),
+      immich_base_url: nullableStringField(body, "immich_base_url", current.immich_base_url),
+      immich_api_key: nullableStringField(body, "immich_api_key", current.immich_api_key),
+      jellyfin_base_url: nullableStringField(body, "jellyfin_base_url", current.jellyfin_base_url),
+      jellyfin_api_key: nullableStringField(body, "jellyfin_api_key", current.jellyfin_api_key),
+      spotify_client_id: nullableStringField(body, "spotify_client_id", current.spotify_client_id),
+      spotify_client_secret: nullableStringField(
         body,
-        "enable_watcher",
-        generalSettings.enable_watcher,
+        "spotify_client_secret",
+        current.spotify_client_secret,
       ),
-      download_images: booleanField(
-        body,
-        "download_images",
-        generalSettings.download_images,
-      ),
-      static_dir: stringField(body, "static_dir", generalSettings.static_dir),
-      transcode_dir: stringField(body, "transcode_dir", generalSettings.transcode_dir),
+      enable_watcher: booleanField(body, "enable_watcher", current.enable_watcher),
+      download_images: booleanField(body, "download_images", current.download_images),
+      static_dir: stringField(body, "static_dir", current.static_dir),
+      transcode_dir: stringField(body, "transcode_dir", current.transcode_dir),
     };
     sendSuccess(response, { settings: generalSettings, restart_required: false });
     return true;
@@ -1196,37 +855,31 @@ async function handleSettingsRoutes(
   }
 
   if (url.pathname === "/api/settings/playback" && method === "PUT") {
-    // Mirrors the RequireAdmin middleware on the real route.
-    if (!user.is_admin) {
-      sendFailure(response, 403, "Server playback settings are admin-only.");
-      return true;
-    }
-
+    if (!requireAdmin(user, response)) return true;
     const body = await readJSONBody(request);
 
     // Absent fields keep their current value; the ones that were sent are
     // validated exactly as the Go handler validates them.
     let serverUploadMbps = serverPlaybackSettings.server_upload_mbps;
-    if (Object.prototype.hasOwnProperty.call(body, "server_upload_mbps")) {
-      const sent = nullableNumberField(body, "server_upload_mbps");
-      if (
-        typeof sent === "number" &&
-        (sent <= 0 || sent >= SERVER_UPLOAD_MAX_MBPS)
-      ) {
-        sendFailure(
-          response,
-          400,
-          `server upload speed must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps`,
-        );
-        return true;
+    if (Object.hasOwn(body, "server_upload_mbps")) {
+      const sent = body.server_upload_mbps;
+      if (typeof sent === "number" && Number.isFinite(sent)) {
+        if (sent <= 0 || sent >= SERVER_UPLOAD_MAX_MBPS) {
+          sendFailure(
+            response,
+            400,
+            `server upload speed must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps`,
+          );
+          return true;
+        }
+        serverUploadMbps = sent;
+      } else if (sent === null) {
+        serverUploadMbps = null;
       }
-      serverUploadMbps = valueOrCurrent(sent, serverUploadMbps);
     }
 
     let hardwareDevice = serverPlaybackSettings.hardware_acceleration_device;
-    if (
-      Object.prototype.hasOwnProperty.call(body, "hardware_acceleration_device")
-    ) {
+    if (Object.hasOwn(body, "hardware_acceleration_device")) {
       const sent = body.hardware_acceleration_device;
       // Rejects null and any unknown string, so the union type is enforced by a
       // check rather than by a cast that assumes it.
@@ -1253,14 +906,11 @@ async function handleSettingsRoutes(
 // show and season, the file mirrors the movie technical fixture keyed by
 // file_id instead of movie_id, and the first episode hands off to the second
 // so the up-next flow has somewhere to go.
-const mockEpisodeId = 70103;
-const mockNextEpisodeId = 70104;
-
 function showEpisodePlayback(episodeId: number) {
-  const isNext = episodeId === mockNextEpisodeId;
+  const isNext = episodeId === MOCK_NEXT_EPISODE_ID;
   return {
     show: {
-      id: 401,
+      id: MOCK_SHOW_ID,
       name: "Frost Harbor",
       poster_path: nullableString("/frost-harbor.jpg"),
       backdrop_path: nullableString("/frost-harbor-backdrop.jpg"),
@@ -1273,32 +923,31 @@ function showEpisodePlayback(episodeId: number) {
       overview: nullableString("The ice gives way."),
       air_date: nullableString("2026-03-22"),
       still_path: nullableString("/still.jpg"),
-      tmdb_runtime: nullableInt(47),
-      vote_average: nullableFloat(8.1),
-      vote_count: nullableInt(220),
+      tmdb_runtime: nullableInt64(47),
+      vote_average: nullableFloat64(8.1),
+      vote_count: nullableInt64(220),
     },
     next_episode: isNext
       ? null
       : {
-          id: mockNextEpisodeId,
+          id: MOCK_NEXT_EPISODE_ID,
           season_number: 1,
           episode_number: 4,
           name: "The Long Night",
           still_path: nullableString("/next-still.jpg"),
-          progress_sec: nullableFloat(null),
-          duration_sec: nullableFloat(null),
+          progress_sec: nullableFloat64(),
+          duration_sec: nullableFloat64(),
           watched: false,
         },
-  };
+  } satisfies ShowEpisodePlaybackDataType;
 }
 
 function episodeTechnicalDetails(episodeId: number) {
-  const { movie, ...streams } = movieTechnicalDetails(101);
-  const fileId = episodeId;
+  const { movie, ...streams } = movieTechnicalDetails(MOCK_MOVIE_ID);
   const withFileId = <T extends { movie_id: unknown }>(rows: T[]) =>
     rows.map(({ movie_id, ...row }) => {
       void movie_id;
-      return { ...row, file_id: fileId };
+      return { ...row, file_id: episodeId };
     });
   return {
     file: {
@@ -1312,25 +961,7 @@ function episodeTechnicalDetails(episodeId: number) {
     audio_streams: withFileId(streams.audio_streams),
     subtitles: withFileId(streams.subtitles),
     chapters: withFileId(streams.chapters),
-  };
-}
-
-// The library rows carry a certification the latest-shows rows do not.
-const libraryShows = latestShows.map(show => ({
-  ...show,
-  certification: nullableString("TV-14"),
-}));
-
-const showGenres = [
-  { genre_id: 30, genre_tag: "Drama", show_count: 2 },
-  { genre_id: 40, genre_tag: "Sci-Fi", show_count: 1 },
-];
-
-function sortedShows(sort: SortDirection) {
-  return [...libraryShows].sort((a, b) => {
-    const value = a.name.localeCompare(b.name);
-    return sort === "asc" ? value : -value;
-  });
+  } satisfies ShowEpisodeTechnicalDetailsDataType;
 }
 
 function handleShowsRoutes(
@@ -1351,162 +982,44 @@ function handleShowsRoutes(
   }
 
   if (url.pathname === "/api/shows/library" && method === "GET") {
-    const { page, perPage, sort } = paginationParams(url);
-    const { items, total, total_pages } = paginate(sortedShows(sort), page, perPage);
-    sendSuccess(response, {
-      shows: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-      sort,
-    });
+    sendSuccess(response, libraryList(url, "shows", libraryShows, show => show.name));
     return true;
   }
 
-  if (url.pathname === "/api/shows/genres" && method === "GET") {
-    sendSuccess(response, { genres: showGenres });
-    return true;
-  }
-
-  const showsByGenreMatch = url.pathname.match(/^\/api\/shows\/genres\/(\d+)\/shows$/);
-  if (showsByGenreMatch && method === "GET") {
-    const genreId = Number(showsByGenreMatch[1]);
-    const { page, perPage, sort } = paginationParams(url);
-    const shows = sortedShows(sort).filter(
-      show => genreId === 30 || (genreId === 40 && show.id === 401),
-    );
-    const { items, total, total_pages } = paginate(shows, page, perPage);
-    sendSuccess(response, {
-      shows: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-      sort,
-    });
-    return true;
-  }
-
-  const episodeMatch = url.pathname.match(/^\/api\/shows\/episodes\/(\d+)$/);
-  if (episodeMatch && method === "GET") {
-    const episodeId = Number(episodeMatch[1]);
-    if (episodeId !== mockEpisodeId && episodeId !== mockNextEpisodeId) {
-      sendJSON(response, 404, { error: true, message: "episode not found" });
-      return true;
-    }
-    sendSuccess(response, showEpisodePlayback(episodeId));
-    return true;
-  }
-
-  const episodeTechnicalMatch = url.pathname.match(
-    /^\/api\/shows\/episodes\/(\d+)\/technical-details$/,
+  const episodeMatch = url.pathname.match(
+    /^\/api\/shows\/episodes\/(\d+)(\/technical-details|\/watch-progress)?$/,
   );
-  if (episodeTechnicalMatch && method === "GET") {
-    sendSuccess(
-      response,
-      episodeTechnicalDetails(Number(episodeTechnicalMatch[1])),
-    );
-    return true;
+  if (!episodeMatch) {
+    return false;
   }
+  const episodeId = Number(episodeMatch[1]);
 
-  const episodeProgressMatch = url.pathname.match(
-    /^\/api\/shows\/episodes\/(\d+)\/watch-progress$/,
-  );
-  if (episodeProgressMatch && method === "GET") {
-    const episodeId = Number(episodeProgressMatch[1]);
-    sendSuccess(
-      response,
-      episodeWatchProgress.get(episodeId) ?? {
-        progress_sec: null,
-        duration_sec: null,
-        watched: false,
-        updated_at: null,
-      },
-    );
-    return true;
-  }
-
-  if (episodeProgressMatch && method === "PUT") {
-    episodeWatchProgress.set(Number(episodeProgressMatch[1]), {
-      progress_sec: 0,
-      duration_sec: 2700,
-      watched: false,
-      updated_at: new Date().toISOString(),
-    });
+  // The finished-episode test saves progress when the video ends; nothing
+  // reads it back.
+  if (episodeMatch[2] === "/watch-progress" && method === "PUT") {
     sendSuccess(response, { watched: false });
     return true;
   }
 
-  if (episodeProgressMatch && method === "DELETE") {
-    episodeWatchProgress.delete(Number(episodeProgressMatch[1]));
-    sendSuccess(response, { cleared: true });
-    return true;
-  }
-
-  const episodeWatchedMatch = url.pathname.match(
-    /^\/api\/shows\/episodes\/(\d+)\/watch-progress\/watched$/,
-  );
-  if (episodeWatchedMatch && method === "PUT") {
-    const episodeId = Number(episodeWatchedMatch[1]);
-    episodeWatchProgress.set(episodeId, {
-      progress_sec: 0,
-      duration_sec: 0,
-      watched: true,
-      updated_at: new Date().toISOString(),
-    });
-    sendSuccess(response, { episode_id: episodeId, watched: true });
-    return true;
-  }
-
-  const episodeStreamMatch = url.pathname.match(
-    /^\/api\/shows\/episodes\/(\d+)\/stream$/,
-  );
-  if (episodeStreamMatch && method === "GET") {
-    sendNoContent(response);
-    return true;
-  }
-
-  return false;
-}
-
-// The home "Continue Watching" row mixes both libraries, so it is its own
-// route rather than part of the movie or show group.
-function handleContinueWatchingRoute(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-) {
-  const method = request.method ?? "GET";
-  if (url.pathname !== "/api/continue-watching" || method !== "GET") {
+  if (method !== "GET") {
     return false;
   }
 
-  const movies = libraryMovies.slice(0, 2).map((movie, index) => ({
-    kind: "movie",
-    ...movie,
-    progress_sec: 900 * (index + 1),
-    duration_sec: 5400,
-  }));
+  if (episodeMatch[2] === "/watch-progress") {
+    sendSuccess(response, NO_PROGRESS);
+    return true;
+  }
 
-  sendSuccess(response, {
-    items: [
-      {
-        kind: "episode",
-        id: mockEpisodeId,
-        title: latestShows[0].name,
-        poster_path: latestShows[0].poster_path,
-        year: latestShows[0].premiere_year,
-        progress_sec: 600,
-        duration_sec: 2400,
-        show_id: latestShows[0].id,
-        season_number: 1,
-        episode_number: 3,
-        episode_name: "The Thaw",
-      },
-      ...movies,
-    ],
-  });
+  if (episodeMatch[2] === "/technical-details") {
+    sendSuccess(response, episodeTechnicalDetails(episodeId));
+    return true;
+  }
+
+  if (episodeId !== MOCK_EPISODE_ID && episodeId !== MOCK_NEXT_EPISODE_ID) {
+    sendFailure(response, 404, "episode not found");
+    return true;
+  }
+  sendSuccess(response, showEpisodePlayback(episodeId));
   return true;
 }
 
@@ -1515,176 +1028,100 @@ function handleMoviesRoutes(
   response: ServerResponse,
   url: URL,
 ) {
-  const method = request.method ?? "GET";
+  if ((request.method ?? "GET") !== "GET") {
+    return false;
+  }
 
-  if (url.pathname === "/api/movies/latest" && method === "GET") {
-    sendSuccess(response, { movies: libraryMovies.slice(0, 3) });
+  if (url.pathname === "/api/movies/latest") {
+    sendSuccess(response, { movies: libraryMovies });
     return true;
   }
 
-  if (url.pathname === "/api/movies/stats" && method === "GET") {
+  if (url.pathname === "/api/movies/stats") {
     sendSuccess(response, { total_movies: libraryMovies.length });
     return true;
   }
 
-  if (url.pathname === "/api/movies/library" && method === "GET") {
-    const { page, perPage, sort } = paginationParams(url);
-    const movies = sortedMovies(sort);
-    const { items, total, total_pages } = paginate(movies, page, perPage);
-    sendSuccess(response, {
-      movies: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-      sort,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/movies/genres" && method === "GET") {
-    sendSuccess(response, {
-      genres: [
-        { genre_id: 10, genre_tag: "Drama", movie_count: 2 },
-        { genre_id: 20, genre_tag: "Adventure", movie_count: 1 },
-      ],
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/movies/playlists" && method === "GET") {
-    sendSuccess(response, { playlists: moviePlaylists });
-    return true;
-  }
-
-  if (url.pathname === "/api/movies/liked" && method === "GET") {
-    const { page, perPage, sort } = paginationParams(url);
-    const movies = sortedMovies(sort).filter(movie => likedMovieIds.has(movie.id));
-    const { items, total, total_pages } = paginate(movies, page, perPage);
-    sendSuccess(response, {
-      movies: items,
-      total,
-      page,
-      per_page: perPage,
-      total_pages,
-      sort,
-    });
+  if (url.pathname === "/api/movies/library") {
+    sendSuccess(response, libraryList(url, "movies", libraryMovies, movie => movie.title));
     return true;
   }
 
   const detailsMatch = url.pathname.match(/^\/api\/movies\/details\/(\d+)$/);
-  if (detailsMatch && method === "GET") {
-    sendSuccess(response, movieDetails(Number(detailsMatch[1])));
+  if (detailsMatch) {
+    const movie = libraryMovies.find(item => item.id === Number(detailsMatch[1]));
+    if (!movie) {
+      sendFailure(response, 404, "movie not found");
+      return true;
+    }
+    sendSuccess(response, libraryMovieDetails(movie));
     return true;
   }
 
-  const technicalMatch = url.pathname.match(
-    /^\/api\/movies\/(\d+)\/technical-details$/,
-  );
-  if (technicalMatch && method === "GET") {
+  const technicalMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/technical-details$/);
+  if (technicalMatch) {
     sendSuccess(response, movieTechnicalDetails(Number(technicalMatch[1])));
     return true;
   }
 
-  const progressMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/watch-progress$/);
-  if (progressMatch && method === "GET") {
-    const movieId = Number(progressMatch[1]);
-    sendSuccess(
-      response,
-      watchProgress.get(movieId) ?? {
-        progress_sec: null,
-        duration_sec: null,
-        watched: false,
-        updated_at: null,
-      },
-    );
-    return true;
-  }
-
-  if (progressMatch && method === "PUT") {
-    const movieId = Number(progressMatch[1]);
-    watchProgress.set(movieId, {
-      progress_sec: 0,
-      duration_sec: 7320,
-      watched: false,
-      updated_at: new Date().toISOString(),
-    });
-    sendSuccess(response, { watched: false });
-    return true;
-  }
-
-  if (progressMatch && method === "DELETE") {
-    watchProgress.delete(Number(progressMatch[1]));
-    sendSuccess(response, { cleared: true });
-    return true;
-  }
-
-  const streamMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/stream$/);
-  if (streamMatch && method === "GET") {
-    sendNoContent(response);
+  // The mocked player never plays far enough to save progress.
+  if (/^\/api\/movies\/\d+\/watch-progress$/.test(url.pathname)) {
+    sendSuccess(response, NO_PROGRESS);
     return true;
   }
 
   return false;
 }
 
-function handleMusicRoutes(
+// Home is only reached when the trailer spec's Escape returns to `/`; its
+// loader asks for all of these.
+function handleHomeRoutes(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
 ) {
-  const method = request.method ?? "GET";
-
-  if (url.pathname === "/api/music/stats" && method === "GET") {
-    sendSuccess(response, {
-      total_albums: latestAlbums.length,
-      total_tracks: tracks.length,
-      total_musicians: musicians.length,
-    });
-    return true;
+  if ((request.method ?? "GET") !== "GET") {
+    return false;
   }
 
-  if (url.pathname === "/api/music/albums/latest" && method === "GET") {
-    sendSuccess(response, { albums: latestAlbums });
-    return true;
+  switch (url.pathname) {
+    case "/api/continue-watching":
+      sendSuccess(response, {
+        items: [
+          {
+            kind: "episode",
+            id: MOCK_EPISODE_ID,
+            title: latestShows[0].name,
+            poster_path: latestShows[0].poster_path,
+            year: latestShows[0].premiere_year,
+            progress_sec: 600,
+            duration_sec: 2400,
+            show_id: latestShows[0].id,
+            season_number: 1,
+            episode_number: 3,
+            episode_name: "The Thaw",
+          },
+          ...libraryMovies.slice(0, 2).map((movie, index) => ({
+            kind: "movie" as const,
+            ...movie,
+            progress_sec: 900 * (index + 1),
+            duration_sec: 5400,
+          })),
+        ] satisfies ContinueWatchingItemType[],
+      });
+      return true;
+    case "/api/music/albums/latest":
+      sendSuccess(response, { albums: latestAlbums });
+      return true;
+    case "/api/tmdb/movies/in-theaters":
+      sendSuccess(response, { movies: theaterMovies });
+      return true;
+    case "/api/watch-rooms":
+      sendSuccess(response, { rooms: [] });
+      return true;
+    default:
+      return false;
   }
-
-  return false;
-}
-
-function handleTmdbRoutes(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-) {
-  const method = request.method ?? "GET";
-
-  if (url.pathname === "/api/tmdb/status" && method === "GET") {
-    sendSuccess(response, { available: true });
-    return true;
-  }
-
-  if (url.pathname === "/api/tmdb/movies/in-theaters" && method === "GET") {
-    sendSuccess(response, { movies: theaterMovies });
-    return true;
-  }
-
-  return false;
-}
-
-function handleWatchRoomRoutes(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-) {
-  const method = request.method ?? "GET";
-
-  if (url.pathname === "/api/watch-rooms" && method === "GET") {
-    sendSuccess(response, { rooms: [] });
-    return true;
-  }
-
-  return false;
 }
 
 async function handleDeviceRoutes(
@@ -1701,31 +1138,25 @@ async function handleDeviceRoutes(
     return true;
   }
 
-  if (url.pathname === "/api/quick-connect/lookup" && method === "POST") {
+  if (
+    (url.pathname === "/api/quick-connect/lookup" ||
+      url.pathname === "/api/quick-connect/approve") &&
+    method === "POST"
+  ) {
     const body = await readJSONBody(request);
-    const code = stringField(body, "code").trim().toUpperCase();
-    const pairing = pendingPairings.get(code);
+    const pairing = pendingPairings.get(stringField(body, "code").trim().toUpperCase());
 
     if (!pairing || pairing.approved) {
-      sendFailure(response, 404, "invalid or expired code");
+      sendFailure(response, 404, INVALID_CODE);
       return true;
     }
 
-    sendSuccess(response, {
-      device_name: pairing.device_name,
-      platform: pairing.platform,
-      app_version: pairing.app_version,
-    });
-    return true;
-  }
-
-  if (url.pathname === "/api/quick-connect/approve" && method === "POST") {
-    const body = await readJSONBody(request);
-    const code = stringField(body, "code").trim().toUpperCase();
-    const pairing = pendingPairings.get(code);
-
-    if (!pairing || pairing.approved) {
-      sendFailure(response, 404, "invalid or expired code");
+    if (url.pathname.endsWith("/lookup")) {
+      sendSuccess(response, {
+        device_name: pairing.device_name,
+        platform: pairing.platform,
+        app_version: pairing.app_version,
+      });
       return true;
     }
 
@@ -1735,19 +1166,14 @@ async function handleDeviceRoutes(
   }
 
   const deviceMatch = url.pathname.match(/^\/api\/devices\/(\d+)$/);
-  if (deviceMatch) {
-    const deviceId = Number.parseInt(deviceMatch[1], 10);
-    const index = devices.findIndex(device => device.id === deviceId);
+  if (deviceMatch && (method === "PATCH" || method === "DELETE")) {
+    const index = devices.findIndex(device => device.id === Number(deviceMatch[1]));
 
     if (method === "PATCH") {
       const body = await readJSONBody(request);
       const name = stringField(body, "name").trim();
       if (!name || name.length > 100) {
-        sendFailure(
-          response,
-          400,
-          "name is required and must be at most 100 characters",
-        );
+        sendFailure(response, 400, `name is required and ${NAME_TOO_LONG}`);
         return true;
       }
       if (index === -1) {
@@ -1759,65 +1185,56 @@ async function handleDeviceRoutes(
       return true;
     }
 
-    if (method === "DELETE") {
-      if (index === -1) {
-        sendFailure(response, 404, "device not found");
-        return true;
-      }
-      devices.splice(index, 1);
-      sendSuccess(response, {}, 200, "Device revoked");
+    if (index === -1) {
+      sendFailure(response, 404, "device not found");
       return true;
     }
-  }
-
-  return false;
-}
-
-function handleNotificationRoutes(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-) {
-  const method = request.method ?? "GET";
-
-  if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
-    sendSuccess(response, { unread_count: 0 });
+    devices.splice(index, 1);
+    sendSuccess(response, {}, 200, "Device revoked");
     return true;
   }
 
   return false;
 }
 
+function handleSharedRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  if ((request.method ?? "GET") !== "GET") {
+    return false;
+  }
+
+  switch (url.pathname) {
+    case "/api/notifications/unread-count":
+      sendSuccess(response, { unread_count: 0 });
+      return true;
+    case "/api/music/stats":
+      sendSuccess(response, musicStats);
+      return true;
+    case "/api/tmdb/status":
+      sendSuccess(response, { available: true });
+      return true;
+    default:
+      return false;
+  }
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
-
-  if (method === "OPTIONS") {
-    response.writeHead(204, {
-      "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    });
-    response.end();
-    return;
-  }
 
   if (url.pathname === "/health") {
     sendJSON(response, 200, { ok: true });
     return;
   }
 
-  if (url.pathname.startsWith("/api/tmdb/images/")) {
-    sendPlaceholderImage(response, "Igloo");
-    return;
-  }
-
-  if (url.pathname.startsWith("/api/youtube/thumbnails/")) {
-    sendPlaceholderImage(response, "Igloo");
-    return;
-  }
-
-  if (url.pathname.startsWith("/api/static/")) {
-    sendPlaceholderImage(response, "Igloo");
+  if (
+    url.pathname.startsWith("/api/tmdb/images/") ||
+    url.pathname.startsWith("/api/static/")
+  ) {
+    sendPlaceholderImage(response);
     return;
   }
 
@@ -1825,35 +1242,25 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (await handleAuthRoutes(request, response, url)) return;
     if (await handleQuickConnectPublicRoutes(request, response, url)) return;
 
-    if (!canHandleWithoutAuth(url.pathname)) {
-      const user = requireAuth(request, response);
-      if (!user) return;
-
-      if (await handleUserRoutes(request, response, url, user)) return;
-
-      if (url.pathname.startsWith("/api/admin/")) {
-        const admin = requireAdmin(request, response);
-        if (!admin) return;
-        if (await handleAdminRoutes(request, response, url, admin)) return;
-      }
-
-      if (await handleSettingsRoutes(request, response, url, user)) return;
-      if (handleContinueWatchingRoute(request, response, url)) return;
-      if (handleMoviesRoutes(request, response, url)) return;
-      if (handleShowsRoutes(request, response, url)) return;
-      if (handleMusicRoutes(request, response, url)) return;
-      if (handleTmdbRoutes(request, response, url)) return;
-      if (handleWatchRoomRoutes(request, response, url)) return;
-      if (handleNotificationRoutes(request, response, url)) return;
-      if (await handleDeviceRoutes(request, response, url)) return;
-    }
-
-    if (url.pathname.startsWith("/api/")) {
-      sendFailure(response, 404, `Unhandled mock API route: ${method} ${url.pathname}`);
+    const user = currentUser(request);
+    if (!user) {
+      sendFailure(response, 401, "Unauthorized");
       return;
     }
 
-    sendFailure(response, 404, "Not found");
+    if (await handleUserRoutes(request, response, url, user)) return;
+    if (url.pathname.startsWith("/api/admin/")) {
+      if (!requireAdmin(user, response)) return;
+      if (await handleAdminRoutes(request, response, url)) return;
+    }
+    if (await handleSettingsRoutes(request, response, url, user)) return;
+    if (handleMoviesRoutes(request, response, url)) return;
+    if (handleShowsRoutes(request, response, url)) return;
+    if (handleHomeRoutes(request, response, url)) return;
+    if (handleSharedRoutes(request, response, url)) return;
+    if (await handleDeviceRoutes(request, response, url)) return;
+
+    sendFailure(response, 404, `Unhandled mock API route: ${method} ${url.pathname}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Mock API error";
     sendFailure(response, 500, message);

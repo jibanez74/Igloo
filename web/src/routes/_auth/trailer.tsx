@@ -297,12 +297,36 @@ function TrailerPage() {
     }
   };
 
-  const handleDialogOpenAutoFocus = (event: Event) => {
-    event.preventDefault();
-
+  const focusPrimaryControl = () => {
     const focusTarget = closeButtonRef.current ?? containerRef.current;
     focusTarget?.focus({ preventScroll: true });
   };
+
+  const handleDialogOpenAutoFocus = (event: Event) => {
+    event.preventDefault();
+    focusPrimaryControl();
+  };
+
+  // Every view below renders into the same dialog, so Radix's open auto-focus
+  // runs for the first view only. A later swap (the player failing, a retry,
+  // the movie finishing loading) unmounts the focused control and would strand
+  // focus on the dialog container, so each new view takes focus the same way.
+  const dialogView = error
+    ? "playback-error"
+    : !trailerKey && shouldFetchMovie && moviePending
+      ? "loading"
+      : !trailerKey && (movieIsError || data?.error)
+        ? "load-error"
+        : !trailerKey
+          ? "no-trailer"
+          : "player";
+  const focusPrimaryControlOnViewChange = useEffectEvent(focusPrimaryControl);
+  const previousDialogViewRef = useRef(dialogView);
+  useEffect(() => {
+    if (previousDialogViewRef.current === dialogView) return;
+    previousDialogViewRef.current = dialogView;
+    focusPrimaryControlOnViewChange();
+  }, [dialogView]);
 
   if (error) {
     return (

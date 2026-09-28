@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -337,8 +337,13 @@ describe("tv shows route genres", () => {
       "aria-pressed",
       "false",
     );
+    // The row beside Clear counts the list response (1), not the chip (2).
+    const clearButton = screen.getByRole("button", { name: "Clear genre filter" });
+    expect(
+      within(clearButton.parentElement as HTMLElement).getByText("1 show"),
+    ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Clear genre filter" }));
+    await user.click(clearButton);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Drama/ })).toHaveFocus();

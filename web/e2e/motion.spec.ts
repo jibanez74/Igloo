@@ -1,24 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import { apiURL, readE2EEnv } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { loginPageViaApi } from "./e2e-auth";
-
-type ComingSoonPage = {
-  path: string;
-  title: string;
-  description: string;
-};
-
-const comingSoonPages: ComingSoonPage[] = [
-  {
-    path: "/photos",
-    title: "Photos",
-    description:
-      "Your personal photo gallery is coming soon. Organize, browse, and share your memories all in one place.",
-  },
-];
 
 async function expectDecorativeAnimationsStopped(page: Page) {
   const decorativeStates = await page.evaluate(() =>
@@ -46,7 +30,9 @@ async function expectDecorativeAnimationsStopped(page: Page) {
     ),
   );
 
-  expect(decorativeStates).toHaveLength(4);
+  // How many there are is ComingSoon's unit contract; there must be some, or
+  // the check below proves nothing.
+  expect(decorativeStates.length).toBeGreaterThan(0);
   expect(
     decorativeStates.filter(
       state =>
@@ -62,43 +48,20 @@ async function expectDecorativeAnimationsStopped(page: Page) {
   ).toEqual([]);
 }
 
-// The visible heading, status badge, and description carry the page
-// announcement for screen readers; there is deliberately no focusable
-// sr-only span, since a non-interactive tab stop is keyboard noise.
-async function expectSkipLinkWorks(page: Page) {
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Skip to page content" })).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("main")).toBeFocused();
-}
-
 test.describe("Reduced motion", () => {
-  test("ComingSoon pages keep content visible and stop decorative loops", async ({
+  test("the ComingSoon page keeps its content visible and stops decorative loops", async ({
     page,
   }) => {
-    const env = readE2EEnv();
     const browserIssues = trackBrowserIssues(page);
 
-    await loginPageViaApi(page, env);
+    await loginPageViaApi(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ width: 1280, height: 900 });
 
-    for (const comingSoonPage of comingSoonPages) {
-      await page.goto(apiURL(env, comingSoonPage.path), {
-        waitUntil: "networkidle",
-      });
-
-      await expect(
-        page.getByRole("heading", { name: comingSoonPage.title }),
-      ).toBeVisible();
-      await expect(page.getByText(comingSoonPage.description)).toBeVisible();
-      await expect(page.getByRole("status")).toHaveText(
-        "Under Development",
-      );
-      await expectPageHasNoHorizontalScroll(page);
-      await expectDecorativeAnimationsStopped(page);
-      await expectSkipLinkWorks(page);
-    }
+    await page.goto("/photos");
+    await expect(page.getByRole("heading", { name: "Photos" })).toBeVisible();
+    await expectPageHasNoHorizontalScroll(page);
+    await expectDecorativeAnimationsStopped(page);
 
     browserIssues.assertClean();
   });

@@ -831,6 +831,13 @@ require the full playback test pass.
   resume: it plays on the first `canplay`, then drops the spent flag from the
   URL (replace) so a reload does not replay it. If the browser refuses
   autoplay, the viewer sees the paused player and presses Play.
+- **Trailer player** (`routes/_auth/trailer.tsx`, YouTube behind
+  `useYouTubePlayer`): one `DialogFullscreenContent` whose view swaps in place
+  — loading, load error, no trailer, the player, a playback error. Each view
+  focuses its primary control ("Close trailer (Escape)", or "Try Again" on an
+  error) when it first appears, not only when the dialog opens: Radix's open
+  auto-focus runs once, and a swap that unmounts the focused control would
+  otherwise strand focus on the dialog container.
 - **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`;
   chrome split into `NowPlayingDialog`, `MiniPlayerBar`, and the shared
   `PlayerTransportControls`, with `useAudioPlaybackKeyboard` and

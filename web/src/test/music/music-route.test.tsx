@@ -9,6 +9,7 @@ import {
   MUSICIANS_PER_PAGE,
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
+import type { PlaylistSummaryType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
@@ -47,6 +48,28 @@ function track(id: number, title: string) {
     album_cover: nullableString(),
     musician_id: nullableInt64(20),
     musician_name: nullableString("The Band"),
+  };
+}
+
+function playlist(
+  id: number,
+  name: string,
+  fields: Partial<PlaylistSummaryType> = {},
+): PlaylistSummaryType {
+  return {
+    id,
+    user_id: 1,
+    name,
+    description: nullableString(),
+    cover_image: nullableString(),
+    is_public: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    track_count: 0,
+    total_duration: 0,
+    is_owner: true,
+    can_edit: true,
+    ...fields,
   };
 }
 
@@ -172,6 +195,24 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
         error: false,
         data: {
           liked_track_ids: [2],
+        },
+      });
+    }
+
+    if (url === "/api/music/playlists") {
+      return jsonResponse({
+        error: false,
+        data: {
+          playlists: [
+            playlist(30, "Morning Rotation", { track_count: 3, total_duration: 540_000 }),
+            playlist(31, "Shared Discoveries", {
+              user_id: 2,
+              track_count: 2,
+              total_duration: 420_000,
+              is_owner: false,
+              can_edit: false,
+            }),
+          ],
         },
       });
     }
@@ -369,6 +410,16 @@ describe("music route tracks tab", () => {
     expect(
       screen.getByRole("button", { name: "More actions for Borrowed Light" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play all tracks" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Shuffle all tracks" })).toBeEnabled();
+
+    // The row like buttons are named from /api/music/tracks/liked-ids (track 2).
+    expect(
+      await screen.findByRole("button", { name: "Remove Borrowed Light from liked" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add Alabaster to liked" }),
+    ).toBeInTheDocument();
 
     const trackRows = within(tracksList).getAllByRole("listitem");
 
@@ -377,5 +428,30 @@ describe("music route tracks tab", () => {
     expect(trackRows[0]).toHaveAttribute("aria-setsize", "2");
     expect(trackRows[1]).toHaveAttribute("aria-posinset", "2");
     expect(trackRows[1]).toHaveAttribute("aria-setsize", "2");
+  });
+});
+
+describe("music route playlists tab", () => {
+  it("lists playlists with the owner badge and the toolbar actions", async () => {
+    await renderMusicRoute("/music/?tab=playlists");
+
+    const owned = await screen.findByRole("link", {
+      name: "Morning Rotation, 3 tracks, 9m 0s",
+    });
+    const shared = screen.getByRole("link", {
+      name: "Shared Discoveries, 2 tracks, 7m 0s",
+    });
+    expect(screen.getByText("2 playlists")).toBeInTheDocument();
+
+    // Only the caller's own playlists carry the Owner badge.
+    expect(within(owned.closest("article")!).getByText("Owner")).toBeInTheDocument();
+    expect(within(shared.closest("article")!).queryByText("Owner")).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: "View liked tracks" }),
+    ).toHaveTextContent("Liked tracks");
+    expect(
+      screen.getByRole("button", { name: "Create new playlist" }),
+    ).toHaveTextContent("New playlist");
   });
 });

@@ -1,31 +1,22 @@
-import type { Route } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import { movieScanStatus } from "../src/test/helpers/movie-scan";
 import { musicScanStatus } from "../src/test/helpers/music-scan";
 import { showScanStatus } from "../src/test/helpers/show-scan";
 
-// Shared shapes for talking to the API from specs: the JSON envelope, the Go
-// `sql.Null*` wire types, and the two ways a spec produces a body — reading a
-// real response, or fulfilling an intercepted route.
+export {
+  nullableFloat64,
+  nullableInt64,
+  nullableString,
+} from "../src/test/helpers/fixtures";
 
-export type ApiResponse<T> = {
+// Shared shapes for talking to the API from specs: the JSON envelope, and the
+// two ways a spec produces a body — reading a real response, or fulfilling an
+// intercepted route.
+
+type ApiResponse<T> = {
   error: boolean;
   message?: string;
   data?: T;
-};
-
-export type NullableString = {
-  String: string;
-  Valid: boolean;
-};
-
-export type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
-
-type NullableFloat64 = {
-  Float64: number;
-  Valid: boolean;
 };
 
 /**
@@ -53,33 +44,88 @@ export async function fulfillJSON(route: Route, body: unknown, status = 200) {
   });
 }
 
-export function nullableString(value = ""): NullableString {
+/**
+ * A page-based list envelope (movies, shows) echoing the request's `page`,
+ * `per_page` and `sort`, with `items` under `key`.
+ */
+export function pagedList<K extends string, T>(
+  url: URL,
+  key: K,
+  items: T[],
+  { total, perPage }: { total: number; perPage: number },
+) {
+  const requestedPerPage = Number(url.searchParams.get("per_page") ?? perPage);
+
   return {
-    String: value,
-    Valid: value.length > 0,
+    [key]: items,
+    total,
+    page: Number(url.searchParams.get("page") ?? "1"),
+    per_page: requestedPerPage,
+    total_pages: Math.max(1, Math.ceil(total / requestedPerPage)),
+    sort: url.searchParams.get("sort") === "desc" ? "desc" : "asc",
+  } as Record<K, T[]> & {
+    total: number;
+    page: number;
+    per_page: number;
+    total_pages: number;
+    sort: "asc" | "desc";
   };
 }
 
-export function nullableInt64(value: number | null = null): NullableInt64 {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
+/**
+ * Waits until one of the recorded requests hit `pathname` with every entry of
+ * `params` in its query. Specs push each `URL` a mock handler sees, so the
+ * poll covers requests that land after the UI has already moved on.
+ */
+export async function expectApiRequest(
+  requests: URL[],
+  pathname: string,
+  params: Record<string, string>,
+) {
+  await expect
+    .poll(
+      () =>
+        requests.some(
+          url =>
+            url.pathname === pathname &&
+            Object.entries(params).every(([key, value]) => url.searchParams.get(key) === value),
+        ),
+      { message: `expected a request for ${pathname} with ${JSON.stringify(params)}` },
+    )
+    .toBe(true);
 }
 
-export function nullableFloat64(value: number | null = null): NullableFloat64 {
-  return {
-    Float64: value ?? 0,
-    Valid: value != null,
-  };
+/**
+ * Holds every request matching `pattern` until `release()`, then answers it
+ * with `respond` — by default whatever the next route handler, or the server,
+ * would have answered.
+ */
+export async function gateRoute(
+  page: Page,
+  pattern: string | RegExp,
+  respond: (route: Route) => Promise<void> = route => route.fallback(),
+) {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  let requested = false;
+
+  await page.route(pattern, async route => {
+    requested = true;
+    await gate;
+    await respond(route);
+  });
+
+  return { release, requested: () => requested };
 }
 
 // The authenticated app shell polls all three scan-status endpoints on every
 // route for admins (it discovers a scan already in flight), so every spec that
-// owns a catch-all `**/api/**` mock sees them regardless of the page under test.
-// Specs call this first in their handler and return when it reports handled,
-// so the requests do not land in their unexpected-request assertions.
-const IDLE_SCAN = {
+// serves an admin session sees them regardless of the page under test.
+
+/** Overrides that turn a scan-status builder's report into an idle one. */
+export const IDLE_SCAN = {
   run_id: "",
   state: "idle",
   phase: "idle",
@@ -88,7 +134,7 @@ const IDLE_SCAN = {
   updated_at: null,
 } as const;
 
-const IDLE_SCAN_STATUS_BY_PATH: Record<string, () => unknown> = {
+export const IDLE_SCAN_STATUS_BY_PATH: Record<string, () => unknown> = {
   "/api/settings/scan/movies": () => movieScanStatus(IDLE_SCAN),
   "/api/settings/scan/music": () => musicScanStatus(IDLE_SCAN),
   "/api/settings/scan/shows": () => showScanStatus(IDLE_SCAN),

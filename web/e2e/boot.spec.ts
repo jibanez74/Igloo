@@ -3,12 +3,14 @@ import { isExpectedUnauthorizedResourceMessage } from "./e2e-browser-issues";
 
 test.describe("production startup", () => {
   test.skip(process.env.E2E_PRODUCTION !== "1", "Requires built production assets");
-  test.setTimeout(60_000);
 
   for (const pathname of ["/", "/login"]) {
     test(`boots from ${pathname} and survives a reload`, async ({ page }) => {
       const issues: string[] = [];
 
+      // Stricter than trackBrowserIssues: any failed request, any non-/api
+      // error status and any console error outside the one expected 401 fails
+      // the production build check.
       // Register before navigation so failures before React mounts are captured.
       page.on("pageerror", error => issues.push(error.stack ?? error.message));
       page.on("requestfailed", request => {

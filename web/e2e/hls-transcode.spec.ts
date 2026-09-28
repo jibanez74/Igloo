@@ -1,122 +1,105 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 
-import { readE2EEnv, type E2EEnv } from "./e2e-env";
+import { STREAM_MODES } from "../src/lib/constants";
+import { loginPageViaApi } from "./e2e-auth";
+import { intEnv, requireRealInstance } from "./e2e-env";
 import {
   clearWatchProgress,
   expectVideoAdvances,
   fetchTechnicalDetails,
-  loginWithCredentials,
   mediaApiPath,
   mediaPlayPath,
+  playButton,
+  realMediaTimeouts,
   type E2EMedia,
 } from "./media-e2e-helpers";
+
+// Opt-in real-media suite for HLS transcoding. Runs against a live Igloo
+// instance: set E2E_BASE_URL, E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD and:
+//   E2E_HLS_4K_MOVIE_ID      a 2160p movie, transcoded with E2E_HLS_4K_PROFILE
+//                            (default 2160p_16mbps)
+//   E2E_HLS_SECOND_MOVIE_ID  another movie, transcoded with a different
+//                            profile, E2E_HLS_SECOND_PROFILE (default 720p_3mbps);
+//                            it proves profile and movie isolation, so the two
+//                            movie cases only run as a pair
+//   E2E_EPISODE_ID           optional: a TV episode transcoded through the
+//                            episode routes with E2E_HLS_EPISODE_PROFILE
+//                            (default 720p_3mbps)
+//   E2E_HLS_AUDIO_TRACK      the audio track to request (default 0)
+
+type TranscodeMode = Extract<(typeof STREAM_MODES)[number], { type: "transcode" }>;
+type HlsProfile = TranscodeMode["id"];
+
+const transcodeProfiles = STREAM_MODES.filter(
+  (mode): mode is TranscodeMode => mode.type === "transcode",
+);
 
 type VideoStream = {
   codec: string;
   height: number;
 };
 
-type MovieTechnicalDetails = {
+type MediaTechnicalDetails = {
   video_streams: VideoStream[];
   audio_streams: unknown[];
 };
 
-type HlsProfile = keyof typeof transcodeProfiles;
-
 type HlsCase = {
-  title: string;
   media: E2EMedia;
   profile: HlsProfile;
   minimumSourceHeight?: number;
 };
 
-type HlsEnv = Pick<E2EEnv, "email" | "password"> & {
+type HlsEnv = {
   audioTrack: number;
-  responseTimeoutMs: number;
-  cases: HlsCase[];
+  fourK?: HlsCase;
+  second?: HlsCase;
+  episode?: HlsCase;
 };
-
-const transcodeProfiles = {
-  "2160p_16mbps": { maxHeight: 2160 },
-  "1080p_8mbps": { maxHeight: 1080 },
-  "1080p_6mbps": { maxHeight: 1080 },
-  "1080p_4mbps": { maxHeight: 1080 },
-  "720p_3mbps": { maxHeight: 720 },
-} as const;
 
 const coverArtCodecs = new Set(["mjpeg", "png", "gif", "bmp"]);
 const playbackSessionPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-function positiveIntEnv(name: string, fallback?: number) {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 function profileEnv(name: string, fallback: HlsProfile): HlsProfile {
   const raw = process.env[name];
   if (!raw) return fallback;
-  if (raw in transcodeProfiles) return raw as HlsProfile;
+
+  const profile = transcodeProfiles.find(mode => mode.id === raw);
+  if (profile) return profile.id;
 
   throw new Error(
-    name + " must be one of " + Object.keys(transcodeProfiles).join(", "),
+    `${name} must be one of ${transcodeProfiles.map(mode => mode.id).join(", ")}`,
   );
 }
 
-function readHlsEnv(): HlsEnv | null {
-  const e2eEnv = readE2EEnv();
-  const fourKMovieId = positiveIntEnv("E2E_HLS_4K_MOVIE_ID");
-  const secondMovieId = positiveIntEnv("E2E_HLS_SECOND_MOVIE_ID");
-  const fourKProfile = profileEnv("E2E_HLS_4K_PROFILE", "2160p_16mbps");
-  const secondProfile = profileEnv("E2E_HLS_SECOND_PROFILE", "720p_3mbps");
-  // Optional: a TV episode transcoded through the episode HLS routes.
-  const episodeId = positiveIntEnv("E2E_EPISODE_ID");
-  const episodeProfile = profileEnv("E2E_HLS_EPISODE_PROFILE", "720p_3mbps");
+function profileMaxHeight(profile: HlsProfile) {
+  return transcodeProfiles.find(mode => mode.id === profile)!.maxHeight;
+}
 
-  // The two movie cases come as a pair (the second exists to prove profile
-  // and movie isolation against the first); the episode case stands alone so
-  // a TV-only library can run it.
-  const movieCases: HlsCase[] =
-    fourKMovieId && secondMovieId
-      ? [
-          {
-            title: "4K movie transcodes at 2160p",
-            media: { kind: "movie", id: fourKMovieId },
-            profile: fourKProfile,
-            minimumSourceHeight: 2160,
-          },
-          {
-            title: "second movie transcodes with a different profile",
-            media: { kind: "movie", id: secondMovieId },
-            profile: secondProfile,
-          },
-        ]
-      : [];
-  const episodeCases: HlsCase[] = episodeId
-    ? [
-        {
-          title: "TV episode transcodes through the episode routes",
-          media: { kind: "episode", id: episodeId },
-          profile: episodeProfile,
-        },
-      ]
-    : [];
-  const cases = [...movieCases, ...episodeCases];
-
-  if (cases.length === 0) {
-    return null;
-  }
+function readHlsEnv(): HlsEnv {
+  const fourKMovieId = intEnv("E2E_HLS_4K_MOVIE_ID");
+  const secondMovieId = intEnv("E2E_HLS_SECOND_MOVIE_ID");
+  const episodeId = intEnv("E2E_EPISODE_ID");
+  const movies = fourKMovieId && secondMovieId ? { fourKMovieId, secondMovieId } : undefined;
 
   return {
-    email: e2eEnv.email,
-    password: e2eEnv.password,
-    audioTrack: positiveIntEnv("E2E_HLS_AUDIO_TRACK", 0) ?? 0,
-    responseTimeoutMs:
-      positiveIntEnv("E2E_HLS_RESPONSE_TIMEOUT_MS", 240_000) ?? 240_000,
-    cases,
+    audioTrack: intEnv("E2E_HLS_AUDIO_TRACK", 0, 0),
+    fourK: movies && {
+      media: { kind: "movie", id: movies.fourKMovieId },
+      profile: profileEnv("E2E_HLS_4K_PROFILE", "2160p_16mbps"),
+      minimumSourceHeight: 2160,
+    },
+    second: movies && {
+      media: { kind: "movie", id: movies.secondMovieId },
+      profile: profileEnv("E2E_HLS_SECOND_PROFILE", "720p_3mbps"),
+    },
+    episode: episodeId
+      ? {
+          media: { kind: "episode", id: episodeId },
+          profile: profileEnv("E2E_HLS_EPISODE_PROFILE", "720p_3mbps"),
+        }
+      : undefined,
   };
 }
 
@@ -177,12 +160,12 @@ function primaryVideoStream(streams: VideoStream[]) {
   );
 }
 
-async function expectMovieSupportsCase(
+async function expectMediaSupportsCase(
   page: Page,
   hlsCase: HlsCase,
   audioTrack: number,
 ) {
-  const details = await fetchTechnicalDetails<MovieTechnicalDetails>(
+  const details = await fetchTechnicalDetails<MediaTechnicalDetails>(
     page,
     hlsCase.media,
   );
@@ -197,7 +180,7 @@ async function expectMovieSupportsCase(
   expect(
     primaryVideo.height,
     `${label} source height must support ${hlsCase.profile}`,
-  ).toBeGreaterThanOrEqual(transcodeProfiles[hlsCase.profile].maxHeight);
+  ).toBeGreaterThanOrEqual(profileMaxHeight(hlsCase.profile));
 
   if (hlsCase.minimumSourceHeight) {
     expect(
@@ -205,6 +188,27 @@ async function expectMovieSupportsCase(
       `${label} must be a 4K source`,
     ).toBeGreaterThanOrEqual(hlsCase.minimumSourceHeight);
   }
+}
+
+/**
+ * The successful response for one asset of the session, whether it already
+ * arrived or is still to come. hls.js fetches the init segment and the first
+ * media segment as soon as the manifest loads, before Play is pressed, so a
+ * wait registered after the click would miss them.
+ */
+function waitForHlsAsset(
+  page: Page,
+  responses: Response[],
+  assetPath: string,
+  filename: string,
+  timeout: number,
+) {
+  const matches = (response: Response) =>
+    responsePath(response) === `${assetPath}${filename}` &&
+    isSuccessfulHlsAssetResponse(response);
+
+  const seen = responses.find(matches);
+  return seen ? Promise.resolve(seen) : page.waitForResponse(matches, { timeout });
 }
 
 async function waitForUniqueSegments(
@@ -244,124 +248,110 @@ async function waitForUniqueSegments(
 }
 
 const hlsEnv = readHlsEnv();
-const hlsCases: HlsCase[] = hlsEnv?.cases ?? [
-  {
-    title: "4K movie transcodes at 2160p",
-    media: { kind: "movie", id: 1 },
-    profile: "2160p_16mbps",
-    minimumSourceHeight: 2160,
-  },
-  {
-    title: "second movie transcodes with a different profile",
-    media: { kind: "movie", id: 2 },
-    profile: "720p_3mbps",
-  },
-];
+const timeouts = realMediaTimeouts();
 
-test.describe.configure({ mode: "serial" });
+async function runHlsCase(page: Page, hlsCase: HlsCase) {
+  const { audioTrack } = hlsEnv;
+  const assetPath = hlsAssetPath(hlsCase.media, hlsCase.profile);
+  const hlsResponses: Response[] = [];
+  page.on("response", response => {
+    if (responsePath(response).startsWith(assetPath)) {
+      hlsResponses.push(response);
+    }
+  });
+
+  await expectMediaSupportsCase(page, hlsCase, audioTrack);
+  await clearWatchProgress(page, hlsCase.media);
+  const playPath = await mediaPlayPath(page, hlsCase.media);
+
+  await page.goto(
+    `${playPath}?mode=${hlsCase.profile}&audio_track=${audioTrack}&start=0`,
+  );
+  await expect(page.locator("video")).toBeVisible({ timeout: timeouts.response });
+
+  const manifestResponse = await waitForHlsAsset(
+    page,
+    hlsResponses,
+    assetPath,
+    "playlist.m3u8",
+    timeouts.response,
+  );
+  expect(manifestResponse.status()).toBe(200);
+  expect(manifestResponse.headers()["content-type"]).toContain(
+    "application/vnd.apple.mpegurl",
+  );
+
+  const playbackSession = new URL(manifestResponse.url()).searchParams.get(
+    "playback_session",
+  );
+  expect(playbackSession).toMatch(playbackSessionPattern);
+
+  // Every asset of the session carries the same query, from the manifest on.
+  const query = { playbackSession: playbackSession!, audioTrack, start: "0" };
+  assertHlsQuery(manifestResponse, query);
+
+  await expect(playButton(page)).toBeVisible({ timeout: timeouts.response });
+  await playButton(page).click();
+
+  const initResponse = await waitForHlsAsset(
+    page,
+    hlsResponses,
+    assetPath,
+    "init.mp4",
+    timeouts.response,
+  );
+  assertSuccessfulHlsAssetResponse(initResponse);
+  expect(initResponse.headers()["content-type"]).toContain("video/mp4");
+  assertHlsQuery(initResponse, query);
+
+  const segmentResponses = await waitForUniqueSegments(
+    page,
+    hlsResponses,
+    assetPath,
+    2,
+    timeouts.response,
+  );
+  for (const response of segmentResponses) {
+    assertSuccessfulHlsAssetResponse(response);
+    expect(response.headers()["content-type"]).toContain("video/mp4");
+    assertHlsQuery(response, query);
+  }
+
+  await expectVideoAdvances(page, timeouts.response);
+  await expect(page.getByText(/playback failed|stream error/i)).toHaveCount(0);
+}
 
 test.describe("HLS transcoding playback", () => {
-  test.skip(
-    !hlsEnv,
-    "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID, or E2E_EPISODE_ID, to run HLS e2e tests.",
-  );
+  requireRealInstance("HLS transcoding needs real media and ffmpeg");
+  test.describe.configure({ timeout: timeouts.test });
+
   test.beforeEach(async ({ page }) => {
-    await loginWithCredentials(page, hlsEnv!);
+    await loginPageViaApi(page);
   });
 
-  test.beforeAll(() => {
-    const movieCases = hlsEnv!.cases.filter(hlsCase => hlsCase.media.kind === "movie");
-    if (movieCases.length < 2) return;
+  const movieCasesReason =
+    "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID to run the HLS movie cases.";
+
+  test("4K movie transcodes through the configured profile", async ({ page }) => {
+    test.skip(!hlsEnv.fourK, movieCasesReason);
+    await runHlsCase(page, hlsEnv.fourK!);
+  });
+
+  test("second movie transcodes with a different profile", async ({ page }) => {
+    test.skip(!hlsEnv.second, movieCasesReason);
     expect(
-      movieCases[1].profile,
+      hlsEnv.second!.profile,
       "second movie must use a different profile from the 4K case",
-    ).not.toBe(movieCases[0].profile);
+    ).not.toBe(hlsEnv.fourK!.profile);
     expect(
-      movieCases[1].media.id,
+      hlsEnv.second!.media.id,
       "second movie must use a different movie from the 4K case",
-    ).not.toBe(movieCases[0].media.id);
+    ).not.toBe(hlsEnv.fourK!.media.id);
+    await runHlsCase(page, hlsEnv.second!);
   });
 
-  for (const hlsCase of hlsCases) {
-    test(hlsCase.title, async ({ page }) => {
-      const assetPath = hlsAssetPath(hlsCase.media, hlsCase.profile);
-      const hlsResponses: Response[] = [];
-      page.on("response", response => {
-        if (responsePath(response).startsWith(assetPath)) {
-          hlsResponses.push(response);
-        }
-      });
-
-      await expectMovieSupportsCase(page, hlsCase, hlsEnv!.audioTrack);
-      await clearWatchProgress(page, hlsCase.media);
-      const playPath = await mediaPlayPath(page, hlsCase.media);
-
-      const manifestResponsePromise = page.waitForResponse(
-        response =>
-          responsePath(response) === `${assetPath}playlist.m3u8` &&
-          response.status() === 200,
-        { timeout: hlsEnv!.responseTimeoutMs },
-      );
-
-      await page.goto(
-        `${playPath}?mode=${hlsCase.profile}&audio_track=${hlsEnv!.audioTrack}&start=0`,
-      );
-      await expect(page.locator("video")).toBeVisible({
-        timeout: hlsEnv!.responseTimeoutMs,
-      });
-
-      const manifestResponse = await manifestResponsePromise;
-      expect(manifestResponse.headers()["content-type"]).toContain(
-        "application/vnd.apple.mpegurl",
-      );
-
-      const manifestUrl = new URL(manifestResponse.url());
-      const playbackSession = manifestUrl.searchParams.get("playback_session");
-      expect(playbackSession).toMatch(playbackSessionPattern);
-      expect(manifestUrl.searchParams.get("start")).toBe("0");
-      expect(manifestUrl.searchParams.get("audio_track")).toBe(
-        String(hlsEnv!.audioTrack),
-      );
-
-      const query = {
-        playbackSession: playbackSession!,
-        audioTrack: hlsEnv!.audioTrack,
-        start: "0",
-      };
-
-      const playButton = page.getByRole("button", { name: "Play (Space or K)" });
-      await expect(playButton).toBeVisible({
-        timeout: hlsEnv!.responseTimeoutMs,
-      });
-      await playButton.click();
-
-      const initResponse = await page.waitForResponse(
-        response =>
-          responsePath(response) === `${assetPath}init.mp4` &&
-          isSuccessfulHlsAssetResponse(response),
-        { timeout: hlsEnv!.responseTimeoutMs },
-      );
-      assertSuccessfulHlsAssetResponse(initResponse);
-      expect(initResponse.headers()["content-type"]).toContain("video/mp4");
-      assertHlsQuery(initResponse, query);
-
-      const segmentResponses = await waitForUniqueSegments(
-        page,
-        hlsResponses,
-        assetPath,
-        2,
-        hlsEnv!.responseTimeoutMs,
-      );
-      for (const response of segmentResponses) {
-        assertSuccessfulHlsAssetResponse(response);
-        expect(response.headers()["content-type"]).toContain("video/mp4");
-        assertHlsQuery(response, query);
-      }
-
-      await expectVideoAdvances(page, hlsEnv!.responseTimeoutMs);
-      await expect(page.getByText(/playback failed|stream error/i)).toHaveCount(
-        0,
-      );
-    });
-  }
+  test("TV episode transcodes through the episode routes", async ({ page }) => {
+    test.skip(!hlsEnv.episode, "Set E2E_EPISODE_ID to run the episode HLS case.");
+    await runHlsCase(page, hlsEnv.episode!);
+  });
 });

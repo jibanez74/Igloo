@@ -1,35 +1,27 @@
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   expect,
   test,
-  type APIResponse,
-  type Locator,
   type Page,
 } from "@playwright/test";
 
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import type { SettingsType } from "../src/types";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
+  fulfillIdleScanStatus,
+  fulfillJSON,
   readJSON,
 } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
-
-type LibrarySettings = {
-  movies_dir: string | null;
-  shows_dir: string | null;
-  music_dir: string | null;
-};
+import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
 
 const responsiveViewports = [
   { name: "small phone", width: 360, height: 800 },
-  { name: "phone", width: 390, height: 844 },
-  { name: "tablet portrait", width: 768, height: 1024 },
-  { name: "desktop", width: 1440, height: 900 },
+  { name: "phone", ...VIEWPORTS.phone },
+  { name: "tablet portrait", ...VIEWPORTS.tablet },
+  { name: "desktop", ...VIEWPORTS.desktop },
 ];
 
 const requiredControlNames = [
@@ -40,92 +32,33 @@ const requiredControlNames = [
   "Clear TV shows library path",
   "Clear music library path",
   "Scan movies library",
+  "Scan TV shows library",
   "Scan music library",
   "Reset library paths",
   "Save library paths",
 ];
 
-async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
-  expect(response.status()).toBe(expectedStatus);
+async function fetchLibrarySettings(page: Page) {
+  const response = await page.context().request.get("/api/settings", {
+    failOnStatusCode: false,
+  });
+  expect(response.status()).toBe(200);
 
-  const body = await readJSON<T>(response);
+  const body = await readJSON<SettingsType>(response);
   expect(body.error, body.message).toBe(false);
   expect(body.data).toBeTruthy();
   return body.data!;
 }
 
-async function fetchLibrarySettings(page: Page, env: E2EEnv) {
-  const response = await page.context().request.get(apiURL(env, "/api/settings"), {
+async function restoreLibrarySettings(page: Page, settings: SettingsType) {
+  const response = await page.context().request.put("/api/settings/libraries", {
+    data: settings,
     failOnStatusCode: false,
   });
-
-  return expectAPIData<LibrarySettings>(response, 200);
-}
-
-async function restoreLibrarySettings(
-  page: Page,
-  env: E2EEnv,
-  settings: LibrarySettings,
-) {
-  const response = await page.context().request.put(
-    apiURL(env, "/api/settings/libraries"),
-    {
-      data: settings,
-      failOnStatusCode: false,
-    },
-  );
   expect(response.status()).toBe(200);
 
-  const body = await readJSON<{ settings: LibrarySettings }>(response);
+  const body = await readJSON<unknown>(response);
   expect(body.error, body.message).toBe(false);
-}
-
-async function expectDescriptionIncludes(
-  page: Page,
-  locator: Locator,
-  expectedText: string,
-) {
-  const describedBy = await locator.getAttribute("aria-describedby");
-  expect(describedBy).toBeTruthy();
-
-  const descriptionText = await page.evaluate(ids => {
-    return ids
-      .split(/\s+/)
-      .map(id => document.getElementById(id)?.textContent?.trim() ?? "")
-      .filter(Boolean)
-      .join(" ");
-  }, describedBy ?? "");
-
-  expect(descriptionText).toContain(expectedText);
-}
-
-async function activeElementName(page: Page) {
-  return page.evaluate(() => {
-    const active = document.activeElement;
-    if (!(active instanceof HTMLElement)) {
-      return null;
-    }
-
-    const ariaLabel = active.getAttribute("aria-label");
-    if (ariaLabel) {
-      return ariaLabel;
-    }
-
-    if (active.id) {
-      const label = document.querySelector(
-        `label[for="${CSS.escape(active.id)}"]`,
-      );
-      if (label?.textContent) {
-        return label.textContent.trim();
-      }
-    }
-
-    return (
-      active.textContent?.trim() ||
-      active.getAttribute("name") ||
-      active.tagName
-    );
-  });
 }
 
 async function auditResponsiveLibrariesPage(page: Page) {
@@ -135,6 +68,7 @@ async function auditResponsiveLibrariesPage(page: Page) {
       height: viewport.height,
     });
     await expect(page.getByRole("tabpanel", { name: "Libraries" })).toBeVisible();
+    await expectPageHasNoHorizontalScroll(page);
 
     const audit = await page.evaluate(requiredNames => {
       const isVisible = (element: Element) => {
@@ -207,18 +141,12 @@ async function auditResponsiveLibrariesPage(page: Page) {
         }));
 
       return {
-        viewportWidth: window.innerWidth,
-        scrollWidth: document.documentElement.scrollWidth,
         missing,
         unlabeled,
         overflowX,
       };
     }, requiredControlNames);
 
-    expect(
-      audit.scrollWidth,
-      `${viewport.name} should not create horizontal page overflow`,
-    ).toBeLessThanOrEqual(audit.viewportWidth + 1);
     expect(audit.missing, `${viewport.name} missing controls`).toEqual([]);
     expect(audit.unlabeled, `${viewport.name} unlabeled controls`).toEqual([]);
     expect(audit.overflowX, `${viewport.name} overflow elements`).toEqual([]);
@@ -229,31 +157,17 @@ test.describe("Libraries settings", () => {
   test("manages library paths accessibly without console noise", async ({
     page,
   }) => {
-    const env = readE2EEnv();
-    const tempRoot = await mkdtemp(join(tmpdir(), "igloo-libraries-settings-"));
-    const paths = {
-      movies: join(tempRoot, "movies"),
-      shows: join(tempRoot, "shows"),
-      music: join(tempRoot, "music"),
-    };
-    await Promise.all(
-      Object.values(paths).map(path => mkdir(path, { recursive: true })),
-    );
-
-    await loginPageViaApi(page, env);
-    const baseline = await fetchLibrarySettings(page, env);
+    await loginPageViaApi(page);
+    const baseline = await fetchLibrarySettings(page);
     const tracker = trackBrowserIssues(page);
 
     let movieScanRequests = 0;
     await page.route("**/api/settings/scan/**", async route => {
       const url = new URL(route.request().url());
-      if (route.request().method() === "GET") {
-        const idle = url.pathname === "/api/settings/scan/music"
-          ? musicScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
-          : url.pathname === "/api/settings/scan/shows"
-            ? showScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 })
-            : movieScanStatus({ run_id: "", state: "idle", phase: "idle", total: 0 });
-        await route.fulfill({ json: { error: false, data: idle } });
+      if (
+        route.request().method() === "GET" &&
+        (await fulfillIdleScanStatus(route, url.pathname))
+      ) {
         return;
       }
       if (url.pathname === "/api/settings/scan/movies") {
@@ -261,33 +175,37 @@ test.describe("Libraries settings", () => {
       }
 
       if (url.pathname === "/api/settings/scan/movies" && movieScanRequests === 1) {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: true,
-            message: "Failed to start movies scan.",
-          }),
+        await fulfillJSON(route, {
+          error: true,
+          message: "Failed to start movies scan.",
         });
         return;
       }
 
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          error: false,
-          message: "Library scan started",
-        }),
+      await fulfillJSON(route, {
+        error: false,
+        message: "Library scan started",
       });
     });
 
+    let tempRoot: string | undefined;
+
     try {
-      await page.goto(apiURL(env, "/settings/libraries"), {
-        waitUntil: "networkidle",
-      });
+      tempRoot = await mkdtemp(join(tmpdir(), "igloo-libraries-settings-"));
+      const paths = {
+        movies: join(tempRoot, "movies"),
+        shows: join(tempRoot, "shows"),
+        music: join(tempRoot, "music"),
+      };
+      await Promise.all(
+        Object.values(paths).map(path => mkdir(path, { recursive: true })),
+      );
+
+      await page.goto("/settings/libraries");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-      await expect(page.getByText("Library Management")).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Library Management" }),
+      ).toBeVisible();
 
       const moviesInput = page.getByRole("textbox", {
         name: "Movies library path",
@@ -300,10 +218,8 @@ test.describe("Libraries settings", () => {
       });
 
       for (const input of [moviesInput, showsInput, musicInput]) {
-        await expectDescriptionIncludes(
-          page,
-          input,
-          "directory path readable by the Igloo server",
+        await expect(input).toHaveAccessibleDescription(
+          /directory path readable by the Igloo server/,
         );
       }
 
@@ -321,9 +237,9 @@ test.describe("Libraries settings", () => {
 
       await moviesInput.focus();
       await page.keyboard.press("Tab");
-      await expect.poll(() => activeElementName(page)).toBe(
-        "Clear movies library path",
-      );
+      await expect(
+        page.getByRole("button", { name: "Clear movies library path" }),
+      ).toBeFocused();
 
       const saveResponsePromise = page.waitForResponse(response => {
         const url = new URL(response.url());
@@ -335,9 +251,7 @@ test.describe("Libraries settings", () => {
       await page.getByRole("button", { name: "Save library paths" }).click();
       const saveResponse = await saveResponsePromise;
       expect(saveResponse.status()).toBe(200);
-      const saveBody = await readJSON<{ settings: LibrarySettings }>(
-        saveResponse,
-      );
+      const saveBody = await readJSON<unknown>(saveResponse);
       expect(saveBody.error, saveBody.message).toBe(false);
 
       await expect(
@@ -346,7 +260,7 @@ test.describe("Libraries settings", () => {
         }),
       ).toBeVisible();
 
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload();
       await expect(moviesInput).toHaveValue(paths.movies);
       await expect(showsInput).toHaveValue(paths.shows);
       await expect(musicInput).toHaveValue(paths.music);
@@ -426,7 +340,7 @@ test.describe("Libraries settings", () => {
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
-          return url.pathname === "/api/settings/scan/music";
+          return url.pathname === "/api/settings/scan/music" && response.request().method() === "POST";
         }),
         page.getByRole("button", { name: "Scan music library" }).click(),
       ]);
@@ -436,17 +350,15 @@ test.describe("Libraries settings", () => {
         }),
       ).toBeVisible();
 
-      // The TV shows scan trigger is reachable by keyboard from its path input,
-      // the way the recovered scanner branch asserted before TV scanning shipped.
+      // The TV shows scan trigger is reachable by keyboard from its path input.
       const showsScanButton = page.getByRole("button", {
         name: "Scan TV shows library",
       });
       await showsInput.focus();
       await page.keyboard.press("Tab");
-      await expect
-        .poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label")
-          ?? document.activeElement?.textContent?.trim()))
-        .toBe("Clear TV shows library path");
+      await expect(
+        page.getByRole("button", { name: "Clear TV shows library path" }),
+      ).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(showsScanButton).toBeFocused();
       await Promise.all([
@@ -467,8 +379,10 @@ test.describe("Libraries settings", () => {
       await auditResponsiveLibrariesPage(page);
     } finally {
       await page.unroute("**/api/settings/scan/**").catch(() => undefined);
-      await restoreLibrarySettings(page, env, baseline);
-      await rm(tempRoot, { recursive: true, force: true });
+      await restoreLibrarySettings(page, baseline);
+      if (tempRoot) {
+        await rm(tempRoot, { recursive: true, force: true });
+      }
     }
 
     tracker.assertClean();

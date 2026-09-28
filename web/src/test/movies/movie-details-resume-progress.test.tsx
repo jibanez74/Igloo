@@ -71,6 +71,15 @@ describe("MovieDetailsResumeProgress", () => {
     );
   });
 
+  it("fills the bar to the share already watched", async () => {
+    renderStrip(IN_PROGRESS);
+
+    const caption = (await screen.findByText("1 hr 35 min left")).closest("p");
+    const track = caption?.previousElementSibling;
+    expect(track).toHaveAttribute("aria-hidden", "true");
+    expect((track?.firstElementChild as HTMLElement).style.width).toBe("25%");
+  });
+
   it("renders nothing once the movie is marked watched", async () => {
     await renderStrip({ ...IN_PROGRESS, watched: true });
 
@@ -79,6 +88,14 @@ describe("MovieDetailsResumeProgress", () => {
 
   it("renders nothing for progress too short to resume", async () => {
     await renderStrip({ ...IN_PROGRESS, progress_sec: 5 });
+
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument();
+  });
+
+  // Past the completion threshold the movie counts as finished even before
+  // the watched flag is saved, so there is nothing left to resume.
+  it("renders nothing once the position passes the completion threshold", async () => {
+    await renderStrip({ ...IN_PROGRESS, progress_sec: 980, duration_sec: 1000 });
 
     expect(screen.queryByText(/left$/)).not.toBeInTheDocument();
   });

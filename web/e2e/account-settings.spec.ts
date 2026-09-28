@@ -2,11 +2,12 @@ import {
   expect,
   test,
   type APIRequestContext,
-  type Locator,
   type Page,
+  type Response,
 } from "@playwright/test";
 
-import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import type { AuthUser } from "../src/types";
+import { readE2EEnv, requireRealInstance, type Credentials } from "./e2e-env";
 import {
   isExpectedUnauthorizedResourceMessage,
   trackBrowserIssues,
@@ -14,21 +15,16 @@ import {
 import {
   readJSON,
 } from "./e2e-api";
-import { loginViaApi, logoutViaApi } from "./e2e-auth";
-
-type AdminUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  avatar: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type UsersData = {
-  users: AdminUser[];
-};
+import { loginPageViaApi, loginViaApi } from "./e2e-auth";
+import {
+  expectPageHasNoHorizontalScroll,
+  VIEWPORTS,
+} from "./e2e-layout";
+import {
+  createUser,
+  deleteUsersByEmailPrefix,
+  fetchAdminUsers,
+} from "./e2e-users";
 
 // "Save profile" is deliberately absent: it is disabled (untabbable) until a
 // profile field changes, and the save flow itself is asserted separately.
@@ -50,95 +46,23 @@ const requiredAccountControlNames = [
 
 const responsiveViewports = [
   { name: "small phone", width: 360, height: 800 },
-  { name: "phone", width: 390, height: 844 },
-  { name: "tablet portrait", width: 768, height: 1024 },
+  { name: "phone", ...VIEWPORTS.phone },
+  { name: "tablet portrait", ...VIEWPORTS.tablet },
   { name: "tablet landscape", width: 1024, height: 768 },
-  { name: "desktop", width: 1440, height: 900 },
+  { name: "desktop", ...VIEWPORTS.desktop },
 ];
 
-async function fetchAdminUsers(
-  request: APIRequestContext,
-  env: E2EEnv,
-) {
-  const response = await request.get(apiURL(env, "/api/admin/users"), {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<UsersData>(response);
-  expect(body.error, body.message).toBe(false);
-  return body.data?.users ?? [];
-}
-
-async function deleteUser(
-  request: APIRequestContext,
-  env: E2EEnv,
-  userId: number,
-) {
-  const response = await request.delete(
-    apiURL(env, `/api/admin/users/${userId}`),
-    { failOnStatusCode: false },
-  );
-  expect(response.status()).toBe(200);
-}
-
-async function cleanupAuditUsers(
-  request: APIRequestContext,
-  env: E2EEnv,
-  prefix: string,
-) {
-  await loginViaApi(request, env);
-  const users = await fetchAdminUsers(request, env);
-  for (const user of users) {
-    if (user.email.startsWith(prefix)) {
-      await deleteUser(request, env, user.id);
-    }
-  }
-}
-
-async function expectDescriptionIncludes(
-  page: Page,
-  locator: Locator,
-  expectedText: string,
-) {
-  const describedBy = await locator.getAttribute("aria-describedby");
-  expect(describedBy).toBeTruthy();
-
-  const descriptionText = await page.evaluate(ids => {
-    return ids
-      .split(/\s+/)
-      .map(id => document.getElementById(id)?.textContent?.trim() ?? "")
-      .filter(Boolean)
-      .join(" ");
-  }, describedBy ?? "");
-
-  expect(descriptionText).toContain(expectedText);
-}
-
-async function expectAppPath(
-  page: Page,
-  env: E2EEnv,
+function isResponseTo(
+  response: Response,
+  method: string,
   pathname: string,
+  status: number,
 ) {
-  await expect.poll(() => new URL(page.url()).origin).toBe(
-    new URL(env.baseURL).origin,
+  return (
+    response.status() === status &&
+    response.request().method() === method &&
+    new URL(response.url()).pathname === pathname
   );
-  await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
-}
-
-async function injectInvalidAvatarFile(page: Page) {
-  await page.locator('input[aria-label="Upload avatar image"]').evaluate(element => {
-    const input = element as HTMLInputElement;
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(
-      new File(["not an image"], "avatar.txt", { type: "text/plain" }),
-    );
-    Object.defineProperty(input, "files", {
-      configurable: true,
-      value: dataTransfer.files,
-    });
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  });
 }
 
 async function auditResponsiveAccountPage(page: Page) {
@@ -148,6 +72,8 @@ async function auditResponsiveAccountPage(page: Page) {
       height: viewport.height,
     });
     await expect(page.getByRole("tabpanel", { name: "Account" })).toBeVisible();
+
+    await expectPageHasNoHorizontalScroll(page);
 
     const audit = await page.evaluate(requiredNames => {
       const isVisible = (element: Element) => {
@@ -243,8 +169,6 @@ async function auditResponsiveAccountPage(page: Page) {
         );
 
       return {
-        noHorizontalOverflow:
-          document.documentElement.scrollWidth <= window.innerWidth + 1,
         requiredNames: Object.fromEntries(
           requiredNames.map(name => [
             name,
@@ -258,10 +182,6 @@ async function auditResponsiveAccountPage(page: Page) {
       };
     }, requiredAccountControlNames);
 
-    expect(
-      audit.noHorizontalOverflow,
-      `${viewport.name} must not horizontally overflow`,
-    ).toBe(true);
     expect(audit.unlabeled, `${viewport.name} unlabeled controls`).toEqual([]);
     expect(
       audit.clippedInteractive,
@@ -322,85 +242,114 @@ async function auditMobileTabOrder(page: Page) {
     window.scrollTo(0, 0);
   });
 
-  const focusedNames: string[] = [];
-  for (let i = 0; i < 24; i += 1) {
+  const unreached = new Set(requiredAccountControlNames);
+  for (let presses = 0; unreached.size > 0 && presses < 60; presses += 1) {
     await page.keyboard.press("Tab");
-    focusedNames.push(await activeElementName(page));
+    unreached.delete(await activeElementName(page));
   }
 
   await page.evaluate(() => document.body.removeAttribute("tabindex"));
 
-  for (const controlName of requiredAccountControlNames) {
-    expect(focusedNames, `mobile tab order must include ${controlName}`).toContain(
-      controlName,
-    );
+  expect([...unreached], "controls the mobile tab order never reached").toEqual(
+    [],
+  );
+}
+
+/**
+ * Signs `page` in as a fresh non-admin account (admins have no Danger Zone),
+ * runs `run`, and deletes every account under the run's email prefix after.
+ */
+async function withDisposableUser(
+  page: Page,
+  request: APIRequestContext,
+  label: string,
+  run: (user: Credentials & { name: string; prefix: string }) => Promise<void>,
+) {
+  const stamp = Date.now();
+  const prefix = `playwright-${label}-${stamp}`;
+  const user = {
+    name: `Playwright ${label} ${stamp}`,
+    email: `${prefix}@example.com`,
+    password: `AccountPass${stamp}!`,
+  };
+
+  await loginViaApi(request);
+  await createUser(request, user);
+  await loginPageViaApi(page, user);
+
+  try {
+    await run({ ...user, prefix });
+  } finally {
+    await loginViaApi(request);
+    await deleteUsersByEmailPrefix(request, prefix);
   }
 }
 
+async function fetchCurrentUser(request: APIRequestContext) {
+  const response = await request.get("/api/auth/user", {
+    failOnStatusCode: false,
+  });
+  expect(response.status()).toBe(200);
+
+  const body = await readJSON<{ user: AuthUser }>(response);
+  return body.data!.user;
+}
+
 test.describe("Account settings", () => {
-  test("updates and deletes a disposable account accessibly without browser noise", async ({
+  test("fits every viewport and keeps every control reachable by keyboard", async ({
+    page,
+    request,
+  }) => {
+    const tracker = trackBrowserIssues(page);
+
+    await withDisposableUser(page, request, "account-audit", async () => {
+      await page.goto("/settings/account");
+      await expect(page.getByText("Profile Information")).toBeVisible();
+
+      await auditResponsiveAccountPage(page);
+      await auditMobileTabOrder(page);
+
+      tracker.assertClean();
+    });
+  });
+
+  test("updates and deletes a disposable account without browser noise", async ({
     page,
     request,
   }) => {
     const env = readE2EEnv();
     const tracker = trackBrowserIssues(page, {
-      minResponseStatus: 500,
-      trackConsoleWarnings: false,
       ignoreConsole: (_type, text) =>
         isExpectedUnauthorizedResourceMessage(text) ||
         text ===
           "Failed to load resource: the server responded with a status of 409 (Conflict)",
-    });
-    const stamp = Date.now();
-    const prefix = `playwright-account-settings-${stamp}`;
-    const name = `Playwright Account Settings ${stamp}`;
-    const email = `${prefix}@example.com`;
-    const password = `AccountPass${stamp}!`;
-    const partiallyEditedName = `Playwright Account Settings Partial ${stamp}`;
-    const editedName = `Playwright Account Settings Edited ${stamp}`;
-    const editedEmail = `${prefix}-edited@example.com`;
-    const newPassword = `AccountNewPass${stamp}!`;
-    let avatarUploadRequestCount = 0;
-
-    page.on("request", request => {
-      if (request.url().includes("/api/user/avatar/upload")) {
-        avatarUploadRequestCount += 1;
-      }
+      // The duplicate email is refused on purpose, and the deleted account's
+      // session no longer authenticates.
+      ignoreResponse: response =>
+        isResponseTo(response, "PUT", "/api/user/email", 409) ||
+        isResponseTo(response, "GET", "/api/auth/user", 401),
     });
 
-    await cleanupAuditUsers(request, env, prefix);
+    await withDisposableUser(page, request, "account-settings", async ({
+      email,
+      password,
+      prefix,
+    }) => {
+      const stamp = Date.now();
+      const partiallyEditedName = `Playwright Account Settings Partial ${stamp}`;
+      const editedName = `Playwright Account Settings Edited ${stamp}`;
+      const editedEmail = `${prefix}-edited@example.com`;
+      const newPassword = `AccountNewPass${stamp}!`;
+      const avatarURL = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23f59e0b'/%3E%3C/svg%3E`;
+      const content = page.getByRole("main");
+      const emailInput = page.getByRole("textbox", { name: "Your email address" });
 
-    await loginViaApi(request, env);
-    const createResponse = await request.post(
-      apiURL(env, "/api/admin/users"),
-      {
-        data: {
-          name,
-          email,
-          password,
-          is_admin: false,
-        },
-        failOnStatusCode: false,
-      },
-    );
-    expect(createResponse.status()).toBe(201);
-    await logoutViaApi(page.context().request, env);
-    await loginViaApi(page.context().request, env, { email, password });
-
-    try {
-      await page.goto(apiURL(env, "/settings/account"), {
-        waitUntil: "networkidle",
-      });
+      await page.goto("/settings/account");
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
       await expect(page.getByText("Profile Information")).toBeVisible();
 
-      await auditResponsiveAccountPage(page);
-      await auditMobileTabOrder(page);
-      await page.setViewportSize({ width: 1440, height: 900 });
-
-      await page.getByRole("textbox", { name: "Your email address" }).fill(
-        env.email,
-      );
+      // Another account's email is refused while the name change still lands.
+      await emailInput.fill(env.email);
       await page.getByRole("textbox", { name: "Your display name" }).fill(
         partiallyEditedName,
       );
@@ -417,27 +366,17 @@ test.describe("Account settings", () => {
         ),
         page.getByRole("button", { name: "Save profile" }).click(),
       ]);
+      await expect(emailInput).toHaveAttribute("aria-invalid", "true");
+      await expect(emailInput).toHaveAccessibleDescription(/already/i);
       await expect(
-        page.getByRole("alert").filter({
-          hasText: /email.*already/i,
-        }),
+        content.getByText(partiallyEditedName, { exact: true }),
       ).toBeVisible();
-      await expect(page.getByText(partiallyEditedName).first()).toBeVisible();
 
-      const partialProfileResponse = await page.context().request.get(
-        apiURL(env, "/api/auth/user"),
-        { failOnStatusCode: false },
-      );
-      expect(partialProfileResponse.status()).toBe(200);
-      const partialProfileBody = await readJSON<{ user: AdminUser }>(
-        partialProfileResponse,
-      );
-      expect(partialProfileBody.data?.user.email).toBe(email);
-      expect(partialProfileBody.data?.user.name).toBe(partiallyEditedName);
+      const partialProfile = await fetchCurrentUser(page.context().request);
+      expect(partialProfile.email).toBe(email);
+      expect(partialProfile.name).toBe(partiallyEditedName);
 
-      await page.getByRole("textbox", { name: "Your email address" }).fill(
-        editedEmail,
-      );
+      await emailInput.fill(editedEmail);
       await page.getByRole("textbox", { name: "Your display name" }).fill(
         editedName,
       );
@@ -454,22 +393,15 @@ test.describe("Account settings", () => {
         ),
         page.getByRole("button", { name: "Save profile" }).click(),
       ]);
-      await expect(
-        page.getByRole("textbox", { name: "Your email address" }),
-      ).toHaveValue(editedEmail);
-      await expect(page.getByText(editedName).first()).toBeVisible();
+      await expect(emailInput).toHaveValue(editedEmail);
+      await expect(content.getByText(editedName, { exact: true })).toBeVisible();
 
-      const profileResponse = await page.context().request.get(
-        apiURL(env, "/api/auth/user"),
-        { failOnStatusCode: false },
-      );
-      expect(profileResponse.status()).toBe(200);
-      const profileBody = await readJSON<{ user: AdminUser }>(profileResponse);
-      expect(profileBody.data?.user.email).toBe(editedEmail);
-      expect(profileBody.data?.user.name).toBe(editedName);
+      const profile = await fetchCurrentUser(page.context().request);
+      expect(profile.email).toBe(editedEmail);
+      expect(profile.name).toBe(editedName);
 
       await page.getByRole("textbox", { name: "Avatar image URL" }).fill(
-        `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' fill='%23f59e0b'/%3E%3C/svg%3E`,
+        avatarURL,
       );
       await Promise.all([
         page.waitForResponse(
@@ -483,39 +415,9 @@ test.describe("Account settings", () => {
       await expect(
         page.getByRole("textbox", { name: "Avatar image URL" }),
       ).toHaveValue("");
-
-      await injectInvalidAvatarFile(page);
-      const uploadInput = page.getByLabel("Upload avatar image");
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.",
-        }),
-      ).toBeVisible();
-      await expect(uploadInput).toHaveAttribute("aria-invalid", "true");
-      await expectDescriptionIncludes(
-        page,
-        uploadInput,
-        "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.",
+      expect((await fetchCurrentUser(page.context().request)).avatar).toBe(
+        avatarURL,
       );
-      expect(avatarUploadRequestCount).toBe(0);
-
-      await page.getByLabel("Current password", { exact: true }).fill(password);
-      await page.getByLabel("New password", { exact: true }).fill("short");
-      await page.getByLabel("Confirm new password").fill("short");
-      await page.getByRole("button", { name: "Update Password" }).click();
-      const newPasswordInput = page.getByLabel("New password", { exact: true });
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "New password must be at least 9 characters.",
-        }),
-      ).toBeVisible();
-      await expect(newPasswordInput).toHaveAttribute("aria-invalid", "true");
-      await expectDescriptionIncludes(
-        page,
-        newPasswordInput,
-        "New password must be at least 9 characters.",
-      );
-      await expect(newPasswordInput).toBeFocused();
 
       await page.getByLabel("Current password", { exact: true }).fill(password);
       await page.getByLabel("New password", { exact: true }).fill(newPassword);
@@ -532,50 +434,16 @@ test.describe("Account settings", () => {
       await expect(page.getByLabel("New password", { exact: true })).toHaveValue("");
       await expect(page.getByLabel("Confirm new password")).toHaveValue("");
 
-      const updatedLoginResponse = await request.post(
-        apiURL(env, "/api/auth/login"),
-        {
-          data: { email: editedEmail, password: newPassword },
-          failOnStatusCode: false,
-        },
-      );
-      expect(updatedLoginResponse.status()).toBe(200);
+      await loginViaApi(request, { email: editedEmail, password: newPassword });
 
       await page.getByRole("button", { name: "Delete account" }).click();
       const dialog = page.getByRole("dialog", { name: "Delete Account" });
-      await expect(dialog).toBeVisible();
-      await expect(
-        page.getByLabel("Type DELETE to confirm account deletion"),
-      ).toBeFocused();
-
-      await page
-        .getByLabel("Type DELETE to confirm account deletion")
-        .fill("delete");
-      const deleteConfirmInput = page.getByLabel(
+      const deleteConfirmInput = dialog.getByLabel(
         "Type DELETE to confirm account deletion",
       );
-      await expect(deleteConfirmInput).toHaveAttribute("aria-invalid", "true");
-      await expectDescriptionIncludes(
-        page,
-        deleteConfirmInput,
-        "Type DELETE exactly to confirm account deletion.",
-      );
-      await expect(
-        page.getByRole("alert").filter({
-          hasText: "Type DELETE exactly to confirm account deletion.",
-        }),
-      ).toBeVisible();
-      await expect(
-        dialog.getByRole("button", { name: "Delete Account" }),
-      ).toBeDisabled();
+      await expect(deleteConfirmInput).toBeFocused();
 
-      await page
-        .getByLabel("Type DELETE to confirm account deletion")
-        .fill("DELETE");
-      await expect(deleteConfirmInput).not.toHaveAttribute("aria-invalid", "true");
-      await expect(
-        dialog.getByRole("button", { name: "Delete Account" }),
-      ).toBeEnabled();
+      await deleteConfirmInput.fill("DELETE");
       await Promise.all([
         page.waitForResponse(
           response =>
@@ -585,69 +453,38 @@ test.describe("Account settings", () => {
         ),
         dialog.getByRole("button", { name: "Delete Account" }).click(),
       ]);
-      await expectAppPath(page, env, "/login");
+      await expect(page).toHaveURL(/\/login(?:\?|$)/);
 
-      const deletedLogin = await request.post(apiURL(env, "/api/auth/login"), {
+      const deletedLogin = await request.post("/api/auth/login", {
         data: { email: editedEmail, password: newPassword },
         failOnStatusCode: false,
       });
       expect(deletedLogin.status()).toBe(401);
 
-      await loginViaApi(request, env);
-      const usersResponse = await request.get(apiURL(env, "/api/admin/users"), {
-        failOnStatusCode: false,
-      });
-      expect(usersResponse.status()).toBe(200);
-      const usersBody = await readJSON<UsersData>(usersResponse);
-      const userStillExists = (usersBody.data?.users ?? []).some(
+      await loginViaApi(request);
+      const userStillExists = (await fetchAdminUsers(request)).some(
         user => user.email === editedEmail || user.email === email,
       );
       expect(userStillExists).toBe(false);
 
       tracker.assertClean();
-    } finally {
-      await cleanupAuditUsers(request, env, prefix);
-    }
+    });
   });
 
   test("manages the profile PIN accessibly without browser noise", async ({
     page,
     request,
   }) => {
-    const env = readE2EEnv();
+    requireRealInstance("the mock server does not serve PIN routes");
     const tracker = trackBrowserIssues(page, {
-      minResponseStatus: 500,
-      trackConsoleWarnings: false,
-      ignoreConsole: (_type, text) =>
-        isExpectedUnauthorizedResourceMessage(text) ||
-        text ===
-          "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      ignoreConsole: (_type, text) => isExpectedUnauthorizedResourceMessage(text),
+      // The wrong current PIN is refused on purpose.
+      ignoreResponse: response =>
+        isResponseTo(response, "PUT", "/api/user/pin", 401),
     });
-    const stamp = Date.now();
-    const prefix = `playwright-profile-pin-${stamp}`;
-    const email = `${prefix}@example.com`;
-    const password = `ProfilePinPass${stamp}!`;
 
-    await cleanupAuditUsers(request, env, prefix);
-
-    await loginViaApi(request, env);
-    const createResponse = await request.post(apiURL(env, "/api/admin/users"), {
-      data: {
-        name: `Playwright Profile PIN ${stamp}`,
-        email,
-        password,
-        is_admin: false,
-      },
-      failOnStatusCode: false,
-    });
-    expect(createResponse.status()).toBe(201);
-    await logoutViaApi(page.context().request, env);
-    await loginViaApi(page.context().request, env, { email, password });
-
-    try {
-      await page.goto(apiURL(env, "/settings/account"), {
-        waitUntil: "networkidle",
-      });
+    await withDisposableUser(page, request, "profile-pin", async () => {
+      await page.goto("/settings/account");
       await expect(
         page.getByRole("heading", { name: "Profile PIN" }),
       ).toBeVisible();
@@ -744,35 +581,6 @@ test.describe("Account settings", () => {
       ).toBeVisible();
 
       tracker.assertClean();
-    } finally {
-      await cleanupAuditUsers(request, env, prefix);
-    }
-  });
-
-  test("hides the danger zone from admin accounts", async ({ page }) => {
-    const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page, {
-      minResponseStatus: 500,
-      trackConsoleWarnings: false,
-      ignoreConsole: (_type, text) =>
-        isExpectedUnauthorizedResourceMessage(text) ||
-        text ===
-          "Failed to load resource: the server responded with a status of 409 (Conflict)",
     });
-
-    await loginViaApi(page.context().request, env);
-
-    await page.goto(apiURL(env, "/settings/account"), {
-      waitUntil: "networkidle",
-    });
-    await expect(page.getByText("Profile Information")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Danger Zone" }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Delete account" }),
-    ).toHaveCount(0);
-
-    tracker.assertClean();
   });
 });

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { apiURL, readE2EEnv } from "./e2e-env";
 import { loginPageViaApi } from "./e2e-auth";
+import { trackBrowserIssues } from "./e2e-browser-issues";
+import { requireMockApi } from "./e2e-env";
 
 const BOOTSTRAP_DESCRIPTION =
   "Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library.";
@@ -23,12 +24,17 @@ async function readActiveHeadMetadata(page: Page) {
 test("restores bootstrap metadata on routes without page-specific head tags", async ({
   page,
 }) => {
-  const env = readE2EEnv();
+  // Head tags are client-side only; the mock's direct-play movie keeps the
+  // player from starting a transcode.
+  requireMockApi();
+  const tracker = trackBrowserIssues(page);
 
-  await loginPageViaApi(page, env);
-  await page.goto(apiURL(env, "/movies"), { waitUntil: "networkidle" });
+  await loginPageViaApi(page);
+  await page.route("**/api/movies/*/stream*", () => {
+    // Never fulfilled: the player stays ready without a media error.
+  });
+  await page.goto("/movies");
 
-  await expect(page).toHaveTitle("Movies - Igloo");
   await expect
     .poll(() => readActiveHeadMetadata(page))
     .toEqual({
@@ -36,11 +42,11 @@ test("restores bootstrap metadata on routes without page-specific head tags", as
       title: "Movies - Igloo",
     });
 
-  const playLink = page.getByRole("link", { name: /^Play / }).first();
-  await expect(playLink).toBeAttached();
-  await playLink.evaluate((link: HTMLAnchorElement) => {
-    link.click();
-  });
+  // A client-side navigation: a full load would restore the bootstrap tags
+  // from index.html no matter what the router does.
+  const playLink = page.getByRole("link", { name: /^Play Signal Fire/ });
+  await playLink.hover();
+  await playLink.click();
 
   await expect(page).toHaveURL(/\/movies\/\d+\/play(\?|$)/);
   await expect
@@ -59,4 +65,6 @@ test("restores bootstrap metadata on routes without page-specific head tags", as
       description: SETTINGS_DESCRIPTION,
       title: "Settings - Igloo",
     });
+
+  tracker.assertClean();
 });

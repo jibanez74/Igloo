@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
@@ -121,9 +121,20 @@ function musicianDetailsResponse({
   };
 }
 
+const silentMusician = musicianDetailsResponse({
+  id: 23,
+  name: "The Silent",
+  sortName: "Silent, The",
+  summary: "An artist with nothing scanned yet.",
+  trackIds: [],
+  trackTitles: [],
+});
+silentMusician.albums = [];
+
 function mockMusicianDetailsFetch() {
   const detailsById = new Map<number, MusicianDetailsResponseType>([
     [20, musicianDetailsResponse()],
+    [23, silentMusician],
     [
       21,
       musicianDetailsResponse({
@@ -335,6 +346,60 @@ describe("musician details route accessibility", () => {
       "datetime",
       "PT360S",
     );
+  });
+
+  it("renders the hero copy, stats, Spotify block, sections and back link", async () => {
+    await renderMusicianDetailsRoute();
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "The Band" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("A focused test artist with two tracks."),
+    ).toBeInTheDocument();
+
+    const stats = within(screen.getByRole("list", { name: "Musician statistics" }));
+    expect(stats.getByText("1 album")).toBeInTheDocument();
+    expect(stats.getByText("2 tracks")).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("group", { name: "Spotify popularity 74 out of 100" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("12K")).toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "Discography" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "All Tracks" })).toBeInTheDocument();
+
+    // Track 2 is liked in the mock; track 1 offers to like.
+    expect(
+      await screen.findByRole("button", { name: "Remove Borrowed Light from liked" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add Alabaster to liked" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "Back to Musicians library" }),
+    ).toHaveAttribute("href", "/music?tab=musicians");
+  });
+
+  it("hides the discography, tracks and playback actions for a musician with nothing scanned", async () => {
+    await renderMusicianDetailsRoute("/music/musician/23");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "The Silent" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Discography" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "All Tracks" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Play all/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Shuffle play/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Back to Musicians library" }),
+    ).toBeInTheDocument();
   });
 
   it("marks the currently playing track row with aria-current", async () => {

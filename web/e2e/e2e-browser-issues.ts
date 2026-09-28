@@ -1,6 +1,6 @@
 import { expect, type Page, type Request, type Response } from "@playwright/test";
 
-export function isIgnorableFailedRequest(request: Request) {
+function isIgnorableFailedRequest(request: Request) {
   const failureText = request.failure()?.errorText ?? "";
   if (!failureText.includes("net::ERR_ABORTED")) {
     return false;
@@ -11,6 +11,16 @@ export function isIgnorableFailedRequest(request: Request) {
     request.method() === "GET" &&
     url.pathname === "/api/auth/user" &&
     request.resourceType() === "fetch"
+  ) {
+    return true;
+  }
+
+  // hls.js loads playlists and segments over XHR/fetch and aborts them when
+  // the player is torn down or re-sourced, e.g. a seek that restarts the
+  // session.
+  if (
+    ["fetch", "xhr"].includes(request.resourceType()) &&
+    url.pathname.includes("/hls/")
   ) {
     return true;
   }
@@ -29,21 +39,21 @@ export function isExpectedUnauthorizedResourceMessage(message: string) {
   );
 }
 
-export function isAppApiResponse(response: Response) {
+function isAppApiResponse(response: Response) {
   return new URL(response.url()).pathname.startsWith("/api/");
 }
 
-export type TrackBrowserIssuesOptions = {
+type TrackBrowserIssuesOptions = {
   /**
    * Console errors/warnings this spec expects. Returning true drops the
    * message instead of failing `assertClean`.
    */
   ignoreConsole?: (type: string, text: string) => boolean;
   /**
-   * Lowest `/api/` response status counted as an error. Defaults to 400;
-   * specs that deliberately drive 4xx flows raise it to 500.
+   * `/api/` error responses this spec drives on purpose, such as a 409 for a
+   * duplicate email. Returning true drops the response instead of failing.
    */
-  minResponseStatus?: number;
+  ignoreResponse?: (response: Response) => boolean;
   /** Set false for specs that drive flows React warns about. Defaults to true. */
   trackConsoleWarnings?: boolean;
 };
@@ -52,11 +62,7 @@ export function trackBrowserIssues(
   page: Page,
   options: TrackBrowserIssuesOptions = {},
 ) {
-  const {
-    ignoreConsole,
-    minResponseStatus = 400,
-    trackConsoleWarnings = true,
-  } = options;
+  const { ignoreConsole, ignoreResponse, trackConsoleWarnings = true } = options;
   const consoleIssues: string[] = [];
   const pageErrors: string[] = [];
   const failedRequests: string[] = [];
@@ -87,7 +93,11 @@ export function trackBrowserIssues(
     );
   });
   page.on("response", response => {
-    if (isAppApiResponse(response) && response.status() >= minResponseStatus) {
+    if (
+      isAppApiResponse(response) &&
+      response.status() >= 400 &&
+      !ignoreResponse?.(response)
+    ) {
       responseErrors.push(
         `${response.status()} ${response.request().method()} ${response.url()}`,
       );

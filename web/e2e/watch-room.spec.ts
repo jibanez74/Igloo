@@ -1,126 +1,54 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type APIResponse,
-  type Page,
-} from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
-import { readE2EEnv, type E2EEnv } from "./e2e-env";
+import {
+  intEnv,
+  readE2EEnv,
+  requireRealInstance,
+  type Credentials,
+  type E2EEnv,
+} from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
-import type { ApiResponse } from "./e2e-api";
-
-type AdminUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-};
+import { readJSON } from "./e2e-api";
+import { loginViaApi } from "./e2e-auth";
+import { createUser, deleteUser } from "./e2e-users";
+import { realMediaTimeouts } from "./media-e2e-helpers";
 
 type WatchRoomEnv = E2EEnv & {
   movieId: number;
   responseTimeoutMs: number;
 };
 
-type E2EGuest = {
+type E2EGuest = Credentials & {
   id: number;
-  email: string;
-  password: string;
 };
 
-function positiveIntEnv(name: string, fallback?: number) {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 function readWatchRoomEnv(): WatchRoomEnv | null {
-  const e2eEnv = readE2EEnv();
-  const movieId = positiveIntEnv("E2E_WATCH_ROOM_MOVIE_ID");
+  const movieId = intEnv("E2E_WATCH_ROOM_MOVIE_ID");
 
   if (!movieId) {
     return null;
   }
 
   return {
-    ...e2eEnv,
+    ...readE2EEnv(),
     movieId,
-    responseTimeoutMs:
-      positiveIntEnv("E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS", 30_000) ?? 30_000,
+    responseTimeoutMs: intEnv("E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS", 30_000),
   };
-}
-
-async function expectApiOk(
-  responsePromise: Promise<APIResponse>,
-  expectedStatus: number,
-) {
-  const response = await responsePromise;
-  expect(response.status()).toBe(expectedStatus);
-
-  const body = (await response.json()) as ApiResponse<unknown>;
-  expect(body.error, body.message).toBe(false);
-  return body;
-}
-
-async function expectApiData<T>(
-  responsePromise: Promise<APIResponse>,
-  expectedStatus: number,
-) {
-  const body = (await expectApiOk(responsePromise, expectedStatus)) as ApiResponse<T>;
-  expect(body.data).toBeTruthy();
-  return body.data!;
-}
-
-async function login(
-  request: APIRequestContext,
-  email: string,
-  password: string,
-) {
-  await expectApiOk(
-    request.post("/api/auth/login", {
-      data: {
-        email,
-        password,
-      },
-      failOnStatusCode: false,
-    }),
-    200,
-  );
-
-  await expectApiOk(
-    request.get("/api/auth/user", {
-      failOnStatusCode: false,
-    }),
-    200,
-  );
 }
 
 async function createGuest(request: APIRequestContext): Promise<E2EGuest> {
   const unique = Date.now().toString(36);
-  const password = `WatchRoom-${unique}-pass`;
-  const email = `watch-room-e2e-${unique}@example.test`;
-
-  const data = await expectApiData<{ user: AdminUser }>(
-    request.post("/api/admin/users", {
-      data: {
-        name: "Watch Room E2E Guest",
-        email,
-        password,
-        is_admin: false,
-      },
-      failOnStatusCode: false,
-    }),
-    201,
-  );
-
-  return {
-    id: data.user.id,
-    email,
-    password,
+  const credentials = {
+    email: `watch-room-e2e-${unique}@example.test`,
+    password: `WatchRoom-${unique}-pass`,
   };
+  const user = await createUser(request, {
+    name: "Watch Room E2E Guest",
+    ...credentials,
+  });
+
+  return { id: user.id, ...credentials };
 }
 
 async function createWatchRoom(
@@ -128,36 +56,27 @@ async function createWatchRoom(
   movieId: number,
   guestId: number,
 ) {
-  const data = await expectApiData<{ room_id: number }>(
-    request.post("/api/watch-rooms", {
-      data: {
-        movie_id: movieId,
-        mode: "direct",
-        audio_track: 0,
-        subtitle_track: null,
-        invited_user_ids: [guestId],
-      },
-      failOnStatusCode: false,
-    }),
-    201,
-  );
+  const response = await request.post("/api/watch-rooms", {
+    data: {
+      movie_id: movieId,
+      mode: "direct",
+      audio_track: 0,
+      subtitle_track: null,
+      invited_user_ids: [guestId],
+    },
+    failOnStatusCode: false,
+  });
+  expect(response.status()).toBe(201);
 
-  return data.room_id;
+  const body = await readJSON<{ room_id: number }>(response);
+  expect(body.error, body.message).toBe(false);
+  return body.data!.room_id;
 }
 
 async function cleanupWatchRoom(request: APIRequestContext, roomId: number | null) {
   if (!roomId) return;
 
   const response = await request.delete(`/api/watch-rooms/${roomId}`, {
-    failOnStatusCode: false,
-  });
-  expect([200, 404]).toContain(response.status());
-}
-
-async function cleanupGuest(request: APIRequestContext, guest: E2EGuest | null) {
-  if (!guest) return;
-
-  const response = await request.delete(`/api/admin/users/${guest.id}`, {
     failOnStatusCode: false,
   });
   expect([200, 404]).toContain(response.status());
@@ -286,13 +205,13 @@ async function expectWatchRoomChrome(page: Page) {
 
 const watchRoomEnv = readWatchRoomEnv();
 
-test.describe.configure({ mode: "serial" });
-
 test.describe("Watch room realtime playback", () => {
+  requireRealInstance("watch rooms need a real websocket and media");
   test.skip(
     !watchRoomEnv,
     "Set E2E_WATCH_ROOM_MOVIE_ID to run watch-room e2e tests.",
   );
+  test.describe.configure({ timeout: realMediaTimeouts().test });
 
   test("syncs direct-room playback controls across owner and guest browsers", async ({
     browser,
@@ -304,14 +223,14 @@ test.describe("Watch room realtime playback", () => {
     let roomId: number | null = null;
 
     try {
-      await login(ownerContext.request, env.email, env.password);
+      await loginViaApi(ownerContext.request, env);
       guest = await createGuest(ownerContext.request);
       roomId = await createWatchRoom(
         ownerContext.request,
         env.movieId,
         guest.id,
       );
-      await login(guestContext.request, guest.email, guest.password);
+      await loginViaApi(guestContext.request, guest);
 
       const ownerPage = await ownerContext.newPage();
       const guestPage = await guestContext.newPage();
@@ -352,7 +271,7 @@ test.describe("Watch room realtime playback", () => {
         .poll(() => videoCurrentTime(guestPage), {
           timeout: env.responseTimeoutMs,
         })
-        .toBeGreaterThanOrEqual(9.5);
+        .toBeGreaterThanOrEqual(WATCH_ROOM_SEEK_STEP_SEC - 0.5);
 
       await guestPage.getByRole("button", { name: "Pause playback" }).click();
       await expect(
@@ -370,7 +289,9 @@ test.describe("Watch room realtime playback", () => {
       roomId = null;
     } finally {
       await cleanupWatchRoom(ownerContext.request, roomId);
-      await cleanupGuest(ownerContext.request, guest);
+      if (guest) {
+        await deleteUser(ownerContext.request, guest.id, { allowMissing: true });
+      }
       await guestContext.close();
       await ownerContext.close();
     }

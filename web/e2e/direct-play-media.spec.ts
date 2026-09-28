@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { readE2EEnv, type E2EEnv } from "./e2e-env";
-import { directPlayAudioSelectionEligible } from "../src/lib/playback";
+import { loginPageViaApi } from "./e2e-auth";
+import { intEnv, requireRealInstance } from "./e2e-env";
 import {
   clearWatchProgress,
+  expectURLParams,
   expectVideoAdvances,
   fetchTechnicalDetails,
-  loginWithCredentials,
   mediaPlayPath,
+  playButton,
+  realMediaTimeouts,
+  trackStreamRequests,
   type E2EMedia,
 } from "./media-e2e-helpers";
 
@@ -17,7 +20,9 @@ import {
 // below, with matching files present in the library:
 //   E2E_DIRECT_MKV_MOVIE_ID        MKV with H.264 video + AAC audio
 //   E2E_DIRECT_10BIT_MOVIE_ID      MP4 with 10-bit H.264 (High 10)
-//   E2E_DIRECT_MULTIAUDIO_MOVIE_ID MP4 with two or more audio streams
+//   E2E_DIRECT_MULTIAUDIO_MOVIE_ID MP4 with 8-bit H.264 and two or more AAC
+//                                  audio streams, so that only the audio
+//                                  dispositions decide direct play
 //   E2E_DIRECT_MP4_MOVIE_ID        optional happy-path control: plain
 //                                  8-bit H.264 + AAC MP4
 //   E2E_DIRECT_SUBTITLE_MOVIE_ID   optional: direct-eligible MP4 with an
@@ -35,8 +40,7 @@ type DirectMovieMatrix = {
   multiAudioMovieId: number;
 };
 
-type DirectMediaEnv = Pick<E2EEnv, "email" | "password"> & {
-  responseTimeoutMs: number;
+type DirectMediaEnv = {
   movies?: DirectMovieMatrix;
   mp4MovieId?: number;
   subtitleMovieId?: number;
@@ -63,37 +67,19 @@ type TechnicalDetails = {
   }>;
 };
 
-function positiveIntEnv(name: string) {
-  const raw = process.env[name];
-  if (!raw) return undefined;
-
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function readDirectMediaEnv(): DirectMediaEnv | null {
-  const e2eEnv = readE2EEnv();
-  const mkvMovieId = positiveIntEnv("E2E_DIRECT_MKV_MOVIE_ID");
-  const tenBitMovieId = positiveIntEnv("E2E_DIRECT_10BIT_MOVIE_ID");
-  const multiAudioMovieId = positiveIntEnv("E2E_DIRECT_MULTIAUDIO_MOVIE_ID");
-  const movies =
-    mkvMovieId && tenBitMovieId && multiAudioMovieId
-      ? { mkvMovieId, tenBitMovieId, multiAudioMovieId }
-      : undefined;
-  const episodeId = positiveIntEnv("E2E_EPISODE_ID");
-
-  if (!movies && !episodeId) {
-    return null;
-  }
+function readDirectMediaEnv(): DirectMediaEnv {
+  const mkvMovieId = intEnv("E2E_DIRECT_MKV_MOVIE_ID");
+  const tenBitMovieId = intEnv("E2E_DIRECT_10BIT_MOVIE_ID");
+  const multiAudioMovieId = intEnv("E2E_DIRECT_MULTIAUDIO_MOVIE_ID");
 
   return {
-    email: e2eEnv.email,
-    password: e2eEnv.password,
-    responseTimeoutMs: 240_000,
-    movies,
-    mp4MovieId: positiveIntEnv("E2E_DIRECT_MP4_MOVIE_ID"),
-    subtitleMovieId: positiveIntEnv("E2E_DIRECT_SUBTITLE_MOVIE_ID"),
-    episodeId,
+    movies:
+      mkvMovieId && tenBitMovieId && multiAudioMovieId
+        ? { mkvMovieId, tenBitMovieId, multiAudioMovieId }
+        : undefined,
+    mp4MovieId: intEnv("E2E_DIRECT_MP4_MOVIE_ID"),
+    subtitleMovieId: intEnv("E2E_DIRECT_SUBTITLE_MOVIE_ID"),
+    episodeId: intEnv("E2E_EPISODE_ID"),
   };
 }
 
@@ -101,142 +87,137 @@ const movieMatrixSkipReason =
   "Set E2E_DIRECT_MKV_MOVIE_ID, E2E_DIRECT_10BIT_MOVIE_ID and E2E_DIRECT_MULTIAUDIO_MOVIE_ID to run the direct-play movie matrix.";
 
 const directEnv = readDirectMediaEnv();
+const timeouts = realMediaTimeouts();
 
-// The app's own rule, so the multi-audio expectation cannot drift from it
-// while still adapting to the operator's actual file.
-const audioSelectionEligible = directPlayAudioSelectionEligible;
-
-function trackStreamRequests(page: Page, movieId: number) {
-  const streamRequests: string[] = [];
-  page.on("request", request => {
-    if (new URL(request.url()).pathname === `/api/movies/${movieId}/stream`) {
-      streamRequests.push(request.url());
-    }
-  });
-  return streamRequests;
+function isTenBitVideo(details: TechnicalDetails) {
+  const video = details.video_streams[0];
+  const bitDepth = video?.bit_depth?.Valid ? video.bit_depth.Int64 : null;
+  const profile = video?.codec_profile?.Valid ? video.codec_profile.String : "";
+  return bitDepth === 10 || profile.includes("10");
 }
 
 async function openPlayerWithDefaults(page: Page, movieId: number) {
   // No mode in the URL: the loader redirect canonicalises the app's own
-  // default choice, which is exactly the decision under test.
+  // default choice, which is exactly the decision under test. The play button
+  // only renders once that redirect has landed.
   await page.goto(`/movies/${movieId}/play?start=0`);
-  await expect(
-    page.getByRole("button", { name: "Play (Space or K)" }),
-  ).toBeVisible({ timeout: directEnv?.responseTimeoutMs });
-  return new URL(page.url()).searchParams.get("mode");
+  await expect(playButton(page)).toBeVisible({ timeout: timeouts.response });
+
+  const mode = new URL(page.url()).searchParams.get("mode");
+  expect(mode, "the player route must carry a mode").toBeTruthy();
+  return mode!;
 }
 
-async function pressPlay(page: Page) {
-  await page.getByRole("button", { name: "Play (Space or K)" }).click();
-}
-
-test.describe.configure({ mode: "serial" });
+// Files the app must refuse direct play for, whatever the rest of the file
+// says: each must play through HLS without ever touching the raw stream.
+const refusedDirectPlayCases = [
+  {
+    // Matrix row 7 — the highest-value regression guard: Chromium fails MKV
+    // silently at 0ms with no MediaError.
+    title: "MKV H.264 is never offered direct play and never requests the raw stream",
+    movieId: () => directEnv.movies?.mkvMovieId,
+    precondition: (details: TechnicalDetails) =>
+      expect(
+        details.movie.container,
+        "E2E_DIRECT_MKV_MOVIE_ID must point at an MKV movie",
+      ).toBe("mkv"),
+  },
+  {
+    // Matrix row 22 — 10-bit H.264 passes the codec-name gate but browsers
+    // cannot decode it; it must be refused pre-emptively and still play via HLS.
+    title: "10-bit H.264 MP4 is refused direct play and plays via HLS",
+    movieId: () => directEnv.movies?.tenBitMovieId,
+    precondition: (details: TechnicalDetails) =>
+      expect(
+        isTenBitVideo(details),
+        "E2E_DIRECT_10BIT_MOVIE_ID must point at a 10-bit H.264 movie",
+      ).toBe(true),
+  },
+];
 
 test.describe("Direct-play eligibility with real media", () => {
-  test.skip(
-    !directEnv,
-    "Set the E2E_DIRECT_*_MOVIE_ID trio or E2E_EPISODE_ID to run direct-play media tests.",
-  );
+  requireRealInstance("direct-play eligibility needs real media files");
+  test.describe.configure({ timeout: timeouts.test });
 
   test.beforeEach(async ({ page }) => {
-    await loginWithCredentials(page, directEnv!);
+    await loginPageViaApi(page);
   });
 
-  // Matrix row 7 — the highest-value regression guard: MKV must never reach
-  // /stream. Chromium fails MKV silently at 0ms with no MediaError.
-  test("MKV H.264 is never offered direct play and never requests the raw stream", async ({
-    page,
-  }) => {
-    test.skip(!directEnv!.movies, movieMatrixSkipReason);
-    const movieId = directEnv!.movies!.mkvMovieId;
-    const details = await fetchTechnicalDetails<TechnicalDetails>(page, {
-      kind: "movie",
-      id: movieId,
+  for (const refused of refusedDirectPlayCases) {
+    test(refused.title, async ({ page }) => {
+      const movieId = refused.movieId();
+      test.skip(!movieId, movieMatrixSkipReason);
+
+      const media: E2EMedia = { kind: "movie", id: movieId! };
+      const details = await fetchTechnicalDetails<TechnicalDetails>(page, media);
+      refused.precondition(details);
+
+      const streamRequests = trackStreamRequests(page, `/api/movies/${movieId}/stream`);
+      await clearWatchProgress(page, media);
+
+      const mode = await openPlayerWithDefaults(page, movieId!);
+      expect(mode).not.toBe("direct");
+
+      await playButton(page).click();
+      await expectVideoAdvances(page, timeouts.response);
+      expect(streamRequests).toEqual([]);
     });
-    expect(
-      details.movie.container,
-      "E2E_DIRECT_MKV_MOVIE_ID must point at an MKV movie",
-    ).toBe("mkv");
-
-    const streamRequests = trackStreamRequests(page, movieId);
-    await clearWatchProgress(page, { kind: "movie", id: movieId });
-
-    const mode = await openPlayerWithDefaults(page, movieId);
-    expect(mode).not.toBe("direct");
-
-    await pressPlay(page);
-    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
-    expect(streamRequests).toEqual([]);
-  });
-
-  // Matrix row 22 — 10-bit H.264 passes the codec-name gate but browsers
-  // cannot decode it; it must be refused pre-emptively and still play via HLS.
-  test("10-bit H.264 MP4 is refused direct play and plays via HLS", async ({
-    page,
-  }) => {
-    test.skip(!directEnv!.movies, movieMatrixSkipReason);
-    const movieId = directEnv!.movies!.tenBitMovieId;
-    const details = await fetchTechnicalDetails<TechnicalDetails>(page, {
-      kind: "movie",
-      id: movieId,
-    });
-    const video = details.video_streams[0];
-    const bitDepth = video?.bit_depth?.Valid ? video.bit_depth.Int64 : null;
-    const profile = video?.codec_profile?.Valid
-      ? video.codec_profile.String
-      : "";
-    expect(
-      bitDepth === 10 || profile.includes("10"),
-      "E2E_DIRECT_10BIT_MOVIE_ID must point at a 10-bit H.264 movie",
-    ).toBe(true);
-
-    const streamRequests = trackStreamRequests(page, movieId);
-    await clearWatchProgress(page, { kind: "movie", id: movieId });
-
-    const mode = await openPlayerWithDefaults(page, movieId);
-    expect(mode).not.toBe("direct");
-
-    await pressPlay(page);
-    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
-    expect(streamRequests).toEqual([]);
-  });
+  }
 
   // Matrix rows 2 / 16 / 16b / 16c — the expectation adapts to the file's
   // actual dispositions via the same refuse-on-ambiguity table the app uses.
   test("multi-audio MP4 follows the disposition ambiguity table", async ({
     page,
   }) => {
-    test.skip(!directEnv!.movies, movieMatrixSkipReason);
-    const movieId = directEnv!.movies!.multiAudioMovieId;
-    const details = await fetchTechnicalDetails<TechnicalDetails>(page, {
-      kind: "movie",
-      id: movieId,
-    });
+    test.skip(!directEnv.movies, movieMatrixSkipReason);
+    const movieId = directEnv.movies!.multiAudioMovieId;
+    const media: E2EMedia = { kind: "movie", id: movieId };
+    const details = await fetchTechnicalDetails<TechnicalDetails>(page, media);
     expect(
       details.audio_streams.length,
       "E2E_DIRECT_MULTIAUDIO_MOVIE_ID must point at a movie with two or more audio streams",
     ).toBeGreaterThanOrEqual(2);
+    // Every other direct-play rule must pass, so the audio table alone decides.
+    expect(
+      details.movie.mime_type,
+      "E2E_DIRECT_MULTIAUDIO_MOVIE_ID must point at an MP4",
+    ).toBe("video/mp4");
+    expect(
+      isTenBitVideo(details),
+      "E2E_DIRECT_MULTIAUDIO_MOVIE_ID must point at an 8-bit H.264 movie",
+    ).toBe(false);
+    expect(
+      details.audio_streams[0].codec.toLowerCase(),
+      "E2E_DIRECT_MULTIAUDIO_MOVIE_ID must have AAC as its first audio stream",
+    ).toBe("aac");
 
-    const streamRequests = trackStreamRequests(page, movieId);
-    await clearWatchProgress(page, { kind: "movie", id: movieId });
+    const streamRequests = trackStreamRequests(page, `/api/movies/${movieId}/stream`);
+    await clearWatchProgress(page, media);
 
     const mode = await openPlayerWithDefaults(page, movieId);
-    const ambiguousAudio = !audioSelectionEligible(details.audio_streams);
-    if (ambiguousAudio) {
-      expect(mode).not.toBe("direct");
+    // Restates the ambiguity table from src/lib/playback.ts on purpose, so a
+    // regression in the app's rule cannot also move this test's expectation.
+    const audio = details.audio_streams;
+    const defaultCount = audio.filter(stream => stream.is_default).length;
+    const unambiguousAudio =
+      defaultCount === 0 || (defaultCount === 1 && audio[0].is_default);
+    if (unambiguousAudio) {
+      expect(mode, "unambiguous audio dispositions keep direct play").toBe("direct");
+    } else {
+      expect(mode, "ambiguous audio dispositions refuse direct play").not.toBe("direct");
     }
 
-    await pressPlay(page);
-    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
+    await playButton(page).click();
+    await expectVideoAdvances(page, timeouts.response);
 
-    if (mode === "direct") {
+    if (unambiguousAudio) {
       expect(streamRequests.length).toBeGreaterThan(0);
     } else {
       expect(streamRequests).toEqual([]);
     }
     // A working non-direct mode must never have touched the raw stream, and a
     // direct mode must never bounce away from it mid-playback.
-    expect(new URL(page.url()).searchParams.get("mode")).toBe(mode);
+    await expectURLParams(page, { mode });
   });
 
   // Audit D11 — the deciding browser test the audit could not run: a resume
@@ -249,15 +230,13 @@ test.describe("Direct-play eligibility with real media", () => {
     page,
   }) => {
     test.skip(
-      !directEnv!.subtitleMovieId,
+      !directEnv.subtitleMovieId,
       "Set E2E_DIRECT_SUBTITLE_MOVIE_ID to run the subtitle-persistence test.",
     );
 
-    const movieId = directEnv!.subtitleMovieId!;
-    const details = await fetchTechnicalDetails<TechnicalDetails>(page, {
-      kind: "movie",
-      id: movieId,
-    });
+    const movieId = directEnv.subtitleMovieId!;
+    const media: E2EMedia = { kind: "movie", id: movieId };
+    const details = await fetchTechnicalDetails<TechnicalDetails>(page, media);
     expect(
       details.subtitles.length,
       "E2E_DIRECT_SUBTITLE_MOVIE_ID must point at a movie with an embedded subtitle stream",
@@ -273,7 +252,7 @@ test.describe("Direct-play eligibility with real media", () => {
     // Seed saved progress so the resume dialog opens: past the eligibility
     // minimum, well short of the completion threshold.
     const resumeTargetSec = Math.min(45, Math.floor(durationSec / 2));
-    await clearWatchProgress(page, { kind: "movie", id: movieId });
+    await clearWatchProgress(page, media);
     const saveResponse = await page
       .context()
       .request.put(`/api/movies/${movieId}/watch-progress`, {
@@ -291,32 +270,32 @@ test.describe("Direct-play eligibility with real media", () => {
       `/movies/${movieId}/play?mode=direct&audio_track=0&subtitle_track=0&start=0`,
     );
 
+    const video = page.locator("video");
     const subtitleShowing = () =>
-      page.locator("video").evaluate(video => {
-        const track = video.querySelector<HTMLTrackElement>(
-          "track[data-subtitle]",
-        );
+      video.evaluate(element => {
+        const track = element.querySelector<HTMLTrackElement>("track[data-subtitle]");
         return track?.track.mode ?? null;
       });
 
     // The dialog only opens once watch progress resolves with start=0.
     await page.getByRole("button", { name: "Resume" }).click();
     await expect(page).toHaveURL(new RegExp(`start=${resumeTargetSec}(&|$)`), {
-      timeout: directEnv!.responseTimeoutMs,
+      timeout: timeouts.response,
     });
 
-    await pressPlay(page);
-    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
+    await playButton(page).click();
+    await expectVideoAdvances(page, timeouts.response);
 
     // The seek landed instead of restarting from byte 0...
-    const currentTime = await page
-      .locator("video")
-      .evaluate(video =>
-        video instanceof HTMLVideoElement ? video.currentTime : 0,
-      );
-    expect(currentTime).toBeGreaterThanOrEqual(resumeTargetSec - 15);
+    await expect
+      .poll(() =>
+        video.evaluate(element =>
+          element instanceof HTMLVideoElement ? element.currentTime : 0,
+        ),
+      )
+      .toBeGreaterThanOrEqual(resumeTargetSec - 15);
     // ...the mode never fell back away from direct...
-    expect(new URL(page.url()).searchParams.get("mode")).toBe("direct");
+    await expectURLParams(page, { mode: "direct" });
     // ...and the subtitle track survived the start change (audit D11).
     expect(await subtitleShowing()).toBe("showing");
   });
@@ -324,30 +303,30 @@ test.describe("Direct-play eligibility with real media", () => {
   // Matrix row 1 — happy-path control: an eligible MP4 direct-plays for real.
   test("plain H.264+AAC MP4 direct-plays and advances", async ({ page }) => {
     test.skip(
-      !directEnv!.mp4MovieId,
+      !directEnv.mp4MovieId,
       "Set E2E_DIRECT_MP4_MOVIE_ID to run the direct-play happy-path test.",
     );
 
-    const movieId = directEnv!.mp4MovieId!;
-    const streamRequests = trackStreamRequests(page, movieId);
+    const movieId = directEnv.mp4MovieId!;
+    const streamRequests = trackStreamRequests(page, `/api/movies/${movieId}/stream`);
     await clearWatchProgress(page, { kind: "movie", id: movieId });
 
     const mode = await openPlayerWithDefaults(page, movieId);
     expect(mode).toBe("direct");
 
-    await pressPlay(page);
-    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
+    await playButton(page).click();
+    await expectVideoAdvances(page, timeouts.response);
     expect(streamRequests.length).toBeGreaterThan(0);
     // No fallback fired: the mode is still direct after real playback.
-    expect(new URL(page.url()).searchParams.get("mode")).toBe("direct");
+    await expectURLParams(page, { mode: "direct" });
   });
 
   // The episode routes reuse the movie pipeline end to end: the same
   // default-settings redirect, the same eligibility gate, the same player.
   test("a TV episode plays through the episode routes", async ({ page }) => {
-    test.skip(!directEnv!.episodeId, "Set E2E_EPISODE_ID to run the episode playback test.");
+    test.skip(!directEnv.episodeId, "Set E2E_EPISODE_ID to run the episode playback test.");
 
-    const media: E2EMedia = { kind: "episode", id: directEnv!.episodeId! };
+    const media: E2EMedia = { kind: "episode", id: directEnv.episodeId! };
     const details = await fetchTechnicalDetails<TechnicalDetails>(page, media);
     expect(details.video_streams.length).toBeGreaterThan(0);
 
@@ -355,15 +334,12 @@ test.describe("Direct-play eligibility with real media", () => {
 
     const playPath = await mediaPlayPath(page, media);
     await page.goto(`${playPath}?start=0`);
-    await expect(
-      page.getByRole("button", { name: "Play (Space or K)" }),
-    ).toBeVisible({ timeout: directEnv!.responseTimeoutMs });
+    await expect(playButton(page)).toBeVisible({ timeout: timeouts.response });
 
-    const url = new URL(page.url());
-    expect(url.pathname).toBe(playPath);
-    expect(url.searchParams.get("mode")).toBeTruthy();
+    // The loader redirect keeps the route and fills in a mode.
+    await expect(page).toHaveURL(new RegExp(`${playPath}\\?.*\\bmode=[a-z0-9_]+`));
 
-    await pressPlay(page);
-    await expectVideoAdvances(page, directEnv!.responseTimeoutMs);
+    await playButton(page).click();
+    await expectVideoAdvances(page, timeouts.response);
   });
 });

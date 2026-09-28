@@ -109,6 +109,11 @@ describe("show details route", () => {
       "aria-selected",
       "true",
     );
+    expect(
+      await screen.findByRole("list", {
+        name: /Specials episodes, 1 in this library/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("falls back to the default season when the URL names one the show lacks", async () => {
@@ -149,6 +154,36 @@ describe("show details route", () => {
 
     expect(router.state.location.search).toEqual({ season: 2 });
     expect(router.history.length).toBe(historyDepthBefore);
+  });
+
+  // Specials are season zero, so a falsy check would drop them from the URL.
+  it("writes the specials season to the URL as zero", async () => {
+    const user = userEvent.setup();
+    mockShowDetailsFetch();
+
+    const { router } = await renderRoute(`/tv-shows/${SHOW_ID}`);
+
+    await user.click(await screen.findByRole("tab", { name: "Specials" }));
+
+    expect(
+      await screen.findByRole("list", {
+        name: /Specials episodes, 1 in this library/,
+      }),
+    ).toBeInTheDocument();
+    expect(router.state.location.search).toEqual({ season: 0 });
+  });
+
+  it("names the show's networks in its About section", async () => {
+    mockShowDetailsFetch();
+
+    await renderRoute(`/tv-shows/${SHOW_ID}`);
+
+    const aboutHeading = await screen.findByRole("heading", {
+      name: "About Frost Harbor",
+    });
+    const about = aboutHeading.closest("section");
+    expect(about).not.toBeNull();
+    expect(within(about as HTMLElement).getByText("Contract Network")).toBeInTheDocument();
   });
 
   it("carries the selected season into the trailer return link", async () => {
