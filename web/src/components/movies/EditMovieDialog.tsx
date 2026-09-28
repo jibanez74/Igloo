@@ -184,16 +184,20 @@ function buildUpdateMovieMetadataRequest(
   if (year > 0 && year !== baselineYear) body.year = year;
   else if (!draft.year.trim() && baseline.year.trim()) body.year = 0;
 
-  if (draft.releaseDate !== baseline.releaseDate)
+  if (draft.releaseDate !== baseline.releaseDate) {
     body.release_date = draft.releaseDate;
+  }
   if (draft.overview !== baseline.overview) body.overview = draft.overview;
   if (draft.tagLine !== baseline.tagLine) body.tag_line = draft.tagLine;
-  if (draft.certification !== baseline.certification)
+  if (draft.certification !== baseline.certification) {
     body.certification = draft.certification;
-  if (draft.posterPath !== baseline.posterPath)
+  }
+  if (draft.posterPath !== baseline.posterPath) {
     body.poster_path = draft.posterPath;
-  if (draft.backdropPath !== baseline.backdropPath)
+  }
+  if (draft.backdropPath !== baseline.backdropPath) {
     body.backdrop_path = draft.backdropPath;
+  }
   if (draft.language !== baseline.language) body.language = draft.language;
 
   return body;
