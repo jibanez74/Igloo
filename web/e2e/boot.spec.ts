@@ -3,7 +3,6 @@ import { isExpectedUnauthorizedResourceMessage } from "./e2e-browser-issues";
 
 test.describe("production startup", () => {
   test.skip(process.env.E2E_PRODUCTION !== "1", "Requires built production assets");
-  test.setTimeout(60_000);
 
   for (const pathname of ["/", "/login"]) {
     test(`boots from ${pathname} and survives a reload`, async ({ page }) => {

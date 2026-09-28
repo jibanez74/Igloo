@@ -86,5 +86,17 @@ jobs:
       - name: Install Playwright Chromium
         run: cd web && bun x playwright install --with-deps chromium
 
-      - name: Test production startup
-        run: cd web && E2E_PRODUCTION=1 bun run test:e2e e2e/boot.spec.ts
+      # The whole mocked suite, boot.spec included, against the bundle built
+      # above. Specs that need real media skip without E2E_BASE_URL.
+      - name: Test e2e (mocked API, production build)
+        run: cd web && E2E_PRODUCTION=1 bun run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7

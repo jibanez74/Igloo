@@ -11,10 +11,13 @@ const mockApiPort = intEnv("E2E_MOCK_API_PORT", 8080);
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: intEnv("E2E_HLS_TEST_TIMEOUT_MS", 600_000),
+  // Mocked tests finish in seconds; the real-media describes raise their own
+  // budget through realMediaTimeouts() (e2e/media-e2e-helpers.ts).
+  timeout: 60_000,
   expect: {
     timeout: intEnv("E2E_EXPECT_TIMEOUT_MS", 30_000),
   },
+  forbidOnly: Boolean(process.env.CI),
   fullyParallel: false,
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],

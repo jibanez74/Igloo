@@ -27,7 +27,7 @@ export function libraryMovie(
 }
 
 /** A list movie's details, as its card prefetches them. */
-function libraryMovieDetails(
+export function libraryMovieDetails(
   movie: MoviesLibraryListItemType,
 ): LibraryMovieDetailsResponse {
   return {

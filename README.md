@@ -130,9 +130,9 @@ Useful commands from the repository root:
 
 The SQLite schema is in [server/sqlc/schema.sql](server/sqlc/schema.sql), with queries in [server/sqlc/queries/](server/sqlc/queries/). Igloo currently changes the schema directly during pre-production rather than adding migrations. Do not edit generated database or OpenAPI types by hand.
 
-Frontend unit tests use Vitest. Browser tests use Playwright; install Chromium from `web/` with `bun x playwright install --with-deps chromium`, then run `bun run test:e2e`. By default, Playwright starts Vite and a mock API. Set `E2E_BASE_URL` to a running Igloo URL for live-server suites, along with `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` where needed. Run `bun run test:e2e:boot` to check a production web build with the mock API. The available focused browser scripts are listed in [web/package.json](web/package.json).
+Frontend unit tests use Vitest. Browser tests use Playwright; install Chromium from `web/` with `bun x playwright install --with-deps chromium`, then run `bun run test:e2e`. By default, Playwright starts Vite and a mock API. Set `E2E_BASE_URL` to a running Igloo URL for live-server suites, along with `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` where needed. Run one spec with `bun run test:e2e e2e/<name>.spec.ts`, and `bun run test:e2e:boot` to check a production web build with the mock API. CI runs the whole mocked suite against the production build.
 
-The [CI workflow](.github/workflows/ci.yml) runs code, contract, and browser startup checks. It does not publish release binaries.
+The [CI workflow](.github/workflows/ci.yml) runs code, contract, and mocked browser checks. It does not publish release binaries.
 
 ## License
 
