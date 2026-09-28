@@ -1,6 +1,3 @@
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
 import type {
   ContinueWatchingItemType,
   DeviceType,
@@ -16,12 +13,12 @@ import type {
 } from "../src/types";
 import {
   apiResponse,
-  IDLE_SCAN,
+  IDLE_SCAN_STATUS_BY_PATH,
   nullableFloat64,
   nullableInt64,
   nullableString,
 } from "./e2e-api";
-import { readE2EEnv } from "./e2e-env";
+import { intEnv, readE2EEnv } from "./e2e-env";
 import { libraryMovie, libraryMovieDetails, MOCK_MOVIE_ID } from "./fixtures/movies";
 import {
   libraryShow,
@@ -67,7 +64,7 @@ type PendingPairing = {
 };
 
 const HOST = "127.0.0.1";
-const PORT = Number.parseInt(process.env.E2E_MOCK_API_PORT ?? "8080", 10);
+const PORT = intEnv("E2E_MOCK_API_PORT", 8080);
 const SESSION_COOKIE = "igloo_e2e_session";
 const CLEAR_SESSION_COOKIE = `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
 const admin = readE2EEnv();
@@ -788,14 +785,6 @@ async function handleAdminRoutes(
   return false;
 }
 
-// No spec starts a scan through the mock (scan-progress stubs its own status
-// route), so the admin shell's polls always see an idle scanner.
-const IDLE_SCAN_STATUS: Record<string, () => unknown> = {
-  "/api/settings/scan/movies": () => movieScanStatus(IDLE_SCAN),
-  "/api/settings/scan/music": () => musicScanStatus(IDLE_SCAN),
-  "/api/settings/scan/shows": () => showScanStatus(IDLE_SCAN),
-};
-
 async function handleSettingsRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -804,7 +793,9 @@ async function handleSettingsRoutes(
 ) {
   const method = request.method ?? "GET";
 
-  const scanStatus = IDLE_SCAN_STATUS[url.pathname];
+  // No spec starts a scan through the mock (scan-progress stubs its own status
+  // route), so the admin shell's polls always see an idle scanner.
+  const scanStatus = IDLE_SCAN_STATUS_BY_PATH[url.pathname];
   if (scanStatus && method === "GET") {
     sendSuccess(response, scanStatus());
     return true;

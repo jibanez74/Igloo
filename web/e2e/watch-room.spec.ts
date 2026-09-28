@@ -289,7 +289,9 @@ test.describe("Watch room realtime playback", () => {
       roomId = null;
     } finally {
       await cleanupWatchRoom(ownerContext.request, roomId);
-      if (guest) await deleteUser(ownerContext.request, guest.id);
+      if (guest) {
+        await deleteUser(ownerContext.request, guest.id, { allowMissing: true });
+      }
       await guestContext.close();
       await ownerContext.close();
     }

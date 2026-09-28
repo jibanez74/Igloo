@@ -35,11 +35,19 @@ export async function fetchAdminUsers(request: APIRequestContext) {
   return body.data?.users ?? [];
 }
 
-export async function deleteUser(request: APIRequestContext, userId: number) {
+/**
+ * Deletes one account. `allowMissing` also accepts 404, for `finally` cleanup
+ * that must not mask the test's own failure when the user is already gone.
+ */
+export async function deleteUser(
+  request: APIRequestContext,
+  userId: number,
+  { allowMissing = false }: { allowMissing?: boolean } = {},
+) {
   const response = await request.delete(`/api/admin/users/${userId}`, {
     failOnStatusCode: false,
   });
-  expect(response.status()).toBe(200);
+  expect(allowMissing ? [200, 404] : [200]).toContain(response.status());
 }
 
 /** Deletes every account whose email starts with `prefix`. */

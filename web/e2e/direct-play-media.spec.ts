@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { loginPageViaApi } from "./e2e-auth";
 import { intEnv, requireRealInstance } from "./e2e-env";
-import { directPlayAudioSelectionEligible } from "../src/lib/playback";
 import {
   clearWatchProgress,
   expectURLParams,
@@ -196,7 +195,12 @@ test.describe("Direct-play eligibility with real media", () => {
     await clearWatchProgress(page, media);
 
     const mode = await openPlayerWithDefaults(page, movieId);
-    const unambiguousAudio = directPlayAudioSelectionEligible(details.audio_streams);
+    // Restates the ambiguity table from src/lib/playback.ts on purpose, so a
+    // regression in the app's rule cannot also move this test's expectation.
+    const audio = details.audio_streams;
+    const defaultCount = audio.filter(stream => stream.is_default).length;
+    const unambiguousAudio =
+      defaultCount === 0 || (defaultCount === 1 && audio[0].is_default);
     if (unambiguousAudio) {
       expect(mode, "unambiguous audio dispositions keep direct play").toBe("direct");
     } else {

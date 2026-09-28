@@ -134,7 +134,7 @@ export const IDLE_SCAN = {
   updated_at: null,
 } as const;
 
-const IDLE_SCAN_STATUS_BY_PATH: Record<string, () => unknown> = {
+export const IDLE_SCAN_STATUS_BY_PATH: Record<string, () => unknown> = {
   "/api/settings/scan/movies": () => movieScanStatus(IDLE_SCAN),
   "/api/settings/scan/music": () => musicScanStatus(IDLE_SCAN),
   "/api/settings/scan/shows": () => showScanStatus(IDLE_SCAN),
