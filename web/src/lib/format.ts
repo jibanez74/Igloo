@@ -108,7 +108,7 @@ export function formatTimecode(
   seconds: number,
   options?: { forceHours?: boolean },
 ) {
-  if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0:00";
+  if (!isFinite(seconds) || seconds < 0) return "0:00";
 
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);
@@ -128,7 +128,7 @@ export function formatTimecode(
 // "1 hour 5 minutes 23 seconds". Zero-valued fields are dropped, and a value of
 // zero reads as "0 seconds" rather than an empty string.
 export function formatSpokenTime(seconds: number) {
-  if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0 seconds";
+  if (!isFinite(seconds) || seconds < 0) return "0 seconds";
 
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);

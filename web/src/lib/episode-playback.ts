@@ -5,7 +5,7 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { hasEligibleResumeProgress } from "@/lib/video-playback";
 import type { ShowEpisodeType, ShowEpisodeUpNextType } from "@/types/shows";
 
-export type EpisodeResumeProgress = {
+type EpisodeResumeProgress = {
   progressSec: number;
   durationSec: number;
 };
@@ -33,7 +33,7 @@ export function episodeResumeProgress(
   return { progressSec, durationSec };
 }
 
-export type EpisodeUpNextPresentation = {
+type EpisodeUpNextPresentation = {
   /** "S1 E4 · Episode name" */
   title: string;
   stillUrl: string | null;
@@ -64,7 +64,7 @@ export function episodeUpNextPresentation(
   };
 }
 
-export type SeasonPlayTarget = {
+type SeasonPlayTarget = {
   episode: ShowEpisodeType;
   /** True when the target continues a partly watched episode. */
   resume: boolean;

@@ -51,14 +51,12 @@ export type {
 export type {
   ContinueWatchingDataType,
   ContinueWatchingItemType,
-  ContinueWatchingMovieItemType,
   ContinueWatchingEpisodeItemType,
 } from "./home";
 
 // Movie types
 export type {
   LatestMovieType,
-  CastMemberType,
   CrewMemberType,
   TheaterMovieType,
   MovieDetailsType,
@@ -97,13 +95,11 @@ export type {
   ShowDetailsDataType,
   ShowSeasonEpisodesDataType,
   ShowSeasonSummaryType,
-  ShowEpisodeSummaryType,
   ShowEpisodePlaybackDataType,
   ShowEpisodeTechnicalDetailsDataType,
   ShowEpisodeType,
   ShowCrewCreditType,
   ShowPersonType,
-  ShowGenreType,
   ShowNetworkType,
   ShowProductionCompanyType,
   ShowLibraryItemType,
@@ -174,7 +170,6 @@ export type {
   PlaybackAudioStreamType,
   PlaybackSubtitleType,
   PlaybackChapterType,
-  PlaybackTechnicalFile,
   WatchProgressType,
   PlaybackSettings,
   StreamModeId,

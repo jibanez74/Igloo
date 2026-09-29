@@ -35,7 +35,6 @@ import type {
   LibraryMovieProductionCompanyType,
   MovieDetailsType,
 } from "@/types";
-import type { NullableString } from "@/types";
 
 export const Route = createFileRoute("/_auth/movies/in-theaters/$id")({
   // Loaded up front so the head has the title. A failure envelope (TMDB not
@@ -63,11 +62,6 @@ export const Route = createFileRoute("/_auth/movies/in-theaters/$id")({
   head: ({ loaderData }) => movieHead(loaderData?.movie),
   component: MovieDetailsPage,
 });
-
-function toNullableString(value: string | null | undefined): NullableString {
-  if (value == null || value === "") return { String: "", Valid: false };
-  return { String: value, Valid: true };
-}
 
 function tmdbCrewToLibraryCrew(
   crew: CrewMemberType[],
@@ -106,11 +100,7 @@ function tmdbYouTubeResultsToLibraryExtras(
 function tmdbProductionCompaniesToLibrary(
   companies: NonNullable<MovieDetailsType["production_companies"]>,
 ): LibraryMovieProductionCompanyType[] {
-  return companies.map(pc => ({
-    id: pc.id,
-    name: pc.name,
-    country: toNullableString(pc.origin_country ?? undefined),
-  }));
+  return companies.map(pc => ({ id: pc.id, name: pc.name }));
 }
 
 function MovieDetailsPage() {
@@ -143,13 +133,10 @@ function MovieDetailsPage() {
 
 function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const backdropUrl = buildTmdbImageUrl(
-    movie.backdrop_path ?? null,
+    movie.backdrop_path,
     TMDB_BACKDROP_SIZE,
   );
-  const posterUrl = buildTmdbImageUrl(
-    movie.poster_path ?? null,
-    TMDB_POSTER_SIZE,
-  );
+  const posterUrl = buildTmdbImageUrl(movie.poster_path, TMDB_POSTER_SIZE);
 
   const releaseDateStr = movie.release_date || null;
   const releaseYear = catalogYear(releaseDateStr);

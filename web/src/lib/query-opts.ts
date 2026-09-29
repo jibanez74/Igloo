@@ -418,7 +418,7 @@ export function movieTechnicalDetailsQueryOpts(id: number) {
  * Either technical-details payload: the player reads the streams and the file
  * through playbackTechnicalFile, so the two shapes share one query.
  */
-export type PlaybackTechnicalDetailsType =
+type PlaybackTechnicalDetailsType =
   | MovieTechnicalDetailsResponse
   | ShowEpisodeTechnicalDetailsDataType;
 

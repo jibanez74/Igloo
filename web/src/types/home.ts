@@ -10,6 +10,5 @@ export type ContinueWatchingDataType = Schema["ContinueWatchingData"];
 
 // One card in the row, discriminated by `kind`.
 export type ContinueWatchingItemType = Schema["ContinueWatchingItem"];
-export type ContinueWatchingMovieItemType = Schema["ContinueWatchingMovieItem"];
 export type ContinueWatchingEpisodeItemType =
   Schema["ContinueWatchingEpisodeItem"];

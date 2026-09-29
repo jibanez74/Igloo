@@ -249,7 +249,7 @@ export function directPlayAudioSelectionEligible(
   return defaultCount === 1 && audioStreams[0].is_default;
 }
 
-export type AvailableModesArgs = {
+type AvailableModesArgs = {
   /**
    * The primary video stream. When absent while `videoStreamsLoaded` is
    * false, all non-transcode modes are offered (metadata still in flight);
@@ -504,12 +504,10 @@ export function describePlaybackChannelLayout(
   const l = channelLayout?.toLowerCase() ?? "";
   if (l.includes("mono") || channels === 1) return "Mono";
   if (l.includes("stereo") || channels === 2) return "Stereo";
-  if (l.includes("5.1") || l.includes("5.1(")) return "5.1 surround";
+  if (l.includes("5.1")) return "5.1 surround";
   if (l.includes("7.1")) return "7.1 surround";
   if (l.includes("quad") || l.includes("4.0")) return "Quad";
   if (channels >= 6) return "Surround";
-  if (channels === 2) return "Stereo";
-  if (channels === 1) return "Mono";
   return `${channels} channels`;
 }
 

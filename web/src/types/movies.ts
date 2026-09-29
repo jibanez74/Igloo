@@ -76,9 +76,6 @@ export type CreateMoviePlaylistRequest = {
 };
 
 export type MovieDetailsType = components["schemas"]["TmdbMovie"];
-export type CastMemberType = NonNullable<
-  MovieDetailsType["credits"]["cast"]
->[number];
 export type CrewMemberType = NonNullable<
   MovieDetailsType["credits"]["crew"]
 >[number];

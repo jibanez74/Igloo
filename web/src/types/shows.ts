@@ -19,8 +19,6 @@ export type ShowSeasonEpisodesDataType = Schema["ShowSeasonEpisodesData"];
 
 export type ShowSeasonSummaryType = Schema["ShowSeasonSummary"];
 export type ShowEpisodeType = Schema["ShowEpisode"];
-// The TMDB-only episode shape the playback header carries.
-export type ShowEpisodeSummaryType = Schema["ShowEpisodeSummary"];
 
 // `data` payload of GET /api/shows/episodes/{id}: the player's title and
 // back-navigation context, plus the episode that follows it.
@@ -33,7 +31,6 @@ export type ShowEpisodeTechnicalDetailsDataType =
   Schema["ShowEpisodeTechnicalDetailsData"];
 export type ShowCrewCreditType = Schema["ShowCrewCredit"];
 export type ShowPersonType = Schema["ShowPerson"];
-export type ShowGenreType = Schema["ShowGenre"];
 export type ShowNetworkType = Schema["ShowNetwork"];
 export type ShowProductionCompanyType = Schema["ShowProductionCompany"];
 
