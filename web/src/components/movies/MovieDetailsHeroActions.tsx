@@ -187,7 +187,9 @@ export default function MovieDetailsHeroActions({
         },
       });
 
-      void refreshWatchQueries(queryClient, movieMediaRef(movieId));
+      void refreshWatchQueries(queryClient, movieMediaRef(movieId), {
+        refetchType: "active",
+      });
     },
   });
 

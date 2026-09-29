@@ -203,6 +203,33 @@ describe("playback exit synchronization", () => {
     queryClient.clear();
   });
 
+  it("only marks inactive lists stale when asked to refetch active ones", async () => {
+    const queryClient = new QueryClient();
+    await queryClient.prefetchQuery({
+      queryKey: [CONTINUE_WATCHING_KEY],
+      queryFn: () => Promise.resolve("continue-watching"),
+    });
+    await queryClient.prefetchQuery({
+      queryKey: [SHOW_SEASON_EPISODES_KEY, 402, 2],
+      queryFn: () => Promise.resolve("other-season"),
+    });
+
+    await refreshWatchQueries(queryClient, episodeMediaRef(9), {
+      refetchType: "active",
+    });
+
+    for (const queryKey of [
+      [CONTINUE_WATCHING_KEY],
+      [SHOW_SEASON_EPISODES_KEY, 402, 2],
+    ]) {
+      const state = queryClient.getQueryState(queryKey);
+      expect(state?.dataUpdateCount).toBe(1);
+      expect(state?.isInvalidated).toBe(true);
+    }
+
+    queryClient.clear();
+  });
+
   it("only bypasses synchronization within the same playback pathname", () => {
     const current = {
       routeId: "/_auth/movies/$id/play",

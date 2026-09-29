@@ -84,7 +84,9 @@ export default function EpisodeWatchedToggle({
       setSeasonWatched(res.data.watched);
       // The season rows, the episode's own progress entry and Home's
       // continue-watching row all show this episode's state.
-      void refreshWatchQueries(queryClient, episodeMediaRef(episodeId));
+      void refreshWatchQueries(queryClient, episodeMediaRef(episodeId), {
+        refetchType: "active",
+      });
     },
   });
 
