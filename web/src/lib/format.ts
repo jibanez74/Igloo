@@ -36,14 +36,18 @@ const DATE_ONLY_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 // a calendar field is read off it, never a bare `new Date(stored)`.
 export function parseCatalogDate(date: string) {
   const dateOnly = DATE_ONLY_PATTERN.exec(date);
+  if (!dateOnly) return new Date(date);
 
-  return dateOnly
-    ? new Date(
-        Number(dateOnly[1]),
-        Number(dateOnly[2] ?? 1) - 1,
-        Number(dateOnly[3] ?? 1),
-      )
-    : new Date(date);
+  // setFullYear, not the Date constructor, which reads years 0-99 as 1900-1999.
+  const local = new Date(0);
+  local.setFullYear(
+    Number(dateOnly[1]),
+    Number(dateOnly[2] ?? 1) - 1,
+    Number(dateOnly[3] ?? 1),
+  );
+  local.setHours(0, 0, 0, 0);
+
+  return local;
 }
 
 const SQLITE_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -61,13 +65,14 @@ export function parseServerTimestamp(timestamp: string) {
 }
 
 // The calendar year of a stored catalog date, or null when the date is missing
-// or unparseable (so a title never reads "(NaN)").
+// or unparseable (so a title never reads "(NaN)"). Year 0 is also null: Spotify
+// reports an unknown release date as "0000".
 export function catalogYear(date: string | null | undefined): number | null {
   if (!date) return null;
 
   const year = parseCatalogDate(date).getFullYear();
 
-  return Number.isNaN(year) ? null : year;
+  return Number.isNaN(year) || year < 1 ? null : year;
 }
 
 // takes in a date string and returns a formatted date string

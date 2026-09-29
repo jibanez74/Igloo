@@ -302,6 +302,14 @@ describe("catalogYear", () => {
     expect(catalogYear("")).toBeNull();
     expect(catalogYear("not a date")).toBeNull();
   });
+
+  it("returns null for Spotify's unknown release date", () => {
+    expect(catalogYear("0000")).toBeNull();
+  });
+
+  it("keeps a two-digit year instead of reading it as 19xx", () => {
+    expect(catalogYear("0050-06-15")).toBe(50);
+  });
 });
 
 describe("nounForCount", () => {
