@@ -1,9 +1,9 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
   getHeroMotionWrapper,
@@ -74,6 +74,20 @@ function mockShowDetailsFetch({ detailsStatus, detailsBody }: MockOptions = {}) 
 }
 
 describe("show details route", () => {
+  it("titles the page with the show's name, premiere year and overview", async () => {
+    mockShowDetailsFetch();
+
+    await renderRoute(`/tv-shows/${SHOW_ID}`);
+
+    await waitFor(() => {
+      expect(readDocumentHead()).toMatchObject({
+        title: "Frost Harbor (2024) - Igloo",
+        description: "A harbor freezes and a town changes with it.",
+        descriptionCount: 1,
+      });
+    });
+  });
+
   it("defaults to the first season in the returned order, not to specials", async () => {
     mockShowDetailsFetch();
 

@@ -1,3 +1,10 @@
+/** Product name used in document titles and head metadata. */
+export const APP_NAME = "Igloo";
+
+/** Default page description (root route head) and the web manifest's. */
+export const APP_DESCRIPTION =
+  "Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library.";
+
 // TanStack Query keys. Keep these values stable and use the exported constants
 // for query options, cache reads/writes, invalidation, and tests.
 export const ADMIN_USERS_KEY = "admin-users";

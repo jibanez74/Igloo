@@ -5,7 +5,7 @@ import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import type { AlbumDetailsResponseType, TrackType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
   getHeroMotionWrapper,
@@ -294,6 +294,19 @@ describe("album details content", () => {
     expect(artistLinks).toHaveLength(3);
     artistLinks.forEach((link) => {
       expect(link).toHaveAttribute("href", "/music/musician/142");
+    });
+  });
+
+  it("titles the page with the album and its artist", async () => {
+    await renderAlbumDetailsRoute("/music/album/42");
+
+    await waitFor(() => {
+      expect(readDocumentHead()).toMatchObject({
+        title: "Blue Record by The Band - Igloo",
+        description:
+          "Listen to Blue Record by The Band - 1 track in your Igloo music library.",
+        descriptionCount: 1,
+      });
     });
   });
 

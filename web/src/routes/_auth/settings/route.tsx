@@ -23,6 +23,7 @@ import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { computeSettingsLayoutState } from "@/lib/settings-layout";
 import { cn } from "@/lib/utils";
+import { routeHead } from "@/lib/route-head";
 
 const SETTINGS_TABS = [
   { id: "general", label: "General", icon: Sliders, path: "/settings" },
@@ -37,7 +38,14 @@ const SETTINGS_TABS = [
   { id: "users", label: "Users", icon: Users, path: "/settings/users" },
 ] as const;
 
+// Subpages set only their own title, so they keep this description.
+const SETTINGS_HEAD = routeHead(
+  "Settings",
+  "Configure your Igloo media center settings and preferences.",
+);
+
 export const Route = createFileRoute("/_auth/settings")({
+  head: () => SETTINGS_HEAD,
   beforeLoad: async ({ context, location }) => {
     const authData = await context.queryClient.fetchQuery(
       authUserQueryOpts(),
@@ -109,60 +117,51 @@ function SettingsLayout() {
       );
 
   return (
-    <>
-      {/* React 19 Document Metadata */}
-      <title>Settings - Igloo</title>
-      <meta
-        name="description"
-        content="Configure your Igloo media center settings and preferences."
-      />
+    <div className="@container min-w-0">
+      {/* Page header */}
+      <header className="mb-6 sm:mb-7">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+          <Settings className="size-6 text-primary" aria-hidden="true" />
+          <span>Settings</span>
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
+          Manage application settings, your account, and users
+        </p>
+      </header>
 
-      <div className="@container min-w-0">
-        {/* Page header */}
-        <header className="mb-6 sm:mb-7">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-            <Settings className="size-6 text-primary" aria-hidden="true" />
-            <span>Settings</span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-            Manage application settings, your account, and users
-          </p>
-        </header>
+      {/* Tabs */}
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
+        <TabsList className={tabsListClassName}>
+          {visibleTabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className={tabsTriggerClassName}
+              >
+                <Icon
+                  className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+                  aria-hidden="true"
+                />
+                {tab.label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
-        {/* Tabs */}
-        <Tabs value={currentTab} onValueChange={handleTabChange}>
-          <TabsList className={tabsListClassName}>
-            {visibleTabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
-                  className={tabsTriggerClassName}
-                >
-                  <Icon
-                    className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
-                    aria-hidden="true"
-                  />
-                  {tab.label}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          <TabsContent value={currentTab} className="mt-6">
-            <div
-              key={location.pathname}
-              className={cn(
-                usesContentAnimation &&
-                  (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
-              )}
-            >
-              <Outlet />
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </>
+        <TabsContent value={currentTab} className="mt-6">
+          <div
+            key={location.pathname}
+            className={cn(
+              usesContentAnimation &&
+                (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
+            )}
+          >
+            <Outlet />
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

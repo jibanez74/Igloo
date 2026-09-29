@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  catalogYear,
   formatDate,
   formatRuntimeMinutes,
   formatSpokenRuntimeMinutes,
@@ -240,6 +241,20 @@ describe("parseCatalogDate", () => {
     expect(parseCatalogDate(timestamp).getTime()).toBe(
       new Date(timestamp).getTime(),
     );
+  });
+});
+
+describe("catalogYear", () => {
+  it("reads the local calendar year of a date-only value", () => {
+    // A January 1st date must not slip back a year west of UTC.
+    expect(catalogYear("2024-01-01")).toBe(2024);
+  });
+
+  it("returns null for a missing or unparseable date", () => {
+    expect(catalogYear(null)).toBeNull();
+    expect(catalogYear(undefined)).toBeNull();
+    expect(catalogYear("")).toBeNull();
+    expect(catalogYear("not a date")).toBeNull();
   });
 });
 

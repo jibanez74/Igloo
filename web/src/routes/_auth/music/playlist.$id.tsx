@@ -59,6 +59,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { parseRouteId } from "@/lib/route-id";
+import { routeHead } from "@/lib/route-head";
 import type {
   PlayableTrackData,
   PlaylistDetailResponseType,
@@ -86,12 +87,42 @@ function playlistTrackToPlayableData(
   };
 }
 
+type PlaylistHeadData = {
+  name: string;
+  trackCount: number;
+  duration: number;
+};
+
+const PLAYLIST_FALLBACK_HEAD = routeHead("Playlist");
+
+function playlistHead(playlist: PlaylistHeadData | null | undefined) {
+  if (!playlist) return PLAYLIST_FALLBACK_HEAD;
+
+  return routeHead(
+    playlist.name,
+    `Listen to ${playlist.name} - ${pluralize(playlist.trackCount, "track")}, ${formatDuration(playlist.duration)} in your Igloo playlist.`,
+  );
+}
+
 export const Route = createFileRoute("/_auth/music/playlist/$id")({
   loader: async ({ context, params }) => {
     const id = parseRouteId(params.id);
-    if (id == null) return;
-    await context.queryClient.ensureQueryData(playlistDetailsQueryOpts(id));
+    if (id == null) return { playlist: null };
+
+    const res = await context.queryClient.ensureQueryData(
+      playlistDetailsQueryOpts(id),
+    );
+    if (res.error || !res.data.playlist) return { playlist: null };
+
+    return {
+      playlist: {
+        name: res.data.playlist.name,
+        trackCount: res.data.track_count,
+        duration: res.data.duration,
+      },
+    };
   },
+  head: ({ loaderData }) => playlistHead(loaderData?.playlist),
   component: PlaylistPage,
 });
 
@@ -145,10 +176,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
     coverUrl ?? "",
   );
   const description = unwrapString(playlist.description);
-
-  // React 19 document metadata - dynamic based on playlist
-  const pageTitle = `${playlist.name} - Igloo`;
-  const pageDescription = `Listen to ${playlist.name} - ${pluralize(track_count, "track")}, ${formatDuration(duration)} in your Igloo playlist.`;
 
   // Infinite query for tracks
   const {
@@ -313,10 +340,6 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       )}
       aria-labelledby="playlist-name"
     >
-      {/* React 19 Document Metadata */}
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       <DetailSkipLinks
         titleHref="#playlist-name"
         titleLabel="Skip to playlist info"

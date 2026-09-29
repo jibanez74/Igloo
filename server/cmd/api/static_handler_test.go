@@ -18,6 +18,8 @@ func testFrontendFS() fstest.MapFS {
 		"webdist/index.html":           {Data: []byte(testFrontendIndex)},
 		"webdist/assets/app.abc123.js": {Data: []byte("console.log('igloo')")},
 		"webdist/docs/index.html":      {Data: []byte("<!doctype html><title>Docs</title>")},
+		"webdist/manifest.webmanifest": {Data: []byte(`{"name":"Igloo"}`)},
+		"webdist/robots.txt":           {Data: []byte("User-agent: *\nDisallow: /\n")},
 	}
 }
 
@@ -54,6 +56,8 @@ func TestServeFrontend_ServesEmbeddedAssets(t *testing.T) {
 		{"hashed asset is immutable", "/assets/app.abc123.js", http.StatusOK, "console.log('igloo')", "public, max-age=31536000", "text/javascript; charset=utf-8"},
 		{"directory serves its index", "/docs", http.StatusOK, "<!doctype html><title>Docs</title>", "no-cache, no-store, must-revalidate", "text/html; charset=utf-8"},
 		{"client route falls back to index", "/movies/42", http.StatusOK, testFrontendIndex, "no-cache, no-store, must-revalidate", "text/html; charset=utf-8"},
+		{"manifest revalidates with its media type", "/manifest.webmanifest", http.StatusOK, `{"name":"Igloo"}`, "no-cache", "application/manifest+json"},
+		{"robots.txt is served, not the SPA", "/robots.txt", http.StatusOK, "User-agent: *\nDisallow: /\n", "no-cache", "text/plain; charset=utf-8"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -72,6 +76,9 @@ func TestServeFrontend_ServesEmbeddedAssets(t *testing.T) {
 			}
 			if got := recorder.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 				t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+			}
+			if got := recorder.Header().Get("X-Robots-Tag"); got != "noindex, nofollow" {
+				t.Errorf("X-Robots-Tag = %q, want noindex, nofollow", got)
 			}
 			if recorder.Header().Get("ETag") == "" {
 				t.Error("ETag was not set")

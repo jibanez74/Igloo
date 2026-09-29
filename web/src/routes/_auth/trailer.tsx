@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { trailerSearchSchema } from "@/lib/route-search";
+import { routeHead } from "@/lib/route-head";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { toast } from "sonner";
@@ -49,6 +50,8 @@ import {
 } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
 
+const TRAILER_FALLBACK_HEAD = routeHead("Trailer");
+
 export const Route = createFileRoute("/_auth/trailer")({
   validateSearch: trailerSearchSchema,
   loaderDeps: ({ search }) => ({
@@ -57,12 +60,29 @@ export const Route = createFileRoute("/_auth/trailer")({
     videoKey: search.videoKey,
   }),
   loader: async ({ context, deps }) => {
-    if (deps.mediaId && deps.mediaId > 0 && !deps.videoKey) {
-      await context.queryClient.ensureQueryData(
-        movieDetailsQueryOpts(deps.mediaId),
-      );
+    // Titled only when the page itself shows this movie's trailer, so every
+    // other case skips the movie lookup the page would not make either.
+    if (
+      deps.mediaType !== "movie" ||
+      !deps.mediaId ||
+      deps.mediaId <= 0 ||
+      deps.videoKey
+    ) {
+      return { movieTitle: null };
     }
+
+    const res = await context.queryClient.ensureQueryData(
+      movieDetailsQueryOpts(deps.mediaId),
+    );
+
+    return {
+      movieTitle: !res.error ? (res.data.movie?.title ?? null) : null,
+    };
   },
+  head: ({ loaderData }) =>
+    loaderData?.movieTitle
+      ? routeHead(`${loaderData.movieTitle} - Trailer`)
+      : TRAILER_FALLBACK_HEAD,
   component: TrailerPage,
 });
 

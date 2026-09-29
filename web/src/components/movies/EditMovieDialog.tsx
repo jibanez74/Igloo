@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useState, type RefObject } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   identifyMovie,
@@ -249,6 +250,25 @@ export default function EditMovieDialog({
   );
 }
 
+// The movie page's head takes the title from its loader data, which only
+// changes on a router load. Wait for the details refetch, then reload that
+// route, so the tab title follows an identify or a manual edit.
+async function refreshMovieDetails(
+  queryClient: QueryClient,
+  router: ReturnType<typeof useRouter>,
+  movieId: number,
+) {
+  queryClient.invalidateQueries({
+    queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, movieId],
+  });
+  await queryClient.invalidateQueries({
+    queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
+  });
+  await router.invalidate({
+    filter: match => match.routeId === "/_auth/movies/$id/",
+  });
+}
+
 function TmdbTab({
   movieId,
   movie,
@@ -259,6 +279,7 @@ function TmdbTab({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   async function handleApply(selectedId: number) {
     const res = await identifyMovie(movieId, selectedId);
@@ -267,14 +288,9 @@ function TmdbTab({
       return;
     }
 
-    queryClient.invalidateQueries({
-      queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
-    });
-    queryClient.invalidateQueries({
-      queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, movieId],
-    });
     toast.success("Movie identified successfully");
     onOpenChange(false);
+    await refreshMovieDetails(queryClient, router, movieId);
   }
 
   return (
@@ -299,6 +315,7 @@ function ManualTab({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [form, dispatchForm] = useReducer(
     movieMetadataFormReducer,
@@ -336,14 +353,9 @@ function ManualTab({
       return;
     }
 
-    queryClient.invalidateQueries({
-      queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
-    });
-    queryClient.invalidateQueries({
-      queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, movieId],
-    });
     toast.success("Movie updated successfully");
     onOpenChange(false);
+    await refreshMovieDetails(queryClient, router, movieId);
   }
 
   return (

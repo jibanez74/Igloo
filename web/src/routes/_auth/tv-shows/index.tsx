@@ -32,8 +32,15 @@ import {
   showsSearchSchema,
   type ShowsSearchParams,
 } from "@/lib/route-search";
+import { routeHead } from "@/lib/route-head";
+
+const TV_SHOWS_HEAD = routeHead(
+  "TV Shows",
+  "Browse and track your TV show library in your Igloo media center.",
+);
 
 export const Route = createFileRoute("/_auth/tv-shows/")({
+  head: () => TV_SHOWS_HEAD,
   validateSearch: showsSearchSchema,
   loaderDeps: ({ search: { allPage, sort, tab, genreId, genresPage } }) => ({
     allPage,
@@ -114,12 +121,6 @@ function TvShowsPage() {
 
   return (
     <div className="min-w-0">
-      <title>TV Shows - Igloo</title>
-      <meta
-        name="description"
-        content="Browse and track your TV show library in your Igloo media center."
-      />
-
       {/* Page header */}
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">

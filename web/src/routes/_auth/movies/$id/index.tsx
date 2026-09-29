@@ -18,11 +18,12 @@ import {
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
+  catalogYear,
   formatRuntimeMinutes,
-  parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import { parseRouteId } from "@/lib/route-id";
+import { movieHead, type MediaHeadData } from "@/lib/route-head";
 import {
   trimmedOrNull,
   unwrapFloat,
@@ -52,29 +53,50 @@ import { useDevicePlaybackPreferences } from "@/hooks/useDevicePlaybackPreferenc
 import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
-import type { AuthUser, LibraryMovieDetailsResponse } from "@/types";
+import type {
+  AuthUser,
+  LibraryMovieDetailsMovieType,
+  LibraryMovieDetailsResponse,
+} from "@/types";
 import type { CastSectionItem } from "@/components/shared/CastSection";
+
+// The stored year, else the release date's; the page and its head both show it.
+function movieReleaseYear(movie: LibraryMovieDetailsMovieType) {
+  return (
+    unwrapInt(movie.year) ?? catalogYear(unwrapString(movie.release_date))
+  );
+}
 
 export const Route = createFileRoute("/_auth/movies/$id/")({
   loader: async ({ context, params }) => {
     const movieId = parseRouteId(params.id);
-    if (movieId != null) {
-      await Promise.all([
-        context.queryClient.ensureQueryData(
-          libraryMovieDetailsQueryOpts(movieId),
-        ),
-        context.queryClient.ensureQueryData(
-          movieTechnicalDetailsQueryOpts(movieId),
-        ),
-        context.queryClient.ensureQueryData(
-          movieLikeStatusQueryOpts(movieId),
-        ),
-        context.queryClient.ensureQueryData(
-          movieWatchProgressQueryOpts(movieId),
-        ),
-      ]);
-    }
+    if (movieId == null) return { movie: null };
+
+    const [details] = await Promise.all([
+      context.queryClient.ensureQueryData(
+        libraryMovieDetailsQueryOpts(movieId),
+      ),
+      context.queryClient.ensureQueryData(
+        movieTechnicalDetailsQueryOpts(movieId),
+      ),
+      context.queryClient.ensureQueryData(movieLikeStatusQueryOpts(movieId)),
+      context.queryClient.ensureQueryData(
+        movieWatchProgressQueryOpts(movieId),
+      ),
+    ]);
+
+    const movie = details.error ? null : details.data.movie;
+    const headData: MediaHeadData | null = movie
+      ? {
+          title: movie.title,
+          year: movieReleaseYear(movie),
+          overview: unwrapString(movie.overview),
+        }
+      : null;
+
+    return { movie: headData };
   },
+  head: ({ loaderData }) => movieHead(loaderData?.movie),
   component: MovieDetailsPage,
 });
 
@@ -195,7 +217,6 @@ function LibraryMovieDetailsContent({
   const releaseDateStr = unwrapString(movie.release_date);
   const overview = unwrapString(movie.overview);
   const runTimeMins = unwrapInt(movie.run_time);
-  const year = unwrapInt(movie.year);
   const criticRating = unwrapFloat(movie.critic_rating);
   const audienceRating = unwrapFloat(movie.audience_rating);
   const certification = unwrapString(movie.certification);
@@ -206,15 +227,7 @@ function LibraryMovieDetailsContent({
   const posterUrl = buildTmdbImageUrl(posterPath, TMDB_POSTER_SIZE);
   const backdropUrl = buildTmdbImageUrl(backdropPath, TMDB_BACKDROP_SIZE);
 
-  const releaseYear =
-    year ??
-    (releaseDateStr ? parseCatalogDate(releaseDateStr).getFullYear() : null);
-  const pageTitle = releaseYear
-    ? `${movie.title} (${releaseYear}) - Igloo`
-    : `${movie.title} - Igloo`;
-  const pageDescription = overview
-    ? overview.slice(0, 160)
-    : `Watch ${movie.title} in your Igloo media library.`;
+  const releaseYear = movieReleaseYear(movie);
 
   const runtime = formatRuntimeMinutes(runTimeMins);
 
@@ -229,9 +242,6 @@ function LibraryMovieDetailsContent({
       aria-labelledby="movie-title"
       className="w-full min-w-0 pb-6 sm:pb-10"
     >
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       <DetailSkipLinks
         titleHref="#movie-title"
         titleLabel="Skip to movie info"

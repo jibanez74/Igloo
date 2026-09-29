@@ -4,10 +4,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title data-igloo-bootstrap-title>Igloo</title>
-  <meta name="description"
-    data-igloo-bootstrap-description
-    content="Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library." />
+  <!-- Pre-boot fallback only: React inserts route titles ahead of this one,
+       and the root route's head supplies the description. -->
+  <title>Igloo</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="application-name" content="Igloo" />
+  <meta name="apple-mobile-web-app-title" content="Igloo" />
   <!-- BEGIN GENERATED: theme boot — edit src/lib/theme-tokens.ts and run `bun run generate:theme` -->
   <meta name="theme-color" content="#0A1322" />
   <!-- Anti-flash: apply the stored theme before any CSS paints. Defaults
@@ -25,7 +27,10 @@
     })();
   </script>
   <!-- END GENERATED: theme boot -->
+  <link rel="icon" href="/favicon.ico" sizes="32x32" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/src/assets/boot.css" />
 </head>

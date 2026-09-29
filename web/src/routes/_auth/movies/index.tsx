@@ -65,8 +65,15 @@ import {
   moviesSearchSchema,
   type MoviesSearchParams,
 } from "@/lib/route-search";
+import { routeHead } from "@/lib/route-head";
+
+const MOVIES_HEAD = routeHead(
+  "Movies",
+  "Browse and organize your personal movie collection in your Igloo media library.",
+);
 
 export const Route = createFileRoute("/_auth/movies/")({
+  head: () => MOVIES_HEAD,
   validateSearch: moviesSearchSchema,
   loaderDeps: ({
     search: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
@@ -219,12 +226,6 @@ function MoviesPage() {
 
   return (
     <div className="min-w-0">
-      <title>Movies - Igloo</title>
-      <meta
-        name="description"
-        content="Browse and organize your personal movie collection in your Igloo media library."
-      />
-
       {/* Page header */}
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">

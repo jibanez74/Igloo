@@ -8,8 +8,11 @@ import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
 import { loadPlayRoute } from "@/lib/play-route-loader";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { parseRouteId } from "@/lib/route-id";
+import { routeHead } from "@/lib/route-head";
 import { playSearchSchema, type PlaySearchParams } from "@/lib/route-search";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+
+const PLAY_MOVIE_FALLBACK_HEAD = routeHead("Playing Movie");
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
   validateSearch: playSearchSchema,
@@ -21,7 +24,7 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
   }),
   loader: async ({ context, params, deps }) => {
     const movieId = parseRouteId(params.id);
-    if (movieId == null) return;
+    if (movieId == null) return { title: null };
 
     const search = await loadPlayRoute({
       queryClient: context.queryClient,
@@ -32,15 +35,30 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
         ),
       deps,
     });
-    if (!search) return;
+    if (search) {
+      throw redirect({
+        to: "/movies/$id/play",
+        params: { id: params.id },
+        search,
+        replace: true,
+      });
+    }
 
-    throw redirect({
-      to: "/movies/$id/play",
-      params: { id: params.id },
-      search,
-      replace: true,
-    });
+    // Cache only: a URL that already carries a mode starts playback without
+    // waiting on the details, so a cold load titles the tab generically.
+    const details = context.queryClient.getQueryData(
+      libraryMovieDetailsQueryOpts(movieId).queryKey,
+    );
+
+    return {
+      title:
+        details && !details.error ? (details.data.movie?.title ?? null) : null,
+    };
   },
+  head: ({ loaderData }) =>
+    loaderData?.title
+      ? routeHead(`Playing ${loaderData.title}`)
+      : PLAY_MOVIE_FALLBACK_HEAD,
   component: PlayMoviePage,
 });
 

@@ -66,8 +66,12 @@ import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
 import DevicesCard from "@/components/settings/DevicesCard";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
+import { routeHead } from "@/lib/route-head";
+
+const ACCOUNT_SETTINGS_HEAD = routeHead("Account Settings");
 
 export const Route = createFileRoute("/_auth/settings/account")({
+  head: () => ACCOUNT_SETTINGS_HEAD,
   component: AccountSettings,
 });
 

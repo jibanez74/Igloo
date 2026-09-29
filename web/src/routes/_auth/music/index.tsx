@@ -84,16 +84,19 @@ import {
   musicSearchSchema,
   type MusicSearchParams,
 } from "@/lib/route-search";
+import { routeHead } from "@/lib/route-head";
 
-const MUSIC_PAGE_TITLE = "Music Library - Igloo";
-const MUSIC_PAGE_DESCRIPTION =
-  "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
+const MUSIC_HEAD = routeHead(
+  "Music Library",
+  "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.",
+);
 
 const ALBUM_NOUN: LibraryNoun = { singular: "album", plural: "albums" };
 const MUSICIAN_NOUN: LibraryNoun = { singular: "musician", plural: "musicians" };
 const TRACK_NOUN: LibraryNoun = { singular: "track", plural: "tracks" };
 
 export const Route = createFileRoute("/_auth/music/")({
+  head: () => MUSIC_HEAD,
   validateSearch: musicSearchSchema,
   loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
     albumsPage,
@@ -165,10 +168,6 @@ function MusicPage() {
 
   return (
     <div className="min-w-0">
-      {/* React 19 Document Metadata */}
-      <title>{MUSIC_PAGE_TITLE}</title>
-      <meta name="description" content={MUSIC_PAGE_DESCRIPTION} />
-
       {/* Page header */}
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">

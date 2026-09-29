@@ -22,20 +22,37 @@ import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
 import { parseRouteId } from "@/lib/route-id";
+import { routeHead } from "@/lib/route-head";
 import type { MoviePlaylistDetailResponseType } from "@/types";
 
 const MOVIE_NOUN: LibraryNoun = { singular: "movie", plural: "movies" };
 
+const MOVIE_PLAYLIST_FALLBACK_HEAD = routeHead("Movie Playlist");
+
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({
   loader: async ({ context, params }) => {
     const id = parseRouteId(params.id);
-    if (id == null) return;
-    await Promise.all([
+    if (id == null) return { playlistName: null };
+
+    const [details] = await Promise.all([
       context.queryClient.ensureQueryData(moviePlaylistDetailsQueryOpts(id)),
       context.queryClient.ensureQueryData(
         moviePlaylistMoviesQueryOpts(id, 1, MOVIES_PER_PAGE, "asc"),
       ),
     ]);
+
+    return {
+      playlistName: details.error
+        ? null
+        : (details.data.playlist?.name ?? null),
+    };
+  },
+  head: ({ loaderData }) => {
+    const name = loaderData?.playlistName;
+
+    return name
+      ? routeHead(name, `Movie playlist: ${name}`)
+      : MOVIE_PLAYLIST_FALLBACK_HEAD;
   },
   component: MoviePlaylistPage,
 });
@@ -81,9 +98,6 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
 
   return (
     <div className="min-w-0">
-      <title>{playlist.name} - Igloo</title>
-      <meta name="description" content={`Movie playlist: ${playlist.name}`} />
-
       <MoviePlaylistsBackLink />
 
       <header className="mb-8">

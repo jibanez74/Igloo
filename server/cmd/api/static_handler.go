@@ -113,10 +113,7 @@ func loadFrontendAssets(fsys fs.FS) map[string]*frontendAsset {
 			return err
 		}
 
-		contentType := mime.TypeByExtension(filepath.Ext(path))
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
+		contentType := frontendContentType(path)
 
 		sum := sha256.Sum256(content)
 		assets[path] = &frontendAsset{
@@ -135,6 +132,22 @@ func loadFrontendAssets(fsys fs.FS) map[string]*frontendAsset {
 	return assets
 }
 
+// frontendContentType resolves an embedded file's Content-Type. The web
+// manifest is pinned because Go's built-in table lacks .webmanifest and the
+// host's mime.types may too, and nosniff rejects the octet-stream fallback.
+func frontendContentType(path string) string {
+	ext := filepath.Ext(path)
+	if strings.EqualFold(ext, ".webmanifest") {
+		return "application/manifest+json"
+	}
+
+	if contentType := mime.TypeByExtension(ext); contentType != "" {
+		return contentType
+	}
+
+	return "application/octet-stream"
+}
+
 func (app *Application) frontendAssetFor(fsPath string) (*frontendAsset, bool) {
 	app.frontendAssetsOnce.Do(func() {
 		app.frontendAssets = loadFrontendAssets(app.FrontendAssets)
@@ -144,17 +157,28 @@ func (app *Application) frontendAssetFor(fsPath string) (*frontendAsset, bool) {
 	return asset, ok
 }
 
-func serveFrontendAsset(w http.ResponseWriter, r *http.Request, asset *frontendAsset, isHTML bool) {
-	// Hashed assets are immutable; HTML must revalidate so deploys are
-	// picked up. Both get an ETag so revalidation can answer 304.
-	if isHTML {
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	} else {
-		w.Header().Set("Cache-Control", "public, max-age=31536000")
+// frontendCacheControl picks the cache policy for an embedded file. Only
+// Vite's content-hashed output under assets/ is immutable. HTML must never be
+// stored so deploys are picked up, and the remaining fixed-name files
+// (manifest, icons, robots.txt, fonts) revalidate against their ETag.
+func frontendCacheControl(fsPath string) string {
+	switch {
+	case strings.HasSuffix(fsPath, ".html"):
+		return "no-cache, no-store, must-revalidate"
+	case strings.HasPrefix(fsPath, "webdist/assets/"):
+		return "public, max-age=31536000"
+	default:
+		return "no-cache"
 	}
+}
 
+func serveFrontendAsset(w http.ResponseWriter, r *http.Request, asset *frontendAsset, fsPath string) {
+	w.Header().Set("Cache-Control", frontendCacheControl(fsPath))
 	w.Header().Set("Content-Type", asset.contentType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Igloo is a private server: keep every page and asset out of search
+	// indexes, including for crawlers that never run the SPA's robots meta.
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	w.Header().Set("ETag", asset.etag)
 
 	// Embedded files carry no modtime; the ETag drives conditional requests.
@@ -194,13 +218,13 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	fsPath = filepath.ToSlash(fsPath)
 
 	if asset, ok := app.frontendAssetFor(fsPath); ok {
-		serveFrontendAsset(w, r, asset, strings.HasSuffix(fsPath, ".html"))
+		serveFrontendAsset(w, r, asset, fsPath)
 		return
 	}
 
 	// A directory request serves its own index.html when one exists.
 	if asset, ok := app.frontendAssetFor(fsPath + "/index.html"); ok {
-		serveFrontendAsset(w, r, asset, true)
+		serveFrontendAsset(w, r, asset, fsPath+"/index.html")
 		return
 	}
 
@@ -225,5 +249,5 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serveFrontendAsset(w, r, asset, true)
+	serveFrontendAsset(w, r, asset, "webdist/index.html")
 }

@@ -16,12 +16,15 @@ import MoviesInTheaters from "@/components/home/MoviesInTheaters";
 import WatchRooms from "@/components/watch-room/WatchRooms";
 import { MOTION_SECTION_ENTER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { routeHead } from "@/lib/route-head";
 
-const pageTitle = "Home - Igloo";
-const pageDescription =
-  "Welcome to Igloo - explore your personal media library with recently added movies, TV shows, music, and more.";
+const HOME_HEAD = routeHead(
+  "Home",
+  "Welcome to Igloo - explore your personal media library with recently added movies, TV shows, music, and more.",
+);
 
 export const Route = createFileRoute("/_auth/")({
+  head: () => HOME_HEAD,
   loader: async ({ context }) => {
     const { queryClient } = context;
 
@@ -40,10 +43,6 @@ export const Route = createFileRoute("/_auth/")({
 function HomePage() {
   return (
     <div className="min-w-0">
-      {/* React 19 Document Metadata */}
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       <section
         aria-labelledby="home-heading"
         className={cn(

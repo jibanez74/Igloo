@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { jsonResponse } from "../helpers/api";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import { restoreMatchMedia, setReducedMotionPreference } from "../helpers/dom";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
@@ -198,6 +198,23 @@ describe("search route", () => {
     expect(heading.closest("header")?.className).toContain(
       MOTION_SECTION_ENTER_CLASS,
     );
+    // No query of its own: the root description stays.
+    expect(readDocumentHead()).toMatchObject({
+      title: "Search - Igloo",
+      description: expect.stringMatching(/^Igloo is your personal media center/),
+      descriptionCount: 1,
+    });
+  });
+
+  it("titles the page with the trimmed query", async () => {
+    await renderSearchRoute("/search/?q=%20Casino%20&tab=all");
+
+    await screen.findByRole("heading", { name: /Search results for/i });
+    expect(readDocumentHead()).toMatchObject({
+      title: "Search: Casino - Igloo",
+      description: 'Search results in your Igloo library for "Casino".',
+      descriptionCount: 1,
+    });
   });
 
   it("applies section entrance contracts to the results header and stable tabs root", async () => {

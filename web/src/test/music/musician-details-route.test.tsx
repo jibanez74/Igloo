@@ -5,7 +5,7 @@ import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
   getHeroMotionWrapper,
@@ -361,6 +361,13 @@ describe("musician details route accessibility", () => {
     const stats = within(screen.getByRole("list", { name: "Musician statistics" }));
     expect(stats.getByText("1 album")).toBeInTheDocument();
     expect(stats.getByText("2 tracks")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(readDocumentHead()).toMatchObject({
+        title: "The Band - Igloo",
+        description:
+          "Listen to The Band - 1 album, 2 tracks in your Igloo music library.",
+      });
+    });
 
     expect(
       screen.getByRole("group", { name: "Spotify popularity 74 out of 100" }),

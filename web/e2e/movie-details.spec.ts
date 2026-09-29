@@ -189,9 +189,24 @@ const noWatchProgress: WatchProgressType = {
   updated_at: null,
 };
 
-async function mockMovieDetailsApi(page: Page) {
+async function mockMovieDetailsApi(
+  page: Page,
+  { admin = false }: { admin?: boolean } = {},
+) {
+  // Per test: a metadata edit changes it, and the refetch must see the edit.
+  const details = structuredClone(movieDetailsPayload);
+
   const { unexpectedApiRequests } = await mockApi(page, {
+    // Only admins get the Edit action on the details page.
+    user: admin ? { is_admin: true } : {},
     handle: async ({ route, url, method }) => {
+      if (url.pathname === `/api/movies/${movieId}` && method === "PATCH") {
+        const body = route.request().postDataJSON() as { title?: string };
+        if (body.title !== undefined) details.movie.title = body.title;
+        await fulfillJSON(route, apiResponse({}));
+        return true;
+      }
+
       if (method !== "GET") {
         return false;
       }
@@ -203,7 +218,7 @@ async function mockMovieDetailsApi(page: Page) {
           total: 1,
           perPage: MOVIES_PER_PAGE,
         }),
-        [`/api/movies/details/${movieId}`]: movieDetailsPayload,
+        [`/api/movies/details/${movieId}`]: details,
         [`/api/movies/${movieId}/technical-details`]: technicalDetailsPayload,
         [`/api/movies/${movieId}/like-status`]: { is_liked: false },
         [`/api/movies/${movieId}/watch-progress`]: noWatchProgress,
@@ -377,6 +392,30 @@ test("plays an extra video in the YouTube player and returns to the details page
   await expect(
     page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
   ).toBeVisible();
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("editing the title retitles the tab", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockMovieDetailsApi(page, { admin: true });
+
+  await page.goto(moviePath);
+  await expect(page).toHaveTitle("Signal Fire (2024) - Igloo");
+
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Movie" });
+  await dialog.getByRole("tab", { name: "Manual" }).click();
+  await dialog.locator("#manual-title").fill("Signal Fire: Director's Cut");
+  await dialog.getByRole("button", { name: "Save Changes" }).click();
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Director's Cut/ }),
+  ).toBeVisible();
+  // The head only reruns on a router load: the dialog has to refetch the
+  // details and then reload the route, or the tab keeps the old title.
+  await expect(page).toHaveTitle("Signal Fire: Director's Cut (2024) - Igloo");
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
