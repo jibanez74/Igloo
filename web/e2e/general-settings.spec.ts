@@ -6,9 +6,7 @@ import type {
   UpdateGeneralSettingsRequest,
 } from "../src/types";
 import { trackBrowserIssues } from "./e2e-browser-issues";
-import {
-  readJSON,
-} from "./e2e-api";
+import { getApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 
 function requestFromSettings(
@@ -30,15 +28,11 @@ function requestFromSettings(
 }
 
 async function fetchGeneralSettings(page: Page) {
-  const response = await page.context().request.get("/api/settings/general", {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<GeneralSettingsResponseType>(response);
-  expect(body.error, body.message).toBe(false);
-  expect(body.data).toBeTruthy();
-  return body.data!.settings;
+  const data = await getApiData<GeneralSettingsResponseType>(
+    page.context().request,
+    "/api/settings/general",
+  );
+  return data.settings;
 }
 
 async function restoreGeneralSettings(

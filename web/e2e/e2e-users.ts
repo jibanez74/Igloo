@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import type { AdminUserType } from "../src/types";
-import { readJSON } from "./e2e-api";
+import { getApiData, readJSON } from "./e2e-api";
 
 // Disposable accounts for specs that drive the Users API. Every helper runs on
 // a request context that already holds an admin session.
@@ -25,14 +25,11 @@ export async function createUser(request: APIRequestContext, user: NewUser) {
 }
 
 export async function fetchAdminUsers(request: APIRequestContext) {
-  const response = await request.get("/api/admin/users", {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<{ users: AdminUserType[] }>(response);
-  expect(body.error, body.message).toBe(false);
-  return body.data?.users ?? [];
+  const data = await getApiData<{ users: AdminUserType[] }>(
+    request,
+    "/api/admin/users",
+  );
+  return data.users;
 }
 
 /**

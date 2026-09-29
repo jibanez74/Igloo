@@ -6,6 +6,7 @@ import {
   expectURLParams,
   holdMediaRequests,
   mediaApiPath,
+  openHeldPlayer,
   playButton,
   trackStreamRequests,
 } from "./media-e2e-helpers";
@@ -33,10 +34,8 @@ test.beforeEach(async ({ page }) => {
   await loginPageViaApi(page);
 });
 
-async function openEpisodePlayer(page: Page, search: string) {
-  const mediaRequests = await holdMediaRequests(page, episode);
-  await page.goto(`${playPath}?${search}`);
-  return mediaRequests;
+function openEpisodePlayer(page: Page, search: string) {
+  return openHeldPlayer(page, episode, `${playPath}?${search}`);
 }
 
 test("direct play titles the player and streams from the episode route", async ({

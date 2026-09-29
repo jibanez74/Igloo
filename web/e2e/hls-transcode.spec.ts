@@ -1,6 +1,8 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 
 import { STREAM_MODES } from "../src/lib/constants";
+import { getPrimaryVideoStream } from "../src/lib/playback";
+import type { PlaybackVideoStreamType } from "../src/types";
 import { loginPageViaApi } from "./e2e-auth";
 import { intEnv, requireRealInstance } from "./e2e-env";
 import {
@@ -34,13 +36,8 @@ const transcodeProfiles = STREAM_MODES.filter(
   (mode): mode is TranscodeMode => mode.type === "transcode",
 );
 
-type VideoStream = {
-  codec: string;
-  height: number;
-};
-
 type MediaTechnicalDetails = {
-  video_streams: VideoStream[];
+  video_streams: PlaybackVideoStreamType[];
   audio_streams: unknown[];
 };
 
@@ -57,7 +54,6 @@ type HlsEnv = {
   episode?: HlsCase;
 };
 
-const coverArtCodecs = new Set(["mjpeg", "png", "gif", "bmp"]);
 const playbackSessionPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -153,13 +149,6 @@ function assertHlsQuery(
   expect(url.searchParams.get("audio_track")).toBe(String(expected.audioTrack));
 }
 
-function primaryVideoStream(streams: VideoStream[]) {
-  return (
-    streams.find(stream => !coverArtCodecs.has(stream.codec.toLowerCase())) ??
-    streams[0]
-  );
-}
-
 async function expectMediaSupportsCase(
   page: Page,
   hlsCase: HlsCase,
@@ -169,7 +158,9 @@ async function expectMediaSupportsCase(
     page,
     hlsCase.media,
   );
-  const primaryVideo = primaryVideoStream(details.video_streams);
+  // The stream the player itself picks, skipping embedded cover art.
+  const primaryVideo = getPrimaryVideoStream(details.video_streams);
+  const sourceHeight = primaryVideo?.height ?? 0;
   const label = `${hlsCase.media.kind} ${hlsCase.media.id}`;
 
   expect(primaryVideo, `${label} must have a primary video stream`).toBeTruthy();
@@ -178,13 +169,13 @@ async function expectMediaSupportsCase(
     `${label} must have audio track ${audioTrack}`,
   ).toBeGreaterThan(audioTrack);
   expect(
-    primaryVideo.height,
+    sourceHeight,
     `${label} source height must support ${hlsCase.profile}`,
   ).toBeGreaterThanOrEqual(profileMaxHeight(hlsCase.profile));
 
   if (hlsCase.minimumSourceHeight) {
     expect(
-      primaryVideo.height,
+      sourceHeight,
       `${label} must be a 4K source`,
     ).toBeGreaterThanOrEqual(hlsCase.minimumSourceHeight);
   }

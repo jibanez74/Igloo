@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { readJSON } from "./e2e-api";
+import { getApiData } from "./e2e-api";
 import { intEnv } from "./e2e-env";
 
 // Shared player helpers. The locator, URL and request helpers serve the
@@ -69,6 +69,21 @@ export async function holdMediaRequests(
 }
 
 /**
+ * Opens the player at `playUrl` with the media's stream and HLS requests held
+ * (see holdMediaRequests), and returns every URL the player asked for.
+ */
+export async function openHeldPlayer(
+  page: Page,
+  media: E2EMedia,
+  playUrl: string,
+  options?: Parameters<typeof holdMediaRequests>[2],
+) {
+  const mediaRequests = await holdMediaRequests(page, media, options);
+  await page.goto(playUrl);
+  return mediaRequests;
+}
+
+/**
  * Every request for `pathname`, whether or not a route handler answers it, so
  * a test can prove the stream was (or was not) asked for.
  */
@@ -104,27 +119,18 @@ export function mediaApiPath(media: E2EMedia) {
 export async function mediaPlayPath(page: Page, media: E2EMedia) {
   if (media.kind === "movie") return `/movies/${media.id}/play`;
 
-  const header = await fetchMediaJSON<{ show: { id: number } }>(
-    page,
+  const header = await getApiData<{ show: { id: number } }>(
+    page.context().request,
     mediaApiPath(media),
   );
   return `/tv-shows/${header.show.id}/episodes/${media.id}/play`;
 }
 
-async function fetchMediaJSON<T>(page: Page, path: string): Promise<T> {
-  const response = await page.context().request.get(path, {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<T>(response);
-  expect(body.error, body.message).toBe(false);
-  expect(body.data).toBeTruthy();
-  return body.data!;
-}
-
 export function fetchTechnicalDetails<T>(page: Page, media: E2EMedia) {
-  return fetchMediaJSON<T>(page, `${mediaApiPath(media)}/technical-details`);
+  return getApiData<T>(
+    page.context().request,
+    `${mediaApiPath(media)}/technical-details`,
+  );
 }
 
 /**
