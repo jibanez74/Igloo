@@ -158,12 +158,18 @@ describe("route loaders feed their head", () => {
     ).toEqual({ meta: [{ title: "Fight Club - Trailer - Igloo" }] });
   });
 
-  it("titles only a movie's trailer, as the page does", async () => {
-    expect(
-      await headAfterLoad(TrailerRoute, [[tmdbKey, fightClub]], {
-        deps: { mediaType: "show", mediaId: 550, videoKey: undefined },
-      }),
-    ).toEqual({ meta: [{ title: "Trailer - Igloo" }] });
+  it("titles only a movie's trailer without loading a movie, as the page does", async () => {
+    const queryClient = createTestQueryClient();
+    const loaderData = await runLoader(TrailerRoute, {
+      context: { queryClient },
+      deps: { mediaType: "show", mediaId: 550, videoKey: undefined },
+    });
+
+    expect(loaderData).toEqual({ movieTitle: null });
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(TrailerRoute.options.head?.({ loaderData } as never)).toEqual({
+      meta: [{ title: "Trailer - Igloo" }],
+    });
   });
 
   it("leaves a direct video key untitled without loading a movie", async () => {

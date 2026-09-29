@@ -60,7 +60,14 @@ export const Route = createFileRoute("/_auth/trailer")({
     videoKey: search.videoKey,
   }),
   loader: async ({ context, deps }) => {
-    if (!deps.mediaId || deps.mediaId <= 0 || deps.videoKey) {
+    // Titled only when the page itself shows this movie's trailer, so every
+    // other case skips the movie lookup the page would not make either.
+    if (
+      deps.mediaType !== "movie" ||
+      !deps.mediaId ||
+      deps.mediaId <= 0 ||
+      deps.videoKey
+    ) {
       return { movieTitle: null };
     }
 
@@ -68,12 +75,8 @@ export const Route = createFileRoute("/_auth/trailer")({
       movieDetailsQueryOpts(deps.mediaId),
     );
 
-    // Titled only when the page itself shows this movie's trailer.
     return {
-      movieTitle:
-        deps.mediaType === "movie" && !res.error
-          ? (res.data.movie?.title ?? null)
-          : null,
+      movieTitle: !res.error ? (res.data.movie?.title ?? null) : null,
     };
   },
   head: ({ loaderData }) =>
