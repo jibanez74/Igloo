@@ -70,11 +70,20 @@ type MockOptions = {
 
 async function mockPlaylistApi(page: Page, options: MockOptions = {}) {
   const trackPageRequests: number[] = [];
+  // Per test: a rename edits it, and the next details fetch must see the edit.
+  const details = structuredClone(playlistDetails);
 
   const { unexpectedApiRequests } = await mockApi(page, {
     handle: async ({ route, url, method }) => {
       if (url.pathname === `/api/music/playlists/${PLAYLIST_ID}` && method === "GET") {
-        await fulfillJSON(route, apiResponse(playlistDetails));
+        await fulfillJSON(route, apiResponse(details));
+        return true;
+      }
+
+      if (url.pathname === `/api/music/playlists/${PLAYLIST_ID}` && method === "PUT") {
+        const body = route.request().postDataJSON() as { name: string };
+        details.playlist.name = body.name;
+        await fulfillJSON(route, apiResponse({ playlist: details.playlist }));
         return true;
       }
 
@@ -254,6 +263,33 @@ test("says so when a page of the drain fails instead of quietly playing a short 
     page.getByText(`Only ${PLAYLIST_TRACKS_PAGE_SIZE} of ${TOTAL_TRACKS} tracks could be loaded.`),
   ).toBeVisible();
   await expect(trackCounter(page)).toHaveText(`Track 1 of ${PLAYLIST_TRACKS_PAGE_SIZE}`);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("renaming the playlist retitles the tab", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const { unexpectedApiRequests } = await mockPlaylistApi(page);
+
+  await openPlaylist(page);
+
+  // The head is built from the loader's data, not the rendered page.
+  await expect(page).toHaveTitle("Long Haul - Igloo");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    "content",
+    `Listen to Long Haul - ${TOTAL_TRACKS} tracks, 6h 40m in your Igloo playlist.`,
+  );
+
+  await page.getByRole("button", { name: "Edit playlist" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Playlist" });
+  const nameInput = dialog.getByRole("textbox", { name: /^Name/ });
+  await nameInput.fill("Night Drive");
+  await dialog.getByRole("button", { name: "Save Changes" }).click();
+
+  await expect(page.getByRole("heading", { level: 1, name: "Night Drive" })).toBeVisible();
+  // The head only reruns on a router load: the dialog has to refetch the
+  // details and then reload the route, or the tab keeps the old name.
+  await expect(page).toHaveTitle("Night Drive - Igloo");
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

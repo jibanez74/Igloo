@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_IN_THEATERS_KEY, MOVIES_PER_PAGE } from "@/lib/constants";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
 const toastMocks = vi.hoisted(() => ({
   showError: vi.fn(),
@@ -184,6 +184,19 @@ async function signIn() {
   );
   await user.click(screen.getByRole("button", { name: "Sign in" }));
 }
+
+describe("login route head", () => {
+  it("titles and describes the sign-in page", async () => {
+    await renderLoginRouteTree("/login");
+
+    await screen.findByRole("button", { name: "Sign in" });
+    expect(readDocumentHead()).toEqual({
+      title: "Sign In - Igloo",
+      description: "Sign in to access your personal Igloo media library.",
+      descriptionCount: 1,
+    });
+  });
+});
 
 describe("login route redirects", () => {
   it("submits an oversized password intact and displays the credential error", async () => {

@@ -5,7 +5,7 @@ import { MOVIE_CONTROLS_IDLE_MS } from "@/lib/constants";
 import { stubMediaElement } from "../helpers/dom";
 import { authUser, nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import { SHOW_ID } from "../helpers/show-details";
 
 // The player pauses the app-wide audio player on mount, so the route needs
@@ -228,6 +228,9 @@ describe("episode play route", () => {
     expect(router.state.location.pathname).toBe(
       `/tv-shows/${SHOW_ID}/episodes/${EPISODE_ID}/play`,
     );
+    // A URL that already names a mode starts without waiting on the episode,
+    // so a cold load titles the tab generically.
+    expect(readDocumentHead().title).toBe("Playing Episode - Igloo");
   });
 
   it("canonicalizes a link without a mode into the episode's default settings", async () => {
@@ -242,6 +245,12 @@ describe("episode play route", () => {
     expect(search.mode).toBe("direct");
     expect(search.audio_track).toBe(0);
     expect(search.subtitle_track).toBe("off");
+    // Canonicalizing loaded the episode, so the tab names it.
+    await waitFor(() => {
+      expect(readDocumentHead().title).toBe(
+        "Playing Frost Harbor · S1 E3 · The Thaw - Igloo",
+      );
+    });
   });
 
   it("offers to resume an episode with a saved position", async () => {

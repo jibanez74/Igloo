@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   extractGeneratedBlock,
@@ -8,21 +6,19 @@ import {
 import { THEME_COLORS } from "@/lib/theme";
 import { THEME_TOKENS, type ThemeName } from "@/lib/theme-tokens";
 import { oklchToHex, parseOklchTokens } from "../helpers/color";
+import { readWebFile } from "../helpers/public-files";
 
 // The theme sync points (styles.css tokens, boot.css pre-hydration paint, the
 // index.html anti-flash script) are GENERATED from src/lib/theme-tokens.ts by
 // scripts/generate-theme.ts. This test fails when a generated block is edited
 // by hand or the module changes without rerunning `bun run generate:theme`,
 // and when a token's OKLCH value and hex disagree.
-// Files are resolved from the vitest cwd (the web/ project root).
-const read = (relPath: string) =>
-  readFileSync(resolve(process.cwd(), relPath), "utf8");
 
 describe("generated theme blocks match src/lib/theme-tokens.ts", () => {
   it.each(GENERATED_TARGETS.map((target) => [target.relPath, target] as const))(
     "%s is up to date (bun run generate:theme)",
     (relPath, target) => {
-      expect(extractGeneratedBlock(read(relPath), target)).toBe(
+      expect(extractGeneratedBlock(readWebFile(relPath), target)).toBe(
         target.render(),
       );
     },

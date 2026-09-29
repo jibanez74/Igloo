@@ -21,6 +21,7 @@ import {
 import { deleteAlbum } from "@/lib/api";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
 import { parseRouteId } from "@/lib/route-id";
+import { routeHead } from "@/lib/route-head";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
@@ -66,14 +67,44 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+type AlbumHeadData = {
+  title: string;
+  musician: string | null;
+  trackCount: number;
+};
+
+const ALBUM_FALLBACK_HEAD = routeHead("Album");
+
+function albumHead(album: AlbumHeadData | null | undefined) {
+  if (!album) return ALBUM_FALLBACK_HEAD;
+
+  const byline = album.musician ? ` by ${album.musician}` : "";
+
+  return routeHead(
+    `${album.title}${byline}`,
+    `Listen to ${album.title}${byline} - ${pluralize(album.trackCount, "track")} in your Igloo music library.`,
+  );
+}
+
 export const Route = createFileRoute("/_auth/music/album/$id")({
   loader: async ({ context, params }) => {
     const albumId = parseRouteId(params.id);
+    if (albumId == null) return { album: null };
 
-    if (albumId != null) {
-      await context.queryClient.ensureQueryData(albumDetailsQueryOpts(albumId));
-    }
+    const res = await context.queryClient.ensureQueryData(
+      albumDetailsQueryOpts(albumId),
+    );
+    if (res.error || !res.data.album) return { album: null };
+
+    return {
+      album: {
+        title: res.data.album.title,
+        musician: unwrapString(res.data.album.musician),
+        trackCount: res.data.tracks.length,
+      },
+    };
   },
+  head: ({ loaderData }) => albumHead(loaderData?.album),
   component: AlbumDetailsPage,
 });
 
@@ -139,12 +170,6 @@ function AlbumDetailsContent({
   const linkedArtist = musicianName
     ? artists.find(a => a.name.toLowerCase() === musicianName.toLowerCase())
     : undefined;
-
-  // React 19 document metadata - dynamic based on album
-  const pageTitle = musicianName
-    ? `${album.title} by ${musicianName} - Igloo`
-    : `${album.title} - Igloo`;
-  const pageDescription = `Listen to ${album.title}${musicianName ? ` by ${musicianName}` : ""} - ${pluralize(tracks.length, "track")} in your Igloo music library.`;
 
   // Deleting an album also removes its tracks, which the musician pages, the
   // liked lists and any playlist may show, so every music query goes stale.
@@ -277,9 +302,6 @@ function AlbumDetailsContent({
       aria-describedby={pageAnnouncementId}
       className="w-full min-w-0 pb-6 sm:pb-10"
     >
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       {/* Screen reader announcement */}
       <span id={pageAnnouncementId} className="sr-only">
         {pageAnnouncement}

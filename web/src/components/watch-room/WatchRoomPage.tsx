@@ -275,12 +275,6 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
           "fixed inset-0 z-50 min-h-dvh w-full overflow-auto bg-background",
       )}
     >
-      <title>{room.movie_title} Watch Room - Igloo</title>
-      <meta
-        name="description"
-        content={`Watch ${room.movie_title} together in a shared synchronized room.`}
-      />
-
       <LiveAnnouncer message={syncAnnouncement} />
       <LiveAnnouncer
         message={

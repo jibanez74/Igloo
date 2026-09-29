@@ -42,8 +42,12 @@ import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
+import { routeHead } from "@/lib/route-head";
+
+const USERS_SETTINGS_HEAD = routeHead("User Management");
 
 export const Route = createFileRoute("/_auth/settings/users")({
+  head: () => USERS_SETTINGS_HEAD,
   component: UsersSettings,
 });
 

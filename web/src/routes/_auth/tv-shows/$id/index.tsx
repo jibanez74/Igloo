@@ -12,6 +12,7 @@ import {
 } from "@/lib/constants";
 import { showDetailsSearchSchema } from "@/lib/route-search";
 import { parseRouteId } from "@/lib/route-id";
+import { showHead, type MediaHeadData } from "@/lib/route-head";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
 import {
@@ -43,19 +44,28 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
   loaderDeps: ({ search: { season } }) => ({ season }),
   loader: async ({ context, params, deps: { season } }) => {
     const showId = parseRouteId(params.id);
-    if (showId == null) return;
+    if (showId == null) return { show: null };
 
     const details = await context.queryClient.ensureQueryData(
       showDetailsQueryOpts(showId),
     );
 
+    if (details.error) return { show: null };
+    const detailsShow = details.data?.show;
+    const show: MediaHeadData | null = detailsShow
+      ? {
+          title: detailsShow.name,
+          year: unwrapInt(detailsShow.premiere_year),
+          overview: unwrapString(detailsShow.overview),
+        }
+      : null;
+
     // Resolve the season here rather than in the component so the page paints
     // complete: the URL's season when it exists, else the first in the order
     // the API returned (specials sort last, so that is season one for a normal
     // show).
-    if (details.error) return;
     const seasons = details.data?.seasons ?? [];
-    if (seasons.length === 0) return;
+    if (seasons.length === 0) return { show };
 
     const selected =
       season != null && seasons.some(s => s.season_number === season)
@@ -65,7 +75,10 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
     await context.queryClient.ensureQueryData(
       showSeasonEpisodesQueryOpts(showId, selected),
     );
+
+    return { show };
   },
+  head: ({ loaderData }) => showHead(loaderData?.show),
   component: ShowDetailsPage,
 });
 
@@ -159,13 +172,6 @@ function ShowDetailsContent({
   const posterUrl = buildTmdbImageUrl(posterPath, TMDB_POSTER_SIZE);
   const backdropUrl = buildTmdbImageUrl(backdropPath, TMDB_BACKDROP_SIZE);
 
-  const pageTitle = premiereYear
-    ? `${show.name} (${premiereYear}) - Igloo`
-    : `${show.name} - Igloo`;
-  const pageDescription = overview
-    ? overview.slice(0, 160)
-    : `Browse ${show.name} in your Igloo media library.`;
-
   const castForSection = showCastToCastSection(cast);
   const youtubeExtraVideos = prepareYouTubeExtrasForDisplay(extra_videos);
 
@@ -180,9 +186,6 @@ function ShowDetailsContent({
 
   return (
     <article aria-labelledby="show-title" className="w-full min-w-0 pb-6 sm:pb-10">
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       <DetailSkipLinks
         titleHref="#show-title"
         titleLabel="Skip to show info"

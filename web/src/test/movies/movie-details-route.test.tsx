@@ -26,7 +26,7 @@ import {
   playbackSettings,
 } from "../helpers/fixtures";
 import { createTestQueryClient } from "../helpers/render";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 import {
   getDetailMotionWrappers,
   getHeroMotionWrapper,
@@ -471,6 +471,32 @@ describe("movie details route motion", () => {
     expect(
       screen.queryByText("Arrival overview for motion verification."),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("movie details route head", () => {
+  it("titles the page from the loader and follows navigation to another movie", async () => {
+    const { router } = await renderMovieDetailsRoute("/movies/57/");
+
+    await waitFor(() => {
+      expect(readDocumentHead()).toEqual({
+        title: "Arrival (2016) - Igloo",
+        description: "Arrival overview for motion verification.",
+        descriptionCount: 1,
+      });
+    });
+
+    await act(async () => {
+      await router.navigate({ to: "/movies/$id", params: { id: "58" } });
+    });
+
+    await waitFor(() => {
+      expect(readDocumentHead()).toMatchObject({
+        title: "Heat (1995) - Igloo",
+        description: "Heat overview after navigating to a different movie.",
+        descriptionCount: 1,
+      });
+    });
   });
 });
 

@@ -1,7 +1,8 @@
 import { useState, useSyncExternalStore } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { showSuccess, showError } from "@/lib/toast-helpers";
-import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
+import BrandMark from "@/components/app/BrandMark";
 import { login } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { loginSearchSchema } from "@/lib/route-search";
@@ -30,11 +31,15 @@ import {
   lightInputClassName,
 } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
+import { routeHead } from "@/lib/route-head";
 
-const pageTitle = "Sign In - Igloo";
-const pageDescription = "Sign in to access your personal Igloo media library.";
+const LOGIN_HEAD = routeHead(
+  "Sign In",
+  "Sign in to access your personal Igloo media library.",
+);
 
 export const Route = createFileRoute("/login")({
+  head: () => LOGIN_HEAD,
   validateSearch: loginSearchSchema,
   beforeLoad: async ({ context, search }) => {
     const res = await context.queryClient.fetchQuery(
@@ -114,10 +119,6 @@ function LoginPage() {
 
   return (
     <main className="relative flex min-h-svh items-center justify-center px-4">
-      {/* React 19 Document Metadata */}
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       <img
         src={loginBg}
         alt=""
@@ -149,7 +150,7 @@ function LoginPage() {
       >
         <CardHeader className="pb-2 text-center">
           <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
-            <Snowflake className="size-5 text-primary" aria-hidden="true" />
+            <BrandMark className="size-6 text-primary" />
           </div>
           <CardTitle asChild className="text-2xl font-semibold tracking-tight text-foreground">
             <h1>Welcome to Igloo</h1>

@@ -44,8 +44,12 @@ import type {
   GeneralSettingsType,
   UpdateGeneralSettingsRequest,
 } from "@/types";
+import { routeHead } from "@/lib/route-head";
+
+const GENERAL_SETTINGS_HEAD = routeHead("General Settings");
 
 export const Route = createFileRoute("/_auth/settings/")({
+  head: () => GENERAL_SETTINGS_HEAD,
   component: GeneralSettings,
 });
 

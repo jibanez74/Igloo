@@ -55,7 +55,13 @@ The system is implemented with:
   **generated** from `src/lib/theme-tokens.ts` (§2.4).
 - **`tw-animate-css`** for enter/exit animations, with a strict
   `motion-reduce:` discipline (§1.5).
-- **lucide-react** for all icons.
+- **lucide-react** for all icons, with one exception: the **brand mark**.
+  `components/app/BrandMark.tsx` draws the igloo from `lib/brand-mark.ts`,
+  the same glyph the app icons are generated from (§2.4), in `currentColor`
+  with transparent cut-outs so the parent picks the tile: the sidebar shows
+  it on a `bg-primary` tile, the login card and loading screen in a
+  `bg-muted` orb tinted `text-primary`. Never stand in a lucide glyph or a
+  letter for the logo — one mark everywhere, as the streaming apps do.
 
 Theme switching toggles the `dark` class on `<html>` (`web/src/lib/theme.ts`),
 persisted under the `igloo-theme` localStorage key, with an anti-flash inline
@@ -343,6 +349,34 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 
   Never leave a non-interactive element whose only content is `aria-hidden` —
   assistive tech lands on an empty node.
+- **Every route titles the page through its `head`, never in JSX.** The
+  document title is the first thing a screen reader announces after a
+  navigation, and it names the browser tab and history entry. Routes declare
+  TanStack Router's `head` option, and `<HeadContent />` in `__root.tsx`
+  renders it through React 19's head hoisting. There are two rules:
+  - **Build titles and descriptions with `routeHead()`** (`src/lib/route-head.ts`).
+    It produces `<Page> - Igloo` and caps descriptions at 160 characters.
+  - **Where the values come from:**
+    - *Static* values: a module-level constant (`const MOVIES_HEAD = routeHead(…)`)
+      returned from `head: () => MOVIES_HEAD`.
+    - *Data-driven* values: the loader returns only the few fields the head needs,
+      and `head: ({ loaderData }) => …` builds the strings. It must fall back to a
+      generic title when `loaderData` is missing, because a head that throws is
+      only logged.
+    - *After an edit* that renames what the title shows (a movie identify or
+      edit, a playlist rename): await the details refetch, then
+      `router.invalidate()` that route, since heads only rerun on a router load.
+
+  The root head supplies the defaults: the title `Igloo` and the app
+  description. A child's `title` and same-named `meta`
+  override them. A subpage that sets only a title (settings tabs, the players)
+  keeps its parent's description. `index.html` keeps only static, non-route
+  metadata: a plain pre-boot `<title>`, the `robots: noindex, nofollow` meta
+  (seen by crawlers that never run JS), `application-name`,
+  `apple-mobile-web-app-title`, the generated `theme-color` and the
+  manifest/icon links. Don't put
+  `<title>`/`<meta>` in components: a second title or description tag would
+  compete with the route's.
 
 ---
 
@@ -455,6 +489,21 @@ rendered from it by `scripts/generate-theme.ts` between
    IIFE that reads `localStorage["igloo-theme"]` and applies the `dark` class
    before first paint (defaults dark, including on storage errors).
 
+**App icons are generated too.** `scripts/generate-icons.ts`
+(`bun run generate:icons`, `--check`) renders `public/favicon.svg` and
+`public/manifest.webmanifest` as whole files from the tokens, the glyph in
+`src/lib/brand-mark.ts` and `APP_NAME`/`APP_DESCRIPTION` from
+`src/lib/constants.ts` (the root route's head uses the same two), then screenshots the SVG with Playwright's bundled
+Chromium into `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (glyph
+inside the 80 % safe zone), `apple-touch-icon.png` (180 px, full-bleed) and a
+PNG-in-ICO `favicon.ico` (16 + 32 px). The mark is fixed across themes, like
+every streaming app's tile: the dark `--background` canvas with a faint
+`--primary` radial glow at the top (the boot.css tint, stronger), and the
+igloo in `--primary`. Rerun the script after changing any source and
+commit the outputs; `icon-drift.test.ts` diffs the SVG and manifest against
+their renders and checks the ICO structure, while the PNG bytes are not
+compared because they vary by Chromium version.
+
 `src/lib/theme.ts` needs no codegen — it imports the module directly and
 derives `THEME_COLORS` / `THEME_TEXT_COLORS` from the canvas tokens; it
 remains the runtime API: `getStoredTheme()` (boot-time persistence read,
@@ -484,7 +533,8 @@ mobile sheet that auto-closes on nav) + `SidebarInset` content column. The
 provider owns this state internally; the rail and Ctrl/Cmd+B toggle desktop
 collapse, while the mobile trigger controls the sheet.
 
-- Sidebar: logo tile + "Igloo" wordmark linking home; Home / Movies / TV Shows
+- Sidebar: `BrandMark` on a `bg-primary` tile + "Igloo" wordmark linking
+  home; Home / Movies / TV Shows
   / Music / Photos / Settings with lucide icons (active =
   `bg-sidebar-accent` + `text-primary` icon); footer Logout. `SidebarRail`
   gives a click-to-collapse handle.

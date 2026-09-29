@@ -13,6 +13,7 @@ import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
+import { routeHead } from "@/lib/route-head";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
@@ -48,16 +49,42 @@ import type {
   PlayableTrackData,
 } from "@/types";
 
+type MusicianHeadData = {
+  name: string;
+  albumCount: number;
+  trackCount: number;
+};
+
+const MUSICIAN_FALLBACK_HEAD = routeHead("Musician");
+
+function musicianHead(musician: MusicianHeadData | null | undefined) {
+  if (!musician) return MUSICIAN_FALLBACK_HEAD;
+
+  return routeHead(
+    musician.name,
+    `Listen to ${musician.name} - ${pluralize(musician.albumCount, "album")}, ${pluralize(musician.trackCount, "track")} in your Igloo music library.`,
+  );
+}
+
 export const Route = createFileRoute("/_auth/music/musician/$id")({
   loader: async ({ context, params }) => {
     const musicianId = parseRouteId(params.id);
+    if (musicianId == null) return { musician: null };
 
-    if (musicianId != null) {
-      await context.queryClient.ensureQueryData(
-        musicianDetailsQueryOpts(musicianId),
-      );
-    }
+    const res = await context.queryClient.ensureQueryData(
+      musicianDetailsQueryOpts(musicianId),
+    );
+    if (res.error || !res.data.musician) return { musician: null };
+
+    return {
+      musician: {
+        name: res.data.musician.name,
+        albumCount: res.data.albums.length,
+        trackCount: res.data.tracks.length,
+      },
+    };
   },
+  head: ({ loaderData }) => musicianHead(loaderData?.musician),
   component: MusicianDetailsPage,
 });
 
@@ -119,10 +146,6 @@ function MusicianDetailsContent({
   const spotifyPopularity =
     spotifyPopularityRaw !== null ? Math.round(spotifyPopularityRaw) : null;
   const spotifyFollowers = unwrapInt(musician.spotify_followers);
-
-  // React 19 document metadata - dynamic based on musician
-  const pageTitle = `${musician.name} - Igloo`;
-  const pageDescription = `Listen to ${musician.name} - ${pluralize(albums.length, "album")}, ${pluralize(tracks.length, "track")} in your Igloo music library.`;
 
   // A musician's tracks span every album they appear on, so each row carries its
   // own album title and cover. Keep them as PlayableTrackData and hand them to
@@ -196,10 +219,6 @@ function MusicianDetailsContent({
       aria-labelledby="musician-name"
       aria-describedby={pageAnnouncementId}
     >
-      {/* React 19 Document Metadata */}
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       {/* Screen reader announcement */}
       <span id={pageAnnouncementId} className="sr-only">
         {pageAnnouncement}

@@ -10,9 +10,12 @@ import { unwrapString } from "@/lib/nullable";
 import { loadPlayRoute } from "@/lib/play-route-loader";
 import { showEpisodeQueryOpts } from "@/lib/query-opts";
 import { parseRouteId } from "@/lib/route-id";
+import { routeHead } from "@/lib/route-head";
 import { playSearchSchema, type PlaySearchParams } from "@/lib/route-search";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { UpNextItem } from "@/types/playback";
+
+const PLAY_EPISODE_FALLBACK_HEAD = routeHead("Playing Episode");
 
 export const Route = createFileRoute(
   "/_auth/tv-shows/$id/episodes/$episodeId/play",
@@ -27,7 +30,7 @@ export const Route = createFileRoute(
   }),
   loader: async ({ context, params, deps }) => {
     const episodeId = parseRouteId(params.episodeId);
-    if (episodeId == null) return;
+    if (episodeId == null) return { title: null };
 
     const search = await loadPlayRoute({
       queryClient: context.queryClient,
@@ -36,15 +39,37 @@ export const Route = createFileRoute(
         context.queryClient.ensureQueryData(showEpisodeQueryOpts(episodeId)),
       deps,
     });
-    if (!search) return;
+    if (search) {
+      throw redirect({
+        to: "/tv-shows/$id/episodes/$episodeId/play",
+        params: { id: params.id, episodeId: params.episodeId },
+        search,
+        replace: true,
+      });
+    }
 
-    throw redirect({
-      to: "/tv-shows/$id/episodes/$episodeId/play",
-      params: { id: params.id, episodeId: params.episodeId },
-      search,
-      replace: true,
-    });
+    // Cache only: a URL that already carries a mode starts playback without
+    // waiting on the details, so a cold load titles the tab generically.
+    const details = context.queryClient.getQueryData(
+      showEpisodeQueryOpts(episodeId).queryKey,
+    );
+
+    return {
+      title:
+        details && !details.error
+          ? episodeTitle(
+              details.data.show.name,
+              details.data.season.season_number,
+              details.data.episode.episode_number,
+              details.data.episode.name,
+            )
+          : null,
+    };
   },
+  head: ({ loaderData }) =>
+    loaderData?.title
+      ? routeHead(`Playing ${loaderData.title}`)
+      : PLAY_EPISODE_FALLBACK_HEAD,
   component: PlayEpisodePage,
 });
 

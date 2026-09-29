@@ -4,13 +4,21 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import EditMovieDialog from "@/components/movies/EditMovieDialog";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { LIBRARY_MOVIE_DETAILS_KEY } from "@/lib/constants";
 import type { ApiResponseType, LibraryMovieDetailsMovieType, TmdbSearchResultType } from "@/types";
 import { createTestQueryClient } from "../helpers/render";
+import {
+  expectRefetchedBeforeReload,
+  recordRefreshOrder,
+} from "../helpers/route-refresh";
 
 const apiMocks = vi.hoisted(() => ({
   identifyMovie: vi.fn(),
   searchTmdbMovies: vi.fn(),
   updateMovieMetadata: vi.fn(),
+}));
+const routerMocks = vi.hoisted(() => ({
+  invalidate: vi.fn(() => Promise.resolve()),
 }));
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
@@ -29,6 +37,16 @@ vi.mock("@/lib/api", async () => {
     updateMovieMetadata: (...args: unknown[]) =>
       apiMocks.updateMovieMetadata(...args),
   };
+});
+
+// The dialog reloads the movie route after a save so its head picks up a new
+// title; the tests render without a router.
+vi.mock("@tanstack/react-router", async () => {
+  const actual = await vi.importActual<
+    typeof import("@tanstack/react-router")
+  >("@tanstack/react-router");
+
+  return { ...actual, useRouter: () => routerMocks };
 });
 
 vi.mock("sonner", () => ({
@@ -177,6 +195,7 @@ function renderDialog(options: Partial<DialogHarnessProps> = {}) {
 
   return {
     onOpenChange,
+    queryClient,
     rerenderDialog(nextProps: Partial<DialogHarnessProps>) {
       currentProps = {
         ...currentProps,
@@ -288,7 +307,8 @@ describe("EditMovieDialog", () => {
     apiMocks.updateMovieMetadata.mockResolvedValue(success({}));
 
     const user = userEvent.setup();
-    const { rerenderDialog, onOpenChange } = renderDialog();
+    const { rerenderDialog, onOpenChange, queryClient } = renderDialog();
+    const refreshOrder = recordRefreshOrder(queryClient, routerMocks.invalidate);
 
     await openManualTab(user);
 
@@ -317,6 +337,10 @@ describe("EditMovieDialog", () => {
       });
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(() => {
+      expect(routerMocks.invalidate).toHaveBeenCalledOnce();
+    });
+    expectRefetchedBeforeReload(refreshOrder, [LIBRARY_MOVIE_DETAILS_KEY, 17]);
   });
 
   it("supports keyboard selection when identifying a movie with TMDB", async () => {
@@ -335,7 +359,8 @@ describe("EditMovieDialog", () => {
     apiMocks.identifyMovie.mockResolvedValue(success({}));
 
     const user = userEvent.setup();
-    const { onOpenChange } = renderDialog();
+    const { onOpenChange, queryClient } = renderDialog();
+    const refreshOrder = recordRefreshOrder(queryClient, routerMocks.invalidate);
 
     const titleInput = screen.getByLabelText("Title");
     const applyButton = screen.getByRole("button", { name: "Apply Selected" });
@@ -386,5 +411,9 @@ describe("EditMovieDialog", () => {
     expect(toastMocks.success).toHaveBeenCalledWith(
       "Movie identified successfully",
     );
+    await waitFor(() => {
+      expect(routerMocks.invalidate).toHaveBeenCalledOnce();
+    });
+    expectRefetchedBeforeReload(refreshOrder, [LIBRARY_MOVIE_DETAILS_KEY, 17]);
   });
 });

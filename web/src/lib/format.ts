@@ -44,6 +44,16 @@ export function parseCatalogDate(date: string) {
     : new Date(date);
 }
 
+// The calendar year of a stored catalog date, or null when the date is missing
+// or unparseable (so a title never reads "(NaN)").
+export function catalogYear(date: string | null | undefined): number | null {
+  if (!date) return null;
+
+  const year = parseCatalogDate(date).getFullYear();
+
+  return Number.isNaN(year) ? null : year;
+}
+
 // takes in a date string and returns a formatted date string
 // format is month day, year
 export function formatDate(date: string) {

@@ -11,10 +11,11 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { pickTmdbCertification } from "@/lib/tmdb-certification";
 import { parseRouteId } from "@/lib/route-id";
 import {
+  catalogYear,
   formatRuntimeMinutes,
-  parseCatalogDate,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
+import { movieHead } from "@/lib/route-head";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import DetailSkeleton from "@/components/shared/DetailSkeleton";
 import CastSection from "@/components/shared/CastSection";
@@ -37,6 +38,29 @@ import type {
 import type { NullableString } from "@/types";
 
 export const Route = createFileRoute("/_auth/movies/in-theaters/$id")({
+  // Loaded up front so the head has the title. A failure envelope (TMDB not
+  // configured, unknown id) is cached like before and the page's guard
+  // renders it; a malformed id never reaches TMDB.
+  loader: async ({ context, params }) => {
+    const movieId = parseRouteId(params.id);
+    if (movieId == null) return { movie: null };
+
+    const res = await context.queryClient.ensureQueryData(
+      movieDetailsQueryOpts(movieId),
+    );
+    const movie = res.error ? null : res.data.movie;
+
+    return {
+      movie: movie
+        ? {
+            title: movie.title,
+            year: catalogYear(movie.release_date),
+            overview: movie.overview || null,
+          }
+        : null,
+    };
+  },
+  head: ({ loaderData }) => movieHead(loaderData?.movie),
   component: MovieDetailsPage,
 });
 
@@ -128,16 +152,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   );
 
   const releaseDateStr = movie.release_date || null;
-  const releaseYear = releaseDateStr
-    ? parseCatalogDate(releaseDateStr).getFullYear()
-    : null;
-
-  const pageTitle = releaseYear
-    ? `${movie.title} (${releaseYear}) - Igloo`
-    : `${movie.title} - Igloo`;
-  const pageDescription = movie.overview
-    ? movie.overview.slice(0, 160)
-    : `Watch ${movie.title} in your Igloo media library.`;
+  const releaseYear = catalogYear(releaseDateStr);
 
   const runtime = formatRuntimeMinutes(movie.runtime);
   const certificationLabel = pickTmdbCertification(movie.release_dates);
@@ -172,9 +187,6 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
       aria-labelledby="movie-title"
       className="w-full min-w-0 pb-6 sm:pb-10"
     >
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
-
       <DetailSkipLinks
         titleHref="#movie-title"
         titleLabel="Skip to movie info"

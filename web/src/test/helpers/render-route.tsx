@@ -60,3 +60,17 @@ export async function renderRoute(
     ...view,
   };
 }
+
+/**
+ * The head tags a route leaves applied. Counts the description metas too: the
+ * root and route heads are merged by name, so there must only ever be one.
+ */
+export function readDocumentHead() {
+  const descriptions = document.head.querySelectorAll('meta[name="description"]');
+
+  return {
+    title: document.title,
+    description: descriptions[0]?.getAttribute("content") ?? null,
+    descriptionCount: descriptions.length,
+  };
+}

@@ -53,6 +53,7 @@ import type {
 } from "@/types";
 import { searchSearchSchema, type SearchParams } from "@/lib/route-search";
 import { nounForCount, pluralize } from "@/lib/format";
+import { routeHead } from "@/lib/route-head";
 
 type PagedSearchTab = Exclude<SearchTab, "all">;
 
@@ -91,6 +92,8 @@ function redirectToLastSearchPage({
     replace: true,
   });
 }
+
+const SEARCH_HEAD = routeHead("Search");
 
 export const Route = createFileRoute("/_auth/search/")({
   validateSearch: searchSearchSchema,
@@ -135,6 +138,16 @@ export const Route = createFileRoute("/_auth/search/")({
       });
     }
   },
+  head: ({ match }) => {
+    const trimmed = match.search.q.trim();
+
+    return trimmed
+      ? routeHead(
+          `Search: ${trimmed}`,
+          `Search results in your Igloo library for "${trimmed}".`,
+        )
+      : SEARCH_HEAD;
+  },
   component: SearchPage,
 });
 
@@ -166,7 +179,6 @@ function SearchPage() {
   if (!trimmed) {
     return (
       <div className="min-w-0">
-        <title>Search - Igloo</title>
         <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
           <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
             <Search
@@ -279,12 +291,6 @@ function SearchPage() {
 
   return (
     <div className="min-w-0">
-      <title>{`Search: ${trimmed} - Igloo`}</title>
-      <meta
-        name="description"
-        content={`Search results in your Igloo library for "${trimmed}".`}
-      />
-
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
           <Search

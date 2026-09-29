@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import {
   showCreated,
   showUpdated,
@@ -125,6 +126,7 @@ function PlaylistForm({
 }: PlaylistFormProps) {
   const config = DIALOG_CONFIG[mode];
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Initialize form state based on mode
   const [name, setName] = useState(playlist?.name ?? "");
@@ -164,19 +166,25 @@ function PlaylistForm({
         is_public: playlist.is_public,
       });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.error) {
         showActionFailed("update playlist", data.message);
         return;
       }
       queryClient.invalidateQueries({ queryKey: [PLAYLISTS_KEY] });
-      if (playlist) {
-        queryClient.invalidateQueries({
-          queryKey: [PLAYLIST_DETAILS_KEY, playlist.id],
-        });
-      }
       showUpdated("Playlist");
       onOpenChange(false);
+      if (playlist) {
+        // The playlist page's head takes the name from its loader data: wait
+        // for the details refetch, then reload that route so the tab title
+        // follows a rename.
+        await queryClient.invalidateQueries({
+          queryKey: [PLAYLIST_DETAILS_KEY, playlist.id],
+        });
+        await router.invalidate({
+          filter: match => match.routeId === "/_auth/music/playlist/$id",
+        });
+      }
     },
     onError: () => {
       showActionFailed("update playlist");

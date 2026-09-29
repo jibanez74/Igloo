@@ -1,10 +1,10 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { authUser, nullableInt64, nullableString } from "../helpers/fixtures";
-import { renderRoute } from "../helpers/render-route";
+import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
 function movie(id: number, title: string, year: number) {
   return {
@@ -107,6 +107,12 @@ describe("movie playlist route", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("Arrival")).toBeInTheDocument();
     expect(screen.getByText("Heat")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(readDocumentHead()).toMatchObject({
+        title: "Weekend Picks - Igloo",
+        description: "Movie playlist: Weekend Picks",
+      });
+    });
   });
 
   it("scopes the empty copy to the playlist, not the library", async () => {

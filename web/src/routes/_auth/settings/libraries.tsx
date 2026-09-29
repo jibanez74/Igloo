@@ -43,8 +43,12 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
+import { routeHead } from "@/lib/route-head";
+
+const LIBRARIES_SETTINGS_HEAD = routeHead("Library Settings");
 
 export const Route = createFileRoute("/_auth/settings/libraries")({
+  head: () => LIBRARIES_SETTINGS_HEAD,
   component: LibrariesSettings,
 });
 

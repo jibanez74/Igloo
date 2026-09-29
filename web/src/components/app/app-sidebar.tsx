@@ -32,6 +32,7 @@ import {
 } from "@/lib/constants";
 import { showError } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
+import BrandMark from "@/components/app/BrandMark";
 
 type NavItem = {
   title: string;
@@ -133,7 +134,7 @@ export default function AppSidebar({
           )}
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-            <span className="text-lg font-bold">I</span>
+            <BrandMark className="size-5" />
           </div>
           <span className="text-lg font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
             Igloo
