@@ -10,7 +10,7 @@ import {
   PEER_FOCUS_VISIBLE_RING_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
-import { pluralize } from "@/lib/format";
+import { catalogYear, pluralize } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -250,7 +250,7 @@ function TmdbResultCard({
   const posterUrl = result.poster_path
     ? buildTmdbImageUrl(result.poster_path, TMDB_POSTER_SIZE)
     : null;
-  const releaseYear = result.release_date?.slice(0, 4);
+  const releaseYear = catalogYear(result.release_date);
   const labelId = `${inputId}-label`;
 
   return (
@@ -296,7 +296,7 @@ function TmdbResultCard({
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-foreground">
             {result.title}
-            {releaseYear && (
+            {releaseYear != null && (
               <span className="ml-1 text-muted-foreground">({releaseYear})</span>
             )}
           </p>

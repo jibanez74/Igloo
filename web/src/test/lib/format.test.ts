@@ -226,6 +226,10 @@ describe("formatDate", () => {
 });
 
 describe("parseCatalogDate", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("reads a date-only value as a local calendar date", () => {
     // The year, not just the day, is at stake: "2024-01-01" parsed at UTC
     // midnight reports 2023 anywhere west of UTC, so a show's air range
@@ -235,6 +239,22 @@ describe("parseCatalogDate", () => {
     expect(d.getFullYear()).toBe(2024);
     expect(d.getMonth()).toBe(0);
     expect(d.getDate()).toBe(1);
+  });
+
+  it("reads a year or year-month value as the first of that period, locally", () => {
+    // Spotify cuts release dates to the year or month; parsed at UTC midnight
+    // "1999" would be 1998 anywhere west of UTC.
+    vi.stubEnv("TZ", "America/Los_Angeles");
+
+    const year = parseCatalogDate("1999");
+    const month = parseCatalogDate("1999-05");
+
+    expect([year.getFullYear(), year.getMonth(), year.getDate()]).toEqual([
+      1999, 0, 1,
+    ]);
+    expect([month.getFullYear(), month.getMonth(), month.getDate()]).toEqual([
+      1999, 4, 1,
+    ]);
   });
 
   it("leaves a value carrying a time to the normal parser", () => {

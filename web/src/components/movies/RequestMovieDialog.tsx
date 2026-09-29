@@ -12,6 +12,7 @@ import TmdbMoviePicker from "@/components/movies/TmdbMoviePicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
+import { catalogYear } from "@/lib/format";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
@@ -42,7 +43,7 @@ export default function RequestMovieDialog({
     }
 
     const requester = authData.data.user;
-    const releaseYear = selectedResult.release_date?.slice(0, 4).trim();
+    const releaseYear = catalogYear(selectedResult.release_date);
     const lines = [
       `Requester: ${requester.name} <${requester.email}>`,
       `Movie: ${selectedResult.title}`,

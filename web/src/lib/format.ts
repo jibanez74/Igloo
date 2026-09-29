@@ -21,7 +21,9 @@ const usdCurrencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+// A calendar date, optionally cut to the month or year the way Spotify reports
+// release dates at a lower precision ("1999", "1999-05").
+const DATE_ONLY_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 
 // takes in a date string and returns a Date in the viewer's local time
 //
@@ -29,8 +31,8 @@ const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 // date-only. `new Date("2024-03-01")` parses those as UTC midnight but reads
 // back in local time, so every such date rendered a day early west of UTC —
 // and a January date reported the previous year. A date-only string is
-// therefore split and built as a local date; anything carrying a time or zone
-// is left to the normal parser. Use this anywhere a stored date is rendered or
+// therefore split and built as a local date (a missing month or day reads as
+// the first); anything carrying a time or zone is left to the normal parser. Use this anywhere a stored date is rendered or
 // a calendar field is read off it, never a bare `new Date(stored)`.
 export function parseCatalogDate(date: string) {
   const dateOnly = DATE_ONLY_PATTERN.exec(date);
@@ -38,8 +40,8 @@ export function parseCatalogDate(date: string) {
   return dateOnly
     ? new Date(
         Number(dateOnly[1]),
-        Number(dateOnly[2]) - 1,
-        Number(dateOnly[3]),
+        Number(dateOnly[2] ?? 1) - 1,
+        Number(dateOnly[3] ?? 1),
       )
     : new Date(date);
 }
