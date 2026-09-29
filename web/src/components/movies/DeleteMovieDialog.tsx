@@ -58,11 +58,14 @@ export default function DeleteMovieDialog({
     onOpenChange(false);
     // Leave the details page before invalidating, so its queries for the
     // deleted movie are no longer active and never refetch into a 404.
-    await navigate({ to: "/" });
-    // Every movie list can hold the deleted title, and so can Home's
-    // continue-watching row.
-    invalidateMovieLibraryQueries(queryClient);
-    void queryClient.invalidateQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
+    try {
+      await navigate({ to: "/" });
+    } finally {
+      // Every movie list can hold the deleted title, and so can Home's
+      // continue-watching row.
+      invalidateMovieLibraryQueries(queryClient);
+      void queryClient.invalidateQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
+    }
   }
 
   return (
