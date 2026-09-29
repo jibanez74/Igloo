@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   capitalize,
   catalogYear,
+  chapterLabel,
   formatDate,
   formatRuntimeMinutes,
   formatSpokenRuntimeMinutes,
@@ -332,5 +333,16 @@ describe("capitalize", () => {
 
   it("leaves an empty string empty", () => {
     expect(capitalize("")).toBe("");
+  });
+});
+
+describe("chapterLabel", () => {
+  it("uses the file's title, trimmed", () => {
+    expect(chapterLabel("  Opening Credits ", 0)).toBe("Opening Credits");
+  });
+
+  it("names a blank or missing title by its 1-based position", () => {
+    expect(chapterLabel("   ", 1)).toBe("Chapter 2");
+    expect(chapterLabel(null, 4)).toBe("Chapter 5");
   });
 });

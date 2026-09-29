@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { formatTimecode } from "@/lib/format";
+import { chapterLabel, formatTimecode } from "@/lib/format";
 import {
   DETAIL_RAIL_HEADING_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
@@ -40,7 +40,7 @@ export default function MovieChaptersSection({
         className="-mx-4 flex snap-x snap-mandatory scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
         aria-label={`Chapters, ${chapters.length} total`}
       >
-        {chapters.map(chapter => (
+        {chapters.map((chapter, index) => (
           <li
             key={chapter.id}
             className="w-[min(18rem,calc(100vw-2.5rem))] shrink-0 snap-start scroll-ms-1 scroll-me-1 sm:scroll-ms-2 sm:scroll-me-2"
@@ -60,7 +60,9 @@ export default function MovieChaptersSection({
                 "sm:min-h-0",
               )}
             >
-              <span className="leading-snug font-medium">{chapter.title}</span>
+              <span className="leading-snug font-medium">
+                {chapterLabel(chapter.title, index)}
+              </span>
               <span className="mt-0.5 text-muted-foreground">
                 {formatTimecode(chapter.start_time)}
               </span>

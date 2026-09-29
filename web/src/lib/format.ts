@@ -357,6 +357,19 @@ export function episodeTitle(
   return `${showName} · ${episodeCode(seasonNumber, episodeNumber)} · ${episodeName}`;
 }
 
+/**
+ * A chapter's display name. Titles come straight from the media file's
+ * metadata and are often blank or whitespace, so a blank one reads
+ * "Chapter N" (1-based) and every entry has a name on screen and for screen
+ * readers.
+ */
+export function chapterLabel(
+  title: string | null | undefined,
+  index: number,
+): string {
+  return title?.trim() || `Chapter ${index + 1}`;
+}
+
 /** The string with its first character upper-cased: "movie" -> "Movie". */
 export function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);

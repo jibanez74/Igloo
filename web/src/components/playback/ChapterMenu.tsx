@@ -9,7 +9,13 @@ import {
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
 } from "@/lib/constants";
-import { formatSpokenTime, formatTimecode, pluralize } from "@/lib/format";
+import {
+  chapterLabel,
+  formatSpokenTime,
+  formatTimecode,
+  pluralize,
+} from "@/lib/format";
+import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
 import type { PlaybackChapterType } from "@/types";
 
@@ -33,18 +39,6 @@ function getActiveChapterIndex(
     }
   }
   return -1;
-}
-
-// Chapter titles come straight from the media file's metadata and are often
-// blank or whitespace. When present we use the title; otherwise fall back to a
-// human-readable "Chapter N" label so every entry has a meaningful name on
-// screen and for screen readers.
-function getChapterTitle(chapter: PlaybackChapterType): string {
-  return chapter.title?.trim() ?? "";
-}
-
-function getChapterLabel(chapter: PlaybackChapterType, index: number): string {
-  return getChapterTitle(chapter) || `Chapter ${index + 1}`;
 }
 
 export default function ChapterMenu({
@@ -77,8 +71,8 @@ export default function ChapterMenu({
       >
         {chapters.map((chapter, index) => {
           const isActive = index === activeIndex;
-          const title = getChapterTitle(chapter);
-          const label = getChapterLabel(chapter, index);
+          const title = trimmedOrNull(chapter.title);
+          const label = chapterLabel(chapter.title, index);
           // Build one spoken sentence so screen readers announce a logical
           // phrase ("Chapter 2 of 8, Opening Credits, starts at 1 minute 23
           // seconds, current chapter") instead of reading the raw timecode. The
@@ -86,7 +80,7 @@ export default function ChapterMenu({
           // avoid the redundant "Chapter 2 of 8, Chapter 2".
           const ariaLabel = [
             `Chapter ${index + 1} of ${chapters.length}`,
-            title || null,
+            title,
             `starts at ${formatSpokenTime(chapter.start_time)}`,
             isActive ? "current chapter" : null,
           ]
