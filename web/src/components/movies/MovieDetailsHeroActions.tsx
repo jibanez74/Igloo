@@ -23,13 +23,12 @@ import {
 import MovieLikeButton from "@/components/movies/MovieLikeButton";
 import { setMovieWatched } from "@/lib/api";
 import { movieMediaRef } from "@/lib/media-ref";
-import { MOVIE_WATCH_PROGRESS_KEY } from "@/lib/constants";
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import { playbackSettingsToPlaySearch } from "@/lib/route-search";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { refreshWatchQueries } from "@/lib/video-playback-exit";
-import type { ApiResponseType, WatchProgressType } from "@/types";
+import type { WatchProgressType } from "@/types";
 import type { LibraryMovieDetailsMovieType } from "@/types/movies";
 import type { PlaybackSettings } from "@/types/playback";
 import type { AuthUser } from "@/types/user";
@@ -108,9 +107,10 @@ export default function MovieDetailsHeroActions({
     }
     onPlaybackSettingsOpenChange(next);
   };
-  const { data: watchProgressData, isLoading: watchProgressLoading } = useQuery(
-    movieWatchProgressQueryOpts(movieId),
-  );
+  const watchProgressQuery = movieWatchProgressQueryOpts(movieId);
+  const watchProgressKey = watchProgressQuery.queryKey;
+  const { data: watchProgressData, isLoading: watchProgressLoading } =
+    useQuery(watchProgressQuery);
   const isWatched =
     watchProgressData?.error === false
       ? Boolean(watchProgressData.data.watched)
@@ -119,17 +119,13 @@ export default function MovieDetailsHeroActions({
   const watchedMutation = useMutation({
     mutationFn: (nextWatched: boolean) => setMovieWatched(movieId, nextWatched),
     onMutate: async (nextWatched: boolean) => {
-      await queryClient.cancelQueries({
-        queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId],
-      });
-      const key = [MOVIE_WATCH_PROGRESS_KEY, movieId] as const;
-      const previous =
-        queryClient.getQueryData<ApiResponseType<WatchProgressType>>(key);
+      await queryClient.cancelQueries({ queryKey: watchProgressKey });
+      const previous = queryClient.getQueryData(watchProgressKey);
       const currentProgress = previous?.error === false
         ? previous.data
         : emptyWatchProgress();
 
-      queryClient.setQueryData<ApiResponseType<WatchProgressType>>(key, {
+      queryClient.setQueryData(watchProgressKey, {
         error: false,
         data: {
           ...currentProgress,
@@ -141,11 +137,10 @@ export default function MovieDetailsHeroActions({
       return { previous };
     },
     onError: (_err, _nextWatched, context) => {
-      const key = [MOVIE_WATCH_PROGRESS_KEY, movieId] as const;
       if (context?.previous !== undefined) {
-        queryClient.setQueryData(key, context.previous);
+        queryClient.setQueryData(watchProgressKey, context.previous);
       } else {
-        queryClient.setQueryData<ApiResponseType<WatchProgressType>>(key, {
+        queryClient.setQueryData(watchProgressKey, {
           error: false,
           data: emptyWatchProgress(),
         });
@@ -156,29 +151,24 @@ export default function MovieDetailsHeroActions({
       );
     },
     onSuccess: (res, nextWatched, context) => {
-      const key = [MOVIE_WATCH_PROGRESS_KEY, movieId] as const;
       if (res.error) {
         if (context?.previous !== undefined) {
-          queryClient.setQueryData(key, context.previous);
+          queryClient.setQueryData(watchProgressKey, context.previous);
         } else {
-          queryClient.setQueryData<ApiResponseType<WatchProgressType>>(
-            key,
-            {
-              error: false,
-              data: emptyWatchProgress(),
-            },
-          );
+          queryClient.setQueryData(watchProgressKey, {
+            error: false,
+            data: emptyWatchProgress(),
+          });
         }
         showActionFailed("update watched status", res.message);
         return;
       }
 
-      const previous =
-        queryClient.getQueryData<ApiResponseType<WatchProgressType>>(key);
+      const previous = queryClient.getQueryData(watchProgressKey);
       const currentProgress = previous?.error === false
         ? previous.data
         : emptyWatchProgress();
-      queryClient.setQueryData<ApiResponseType<WatchProgressType>>(key, {
+      queryClient.setQueryData(watchProgressKey, {
         error: false,
         data: {
           ...currentProgress,
