@@ -33,7 +33,7 @@ import {
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
-import { authUserQueryOpts } from "@/lib/query-opts";
+import { authUserFrom, authUserQueryOpts } from "@/lib/query-opts";
 import {
   AUTH_USER_KEY,
   ADMIN_USERS_KEY,
@@ -52,6 +52,7 @@ import {
   uploadUserAvatar,
   deleteUserAccount,
 } from "@/lib/api";
+import { passwordRuleError } from "@/lib/form-validation";
 import {
   showSuccess,
   showError,
@@ -59,7 +60,6 @@ import {
   showValidationError,
 } from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
-import type { AuthUser } from "@/types";
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
@@ -126,10 +126,7 @@ function AccountSettings() {
   const confirmPasswordErrorId = `${confirmPasswordId}-error`;
   const deleteConfirmErrorId = `${deleteConfirmId}-error`;
 
-  const user: AuthUser | null =
-    userData?.error === false && userData.data?.user
-      ? (userData.data.user)
-      : null;
+  const user = authUserFrom(userData);
 
   // Form input state (controlled inputs)
   const [name, setName] = useState<string | null>(null);
@@ -392,13 +389,11 @@ function AccountSettings() {
       nextErrors.currentPassword = "Current password is required.";
     }
 
-    if (!newPassword) {
-      nextErrors.newPassword = "New password is required.";
-    } else if (codePointLength(newPassword) < USER_PASSWORD_MIN_LENGTH) {
-      nextErrors.newPassword = `New password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (new TextEncoder().encode(newPassword).length > USER_PASSWORD_MAX_BYTES) {
-      nextErrors.newPassword =
-        `New password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
+    const newPasswordRule = newPassword
+      ? passwordRuleError(newPassword, "New password")
+      : "New password is required.";
+    if (newPasswordRule) {
+      nextErrors.newPassword = newPasswordRule;
     }
 
     if (!confirmPassword) {

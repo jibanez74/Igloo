@@ -1,5 +1,6 @@
 import type { Ref } from "react";
 import PlaybackStatusScreen from "@/components/playback/PlaybackStatusScreen";
+import { capitalize } from "@/lib/format";
 import type { PlaybackStatus } from "@/types";
 
 type PlaybackStatusViewProps = {
@@ -11,10 +12,6 @@ type PlaybackStatusViewProps = {
   backButtonRef: Ref<HTMLButtonElement>;
   containerRef: Ref<HTMLDivElement>;
 };
-
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
 
 export default function PlaybackStatusView({
   status,

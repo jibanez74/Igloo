@@ -16,6 +16,7 @@ import type {
   WatchRoomPlaybackStateType,
   WatchRoomServerEventType,
 } from "@/types";
+import { clearTimeoutRef } from "@/lib/utils";
 
 const MAX_RECONNECT_DELAY_MS = 16_000;
 
@@ -76,10 +77,7 @@ export function useWatchRoomConnection({
   const closeRoomConnection = () => {
     intentionalCloseRef.current = true;
 
-    if (reconnectTimeoutRef.current !== null) {
-      window.clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
+    clearTimeoutRef(reconnectTimeoutRef);
 
     clearHeartbeat();
 
@@ -297,10 +295,7 @@ export function useWatchRoomConnection({
       cancelled = true;
       intentionalCloseRef.current = true;
 
-      if (reconnectTimeoutRef.current !== null) {
-        window.clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
+      clearTimeoutRef(reconnectTimeoutRef);
 
       clearHeartbeat();
       // Teardown owns this now that a stale close returns early above.

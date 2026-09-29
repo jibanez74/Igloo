@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSubtitleTrackInfo } from "@/lib/video-playback";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
-import { effectiveModeLabel } from "@/lib/playback";
+import { effectiveModeLabel, streamModeLabel } from "@/lib/playback";
 import type { SubtitleType } from "@/types";
 
 function subtitle(overrides: Partial<SubtitleType> = {}): SubtitleType {
@@ -129,5 +129,15 @@ describe("effectiveModeLabel", () => {
     expect(effectiveModeLabel("remux", "something_else")).toBe(
       "Original video, adjusted audio",
     );
+  });
+});
+
+describe("streamModeLabel", () => {
+  it("names a known stream mode", () => {
+    expect(streamModeLabel("remux")).toBe("Original video, adjusted audio");
+  });
+
+  it("falls back to the raw id for a mode it does not list", () => {
+    expect(streamModeLabel("something_else")).toBe("something_else");
   });
 });

@@ -3,6 +3,7 @@ import MediaNotFound, {
   type BackDestination,
 } from "@/components/shared/MediaNotFound";
 import { apiErrorMessage } from "@/lib/is-api-failure";
+import { capitalize } from "@/lib/format";
 
 type MediaDetailGuardProps<TPayload> = {
   /** The parsed route id; null when the URL segment was not a number. */
@@ -61,9 +62,9 @@ export default function MediaDetailGuard<TPayload>({
   }
 
   if (payload == null) {
-    const capitalized = noun.charAt(0).toUpperCase() + noun.slice(1);
-
-    return <MediaNotFound message={`${capitalized} not found.`} back={back} />;
+    return (
+      <MediaNotFound message={`${capitalize(noun)} not found.`} back={back} />
+    );
   }
 
   return <>{children(payload, id)}</>;

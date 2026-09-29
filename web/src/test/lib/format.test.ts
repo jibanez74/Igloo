@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  capitalize,
   catalogYear,
   formatDate,
   formatRuntimeMinutes,
@@ -276,5 +277,16 @@ describe("nounForCount", () => {
     expect(nounForCount(3, { singular: "person", plural: "people" })).toBe(
       "people",
     );
+  });
+});
+
+describe("capitalize", () => {
+  it("upper-cases only the first character", () => {
+    expect(capitalize("movie")).toBe("Movie");
+    expect(capitalize("behind the scenes")).toBe("Behind the scenes");
+  });
+
+  it("leaves an empty string empty", () => {
+    expect(capitalize("")).toBe("");
   });
 });

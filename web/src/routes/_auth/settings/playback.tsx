@@ -31,6 +31,7 @@ import {
 import { updatePlaybackSettings } from "@/lib/api";
 import { parseMbpsInput } from "@/lib/playback";
 import {
+  authUserFrom,
   authUserQueryOpts,
   playbackSettingsFromResponse,
   playbackSettingsQueryOpts,
@@ -112,8 +113,7 @@ function PlaybackSettings() {
   const { data: authData, isLoading: authLoading } = useQuery(
     authUserQueryOpts(),
   );
-  const user =
-    authData?.error === false && authData.data?.user ? authData.data.user : null;
+  const user = authUserFrom(authData);
   const { data, isLoading } = useQuery(playbackSettingsQueryOpts());
 
   const settings = playbackSettingsFromResponse(data);

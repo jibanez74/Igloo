@@ -14,6 +14,7 @@ import { pluralize } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
+import { handleRadioListKey } from "@/lib/radio-list";
 import type { ApiResponseType, TmdbSearchMoviesRequest, TmdbSearchResultType } from "@/types";
 
 type TmdbMoviePickerProps = {
@@ -65,45 +66,14 @@ export default function TmdbMoviePicker({
     return `${pickerId}-tmdb-result-${tmdbId}`;
   }
 
-  function handleResultArrowKey(
+  const handleResultArrowKey = (
     event: KeyboardEvent<HTMLInputElement>,
     currentIndex: number,
-  ) {
-    if (
-      event.key === " "
-      || event.key === "Space"
-      || event.key === "Spacebar"
-      || event.code === "Space"
-    ) {
-      event.preventDefault();
-      setSelectedId(results[currentIndex].tmdb_id);
-      return;
-    }
-
-    if (results.length < 2) {
-      return;
-    }
-
-    let nextIndex = currentIndex;
-
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      nextIndex = (currentIndex + 1) % results.length;
-    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-      nextIndex = (currentIndex - 1 + results.length) % results.length;
-    } else {
-      return;
-    }
-
-    event.preventDefault();
-
-    const nextResult = results[nextIndex];
-    const nextInput = document.getElementById(getResultInputId(nextResult.tmdb_id));
-    if (nextInput instanceof HTMLInputElement) {
-      nextInput.focus();
-    }
-
-    setSelectedId(nextResult.tmdb_id);
-  }
+  ) =>
+    handleRadioListKey(event, results, currentIndex, {
+      inputId: result => getResultInputId(result.tmdb_id),
+      onSelect: result => setSelectedId(result.tmdb_id),
+    });
 
   async function handleSearch() {
     if (!canSearch) return;

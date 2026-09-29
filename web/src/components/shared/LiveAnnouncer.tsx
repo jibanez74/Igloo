@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { clearTimeoutRef } from "@/lib/utils";
 
 /**
  * LiveAnnouncer component for screen reader announcements.
@@ -40,31 +41,25 @@ export default function LiveAnnouncer({
 }: LiveAnnouncerProps) {
   // Use two alternating slots to ensure consecutive identical messages are announced
   const [announcement, setAnnouncement] = useState({ text: "", slot: 0 });
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Clear any pending announcement
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    clearTimeoutRef(timeoutRef);
 
     if (!message) {
       return;
     }
 
     // Delay the announcement slightly to ensure DOM is ready
-    timeoutRef.current = setTimeout(() => {
+    timeoutRef.current = window.setTimeout(() => {
       setAnnouncement((prev) => ({
         text: message,
         slot: prev.slot === 0 ? 1 : 0,
       }));
     }, delay);
 
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
+    return () => clearTimeoutRef(timeoutRef);
   }, [message, announcementKey, delay]);
 
   // Render two live regions, alternating between them

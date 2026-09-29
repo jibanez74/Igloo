@@ -258,7 +258,7 @@ export function formatExtraVideoType(type: string): string {
   return key
     .split("_")
     .filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map(capitalize)
     .join(" ");
 }
 
@@ -339,6 +339,11 @@ export function episodeTitle(
   episodeName: string,
 ): string {
   return `${showName} · ${episodeCode(seasonNumber, episodeNumber)} · ${episodeName}`;
+}
+
+/** The string with its first character upper-cased: "movie" -> "Movie". */
+export function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 /** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */

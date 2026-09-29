@@ -1,4 +1,4 @@
-import { unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { unwrapInt, unwrapNormalizedString } from "@/lib/nullable";
 import type {
   PlaybackAudioStreamType,
   PlaybackVideoStreamType,
@@ -41,9 +41,7 @@ function audioCodecString(audio: ProbeAudioInfo | undefined): string | undefined
   // the static audio allowlist still governs those codecs.
   if (!audio || audio.codec.toLowerCase() !== "aac") return undefined;
 
-  const profile = unwrapStringOrUndefined(audio.codec_profile)
-    ?.trim()
-    .toLowerCase();
+  const profile = unwrapNormalizedString(audio.codec_profile);
   if (!profile) return AAC_PROFILE_CODECS.lc;
   return AAC_PROFILE_CODECS[profile] ?? AAC_PROFILE_CODECS.lc;
 }
@@ -63,9 +61,7 @@ export function buildDirectPlayTypeString(
   video: ProbeVideoInfo,
   audio?: ProbeAudioInfo,
 ): string {
-  const profile = unwrapStringOrUndefined(video.codec_profile)
-    ?.trim()
-    .toLowerCase();
+  const profile = unwrapNormalizedString(video.codec_profile);
   const prefix = profile ? H264_PROFILE_PREFIXES[profile] : undefined;
   const level = unwrapInt(video.codec_level);
   const levelUsable = level != null && level > 0 && level <= 255;

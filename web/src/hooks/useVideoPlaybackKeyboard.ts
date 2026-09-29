@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import type { RefObject } from "react";
+import { isEditableTarget } from "@/lib/utils";
 
 type VideoPlaybackKeyboardOptions = {
   containerRef: RefObject<HTMLElement | null>;
@@ -59,14 +60,7 @@ export function useVideoPlaybackKeyboard({
     const targetIsPageBody =
       target === document.body || target === document.documentElement;
 
-    if (
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT" ||
-      target.isContentEditable
-    ) {
-      return;
-    }
+    if (isEditableTarget(target)) return;
     if (!targetInsidePlayer && !targetIsPageBody) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 

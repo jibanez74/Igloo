@@ -18,12 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { createMoviePlaylist } from "@/lib/api";
-import {
-  MOVIE_PLAYLISTS_KEY,
-  PLAYLIST_DESCRIPTION_MAX_LENGTH,
-  PLAYLIST_NAME_MAX_LENGTH,
-} from "@/lib/constants";
-import { codePointLength } from "@/lib/utils";
+import { MOVIE_PLAYLISTS_KEY } from "@/lib/constants";
+import { playlistFieldsError } from "@/lib/form-validation";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type CreateMoviePlaylistDialogProps = {
@@ -84,20 +80,9 @@ export default function CreateMoviePlaylistDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      showValidationError("Playlist name is required");
-      return;
-    }
-    if (codePointLength(name.trim()) > PLAYLIST_NAME_MAX_LENGTH) {
-      showValidationError(
-        `Playlist name is too long (max ${PLAYLIST_NAME_MAX_LENGTH} characters)`,
-      );
-      return;
-    }
-    if (codePointLength(description.trim()) > PLAYLIST_DESCRIPTION_MAX_LENGTH) {
-      showValidationError(
-        `Playlist description is too long (max ${PLAYLIST_DESCRIPTION_MAX_LENGTH} characters)`,
-      );
+    const fieldsError = playlistFieldsError(name, description);
+    if (fieldsError) {
+      showValidationError(fieldsError);
       return;
     }
     mutation.mutate();

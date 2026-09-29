@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type {
   ApiResponseType,
+  AuthUser,
   MovieTechnicalDetailsResponse,
   PlaybackMediaRef,
   PlaybackSettingsResponseType,
@@ -182,6 +183,13 @@ export function authUserQueryOpts(options?: { revalidate?: boolean }) {
     staleTime: options?.revalidate ? 0 : STALE_1M,
     gcTime: GC_DEFAULT,
   });
+}
+
+/** The signed-in user, or null while the query loads or when it failed. */
+export function authUserFrom(
+  res: ApiResponseType<{ user: AuthUser }> | undefined,
+): AuthUser | null {
+  return res?.error === false ? (res.data?.user ?? null) : null;
 }
 
 /**

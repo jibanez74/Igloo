@@ -48,6 +48,21 @@ function mediaHead(
   );
 }
 
+/**
+ * Head for a music detail page: "Listen to <title> - <summary> in your Igloo
+ * <place>.", where the summary carries the page's counts or duration.
+ */
+export function listenHead(
+  title: string,
+  summary: string,
+  place = "music library",
+) {
+  return routeHead(
+    title,
+    `Listen to ${title} - ${summary} in your ${APP_NAME} ${place}.`,
+  );
+}
+
 const MOVIE_FALLBACK_HEAD = routeHead("Movie");
 const SHOW_FALLBACK_HEAD = routeHead("TV Show");
 

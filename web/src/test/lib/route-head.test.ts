@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { movieHead, routeHead, showHead } from "@/lib/route-head";
+import { listenHead, movieHead, routeHead, showHead } from "@/lib/route-head";
 
 describe("routeHead", () => {
   it("suffixes the title with the app name", () => {
@@ -70,5 +70,26 @@ describe("showHead", () => {
       },
     ]);
     expect(showHead(null).meta).toEqual([{ title: "TV Show - Igloo" }]);
+  });
+});
+
+describe("listenHead", () => {
+  it("describes a music page with its summary, in the music library by default", () => {
+    expect(listenHead("Blue Record", "1 track")).toEqual({
+      meta: [
+        { title: "Blue Record - Igloo" },
+        {
+          name: "description",
+          content: "Listen to Blue Record - 1 track in your Igloo music library.",
+        },
+      ],
+    });
+  });
+
+  it("names another place when given one", () => {
+    expect(listenHead("Road Trip", "12 tracks", "playlist").meta[1]).toEqual({
+      name: "description",
+      content: "Listen to Road Trip - 12 tracks in your Igloo playlist.",
+    });
   });
 });

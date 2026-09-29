@@ -13,7 +13,7 @@ import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { parseRouteId } from "@/lib/route-id";
-import { routeHead } from "@/lib/route-head";
+import { listenHead, routeHead } from "@/lib/route-head";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
@@ -60,9 +60,9 @@ const MUSICIAN_FALLBACK_HEAD = routeHead("Musician");
 function musicianHead(musician: MusicianHeadData | null | undefined) {
   if (!musician) return MUSICIAN_FALLBACK_HEAD;
 
-  return routeHead(
+  return listenHead(
     musician.name,
-    `Listen to ${musician.name} - ${pluralize(musician.albumCount, "album")}, ${pluralize(musician.trackCount, "track")} in your Igloo music library.`,
+    `${pluralize(musician.albumCount, "album")}, ${pluralize(musician.trackCount, "track")}`,
   );
 }
 
@@ -169,24 +169,15 @@ function MusicianDetailsContent({
     musician: musician.name,
   };
 
-  const handlePlayAll = () => {
+  const startMusicianQueue = (shuffle: boolean) => {
     if (playableTracks.length === 0) return;
 
-    audioPlayer.playQueue(
-      playableTracks.map(convertToAudioTrack),
-      albumInfo,
-      playableTracks,
-    );
-  };
-
-  const handleShufflePlay = () => {
-    if (playableTracks.length === 0) return;
-
-    audioPlayer.shuffleQueue(
-      playableTracks.map(convertToAudioTrack),
-      albumInfo,
-      playableTracks,
-    );
+    const audioTracks = playableTracks.map(convertToAudioTrack);
+    if (shuffle) {
+      audioPlayer.shuffleQueue(audioTracks, albumInfo, playableTracks);
+    } else {
+      audioPlayer.playQueue(audioTracks, albumInfo, playableTracks);
+    }
   };
 
   // playTrackFromList (not playQueue) so a click on the current row toggles
@@ -374,7 +365,7 @@ function MusicianDetailsContent({
                     type="button"
                     variant="accent-pill"
                     size="lg"
-                    onClick={handlePlayAll}
+                    onClick={() => startMusicianQueue(false)}
                     className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                     aria-label={`Play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
                   >
@@ -385,7 +376,7 @@ function MusicianDetailsContent({
                     type="button"
                     variant="outline"
                     size="lg"
-                    onClick={handleShufflePlay}
+                    onClick={() => startMusicianQueue(true)}
                     className="w-full rounded-full font-semibold sm:w-auto"
                     aria-label={`Shuffle play all ${pluralize(tracks.length, "track")} by ${musician.name}`}
                   >

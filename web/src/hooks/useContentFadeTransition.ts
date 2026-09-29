@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getPrefersReducedMotion } from "@/lib/motion";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { REDUCED_MOTION_QUERY } from "@/lib/motion";
 
 type RunContentFadeTransitionArgs = {
   onTransition: () => void | Promise<void>;
@@ -16,27 +17,7 @@ export function useContentFadeTransition(
   const [isExiting, setIsExiting] = useState(false);
   const [pendingTransition, setPendingTransition] =
     useState<PendingContentFadeTransition | null>(null);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
-    getPrefersReducedMotion,
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const syncReducedMotion = () => {
-      setPrefersReducedMotion(mediaQuery.matches);
-    };
-
-    syncReducedMotion();
-    mediaQuery.addEventListener("change", syncReducedMotion);
-
-    return () => {
-      mediaQuery.removeEventListener("change", syncReducedMotion);
-    };
-  }, []);
+  const prefersReducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
 
   useEffect(() => {
     if (!pendingTransition) return;

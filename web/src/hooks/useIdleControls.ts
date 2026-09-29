@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { clearTimeoutRef } from "@/lib/utils";
 
 type IdleControlsOptions = {
   active: boolean;
@@ -10,17 +11,6 @@ type IdleControlsState = {
   idleMs: number;
   visible: boolean;
 };
-
-type TimerRef = {
-  current: ReturnType<typeof setTimeout> | null;
-};
-
-function clearIdleTimer(timerRef: TimerRef) {
-  if (timerRef.current) {
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }
-}
 
 function hideIdleControls(
   state: IdleControlsState,
@@ -43,7 +33,7 @@ export function useIdleControls({ active, idleMs }: IdleControlsOptions) {
     idleMs,
     visible: true,
   }));
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   let currentState = idleState;
   if (currentState.active !== active || currentState.idleMs !== idleMs) {
@@ -56,10 +46,10 @@ export function useIdleControls({ active, idleMs }: IdleControlsOptions) {
   }
 
   const showAndReset = () => {
-    clearIdleTimer(timerRef);
+    clearTimeoutRef(timerRef);
 
     if (active) {
-      timerRef.current = setTimeout(() => {
+      timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
         setIdleState(state => hideIdleControls(state, active, idleMs));
       }, idleMs);
@@ -79,18 +69,18 @@ export function useIdleControls({ active, idleMs }: IdleControlsOptions) {
   };
 
   useEffect(() => {
-    clearIdleTimer(timerRef);
+    clearTimeoutRef(timerRef);
 
     if (!active) {
-      return () => clearIdleTimer(timerRef);
+      return () => clearTimeoutRef(timerRef);
     }
 
-    timerRef.current = setTimeout(() => {
+    timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
       setIdleState(state => hideIdleControls(state, active, idleMs));
     }, idleMs);
 
-    return () => clearIdleTimer(timerRef);
+    return () => clearTimeoutRef(timerRef);
   }, [active, idleMs]);
 
   const visible = active ? currentState.visible : true;

@@ -7,7 +7,6 @@ import {
   AUDIO_TRACK_DEFAULT_LABEL,
   MOTION_MICRO_COLORS_CLASS,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
-  STREAM_MODES,
   SUBTITLES_NONE_LABEL,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
@@ -17,7 +16,8 @@ import {
   formatSubtitleLabel,
   getAvailableModes,
   getPrimaryVideoStream,
-  resolvePlaybackSettings
+  resolvePlaybackSettings,
+  streamModeLabel,
 } from "@/lib/playback";
 import type { PlaybackSettings } from "@/types/playback";
 import {
@@ -120,9 +120,7 @@ export default function CreateWatchRoomDialog({
     audioStreams,
     subtitleStreams,
   );
-  const modeLabel =
-    STREAM_MODES.find(mode => mode.id === resolvedSettings.mode)?.label ??
-    resolvedSettings.mode;
+  const modeLabel = streamModeLabel(resolvedSettings.mode);
   const audioLabel =
     audioStreams[resolvedSettings.audioTrack] !== undefined
       ? formatPlaybackAudioLabel(

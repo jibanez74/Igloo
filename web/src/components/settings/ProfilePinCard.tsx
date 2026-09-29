@@ -9,7 +9,7 @@ import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { updateUserPin } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/is-api-failure";
-import { authUserQueryOpts, userPinQueryOpts } from "@/lib/query-opts";
+import { authUserFrom, authUserQueryOpts, userPinQueryOpts } from "@/lib/query-opts";
 import {
   ADMIN_USERS_KEY,
   AUTH_USER_KEY,
@@ -39,10 +39,7 @@ const PIN_PATTERN = /^\d{4}$/;
 export default function ProfilePinCard() {
   const queryClient = useQueryClient();
   const { data: userData } = useQuery(authUserQueryOpts());
-  const hasPin =
-    userData?.error === false && userData.data?.user
-      ? userData.data.user.has_pin
-      : false;
+  const hasPin = authUserFrom(userData)?.has_pin ?? false;
 
   const [revealed, setRevealed] = useState(false);
   const [currentPin, setCurrentPin] = useState("");

@@ -42,6 +42,16 @@ export function unwrapStringOrUndefined(
 }
 
 /**
+ * The string trimmed and lower-cased for matching against a known list
+ * (pixel formats, codec profiles, color transfers), or undefined when missing.
+ */
+export function unwrapNormalizedString(
+  value: NullableStringLike | string | null | undefined,
+): string | undefined {
+  return unwrapStringOrUndefined(value)?.trim().toLowerCase();
+}
+
+/**
  * Returns a number or null. Accepts nullable object (Valid + Int64) or plain number.
  *
  * @example

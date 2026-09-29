@@ -16,12 +16,13 @@ import {
 } from "lucide-react";
 import {
   albumDetailsQueryOpts,
+  authUserFrom,
   authUserQueryOpts,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { invalidateMusicLibraryQueries } from "@/lib/music-library-cache";
 import { parseRouteId } from "@/lib/route-id";
-import { routeHead } from "@/lib/route-head";
+import { listenHead, routeHead } from "@/lib/route-head";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,6 @@ import {
 import type {
   AlbumDetailsResponseType,
   ArtistType,
-  AuthUser,
   TrackGenreType,
   TrackType,
 } from "@/types";
@@ -81,9 +81,9 @@ function albumHead(album: AlbumHeadData | null | undefined) {
 
   const byline = album.musician ? ` by ${album.musician}` : "";
 
-  return routeHead(
+  return listenHead(
     `${album.title}${byline}`,
-    `Listen to ${album.title}${byline} - ${pluralize(album.trackCount, "track")} in your Igloo music library.`,
+    pluralize(album.trackCount, "track"),
   );
 }
 
@@ -150,10 +150,7 @@ function AlbumDetailsContent({
   const queryClient = useQueryClient();
 
   const { data: userData } = useQuery(authUserQueryOpts());
-  const user: AuthUser | null =
-    userData?.error === false && userData.data?.user
-      ? (userData.data.user)
-      : null;
+  const user = authUserFrom(userData);
   const isAdmin = user?.is_admin === true;
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -266,35 +263,26 @@ function AlbumDetailsContent({
   const pageAnnouncement = `${album.title}${musicianName ? ` by ${musicianName}` : ""}. ${pluralize(tracks.length, "track")}. Total duration: ${formatDuration(total_duration)}.${album_genres.length > 0 ? ` Genres: ${album_genres.join(", ")}.` : ""}`;
   const pageAnnouncementId = `album-${album.id}-summary`;
 
+  const albumInfo = {
+    cover: coverUrl,
+    title: album.title,
+    musician: musicianName,
+  };
+
   // playTrack toggles play/pause itself when the clicked track is current
   const handleToggleTrack = (track: TrackType) => {
-    audioPlayer.playTrack(track, tracks, {
-      cover: coverUrl,
-      title: album.title,
-      musician: musicianName,
-    });
+    audioPlayer.playTrack(track, tracks, albumInfo);
   };
 
-  // Handle playing the album from the beginning
-  const handlePlayAlbum = () => {
+  // Play the album from the beginning, or shuffled
+  const startAlbumQueue = (shuffle: boolean) => {
     if (tracks.length === 0) return;
 
-    audioPlayer.playQueue(tracks, {
-      cover: coverUrl,
-      title: album.title,
-      musician: musicianName,
-    });
-  };
-
-  // Handle shuffle play
-  const handleShufflePlay = () => {
-    if (tracks.length === 0) return;
-
-    audioPlayer.shuffleQueue(tracks, {
-      cover: coverUrl,
-      title: album.title,
-      musician: musicianName,
-    });
+    if (shuffle) {
+      audioPlayer.shuffleQueue(tracks, albumInfo);
+    } else {
+      audioPlayer.playQueue(tracks, albumInfo);
+    }
   };
 
   return (
@@ -446,7 +434,7 @@ function AlbumDetailsContent({
                       type="button"
                       variant="accent-pill"
                       size="lg"
-                      onClick={handlePlayAlbum}
+                      onClick={() => startAlbumQueue(false)}
                       className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                     >
                       <Play
@@ -459,7 +447,7 @@ function AlbumDetailsContent({
                       type="button"
                       variant="outline"
                       size="lg"
-                      onClick={handleShufflePlay}
+                      onClick={() => startAlbumQueue(true)}
                       className="w-full rounded-full font-semibold sm:w-auto"
                       aria-label="Shuffle play album"
                     >

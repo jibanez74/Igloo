@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Film } from "lucide-react";
 import {
+  authUserFrom,
   authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
   movieLikeStatusQueryOpts,
@@ -54,7 +55,6 @@ import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
 import type {
-  AuthUser,
   LibraryMovieDetailsMovieType,
   LibraryMovieDetailsResponse,
 } from "@/types";
@@ -156,10 +156,7 @@ function LibraryMovieDetailsContent({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
   const { data: userData } = useQuery(authUserQueryOpts());
-  const user: AuthUser | null =
-    userData?.error === false && userData.data?.user
-      ? (userData.data.user)
-      : null;
+  const user = authUserFrom(userData);
   const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
   const serverPlaybackSettings =
     playbackSettingsFromResponse(playbackSettingsData);

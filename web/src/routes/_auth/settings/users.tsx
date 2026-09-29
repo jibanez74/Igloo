@@ -38,6 +38,7 @@ import {
   adminResetUserPassword,
 } from "@/lib/api";
 import { lightInputClassName } from "@/lib/input-styles";
+import { passwordRuleError } from "@/lib/form-validation";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
@@ -477,10 +478,9 @@ function CreateUserDialog({
     const trimmedEmail = email.trim();
     const nextErrors = validateNameEmail(users, trimmedName, trimmedEmail);
 
-    if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
-      nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES) {
-      nextErrors.password = `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
+    const passwordRule = passwordRuleError(password);
+    if (passwordRule) {
+      nextErrors.password = passwordRule;
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -921,10 +921,9 @@ function ResetPasswordDialog({
     e.preventDefault();
     const nextErrors: UserFormErrors = {};
 
-    if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
-      nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES) {
-      nextErrors.password = `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`;
+    const passwordRule = passwordRuleError(password);
+    if (passwordRule) {
+      nextErrors.password = passwordRule;
     }
 
     if (password !== confirmPassword) {
@@ -948,20 +947,14 @@ function ResetPasswordDialog({
   };
 
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const passwordRule = passwordRuleError(password);
   const passwordError =
-    errors.password ??
-    (password.length > 0 && codePointLength(password) < USER_PASSWORD_MIN_LENGTH
-      ? `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`
-      : undefined) ??
-    (new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES
-      ? `Password must be at most ${USER_PASSWORD_MAX_BYTES} UTF-8 bytes.`
-      : undefined);
+    errors.password ?? (password.length > 0 ? passwordRule : null) ?? undefined;
   const confirmPasswordError =
     errors.confirmPassword ?? (mismatch ? "Passwords do not match." : undefined);
   const resetDisabled =
     isPending ||
-    codePointLength(password) < USER_PASSWORD_MIN_LENGTH ||
-    new TextEncoder().encode(password).length > USER_PASSWORD_MAX_BYTES ||
+    passwordRule !== null ||
     mismatch;
 
   return (
