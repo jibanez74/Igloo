@@ -12,9 +12,7 @@ import {
   isExpectedUnauthorizedResourceMessage,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import {
-  readJSON,
-} from "./e2e-api";
+import { getApiData } from "./e2e-api";
 import { loginPageViaApi, loginViaApi } from "./e2e-auth";
 import {
   expectPageHasNoHorizontalScroll,
@@ -286,13 +284,8 @@ async function withDisposableUser(
 }
 
 async function fetchCurrentUser(request: APIRequestContext) {
-  const response = await request.get("/api/auth/user", {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<{ user: AuthUser }>(response);
-  return body.data!.user;
+  const data = await getApiData<{ user: AuthUser }>(request, "/api/auth/user");
+  return data.user;
 }
 
 test.describe("Account settings", () => {

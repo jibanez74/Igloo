@@ -21,7 +21,9 @@ const usdCurrencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+// A calendar date, optionally cut to the month or year the way Spotify reports
+// release dates at a lower precision ("1999", "1999-05").
+const DATE_ONLY_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 
 // takes in a date string and returns a Date in the viewer's local time
 //
@@ -29,29 +31,48 @@ const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 // date-only. `new Date("2024-03-01")` parses those as UTC midnight but reads
 // back in local time, so every such date rendered a day early west of UTC —
 // and a January date reported the previous year. A date-only string is
-// therefore split and built as a local date; anything carrying a time or zone
-// is left to the normal parser. Use this anywhere a stored date is rendered or
+// therefore split and built as a local date (a missing month or day reads as
+// the first); anything carrying a time or zone is left to the normal parser. Use this anywhere a stored date is rendered or
 // a calendar field is read off it, never a bare `new Date(stored)`.
 export function parseCatalogDate(date: string) {
   const dateOnly = DATE_ONLY_PATTERN.exec(date);
+  if (!dateOnly) return new Date(date);
 
-  return dateOnly
-    ? new Date(
-        Number(dateOnly[1]),
-        Number(dateOnly[2]) - 1,
-        Number(dateOnly[3]),
-      )
-    : new Date(date);
+  // setFullYear, not the Date constructor, which reads years 0-99 as 1900-1999.
+  const local = new Date(0);
+  local.setFullYear(
+    Number(dateOnly[1]),
+    Number(dateOnly[2] ?? 1) - 1,
+    Number(dateOnly[3] ?? 1),
+  );
+  local.setHours(0, 0, 0, 0);
+
+  return local;
+}
+
+const SQLITE_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+// Server row timestamps (created_at, last_used_at) are SQLite
+// CURRENT_TIMESTAMP values, "YYYY-MM-DD HH:MM:SS" in UTC with no zone, which a
+// bare `new Date` reads as local time. Those are pinned to UTC here; anything
+// already carrying a zone goes to the normal parser.
+export function parseServerTimestamp(timestamp: string) {
+  return new Date(
+    SQLITE_TIMESTAMP_PATTERN.test(timestamp)
+      ? `${timestamp.replace(" ", "T")}Z`
+      : timestamp,
+  );
 }
 
 // The calendar year of a stored catalog date, or null when the date is missing
-// or unparseable (so a title never reads "(NaN)").
+// or unparseable (so a title never reads "(NaN)"). Year 0 is also null: Spotify
+// reports an unknown release date as "0000".
 export function catalogYear(date: string | null | undefined): number | null {
   if (!date) return null;
 
   const year = parseCatalogDate(date).getFullYear();
 
-  return Number.isNaN(year) ? null : year;
+  return Number.isNaN(year) || year < 1 ? null : year;
 }
 
 // takes in a date string and returns a formatted date string
@@ -108,7 +129,7 @@ export function formatTimecode(
   seconds: number,
   options?: { forceHours?: boolean },
 ) {
-  if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0:00";
+  if (!isFinite(seconds) || seconds < 0) return "0:00";
 
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);
@@ -128,7 +149,7 @@ export function formatTimecode(
 // "1 hour 5 minutes 23 seconds". Zero-valued fields are dropped, and a value of
 // zero reads as "0 seconds" rather than an empty string.
 export function formatSpokenTime(seconds: number) {
-  if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0 seconds";
+  if (!isFinite(seconds) || seconds < 0) return "0 seconds";
 
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);
@@ -136,11 +157,9 @@ export function formatSpokenTime(seconds: number) {
   const secs = total % 60;
 
   const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
-  if (mins > 0) parts.push(`${mins} ${mins === 1 ? "minute" : "minutes"}`);
-  if (secs > 0 || parts.length === 0) {
-    parts.push(`${secs} ${secs === 1 ? "second" : "seconds"}`);
-  }
+  if (hours > 0) parts.push(pluralize(hours, "hour"));
+  if (mins > 0) parts.push(pluralize(mins, "minute"));
+  if (secs > 0 || parts.length === 0) parts.push(pluralize(secs, "second"));
 
   return parts.join(" ");
 }
@@ -167,10 +186,8 @@ function hourMinuteSpoken(totalMinutes: number): string {
   const minutes = totalMinutes % 60;
 
   const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
-  if (minutes > 0) {
-    parts.push(`${minutes} ${minutes === 1 ? "minute" : "minutes"}`);
-  }
+  if (hours > 0) parts.push(pluralize(hours, "hour"));
+  if (minutes > 0) parts.push(pluralize(minutes, "minute"));
 
   return parts.join(" ");
 }
@@ -224,7 +241,7 @@ export function formatTimeLeft(
 
     return {
       text: `${seconds} sec left`,
-      spoken: `${seconds} ${seconds === 1 ? "second" : "seconds"} left`,
+      spoken: `${pluralize(seconds, "second")} left`,
     };
   }
 
@@ -262,7 +279,7 @@ export function formatExtraVideoType(type: string): string {
   return key
     .split("_")
     .filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map(capitalize)
     .join(" ");
 }
 
@@ -343,6 +360,24 @@ export function episodeTitle(
   episodeName: string,
 ): string {
   return `${showName} · ${episodeCode(seasonNumber, episodeNumber)} · ${episodeName}`;
+}
+
+/**
+ * A chapter's display name. Titles come straight from the media file's
+ * metadata and are often blank or whitespace, so a blank one reads
+ * "Chapter N" (1-based) and every entry has a name on screen and for screen
+ * readers.
+ */
+export function chapterLabel(
+  title: string | null | undefined,
+  index: number,
+): string {
+  return title?.trim() || `Chapter ${index + 1}`;
+}
+
+/** The string with its first character upper-cased: "movie" -> "Movie". */
+export function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 /** "1 episode", "3 seasons": count plus the noun, pluralized with an "s". */

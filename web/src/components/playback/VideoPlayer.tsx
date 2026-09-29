@@ -21,7 +21,7 @@ import {
 } from "@/lib/constants";
 import { prefersNativeHLS } from "@/lib/playback";
 import { releaseResponseBody } from "@/lib/video-playback";
-import { cn } from "@/lib/utils";
+import { clearTimeoutRef, cn } from "@/lib/utils";
 
 type SubtitleTrackInfo = {
   url: string;
@@ -253,10 +253,7 @@ export default function VideoPlayer({
   const bufferingDelayTimerRef = useRef<number | null>(null);
 
   const clearBufferingIndicator = () => {
-    if (bufferingDelayTimerRef.current !== null) {
-      window.clearTimeout(bufferingDelayTimerRef.current);
-      bufferingDelayTimerRef.current = null;
-    }
+    clearTimeoutRef(bufferingDelayTimerRef);
     setShowBuffering(false);
   };
 
@@ -277,9 +274,7 @@ export default function VideoPlayer({
   };
 
   const clearHlsSeekReport = () => {
-    if (hlsSeekReportTimerRef.current === null) return;
-    window.clearTimeout(hlsSeekReportTimerRef.current);
-    hlsSeekReportTimerRef.current = null;
+    clearTimeoutRef(hlsSeekReportTimerRef);
   };
 
   const scheduleHlsSeekReport = (targetTime: number) => {

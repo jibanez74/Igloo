@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ShowSeasonEpisodeList from "@/components/shows/ShowSeasonEpisodeList";
+import { CONTINUE_WATCHING_KEY } from "@/lib/constants";
 import {
   countFetchRequests,
   deferredResponse,
@@ -169,6 +170,38 @@ describe("ShowSeasonEpisodeList", () => {
       within(row).getByRole("button", { name: "Mark S1 E1 as unwatched" }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(showActionFailedMock).not.toHaveBeenCalled();
+  });
+
+  it("refreshes Home's continue-watching row after marking an episode watched", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        requestURL(input) === "/api/shows/episodes/70101/watch-progress/watched"
+          ? jsonResponse({
+              error: false,
+              data: { episode_id: 70101, watched: true },
+            })
+          : jsonResponse({ error: false, data: seasonWithProgress() }),
+      ),
+    );
+
+    const { queryClient } = renderWithQueryClient(
+      <ShowSeasonEpisodeList showId={SHOW_ID} seasonNumber={1} />,
+    );
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const row = await screen.findByRole("article", { name: /1\.\s*S1 Episode 1/ });
+    await user.click(
+      within(row).getByRole("button", { name: "Mark S1 E1 as watched" }),
+    );
+
+    // A finished episode must leave the row rather than stay resumable there.
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: [CONTINUE_WATCHING_KEY] }),
+      );
+    });
   });
 
   it("rolls the row back and reports the failure when marking watched fails", async () => {

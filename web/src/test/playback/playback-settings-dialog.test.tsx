@@ -1,5 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PlaybackSettingsDialog from "@/components/movies/PlaybackSettingsDialog";
 import {
@@ -11,13 +10,16 @@ import {
 } from "@/lib/constants";
 import type {
   ApiResponseType,
-  AudioStreamType,
   MovieTechnicalDetailsResponse,
   SubtitleType,
-  VideoStreamType,
 } from "@/types";
 import { nullableFloat64, nullableInt64, nullableString } from "../helpers/fixtures";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
+import {
+  audioStream,
+  subtitleStream,
+  videoStream,
+} from "../helpers/tech-details";
 
 const prefersCoarse = vi.hoisted(() => ({ value: false }));
 vi.mock("@/hooks/use-coarse-pointer", () => ({
@@ -28,66 +30,14 @@ afterEach(() => {
   prefersCoarse.value = false;
 });
 
-function videoStream(): VideoStreamType {
-  return {
-    id: 1,
-    movie_id: 22,
-    stream_index: 0,
-    codec: "h264",
-    codec_profile: nullableString("Main"),
-    codec_level: nullableInt64(41),
-    bit_rate: 4_000_000,
-    width: 1920,
-    height: 1080,
-    coded_width: nullableInt64(1920),
-    coded_height: nullableInt64(1080),
-    aspect_ratio: nullableString("16:9"),
-    frame_rate: 24,
-    avg_frame_rate: nullableString("24/1"),
-    bit_depth: nullableInt64(8),
-    pixel_format: nullableString("yuv420p"),
-    color_range: nullableString(),
-    color_space: nullableString(),
-    color_primaries: nullableString(),
-    color_transfer: nullableString(),
-    field_order: nullableString(),
-    rotation: nullableInt64(),
-    language: nullableString(),
-    title: nullableString(),
-  };
-}
-
-function audioStream(
-  overrides: Partial<AudioStreamType> = {},
-): AudioStreamType {
-  return {
-    id: 1,
-    movie_id: 22,
-    stream_index: 1,
-    codec: "aac",
-    codec_profile: nullableString("LC"),
-    bit_rate: 192_000,
-    sample_rate: nullableInt64(48_000),
-    channels: 2,
-    channel_layout: nullableString("stereo"),
-    language: nullableString("eng"),
-    title: nullableString("English Stereo"),
-    is_default: false,
-    ...overrides,
-  };
-}
-
-function subtitleStream(): SubtitleType {
-  return {
-    id: 1,
-    movie_id: 22,
+// The default English SDH subtitle this dialog's fixtures carry.
+function sdhSubtitle(overrides: Partial<SubtitleType> = {}): SubtitleType {
+  return subtitleStream({
     stream_index: 3,
-    codec: "subrip",
-    language: nullableString("eng"),
     title: nullableString("SDH"),
-    is_forced: false,
     is_default: true,
-  };
+    ...overrides,
+  });
 }
 
 function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
@@ -104,7 +54,7 @@ function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
       },
       video_streams: [videoStream()],
       audio_streams: [
-        audioStream(),
+        audioStream({ title: nullableString("English Stereo") }),
         audioStream({
           id: 2,
           stream_index: 2,
@@ -112,31 +62,26 @@ function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
           title: nullableString("Spanish Stereo"),
         }),
       ],
-      subtitles: [subtitleStream()],
+      subtitles: [sdhSubtitle()],
       chapters: [],
     },
   };
 }
 
-function createQueryClient() {
-  return createTestQueryClient();
-}
-
 describe("PlaybackSettingsDialog", () => {
   it("renders labelled controls inside the media dialog surface", () => {
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], technicalDetails());
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={vi.fn()}
-          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-          onSave={vi.fn()}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={vi.fn()}
+      />,
+      { queryClient },
     );
 
     expect(screen.getByRole("dialog")).toHaveClass(
@@ -154,7 +99,7 @@ describe("PlaybackSettingsDialog", () => {
 
   it("saves the selected mode, audio track, and subtitle as one draft", () => {
     prefersCoarse.value = true;
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(
       [MOVIE_TECHNICAL_DETAILS_KEY, 22],
       technicalDetails(),
@@ -162,16 +107,15 @@ describe("PlaybackSettingsDialog", () => {
     const onSave = vi.fn();
     const onOpenChange = vi.fn();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={onOpenChange}
-          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-          onSave={onSave}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={onOpenChange}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={onSave}
+      />,
+      { queryClient },
     );
 
     fireEvent.change(screen.getByLabelText("Playback"), {
@@ -195,10 +139,10 @@ describe("PlaybackSettingsDialog", () => {
 
   it("disables image-based subtitle options", () => {
     prefersCoarse.value = true;
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     const details = technicalDetails();
     details.data!.subtitles.push({
-      ...subtitleStream(),
+      ...sdhSubtitle(),
       id: 2,
       stream_index: 4,
       codec: "hdmv_pgs_subtitle",
@@ -206,16 +150,15 @@ describe("PlaybackSettingsDialog", () => {
     });
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={vi.fn()}
-          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-          onSave={vi.fn()}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={vi.fn()}
+      />,
+      { queryClient },
     );
 
     const bitmapOption = screen.getByRole("option", {
@@ -229,18 +172,17 @@ describe("PlaybackSettingsDialog", () => {
 
   it("offers no modes and disables saving while technical details load", () => {
     prefersCoarse.value = true;
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={vi.fn()}
-          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-          onSave={vi.fn()}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={vi.fn()}
+      />,
+      { queryClient },
     );
 
     const modeSelect = screen.getByLabelText("Playback");
@@ -257,23 +199,22 @@ describe("PlaybackSettingsDialog", () => {
 
   it("only offers modes the source supports once technical details arrive", () => {
     prefersCoarse.value = true;
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     const details = technicalDetails();
     details.data!.movie.mime_type = "video/x-matroska";
     details.data!.movie.container = "mkv";
     details.data!.video_streams[0].codec = "hevc";
     queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={vi.fn()}
-          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-          onSave={vi.fn()}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={vi.fn()}
+      />,
+      { queryClient },
     );
 
     expect(
@@ -297,7 +238,7 @@ describe("PlaybackSettingsDialog", () => {
     "keeps %s playback and audio controls disabled when the source has no mode",
     (_, coarsePointer) => {
       prefersCoarse.value = coarsePointer;
-      const queryClient = createQueryClient();
+      const queryClient = createTestQueryClient();
       const details = technicalDetails();
       details.data!.movie.mime_type = "video/x-matroska";
       details.data!.movie.container = "mkv";
@@ -305,16 +246,15 @@ describe("PlaybackSettingsDialog", () => {
       queryClient.setQueryData([MOVIE_TECHNICAL_DETAILS_KEY, 22], details);
       const onSave = vi.fn();
 
-      render(
-        <QueryClientProvider client={queryClient}>
-          <PlaybackSettingsDialog
-            movieId={22}
-            open
-            onOpenChange={vi.fn()}
-            settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-            onSave={onSave}
-          />
-        </QueryClientProvider>,
+      renderWithQueryClient(
+        <PlaybackSettingsDialog
+          movieId={22}
+          open
+          onOpenChange={vi.fn()}
+          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+          onSave={onSave}
+        />,
+        { queryClient },
       );
 
       const modeSelect = screen.getByLabelText("Playback");
@@ -341,23 +281,22 @@ describe("PlaybackSettingsDialog", () => {
 
   it("switches direct play to remux when a non-first audio track is picked", () => {
     prefersCoarse.value = true;
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(
       [MOVIE_TECHNICAL_DETAILS_KEY, 22],
       technicalDetails(),
     );
     const onSave = vi.fn();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={vi.fn()}
-          settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
-          onSave={onSave}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "direct", audioTrack: 0, subtitleTrack: null }}
+        onSave={onSave}
+      />,
+      { queryClient },
     );
 
     const modeSelect = screen.getByLabelText("Playback");
@@ -389,23 +328,22 @@ describe("PlaybackSettingsDialog", () => {
 
   it("snaps the audio track back to the first stream when direct play is chosen", () => {
     prefersCoarse.value = true;
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(
       [MOVIE_TECHNICAL_DETAILS_KEY, 22],
       technicalDetails(),
     );
     const onSave = vi.fn();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaybackSettingsDialog
-          movieId={22}
-          open
-          onOpenChange={vi.fn()}
-          settings={{ mode: "remux", audioTrack: 1, subtitleTrack: null }}
-          onSave={onSave}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaybackSettingsDialog
+        movieId={22}
+        open
+        onOpenChange={vi.fn()}
+        settings={{ mode: "remux", audioTrack: 1, subtitleTrack: null }}
+        onSave={onSave}
+      />,
+      { queryClient },
     );
 
     const modeSelect = screen.getByLabelText("Playback");

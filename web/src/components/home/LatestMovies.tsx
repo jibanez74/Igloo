@@ -4,14 +4,14 @@ import { Film } from "lucide-react";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import MovieCard from "@/components/movies/MovieCard";
 import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestMovies() {
   const { data, isPending } = useQuery(latestMoviesQueryOpts());
 
   const movies = data && !data.error ? (data.data?.movies ?? []) : [];
-  const hasError = data && data.error;
-  const errorMessage = hasError
-    ? data.message || "Failed to load movies. Please try again later."
+  const errorMessage = data?.error
+    ? apiErrorMessage(data, "Failed to load movies. Please try again later.")
     : undefined;
 
   return (

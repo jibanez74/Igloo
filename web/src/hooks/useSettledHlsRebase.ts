@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { HLS_SEEK_SETTLE_MS } from "@/lib/constants";
+import { clearTimeoutRef } from "@/lib/utils";
 
 type SettledHlsRebaseOptions = {
   /** The stream window; a change drops a pending rebase it already answered. */
@@ -28,9 +29,7 @@ export function useSettledHlsRebase({
   }, [onRebase]);
 
   const cancelRebase = () => {
-    if (timerRef.current === null) return;
-    window.clearTimeout(timerRef.current);
-    timerRef.current = null;
+    clearTimeoutRef(timerRef);
   };
 
   const requestRebase = (targetTimeSec: number) => {
@@ -48,9 +47,7 @@ export function useSettledHlsRebase({
   // unmount must not inherit a rebase meant for the previous one.
   useEffect(() => {
     return () => {
-      if (timerRef.current === null) return;
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
+      clearTimeoutRef(timerRef);
     };
   }, [resetKey]);
 

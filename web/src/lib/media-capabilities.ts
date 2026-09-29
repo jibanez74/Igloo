@@ -2,7 +2,10 @@ import {
   describePlaybackChannelLayout,
   getPrimaryVideoStream,
 } from "@/lib/playback";
-import { unwrapStringOrUndefined } from "@/lib/nullable";
+import {
+  unwrapNormalizedString,
+  unwrapStringOrUndefined,
+} from "@/lib/nullable";
 import type {
   MediaCapabilityBadge,
   MovieTechnicalDetailsResponse,
@@ -32,9 +35,7 @@ export function deriveMediaCapabilityBadges(
       badges.push({ label: "HD", description: "High definition video" });
     }
 
-    const transfer = unwrapStringOrUndefined(video.color_transfer)
-      ?.trim()
-      .toLowerCase();
+    const transfer = unwrapNormalizedString(video.color_transfer);
     if (transfer && HDR_COLOR_TRANSFERS.includes(transfer)) {
       badges.push({ label: "HDR", description: "High dynamic range video" });
     }

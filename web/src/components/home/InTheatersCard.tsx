@@ -2,7 +2,7 @@ import { Film, Star } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
 import { Badge } from "@/components/ui/badge";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
-import { parseCatalogDate } from "@/lib/format";
+import { catalogYear } from "@/lib/format";
 import { criticRatingClass } from "@/lib/rating";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { cn } from "@/lib/utils";
@@ -18,14 +18,10 @@ type InTheatersCardProps = {
 export default function InTheatersCard({ movie }: InTheatersCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
-  const posterUrl = poster_path
-    ? buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE)
-    : "";
+  const posterUrl = buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE);
 
   const rating = vote_average ? vote_average.toFixed(1) : null;
-  const year = release_date
-    ? parseCatalogDate(release_date).getFullYear()
-    : null;
+  const year = catalogYear(release_date);
 
   return (
     <PosterCard

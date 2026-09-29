@@ -5,6 +5,7 @@ import {
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
 import { currentPlaybackTimestampMs } from "@/lib/video-playback";
+import { clearTimeoutRef } from "@/lib/utils";
 
 type HlsSessionRecoveryOptions = {
   onRecover: (currentTimeSec: number) => void;
@@ -35,9 +36,7 @@ export function useHlsSessionRecovery({
 
   useEffect(() => {
     return () => {
-      if (retryTimerRef.current !== null) {
-        window.clearTimeout(retryTimerRef.current);
-      }
+      clearTimeoutRef(retryTimerRef);
     };
   }, []);
 
@@ -91,10 +90,7 @@ export function useHlsSessionRecovery({
   const resetRecovery = () => {
     attemptsRef.current = 0;
     lastAttemptAtRef.current = 0;
-    if (retryTimerRef.current !== null) {
-      window.clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-    }
+    clearTimeoutRef(retryTimerRef);
   };
 
   return { handleSessionLost, resetRecovery, recoveryAttempt };

@@ -1,8 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
-
-const defaultMatchMedia = window.matchMedia;
+import { restoreMatchMedia } from "../helpers/dom";
 
 type MatchMediaChangeListener = () => void;
 
@@ -99,10 +98,7 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
 
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: defaultMatchMedia,
-  });
+  restoreMatchMedia();
 });
 
 describe("useContentFadeTransition", () => {

@@ -7,7 +7,9 @@ import { Spinner } from "@/components/ui/spinner";
 import SectionErrorAlert from "@/components/shared/SectionErrorAlert";
 import WatchRoomCard from "@/components/watch-room/WatchRoomCard";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { pluralize } from "@/lib/format";
+import { cn, describedBy } from "@/lib/utils";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const WATCH_ROOMS_DESCRIPTION_ID = "watch-rooms-description";
 const WATCH_ROOMS_SUMMARY_ID = "watch-rooms-summary";
@@ -17,17 +19,21 @@ export default function WatchRooms() {
 
   const rooms = data && !data.error ? (data.data?.rooms ?? []) : [];
   const hasError = data && data.error;
-  const sectionDescribedBy =
-    !isPending && !hasError && rooms.length > 0
-      ? `${WATCH_ROOMS_DESCRIPTION_ID} ${WATCH_ROOMS_SUMMARY_ID}`
-      : WATCH_ROOMS_DESCRIPTION_ID;
+  const loadErrorMessage = apiErrorMessage(
+    data,
+    "Failed to load watch rooms. Please try again later.",
+  );
+  const sectionDescribedBy = describedBy(
+    WATCH_ROOMS_DESCRIPTION_ID,
+    !isPending && !hasError && rooms.length > 0 && WATCH_ROOMS_SUMMARY_ID,
+  );
   const announcementMessage = isPending
     ? undefined
     : hasError
-      ? data.message || "Failed to load watch rooms"
+      ? loadErrorMessage
       : rooms.length === 0
         ? undefined
-        : `${rooms.length} watch room${rooms.length === 1 ? "" : "s"} available`;
+        : `${pluralize(rooms.length, "watch room")} available`;
 
   // Render nothing when there are no rooms and no error — keeps the home page clean
   if (!isPending && !hasError && rooms.length === 0) {
@@ -69,7 +75,7 @@ export default function WatchRooms() {
               variant="outline"
               className="px-3 py-1"
             >
-              {rooms.length} room{rooms.length === 1 ? "" : "s"}
+              {pluralize(rooms.length, "room")}
             </Badge>
           )}
         </div>
@@ -85,9 +91,7 @@ export default function WatchRooms() {
         </div>
       ) : hasError ? (
         <SectionErrorAlert
-          message={
-            data.message || "Failed to load watch rooms. Please try again later."
-          }
+          message={loadErrorMessage}
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

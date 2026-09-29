@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent } from "react";
 import type { RefObject } from "react";
 import { AUDIO_SEEK_STEP_SECONDS, AUDIO_VOLUME_STEP } from "@/lib/constants";
+import { isEditableTarget } from "@/lib/utils";
 
 // Controls whose native keyboard interaction must win over the global
 // playback shortcuts.
@@ -66,13 +67,7 @@ export function useAudioPlaybackKeyboard({
       target.type === "range" &&
       target.closest(PLAYER_CHROME_SELECTOR) !== null;
 
-    if (
-      target &&
-      !isPlayerRangeInput &&
-      (target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable)
-    ) {
+    if (target && !isPlayerRangeInput && isEditableTarget(target)) {
       return;
     }
 

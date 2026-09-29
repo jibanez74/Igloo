@@ -10,7 +10,12 @@ import {
   createCanPlayProbe,
   type CanPlayProbe,
 } from "@/lib/direct-play-probe";
-import { unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { capitalize } from "@/lib/format";
+import {
+  unwrapInt,
+  unwrapNormalizedString,
+  unwrapStringOrUndefined,
+} from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type {
   PlaybackAudioStreamType,
@@ -198,16 +203,12 @@ function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
   const bitDepth = unwrapInt(video.bit_depth);
   if (bitDepth !== null && bitDepth > 8) return false;
 
-  const pixelFormat = unwrapStringOrUndefined(video.pixel_format)
-    ?.trim()
-    .toLowerCase();
+  const pixelFormat = unwrapNormalizedString(video.pixel_format);
   if (pixelFormat && !BROWSER_SAFE_H264_PIXEL_FORMATS.includes(pixelFormat)) {
     return false;
   }
 
-  const profile = unwrapStringOrUndefined(video.codec_profile)
-    ?.trim()
-    .toLowerCase();
+  const profile = unwrapNormalizedString(video.codec_profile);
   if (
     profile &&
     NON_BROWSER_H264_PROFILE_MARKERS.some((m) => profile.includes(m))
@@ -217,9 +218,7 @@ function isBrowserSafeH264(video: DirectPlayVideoInfo): boolean {
 
   // Browsers do not deinterlace, so both direct play and remux would display
   // combed frames; only the transcode path applies yadif.
-  const fieldOrder = unwrapStringOrUndefined(video.field_order)
-    ?.trim()
-    .toLowerCase();
+  const fieldOrder = unwrapNormalizedString(video.field_order);
   if (fieldOrder && INTERLACED_FIELD_ORDERS.includes(fieldOrder)) {
     return false;
   }
@@ -249,7 +248,7 @@ export function directPlayAudioSelectionEligible(
   return defaultCount === 1 && audioStreams[0].is_default;
 }
 
-export type AvailableModesArgs = {
+type AvailableModesArgs = {
   /**
    * The primary video stream. When absent while `videoStreamsLoaded` is
    * false, all non-transcode modes are offered (metadata still in flight);
@@ -492,9 +491,7 @@ function formatLanguageName(
   if (!code) return undefined;
   const two = code.slice(0, 2);
   if (LANGUAGE_NAMES[two]) return LANGUAGE_NAMES[two];
-  return code.length <= 3
-    ? code.toUpperCase()
-    : code.charAt(0).toUpperCase() + code.slice(1);
+  return code.length <= 3 ? code.toUpperCase() : capitalize(code);
 }
 
 export function describePlaybackChannelLayout(
@@ -504,12 +501,10 @@ export function describePlaybackChannelLayout(
   const l = channelLayout?.toLowerCase() ?? "";
   if (l.includes("mono") || channels === 1) return "Mono";
   if (l.includes("stereo") || channels === 2) return "Stereo";
-  if (l.includes("5.1") || l.includes("5.1(")) return "5.1 surround";
+  if (l.includes("5.1")) return "5.1 surround";
   if (l.includes("7.1")) return "7.1 surround";
   if (l.includes("quad") || l.includes("4.0")) return "Quad";
   if (channels >= 6) return "Surround";
-  if (channels === 2) return "Stereo";
-  if (channels === 1) return "Mono";
   return `${channels} channels`;
 }
 
@@ -529,6 +524,11 @@ export function formatPlaybackAudioLabel(
   return `Track ${index + 1} · ${channels}`;
 }
 
+/** A stream mode's display label, or the raw id for a mode the list lacks. */
+export function streamModeLabel(mode: string): string {
+  return STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
+}
+
 /**
  * Player-badge label for direct play. Whenever direct play is actually
  * chosen, the audible stream is ordinal 0 of the stream_index-ordered rows
@@ -539,14 +539,28 @@ export function formatPlaybackAudioLabel(
 export function directPlayModeLabel(
   audioStreams: PlaybackAudioStreamType[] | undefined,
 ): string {
-  const fallback =
-    STREAM_MODES.find(m => m.id === "direct")?.label ?? "direct";
+  const fallback = streamModeLabel("direct");
   const langName = formatLanguageName(
     unwrapStringOrUndefined(audioStreams?.[0]?.language),
   );
   if (!langName) return fallback;
   const base = fallback.split(" — ")[0];
   return `${base} — ${langName} audio`;
+}
+
+/**
+ * The label for a resolved mode before any HLS profile has been reported:
+ * direct play names its audio language (see directPlayModeLabel), every other
+ * mode its list label. Pass the audio streams only once technical details
+ * have loaded.
+ */
+export function playbackModeLabel(
+  mode: StreamModeId,
+  audioStreams: PlaybackAudioStreamType[] | undefined,
+): string {
+  return mode === "direct"
+    ? directPlayModeLabel(audioStreams)
+    : streamModeLabel(mode);
 }
 
 /**
@@ -560,8 +574,7 @@ export function effectiveModeLabel(
   requestedMode: StreamModeId,
   effectiveProfile: string | null,
 ): string {
-  const requestedLabel =
-    STREAM_MODES.find(m => m.id === requestedMode)?.label ?? requestedMode;
+  const requestedLabel = streamModeLabel(requestedMode);
 
   if (!effectiveProfile || effectiveProfile === requestedMode) {
     return requestedLabel;

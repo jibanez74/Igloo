@@ -1,7 +1,14 @@
-import { expect, type Page, type Route } from "@playwright/test";
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
+import {
+  expect,
+  type APIRequestContext,
+  type Page,
+  type Route,
+} from "@playwright/test";
+import {
+  movieScanStatus,
+  musicScanStatus,
+  showScanStatus,
+} from "../src/test/helpers/scan-status";
 
 export {
   nullableFloat64,
@@ -26,6 +33,20 @@ type ApiResponse<T> = {
  */
 export async function readJSON<T>(response: { json(): Promise<unknown> }) {
   return (await response.json()) as ApiResponse<T>;
+}
+
+/**
+ * GETs `path` on a request context that already holds a session, asserts a
+ * 200 success envelope carrying data, and returns the data.
+ */
+export async function getApiData<T>(request: APIRequestContext, path: string) {
+  const response = await request.get(path, { failOnStatusCode: false });
+  expect(response.status(), `GET ${path}`).toBe(200);
+
+  const body = await readJSON<T>(response);
+  expect(body.error, body.message).toBe(false);
+  expect(body.data).toBeTruthy();
+  return body.data!;
 }
 
 /** Wraps data in the success envelope. */

@@ -1,21 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildSubtitleTrackInfo } from "@/lib/video-playback";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
-import { effectiveModeLabel } from "@/lib/playback";
-import type { SubtitleType } from "@/types";
-
-function subtitle(overrides: Partial<SubtitleType> = {}): SubtitleType {
-  return {
-    id: 1,
-    title: { String: "", Valid: false },
-    codec: "subrip",
-    language: { String: "eng", Valid: true },
-    stream_index: 2,
-    is_default: false,
-    is_forced: false,
-    ...overrides,
-  } as SubtitleType;
-}
+import { effectiveModeLabel, streamModeLabel } from "@/lib/playback";
+import { subtitleStream } from "../helpers/tech-details";
 
 describe("buildSubtitleTrackInfo", () => {
   it("builds episode subtitle URLs under the episode route", () => {
@@ -23,7 +10,7 @@ describe("buildSubtitleTrackInfo", () => {
       media: episodeMediaRef(9),
       resolvedSubtitleTrack: 1,
       techLoaded: true,
-      subtitleStreams: [subtitle(), subtitle()],
+      subtitleStreams: [subtitleStream(), subtitleStream()],
       actualHlsStartSec: 30,
     });
 
@@ -38,7 +25,7 @@ describe("buildSubtitleTrackInfo", () => {
       media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
-      subtitleStreams: [subtitle()],
+      subtitleStreams: [subtitleStream()],
       actualHlsStartSec: 590,
     });
 
@@ -53,7 +40,7 @@ describe("buildSubtitleTrackInfo", () => {
       media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
-      subtitleStreams: [subtitle()],
+      subtitleStreams: [subtitleStream()],
       actualHlsStartSec: 591.174,
     });
 
@@ -65,7 +52,7 @@ describe("buildSubtitleTrackInfo", () => {
       media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
-      subtitleStreams: [subtitle()],
+      subtitleStreams: [subtitleStream()],
       actualHlsStartSec: 0,
     });
 
@@ -77,7 +64,7 @@ describe("buildSubtitleTrackInfo", () => {
       media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
-      subtitleStreams: [subtitle()],
+      subtitleStreams: [subtitleStream()],
     });
 
     expect(info?.url).toBe("/api/movies/7/subtitles/0/web.vtt");
@@ -90,7 +77,7 @@ describe("buildSubtitleTrackInfo", () => {
       media: movieMediaRef(7),
       resolvedSubtitleTrack: 0,
       techLoaded: true,
-      subtitleStreams: [subtitle()],
+      subtitleStreams: [subtitleStream()],
     };
 
     const first = buildSubtitleTrackInfo({
@@ -129,5 +116,15 @@ describe("effectiveModeLabel", () => {
     expect(effectiveModeLabel("remux", "something_else")).toBe(
       "Original video, adjusted audio",
     );
+  });
+});
+
+describe("streamModeLabel", () => {
+  it("names a known stream mode", () => {
+    expect(streamModeLabel("remux")).toBe("Original video, adjusted audio");
+  });
+
+  it("falls back to the raw id for a mode it does not list", () => {
+    expect(streamModeLabel("something_else")).toBe("something_else");
   });
 });

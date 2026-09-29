@@ -3,6 +3,7 @@ import { Tv } from "lucide-react";
 import PosterCard from "@/components/shared/PosterCard";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { showDetailsQueryOpts } from "@/lib/query-opts";
+import { unwrapInt, unwrapString } from "@/lib/nullable";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { LatestShowType } from "@/types";
 
@@ -20,14 +21,13 @@ export default function ShowCard({ show }: ShowCardProps) {
 
   const handlePrefetch = () => queryClient.prefetchQuery(showDetailsQueryOpts(id));
 
-  const posterUrl =
-    poster_path.Valid && poster_path.String !== ""
-      ? buildTmdbImageUrl(poster_path.String, TMDB_POSTER_SIZE)
-      : "";
+  const posterUrl = buildTmdbImageUrl(
+    unwrapString(poster_path),
+    TMDB_POSTER_SIZE,
+  );
 
-  const cardAriaLabel = premiere_year.Valid
-    ? `${name} ${premiere_year.Int64}`
-    : name;
+  const premiereYear = unwrapInt(premiere_year);
+  const cardAriaLabel = premiereYear == null ? name : `${name} ${premiereYear}`;
 
   return (
     <PosterCard
@@ -35,7 +35,7 @@ export default function ShowCard({ show }: ShowCardProps) {
       posterUrl={posterUrl}
       fallbackIcon={Tv}
       title={name}
-      subtitle={premiere_year.Valid ? String(premiere_year.Int64) : undefined}
+      subtitle={premiereYear == null ? undefined : String(premiereYear)}
       detailsLabel={cardAriaLabel}
       onPrefetch={handlePrefetch}
     />

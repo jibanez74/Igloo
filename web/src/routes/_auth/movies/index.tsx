@@ -20,9 +20,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/movies/MovieCard";
 import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
-import LibraryAllTab, {
-  type LibraryNoun,
-} from "@/components/shared/LibraryAllTab";
+import LibraryAllTab from "@/components/shared/LibraryAllTab";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
 import LibraryMoreMenu, {
   RequestMediaMenuItem,
@@ -44,6 +42,7 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
   MUSIC_CARD_GRID_CLASS,
+  LIBRARY_NOUNS,
 } from "@/lib/constants";
 import {
   likedMoviesQueryOpts,
@@ -121,8 +120,6 @@ export const Route = createFileRoute("/_auth/movies/")({
   },
   component: MoviesPage,
 });
-
-const MOVIE_NOUN: LibraryNoun = { singular: "movie", plural: "movies" };
 
 type PlaylistsFocusIntent =
   | "enter-liked-from-toolbar"
@@ -250,7 +247,7 @@ function MoviesPage() {
             {
               icon: Film,
               label: "Movies",
-              noun: MOVIE_NOUN,
+              noun: LIBRARY_NOUNS.movie,
               getValue: data => data.total_movies,
             },
           ]}
@@ -399,7 +396,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
       currentPage={currentPage}
       sort={sort}
       perPage={MOVIES_PER_PAGE}
-      noun={MOVIE_NOUN}
+      noun={LIBRARY_NOUNS.movie}
       emptyIcon={Film}
       onPageChange={newPage =>
         navigate({
@@ -468,7 +465,7 @@ function GenresTabContent({
       genresPage={genresPage}
       sort={sort}
       perPage={MOVIES_PER_PAGE}
-      noun={MOVIE_NOUN}
+      noun={LIBRARY_NOUNS.movie}
       emptyIcon={Film}
       fallbackFocusRef={fallbackFocusRef}
       onSelectGenre={id =>

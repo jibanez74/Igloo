@@ -1,9 +1,13 @@
 import { useState, type RefObject } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { deleteMovie } from "@/lib/api";
-import { LATEST_MOVIES_KEY, LIBRARY_MOVIE_DETAILS_KEY } from "@/lib/constants";
+import {
+  CONTINUE_WATCHING_KEY,
+  LIBRARY_MOVIE_DETAILS_KEY,
+} from "@/lib/constants";
+import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
+import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -31,26 +35,37 @@ export default function DeleteMovieDialog({
   async function handleDelete() {
     setDeleting(true);
 
+    let deleted = false;
     try {
       const res = await deleteMovie(movieId, deleteFile);
 
       if (res.error) {
-        toast.error(res.message || "Failed to delete movie");
+        showActionFailed("delete movie", res.message);
       } else {
-        queryClient.invalidateQueries({ queryKey: [LATEST_MOVIES_KEY] });
-        queryClient.removeQueries({
-          queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
-        });
-
-        toast.success(`"${movieTitle}" deleted successfully`);
-        onOpenChange(false);
-        navigate({ to: "/" });
+        deleted = true;
       }
     } catch {
-      toast.error("Failed to delete movie");
+      showActionFailed("delete movie");
     }
 
     setDeleting(false);
+    if (!deleted) return;
+
+    queryClient.removeQueries({
+      queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
+    });
+    showDeleted(`"${movieTitle}"`);
+    onOpenChange(false);
+    // Leave the details page before invalidating, so its queries for the
+    // deleted movie are no longer active and never refetch into a 404.
+    try {
+      await navigate({ to: "/" });
+    } finally {
+      // Every movie list can hold the deleted title, and so can Home's
+      // continue-watching row.
+      invalidateMovieLibraryQueries(queryClient);
+      void queryClient.invalidateQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
+    }
   }
 
   return (

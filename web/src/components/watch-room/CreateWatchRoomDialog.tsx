@@ -7,7 +7,6 @@ import {
   AUDIO_TRACK_DEFAULT_LABEL,
   MOTION_MICRO_COLORS_CLASS,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
-  STREAM_MODES,
   SUBTITLES_NONE_LABEL,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
@@ -17,7 +16,8 @@ import {
   formatSubtitleLabel,
   getAvailableModes,
   getPrimaryVideoStream,
-  resolvePlaybackSettings
+  playbackModeLabel,
+  resolvePlaybackSettings,
 } from "@/lib/playback";
 import type { PlaybackSettings } from "@/types/playback";
 import {
@@ -46,6 +46,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { apiErrorMessage } from "@/lib/is-api-failure";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 
 type CreateWatchRoomDialogProps = {
   movieId: number;
@@ -119,9 +121,10 @@ export default function CreateWatchRoomDialog({
     audioStreams,
     subtitleStreams,
   );
-  const modeLabel =
-    STREAM_MODES.find(mode => mode.id === resolvedSettings.mode)?.label ??
-    resolvedSettings.mode;
+  const modeLabel = playbackModeLabel(
+    resolvedSettings.mode,
+    techLoaded ? audioStreams : undefined,
+  );
   const audioLabel =
     audioStreams[resolvedSettings.audioTrack] !== undefined
       ? formatPlaybackAudioLabel(
@@ -261,8 +264,10 @@ export default function CreateWatchRoomDialog({
                 </p>
               ) : !techLoaded ? (
                 <p className="mt-3 text-sm text-destructive">
-                  {(techData?.error && techData.message) ||
-                    "Failed to load playback options. Please try again."}
+                  {apiErrorMessage(
+                    techData,
+                    "Failed to load playback options. Please try again.",
+                  )}
                 </p>
               ) : (
                 <dl className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -359,8 +364,10 @@ export default function CreateWatchRoomDialog({
                   </div>
                 ) : inviteUsersData?.error ? (
                   <p className="px-4 py-6 text-sm text-destructive">
-                    {inviteUsersData.message ||
-                      "Failed to load users. Please try again."}
+                    {apiErrorMessage(
+                      inviteUsersData,
+                      "Failed to load users. Please try again.",
+                    )}
                   </p>
                 ) : inviteUsers.length === 0 ? (
                   <p className="px-4 py-6 text-sm text-muted-foreground">
@@ -394,7 +401,7 @@ export default function CreateWatchRoomDialog({
                             <Avatar className="size-9 border border-border">
                               {user.avatar ? (
                                 <AvatarImage
-                                  src={`/api/static/${user.avatar}`}
+                                  src={getMediaImageUrl(user.avatar) ?? undefined}
                                   alt=""
                                 />
                               ) : null}

@@ -12,6 +12,7 @@ import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   fulfillIdleScanStatus,
   fulfillJSON,
+  getApiData,
   readJSON,
 } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
@@ -38,16 +39,8 @@ const requiredControlNames = [
   "Save library paths",
 ];
 
-async function fetchLibrarySettings(page: Page) {
-  const response = await page.context().request.get("/api/settings", {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<SettingsType>(response);
-  expect(body.error, body.message).toBe(false);
-  expect(body.data).toBeTruthy();
-  return body.data!;
+function fetchLibrarySettings(page: Page) {
+  return getApiData<SettingsType>(page.context().request, "/api/settings");
 }
 
 async function restoreLibrarySettings(page: Page, settings: SettingsType) {

@@ -15,7 +15,7 @@ import ResumeDialog from "@/components/playback/ResumeDialog";
 import PlayerControls from "@/components/playback/PlayerControls";
 import PlaybackStatusView from "@/components/playback/PlaybackStatus";
 import UpNextOverlay from "@/components/playback/UpNextOverlay";
-import { effectiveModeLabel } from "@/lib/playback";
+import { effectiveModeLabel, streamModeLabel } from "@/lib/playback";
 import { deleteMediaWatchProgress } from "@/lib/api";
 import { mediaKey } from "@/lib/media-ref";
 import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
@@ -43,11 +43,10 @@ import {
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
   PLAYER_ICON_BUTTON_CLASS,
-  STREAM_MODES,
   UP_NEXT_COUNTDOWN_SEC,
 } from "@/lib/constants";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
-import { cn } from "@/lib/utils";
+import { clearTimeoutRef, cn } from "@/lib/utils";
 import {
   playbackSettingsToPlaySearch,
   type PlaySearchParams,
@@ -259,10 +258,7 @@ export default function VideoPlaybackPage({
   useEffect(() => {
     if (!isHlsPlayback) return;
 
-    if (hlsStopCleanupTimerRef.current !== null) {
-      window.clearTimeout(hlsStopCleanupTimerRef.current);
-      hlsStopCleanupTimerRef.current = null;
-    }
+    clearTimeoutRef(hlsStopCleanupTimerRef);
 
     let stopped = false;
     const stopSession = (keepalive: boolean) => {
@@ -379,9 +375,7 @@ export default function VideoPlaybackPage({
       directAvailable: directPlayAvailable,
       playerMounted,
       onFallback: () => {
-        const remuxLabel =
-          STREAM_MODES.find((m) => m.id === "remux")?.label ?? "remux";
-        const notice = `This file can't be played directly by your browser. Switched to ${remuxLabel}.`;
+        const notice = `This file can't be played directly by your browser. Switched to ${streamModeLabel("remux")}.`;
         setFallbackAnnouncement((prev) => ({
           key: prev.key + 1,
           text: notice,

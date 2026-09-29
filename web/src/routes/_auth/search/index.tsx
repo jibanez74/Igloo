@@ -38,6 +38,7 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
   TRACK_LIST_CONTAINER_CLASS,
+  LIBRARY_NOUNS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
@@ -60,11 +61,11 @@ type PagedSearchTab = Exclude<SearchTab, "all">;
 // The tab value doubles as the visible category word, so each one carries both
 // forms - a single result reads "1 show", not "1 shows".
 const SEARCH_TAB_NOUNS: Record<PagedSearchTab, LibraryNoun> = {
-  movies: { singular: "movie", plural: "movies" },
-  shows: { singular: "show", plural: "shows" },
-  albums: { singular: "album", plural: "albums" },
-  musicians: { singular: "musician", plural: "musicians" },
-  tracks: { singular: "track", plural: "tracks" },
+  movies: LIBRARY_NOUNS.movie,
+  shows: LIBRARY_NOUNS.show,
+  albums: LIBRARY_NOUNS.album,
+  musicians: LIBRARY_NOUNS.musician,
+  tracks: LIBRARY_NOUNS.track,
 };
 
 function redirectToLastSearchPage({

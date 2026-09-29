@@ -6,6 +6,7 @@ import MovieCard from "@/components/movies/MovieCard";
 import ContinueWatchingEpisodeCard from "@/components/shows/ContinueWatchingEpisodeCard";
 import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 import type { ContinueWatchingItemType } from "@/types";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 const renderCard = (item: ContinueWatchingItemType) => {
   if (item.kind === "episode") {
@@ -27,9 +28,8 @@ export default function ContinueWatching() {
   const { data, isPending } = useQuery(continueWatchingQueryOpts());
 
   const items = data && !data.error ? (data.data?.items ?? []) : [];
-  const hasError = data && data.error;
-  const errorMessage = hasError
-    ? data.message || "Failed to load what you are watching."
+  const errorMessage = data?.error
+    ? apiErrorMessage(data, "Failed to load what you are watching.")
     : undefined;
 
   // The home route loader awaits this query, so the section renders populated

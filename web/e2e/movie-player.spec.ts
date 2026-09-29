@@ -7,7 +7,7 @@ import { trackBrowserIssues } from "./e2e-browser-issues";
 import { requireMockApi } from "./e2e-env";
 import {
   expectURLParams,
-  holdMediaRequests,
+  openHeldPlayer,
   playButton,
 } from "./media-e2e-helpers";
 import { MOCK_MOVIE_ID } from "./fixtures/movies";
@@ -28,14 +28,12 @@ test.beforeEach(async ({ page }) => {
   await loginPageViaApi(page);
 });
 
-async function openMoviePlayer(
+function openMoviePlayer(
   page: Page,
   search: string,
-  options?: Parameters<typeof holdMediaRequests>[2],
+  options?: Parameters<typeof openHeldPlayer>[3],
 ) {
-  const mediaRequests = await holdMediaRequests(page, movie, options);
-  await page.goto(`${moviePath}/play?${search}`);
-  return mediaRequests;
+  return openHeldPlayer(page, movie, `${moviePath}/play?${search}`, options);
 }
 
 /**

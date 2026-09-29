@@ -55,6 +55,7 @@ import {
   TRACK_LIST_CONTAINER_CLASS,
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
+  LIBRARY_NOUNS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { scrollWindowToTop } from "@/lib/motion";
@@ -63,9 +64,7 @@ import AlbumCard, { AlbumCardSkeleton } from "@/components/music/AlbumCard";
 import MusicianCard, {
   MusicianCardSkeleton,
 } from "@/components/music/MusicianCard";
-import LibraryAllTab, {
-  type LibraryNoun,
-} from "@/components/shared/LibraryAllTab";
+import LibraryAllTab from "@/components/shared/LibraryAllTab";
 import LibraryMoreMenu, {
   RequestMediaMenuItem,
   RefreshLibraryMenuItem,
@@ -90,10 +89,6 @@ const MUSIC_HEAD = routeHead(
   "Music Library",
   "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.",
 );
-
-const ALBUM_NOUN: LibraryNoun = { singular: "album", plural: "albums" };
-const MUSICIAN_NOUN: LibraryNoun = { singular: "musician", plural: "musicians" };
-const TRACK_NOUN: LibraryNoun = { singular: "track", plural: "tracks" };
 
 export const Route = createFileRoute("/_auth/music/")({
   head: () => MUSIC_HEAD,
@@ -192,19 +187,19 @@ function MusicPage() {
             {
               icon: Disc3,
               label: "Albums",
-              noun: ALBUM_NOUN,
+              noun: LIBRARY_NOUNS.album,
               getValue: data => data.total_albums,
             },
             {
               icon: Music,
               label: "Tracks",
-              noun: TRACK_NOUN,
+              noun: LIBRARY_NOUNS.track,
               getValue: data => data.total_tracks,
             },
             {
               icon: User,
               label: "Musicians",
-              noun: MUSICIAN_NOUN,
+              noun: LIBRARY_NOUNS.musician,
               getValue: data => data.total_musicians,
             },
           ]}
@@ -332,7 +327,7 @@ function MusiciansTabContent({ currentPage }: { currentPage: number }) {
       renderCard={musician => <MusicianCard musician={musician} />}
       currentPage={currentPage}
       perPage={MUSICIANS_PER_PAGE}
-      noun={MUSICIAN_NOUN}
+      noun={LIBRARY_NOUNS.musician}
       emptyIcon={Users}
       gridClassName={MUSIC_CARD_GRID_CLASS}
       skeletonCard={<MusicianCardSkeleton />}
@@ -360,7 +355,7 @@ function AlbumsTabContent({ currentPage }: { currentPage: number }) {
       renderCard={album => <AlbumCard album={album} />}
       currentPage={currentPage}
       perPage={ALBUMS_PER_PAGE}
-      noun={ALBUM_NOUN}
+      noun={LIBRARY_NOUNS.album}
       emptyIcon={Disc3}
       skeletonCard={<AlbumCardSkeleton />}
       onPageChange={newPage =>

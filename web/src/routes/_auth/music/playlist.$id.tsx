@@ -59,7 +59,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { parseRouteId } from "@/lib/route-id";
-import { routeHead } from "@/lib/route-head";
+import { listenHead, routeHead } from "@/lib/route-head";
 import type {
   PlayableTrackData,
   PlaylistDetailResponseType,
@@ -98,9 +98,10 @@ const PLAYLIST_FALLBACK_HEAD = routeHead("Playlist");
 function playlistHead(playlist: PlaylistHeadData | null | undefined) {
   if (!playlist) return PLAYLIST_FALLBACK_HEAD;
 
-  return routeHead(
+  return listenHead(
     playlist.name,
-    `Listen to ${playlist.name} - ${pluralize(playlist.trackCount, "track")}, ${formatDuration(playlist.duration)} in your Igloo playlist.`,
+    `${pluralize(playlist.trackCount, "track")}, ${formatDuration(playlist.duration)}`,
+    "playlist",
   );
 }
 

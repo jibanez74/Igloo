@@ -2,7 +2,7 @@ import { CalendarRange, Film, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import TmdbScoreBadge from "@/components/shared/TmdbScoreBadge";
 import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
-import { parseCatalogDate, pluralize } from "@/lib/format";
+import { catalogYear, pluralize } from "@/lib/format";
 
 type ShowDetailsMetadataChipsProps = {
   tmdbVoteAverage: number | null;
@@ -46,14 +46,11 @@ export default function ShowDetailsMetadataChips({
     ? `${availableEpisodeCount} of ${pluralize(tmdbEpisodeCount, "episode")}`
     : pluralize(availableEpisodeCount, "episode");
 
-  // parseCatalogDate, not `new Date`: a stored date-only value parses at UTC
-  // midnight, so a January air date reports the previous year west of UTC.
-  const firstYear = firstAirDate
-    ? parseCatalogDate(firstAirDate).getFullYear()
-    : null;
-  const lastYear = lastAirDate
-    ? parseCatalogDate(lastAirDate).getFullYear()
-    : null;
+  // catalogYear, not `new Date`: a stored date-only value parses at UTC
+  // midnight, so a January air date reports the previous year west of UTC,
+  // and an unparseable date must not read "NaN".
+  const firstYear = catalogYear(firstAirDate);
+  const lastYear = catalogYear(lastAirDate);
   const spansYears = lastYear != null && lastYear !== firstYear;
   const airRange =
     firstYear != null

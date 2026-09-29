@@ -86,6 +86,19 @@ describe("ShowDetailsMetadataChips", () => {
     expect(screen.getByText("Aired 2024")).toBeInTheDocument();
   });
 
+  it("drops an unparseable air date instead of reading NaN", () => {
+    render(
+      <ShowDetailsMetadataChips
+        {...baseProps}
+        firstAirDate="2024-03-01"
+        lastAirDate="not a date"
+      />,
+    );
+
+    expect(screen.getByText("Aired 2024")).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+
   it("speaks the certification and series status as list item content", () => {
     render(
       <ShowDetailsMetadataChips

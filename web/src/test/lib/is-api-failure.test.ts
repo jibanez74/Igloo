@@ -39,4 +39,10 @@ describe("apiErrorMessage", () => {
       "Fallback.",
     );
   });
+
+  it("falls back when the failure carries a blank message", () => {
+    expect(apiErrorMessage({ error: true, message: "" }, "Fallback.")).toBe(
+      "Fallback.",
+    );
+  });
 });

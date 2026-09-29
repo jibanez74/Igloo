@@ -24,6 +24,7 @@ import {
   MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { formatTimecode } from "@/lib/format";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
   movieTechnicalDetailsQueryOpts,
@@ -251,10 +252,10 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   if (isError || (data && data.error) || !room) {
     return (
       <WatchRoomUnavailable
-        message={
-          data?.message ||
-          "This watch room could not be loaded or you do not have access to it."
-        }
+        message={apiErrorMessage(
+          data,
+          "This watch room could not be loaded or you do not have access to it.",
+        )}
         onBackHome={() => navigate({ to: "/" })}
       />
     );

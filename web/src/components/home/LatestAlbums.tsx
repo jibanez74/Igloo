@@ -4,14 +4,14 @@ import { latestAlbumsQueryOpts } from "@/lib/query-opts";
 import AlbumCard from "@/components/music/AlbumCard";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import { HOME_ALBUM_GRID_CLASS } from "@/lib/constants";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestAlbums() {
   const { data, isPending } = useQuery(latestAlbumsQueryOpts());
 
   const albums = data && !data.error ? (data.data?.albums ?? []) : [];
-  const hasError = data && data.error;
-  const errorMessage = hasError
-    ? data.message || "Failed to load albums. Please try again later."
+  const errorMessage = data?.error
+    ? apiErrorMessage(data, "Failed to load albums. Please try again later.")
     : undefined;
 
   return (

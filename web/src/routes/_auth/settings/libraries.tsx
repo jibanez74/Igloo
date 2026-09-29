@@ -41,6 +41,7 @@ import {
   SETTINGS_INPUT_CLASS,
   SETTINGS_KEY,
 } from "@/lib/constants";
+import { trimmedOrNull } from "@/lib/nullable";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
 import { routeHead } from "@/lib/route-head";
@@ -173,15 +174,10 @@ function formFromSettings(settings: SettingsType): LibrariesForm {
 
 function payloadFromForm(form: LibrariesForm): SettingsType {
   return {
-    movies_dir: optionalLibraryPath(form.movies_dir),
-    shows_dir: optionalLibraryPath(form.shows_dir),
-    music_dir: optionalLibraryPath(form.music_dir),
+    movies_dir: trimmedOrNull(form.movies_dir),
+    shows_dir: trimmedOrNull(form.shows_dir),
+    music_dir: trimmedOrNull(form.music_dir),
   };
-}
-
-function optionalLibraryPath(value: string) {
-  const trimmed = value.trim();
-  return trimmed === "" ? null : trimmed;
 }
 
 function formHasChanges(form: LibrariesForm, settings: SettingsType) {

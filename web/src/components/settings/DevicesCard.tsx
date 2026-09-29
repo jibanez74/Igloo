@@ -10,12 +10,13 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { renameDevice, revokeDevice } from "@/lib/api";
 import { DEVICES_KEY, SETTINGS_CARD_SURFACE_CLASS } from "@/lib/constants";
+import { parseServerTimestamp } from "@/lib/format";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { DeviceType } from "@/types";
 
 function formatDeviceDate(value: string) {
-  const date = new Date(value);
+  const date = parseServerTimestamp(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }

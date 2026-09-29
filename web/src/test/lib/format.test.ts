@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  capitalize,
   catalogYear,
+  chapterLabel,
   formatDate,
   formatRuntimeMinutes,
   formatSpokenRuntimeMinutes,
@@ -10,6 +12,7 @@ import {
   formatTrackDuration,
   nounForCount,
   parseCatalogDate,
+  parseServerTimestamp,
 } from "@/lib/format";
 
 // format.ts keeps its own month names; mirror them here so a test expectation
@@ -224,6 +227,10 @@ describe("formatDate", () => {
 });
 
 describe("parseCatalogDate", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("reads a date-only value as a local calendar date", () => {
     // The year, not just the day, is at stake: "2024-01-01" parsed at UTC
     // midnight reports 2023 anywhere west of UTC, so a show's air range
@@ -235,10 +242,49 @@ describe("parseCatalogDate", () => {
     expect(d.getDate()).toBe(1);
   });
 
+  it("reads a year or year-month value as the first of that period, locally", () => {
+    // Spotify cuts release dates to the year or month; parsed at UTC midnight
+    // "1999" would be 1998 anywhere west of UTC.
+    vi.stubEnv("TZ", "America/Los_Angeles");
+
+    const year = parseCatalogDate("1999");
+    const month = parseCatalogDate("1999-05");
+
+    expect([year.getFullYear(), year.getMonth(), year.getDate()]).toEqual([
+      1999, 0, 1,
+    ]);
+    expect([month.getFullYear(), month.getMonth(), month.getDate()]).toEqual([
+      1999, 4, 1,
+    ]);
+  });
+
   it("leaves a value carrying a time to the normal parser", () => {
     const timestamp = "2024-03-01T18:30:00Z";
 
     expect(parseCatalogDate(timestamp).getTime()).toBe(
+      new Date(timestamp).getTime(),
+    );
+  });
+});
+
+describe("parseServerTimestamp", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads a zone-less SQLite timestamp as UTC in any time zone", () => {
+    // A bare `new Date` would read this as Tokyo time, nine hours early.
+    vi.stubEnv("TZ", "Asia/Tokyo");
+
+    expect(parseServerTimestamp("2026-07-05 23:30:00").getTime()).toBe(
+      Date.UTC(2026, 6, 5, 23, 30),
+    );
+  });
+
+  it("leaves a value carrying its own zone to the normal parser", () => {
+    const timestamp = "2026-07-05T23:30:00+02:00";
+
+    expect(parseServerTimestamp(timestamp).getTime()).toBe(
       new Date(timestamp).getTime(),
     );
   });
@@ -255,6 +301,14 @@ describe("catalogYear", () => {
     expect(catalogYear(undefined)).toBeNull();
     expect(catalogYear("")).toBeNull();
     expect(catalogYear("not a date")).toBeNull();
+  });
+
+  it("returns null for Spotify's unknown release date", () => {
+    expect(catalogYear("0000")).toBeNull();
+  });
+
+  it("keeps a two-digit year instead of reading it as 19xx", () => {
+    expect(catalogYear("0050-06-15")).toBe(50);
   });
 });
 
@@ -276,5 +330,27 @@ describe("nounForCount", () => {
     expect(nounForCount(3, { singular: "person", plural: "people" })).toBe(
       "people",
     );
+  });
+});
+
+describe("capitalize", () => {
+  it("upper-cases only the first character", () => {
+    expect(capitalize("movie")).toBe("Movie");
+    expect(capitalize("behind the scenes")).toBe("Behind the scenes");
+  });
+
+  it("leaves an empty string empty", () => {
+    expect(capitalize("")).toBe("");
+  });
+});
+
+describe("chapterLabel", () => {
+  it("uses the file's title, trimmed", () => {
+    expect(chapterLabel("  Opening Credits ", 0)).toBe("Opening Credits");
+  });
+
+  it("names a blank or missing title by its 1-based position", () => {
+    expect(chapterLabel("   ", 1)).toBe("Chapter 2");
+    expect(chapterLabel(null, 4)).toBe("Chapter 5");
   });
 });

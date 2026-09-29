@@ -3,7 +3,7 @@ import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import { expectNoOverflowingElements, VIEWPORTS } from "./e2e-layout";
+import { cardFor, expectNoOverflowingElements, VIEWPORTS } from "./e2e-layout";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
 import type {
   CreateMoviePlaylistRequest,
@@ -172,12 +172,6 @@ async function mockMoviesApi(page: Page) {
   });
 
   return { createdPlaylistRequests, unexpectedApiRequests };
-}
-
-function cardFor(page: Page, name: string) {
-  return page.getByRole("article").filter({
-    has: page.getByRole("link", { name, exact: true }),
-  });
 }
 
 test("playlists tab lists playlists and creates a playlist from the toolbar dialog", async ({ page }) => {

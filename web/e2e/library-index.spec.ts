@@ -16,7 +16,7 @@ import {
   assertMockSuiteClean,
   trackBrowserIssues,
 } from "./e2e-browser-issues";
-import { expectNoOverflowingElements, VIEWPORTS } from "./e2e-layout";
+import { cardFor, expectNoOverflowingElements, VIEWPORTS } from "./e2e-layout";
 import { mockApi } from "./e2e-mock-api";
 import {
   fillLibraryPage,
@@ -269,12 +269,6 @@ async function expectTabShown(page: Page, tab: LibraryTab) {
   await expect(
     panel.getByRole(tab.marker.role, { name: tab.marker.name, exact: true }),
   ).toBeVisible();
-}
-
-function cardFor(page: Page, name: string) {
-  return page.getByRole("article").filter({
-    has: page.getByRole("link", { name, exact: true }),
-  });
 }
 
 for (const kind of [moviesKind(), showsKind()]) {

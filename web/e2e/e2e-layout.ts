@@ -81,3 +81,10 @@ export async function tabTo(page: Page, target: Locator, maxPresses = 40) {
   }
   throw new Error(`Tab did not reach the target within ${maxPresses} presses`);
 }
+
+/** The card (an article) whose link is named exactly `name`. */
+export function cardFor(page: Page, name: string) {
+  return page.getByRole("article").filter({
+    has: page.getByRole("link", { name, exact: true }),
+  });
+}

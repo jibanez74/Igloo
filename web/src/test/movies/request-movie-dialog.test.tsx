@@ -1,10 +1,8 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   useRef,
   useState,
-  type PropsWithChildren,
   type ReactNode,
 } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,10 +11,10 @@ import { AUTH_USER_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,
   CreateNotificationResponseType,
-  AuthUser,
   TmdbSearchResultType,
 } from "@/types";
-import { createTestQueryClient } from "../helpers/render";
+import { authUserData } from "../helpers/fixtures";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const apiMocks = vi.hoisted(() => ({
   createNotification: vi.fn(),
@@ -94,21 +92,12 @@ function success<T extends Record<string, unknown>>(data: T): ApiResponseType<T>
   };
 }
 
-function createQueryClient() {
-  return createTestQueryClient();
-}
-
-function authUser(): AuthUser {
-  return {
+function authUser() {
+  return authUserData({
     id: 7,
     name: "Movie Fan",
     email: "movie-fan@example.com",
-    is_admin: false,
-    avatar: null,
-    has_pin: false,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
+  });
 }
 
 function tmdbResult(
@@ -130,17 +119,9 @@ function notificationResponse(): CreateNotificationResponseType {
 }
 
 function renderDialog() {
-  const queryClient = createQueryClient();
+  const queryClient = createTestQueryClient();
   queryClient.setQueryData([AUTH_USER_KEY], success({ user: authUser() }));
   const onOpenChange = vi.fn();
-
-  function Wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  }
 
   function DialogHarness() {
     const [open, setOpen] = useState(true);
@@ -163,10 +144,7 @@ function renderDialog() {
     );
   }
 
-  render(
-    <DialogHarness />,
-    { wrapper: Wrapper },
-  );
+  renderWithQueryClient(<DialogHarness />, { queryClient });
 
   return { onOpenChange };
 }

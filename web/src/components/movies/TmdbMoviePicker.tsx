@@ -10,9 +10,11 @@ import {
   PEER_FOCUS_VISIBLE_RING_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { catalogYear, pluralize } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
+import { handleRadioListKey } from "@/lib/radio-list";
 import type { ApiResponseType, TmdbSearchMoviesRequest, TmdbSearchResultType } from "@/types";
 
 type TmdbMoviePickerProps = {
@@ -64,45 +66,14 @@ export default function TmdbMoviePicker({
     return `${pickerId}-tmdb-result-${tmdbId}`;
   }
 
-  function handleResultArrowKey(
+  const handleResultArrowKey = (
     event: KeyboardEvent<HTMLInputElement>,
     currentIndex: number,
-  ) {
-    if (
-      event.key === " "
-      || event.key === "Space"
-      || event.key === "Spacebar"
-      || event.code === "Space"
-    ) {
-      event.preventDefault();
-      setSelectedId(results[currentIndex].tmdb_id);
-      return;
-    }
-
-    if (results.length < 2) {
-      return;
-    }
-
-    let nextIndex = currentIndex;
-
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      nextIndex = (currentIndex + 1) % results.length;
-    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-      nextIndex = (currentIndex - 1 + results.length) % results.length;
-    } else {
-      return;
-    }
-
-    event.preventDefault();
-
-    const nextResult = results[nextIndex];
-    const nextInput = document.getElementById(getResultInputId(nextResult.tmdb_id));
-    if (nextInput instanceof HTMLInputElement) {
-      nextInput.focus();
-    }
-
-    setSelectedId(nextResult.tmdb_id);
-  }
+  ) =>
+    handleRadioListKey(event, results, currentIndex, {
+      inputId: result => getResultInputId(result.tmdb_id),
+      onSelect: result => setSelectedId(result.tmdb_id),
+    });
 
   async function handleSearch() {
     if (!canSearch) return;
@@ -219,7 +190,7 @@ export default function TmdbMoviePicker({
             TMDB movie results
           </legend>
           <p className="text-sm text-muted-foreground">
-            {results.length} result{results.length === 1 ? "" : "s"} found
+            {pluralize(results.length, "result")} found
           </p>
 
           <ul className="max-h-64 space-y-2 overflow-y-auto">
@@ -279,7 +250,7 @@ function TmdbResultCard({
   const posterUrl = result.poster_path
     ? buildTmdbImageUrl(result.poster_path, TMDB_POSTER_SIZE)
     : null;
-  const releaseYear = result.release_date?.slice(0, 4);
+  const releaseYear = catalogYear(result.release_date);
   const labelId = `${inputId}-label`;
 
   return (
@@ -325,7 +296,7 @@ function TmdbResultCard({
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-foreground">
             {result.title}
-            {releaseYear && (
+            {releaseYear != null && (
               <span className="ml-1 text-muted-foreground">({releaseYear})</span>
             )}
           </p>

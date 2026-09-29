@@ -1,14 +1,15 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ScanProgress from "@/components/settings/ScanProgress";
 import { useMovieScanStatus, useMusicScanStatus, useShowScanStatus } from "@/hooks/useScanStatus";
 import { ALBUMS_PAGINATED_KEY, MOVIES_STATS_KEY, MOVIES_LIBRARY_KEY, MUSIC_STATS_KEY } from "@/lib/constants";
-import { createTestQueryClient } from "../helpers/render";
-import { movieScanStatus } from "../helpers/movie-scan";
-import { musicScanStatus } from "../helpers/music-scan";
-import { showScanStatus } from "../helpers/show-scan";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
+import {
+  movieScanStatus,
+  musicScanStatus,
+  showScanStatus,
+} from "../helpers/scan-status";
 import { jsonResponse, requestURL } from "../helpers/api";
 
 function ScanView() {
@@ -68,7 +69,7 @@ describe("movie scan progress", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
-    const view = render(<QueryClientProvider client={client}><ScanView /></QueryClientProvider>);
+    const view = renderWithQueryClient(<ScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing movies");
     status = movieScanStatus({ processed: 2, imported: 2 });
@@ -93,7 +94,7 @@ describe("movie scan progress", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Updating movie descriptions");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [MOVIES_LIBRARY_KEY] });
     view.unmount();
-    render(<QueryClientProvider client={client}><ScanView /></QueryClientProvider>);
+    renderWithQueryClient(<ScanView />, { queryClient: client });
     expect(screen.getByRole("status")).toHaveTextContent("Updating movie descriptions");
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     status = movieScanStatus({ state: "completed", phase: "enrichment", processed: 418, imported: 418 });
@@ -113,7 +114,7 @@ describe("movie scan progress", () => {
     const fetchMock = vi.fn(() => jsonResponse({ error: false, data: status }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
-    render(<QueryClientProvider client={client}><BackgroundScanView /></QueryClientProvider>);
+    renderWithQueryClient(<BackgroundScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing movies");
@@ -159,7 +160,7 @@ describe("music scan progress", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
-    render(<QueryClientProvider client={client}><MusicScanView /></QueryClientProvider>);
+    renderWithQueryClient(<MusicScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Discovering and importing tracks");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: [ALBUMS_PAGINATED_KEY] });
@@ -205,7 +206,7 @@ describe("TV shows scan progress", () => {
       : { error: true, message: `unexpected request ${requestURL(input)}` }));
     vi.stubGlobal("fetch", fetchMock);
     const client = createTestQueryClient();
-    render(<QueryClientProvider client={client}><ShowScanView /></QueryClientProvider>);
+    renderWithQueryClient(<ShowScanView />, { queryClient: client });
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByRole("status")).toHaveTextContent("Inspecting and importing episodes");
     status = showScanStatus({ processed: 54, imported: 54, episodes: 60, active_files: ["Show.S01E01.mkv"] });

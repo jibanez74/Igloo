@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import SpotifyRequestDialog from "@/components/music/SpotifyRequestDialog";
 import { searchSpotifyAlbums } from "@/lib/api";
-import { pluralize } from "@/lib/format";
+import { catalogYear, pluralize } from "@/lib/format";
 import { showActionFailed } from "@/lib/toast-helpers";
 import type { SpotifyAlbumSearchResultType } from "@/types";
 
@@ -47,7 +47,7 @@ export default function RequestAlbumDialog({
       restoreFocusRef={restoreFocusRef}
       kind="album"
       searchFn={searchSpotifyAlbums}
-      getTitleSuffix={result => result.release_date.slice(0, 4)}
+      getTitleSuffix={result => String(catalogYear(result.release_date) ?? "")}
       renderDetails={result => (
         <p className="mt-1 text-xs text-muted-foreground">
           {result.album_type || "album"}

@@ -1,12 +1,11 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { STREAM_MODES } from "@/lib/constants";
 import { mediaKey } from "@/lib/media-ref";
 import {
-  directPlayModeLabel,
   getAvailableModes,
   getPrimaryVideoStream,
   playbackDefaultsInput,
+  playbackModeLabel,
   resolveModeForAudioTrack,
   resolvePlaybackSettings,
 } from "@/lib/playback";
@@ -18,6 +17,7 @@ import {
   hlsStartTimeSec,
 } from "@/lib/video-playback";
 import {
+  authUserFrom,
   authUserQueryOpts,
   mediaTechnicalDetailsQueryOpts,
   mediaWatchProgressQueryOpts,
@@ -78,7 +78,7 @@ export function useVideoPlaybackData({
   const { data: userData, isPending: authUserPending } = useQuery(
     authUserQueryOpts(),
   );
-  const user = userData?.error === false ? (userData.data?.user ?? null) : null;
+  const user = authUserFrom(userData);
   const {
     data: playbackSettingsData,
     isPending: playbackSettingsPending,
@@ -173,11 +173,10 @@ export function useVideoPlaybackData({
     streamReloadKey,
     playbackSessionId,
   );
-  const modeLabel =
-    resolvedMode === "direct"
-      ? directPlayModeLabel(techLoaded ? audioStreams : undefined)
-      : (STREAM_MODES.find((m) => m.id === resolvedMode)?.label ??
-        resolvedMode);
+  const modeLabel = playbackModeLabel(
+    resolvedMode,
+    techLoaded ? audioStreams : undefined,
+  );
   const modeUnavailable =
     availableModes !== null && availableModes.length === 0;
   const directPlayAvailable =

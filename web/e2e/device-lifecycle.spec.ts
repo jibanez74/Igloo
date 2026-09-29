@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import type { DevicesListResponseType } from "../src/types";
 import type { components } from "../src/types/openapi.gen";
-import { readJSON } from "./e2e-api";
+import { getApiData, readJSON } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 import { requireRealInstance } from "./e2e-env";
 
@@ -67,13 +67,8 @@ async function redeemApprovedToken(
 }
 
 async function fetchDevices(request: APIRequestContext) {
-  const response = await request.get("/api/devices", {
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-
-  const body = await readJSON<DevicesListResponseType>(response);
-  return body.data?.devices ?? [];
+  const data = await getApiData<DevicesListResponseType>(request, "/api/devices");
+  return data.devices;
 }
 
 /**

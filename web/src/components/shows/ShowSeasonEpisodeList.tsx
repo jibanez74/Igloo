@@ -23,6 +23,7 @@ import {
   pluralize,
   seasonLabel,
 } from "@/lib/format";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import { showSeasonEpisodesQueryOpts } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -221,9 +222,10 @@ export default function ShowSeasonEpisodeList({
       </div>
     );
   } else if (isError || data.error) {
-    const message =
-      (data?.error ? data.message : null) ||
-      "Failed to load episodes. Please try again.";
+    const message = apiErrorMessage(
+      data,
+      "Failed to load episodes. Please try again.",
+    );
     // MoviesLoadError is a role="alert", so it announces itself; adding the
     // failure to LiveAnnouncer as well would announce it twice.
     body = (

@@ -22,13 +22,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { createPlaylist, updatePlaylist } from "@/lib/api";
 import {
   FOCUS_VISIBLE_RING_CLASS,
-  PLAYLIST_DESCRIPTION_MAX_LENGTH,
   PLAYLIST_DETAILS_KEY,
-  PLAYLIST_NAME_MAX_LENGTH,
   PLAYLISTS_KEY,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
-import { cn, codePointLength } from "@/lib/utils";
+import { playlistFieldsError } from "@/lib/form-validation";
+import { cn } from "@/lib/utils";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
@@ -203,22 +202,9 @@ function PlaylistForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      showValidationError("Playlist name is required");
-      return;
-    }
-
-    if (codePointLength(name.trim()) > PLAYLIST_NAME_MAX_LENGTH) {
-      showValidationError(
-        `Playlist name is too long (max ${PLAYLIST_NAME_MAX_LENGTH} characters)`,
-      );
-      return;
-    }
-
-    if (codePointLength(description.trim()) > PLAYLIST_DESCRIPTION_MAX_LENGTH) {
-      showValidationError(
-        `Playlist description is too long (max ${PLAYLIST_DESCRIPTION_MAX_LENGTH} characters)`,
-      );
+    const fieldsError = playlistFieldsError(name, description);
+    if (fieldsError) {
+      showValidationError(fieldsError);
       return;
     }
 

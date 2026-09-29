@@ -1,7 +1,6 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ComponentProps, PropsWithChildren } from "react";
+import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateWatchRoomDialog from "@/components/watch-room/CreateWatchRoomDialog";
 import {
@@ -16,12 +15,14 @@ import type {
   MovieTechnicalDetailsResponse,
   WatchRoomInviteUsersResponseType,
 } from "@/types";
-import type {
-  AudioStreamType,
-  SubtitleType,
-  VideoStreamType,
-} from "@/types/movies";
-import { createTestQueryClient } from "../helpers/render";
+import type { SubtitleType } from "@/types/movies";
+import { nullableString } from "../helpers/fixtures";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
+import {
+  audioStream,
+  subtitleStream,
+  videoStream,
+} from "../helpers/tech-details";
 
 const createWatchRoomMock = vi.fn();
 const getMovieTechnicalDetailsMock = vi.fn();
@@ -85,68 +86,14 @@ function failure(message: string): ApiResponseType<never> {
   };
 }
 
-function videoStream(overrides: Partial<VideoStreamType> = {}): VideoStreamType {
-  return {
-    id: 1,
-    movie_id: 22,
-    stream_index: 0,
-    codec: "h264",
-    codec_profile: { String: "Main", Valid: true },
-    codec_level: { Int64: 41, Valid: true },
-    bit_rate: 4_000_000,
-    width: 1920,
-    height: 1080,
-    coded_width: { Int64: 1920, Valid: true },
-    coded_height: { Int64: 1080, Valid: true },
-    aspect_ratio: { String: "16:9", Valid: true },
-    frame_rate: 24,
-    avg_frame_rate: { String: "24/1", Valid: true },
-    bit_depth: { Int64: 8, Valid: true },
-    pixel_format: { String: "yuv420p", Valid: true },
-    color_range: { String: "", Valid: false },
-    color_space: { String: "", Valid: false },
-    color_primaries: { String: "", Valid: false },
-    color_transfer: { String: "", Valid: false },
-    field_order: { String: "", Valid: false },
-    rotation: { Int64: 0, Valid: false },
-    language: { String: "", Valid: false },
-    title: { String: "", Valid: false },
-    ...overrides,
-  };
-}
-
-function audioStream(overrides: Partial<AudioStreamType> = {}): AudioStreamType {
-  return {
-    id: 1,
-    movie_id: 22,
-    stream_index: 1,
-    codec: "aac",
-    codec_profile: { String: "LC", Valid: true },
-    bit_rate: 192_000,
-    sample_rate: { Int64: 48_000, Valid: true },
-    channels: 2,
-    channel_layout: { String: "stereo", Valid: true },
-    language: { String: "eng", Valid: true },
-    title: { String: "", Valid: false },
-    is_default: false,
-    ...overrides,
-  };
-}
-
-function subtitleStream(
-  overrides: Partial<SubtitleType> = {},
-): SubtitleType {
-  return {
-    id: 1,
-    movie_id: 22,
+// The default English SDH subtitle this dialog's fixtures carry.
+function sdhSubtitle(overrides: Partial<SubtitleType> = {}): SubtitleType {
+  return subtitleStream({
     stream_index: 3,
-    codec: "subrip",
-    language: { String: "eng", Valid: true },
-    title: { String: "SDH", Valid: true },
-    is_forced: false,
+    title: nullableString("SDH"),
     is_default: true,
     ...overrides,
-  };
+  });
 }
 
 function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
@@ -168,7 +115,7 @@ function technicalDetails(): ApiResponseType<MovieTechnicalDetailsResponse> {
         language: { String: "spa", Valid: true },
       }),
     ],
-    subtitles: [subtitleStream()],
+    subtitles: [sdhSubtitle()],
     chapters: [],
   });
 }
@@ -186,7 +133,7 @@ function inviteUsers(): ApiResponseType<WatchRoomInviteUsersResponseType> {
         id: 3,
         name: "Fox Mulder",
         email: "fox@example.com",
-        avatar: "avatars/fox.webp",
+        avatar: "/api/static/avatars/fox.webp",
       },
     ],
   });
@@ -222,19 +169,12 @@ function renderDialog(
     ...overrides,
   };
 
-  function Wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  }
-
   return {
     invalidateSpy,
     onOpenChange,
-    queryClient,
-    ...render(<CreateWatchRoomDialog {...props} />, { wrapper: Wrapper }),
+    ...renderWithQueryClient(<CreateWatchRoomDialog {...props} />, {
+      queryClient,
+    }),
   };
 }
 
@@ -318,6 +258,15 @@ describe("CreateWatchRoomDialog", () => {
       screen.getByRole("button", { name: "Create and join room" }),
     ).toBeDisabled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("names the direct-play audio language, as the player's badge does", () => {
+    renderDialog({
+      playbackSettings: { mode: "direct", audioTrack: 0, subtitleTrack: null },
+    });
+
+    const playback = screen.getByText("Playback").nextElementSibling;
+    expect(playback).toHaveTextContent("Original file — English audio");
   });
 
   it("creates the room with resolved playback settings and navigates to it", async () => {

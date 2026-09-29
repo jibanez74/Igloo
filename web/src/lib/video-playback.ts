@@ -7,10 +7,13 @@ import {
   HLS_FORWARD_REBASE_THRESHOLD_SEC,
   WATCH_PROGRESS_COMPLETION_THRESHOLD,
   WATCH_PROGRESS_MIN_SECONDS,
-  STREAM_MODES,
 } from "@/lib/constants";
 import { mediaApiBasePath, mediaKey } from "@/lib/media-ref";
-import { formatSubtitleLabel, normalizeLang } from "@/lib/playback";
+import {
+  formatSubtitleLabel,
+  normalizeLang,
+  streamModeLabel,
+} from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type {
   PlaybackMediaRef,
@@ -161,10 +164,10 @@ export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
     return { kind: "loading", message: "Preparing playback..." };
   }
   if (args.modeUnavailable) {
-    const modeLabel =
-      STREAM_MODES.find((m) => m.id === args.requestedMode)?.label ??
-      args.requestedMode;
-    return { kind: "modeUnavailable", modeLabel };
+    return {
+      kind: "modeUnavailable",
+      modeLabel: streamModeLabel(args.requestedMode),
+    };
   }
   if (args.playbackError) return { kind: "error", message: args.playbackError };
   return { kind: "ready" };

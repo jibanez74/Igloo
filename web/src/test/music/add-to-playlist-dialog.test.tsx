@@ -1,12 +1,10 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
 import { PLAYLISTS_KEY } from "@/lib/constants";
 import type { ApiResponseType, PlaylistsListResponseType } from "@/types";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const getPlaylistsMock = vi.fn();
 const addTracksToPlaylistMock = vi.fn();
@@ -69,22 +67,14 @@ function renderDialog() {
   queryClient.setQueryData([PLAYLISTS_KEY], playlistsResponse);
   getPlaylistsMock.mockResolvedValue(playlistsResponse);
 
-  function Wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  }
-
-  return render(
+  return renderWithQueryClient(
     <AddToPlaylistDialog
       open
       onOpenChange={vi.fn()}
       trackId={7}
       trackTitle="First Contact"
     />,
-    { wrapper: Wrapper },
+    { queryClient },
   );
 }
 

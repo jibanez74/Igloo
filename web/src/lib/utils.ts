@@ -19,6 +19,25 @@ export function describedBy(...ids: Array<string | false | null | undefined>) {
   return value || undefined
 }
 
+// Cancels the timer a ref holds, if any, and empties the ref so a later check
+// sees no pending timer. Timer ids are compared with null, since 0 is valid.
+export function clearTimeoutRef(ref: { current: number | null }) {
+  if (ref.current === null) return
+  window.clearTimeout(ref.current)
+  ref.current = null
+}
+
+// Whether a key event's target takes typed input (including a native select's
+// type-ahead), so global media shortcuts must leave the key alone.
+export function isEditableTarget(target: HTMLElement) {
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable === true
+  )
+}
+
 // Two-letter avatar initials from a display name (first + last word), upper-cased.
 // `fallback` is returned for a blank name (e.g. "U" for a user, "?" generic).
 export function getInitials(name: string, fallback = "U"): string {

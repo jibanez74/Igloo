@@ -32,14 +32,17 @@ export function watchListQueryKeys(media: PlaybackMediaRef) {
 
 // Every watch-related cache must refresh on exit: the media's own
 // watch-progress entry (staleTime 30s) feeds the Resume dialog when the play
-// page is reopened right away, plus the lists above.
+// page is reopened right away, plus the lists above. Exit refetches the lists
+// even while inactive, since the page being returned to is not mounted yet; a
+// toggle on a mounted page passes "active" so it only marks the rest stale.
 export function refreshWatchQueries(
   queryClient: QueryClient,
   media: PlaybackMediaRef,
+  { refetchType = "all" }: { refetchType?: "all" | "active" } = {},
 ) {
   return Promise.all([
     ...watchListQueryKeys(media).map(queryKey =>
-      queryClient.invalidateQueries({ queryKey, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey, refetchType }),
     ),
     queryClient.invalidateQueries({
       queryKey: mediaWatchProgressQueryKey(media),

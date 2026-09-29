@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MOVIES_IN_THEATERS_KEY, MOVIES_PER_PAGE } from "@/lib/constants";
+import { authUserData } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { readDocumentHead, renderRoute } from "../helpers/render-route";
 
@@ -23,15 +24,11 @@ vi.mock("@/lib/toast-helpers", () => ({
 }));
 
 function authUser() {
-  return {
-    id: 1,
+  return authUserData({
     name: "Admin",
     email: "admin@example.com",
     is_admin: true,
-    avatar: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
+  });
 }
 
 type MockLoginFetchOptions = {
