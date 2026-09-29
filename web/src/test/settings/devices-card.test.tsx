@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import DevicesCard from "@/components/settings/DevicesCard";
 import type { DeviceType } from "@/types";
 import { createTestQueryClient } from "../helpers/render";
@@ -49,6 +49,27 @@ function renderCard() {
 describe("DevicesCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("dates a device by the UTC day the server recorded, not local time", async () => {
+    // 23:30 UTC on July 5th is already July 6th in Tokyo; read as local
+    // time it would stay on the 5th.
+    vi.stubEnv("TZ", "Asia/Tokyo");
+    getDevicesMock.mockResolvedValue({
+      error: false,
+      data: { devices: [device({ last_used_at: "2026-07-05 23:30:00" })] },
+    });
+
+    renderCard();
+
+    const lastUsed = new Date(Date.UTC(2026, 6, 5, 23, 30)).toLocaleDateString();
+    expect(await screen.findByText(/Last used/)).toHaveTextContent(
+      `Last used ${lastUsed}`,
+    );
   });
 
   it("shows an empty state when no devices are paired", async () => {

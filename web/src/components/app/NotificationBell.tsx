@@ -18,6 +18,7 @@ import {
   NOTIFICATIONS_KEY,
   NOTIFICATIONS_UNREAD_COUNT_KEY,
 } from "@/lib/constants";
+import { parseServerTimestamp } from "@/lib/format";
 import {
   notificationsQueryOpts,
   unreadNotificationCountQueryOpts,
@@ -47,10 +48,8 @@ const RELATIVE_TIME_FORMAT = new Intl.RelativeTimeFormat(undefined, {
   numeric: "auto",
 });
 
-// SQLite timestamps come back as "YYYY-MM-DD HH:MM:SS" in UTC; normalize to an
-// ISO string before parsing so the relative time is computed correctly.
 function formatRelativeTime(timestamp: string): string {
-  const parsed = new Date(`${timestamp.replace(" ", "T")}Z`).getTime();
+  const parsed = parseServerTimestamp(timestamp).getTime();
   if (Number.isNaN(parsed)) return "";
 
   const diffSec = Math.round((parsed - Date.now()) / 1000);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   capitalize,
   catalogYear,
@@ -11,6 +11,7 @@ import {
   formatTrackDuration,
   nounForCount,
   parseCatalogDate,
+  parseServerTimestamp,
 } from "@/lib/format";
 
 // format.ts keeps its own month names; mirror them here so a test expectation
@@ -240,6 +241,29 @@ describe("parseCatalogDate", () => {
     const timestamp = "2024-03-01T18:30:00Z";
 
     expect(parseCatalogDate(timestamp).getTime()).toBe(
+      new Date(timestamp).getTime(),
+    );
+  });
+});
+
+describe("parseServerTimestamp", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads a zone-less SQLite timestamp as UTC in any time zone", () => {
+    // A bare `new Date` would read this as Tokyo time, nine hours early.
+    vi.stubEnv("TZ", "Asia/Tokyo");
+
+    expect(parseServerTimestamp("2026-07-05 23:30:00").getTime()).toBe(
+      Date.UTC(2026, 6, 5, 23, 30),
+    );
+  });
+
+  it("leaves a value carrying its own zone to the normal parser", () => {
+    const timestamp = "2026-07-05T23:30:00+02:00";
+
+    expect(parseServerTimestamp(timestamp).getTime()).toBe(
       new Date(timestamp).getTime(),
     );
   });

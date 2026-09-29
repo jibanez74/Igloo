@@ -44,6 +44,20 @@ export function parseCatalogDate(date: string) {
     : new Date(date);
 }
 
+const SQLITE_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+// Server row timestamps (created_at, last_used_at) are SQLite
+// CURRENT_TIMESTAMP values, "YYYY-MM-DD HH:MM:SS" in UTC with no zone, which a
+// bare `new Date` reads as local time. Those are pinned to UTC here; anything
+// already carrying a zone goes to the normal parser.
+export function parseServerTimestamp(timestamp: string) {
+  return new Date(
+    SQLITE_TIMESTAMP_PATTERN.test(timestamp)
+      ? `${timestamp.replace(" ", "T")}Z`
+      : timestamp,
+  );
+}
+
 // The calendar year of a stored catalog date, or null when the date is missing
 // or unparseable (so a title never reads "(NaN)").
 export function catalogYear(date: string | null | undefined): number | null {
