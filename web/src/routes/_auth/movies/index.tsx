@@ -20,8 +20,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/movies/MovieCard";
 import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
-import LibraryAllTab, {
-} from "@/components/shared/LibraryAllTab";
+import LibraryAllTab from "@/components/shared/LibraryAllTab";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
 import LibraryMoreMenu, {
   RequestMediaMenuItem,
