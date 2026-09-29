@@ -1,5 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import TechnicalDetailsDialog from "@/components/movies/TechnicalDetailsDialog";
 import { MOVIE_TECHNICAL_DETAILS_KEY } from "@/lib/constants";
@@ -8,7 +7,7 @@ import type {
   MovieTechnicalDetailsResponse,
 } from "@/types";
 import { nullableFloat64, nullableInt64 } from "../helpers/fixtures";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 function technicalDetails(
   runtimeMinutes: number | null,
@@ -32,25 +31,20 @@ function technicalDetails(
   };
 }
 
-function createQueryClient() {
-  return createTestQueryClient();
-}
-
 function renderDialog(runtimeMinutes: number | null) {
-  const queryClient = createQueryClient();
+  const queryClient = createTestQueryClient();
   queryClient.setQueryData(
     [MOVIE_TECHNICAL_DETAILS_KEY, 22],
     technicalDetails(runtimeMinutes),
   );
 
-  render(
-    <QueryClientProvider client={queryClient}>
-      <TechnicalDetailsDialog
-        movieId={22}
-        open
-        onOpenChange={vi.fn()}
-      />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <TechnicalDetailsDialog
+      movieId={22}
+      open
+      onOpenChange={vi.fn()}
+    />,
+    { queryClient },
   );
 }
 

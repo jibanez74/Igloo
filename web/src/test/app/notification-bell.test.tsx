@@ -1,7 +1,5 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { PropsWithChildren } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import NotificationBell from "@/components/app/NotificationBell";
 import type {
@@ -10,7 +8,7 @@ import type {
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
 } from "@/types";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const apiMocks = vi.hoisted(() => ({
   getNotifications: vi.fn(),
@@ -99,22 +97,10 @@ function countResponse(
   return success({ unread_count: unread });
 }
 
-function createQueryClient() {
-  return createTestQueryClient();
-}
-
 function renderBell() {
-  const queryClient = createQueryClient();
+  const queryClient = createTestQueryClient();
 
-  function Wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  }
-
-  render(<NotificationBell />, { wrapper: Wrapper });
+  renderWithQueryClient(<NotificationBell />, { queryClient });
 }
 
 beforeEach(() => {

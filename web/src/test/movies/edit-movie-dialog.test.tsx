@@ -1,12 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import EditMovieDialog from "@/components/movies/EditMovieDialog";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { LIBRARY_MOVIE_DETAILS_KEY } from "@/lib/constants";
 import type { ApiResponseType, LibraryMovieDetailsMovieType, TmdbSearchResultType } from "@/types";
-import { createTestQueryClient } from "../helpers/render";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 import {
   expectRefetchedBeforeReload,
   recordRefreshOrder,
@@ -78,20 +78,6 @@ function tmdbResult(
   };
 }
 
-function nullableString(value: string | null) {
-  return {
-    String: value ?? "",
-    Valid: value != null,
-  };
-}
-
-function nullableInt(value: number | null) {
-  return {
-    Int64: value ?? 0,
-    Valid: value != null,
-  };
-}
-
 function buildMovie(
   overrides: Partial<LibraryMovieDetailsMovieType> = {},
 ): LibraryMovieDetailsMovieType {
@@ -99,12 +85,12 @@ function buildMovie(
     id: 17,
     title: "The Matrix",
     adult: false,
-    tmdb_id: nullableInt(603),
+    tmdb_id: nullableInt64(603),
     imdb_id: nullableString("tt0133093"),
     poster_path: nullableString("/matrix.jpg"),
     backdrop_path: nullableString("/matrix-backdrop.jpg"),
     language: nullableString("en"),
-    year: nullableInt(1999),
+    year: nullableInt64(1999),
     release_date: nullableString("1999-03-31"),
     overview: nullableString("A hacker learns the truth about reality."),
     tag_line: nullableString("Welcome to the Real World."),
@@ -123,12 +109,6 @@ type DialogHarnessProps = {
   movieId: number;
   movie: LibraryMovieDetailsMovieType;
 };
-
-function createQueryClient() {
-  const queryClient = createTestQueryClient();
-
-  return queryClient;
-}
 
 function getTmdbTitleInput() {
   return screen.getByLabelText("Title", {
@@ -164,7 +144,7 @@ async function openManualTab(user: ReturnType<typeof userEvent.setup>) {
 }
 
 function renderDialog(options: Partial<DialogHarnessProps> = {}) {
-  const queryClient = createQueryClient();
+  const queryClient = createTestQueryClient();
   const onOpenChange = vi.fn();
   let currentProps: DialogHarnessProps = {
     movie: options.movie ?? buildMovie(),
@@ -187,10 +167,9 @@ function renderDialog(options: Partial<DialogHarnessProps> = {}) {
     );
   }
 
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <DialogHarness {...currentProps} />
-    </QueryClientProvider>,
+  const view = renderWithQueryClient(
+    <DialogHarness {...currentProps} />,
+    { queryClient },
   );
 
   return {
@@ -202,11 +181,7 @@ function renderDialog(options: Partial<DialogHarnessProps> = {}) {
         ...nextProps,
       };
 
-      view.rerender(
-        <QueryClientProvider client={queryClient}>
-          <DialogHarness {...currentProps} />
-        </QueryClientProvider>,
-      );
+      view.rerender(<DialogHarness {...currentProps} />);
     },
   };
 }
@@ -230,8 +205,8 @@ describe("EditMovieDialog", () => {
       movie: buildMovie({
         id: 18,
         title: "Inception",
-        tmdb_id: nullableInt(27205),
-        year: nullableInt(2010),
+        tmdb_id: nullableInt64(27205),
+        year: nullableInt64(2010),
         release_date: nullableString("2010-07-16"),
         overview: nullableString("A thief steals secrets through dreams."),
       }),
@@ -261,7 +236,7 @@ describe("EditMovieDialog", () => {
     rerenderDialog({
       movie: buildMovie({
         title: "The Matrix Reloaded",
-        year: nullableInt(2003),
+        year: nullableInt64(2003),
         release_date: nullableString("2003-05-15"),
         overview: nullableString("Neo faces a new threat from the machines."),
         certification: nullableString("R"),
@@ -289,7 +264,7 @@ describe("EditMovieDialog", () => {
     rerenderDialog({
       movie: buildMovie({
         title: "The Matrix Reloaded",
-        year: nullableInt(2003),
+        year: nullableInt64(2003),
         overview: nullableString("Neo faces a new threat from the machines."),
       }),
     });
@@ -315,7 +290,7 @@ describe("EditMovieDialog", () => {
     rerenderDialog({
       movie: buildMovie({
         title: "The Matrix Reloaded",
-        year: nullableInt(2003),
+        year: nullableInt64(2003),
         overview: nullableString("Neo faces a new threat from the machines."),
       }),
     });

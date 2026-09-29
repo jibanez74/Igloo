@@ -5,6 +5,7 @@ import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
 } from "@/lib/constants";
+import { authUserData } from "../helpers/fixtures";
 import { jsonResponse, requestURL } from "../helpers/api";
 import { renderRoute } from "../helpers/render-route";
 
@@ -15,15 +16,11 @@ vi.mock("@/components/app/AppShell", () => ({
 }));
 
 function authUser() {
-  return {
-    id: 1,
+  return authUserData({
     name: "Admin User",
     email: "admin@example.com",
     is_admin: true,
-    avatar: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
+  });
 }
 
 type MockHomeFetchOptions = {

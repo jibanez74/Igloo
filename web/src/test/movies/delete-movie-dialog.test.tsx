@@ -1,5 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DeleteMovieDialog from "@/components/movies/DeleteMovieDialog";
@@ -11,7 +10,7 @@ import {
   MOVIES_LIKED_KEY,
   MOVIES_STATS_KEY,
 } from "@/lib/constants";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const mocks = vi.hoisted(() => ({
   deleteMovie: vi.fn(),
@@ -57,15 +56,14 @@ function renderDialog() {
     data: {},
   });
 
-  render(
-    <QueryClientProvider client={queryClient}>
-      <DeleteMovieDialog
-        movieId={MOVIE_ID}
-        movieTitle="Heat"
-        open
-        onOpenChange={vi.fn()}
-      />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <DeleteMovieDialog
+      movieId={MOVIE_ID}
+      movieTitle="Heat"
+      open
+      onOpenChange={vi.fn()}
+    />,
+    { queryClient },
   );
 
   return { queryClient, listKeys };

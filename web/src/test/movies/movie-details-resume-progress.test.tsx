@@ -1,12 +1,11 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MovieDetailsResumeProgress from "@/components/movies/MovieDetailsResumeProgress";
 import { movieMediaRef } from "@/lib/media-ref";
 import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
 import type { WatchProgressType } from "@/types";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const MOVIE_ID = 7;
 
@@ -30,10 +29,9 @@ function renderStrip(progress: WatchProgressType) {
   vi.stubGlobal("fetch", fetchMock);
 
   const queryClient = createTestQueryClient();
-  render(
-    <QueryClientProvider client={queryClient}>
-      <MovieDetailsResumeProgress movieId={MOVIE_ID} />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <MovieDetailsResumeProgress movieId={MOVIE_ID} />,
+    { queryClient },
   );
 
   // The strip renders nothing at all for an ineligible position, so the

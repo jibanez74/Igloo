@@ -16,19 +16,27 @@ export function createTestQueryClient() {
   });
 }
 
-export function renderWithQueryClient(ui: ReactElement) {
-  const queryClient = createTestQueryClient();
-
-  function Wrapper({ children }: PropsWithChildren) {
+/** Provides `queryClient` to a tree: a render or renderHook `wrapper`. */
+export function queryClientWrapper(queryClient: QueryClient) {
+  return function Wrapper({ children }: PropsWithChildren) {
     return (
       <QueryClientProvider client={queryClient}>
         {children}
       </QueryClientProvider>
     );
-  }
+  };
+}
 
+/**
+ * Renders `ui` under a QueryClientProvider. Pass `queryClient` to seed or spy
+ * on the cache before rendering; otherwise a fresh test client is made.
+ */
+export function renderWithQueryClient(
+  ui: ReactElement,
+  { queryClient = createTestQueryClient() }: { queryClient?: QueryClient } = {},
+) {
   return {
     queryClient,
-    ...render(ui, { wrapper: Wrapper }),
+    ...render(ui, { wrapper: queryClientWrapper(queryClient) }),
   };
 }

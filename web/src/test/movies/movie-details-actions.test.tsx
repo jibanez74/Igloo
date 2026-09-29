@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
-import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { PropsWithChildren, ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MovieDetailsHeroActions from "@/components/movies/MovieDetailsHeroActions";
 import MovieLikeButton from "@/components/movies/MovieLikeButton";
@@ -16,7 +15,7 @@ import type {
   LibraryMovieDetailsMovieType,
   WatchProgressType,
 } from "@/types";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 
 const toggleLikeMovieMock = vi.fn();
 const setMovieWatchedMock = vi.fn();
@@ -107,18 +106,9 @@ function renderWithClient(
   const queryClient = createTestQueryClient();
   setup?.(queryClient);
 
-  function Wrapper({ children }: PropsWithChildren) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    );
-  }
-
   return {
-    queryClient,
     invalidateSpy: vi.spyOn(queryClient, "invalidateQueries"),
-    ...render(ui, { wrapper: Wrapper }),
+    ...renderWithQueryClient(ui, { queryClient }),
   };
 }
 

@@ -1,6 +1,5 @@
-import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { movieMediaRef } from "@/lib/media-ref";
@@ -26,35 +25,23 @@ import type {
   DevicePlaybackPreferences,
   StreamModeId,
 } from "@/types";
-import { playbackSettings } from "../helpers/fixtures";
-import { createTestQueryClient } from "../helpers/render";
+import { deferredResponse, jsonResponse } from "../helpers/api";
+import {
+  authUserData,
+  nullableFloat64,
+  playbackSettings,
+} from "../helpers/fixtures";
+import { createTestQueryClient, queryClientWrapper } from "../helpers/render";
 
 const playbackSessionId = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 const authenticatedUserId = 1;
 
-function nullableFloat64(value: number) {
-  return { Float64: value, Valid: true };
-}
-
-function wrapperFor(queryClient: QueryClient) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-  };
-}
-
 function authenticatedUser(): AuthUser {
-  return {
+  return authUserData({
     id: authenticatedUserId,
     name: "Playback User",
     email: "playback@example.com",
-    is_admin: false,
-    avatar: null,
-    has_pin: false,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
+  });
 }
 
 function seedDevicePreferences(
@@ -136,22 +123,6 @@ function seedMovieWithoutTechnicalDetails(
   seedSettledPlaybackPreferences(queryClient);
 }
 
-function createDeferredResponse() {
-  let resolve!: (response: Response) => void;
-  const promise = new Promise<Response>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-
-  return { promise, resolve };
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
 function playbackStatus(
   data: ReturnType<typeof useVideoPlaybackData>,
   requestedMode: StreamModeId,
@@ -213,7 +184,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.playbackStartSec).toBe(120);
@@ -254,7 +225,7 @@ describe("useVideoPlaybackData", () => {
         }),
       {
         initialProps: { search },
-        wrapper: wrapperFor(queryClient),
+        wrapper: queryClientWrapper(queryClient),
       },
     );
 
@@ -339,7 +310,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedMode).toBe("direct");
@@ -366,7 +337,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedMode).toBe("remux");
@@ -412,7 +383,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.modeUnavailable).toBe(true);
@@ -465,7 +436,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedSubtitleTrack).toBeNull();
@@ -499,7 +470,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedSubtitleTrack).toBe(1);
@@ -534,7 +505,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedSubtitleTrack).toBeNull();
@@ -578,7 +549,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedMode).toBe("remux");
@@ -597,7 +568,7 @@ describe("useVideoPlaybackData", () => {
     const movieId = 91;
     const queryClient = createTestQueryClient();
     seedMovieWithoutTechnicalDetails(queryClient, movieId);
-    const technicalDetailsRequest = createDeferredResponse();
+    const technicalDetailsRequest = deferredResponse();
     vi.stubGlobal("fetch", vi.fn(() => technicalDetailsRequest.promise));
 
     const { result } = renderHook(
@@ -614,7 +585,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.techPending).toBe(true);
@@ -680,7 +651,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.techPending).toBe(false);
@@ -697,7 +668,7 @@ describe("useVideoPlaybackData", () => {
     const movieId = 93;
     const queryClient = createTestQueryClient();
     seedMovieWithoutTechnicalDetails(queryClient, movieId);
-    const technicalDetailsRequest = createDeferredResponse();
+    const technicalDetailsRequest = deferredResponse();
     vi.stubGlobal("fetch", vi.fn(() => technicalDetailsRequest.promise));
 
     const { result } = renderHook(
@@ -714,7 +685,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.techPending).toBe(true);
@@ -753,7 +724,7 @@ describe("useVideoPlaybackData", () => {
     const movieId = 94;
     const queryClient = createTestQueryClient();
     seedMovieWithoutTechnicalDetails(queryClient, movieId);
-    vi.stubGlobal("fetch", vi.fn(() => createDeferredResponse().promise));
+    vi.stubGlobal("fetch", vi.fn(() => deferredResponse().promise));
     const search = {
       mode: "720p_3mbps" as const,
       audio_track: 0,
@@ -773,7 +744,7 @@ describe("useVideoPlaybackData", () => {
           fallbackDurationSec: 600,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
     expect(withFallback.result.current.techPending).toBe(true);
     expect(withFallback.result.current.mediaDurationSec).toBe(600);
@@ -791,7 +762,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch: vi.fn(),
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
     expect(withoutFallback.result.current.mediaDurationSec).toBeUndefined();
     expect(withoutFallback.result.current.playbackStartSec).toBe(1000);
@@ -809,8 +780,8 @@ describe("useVideoPlaybackData", () => {
       preferredSubtitleLanguage: "es",
     });
 
-    const authRequest = createDeferredResponse();
-    const playbackSettingsRequest = createDeferredResponse();
+    const authRequest = deferredResponse();
+    const playbackSettingsRequest = deferredResponse();
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       if (String(input) === "/api/auth/user") {
         return authRequest.promise;
@@ -837,7 +808,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     expect(result.current.resolvedMode).toBe("direct");
@@ -915,7 +886,7 @@ describe("useVideoPlaybackData", () => {
       preferredSubtitleLanguage: "es",
     });
 
-    const playbackSettingsRequest = createDeferredResponse();
+    const playbackSettingsRequest = deferredResponse();
     const fetchMock = vi.fn(() => playbackSettingsRequest.promise);
     vi.stubGlobal("fetch", fetchMock);
     const onSyncSearch = vi.fn();
@@ -934,7 +905,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     await waitFor(() => {
@@ -976,7 +947,7 @@ describe("useVideoPlaybackData", () => {
       downloadMbps: 4,
     });
 
-    const playbackSettingsRequest = createDeferredResponse();
+    const playbackSettingsRequest = deferredResponse();
     const fetchMock = vi.fn(() => playbackSettingsRequest.promise);
     vi.stubGlobal("fetch", fetchMock);
     const onSyncSearch = vi.fn();
@@ -995,7 +966,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     await waitFor(() => {
@@ -1034,7 +1005,7 @@ describe("useVideoPlaybackData", () => {
     // back when it fails.
     seedDevicePreferences({ downloadMbps: 25 });
 
-    const playbackSettingsRequest = createDeferredResponse();
+    const playbackSettingsRequest = deferredResponse();
     const fetchMock = vi.fn(() => playbackSettingsRequest.promise);
     vi.stubGlobal("fetch", fetchMock);
     const onSyncSearch = vi.fn();
@@ -1053,7 +1024,7 @@ describe("useVideoPlaybackData", () => {
           playbackSessionId,
           onSyncSearch,
         }),
-      { wrapper: wrapperFor(queryClient) },
+      { wrapper: queryClientWrapper(queryClient) },
     );
 
     await waitFor(() => {

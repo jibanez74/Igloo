@@ -8,7 +8,6 @@ import {
 } from "@/lib/constants";
 import type {
   ApiResponseType,
-  AuthUser,
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
   WatchProgressType,
@@ -20,6 +19,7 @@ import {
 } from "@/lib/playback-preferences";
 import { jsonResponse, requestURL } from "../helpers/api";
 import {
+  authUserData,
   nullableFloat64,
   nullableInt64,
   nullableString,
@@ -53,17 +53,8 @@ function success<T extends Record<string, unknown>>(data: T): ApiResponseType<T>
   };
 }
 
-function authUser(): AuthUser {
-  return {
-    id: 1,
-    name: "Movie User",
-    email: "movies@example.com",
-    is_admin: false,
-    avatar: null,
-    has_pin: false,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
+function authUser() {
+  return authUserData({ name: "Movie User", email: "movies@example.com" });
 }
 
 function movieDetailsResponse(

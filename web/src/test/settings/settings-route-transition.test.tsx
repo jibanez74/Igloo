@@ -12,24 +12,20 @@ import {
 import type { AudioPlayerNowPlaying } from "@/types";
 import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 import { jsonResponse, requestURL } from "../helpers/api";
-import { playbackSettings } from "../helpers/fixtures";
+import { restoreMatchMedia } from "../helpers/dom";
+import { authUserData, playbackSettings } from "../helpers/fixtures";
 import { renderRoute } from "../helpers/render-route";
 
-const defaultMatchMedia = window.matchMedia;
 const originalStartViewTransition = (document as Document & {
   startViewTransition?: unknown;
 }).startViewTransition;
 
 function authUser() {
-  return {
-    id: 1,
+  return authUserData({
     name: "Settings User",
     email: "settings@example.com",
     is_admin: true,
-    avatar: null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-  };
+  });
 }
 
 function generalSettings() {
@@ -126,10 +122,7 @@ async function renderSettingsRoute(
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: defaultMatchMedia,
-  });
+  restoreMatchMedia();
 
   if (originalStartViewTransition === undefined) {
     Reflect.deleteProperty(document, "startViewTransition");

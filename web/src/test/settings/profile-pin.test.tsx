@@ -1,10 +1,10 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePinCard from "@/components/settings/ProfilePinCard";
 import type { AuthUser } from "@/types";
-import { createTestQueryClient } from "../helpers/render";
+import { authUser, authUserData } from "../helpers/fixtures";
+import { renderWithQueryClient } from "../helpers/render";
 
 const getAuthUserMock = vi.fn();
 const getUserPinMock = vi.fn();
@@ -26,39 +26,22 @@ vi.mock("@/lib/toast-helpers", () => ({
 }));
 
 function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
-  return {
+  return authUserData({
     id: 2,
     name: "Dana Scully",
     email: "dana@example.com",
-    is_admin: false,
-    avatar: null,
-    has_pin: false,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
-  };
-}
-
-function authUserResponse(user: AuthUser) {
-  return { error: false, data: { user } };
+  });
 }
 
 function renderCard() {
-  const queryClient = createTestQueryClient();
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <ProfilePinCard />
-    </QueryClientProvider>,
-  );
-
-  return queryClient;
+  return renderWithQueryClient(<ProfilePinCard />).queryClient;
 }
 
 describe("ProfilePinCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getAuthUserMock.mockResolvedValue(authUserResponse(testUser()));
+    getAuthUserMock.mockResolvedValue(authUser(testUser()));
     getUserPinMock.mockResolvedValue({
       error: false,
       data: { pin: "1234" },
@@ -122,7 +105,7 @@ describe("ProfilePinCard", () => {
 
   it("requires the current PIN before changing an existing one", async () => {
     getAuthUserMock.mockResolvedValue(
-      authUserResponse(testUser({ has_pin: true })),
+      authUser(testUser({ has_pin: true })),
     );
     const user = userEvent.setup();
     renderCard();
@@ -145,7 +128,7 @@ describe("ProfilePinCard", () => {
 
   it("reveals and hides the current PIN on demand", async () => {
     getAuthUserMock.mockResolvedValue(
-      authUserResponse(testUser({ has_pin: true })),
+      authUser(testUser({ has_pin: true })),
     );
     const user = userEvent.setup();
     renderCard();
@@ -170,7 +153,7 @@ describe("ProfilePinCard", () => {
 
   it("removes the PIN with the current PIN", async () => {
     getAuthUserMock.mockResolvedValue(
-      authUserResponse(testUser({ has_pin: true })),
+      authUser(testUser({ has_pin: true })),
     );
     updateUserPinMock.mockResolvedValue({
       error: false,
@@ -194,7 +177,7 @@ describe("ProfilePinCard", () => {
 
   it("surfaces server rejections on the current PIN field", async () => {
     getAuthUserMock.mockResolvedValue(
-      authUserResponse(testUser({ has_pin: true })),
+      authUser(testUser({ has_pin: true })),
     );
     updateUserPinMock.mockResolvedValue({
       error: true,

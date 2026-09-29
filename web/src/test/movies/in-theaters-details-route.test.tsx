@@ -9,7 +9,7 @@ function mockInTheatersFetch(movie: unknown) {
     const url = requestURL(input);
 
     if (url === "/api/auth/user") {
-      return jsonResponse({ error: false, data: { user: authUser() } });
+      return jsonResponse(authUser());
     }
 
     if (url.startsWith("/api/tmdb/movies/")) {

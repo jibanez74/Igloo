@@ -2,12 +2,14 @@
 // payload and the server playback settings, which appear across the mocked API
 // responses.
 
-import type { PlaybackSettingsType } from "@/types";
+import type { AuthUser, PlaybackSettingsType } from "@/types";
 
-export function nullableString(value = "") {
+// null or "" is the invalid (SQL NULL) form; a test that needs a valid empty
+// string writes the literal.
+export function nullableString(value: string | null = "") {
   return {
-    String: value,
-    Valid: value.length > 0,
+    String: value ?? "",
+    Valid: value != null && value.length > 0,
   };
 }
 
@@ -25,22 +27,26 @@ export function nullableFloat64(value: number | null = null) {
   };
 }
 
-/** A `GET /api/auth/user` payload. Override any field via `overrides`. */
-export function authUser(overrides: Record<string, unknown> = {}) {
+/** The authenticated user object. Override any field via `overrides`. */
+export function authUserData(overrides: Partial<AuthUser> = {}): AuthUser {
+  return {
+    id: 1,
+    name: "Test User",
+    email: "test@example.com",
+    is_admin: false,
+    avatar: null,
+    has_pin: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A `GET /api/auth/user` payload. Override any user field via `overrides`. */
+export function authUser(overrides: Partial<AuthUser> = {}) {
   return {
     error: false,
-    data: {
-      user: {
-        id: 1,
-        name: "Test User",
-        email: "test@example.com",
-        is_admin: false,
-        avatar: null,
-        created_at: "2026-01-01T00:00:00Z",
-        updated_at: "2026-01-01T00:00:00Z",
-        ...overrides,
-      },
-    },
+    data: { user: authUserData(overrides) },
   };
 }
 

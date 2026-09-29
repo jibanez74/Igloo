@@ -6,9 +6,10 @@ import {
 } from "@/lib/playback";
 import type { DirectPlayAudioInfo, DirectPlayVideoInfo } from "@/lib/playback";
 import type { AudioStreamType } from "@/types/movies";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
 
-const nullString = { String: "", Valid: false };
-const nullInt = { Int64: 0, Valid: false };
+const nullString = nullableString();
+const nullInt = nullableInt64();
 
 const h264Video = (
   overrides: Partial<DirectPlayVideoInfo> = {},

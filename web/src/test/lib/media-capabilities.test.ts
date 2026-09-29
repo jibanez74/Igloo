@@ -1,86 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
-import type {
-  AudioStreamType,
-  MovieTechnicalDetailsResponse,
-  SubtitleType,
-  VideoStreamType,
-} from "@/types/movies";
-import type { NullableInt64, NullableString } from "@/types";
-
-function nullableString(value?: string): NullableString {
-  return value == null
-    ? { String: "", Valid: false }
-    : { String: value, Valid: true };
-}
-
-function nullableInt64(value?: number): NullableInt64 {
-  return value == null
-    ? { Int64: 0, Valid: false }
-    : { Int64: value, Valid: true };
-}
-
-function videoStream(overrides: Partial<VideoStreamType>): VideoStreamType {
-  return {
-    id: 1,
-    movie_id: 1,
-    stream_index: 0,
-    codec: "hevc",
-    codec_profile: nullableString(),
-    codec_level: nullableInt64(),
-    bit_rate: 20_000_000,
-    width: 1920,
-    height: 1080,
-    coded_width: nullableInt64(),
-    coded_height: nullableInt64(),
-    aspect_ratio: nullableString(),
-    frame_rate: 23.976,
-    avg_frame_rate: nullableString(),
-    bit_depth: nullableInt64(),
-    pixel_format: nullableString(),
-    color_range: nullableString(),
-    color_space: nullableString(),
-    color_primaries: nullableString(),
-    color_transfer: nullableString(),
-    field_order: nullableString(),
-    rotation: nullableInt64(),
-    language: nullableString(),
-    title: nullableString(),
-    ...overrides,
-  };
-}
-
-function audioStream(overrides: Partial<AudioStreamType>): AudioStreamType {
-  return {
-    id: 1,
-    movie_id: 1,
-    stream_index: 1,
-    codec: "aac",
-    codec_profile: nullableString(),
-    bit_rate: 256_000,
-    sample_rate: nullableInt64(48_000),
-    channels: 2,
-    channel_layout: nullableString("stereo"),
-    language: nullableString("eng"),
-    title: nullableString(),
-    is_default: false,
-    ...overrides,
-  };
-}
-
-function subtitle(overrides: Partial<SubtitleType>): SubtitleType {
-  return {
-    id: 1,
-    movie_id: 1,
-    stream_index: 2,
-    codec: "subrip",
-    language: nullableString("eng"),
-    title: nullableString(),
-    is_forced: false,
-    is_default: false,
-    ...overrides,
-  };
-}
+import type { MovieTechnicalDetailsResponse } from "@/types/movies";
+import { nullableInt64, nullableString } from "../helpers/fixtures";
+import {
+  audioStream,
+  subtitleStream,
+  videoStream,
+} from "../helpers/tech-details";
 
 function tech(
   overrides: Partial<MovieTechnicalDetailsResponse>,
@@ -124,7 +50,7 @@ describe("deriveMediaCapabilityBadges", () => {
             channel_layout: nullableString("7.1"),
           }),
         ],
-        subtitles: [subtitle({})],
+        subtitles: [subtitleStream()],
       }),
     );
 

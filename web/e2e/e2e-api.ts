@@ -4,9 +4,11 @@ import {
   type Page,
   type Route,
 } from "@playwright/test";
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
+import {
+  movieScanStatus,
+  musicScanStatus,
+  showScanStatus,
+} from "../src/test/helpers/scan-status";
 
 export {
   nullableFloat64,

@@ -1,10 +1,9 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import PlaylistFormDialog from "@/components/music/PlaylistFormDialog";
 import { PLAYLIST_DETAILS_KEY } from "@/lib/constants";
-import { createTestQueryClient } from "../helpers/render";
+import { createTestQueryClient, renderWithQueryClient } from "../helpers/render";
 import {
   expectRefetchedBeforeReload,
   recordRefreshOrder,
@@ -37,18 +36,13 @@ vi.mock("@tanstack/react-router", async () => {
   return { ...actual, useRouter: () => routerMocks };
 });
 
-function createQueryClient() {
-  return createTestQueryClient();
-}
-
 describe("PlaylistFormDialog", () => {
   it("gives the description textarea an accessible name from the visible label", () => {
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaylistFormDialog mode="create" open onOpenChange={vi.fn()} />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaylistFormDialog mode="create" open onOpenChange={vi.fn()} />,
+      { queryClient },
     );
 
     expect(
@@ -58,7 +52,7 @@ describe("PlaylistFormDialog", () => {
 
   it("refetches the playlist and reloads its route after a rename", async () => {
     const user = userEvent.setup();
-    const queryClient = createQueryClient();
+    const queryClient = createTestQueryClient();
     const refreshOrder = recordRefreshOrder(queryClient, routerMocks.invalidate);
     const onOpenChange = vi.fn();
     apiMocks.updatePlaylist.mockResolvedValue({
@@ -66,20 +60,19 @@ describe("PlaylistFormDialog", () => {
       data: { playlist: { id: 7 } },
     });
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <PlaylistFormDialog
-          mode="edit"
-          open
-          onOpenChange={onOpenChange}
-          playlist={{
-            id: 7,
-            name: "Road Trip",
-            description: { String: "", Valid: false },
-            is_public: false,
-          }}
-        />
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <PlaylistFormDialog
+        mode="edit"
+        open
+        onOpenChange={onOpenChange}
+        playlist={{
+          id: 7,
+          name: "Road Trip",
+          description: { String: "", Valid: false },
+          is_public: false,
+        }}
+      />,
+      { queryClient },
     );
 
     const nameInput = screen.getByRole("textbox", { name: /^Name/ });

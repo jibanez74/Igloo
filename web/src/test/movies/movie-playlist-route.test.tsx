@@ -26,7 +26,7 @@ function mockPlaylistsFetch(playlists: Record<number, MockPlaylist>) {
     const url = requestURL(input);
 
     if (url === "/api/auth/user") {
-      return jsonResponse({ error: false, data: { user: authUser() } });
+      return jsonResponse(authUser());
     }
 
     const detail = url.match(/^\/api\/movies\/playlists\/(\d+)$/);

@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { ALBUMS_PER_PAGE, MUSICIANS_PER_PAGE } from "../src/lib/constants";
-import { movieScanStatus } from "../src/test/helpers/movie-scan";
-import { musicScanStatus } from "../src/test/helpers/music-scan";
-import { showScanStatus } from "../src/test/helpers/show-scan";
+import {
+  movieScanStatus,
+  musicScanStatus,
+  showScanStatus,
+} from "../src/test/helpers/scan-status";
 import { apiResponse, fulfillJSON, IDLE_SCAN } from "./e2e-api";
 import { loginPageViaApi } from "./e2e-auth";
 import { trackBrowserIssues } from "./e2e-browser-issues";
