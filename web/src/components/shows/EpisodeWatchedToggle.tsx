@@ -4,12 +4,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { buttonVariants } from "@/components/ui/button";
 import { setMediaWatched } from "@/lib/api";
 import { episodeMediaRef } from "@/lib/media-ref";
-import {
-  mediaWatchProgressQueryKey,
-  showSeasonEpisodesQueryOpts,
-} from "@/lib/query-opts";
+import { showSeasonEpisodesQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
+import { refreshWatchQueries } from "@/lib/video-playback-exit";
 import type { ApiResponseType, ShowSeasonEpisodesDataType } from "@/types";
 
 type EpisodeWatchedToggleProps = {
@@ -24,8 +22,8 @@ type EpisodeWatchedToggleProps = {
 /**
  * Marks one episode watched or unwatched. The season list is the source of
  * truth on the page, so the toggle updates that cached payload optimistically
- * (the row re-renders at once), restores it on failure, and refreshes both it
- * and the episode's own progress entry once the server has answered.
+ * (the row re-renders at once), restores it on failure, and refreshes every
+ * watch query that shows the episode once the server has answered.
  */
 export default function EpisodeWatchedToggle({
   showId,
@@ -84,10 +82,9 @@ export default function EpisodeWatchedToggle({
       }
 
       setSeasonWatched(res.data.watched);
-      void queryClient.invalidateQueries({ queryKey: seasonKey });
-      void queryClient.invalidateQueries({
-        queryKey: mediaWatchProgressQueryKey(episodeMediaRef(episodeId)),
-      });
+      // The season rows, the episode's own progress entry and Home's
+      // continue-watching row all show this episode's state.
+      void refreshWatchQueries(queryClient, episodeMediaRef(episodeId));
     },
   });
 
