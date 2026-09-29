@@ -2,13 +2,12 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { mediaKey } from "@/lib/media-ref";
 import {
-  directPlayModeLabel,
   getAvailableModes,
   getPrimaryVideoStream,
   playbackDefaultsInput,
+  playbackModeLabel,
   resolveModeForAudioTrack,
   resolvePlaybackSettings,
-  streamModeLabel,
 } from "@/lib/playback";
 import {
   buildStreamUrl,
@@ -174,10 +173,10 @@ export function useVideoPlaybackData({
     streamReloadKey,
     playbackSessionId,
   );
-  const modeLabel =
-    resolvedMode === "direct"
-      ? directPlayModeLabel(techLoaded ? audioStreams : undefined)
-      : streamModeLabel(resolvedMode);
+  const modeLabel = playbackModeLabel(
+    resolvedMode,
+    techLoaded ? audioStreams : undefined,
+  );
   const modeUnavailable =
     availableModes !== null && availableModes.length === 0;
   const directPlayAvailable =

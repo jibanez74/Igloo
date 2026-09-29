@@ -320,6 +320,15 @@ describe("CreateWatchRoomDialog", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  it("names the direct-play audio language, as the player's badge does", () => {
+    renderDialog({
+      playbackSettings: { mode: "direct", audioTrack: 0, subtitleTrack: null },
+    });
+
+    const playback = screen.getByText("Playback").nextElementSibling;
+    expect(playback).toHaveTextContent("Original file — English audio");
+  });
+
   it("creates the room with resolved playback settings and navigates to it", async () => {
     createWatchRoomMock.mockResolvedValue(
       success<CreateWatchRoomResponseType>({ room_id: 123 }),

@@ -16,8 +16,8 @@ import {
   formatSubtitleLabel,
   getAvailableModes,
   getPrimaryVideoStream,
+  playbackModeLabel,
   resolvePlaybackSettings,
-  streamModeLabel,
 } from "@/lib/playback";
 import type { PlaybackSettings } from "@/types/playback";
 import {
@@ -120,7 +120,10 @@ export default function CreateWatchRoomDialog({
     audioStreams,
     subtitleStreams,
   );
-  const modeLabel = streamModeLabel(resolvedSettings.mode);
+  const modeLabel = playbackModeLabel(
+    resolvedSettings.mode,
+    techLoaded ? audioStreams : undefined,
+  );
   const audioLabel =
     audioStreams[resolvedSettings.audioTrack] !== undefined
       ? formatPlaybackAudioLabel(
@@ -260,8 +263,10 @@ export default function CreateWatchRoomDialog({
                 </p>
               ) : !techLoaded ? (
                 <p className="mt-3 text-sm text-destructive">
-                  {(techData?.error && techData.message) ||
-                    "Failed to load playback options. Please try again."}
+                  {apiErrorMessage(
+                    techData,
+                    "Failed to load playback options. Please try again.",
+                  )}
                 </p>
               ) : (
                 <dl className="mt-3 grid gap-3 sm:grid-cols-3">

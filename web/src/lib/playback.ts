@@ -549,6 +549,21 @@ export function directPlayModeLabel(
 }
 
 /**
+ * The label for a resolved mode before any HLS profile has been reported:
+ * direct play names its audio language (see directPlayModeLabel), every other
+ * mode its list label. Pass the audio streams only once technical details
+ * have loaded.
+ */
+export function playbackModeLabel(
+  mode: StreamModeId,
+  audioStreams: PlaybackAudioStreamType[] | undefined,
+): string {
+  return mode === "direct"
+    ? directPlayModeLabel(audioStreams)
+    : streamModeLabel(mode);
+}
+
+/**
  * Player-badge label for an HLS session, given the profile the server reports
  * it actually ran. The requested profile is only a request: the remux safety
  * gate can fall back to a transcode after the manifest URL is already fixed, so
