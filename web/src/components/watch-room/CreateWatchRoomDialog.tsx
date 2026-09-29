@@ -47,6 +47,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { apiErrorMessage } from "@/lib/is-api-failure";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 
 type CreateWatchRoomDialogProps = {
   movieId: number;
@@ -400,7 +401,7 @@ export default function CreateWatchRoomDialog({
                             <Avatar className="size-9 border border-border">
                               {user.avatar ? (
                                 <AvatarImage
-                                  src={`/api/static/${user.avatar}`}
+                                  src={getMediaImageUrl(user.avatar) ?? undefined}
                                   alt=""
                                 />
                               ) : null}

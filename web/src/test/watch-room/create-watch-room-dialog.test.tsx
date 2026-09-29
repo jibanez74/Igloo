@@ -186,7 +186,7 @@ function inviteUsers(): ApiResponseType<WatchRoomInviteUsersResponseType> {
         id: 3,
         name: "Fox Mulder",
         email: "fox@example.com",
-        avatar: "avatars/fox.webp",
+        avatar: "/api/static/avatars/fox.webp",
       },
     ],
   });

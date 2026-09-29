@@ -10,6 +10,7 @@ import {
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -117,7 +118,7 @@ export default function WatchRoomCard({ room }: Props) {
                 >
                   {member.avatar ? (
                     <AvatarImage
-                      src={`/api/static/${member.avatar}`}
+                      src={getMediaImageUrl(member.avatar) ?? undefined}
                       alt={member.name}
                     />
                   ) : null}

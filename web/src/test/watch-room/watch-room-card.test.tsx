@@ -53,6 +53,16 @@ vi.mock("@tanstack/react-router", async () => {
   };
 });
 
+// Radix only mounts the avatar <img> once the browser has loaded it, which
+// jsdom never does; render it outright so its src can be read.
+vi.mock("@/components/ui/avatar", () => ({
+  Avatar: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  AvatarImage: (props: { src?: string; alt?: string }) => <img {...props} />,
+  AvatarFallback: ({ children }: { children: React.ReactNode }) => (
+    <span>{children}</span>
+  ),
+}));
+
 vi.mock("@/lib/api", () => ({
   deleteWatchRoom: (...args: unknown[]) => deleteWatchRoomMock(...args),
 }));
@@ -117,6 +127,33 @@ describe("WatchRoomCard", () => {
     expect(card?.className).toContain(CARD_INTERACTIVE_SURFACE_CLASS);
     expect(poster).toBeTruthy();
     expect(poster?.className).toContain(CARD_MEDIA_HOVER_CLASS);
+  });
+
+  it("shows member avatars from the stored URL, uploaded or external", () => {
+    // The server stores the full URL, so the card must not prefix it again.
+    renderWithQueryClient(
+      <WatchRoomCard
+        room={buildRoom({
+          members: [
+            { id: 1, name: "Room Owner", avatar: "/api/static/avatars/1.webp" },
+            {
+              id: 2,
+              name: "Invited Guest",
+              avatar: "https://example.com/guest.png",
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Room Owner" })).toHaveAttribute(
+      "src",
+      "/api/static/avatars/1.webp",
+    );
+    expect(screen.getByRole("img", { name: "Invited Guest" })).toHaveAttribute(
+      "src",
+      "https://example.com/guest.png",
+    );
   });
 
   it("shows the owner delete affordance only for owners", () => {
