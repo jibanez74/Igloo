@@ -14,9 +14,10 @@ export function isApiFailure(data: unknown): data is { error: true; message: str
 /**
  * The server's own message when the envelope reports a failure, and the
  * caller's wording when the request never got that far — a network error, or a
- * response that was not an envelope at all. Every load-error surface makes the
- * same choice, so it is made here.
+ * response that was not an envelope at all — or the failure came back with a
+ * blank message. Every load-error surface makes the same choice, so it is made
+ * here.
  */
 export function apiErrorMessage(data: unknown, fallback: string): string {
-  return isApiFailure(data) ? data.message : fallback;
+  return (isApiFailure(data) && data.message) || fallback;
 }

@@ -46,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 type CreateWatchRoomDialogProps = {
   movieId: number;
@@ -359,8 +360,10 @@ export default function CreateWatchRoomDialog({
                   </div>
                 ) : inviteUsersData?.error ? (
                   <p className="px-4 py-6 text-sm text-destructive">
-                    {inviteUsersData.message ||
-                      "Failed to load users. Please try again."}
+                    {apiErrorMessage(
+                      inviteUsersData,
+                      "Failed to load users. Please try again.",
+                    )}
                   </p>
                 ) : inviteUsers.length === 0 ? (
                   <p className="px-4 py-6 text-sm text-muted-foreground">

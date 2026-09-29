@@ -6,6 +6,7 @@ import InTheatersCard from "@/components/home/InTheatersCard";
 import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 import { parseCatalogDate } from "@/lib/format";
 import type { TheaterMovieType } from "@/types";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function MoviesInTheaters() {
   const { data, isPending } = useQuery(inTheatersQueryOpts());
@@ -19,9 +20,8 @@ export default function MoviesInTheaters() {
     );
   }
 
-  const hasError = data && data.error;
-  const errorMessage = hasError
-    ? data.message || "Failed to load movies. Please try again later."
+  const errorMessage = data?.error
+    ? apiErrorMessage(data, "Failed to load movies. Please try again later.")
     : undefined;
 
   return (

@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useState, type RefObject } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { toast } from "sonner";
 import {
   identifyMovie,
   updateMovieMetadata,
@@ -14,6 +13,12 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
+import {
+  showActionFailed,
+  showInfo,
+  showSuccess,
+  showUpdated,
+} from "@/lib/toast-helpers";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -284,11 +289,11 @@ function TmdbTab({
   async function handleApply(selectedId: number) {
     const res = await identifyMovie(movieId, selectedId);
     if (res.error) {
-      toast.error(res.message || "Failed to identify movie");
+      showActionFailed("identify movie", res.message);
       return;
     }
 
-    toast.success("Movie identified successfully");
+    showSuccess("Movie identified successfully");
     onOpenChange(false);
     await refreshMovieDetails(queryClient, router, movieId);
   }
@@ -337,7 +342,7 @@ function ManualTab({
     const body = buildUpdateMovieMetadataRequest(draft, baseline);
 
     if (Object.keys(body).length === 0) {
-      toast.info("No changes to save");
+      showInfo("No changes to save");
       setSaving(false);
       return;
     }
@@ -349,11 +354,11 @@ function ManualTab({
     setSaving(false);
 
     if (res.error) {
-      toast.error(res.message || "Failed to update movie");
+      showActionFailed("update movie", res.message);
       return;
     }
 
-    toast.success("Movie updated successfully");
+    showUpdated("Movie");
     onOpenChange(false);
     await refreshMovieDetails(queryClient, router, movieId);
   }

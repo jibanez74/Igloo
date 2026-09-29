@@ -1,9 +1,9 @@
 import { useState, type RefObject } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { deleteMovie } from "@/lib/api";
 import { LATEST_MOVIES_KEY, LIBRARY_MOVIE_DETAILS_KEY } from "@/lib/constants";
+import { showActionFailed, showDeleted } from "@/lib/toast-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
@@ -35,19 +35,19 @@ export default function DeleteMovieDialog({
       const res = await deleteMovie(movieId, deleteFile);
 
       if (res.error) {
-        toast.error(res.message || "Failed to delete movie");
+        showActionFailed("delete movie", res.message);
       } else {
         queryClient.invalidateQueries({ queryKey: [LATEST_MOVIES_KEY] });
         queryClient.removeQueries({
           queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
         });
 
-        toast.success(`"${movieTitle}" deleted successfully`);
+        showDeleted(`"${movieTitle}"`);
         onOpenChange(false);
         navigate({ to: "/" });
       }
     } catch {
-      toast.error("Failed to delete movie");
+      showActionFailed("delete movie");
     }
 
     setDeleting(false);

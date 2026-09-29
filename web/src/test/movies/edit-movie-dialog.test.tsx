@@ -410,6 +410,7 @@ describe("EditMovieDialog", () => {
       .not.toBeInTheDocument();
     expect(toastMocks.success).toHaveBeenCalledWith(
       "Movie identified successfully",
+      undefined,
     );
     await waitFor(() => {
       expect(routerMocks.invalidate).toHaveBeenCalledOnce();

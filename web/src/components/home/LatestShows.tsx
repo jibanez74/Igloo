@@ -4,14 +4,14 @@ import { Tv } from "lucide-react";
 import HomeMediaSection from "@/components/home/HomeMediaSection";
 import ShowCard from "@/components/shows/ShowCard";
 import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 
 export default function LatestShows() {
   const { data, isPending } = useQuery(latestShowsQueryOpts());
 
   const shows = data && !data.error ? (data.data?.shows ?? []) : [];
-  const hasError = data && data.error;
-  const errorMessage = hasError
-    ? data.message || "Failed to load shows. Please try again later."
+  const errorMessage = data?.error
+    ? apiErrorMessage(data, "Failed to load shows. Please try again later.")
     : undefined;
 
   return (

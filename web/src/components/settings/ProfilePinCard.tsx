@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { KeyRound } from "lucide-react";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { updateUserPin } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/is-api-failure";
 import { authUserQueryOpts, userPinQueryOpts } from "@/lib/query-opts";
 import {
   ADMIN_USERS_KEY,
@@ -98,7 +99,7 @@ export default function ProfilePinCard() {
         showMutationError(
           variables.current !== undefined,
           action,
-          res.message || `Failed to ${action}.`,
+          apiErrorMessage(res, `Failed to ${action}.`),
         );
         return;
       }
