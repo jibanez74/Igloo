@@ -9,7 +9,7 @@ import {
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
 } from "@/lib/constants";
-import { formatSpokenTime, formatTimecode } from "@/lib/format";
+import { formatSpokenTime, formatTimecode, pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PlaybackChapterType } from "@/types";
 
@@ -64,9 +64,7 @@ export default function ChapterMenu({
           PLAYER_ICON_BUTTON_CLASS,
           "size-10 hover:bg-accent",
         )}
-        aria-label={`Chapters, ${chapters.length} ${
-          chapters.length === 1 ? "chapter" : "chapters"
-        }`}
+        aria-label={`Chapters, ${pluralize(chapters.length, "chapter")}`}
       >
         <ListOrdered className="size-5" aria-hidden="true" />
       </DropdownMenuTrigger>

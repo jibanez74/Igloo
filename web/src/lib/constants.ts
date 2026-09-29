@@ -131,6 +131,16 @@ export const SHUFFLE_TRACKS_LIMIT = 50;
 // samples around them. Matches the server's own cap.
 export const SHUFFLE_EXCLUDE_LIMIT = 200;
 
+// Singular/plural forms of each library's item noun, for counts and headings
+// ("1 show", "24 shows") across the library, playlist and search pages.
+export const LIBRARY_NOUNS = {
+  movie: { singular: "movie", plural: "movies" },
+  show: { singular: "show", plural: "shows" },
+  album: { singular: "album", plural: "albums" },
+  musician: { singular: "musician", plural: "musicians" },
+  track: { singular: "track", plural: "tracks" },
+} as const;
+
 // Route search defaults. Reuse these when navigating so links and loaders agree
 // on the canonical starting search state for a route.
 export const MOVIES_INDEX_DEFAULT_SEARCH = {

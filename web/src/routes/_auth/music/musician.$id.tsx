@@ -142,9 +142,7 @@ function MusicianDetailsContent({
   const { showPoster: showThumb, onError: onThumbError } =
     usePosterFallback(thumbUrl);
   const summary = unwrapString(musician.summary);
-  const spotifyPopularityRaw = unwrapFloat(musician.spotify_popularity);
-  const spotifyPopularity =
-    spotifyPopularityRaw !== null ? Math.round(spotifyPopularityRaw) : null;
+  const spotifyPopularity = unwrapFloat(musician.spotify_popularity);
   const spotifyFollowers = unwrapInt(musician.spotify_followers);
 
   // A musician's tracks span every album they appear on, so each row carries its

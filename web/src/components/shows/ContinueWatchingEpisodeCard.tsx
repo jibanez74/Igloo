@@ -4,6 +4,7 @@ import PosterCard from "@/components/shared/PosterCard";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { episodeCode, watchProgressPercent } from "@/lib/format";
 import { showDetailsQueryOpts } from "@/lib/query-opts";
+import { unwrapString } from "@/lib/nullable";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { ContinueWatchingEpisodeItemType } from "@/types";
 
@@ -32,10 +33,10 @@ export default function ContinueWatchingEpisodeCard({
     episode.duration_sec,
   );
 
-  const posterUrl =
-    episode.poster_path.Valid && episode.poster_path.String !== ""
-      ? buildTmdbImageUrl(episode.poster_path.String, TMDB_POSTER_SIZE)
-      : "";
+  const posterUrl = buildTmdbImageUrl(
+    unwrapString(episode.poster_path),
+    TMDB_POSTER_SIZE,
+  );
 
   return (
     <PosterCard

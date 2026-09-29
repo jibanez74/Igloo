@@ -18,9 +18,7 @@ type InTheatersCardProps = {
 export default function InTheatersCard({ movie }: InTheatersCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
-  const posterUrl = poster_path
-    ? buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE)
-    : "";
+  const posterUrl = buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE);
 
   const rating = vote_average ? vote_average.toFixed(1) : null;
   const year = release_date

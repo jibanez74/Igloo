@@ -9,6 +9,7 @@ import {
   MOTION_MICRO_COLORS_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -28,9 +29,7 @@ export default function WatchRoomCard({ room }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const closeRoomButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const posterUrl = room.movie_poster
-    ? buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE)
-    : "";
+  const posterUrl = buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE);
 
   const shownMembers = room.members.slice(0, WATCH_ROOM_MEMBER_AVATAR_LIMIT);
   const overflow = room.members.length - WATCH_ROOM_MEMBER_AVATAR_LIMIT;
@@ -106,7 +105,7 @@ export default function WatchRoomCard({ room }: Props) {
             <div className="flex items-center gap-2">
               <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
               <p className="text-xs font-medium text-muted-foreground">
-                {room.members.length} member{room.members.length === 1 ? "" : "s"}
+                {pluralize(room.members.length, "member")}
               </p>
             </div>
 

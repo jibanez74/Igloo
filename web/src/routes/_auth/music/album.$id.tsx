@@ -38,6 +38,7 @@ import { usePosterFallback } from "@/hooks/usePosterFallback";
 import TrackItem from "@/components/music/TrackItem";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import {
+  formatBitRate,
   formatDate,
   formatDuration,
   nounForCount,
@@ -254,7 +255,7 @@ function AlbumDetailsContent({
   const audioQuality = dominantCodec
     ? [
         dominantCodec.toUpperCase(),
-        maxBitRate > 0 ? `${Math.round(maxBitRate / 1000)} kbps` : null,
+        maxBitRate > 0 ? formatBitRate(maxBitRate) : null,
         uniformChannelLayout,
       ]
         .filter(Boolean)

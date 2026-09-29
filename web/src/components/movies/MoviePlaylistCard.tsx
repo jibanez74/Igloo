@@ -5,6 +5,7 @@ import {
   CARD_SURFACE_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
 } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ type MoviePlaylistCardProps = {
 export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) {
   const { id, name, movie_count, cover_image, is_owner } = playlist;
   const coverUrl = getMediaImageUrl(unwrapString(cover_image));
-  const movieNoun = movie_count === 1 ? "movie" : "movies";
+  const movieCount = pluralize(movie_count, "movie");
 
   return (
     <article
@@ -27,7 +28,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
         to="/movies/playlist/$id"
         params={{ id: id.toString() }}
         className={cn("block", FOCUS_VISIBLE_RING_CLASS, "focus-visible:ring-inset")}
-        aria-label={`${name}, ${movie_count} ${movieNoun}`}
+        aria-label={`${name}, ${movieCount}`}
       >
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">
           {coverUrl ? (
@@ -50,7 +51,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
         <div className="text-center">
           <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {movie_count} {movieNoun}
+            {movieCount}
           </p>
         </div>
       </Link>

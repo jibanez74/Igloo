@@ -10,6 +10,7 @@ import {
   PEER_FOCUS_VISIBLE_RING_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { pluralize } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -219,7 +220,7 @@ export default function TmdbMoviePicker({
             TMDB movie results
           </legend>
           <p className="text-sm text-muted-foreground">
-            {results.length} result{results.length === 1 ? "" : "s"} found
+            {pluralize(results.length, "result")} found
           </p>
 
           <ul className="max-h-64 space-y-2 overflow-y-auto">

@@ -136,11 +136,9 @@ export function formatSpokenTime(seconds: number) {
   const secs = total % 60;
 
   const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
-  if (mins > 0) parts.push(`${mins} ${mins === 1 ? "minute" : "minutes"}`);
-  if (secs > 0 || parts.length === 0) {
-    parts.push(`${secs} ${secs === 1 ? "second" : "seconds"}`);
-  }
+  if (hours > 0) parts.push(pluralize(hours, "hour"));
+  if (mins > 0) parts.push(pluralize(mins, "minute"));
+  if (secs > 0 || parts.length === 0) parts.push(pluralize(secs, "second"));
 
   return parts.join(" ");
 }
@@ -167,10 +165,8 @@ function hourMinuteSpoken(totalMinutes: number): string {
   const minutes = totalMinutes % 60;
 
   const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
-  if (minutes > 0) {
-    parts.push(`${minutes} ${minutes === 1 ? "minute" : "minutes"}`);
-  }
+  if (hours > 0) parts.push(pluralize(hours, "hour"));
+  if (minutes > 0) parts.push(pluralize(minutes, "minute"));
 
   return parts.join(" ");
 }
@@ -224,7 +220,7 @@ export function formatTimeLeft(
 
     return {
       text: `${seconds} sec left`,
-      spoken: `${seconds} ${seconds === 1 ? "second" : "seconds"} left`,
+      spoken: `${pluralize(seconds, "second")} left`,
     };
   }
 

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Grid3X3, Tv } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ShowCard from "@/components/shows/ShowCard";
-import LibraryAllTab, { type LibraryNoun } from "@/components/shared/LibraryAllTab";
+import LibraryAllTab from "@/components/shared/LibraryAllTab";
 import LibraryGenresTab from "@/components/shared/LibraryGenresTab";
 import LibraryMoreMenu, {
   RefreshLibraryMenuItem,
@@ -19,6 +19,7 @@ import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SHOWS_PER_PAGE,
+  LIBRARY_NOUNS,
 } from "@/lib/constants";
 import {
   showsByGenreQueryOpts,
@@ -74,8 +75,6 @@ export const Route = createFileRoute("/_auth/tv-shows/")({
   },
   component: TvShowsPage,
 });
-
-const SHOW_NOUN: LibraryNoun = { singular: "show", plural: "shows" };
 
 // ---------------------------------------------------------------------------
 // Page component
@@ -145,7 +144,7 @@ function TvShowsPage() {
             {
               icon: Tv,
               label: "Shows",
-              noun: SHOW_NOUN,
+              noun: LIBRARY_NOUNS.show,
               getValue: data => data.total_shows,
             },
           ]}
@@ -228,7 +227,7 @@ function AllShowsTabContent({ currentPage, sort }: AllShowsTabContentProps) {
       currentPage={currentPage}
       sort={sort}
       perPage={SHOWS_PER_PAGE}
-      noun={SHOW_NOUN}
+      noun={LIBRARY_NOUNS.show}
       emptyIcon={Tv}
       onPageChange={newPage =>
         navigate({
@@ -297,7 +296,7 @@ function GenresTabContent({
       genresPage={genresPage}
       sort={sort}
       perPage={SHOWS_PER_PAGE}
-      noun={SHOW_NOUN}
+      noun={LIBRARY_NOUNS.show}
       emptyIcon={Tv}
       fallbackFocusRef={fallbackFocusRef}
       onSelectGenre={id =>

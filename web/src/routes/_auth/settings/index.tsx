@@ -31,6 +31,7 @@ import {
   SETTINGS_INPUT_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
+import { trimmedOrNull } from "@/lib/nullable";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
@@ -119,11 +120,6 @@ function isOptionalHTTPBaseURL(value: string) {
   }
 }
 
-function optionalSetting(value: string) {
-  const trimmed = value.trim();
-  return trimmed === "" ? null : trimmed;
-}
-
 function GeneralSettings() {
   const { data, isLoading } = useQuery(generalSettingsQueryOpts());
 
@@ -209,17 +205,17 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               ...current.data,
               settings: {
                 ...current.data.settings,
-                tmdb_key: optionalSetting(nextSettings.tmdb_key),
-                immich_base_url: optionalSetting(nextSettings.immich_base_url),
-                immich_api_key: optionalSetting(nextSettings.immich_api_key),
-                jellyfin_base_url: optionalSetting(
+                tmdb_key: trimmedOrNull(nextSettings.tmdb_key),
+                immich_base_url: trimmedOrNull(nextSettings.immich_base_url),
+                immich_api_key: trimmedOrNull(nextSettings.immich_api_key),
+                jellyfin_base_url: trimmedOrNull(
                   nextSettings.jellyfin_base_url,
                 ),
-                jellyfin_api_key: optionalSetting(nextSettings.jellyfin_api_key),
-                spotify_client_id: optionalSetting(
+                jellyfin_api_key: trimmedOrNull(nextSettings.jellyfin_api_key),
+                spotify_client_id: trimmedOrNull(
                   nextSettings.spotify_client_id,
                 ),
-                spotify_client_secret: optionalSetting(
+                spotify_client_secret: trimmedOrNull(
                   nextSettings.spotify_client_secret,
                 ),
                 enable_watcher: nextSettings.enable_watcher,

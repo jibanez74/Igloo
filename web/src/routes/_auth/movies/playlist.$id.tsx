@@ -5,7 +5,6 @@ import { ArrowLeft, ListVideo } from "lucide-react";
 import MovieCard from "@/components/movies/MovieCard";
 import LibraryAllTab, {
   LibraryAllTabSkeleton,
-  type LibraryNoun,
 } from "@/components/shared/LibraryAllTab";
 import MediaDetailGuard from "@/components/shared/MediaDetailGuard";
 import {
@@ -17,6 +16,7 @@ import {
   MOTION_MICRO_COLORS_CLASS,
   MOVIES_PER_PAGE,
   MOVIES_PLAYLISTS_TAB_SEARCH,
+  LIBRARY_NOUNS,
 } from "@/lib/constants";
 import { pluralize } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -24,8 +24,6 @@ import { unwrapString } from "@/lib/nullable";
 import { parseRouteId } from "@/lib/route-id";
 import { routeHead } from "@/lib/route-head";
 import type { MoviePlaylistDetailResponseType } from "@/types";
-
-const MOVIE_NOUN: LibraryNoun = { singular: "movie", plural: "movies" };
 
 const MOVIE_PLAYLIST_FALLBACK_HEAD = routeHead("Movie Playlist");
 
@@ -124,7 +122,7 @@ function MoviePlaylistContent({ playlistId, data }: MoviePlaylistContentProps) {
         currentPage={page}
         sort={sort}
         perPage={MOVIES_PER_PAGE}
-        noun={MOVIE_NOUN}
+        noun={LIBRARY_NOUNS.movie}
         emptyIcon={ListVideo}
         emptyMessage="No movies in this playlist yet."
         onPageChange={setPage}
