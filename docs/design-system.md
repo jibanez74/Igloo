@@ -27,6 +27,7 @@ this doc, prefer adding a guard too.
 | Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/shared/theme-drift.test.ts` |
 | Every shared motion constant carries a `motion-reduce:` escape; every `src/` file with an inline transition/animation has the matching `motion-reduce:` escape | `web/src/test/shared/motion-contracts.test.ts` |
 | Every focus indicator in `src/` uses a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
+| No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
