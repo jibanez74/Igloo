@@ -222,6 +222,11 @@ vi.mock("@/components/shared/LiveAnnouncer", () => ({
   ),
 }));
 
+const prefersCoarse = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-coarse-pointer", () => ({
+  usePrefersCoarsePointer: () => prefersCoarse.value,
+}));
+
 class FakeWebSocket {
   static CONNECTING = 0;
   static OPEN = 1;
@@ -367,6 +372,7 @@ describe("WatchRoomPageContent", () => {
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
+    prefersCoarse.value = false;
     vi.useRealTimers();
   });
 
@@ -483,6 +489,36 @@ describe("WatchRoomPageContent", () => {
       expect(
         screen.getByRole("button", { name: /pause playback/i }),
       ).toBeInTheDocument();
+    });
+  });
+
+  it("lists the keyboard shortcuts for screen readers", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await screen.findByTestId("video-player");
+
+    expect(screen.getByText(/^Keyboard shortcuts:/)).toHaveClass("sr-only");
+  });
+
+  // A touch-first device has no keyboard to press them on (design-system §1.7),
+  // but an attached keyboard still drives playback.
+  it("drops the shortcut list on a touch-first device and keeps the shortcuts bound", async () => {
+    prefersCoarse.value = true;
+    mockVideoController.readyState = 3;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await screen.findByTestId("video-player");
+    expect(screen.queryByText(/Keyboard shortcuts:/)).not.toBeInTheDocument();
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    await waitFor(() => {
+      expect(mockVideoController.playCalls).toBe(1);
     });
   });
 

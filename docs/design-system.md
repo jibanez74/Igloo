@@ -27,6 +27,7 @@ this doc, prefer adding a guard too.
 | Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/shared/theme-drift.test.ts` |
 | Every shared motion constant carries a `motion-reduce:` escape; every `src/` file with an inline transition/animation has the matching `motion-reduce:` escape | `web/src/test/shared/motion-contracts.test.ts` |
 | Every focus indicator in `src/` uses a shared focus-ring recipe — no hand-written widths, offsets, or `focus:` (mouse-visible) rings | `web/src/test/shared/focus-contracts.test.ts` |
+| No string in `src/` hard-codes a keyboard-shortcut hint suffix (`"Mute (M)"`) — hints go through `useShortcutHints` | `web/src/test/shared/shortcut-hint-contracts.test.ts` |
 | Input styling contracts | `web/src/test/shared/input-styles.test.ts` |
 | Shared class-string constants keep their contracts | `web/src/test/lib/constants-contracts.test.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (**error**) in `web/eslint.config.js` |
@@ -349,6 +350,16 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
 
   Never leave a non-interactive element whose only content is `aria-hidden` —
   assistive tech lands on an empty node.
+- **Keyboard-shortcut hints follow the input device.** A player control names
+  its shortcut as a suffix of its accessible name ("Pause (Space or K)"), and
+  a player may add an `sr-only` keyboard map ("Keyboard shortcuts: …") as a
+  paragraph or its dialog's description. Both come from `useShortcutHints`:
+  `withShortcut(label, keys)` builds the name and `showShortcutHints` gates
+  the map. A touch-first device (`(hover: none) and (pointer: coarse)`, via
+  `usePrefersCoarsePointer`) gets neither, because a screen reader there would
+  read out keys nobody can press; the shortcuts themselves stay bound for an
+  attached keyboard. Never hard-code the suffix. Gate on the pointer, not on
+  `useIsMobile`: a narrow desktop window still has a keyboard.
 - **Every route titles the page through its `head`, never in JSX.** The
   document title is the first thing a screen reader announces after a
   navigation, and it names the browser tab and history entry. Routes declare
@@ -850,7 +861,8 @@ require the full playback test pass.
   becomes absolute overlay panels (`MOTION_PLAYER_CHROME_PANEL_CLASS`,
   `bg-background/95 backdrop-blur-lg`) and **auto-hides on idle**
   (`useIdleControls`), sliding back on pointer/touch/key input. A `sr-only`
-  paragraph documents the keyboard map (Space/K, J/L, arrows, M, F, Esc);
+  paragraph documents the keyboard map (Space/K, J/L, arrows, M, F, Esc),
+  and the controls name their shortcuts — both dropped on touch (§1.7);
   `ResumeDialog` offers resume vs. start-over; announcements via five
   `LiveAnnouncer`s (play/pause state, capacity waiting, chapter jumps,
   direct-play fallback, and HLS session recovery — the watch room announces
@@ -884,8 +896,8 @@ require the full playback test pass.
 - **Trailer player** (`routes/_auth/trailer.tsx`, YouTube behind
   `useYouTubePlayer`): one `DialogFullscreenContent` whose view swaps in place
   — loading, load error, no trailer, the player, a playback error. Each view
-  focuses its primary control ("Close trailer (Escape)", or "Try Again" on an
-  error) when it first appears, not only when the dialog opens: Radix's open
+  focuses its primary control ("Close trailer (Escape)" — "Close trailer" on
+  touch, §1.7 — or "Try Again" on an error) when it first appears, not only when the dialog opens: Radix's open
   auto-focus runs once, and a swap that unmounts the focused control would
   otherwise strand focus on the dialog container.
 - **Audio player** (`AudioPlayer.tsx`, app-wide via `AudioPlayerContext`;
@@ -895,7 +907,8 @@ require the full playback test pass.
   starting a **new** track opens the **fullscreen Now Playing** view
   (`DialogFullscreenContent`, gradient `from-background via-muted
   to-background`, large art with disc-icon fallback, transport + volume +
-  "Track N of M"); "Minimize player (Escape)" collapses it to the **docked
+  "Track N of M"); "Minimize player (Escape)" (no suffix on touch, §1.7)
+  collapses it to the **docked
   mini bar** (`fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur`)
   with track info, transport, close, and a bottom progress strip. The bar
   persists across navigation; the current track's row in lists is

@@ -30,6 +30,11 @@ vi.mock("@/lib/api", async importOriginal => ({
   }),
 }));
 
+const prefersCoarse = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-coarse-pointer", () => ({
+  usePrefersCoarsePointer: () => prefersCoarse.value,
+}));
+
 // The player subtree queries liked-track ids, so every render needs a
 // QueryClientProvider. useState keeps the client stable across rerenders.
 function Providers({ children }: PropsWithChildren) {
@@ -215,6 +220,7 @@ describe("AudioPlayer Media Session", () => {
 
   afterEach(() => {
     cleanup();
+    prefersCoarse.value = false;
 
     restoreProperty(
       navigator,
@@ -429,6 +435,21 @@ describe("AudioPlayer Media Session", () => {
     expect(screen.getByRole("button", { name: "Mute (M)" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
     );
+    expect(screen.getByRole("dialog")).toHaveAccessibleDescription(
+      "Press Escape to minimize.",
+    );
+  });
+
+  // A touch-first device has no keyboard to press them on (design-system §1.7).
+  it("drops keyboard hints from the expanded player on a touch-first device", () => {
+    prefersCoarse.value = true;
+    renderAudioPlayer({ isExpanded: true, onClose: vi.fn() });
+
+    expect(screen.getByRole("dialog")).not.toHaveAttribute("aria-describedby");
+    expect(
+      screen.getByRole("button", { name: "Minimize player" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mute" })).toBeInTheDocument();
   });
 
   it("keeps transport controls on the single focus-visible ring recipe (design-system §1.7)", () => {

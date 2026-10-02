@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll, VIEWPORTS } from "./e2e-layout";
-import { playButton } from "./media-e2e-helpers";
 import { mockYouTubePlayer } from "./mock-youtube-player";
 import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
 import { loginPageViaApi } from "./e2e-auth";
@@ -16,29 +15,35 @@ async function openTrailer(
   });
 }
 
-async function expectTrailerChrome(page: Page) {
-  await expect(page.getByRole("dialog", { name: "Trailer" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Close trailer (Escape)" }),
-  ).toBeVisible();
+// A touch-first device drops the keyboard hints from every control name and
+// the shortcut list from the dialog description (design-system §1.7).
+async function expectTrailerChrome(page: Page, { touch = false } = {}) {
+  const control = (label: string, keys: string) =>
+    page.getByRole("button", {
+      name: touch ? label : `${label} (${keys})`,
+      exact: true,
+    });
+
+  const dialog = page.getByRole("dialog", { name: "Trailer" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleDescription(
+    touch
+      ? ""
+      : new RegExp(`^Keyboard shortcuts: .* rewind ${MOVIE_SEEK_STEP_SEC} seconds`),
+  );
+  await expect(control("Close trailer", "Escape")).toBeVisible();
   await expect(
     page.getByRole("slider", { name: "Seek through trailer" }),
   ).toBeVisible();
-  await expect(playButton(page)).toBeVisible();
+  await expect(control("Play", "Space or K")).toBeVisible();
   await expect(
-    page.getByRole("button", {
-      name: `Rewind ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`,
-    }),
+    control(`Rewind ${MOVIE_SEEK_STEP_SEC} seconds`, "J or Left Arrow"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", {
-      name: `Forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`,
-    }),
+    control(`Forward ${MOVIE_SEEK_STEP_SEC} seconds`, "L or Right Arrow"),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Mute (M)" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Fullscreen (F)" }),
-  ).toBeVisible();
+  await expect(control("Mute", "M")).toBeVisible();
+  await expect(control("Fullscreen", "F")).toBeVisible();
   await expectPageHasNoHorizontalScroll(page);
 }
 
@@ -48,14 +53,25 @@ test.describe("Trailer playback chrome", () => {
   });
 
   // The desktop layout is audited by the focus test below.
-  test("renders labelled trailer controls on a phone", async ({ page }) => {
-    const browserIssues = trackBrowserIssues(page);
+  test.describe("on a touch phone", () => {
+    test.use({ viewport: VIEWPORTS.phone, hasTouch: true, isMobile: true });
 
-    await page.setViewportSize(VIEWPORTS.phone);
-    await openTrailer(page);
+    test("renders labelled trailer controls without keyboard hints", async ({
+      page,
+    }) => {
+      const browserIssues = trackBrowserIssues(page);
 
-    await expectTrailerChrome(page);
-    browserIssues.assertClean();
+      await openTrailer(page);
+
+      // The hints key off this query; fail loudly if emulation stops setting it.
+      expect(
+        await page.evaluate(
+          () => matchMedia("(hover: none) and (pointer: coarse)").matches,
+        ),
+      ).toBe(true);
+      await expectTrailerChrome(page, { touch: true });
+      browserIssues.assertClean();
+    });
   });
 
   test("keeps keyboard focus in the trailer dialog and closes on Escape", async ({

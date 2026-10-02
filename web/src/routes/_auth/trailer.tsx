@@ -30,6 +30,7 @@ import { trailerSearchSchema } from "@/lib/route-search";
 import { routeHead } from "@/lib/route-head";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import { toast } from "sonner";
 import { formatTimecode } from "@/lib/format";
 import {
@@ -106,6 +107,7 @@ function TrailerPage() {
   const navigate = Route.useNavigate();
   const router = useRouter();
   const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
+  const { showShortcutHints, withShortcut } = useShortcutHints();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -546,12 +548,14 @@ function TrailerPage() {
         {announcement}
       </div>
 
-      <DialogDescription className="sr-only">
-        Keyboard shortcuts: Space or K to play/pause, J or left arrow to rewind
-        {MOVIE_SEEK_STEP_SEC} seconds, L or right arrow to forward{" "}
-        {MOVIE_SEEK_STEP_SEC} seconds, up/down arrows for volume, M to mute, F
-        for fullscreen, Escape to exit fullscreen or close.
-      </DialogDescription>
+      {showShortcutHints && (
+        <DialogDescription className="sr-only">
+          Keyboard shortcuts: Space or K to play/pause, J or left arrow to
+          rewind {MOVIE_SEEK_STEP_SEC} seconds, L or right arrow to forward{" "}
+          {MOVIE_SEEK_STEP_SEC} seconds, up/down arrows for volume, M to mute, F
+          for fullscreen, Escape to exit fullscreen or close.
+        </DialogDescription>
+      )}
 
       <header
         className={cn(
@@ -576,7 +580,7 @@ function TrailerPage() {
             PLAYER_ICON_BUTTON_CLASS,
             "size-10 hover:bg-muted",
           )}
-          aria-label="Close trailer (Escape)"
+          aria-label={withShortcut("Close trailer", "Escape")}
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -644,7 +648,10 @@ function TrailerPage() {
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
                 )}
-                aria-label={`Rewind ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`}
+                aria-label={withShortcut(
+                  `Rewind ${MOVIE_SEEK_STEP_SEC} seconds`,
+                  "J or Left Arrow",
+                )}
               >
                 <Rewind className="size-5" aria-hidden="true" />
               </button>
@@ -656,9 +663,10 @@ function TrailerPage() {
                   PLAYER_PRIMARY_BUTTON_CLASS,
                   "size-14 shadow-lg shadow-primary/20",
                 )}
-                aria-label={
-                  isPlaying ? "Pause (Space or K)" : "Play (Space or K)"
-                }
+                aria-label={withShortcut(
+                  isPlaying ? "Pause" : "Play",
+                  "Space or K",
+                )}
               >
                 {isPlaying ? (
                   <Pause className="size-6 fill-current" aria-hidden="true" />
@@ -674,7 +682,10 @@ function TrailerPage() {
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
                 )}
-                aria-label={`Forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`}
+                aria-label={withShortcut(
+                  `Forward ${MOVIE_SEEK_STEP_SEC} seconds`,
+                  "L or Right Arrow",
+                )}
               >
                 <FastForward className="size-5" aria-hidden="true" />
               </button>
@@ -688,7 +699,10 @@ function TrailerPage() {
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
                 )}
-                aria-label={isEffectivelyMuted ? "Unmute (M)" : "Mute (M)"}
+                aria-label={withShortcut(
+                  isEffectivelyMuted ? "Unmute" : "Mute",
+                  "M",
+                )}
                 aria-pressed={isEffectivelyMuted}
               >
                 {isEffectivelyMuted ? (
@@ -707,9 +721,10 @@ function TrailerPage() {
                   PLAYER_ICON_BUTTON_CLASS,
                   "size-10 hover:bg-muted",
                 )}
-                aria-label={
-                  isBrowserFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"
-                }
+                aria-label={withShortcut(
+                  isBrowserFullscreen ? "Exit fullscreen" : "Fullscreen",
+                  "F",
+                )}
                 aria-pressed={isBrowserFullscreen}
               >
                 {isBrowserFullscreen ? (

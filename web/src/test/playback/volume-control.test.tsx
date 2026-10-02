@@ -1,9 +1,18 @@
 import { type RefObject } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import VolumeControl from "@/components/playback/VolumeControl";
 import { PLAYER_ICON_BUTTON_CLASS } from "@/lib/constants";
+
+const prefersCoarse = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-coarse-pointer", () => ({
+  usePrefersCoarsePointer: () => prefersCoarse.value,
+}));
+
+afterEach(() => {
+  prefersCoarse.value = false;
+});
 
 function renderVolumeControl() {
   const media = document.createElement("audio");
@@ -123,5 +132,27 @@ describe("VolumeControl", () => {
     expect(media.muted).toBe(false);
     expect(slider).toHaveAttribute("aria-valuetext", "25% volume");
     expect(screen.getByRole("button", { name: "Mute (M)" })).toBeVisible();
+  });
+
+  // A touch-first device has no keyboard to press them on (design-system §1.7).
+  it("drops the M shortcut from the mute button on a touch-first device", async () => {
+    prefersCoarse.value = true;
+    const user = userEvent.setup();
+    const media = document.createElement("audio");
+
+    render(
+      <>
+        <VolumeControl mediaRef={{ current: media }} variant="expanded" />
+        <VolumeControl mediaRef={{ current: media }} />
+      </>,
+    );
+    await user.click(screen.getByRole("button", { name: "Adjust volume" }));
+
+    expect(screen.getAllByRole("button", { name: "Mute" })).toHaveLength(2);
+
+    media.muted = true;
+    fireEvent(media, new Event("volumechange"));
+
+    expect(screen.getAllByRole("button", { name: "Unmute" })).toHaveLength(2);
   });
 });
