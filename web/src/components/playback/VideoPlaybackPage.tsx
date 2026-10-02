@@ -65,6 +65,7 @@ import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { useSettledHlsRebase } from "@/hooks/useSettledHlsRebase";
 import { useVideoPlaybackData } from "@/hooks/useVideoPlaybackData";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import type { PlaybackMediaRef, UpNextItem } from "@/types/playback";
 
 type ChapterAnnouncement = {
@@ -642,6 +643,7 @@ export default function VideoPlaybackPage({
     onToggleFullscreen: () => void toggleFullscreen(),
     onEscape: exitFullscreenIfActive,
   });
+  const { showShortcutHints } = useShortcutHints();
 
   const announcement = playing ? `Playing: ${title}` : `Paused: ${title}`;
 
@@ -853,15 +855,17 @@ export default function VideoPlaybackPage({
         restoreFocusRef={containerRef}
       />
 
-      <p className="sr-only">
-        Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind{" "}
-        {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
-        {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
-        fullscreen, Escape to exit fullscreen, Back button to go back.
-        {upNext
-          ? " When the episode ends, the up next card takes the keyboard: Enter or Space activates the focused button."
-          : ""}
-      </p>
+      {showShortcutHints && (
+        <p className="sr-only">
+          Keyboard shortcuts: Space or K to play/pause, J or Left arrow to
+          rewind {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
+          {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
+          fullscreen, Escape to exit fullscreen, Back button to go back.
+          {upNext
+            ? " When the episode ends, the up next card takes the keyboard: Enter or Space activates the focused button."
+            : ""}
+        </p>
+      )}
 
       <header
         className={

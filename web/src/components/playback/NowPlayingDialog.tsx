@@ -10,6 +10,7 @@ import PlayerTransportControls from "@/components/playback/PlayerTransportContro
 import type { PlayerTransportProps } from "@/components/playback/PlayerTransportControls";
 import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import {
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
@@ -56,6 +57,8 @@ export default function NowPlayingDialog({
   trackTotal,
   transport,
 }: NowPlayingDialogProps) {
+  const { showShortcutHints, withShortcut } = useShortcutHints();
+
   return (
     <Dialog
       open={isExpanded}
@@ -85,9 +88,11 @@ export default function NowPlayingDialog({
           <DialogTitle className="sr-only">
             Now playing: {track.title} by {artist}
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            Press Escape to minimize.
-          </DialogDescription>
+          {showShortcutHints && (
+            <DialogDescription className="sr-only">
+              Press Escape to minimize.
+            </DialogDescription>
+          )}
 
           <header className="flex items-center justify-between px-6 py-4">
             <button
@@ -97,7 +102,7 @@ export default function NowPlayingDialog({
                 PLAYER_ICON_BUTTON_CLASS,
                 "size-10 hover:bg-accent/50",
               )}
-              aria-label="Minimize player (Escape)"
+              aria-label={withShortcut("Minimize player", "Escape")}
             >
               <ChevronDown className="size-5" aria-hidden="true" />
             </button>

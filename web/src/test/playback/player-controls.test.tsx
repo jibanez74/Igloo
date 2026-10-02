@@ -1,12 +1,21 @@
 import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import PlayerControls from "@/components/playback/PlayerControls";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
 } from "@/lib/constants";
+
+const prefersCoarse = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-coarse-pointer", () => ({
+  usePrefersCoarsePointer: () => prefersCoarse.value,
+}));
+
+afterEach(() => {
+  prefersCoarse.value = false;
+});
 
 describe("PlayerControls", () => {
   it("keeps playback buttons labelled and on shared chrome contracts", () => {
@@ -53,6 +62,45 @@ describe("PlayerControls", () => {
     expect(
       screen.getByRole("button", { name: "Adjust volume" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+  });
+
+  // A touch-first device has no keyboard to press them on (design-system §1.7).
+  it("drops the keyboard shortcuts from button names on a touch-first device", () => {
+    prefersCoarse.value = true;
+
+    render(
+      <PlayerControls
+        chromeFullscreenMode
+        controlsVisible
+        isFullscreen={false}
+        isImmersiveViewport
+        currentTime={12}
+        duration={120}
+        displayedDuration={120}
+        playing={false}
+        modeLabel="Direct"
+        chapters={[]}
+        videoRef={createRef<HTMLVideoElement>()}
+        onSeek={vi.fn()}
+        onSeekBackward={vi.fn()}
+        onSeekForward={vi.fn()}
+        onTogglePlay={vi.fn()}
+        onToggleFullscreen={vi.fn()}
+        onSelectChapter={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      `Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`,
+      "Play",
+      `Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`,
+      "Adjust volume",
+      "Exit expanded view",
+    ]);
   });
 
   // Audit D13: aria-label on a generic span is ignored by assistive tech, so

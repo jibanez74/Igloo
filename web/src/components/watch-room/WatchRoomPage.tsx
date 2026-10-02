@@ -47,6 +47,7 @@ import VideoPlayer from "@/components/playback/VideoPlayer";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import { useWatchRoomConnection } from "./useWatchRoomConnection";
 import type { WatchRoomDetailType, WatchRoomMemberType } from "@/types";
 
@@ -239,6 +240,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onToggleFullscreen: () => void toggleFullscreen(),
     onEscape: exitFullscreenIfActive,
   });
+  const { showShortcutHints } = useShortcutHints();
 
   const handleOwnerDeleteSuccess = () => {
     closeRoomConnection();
@@ -286,12 +288,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
         announcementKey={recoveryAttempt}
         politeness="assertive"
       />
-      <p className="sr-only">
-        Keyboard shortcuts: Space or K to play or pause, J or Left Arrow to
-        rewind, L or Right Arrow to fast-forward, Home or 0 to restart, F for
-        fullscreen, M to mute, Up or Down Arrow to adjust volume, and Escape to
-        exit fullscreen.
-      </p>
+      {showShortcutHints && (
+        <p className="sr-only">
+          Keyboard shortcuts: Space or K to play or pause, J or Left Arrow to
+          rewind, L or Right Arrow to fast-forward, Home or 0 to restart, F for
+          fullscreen, M to mute, Up or Down Arrow to adjust volume, and Escape
+          to exit fullscreen.
+        </p>
+      )}
 
       <div
         className={cn(

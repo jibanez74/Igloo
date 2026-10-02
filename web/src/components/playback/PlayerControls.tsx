@@ -10,6 +10,7 @@ import {
 import ProgressBar from "@/components/playback/ProgressBar";
 import ChapterMenu from "@/components/playback/ChapterMenu";
 import VolumeControl from "@/components/playback/VolumeControl";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
@@ -59,6 +60,16 @@ export default function PlayerControls({
   onToggleFullscreen,
   onSelectChapter,
 }: PlayerControlsProps) {
+  const { withShortcut } = useShortcutHints();
+
+  const exitFullscreenLabel =
+    isImmersiveViewport && !isFullscreen
+      ? "Exit expanded view"
+      : "Exit fullscreen";
+  const fullscreenLabel = chromeFullscreenMode
+    ? exitFullscreenLabel
+    : "Fullscreen";
+
   return (
     <footer
       className={
@@ -108,7 +119,10 @@ export default function PlayerControls({
                 PLAYER_ICON_BUTTON_CLASS,
                 "size-10 hover:bg-accent",
               )}
-              aria-label={`Seek backward ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`}
+              aria-label={withShortcut(
+                `Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`,
+                "J or Left Arrow",
+              )}
             >
               <Rewind className="size-5" aria-hidden="true" />
             </button>
@@ -119,7 +133,7 @@ export default function PlayerControls({
                 PLAYER_PRIMARY_BUTTON_CLASS,
                 "size-14 shadow-lg shadow-primary/20",
               )}
-              aria-label={playing ? "Pause (Space or K)" : "Play (Space or K)"}
+              aria-label={withShortcut(playing ? "Pause" : "Play", "Space or K")}
             >
               {playing ? (
                 <Pause className="size-6 fill-current" aria-hidden="true" />
@@ -134,7 +148,10 @@ export default function PlayerControls({
                 PLAYER_ICON_BUTTON_CLASS,
                 "size-10 hover:bg-accent",
               )}
-              aria-label={`Seek forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`}
+              aria-label={withShortcut(
+                `Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`,
+                "L or Right Arrow",
+              )}
             >
               <FastForward className="size-5" aria-hidden="true" />
             </button>
@@ -161,13 +178,7 @@ export default function PlayerControls({
                 PLAYER_ICON_BUTTON_CLASS,
                 "size-10 hover:bg-accent",
               )}
-              aria-label={
-                chromeFullscreenMode
-                  ? isImmersiveViewport && !isFullscreen
-                    ? "Exit expanded view (F)"
-                    : "Exit fullscreen (F)"
-                  : "Fullscreen (F)"
-              }
+              aria-label={withShortcut(fullscreenLabel, "F")}
               aria-pressed={chromeFullscreenMode}
             >
               {chromeFullscreenMode ? (

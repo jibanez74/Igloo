@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { Volume, Volume1, Volume2, VolumeX } from "lucide-react";
+import { useShortcutHints } from "@/hooks/useShortcutHints";
 import {
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   PLAYER_ICON_BUTTON_CLASS,
@@ -56,6 +57,7 @@ export default function VolumeControl({
     initialVolumeState,
   );
   const [isMinimizedPanelOpen, setIsMinimizedPanelOpen] = useState(false);
+  const { withShortcut } = useShortcutHints();
 
   const controlId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +69,7 @@ export default function VolumeControl({
   const currentVolume = isMuted ? 0 : volume;
   const volumePercent = Math.round(currentVolume * 100);
   const panelId = `${controlId}-volume-panel`;
+  const muteLabel = withShortcut(isMuted ? "Unmute" : "Mute", "M");
 
   // Sync with media element (audio or video)
   useEffect(() => {
@@ -193,7 +196,7 @@ export default function VolumeControl({
           type="button"
           onClick={toggleMute}
           className={cn(PLAYER_ICON_BUTTON_CLASS, "size-10")}
-          aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
+          aria-label={muteLabel}
         >
           {getVolumeIcon()}
         </button>
@@ -242,7 +245,7 @@ export default function VolumeControl({
               type="button"
               onClick={toggleMute}
               className={cn(PLAYER_ICON_BUTTON_CLASS, "size-11 hover:bg-accent")}
-              aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
+              aria-label={muteLabel}
             >
               {getVolumeIcon()}
             </button>
