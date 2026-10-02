@@ -1,10 +1,14 @@
 # Igloo
 
-Igloo is a self-hosted media center for your movies, TV shows, and music. It runs on a home server or small personal setup, with a Go backend and a React web app. You can browse your library, pick up where you left off, and share movie playback with friends in a watch room.
+Igloo is a self-hosted media center for the movies, TV shows, and music you keep on your own server. It scans your local libraries and brings them together in a web app where you can browse, search, and play your collection. Movie and episode progress is saved per user, making it easy to pick up where you left off. You can also create collaborative playlists and watch movies with friends in synchronized watch rooms. Built with a Go server and a React web client, Igloo is designed for home servers and small personal setups.
 
-The interface aims to feel comfortable for everyone. Keyboard navigation, visible focus, screen reader labels, skip links, and reduced-motion support are part of the [design system](docs/design-system.md).
+The goal is a library that feels like your own, whether you're finding an old favorite or settling in for movie night.
+
+Accessibility is part of that experience from the start. Keyboard navigation, visible focus, screen reader labels, skip links, and reduced-motion support are part of the [design system](docs/design-system.md).
 
 Igloo is **pre-production**. Its API, configuration, database schema, and interface may change before v1. There are no database migrations or compatibility guarantees yet.
+
+The Android TV and Fire TV client lives in the separate [Igloo TV repository](https://github.com/jibanez74/IglooTV). It is also pre-production; see that repository for its current features and build instructions.
 
 ## What works today
 
@@ -63,7 +67,7 @@ make dev
 
 Open [http://localhost:3000](http://localhost:3000) and sign in with your administrator email and password. Vite proxies `/api` to the Go server on port 8080. `make dev` generates database code, builds the development server, and runs it with Vite enabled.
 
-In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after changing your library. Saving a path by itself does not start a scan.
+In **Settings → Libraries**, save your movie, TV show, and music paths, then start a scan for each library you want to use. Configured libraries also scan when the server starts. A scan can take time, and files being written are deferred until they have been quiet for 60 seconds. Run another scan after adding or changing files. Saving a path by itself does not start a scan.
 
 For TV files, use a layout such as `Show Name/Season 1/S01E02 - Episode Title.mkv`. `Specials` is supported for season zero. Combined episode files are catalogued as separate episodes, but playback runs the whole file because Igloo does not guess episode boundaries. More filename rules are in the [media guide](docs/ffmpeg.md#tv-show-scanning).
 
@@ -118,6 +122,8 @@ To build and run it in the background from the repository root, use `make start`
 The main areas of the repository are [server/](server/) for the Go API, SQLite database, scanners, and playback; [web/](web/) for the React/Vite client; and [docs/](docs/) for the design system, playback notes, and API contract.
 
 Start with the [repository guidelines](AGENTS.md) and the relevant [backend](server/AGENTS.md) or [web](web/AGENTS.md) guidelines. The [design system](docs/design-system.md), [FFmpeg guide](docs/ffmpeg.md), and manually maintained [OpenAPI contract](docs/openapi.json) describe the current rules.
+
+Bug reports, pull requests, and accessibility feedback are welcome.
 
 Useful commands from the repository root:
 
