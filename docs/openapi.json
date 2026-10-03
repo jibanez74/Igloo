@@ -693,6 +693,51 @@
         }
       }
     },
+    "/api/user/preferences/trailers": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Get the current user's trailer pre-roll preferences",
+        "description": "Account-scoped settings for the trailers played before a movie starts from the beginning. A user who never saved any gets the defaults: disabled, two trailers, both sources.",
+        "operationId": "getTrailerPreferences",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TrailerPreferencesResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Update the current user's trailer pre-roll preferences",
+        "operationId": "updateTrailerPreferences",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UpdateTrailerPreferencesRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TrailerPreferencesResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/user": {
       "delete": {
         "tags": [
@@ -3154,6 +3199,38 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/MovieWatchedResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/movies/{id}/preroll": {
+      "get": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "Get the trailer queue to play before a movie",
+        "description": "The ordered YouTube trailers the caller's saved preferences select for this movie: in-theaters trailers first, then library trailers, never the movie itself, deduplicated by TMDB id, with either pool topping up the other. The list is empty when the feature is disabled or no trailer is available. Trailers stream from YouTube; the server never stores or proxies them. Works with a cookie session or a device bearer token.",
+        "operationId": "getMoviePreroll",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MoviePrerollResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -6484,6 +6561,16 @@
           }
         }
       },
+      "UpdateTrailerPreferencesRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateTrailerPreferencesRequest"
+            }
+          }
+        }
+      },
       "UpdateUserEmailRequest": {
         "required": true,
         "content": {
@@ -7171,6 +7258,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/WatchProgressUpdateEnvelope"
+            }
+          }
+        }
+      },
+      "TrailerPreferencesResponse": {
+        "description": "Trailer pre-roll preferences response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TrailerPreferencesEnvelope"
+            }
+          }
+        }
+      },
+      "MoviePrerollResponse": {
+        "description": "Trailer pre-roll queue response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MoviePrerollEnvelope"
             }
           }
         }
@@ -11321,6 +11428,160 @@
                   }
                 },
                 "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TrailerSource": {
+        "type": "string",
+        "description": "Where pre-roll trailers come from: the user's library, TMDB's now-playing movies, or both (theaters first).",
+        "enum": [
+          "library",
+          "theaters",
+          "both"
+        ]
+      },
+      "TrailerPreferencesData": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "count",
+          "source"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Off by default."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "How many trailers to play; defaults to 2."
+          },
+          "source": {
+            "$ref": "#/components/schemas/TrailerSource"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTrailerPreferencesRequest": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "count",
+          "source"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "source": {
+            "$ref": "#/components/schemas/TrailerSource"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TrailerPreferencesEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TrailerPreferencesData"
+              }
+            }
+          }
+        ]
+      },
+      "PrerollTrailerSource": {
+        "type": "string",
+        "enum": [
+          "library",
+          "theaters"
+        ]
+      },
+      "PrerollTrailer": {
+        "type": "object",
+        "required": [
+          "title",
+          "youtube_key",
+          "source",
+          "movie_id",
+          "tmdb_id"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The movie's title."
+          },
+          "youtube_key": {
+            "type": "string",
+            "description": "YouTube video id, played through the IFrame player."
+          },
+          "source": {
+            "$ref": "#/components/schemas/PrerollTrailerSource"
+          },
+          "movie_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Library movie id; null for theaters trailers."
+          },
+          "tmdb_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "TMDB movie id when known; null otherwise."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoviePrerollData": {
+        "type": "object",
+        "required": [
+          "trailers"
+        ],
+        "properties": {
+          "trailers": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/PrerollTrailer"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoviePrerollEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MoviePrerollData"
               }
             }
           }
