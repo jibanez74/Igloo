@@ -138,6 +138,7 @@ func (app *Application) clearMediaClientCaches() {
 	if app.Tmdb != nil {
 		app.Tmdb.ClearCache()
 	}
+	app.PrerollTheaters.Reset()
 }
 
 func (app *Application) cleanupMediaBinaries() {

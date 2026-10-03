@@ -13,6 +13,7 @@ import (
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	applogger "igloo/cmd/internal/logger"
+	"igloo/cmd/internal/preroll"
 	"igloo/cmd/internal/scanner"
 	"igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/scanner/music"
@@ -55,6 +56,7 @@ type Application struct {
 	FFmpeg                  ffmpeg.FFmpegInterface
 	Spotify                 spotify.SpotifyInterface
 	Tmdb                    tmdb.TmdbInterface
+	PrerollTheaters         *preroll.TheatersPool
 	TmdbImageBaseURL        string
 	TmdbImageHTTPClient     *http.Client
 	YouTubeThumbBaseURL     string
@@ -351,6 +353,8 @@ func (app *Application) initRuntimeCaches() {
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
+	// Reads app.Tmdb as initialized above and yields an empty pool while it is nil.
+	app.PrerollTheaters = preroll.NewTheatersPool(app.Tmdb, app.Logger)
 	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 
 	app.QuickConnect = NewQuickConnectBroker()

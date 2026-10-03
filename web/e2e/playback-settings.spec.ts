@@ -10,6 +10,7 @@ import type {
   DevicePlaybackPreferences,
   PlaybackSettingsResponseType,
   PlaybackSettingsType,
+  TrailerPreferencesData,
   UpdatePlaybackSettingsRequest,
 } from "../src/types";
 import { PLAYBACK_PREFERENCES_STORAGE_PREFIX } from "../src/lib/playback-preferences";
@@ -65,6 +66,18 @@ async function restorePlaybackSettings(
 
   const body = await readJSON<unknown>(response);
   expect(body.error, body.message).toBe(false);
+}
+
+const TRAILER_PREFERENCES_PATH = "/api/user/preferences/trailers";
+
+async function fetchTrailerPreferences(page: Page) {
+  const response = await page.context().request.get(TRAILER_PREFERENCES_PATH, {
+    failOnStatusCode: false,
+  });
+  expect(response.status()).toBe(200);
+  const body = await readJSON<TrailerPreferencesData>(response);
+  expect(body.error, body.message).toBe(false);
+  return body.data!;
 }
 
 type RegularUser = AdminUserType & { password: string };
@@ -141,6 +154,20 @@ test.describe("Playback settings", () => {
       await expectTabMovesFocus(
         page,
         page.getByRole("combobox", { name: "Subtitle language" }),
+      );
+      // The account-scoped trailer card sits between the device cards and
+      // the admin Server card.
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("switch", { name: "Play trailers before movies" }),
+      );
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("combobox", { name: "Number of trailers" }),
+      );
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("combobox", { name: "Trailer source" }),
       );
       await expectTabMovesFocus(page, serverInput);
       await expectTabMovesFocus(
@@ -224,6 +251,73 @@ test.describe("Playback settings", () => {
       ).toHaveText("Always off");
     } finally {
       await restorePlaybackSettings(page, baselineSettings);
+    }
+
+    tracker.assertClean();
+  });
+
+  test("saves trailer pre-roll preferences to the account as they change", async ({
+    page,
+  }) => {
+    const tracker = trackBrowserIssues(page);
+    let regularUser: RegularUser | null = null;
+
+    await loginPageViaApi(page);
+
+    try {
+      // A fresh account, so the defaults hold however a real instance's
+      // admin has set its own trailers, and nothing is left on it.
+      regularUser = await createRegularUser(page);
+      await logoutViaApi(page.context().request);
+      await loginPageViaApi(page, regularUser);
+      const baseline = await fetchTrailerPreferences(page);
+      expect(baseline.enabled).toBe(false);
+
+      await page.goto("/settings/playback");
+      await expect(
+        page.getByRole("heading", { name: "Trailers before movies" }),
+      ).toBeVisible();
+      await expect(page.getByText(/Saved to your account, so it follows/)).toBeVisible();
+
+      const toggle = page.getByRole("switch", { name: "Play trailers before movies" });
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+      await expect(
+        page.getByText("Trailers before movies turned on. Saved to your account."),
+      ).toBeVisible();
+
+      await page.getByRole("combobox", { name: "Number of trailers" }).click();
+      await page.getByRole("option", { name: "3 trailers" }).click();
+      await expect(
+        page.getByText("Trailer count set to 3. Saved to your account."),
+      ).toBeVisible();
+
+      await page.getByRole("combobox", { name: "Trailer source" }).click();
+      await page.getByRole("option", { name: "In theaters" }).click();
+      await expect(
+        page.getByText("Trailer source set to In theaters. Saved to your account."),
+      ).toBeVisible();
+
+      await expect.poll(() => fetchTrailerPreferences(page)).toEqual({
+        enabled: true,
+        count: 3,
+        source: "theaters",
+      });
+
+      // The account holds the values, so a reload shows them again.
+      await page.reload();
+      await expect(
+        page.getByRole("switch", { name: "Play trailers before movies" }),
+      ).toHaveAttribute("aria-checked", "true");
+      await expect(
+        page.getByRole("combobox", { name: "Number of trailers" }),
+      ).toHaveText("3 trailers");
+      await expect(
+        page.getByRole("combobox", { name: "Trailer source" }),
+      ).toHaveText("In theaters");
+    } finally {
+      await signBackInAsAdmin(page, regularUser);
     }
 
     tracker.assertClean();

@@ -71,6 +71,8 @@ import {
   searchMusicians,
   searchShows,
   searchTracks,
+  getTrailerPreferences,
+  getMoviePreroll,
 } from "@/lib/api";
 import {
   ADMIN_USERS_KEY,
@@ -142,6 +144,9 @@ import {
   SEARCH_TRACKS_KEY,
   SEARCH_PER_PAGE,
   MUSICIANS_PER_PAGE,
+  TRAILER_PREFERENCES_KEY,
+  MOVIE_PREROLL_KEY,
+  PREROLL_FETCH_TIMEOUT_MS,
 } from "@/lib/constants";
 
 /**
@@ -377,6 +382,34 @@ export function movieDetailsQueryOpts(id: number) {
     enabled: id > 0,
     staleTime: STALE_CATALOG,
     gcTime: GC_LONG,
+  });
+}
+
+export function trailerPreferencesQueryOpts() {
+  return queryOptions({
+    queryKey: [TRAILER_PREFERENCES_KEY],
+    queryFn: getTrailerPreferences,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
+  });
+}
+
+/**
+ * The trailer queue for one play. Never retried: a failed or slow request
+ * resolves to an error envelope the player treats as "no trailers". Never
+ * stale while the play lasts, so a window focus or reconnect cannot swap the
+ * queue under the trailer playing; never kept once the play unmounts, so the
+ * next play draws a fresh random queue.
+ */
+export function moviePrerollQueryOpts(movieId: number) {
+  return queryOptions({
+    queryKey: [MOVIE_PREROLL_KEY, movieId],
+    queryFn: () =>
+      getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
+    enabled: movieId > 0,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
   });
 }
 

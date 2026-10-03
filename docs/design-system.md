@@ -893,6 +893,36 @@ require the full playback test pass.
   resume: it plays on the first `canplay`, then drops the spent flag from the
   URL (replace) so a reload does not replay it. If the browser refuses
   autoplay, the viewer sees the paused player and presses Play.
+- **Trailer pre-roll** (`components/playback/PrerollPlayer.tsx`, YouTube
+  behind `useYouTubePlayer` with its own controls off): an opt-in phase
+  *inside* the movie player, never a chain of `/trailer` navigations, so
+  fullscreen, the keyboard and one Back exiting the whole play session stay
+  coherent. It runs only for a movie starting from the beginning: the resume
+  decision resolves first, Resume bypasses it, Start over and a fresh play run
+  it; TV episodes, watch rooms, chapter links and Continue Watching never see
+  it. The queue comes from `GET /api/movies/{id}/preroll` (the server owns
+  selection), fetched once per play with a short timeout and never refetched
+  on focus or reconnect; an empty or failed answer starts the movie as before,
+  paused, while a pre-roll that played starts the movie on its own (a
+  direct-play fallback during the warm-up waits for it). The layer is a
+  `section` "Trailers before the movie" over the movie surface, which stays
+  **unmounted** while trailers play (mounting it starts the HLS session) and
+  is warmed up only in the last trailer's final `PREROLL_MOVIE_WARMUP_SEC`
+  (once YouTube reports the trailer's duration; without one, no warm-up);
+  it stops clicks so the fullscreen click-to-toggle never reaches the movie,
+  and a transparent layer over the iframe keeps focus in our document. Its
+  chrome replaces `PlayerControls` in the footer slot with the same panel
+  classes (so it hides on idle in fullscreen): "Trailer X of N · title" in
+  `tabular-nums`, `ProgressBar variant="trailer"`, the primary play/pause,
+  outline **Skip trailer** (focused when the pre-roll appears), accent
+  **Start movie**, and fullscreen (the expanded view where the browser lacks
+  element fullscreen, never the warmed movie's video-only fullscreen). Keys
+  follow the player's conventions and go through `useShortcutHints`:
+  Space/K, **N** skip, **S** start movie, F, Escape. Each trailer is announced once ("Trailer 1 of 2: Title") through
+  `LiveAnnouncer`; an embed error (removed, private, embed-disabled) skips the
+  trailer silently, an unavailable player ends the pre-roll, and no watch
+  progress is saved until the movie starts. No feature-presentation card and
+  no link to the trailer's movie.
 - **Trailer player** (`routes/_auth/trailer.tsx`, YouTube behind
   `useYouTubePlayer`): one `DialogFullscreenContent` whose view swaps in place
   — loading, load error, no trailer, the player, a playback error. Each view
@@ -977,9 +1007,21 @@ require the full playback test pass.
   says "applied for this session only" instead of claiming a save. Because the
   announcement is one-shot while the refusal is a standing browser condition,
   such a card also renders a visible `text-destructive` notice for as long as
-  it lasts. Do not mix the two models inside one card — split by ownership,
-  as Settings → Playback does (two "this device" cards, one admin-only
-  "Server" card with the only Save bar).
+  it lasts. Do not mix the models inside one card — split by ownership,
+  as Settings → Playback does (two "this device" cards, one account card,
+  one admin-only "Server" card with the only Save bar).
+- **Account-scoped settings also apply instantly, through the API.** A
+  setting that belongs to the account rather than to one browser or to the
+  server ("Trailers before movies", `TrailerPreferencesCard`) saves every
+  change at once with an optimistic mutation: the control reflects the
+  change immediately, `LiveAnnouncer` confirms it once the save lands
+  ("…turned on. Saved to your account."), and a failure toasts through
+  `showActionFailed` and rolls the control back. No Save bar. The
+  `SettingsCardHeader` description states the scope ("Saved to your account,
+  so it follows you across browsers and devices"), as the device cards state
+  theirs. Its on/off control is the shared `SwitchField` (a real
+  `role="switch"` button with its description tied in by `aria-describedby`),
+  the same row the General settings card uses.
 - **A setting the server may not honor says what is in force.** Under the
   Server card's hardware acceleration select, a notice read from the saved
   settings (not the form) names the device transcodes actually run on:

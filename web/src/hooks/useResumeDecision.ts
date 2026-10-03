@@ -69,6 +69,8 @@ export function useResumeDecision({
   const dismissResumeDecision = () => setDecision(DISMISSED);
 
   return {
+    /** True until the saved-progress snapshot has been taken. */
+    resumeDecisionPending: effectiveDecision.status === "pending",
     resumeDialogOpen: effectiveDecision.status === "show",
     resumeTargetSec:
       effectiveDecision.status === "show"

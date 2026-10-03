@@ -4,6 +4,7 @@ import type {
   MoviesLibraryListItemType,
   PlaybackSettingsType,
   WatchProgressType,
+  PrerollTrailer,
 } from "../../src/types";
 import { nullableFloat64, nullableInt64, nullableString } from "../e2e-api";
 
@@ -153,5 +154,25 @@ export function fillLibraryPage<T>(
         index % 2 === 0 ? `/${slug}-${index + 1}.jpg` : "",
       ),
     ),
+  ];
+}
+
+/** The trailer queue the mock server plays before MOCK_MOVIE_ID when the pre-roll is on. */
+export function prerollTrailers(): PrerollTrailer[] {
+  return [
+    {
+      title: "Glacier Run",
+      youtube_key: "glacier-run-trailer",
+      source: "theaters",
+      movie_id: null,
+      tmdb_id: 9001,
+    },
+    {
+      title: "North Light",
+      youtube_key: "north-light-trailer",
+      source: "library",
+      movie_id: 102,
+      tmdb_id: 102,
+    },
   ];
 }

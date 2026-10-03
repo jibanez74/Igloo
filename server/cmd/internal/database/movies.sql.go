@@ -1206,6 +1206,61 @@ func (q *Queries) GetProductionCompaniesByMovieID(ctx context.Context, movieID i
 	return items, nil
 }
 
+const getRandomLibraryTrailers = `-- name: GetRandomLibraryTrailers :many
+SELECT m.id AS movie_id, m.title, m.tmdb_id, ev.key AS youtube_key
+FROM movies AS m
+INNER JOIN movie_extra_videos AS mev ON mev.movie_id = m.id
+INNER JOIN extra_videos AS ev ON ev.id = mev.extra_video_id
+WHERE ev.type = 'trailer'
+  AND ev.site = 'youtube'
+  AND m.id <> ?1
+GROUP BY m.id
+ORDER BY RANDOM()
+LIMIT ?2
+`
+
+type GetRandomLibraryTrailersParams struct {
+	ExcludeMovieID int64 `json:"exclude_movie_id"`
+	RowLimit       int64 `json:"row_limit"`
+}
+
+type GetRandomLibraryTrailersRow struct {
+	MovieID    int64         `json:"movie_id"`
+	Title      string        `json:"title"`
+	TmdbID     sql.NullInt64 `json:"tmdb_id"`
+	YoutubeKey string        `json:"youtube_key"`
+}
+
+// One random YouTube trailer per movie, bounded by row_limit, for the pre-roll
+// library pool. The bare ev.key under GROUP BY picks any of the movie's trailers.
+func (q *Queries) GetRandomLibraryTrailers(ctx context.Context, arg GetRandomLibraryTrailersParams) ([]GetRandomLibraryTrailersRow, error) {
+	rows, err := q.query(ctx, q.getRandomLibraryTrailersStmt, getRandomLibraryTrailers, arg.ExcludeMovieID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRandomLibraryTrailersRow{}
+	for rows.Next() {
+		var i GetRandomLibraryTrailersRow
+		if err := rows.Scan(
+			&i.MovieID,
+			&i.Title,
+			&i.TmdbID,
+			&i.YoutubeKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSubtitlesByMovieID = `-- name: GetSubtitlesByMovieID :many
 SELECT
   id, movie_id, stream_index, codec, language, title, is_forced, is_default

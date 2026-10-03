@@ -6,19 +6,23 @@ import {
   type ComponentType,
 } from "react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, type LucideProps } from "lucide-react";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
 import VideoPlayer from "@/components/playback/VideoPlayer";
 import ResumeDialog from "@/components/playback/ResumeDialog";
 import PlayerControls from "@/components/playback/PlayerControls";
+import PrerollPlayer from "@/components/playback/PrerollPlayer";
 import PlaybackStatusView from "@/components/playback/PlaybackStatus";
 import UpNextOverlay from "@/components/playback/UpNextOverlay";
 import { effectiveModeLabel, streamModeLabel } from "@/lib/playback";
 import { deleteMediaWatchProgress } from "@/lib/api";
 import { mediaKey } from "@/lib/media-ref";
-import { mediaWatchProgressQueryKey } from "@/lib/query-opts";
+import {
+  mediaWatchProgressQueryKey,
+  moviePrerollQueryOpts,
+} from "@/lib/query-opts";
 import {
   clampPlaybackTime,
   getOrCreateHlsPlaybackSessionId,
@@ -126,6 +130,7 @@ export default function VideoPlaybackPage({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
+  const prerollSkipButtonRef = useRef<HTMLButtonElement>(null);
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
@@ -150,6 +155,14 @@ export default function VideoPlaybackPage({
   const [ended, setEnded] = useState(false);
   const [upNextDismissed, setUpNextDismissed] = useState(false);
   const [resumeActionPending, setResumeActionPending] = useState(false);
+  // The trailer pre-roll runs only for a movie starting from the beginning.
+  // "Resume" bypasses it; "Start over" and a fresh play run it; it finishes
+  // by any route (last trailer, Start movie, an empty or failed queue). The
+  // movie surface stays unmounted meanwhile, because mounting it is what
+  // starts the stream, until the last trailer's final seconds (warm-up).
+  const [prerollBypassed, setPrerollBypassed] = useState(false);
+  const [prerollFinished, setPrerollFinished] = useState(false);
+  const [prerollWarmup, setPrerollWarmup] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   // Tagged with the session it describes rather than cleared by an effect, so
   // a rebase or mode change invalidates it by derivation.
@@ -246,7 +259,27 @@ export default function VideoPlaybackPage({
     modeUnavailable,
     playbackError,
   });
-  const playerMounted = status.kind === "ready";
+  const prerollEligible =
+    kind === "movie" &&
+    start === 0 &&
+    search.autoplay !== true &&
+    !prerollBypassed;
+  const prerollPhase = prerollEligible && !prerollFinished;
+  // Fetched from the first render, alongside watch progress, so the queue is
+  // normally known before the resume decision lands; a slow or failed request
+  // resolves to an error envelope and the movie starts as it always did.
+  const prerollQuery = useQuery({
+    ...moviePrerollQueryOpts(id),
+    enabled: prerollPhase,
+  });
+  const prerollTrailers =
+    prerollQuery.data?.error === false
+      ? prerollQuery.data.data.trailers
+      : undefined;
+  const prerollLoadFailed =
+    prerollQuery.isError || prerollQuery.data?.error === true;
+  const movieSurfaceMounted = !prerollPhase || prerollWarmup;
+  const playerMounted = status.kind === "ready" && movieSurfaceMounted;
   // The offer stands while the media sits at its end and the viewer has not
   // waved it away; anything that puts playback back in motion retracts it.
   const upNextOpen = ended && !!upNext && !upNextDismissed;
@@ -296,15 +329,21 @@ export default function VideoPlaybackPage({
     watchProgressData?.error === false ? watchProgressData.data : null;
   const savedProgressSec = savedProgress?.progress_sec ?? null;
   const savedDurationSec = savedProgress?.duration_sec ?? null;
-  const { resumeDialogOpen, resumeTargetSec, dismissResumeDecision } =
-    useResumeDecision({
-      mediaKey: currentMediaKey,
-      start,
-      playing,
-      watchProgressPending,
-      savedProgressSec,
-      savedDurationSec,
-    });
+  const {
+    resumeDecisionPending,
+    resumeDialogOpen,
+    resumeTargetSec,
+    dismissResumeDecision,
+  } = useResumeDecision({
+    mediaKey: currentMediaKey,
+    start,
+    playing,
+    watchProgressPending,
+    savedProgressSec,
+    savedDurationSec,
+  });
+  const prerollActive =
+    prerollPhase && !resumeDecisionPending && !resumeDialogOpen;
 
   const handleBack = () => {
     if (router.history.length > 1) {
@@ -432,7 +471,7 @@ export default function VideoPlaybackPage({
   const handlePlaybackSurfaceClick = async (
     event: React.MouseEvent<HTMLDivElement>,
   ) => {
-    if (!chromeFullscreenMode) return;
+    if (!chromeFullscreenMode || prerollActive) return;
     const target = event.target as HTMLElement;
     const interactiveAncestor = target.closest(
       "button,a,input,select,textarea,[role='button'],[role='slider']",
@@ -530,6 +569,7 @@ export default function VideoPlaybackPage({
       currentTimeRef,
       durationRef,
       fallbackDurationSec: mediaDurationSec,
+      enabled: !prerollActive,
     });
 
   // Paused while the stream waits for server capacity: the ping is a
@@ -570,7 +610,10 @@ export default function VideoPlaybackPage({
   });
 
   useEffect(() => {
-    if (!pendingAutoPlayOnLoadRef.current) return;
+    // A movie warmed up under the last trailer must not start beneath it, even
+    // when a direct-play fallback armed the flag; the pre-roll ending re-runs
+    // this and the flag is honored then.
+    if (prerollPhase || !pendingAutoPlayOnLoadRef.current) return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -597,8 +640,10 @@ export default function VideoPlaybackPage({
     // Keyed on the stream window, not streamUrl: the direct-play URL is a
     // constant, so a fallback navigation would never re-fire this otherwise
     // (audit D12). Also on the player mounting: an up-next hand-off arrives
-    // with its window already final, before the video element exists.
-  }, [sessionWindowKey, playerMounted]);
+    // with its window already final, before the video element exists. And on
+    // the pre-roll ending: the player may have been warmed up under the last
+    // trailer, so this already ran for the mount and held off.
+  }, [sessionWindowKey, playerMounted, prerollPhase]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(mediaDurationSec && mediaDurationSec > 0)) return;
@@ -627,7 +672,7 @@ export default function VideoPlaybackPage({
   // own Space/K binding would otherwise swallow the activation key of the
   // focused "Play now".
   const keyboardShortcutsEnabled =
-    playerMounted && !resumeDialogOpen && !upNextOpen;
+    playerMounted && !resumeDialogOpen && !upNextOpen && !prerollActive;
 
   useVideoPlaybackKeyboard({
     containerRef,
@@ -650,8 +695,19 @@ export default function VideoPlaybackPage({
   const handleResume = () => {
     if (resumeTargetSec === null) return;
 
+    setPrerollBypassed(true);
     dismissResumeDecision();
     navigateToPlaybackPosition(resumeTargetSec);
+  };
+
+  const handlePrerollFinish = () => {
+    // The movie plays on its own after the trailers, exactly as a rebase
+    // resumes: the effect above plays on the first canplay. An empty or failed
+    // queue played nothing, so the movie opens paused as it always did.
+    if (prerollTrailers && prerollTrailers.length > 0) {
+      pendingAutoPlayOnLoadRef.current = true;
+    }
+    setPrerollFinished(true);
   };
 
   const handleStartFromBeginning = async () => {
@@ -687,7 +743,12 @@ export default function VideoPlaybackPage({
     onPlay: playVideo,
     onPause: pauseVideo,
     onSeek: seek,
-    enabled: !notFound && !detailsPending && !playbackError && !modeUnavailable,
+    enabled:
+      !notFound &&
+      !detailsPending &&
+      !playbackError &&
+      !modeUnavailable &&
+      !prerollActive,
   });
 
   const videoPlayer = (
@@ -852,10 +913,13 @@ export default function VideoPlaybackPage({
         pending={resumeActionPending}
         onResume={handleResume}
         onStartFromBeginning={() => void handleStartFromBeginning()}
-        restoreFocusRef={containerRef}
+        // Closing after "Start from beginning" lands on the pre-roll's
+        // primary control; after "Resume" the pre-roll is bypassed and the
+        // player region takes focus as before.
+        restoreFocusRef={prerollPhase ? prerollSkipButtonRef : containerRef}
       />
 
-      {showShortcutHints && (
+      {showShortcutHints && !prerollActive && (
         <p className="sr-only">
           Keyboard shortcuts: Space or K to play/pause, J or Left arrow to
           rewind {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
@@ -910,38 +974,60 @@ export default function VideoPlaybackPage({
         className="relative flex min-h-0 flex-1 flex-col"
         onClick={chromeFullscreenMode ? handlePlaybackSurfaceClick : undefined}
       >
-        {videoPlayer}
+        {movieSurfaceMounted && videoPlayer}
         {capacityOverlay}
         {upNextOverlay}
+        {prerollActive && (
+          <PrerollPlayer
+            trailers={prerollTrailers}
+            loadFailed={prerollLoadFailed}
+            chromeFullscreenMode={chromeFullscreenMode}
+            controlsVisible={controlsVisible}
+            isFullscreen={isFullscreen}
+            isImmersiveViewport={isImmersiveViewport}
+            skipButtonRef={prerollSkipButtonRef}
+            onFinish={handlePrerollFinish}
+            onWarmup={() => setPrerollWarmup(true)}
+            onShowControls={showControlsAndResetIdle}
+            // The movie element may already be warmed up underneath; WebKit's
+            // video-only fullscreen would show it instead of the trailer.
+            onToggleFullscreen={() =>
+              void toggleFullscreen({ videoFallback: false })
+            }
+            onExitFullscreen={exitFullscreenIfActive}
+          />
+        )}
       </div>
 
-      <PlayerControls
-        chromeFullscreenMode={chromeFullscreenMode}
-        // In fullscreen the transport bar is absolutely positioned over the
-        // bottom of the video, exactly where the up-next card sits, and it
-        // paints on top. Yield the bottom edge while the card stands; Cancel
-        // (or any seek) retracts it and the chrome comes back.
-        controlsVisible={controlsVisible && !upNextOpen}
-        isFullscreen={isFullscreen}
-        isImmersiveViewport={isImmersiveViewport}
-        currentTime={currentTime}
-        duration={duration}
-        displayedDuration={displayedDuration}
-        playing={playing}
-        modeLabel={
-          isHlsPlayback
-            ? effectiveModeLabel(resolvedMode, effectiveProfile)
-            : modeLabel
-        }
-        chapters={chapters}
-        videoRef={videoRef}
-        onSeek={seek}
-        onSeekBackward={seekBackward}
-        onSeekForward={seekForward}
-        onTogglePlay={() => void togglePlay()}
-        onToggleFullscreen={() => void toggleFullscreen()}
-        onSelectChapter={handleChapterSelect}
-      />
+      {!prerollActive && (
+        <PlayerControls
+          chromeFullscreenMode={chromeFullscreenMode}
+          // In fullscreen the transport bar is absolutely positioned over the
+          // bottom of the video, exactly where the up-next card sits, and it
+          // paints on top. Yield the bottom edge while the card stands; Cancel
+          // (or any seek) retracts it and the chrome comes back.
+          controlsVisible={controlsVisible && !upNextOpen}
+          isFullscreen={isFullscreen}
+          isImmersiveViewport={isImmersiveViewport}
+          currentTime={currentTime}
+          duration={duration}
+          displayedDuration={displayedDuration}
+          playing={playing}
+          modeLabel={
+            isHlsPlayback
+              ? effectiveModeLabel(resolvedMode, effectiveProfile)
+              : modeLabel
+          }
+          chapters={chapters}
+          videoRef={videoRef}
+          onSeek={seek}
+          onSeekBackward={seekBackward}
+          onSeekForward={seekForward}
+          onTogglePlay={() => void togglePlay()}
+          onToggleFullscreen={() => void toggleFullscreen()}
+          onSelectChapter={handleChapterSelect}
+        />
+      )}
     </div>
   );
 }

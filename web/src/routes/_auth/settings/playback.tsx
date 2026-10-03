@@ -16,6 +16,7 @@ import {
 import DevicePlaybackCards from "@/components/settings/DevicePlaybackCards";
 import PlaybackSection from "@/components/settings/PlaybackSection";
 import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import TrailerPreferencesCard from "@/components/settings/TrailerPreferencesCard";
 import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
 import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
@@ -155,6 +156,7 @@ function PlaybackSettings() {
         userId={user.id}
         isAdmin={user.is_admin}
       />
+      <TrailerPreferencesCard />
       {user.is_admin && <ServerPlaybackForm settings={settings} />}
     </div>
   );

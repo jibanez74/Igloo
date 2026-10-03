@@ -169,6 +169,10 @@ FFmpeg runs with `context.Background()` after session creation. This is delibera
 
 HLS temp directories are created under the transcode directory stored in Settings. On first launch that value is seeded from `TRANSCODE_DIR`, or from `./transcode` when `TRANSCODE_DIR` is unset. This keeps heavy temporary media output in Igloo's configured transcode workspace instead of the operating-system temp directory.
 
+### Trailer pre-roll
+
+The web client can play YouTube trailers before a movie that starts from the beginning (an opt-in, account-scoped preference; the queue comes from `GET /api/movies/{id}/preroll`). Trailers stream from YouTube through the embedded IFrame player: Igloo never downloads, stores, caches, or proxies trailer video, and the server contract for playback is unchanged. What the pre-roll changes is *when* the first manifest request is made. Mounting the web player is what creates the HLS session, and a transcode session holds a limiter permit from creation, so the player is not mounted while trailers play; it is mounted in the last trailer's final 20 seconds (`PREROLL_MOVIE_WARMUP_SEC`), when the viewer skips the trailers, or at once when the queue is empty or the request failed. That keeps a permit held for at most those 20 seconds instead of the whole pre-roll, avoids the idle TTL and keepalive dance for a session nobody is watching, and still covers a normal cold start (`init.mp4` and the first segments) before the movie begins. Remux and direct play hold no permit, so the same rule costs nothing there. No watch progress is saved during the pre-roll, and watch rooms, episodes, and resumed playback never run it.
+
 ## HLS Output Format
 
 Igloo writes fragmented MP4 HLS, not MPEG-TS HLS.

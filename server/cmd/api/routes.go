@@ -109,6 +109,8 @@ func (app *Application) registerUserRoutes(r chi.Router) {
 		r.Put("/avatar", app.UpdateUserAvatar)
 		r.Post("/avatar/upload", app.UploadUserAvatar)
 		r.Delete("/", app.DeleteUserAccount)
+		r.Get("/preferences/trailers", app.GetTrailerPreferences)
+		r.Put("/preferences/trailers", app.UpdateTrailerPreferences)
 	})
 }
 
@@ -176,6 +178,7 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 		r.Put("/{id}/watch-progress", app.UpdateMovieWatchProgress)
 		r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
 		r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
+		r.Get("/{id}/preroll", app.GetMoviePreroll)
 		r.Post("/{id}/hls/session/stop", app.StopPersonalHLSSession)
 		r.Get("/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, app.HLSManifest)
 		r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
