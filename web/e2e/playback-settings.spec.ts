@@ -80,14 +80,6 @@ async function fetchTrailerPreferences(page: Page) {
   return body.data!;
 }
 
-async function restoreTrailerPreferences(page: Page, prefs: TrailerPreferencesData) {
-  const response = await page.context().request.put(TRAILER_PREFERENCES_PATH, {
-    data: prefs,
-    failOnStatusCode: false,
-  });
-  expect(response.status()).toBe(200);
-}
-
 type RegularUser = AdminUserType & { password: string };
 
 /** A disposable non-admin account, created through the page's admin session. */
@@ -268,12 +260,19 @@ test.describe("Playback settings", () => {
     page,
   }) => {
     const tracker = trackBrowserIssues(page);
+    let regularUser: RegularUser | null = null;
 
     await loginPageViaApi(page);
-    const baseline = await fetchTrailerPreferences(page);
-    expect(baseline.enabled).toBe(false);
 
     try {
+      // A fresh account, so the defaults hold however a real instance's
+      // admin has set its own trailers, and nothing is left on it.
+      regularUser = await createRegularUser(page);
+      await logoutViaApi(page.context().request);
+      await loginPageViaApi(page, regularUser);
+      const baseline = await fetchTrailerPreferences(page);
+      expect(baseline.enabled).toBe(false);
+
       await page.goto("/settings/playback");
       await expect(
         page.getByRole("heading", { name: "Trailers before movies" }),
@@ -318,7 +317,7 @@ test.describe("Playback settings", () => {
         page.getByRole("combobox", { name: "Trailer source" }),
       ).toHaveText("In theaters");
     } finally {
-      await restoreTrailerPreferences(page, baseline);
+      await signBackInAsAdmin(page, regularUser);
     }
 
     tracker.assertClean();
