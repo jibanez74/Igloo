@@ -395,9 +395,11 @@ export function trailerPreferencesQueryOpts() {
 }
 
 /**
- * The trailer queue for one play. Never retried and never cached: a failed or
- * slow request resolves to an error envelope the player treats as "no
- * trailers", and each play draws a fresh random queue.
+ * The trailer queue for one play. Never retried: a failed or slow request
+ * resolves to an error envelope the player treats as "no trailers". Never
+ * stale while the play lasts, so a window focus or reconnect cannot swap the
+ * queue under the trailer playing; never kept once the play unmounts, so the
+ * next play draws a fresh random queue.
  */
 export function moviePrerollQueryOpts(movieId: number) {
   return queryOptions({
@@ -406,7 +408,7 @@ export function moviePrerollQueryOpts(movieId: number) {
       getMoviePreroll(movieId, AbortSignal.timeout(PREROLL_FETCH_TIMEOUT_MS)),
     enabled: movieId > 0,
     retry: false,
-    staleTime: 0,
+    staleTime: Infinity,
     gcTime: 0,
   });
 }

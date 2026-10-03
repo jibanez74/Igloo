@@ -610,7 +610,10 @@ export default function VideoPlaybackPage({
   });
 
   useEffect(() => {
-    if (!pendingAutoPlayOnLoadRef.current) return;
+    // A movie warmed up under the last trailer must not start beneath it, even
+    // when a direct-play fallback armed the flag; the pre-roll ending re-runs
+    // this and the flag is honored then.
+    if (prerollPhase || !pendingAutoPlayOnLoadRef.current) return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -639,8 +642,8 @@ export default function VideoPlaybackPage({
     // (audit D12). Also on the player mounting: an up-next hand-off arrives
     // with its window already final, before the video element exists. And on
     // the pre-roll ending: the player may have been warmed up under the last
-    // trailer, so the flag is set after this already ran for the mount.
-  }, [sessionWindowKey, playerMounted, prerollActive]);
+    // trailer, so this already ran for the mount and held off.
+  }, [sessionWindowKey, playerMounted, prerollPhase]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(mediaDurationSec && mediaDurationSec > 0)) return;
@@ -699,8 +702,11 @@ export default function VideoPlaybackPage({
 
   const handlePrerollFinish = () => {
     // The movie plays on its own after the trailers, exactly as a rebase
-    // resumes: the effect above plays on the first canplay.
-    pendingAutoPlayOnLoadRef.current = true;
+    // resumes: the effect above plays on the first canplay. An empty or failed
+    // queue played nothing, so the movie opens paused as it always did.
+    if (prerollTrailers && prerollTrailers.length > 0) {
+      pendingAutoPlayOnLoadRef.current = true;
+    }
     setPrerollFinished(true);
   };
 

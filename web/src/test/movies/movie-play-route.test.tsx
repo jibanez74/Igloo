@@ -1,7 +1,9 @@
+import { focusManager, onlineManager } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
+import { MEDIA_ERR_SRC_NOT_SUPPORTED } from "@/lib/constants";
 import type {
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
@@ -19,14 +21,17 @@ import { renderRoute } from "../helpers/render-route";
 import { audioStream, videoStream } from "../helpers/tech-details";
 
 // The YouTube IFrame API is never loaded in tests; the pre-roll only needs
-// the hook's surface to render its chrome.
+// the hook's surface to render its chrome. The clock is mutable so a test can
+// place the last trailer inside the movie's warm-up window.
+const youtubeClock = vi.hoisted(() => ({ currentTime: 0, duration: 120 }));
+
 vi.mock("@/hooks/useYouTubePlayer", () => ({
   useYouTubePlayer: () => ({
     containerRef: () => {},
     isReady: true,
     isPlaying: true,
-    currentTime: 0,
-    duration: 120,
+    currentTime: youtubeClock.currentTime,
+    duration: youtubeClock.duration,
     volume: 100,
     isMuted: false,
     error: null,
@@ -43,6 +48,20 @@ vi.mock("@/hooks/useYouTubePlayer", () => ({
     retry: vi.fn(),
   }),
 }));
+
+// Decided once at module load from the browser; jsdom has no MediaSource, so
+// a test that reaches HLS opts into the native path the player uses on Safari.
+const hlsSupport = vi.hoisted(() => ({ native: false }));
+
+vi.mock("@/lib/playback", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/playback")>();
+  return {
+    ...actual,
+    get prefersNativeHLS() {
+      return hlsSupport.native;
+    },
+  };
+});
 
 const MOVIE_ID = 7;
 const PLAY_PATH = `/movies/${MOVIE_ID}/play`;
@@ -202,32 +221,115 @@ function requestsTo(
 const prerollRegion = () =>
   screen.queryByRole("region", { name: "Trailers before the movie" });
 
+const playSpy = () => vi.mocked(window.HTMLMediaElement.prototype.play);
+
+/** The movie's video element once it is mounted. */
+async function movieVideo() {
+  await waitFor(() => expect(document.querySelector("video")).not.toBeNull());
+  return document.querySelector("video") as HTMLVideoElement;
+}
+
+/** jsdom never loads media, so a test says when the stream could play. */
+function reportCanPlay(video: HTMLVideoElement) {
+  act(() => {
+    video.dispatchEvent(new Event("canplay"));
+  });
+}
+
 describe("movie play route trailer pre-roll", () => {
   beforeEach(() => {
     stubMediaElement();
+    youtubeClock.currentTime = 0;
+    youtubeClock.duration = 120;
+    hlsSupport.native = false;
   });
 
-  it("starts the movie straight away on an empty queue", async () => {
+  it("starts the movie straight away, paused, on an empty queue", async () => {
     const fetchMock = mockMovieApi({ preroll: [] });
 
     await renderMovieRoute(FRESH_SEARCH);
 
     await screen.findByRole("region", { name: "Video player for Signal Fire" });
-    await waitFor(() => expect(document.querySelector("video")).not.toBeNull());
+    const video = await movieVideo();
     expect(prerollRegion()).toBeNull();
     expect(
       requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
     ).toHaveLength(1);
+
+    // No trailer played, so nothing tells the movie to play on its own.
+    reportCanPlay(video);
+    expect(playSpy()).not.toHaveBeenCalled();
   });
 
-  it("starts the movie when the queue request fails", async () => {
+  it("starts the movie, paused, when the queue request fails", async () => {
     mockMovieApi({ preroll: "fail" });
 
     await renderMovieRoute(FRESH_SEARCH);
 
     await screen.findByRole("region", { name: "Video player for Signal Fire" });
-    await waitFor(() => expect(document.querySelector("video")).not.toBeNull());
+    const video = await movieVideo();
     expect(prerollRegion()).toBeNull();
+
+    reportCanPlay(video);
+    expect(playSpy()).not.toHaveBeenCalled();
+  });
+
+  it("plays the movie on its own once the trailers finish", async () => {
+    mockMovieApi({ preroll: twoTrailers });
+
+    await renderMovieRoute(FRESH_SEARCH);
+
+    await screen.findByRole("region", { name: "Trailers before the movie" });
+    fireEvent.click(screen.getByRole("button", { name: /^Start movie/ }));
+
+    const video = await movieVideo();
+    reportCanPlay(video);
+    await waitFor(() => expect(playSpy()).toHaveBeenCalledTimes(1));
+  });
+
+  it("holds a direct-play fallback's autoplay until the last trailer ends", async () => {
+    // The only trailer is already inside its final seconds, so the movie
+    // warms up underneath it straight away.
+    youtubeClock.currentTime = 110;
+    mockMovieApi({ preroll: [trailer("one", "Glacier Run")] });
+    // jsdom has no MediaSource; native HLS keeps the remux stream on the
+    // video element itself.
+    hlsSupport.native = true;
+
+    const { router } = await renderMovieRoute(FRESH_SEARCH);
+
+    await screen.findByRole("region", { name: "Trailers before the movie" });
+    const warmed = await movieVideo();
+
+    // The browser cannot play the file directly: the player switches to
+    // remux and arms autoplay for the replacement stream. jsdom has no
+    // MediaError, which the player's error handler reads.
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED,
+    });
+    Object.defineProperty(warmed, "error", {
+      configurable: true,
+      value: { code: MEDIA_ERR_SRC_NOT_SUPPORTED },
+    });
+    act(() => {
+      warmed.dispatchEvent(new Event("error"));
+    });
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.mode).toBe("remux");
+    });
+
+    reportCanPlay(await movieVideo());
+    expect(prerollRegion()).not.toBeNull();
+    expect(playSpy()).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Start movie/ }));
+    await waitFor(() => expect(prerollRegion()).toBeNull());
+    reportCanPlay(await movieVideo());
+    await waitFor(() => expect(playSpy()).toHaveBeenCalledTimes(1));
   });
 
   it("plays the trailers before mounting the movie, saving no progress meanwhile", async () => {
@@ -262,6 +364,30 @@ describe("movie play route trailer pre-roll", () => {
     expect(
       screen.getByRole("group", { name: "Playback controls" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the queue it started with when the window regains focus", async () => {
+    const fetchMock = mockMovieApi({ preroll: twoTrailers });
+
+    await renderMovieRoute(FRESH_SEARCH);
+
+    const region = await screen.findByRole("region", {
+      name: "Trailers before the movie",
+    });
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+    focusManager.setFocused(undefined);
+
+    // A refetch would draw a new random queue under the trailer playing.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
+    ).toHaveLength(1);
+    expect(region).toHaveTextContent("Glacier Run");
   });
 
   it("never asks for trailers when the play URL starts mid-movie", async () => {
