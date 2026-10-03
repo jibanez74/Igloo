@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -89,6 +90,18 @@ func savePrerollPrefs(t *testing.T, app *Application, userID int64, enabled bool
 	if err != nil {
 		t.Fatalf("save preferences: %v", err)
 	}
+}
+
+// countingTheaterSource counts now-playing lookups; the pool refreshes on its
+// own goroutine, hence the atomic.
+type countingTheaterSource struct {
+	preroll.TheaterSource
+	listCalls atomic.Int32
+}
+
+func (s *countingTheaterSource) GetMoviesInTheaters(ctx context.Context) ([]*tmdb.TmdbMovie, error) {
+	s.listCalls.Add(1)
+	return s.TheaterSource.GetMoviesInTheaters(ctx)
 }
 
 func theaterStub(ids ...int) *stubTmdbClient {
@@ -199,6 +212,53 @@ func TestGetMoviePreroll_TheatersFirstThenLibrary(t *testing.T) {
 	}
 	if trailers[2].Title != "Library only" {
 		t.Fatalf("the library share must skip TMDB 20, already queued from theaters: %+v", trailers[2])
+	}
+}
+
+func TestGetMoviePreroll_LibraryPreferenceTopsUpFromTheaters(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	playing := createTrailerMovie(t, app, "Feature", 10, "feature")
+	createTrailerMovie(t, app, "Other", 20, "other")
+	stub := theaterStub(10, 30, 40)
+	app.Tmdb = stub
+	app.PrerollTheaters = preroll.NewTheatersPool(stub, app.Logger)
+	savePrerollPrefs(t, app, user.ID, true, 3, preroll.SourceLibrary)
+
+	resp := serveAs(t, app, user.ID, http.MethodGet, prerollPath(playing), "")
+	trailers := decodePreroll(t, resp.Body.String())
+	if len(trailers) != 3 {
+		t.Fatalf("trailers = %+v, want the library trailer topped up with two theaters trailers", trailers)
+	}
+	if trailers[0].Source != preroll.SourceTheaters || trailers[1].Source != preroll.SourceTheaters || trailers[2].Source != preroll.SourceLibrary {
+		t.Fatalf("order = %+v, want theaters, theaters, library", trailers)
+	}
+	for _, trailer := range trailers[:2] {
+		if trailer.TmdbID == nil || *trailer.TmdbID == 10 {
+			t.Fatalf("the top-up must skip the movie about to play: %+v", trailer)
+		}
+	}
+}
+
+func TestGetMoviePreroll_FilledLibraryPreferenceSkipsTheaters(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Viewer", "viewer@example.com", false)
+	playing := createTrailerMovie(t, app, "Feature", 10, "feature")
+	createTrailerMovie(t, app, "Other A", 20, "other-a")
+	createTrailerMovie(t, app, "Other B", 30, "other-b")
+	stub := theaterStub(40, 50)
+	source := &countingTheaterSource{TheaterSource: stub}
+	app.Tmdb = stub
+	app.PrerollTheaters = preroll.NewTheatersPool(source, app.Logger)
+	savePrerollPrefs(t, app, user.ID, true, 2, preroll.SourceLibrary)
+
+	resp := serveAs(t, app, user.ID, http.MethodGet, prerollPath(playing), "")
+	trailers := decodePreroll(t, resp.Body.String())
+	if len(trailers) != 2 || trailers[0].Source != preroll.SourceLibrary || trailers[1].Source != preroll.SourceLibrary {
+		t.Fatalf("trailers = %+v, want two library trailers", trailers)
+	}
+	if calls := source.listCalls.Load(); calls != 0 {
+		t.Fatalf("a library preference the library fills must not resolve theaters (%d calls)", calls)
 	}
 }
 

@@ -101,15 +101,10 @@ func (app *Application) GetMoviePreroll(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false, Data: map[string]any{"trailers": trailers}})
 }
 
+// buildPrerollQueue loads the library pool first, so a library preference the
+// library can fill never waits on TMDB; theaters are resolved for the other
+// sources, and for a library preference only to top up a short queue.
 func (app *Application) buildPrerollQueue(ctx context.Context, prefs preroll.Preferences, movie database.Movie) ([]preroll.Trailer, error) {
-	var theaters []preroll.Trailer
-	wantsTheaters := prefs.Source != preroll.SourceLibrary
-	if wantsTheaters {
-		waitCtx, cancel := context.WithTimeout(ctx, prerollTheatersWait)
-		theaters = app.PrerollTheaters.Trailers(waitCtx)
-		cancel()
-	}
-
 	rows, err := app.Queries.GetRandomLibraryTrailers(ctx, database.GetRandomLibraryTrailersParams{
 		ExcludeMovieID: movie.ID,
 		RowLimit:       int64(prefs.Count + prerollLibraryOverfetch),
@@ -129,5 +124,17 @@ func (app *Application) buildPrerollQueue(ctx context.Context, prefs preroll.Pre
 	}
 
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
-	return preroll.Select(prefs, library, theaters, movie.TmdbID.Int64, rng), nil
+	excludeTmdbID := movie.TmdbID.Int64
+	if prefs.Source == preroll.SourceLibrary {
+		queue := preroll.Select(prefs, library, nil, excludeTmdbID, rng)
+		if len(queue) >= prefs.Count {
+			return queue, nil
+		}
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, prerollTheatersWait)
+	theaters := app.PrerollTheaters.Trailers(waitCtx)
+	cancel()
+
+	return preroll.Select(prefs, library, theaters, excludeTmdbID, rng), nil
 }
