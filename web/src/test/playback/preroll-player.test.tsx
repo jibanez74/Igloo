@@ -232,6 +232,26 @@ describe("PrerollPlayer", () => {
     expect(props.onWarmup).toHaveBeenCalledTimes(1);
   });
 
+  it("holds the warm-up until the last trailer reports its duration", () => {
+    const { props, rerender } = renderPreroll();
+    fireEvent.click(screen.getByRole("button", { name: "Skip trailer (N)" }));
+
+    // YouTube can report ready before the metadata, with a duration of 0;
+    // that is not the trailer's final seconds.
+    fake.duration = 0;
+    fake.currentTime = 0;
+    rerender(<PrerollPlayer {...props} />);
+    expect(props.onWarmup).not.toHaveBeenCalled();
+
+    fake.duration = 120;
+    rerender(<PrerollPlayer {...props} />);
+    expect(props.onWarmup).not.toHaveBeenCalled();
+
+    fake.currentTime = 120 - PREROLL_MOVIE_WARMUP_SEC;
+    rerender(<PrerollPlayer {...props} />);
+    expect(props.onWarmup).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a loading state until the queue arrives and finishes on an empty one", () => {
     const { props, rerender } = renderPreroll({ trailers: undefined });
 

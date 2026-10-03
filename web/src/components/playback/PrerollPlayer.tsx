@@ -110,10 +110,10 @@ export default function PrerollPlayer({
 
   const warmup = useEffectEvent(onWarmup);
   useEffect(() => {
-    if (!isLast || !isReady || warmupFiredRef.current) return;
-    const nearEnd =
-      duration <= 0 || duration - currentTime <= PREROLL_MOVIE_WARMUP_SEC;
-    if (!nearEnd) return;
+    // YouTube reports a duration of 0 until the metadata loads; without a
+    // known duration there is no warm-up and the movie starts cold instead.
+    if (!isLast || !isReady || duration <= 0 || warmupFiredRef.current) return;
+    if (duration - currentTime > PREROLL_MOVIE_WARMUP_SEC) return;
     warmupFiredRef.current = true;
     warmup();
   }, [isLast, isReady, duration, currentTime]);
