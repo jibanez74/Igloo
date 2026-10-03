@@ -2,7 +2,8 @@
 
 -- Accounts, settings, and authentication
 
--- Playback preferences are device-specific and stored in the browser.
+-- Device playback preferences (profile, bandwidth, languages) stay in the
+-- browser; account-scoped preferences live in user_preferences below.
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -16,6 +17,16 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_name ON users (name);
+
+-- Account-scoped playback preferences (trailer pre-roll). A missing row means
+-- the defaults; only these values are stored, never trailers.
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  trailers_enabled BOOLEAN NOT NULL DEFAULT false,
+  trailers_count INTEGER NOT NULL DEFAULT 2 CHECK (trailers_count BETWEEN 1 AND 5),
+  trailers_source TEXT NOT NULL DEFAULT 'both' CHECK (trailers_source IN ('library', 'theaters', 'both')),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

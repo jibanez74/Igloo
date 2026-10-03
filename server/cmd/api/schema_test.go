@@ -647,8 +647,17 @@ func TestSchema_ParentDeletesCascade(t *testing.T) {
 			userID, movieID := createTestUserAndMovie(t, app)
 			room := createTestRoom(t, app, userID, movieID)
 			seedWatchProgress(t, app, userID, movieID)
+			_, err := app.Queries.UpsertUserPreferences(ctx, database.UpsertUserPreferencesParams{
+				UserID:          userID,
+				TrailersEnabled: true,
+				TrailersCount:   3,
+				TrailersSource:  "library",
+			})
+			if err != nil {
+				t.Fatalf("seed user preferences: %v", err)
+			}
 
-			err := parent.delete(ctx, app, userID, movieID)
+			err = parent.delete(ctx, app, userID, movieID)
 			if err != nil {
 				t.Fatalf("delete %s: %v", parent.name, err)
 			}
@@ -660,6 +669,12 @@ func TestSchema_ParentDeletesCascade(t *testing.T) {
 			_, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{UserID: userID, MovieID: movieID})
 			if !errors.Is(err, sql.ErrNoRows) {
 				t.Errorf("watch progress after %s delete: %v, want sql.ErrNoRows", parent.name, err)
+			}
+			if parent.name == "user" {
+				_, err = app.Queries.GetUserPreferences(ctx, userID)
+				if !errors.Is(err, sql.ErrNoRows) {
+					t.Errorf("user preferences after user delete: %v, want sql.ErrNoRows", err)
+				}
 			}
 		})
 	}

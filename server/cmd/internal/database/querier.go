@@ -293,6 +293,9 @@ type Querier interface {
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
 	// Production companies linked to a show (for details view).
 	GetProductionCompaniesByShowID(ctx context.Context, showID int64) ([]GetProductionCompaniesByShowIDRow, error)
+	// One random YouTube trailer per movie, bounded by row_limit, for the pre-roll
+	// library pool. The bare ev.key under GROUP BY picks any of the movie's trailers.
+	GetRandomLibraryTrailers(ctx context.Context, arg GetRandomLibraryTrailersParams) ([]GetRandomLibraryTrailersRow, error)
 	// The random pick happens over the bare tracks primary key, so the album and
 	// musician joins run only for the chosen rows instead of the whole library.
 	// The outer ORDER BY RANDOM() re-shuffles just those winners so playback order
@@ -410,6 +413,7 @@ type Querier interface {
 	// Returns overall listening statistics for a user
 	GetUserListeningStats(ctx context.Context, userID int64) (GetUserListeningStatsRow, error)
 	GetUserPin(ctx context.Context, id int64) (sql.NullString, error)
+	GetUserPreferences(ctx context.Context, userID int64) (GetUserPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
 	// Returns the user's most listened albums
@@ -594,6 +598,7 @@ type Querier interface {
 	UpsertShowRemuxSafetyVerdict(ctx context.Context, arg UpsertShowRemuxSafetyVerdictParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (int64, error)
 	UpsertTrackFileFingerprint(ctx context.Context, arg UpsertTrackFileFingerprintParams) (int64, error)
+	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UpsertUserPreferencesRow, error)
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error
 	UserExists(ctx context.Context, id int64) (bool, error)
