@@ -176,6 +176,22 @@ func TestSelectExcludesTheCurrentMovieFromTheaters(t *testing.T) {
 	}
 }
 
+func TestSelectExcludesTheCurrentMovieFromTheLibrary(t *testing.T) {
+	prefs := Preferences{Enabled: true, Count: 3, Source: SourceLibrary}
+	// Movie 2 is another file or edition of the movie about to play: a
+	// different row with the same TMDB id, which the query does not exclude.
+	lib := library(1, 2, 3)
+	queue := Select(prefs, lib, nil, lib[1].TmdbID, seeded())
+	if len(queue) != 2 {
+		t.Fatalf("len = %d, want 2 after excluding the current movie", len(queue))
+	}
+	for _, trailer := range queue {
+		if trailer.TmdbID == lib[1].TmdbID {
+			t.Fatal("another edition of the movie about to play was selected")
+		}
+	}
+}
+
 func TestSelectDedupesLibraryAgainstTheatersByTmdbID(t *testing.T) {
 	prefs := Preferences{Enabled: true, Count: 2, Source: SourceBoth}
 	// The only theaters movie is also in the library under movie id 1.

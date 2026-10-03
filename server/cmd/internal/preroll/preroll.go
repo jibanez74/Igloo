@@ -6,6 +6,7 @@ package preroll
 import (
 	"errors"
 	"math/rand/v2"
+	"slices"
 )
 
 const (
@@ -70,29 +71,26 @@ type Trailer struct {
 // Select builds the queue: theaters trailers first, then library trailers,
 // like a real cinema. The library pool is consumed in the order given (the
 // query already randomizes it); the theaters pool is shuffled with rng, so
-// tests inject a seeded generator. Entries are deduplicated by TMDB id, a
-// theaters entry matching excludeTmdbID (the movie about to play) is dropped,
-// and a share one pool cannot fill is topped up from the other.
+// tests inject a seeded generator. Entries are deduplicated by TMDB id, an
+// entry from either pool matching excludeTmdbID (the movie about to play, which
+// another library row may share as a second file or edition) is dropped, and a
+// share one pool cannot fill is topped up from the other.
 func Select(prefs Preferences, library, theaters []Trailer, excludeTmdbID int64, rng *rand.Rand) []Trailer {
 	queue := make([]Trailer, 0, prefs.Count)
 	if !prefs.Enabled || prefs.Count <= 0 {
 		return queue
 	}
 
-	theatersPool := make([]Trailer, 0, len(theaters))
-	for _, trailer := range theaters {
-		isCurrentMovie := trailer.TmdbID != 0 && trailer.TmdbID == excludeTmdbID
-		if isCurrentMovie {
-			continue
-		}
-		theatersPool = append(theatersPool, trailer)
-	}
+	theatersPool := slices.Clone(theaters)
 	rng.Shuffle(len(theatersPool), func(i, j int) {
 		theatersPool[i], theatersPool[j] = theatersPool[j], theatersPool[i]
 	})
 
 	theatersShare, libraryShare := shares(prefs)
-	seen := make(map[int64]struct{}, prefs.Count)
+	seen := make(map[int64]struct{}, prefs.Count+1)
+	if excludeTmdbID != 0 {
+		seen[excludeTmdbID] = struct{}{}
+	}
 	theatersPool, chosenTheaters := take(theatersPool, theatersShare, seen)
 	libraryPool, chosenLibrary := take(library, libraryShare, seen)
 
