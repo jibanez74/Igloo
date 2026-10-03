@@ -901,20 +901,24 @@ require the full playback test pass.
   decision resolves first, Resume bypasses it, Start over and a fresh play run
   it; TV episodes, watch rooms, chapter links and Continue Watching never see
   it. The queue comes from `GET /api/movies/{id}/preroll` (the server owns
-  selection), fetched from the first render with a short timeout; an empty
-  or failed answer starts the movie as before. The layer is a `section`
-  "Trailers before the movie" over the movie surface, which stays
+  selection), fetched once per play with a short timeout and never refetched
+  on focus or reconnect; an empty or failed answer starts the movie as before,
+  paused, while a pre-roll that played starts the movie on its own (a
+  direct-play fallback during the warm-up waits for it). The layer is a
+  `section` "Trailers before the movie" over the movie surface, which stays
   **unmounted** while trailers play (mounting it starts the HLS session) and
-  is warmed up only in the last trailer's final `PREROLL_MOVIE_WARMUP_SEC`;
+  is warmed up only in the last trailer's final `PREROLL_MOVIE_WARMUP_SEC`
+  (once YouTube reports the trailer's duration; without one, no warm-up);
   it stops clicks so the fullscreen click-to-toggle never reaches the movie,
   and a transparent layer over the iframe keeps focus in our document. Its
   chrome replaces `PlayerControls` in the footer slot with the same panel
   classes (so it hides on idle in fullscreen): "Trailer X of N · title" in
   `tabular-nums`, `ProgressBar variant="trailer"`, the primary play/pause,
   outline **Skip trailer** (focused when the pre-roll appears), accent
-  **Start movie**, and fullscreen. Keys follow the player's conventions and
-  go through `useShortcutHints`: Space/K, **N** skip, **S** start movie, F,
-  Escape. Each trailer is announced once ("Trailer 1 of 2: Title") through
+  **Start movie**, and fullscreen (the expanded view where the browser lacks
+  element fullscreen, never the warmed movie's video-only fullscreen). Keys
+  follow the player's conventions and go through `useShortcutHints`:
+  Space/K, **N** skip, **S** start movie, F, Escape. Each trailer is announced once ("Trailer 1 of 2: Title") through
   `LiveAnnouncer`; an embed error (removed, private, embed-disabled) skips the
   trailer silently, an unavailable player ends the pre-roll, and no watch
   progress is saved until the movie starts. No feature-presentation card and
