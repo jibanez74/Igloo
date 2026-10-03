@@ -983,7 +983,11 @@ export default function VideoPlaybackPage({
             onFinish={handlePrerollFinish}
             onWarmup={() => setPrerollWarmup(true)}
             onShowControls={showControlsAndResetIdle}
-            onToggleFullscreen={() => void toggleFullscreen()}
+            // The movie element may already be warmed up underneath; WebKit's
+            // video-only fullscreen would show it instead of the trailer.
+            onToggleFullscreen={() =>
+              void toggleFullscreen({ videoFallback: false })
+            }
             onExitFullscreen={exitFullscreenIfActive}
           />
         )}

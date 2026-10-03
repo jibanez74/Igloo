@@ -62,6 +62,12 @@ function VideoFullscreenHarness() {
       <button type="button" onClick={() => void toggleFullscreen()}>
         Toggle fullscreen
       </button>
+      <button
+        type="button"
+        onClick={() => void toggleFullscreen({ videoFallback: false })}
+      >
+        Toggle fullscreen without the video
+      </button>
     </div>
   );
 }
@@ -176,5 +182,55 @@ describe("useVideoFullscreen", () => {
     expect(screen.getByTestId("is-immersive")).toHaveTextContent("false");
     expect(screen.getByTestId("chrome-mode")).toHaveTextContent("false");
     expect(document.body.style.overflow).toBe("");
+  });
+
+  describe("on a browser with only WebKit video fullscreen (iPhone Safari)", () => {
+    function renderWithoutElementFullscreen() {
+      render(<VideoFullscreenHarness />);
+      const container = screen.getByTestId("container");
+      Object.defineProperty(container, "requestFullscreen", {
+        configurable: true,
+        value: undefined,
+      });
+      Object.defineProperty(container, "webkitRequestFullscreen", {
+        configurable: true,
+        value: undefined,
+      });
+      const webkitEnterFullscreen = vi.fn();
+      Object.defineProperty(screen.getByTestId("video"), "webkitEnterFullscreen", {
+        configurable: true,
+        value: webkitEnterFullscreen,
+      });
+      return { webkitEnterFullscreen };
+    }
+
+    it("takes the video element fullscreen", async () => {
+      const { webkitEnterFullscreen } = renderWithoutElementFullscreen();
+
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Toggle fullscreen" }),
+        );
+      });
+
+      expect(webkitEnterFullscreen).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("is-immersive")).toHaveTextContent("false");
+    });
+
+    it("expands the container instead when the video is not what plays", async () => {
+      // The trailer pre-roll: the element is the movie warming up underneath.
+      const { webkitEnterFullscreen } = renderWithoutElementFullscreen();
+
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: "Toggle fullscreen without the video",
+          }),
+        );
+      });
+
+      expect(webkitEnterFullscreen).not.toHaveBeenCalled();
+      expect(screen.getByTestId("is-immersive")).toHaveTextContent("true");
+    });
   });
 });
