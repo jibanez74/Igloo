@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/preroll"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -585,6 +586,22 @@ func TestOpenAPIEnumsMatchServerConstants(t *testing.T) {
 				string(helpers.HLSAudioCodecAC3),
 				string(helpers.HLSAudioCodecEAC3),
 			},
+		},
+		{
+			name:   "trailer sources",
+			schema: "TrailerSource",
+			want: func() []any {
+				values := make([]any, len(preroll.Sources))
+				for i, source := range preroll.Sources {
+					values[i] = source
+				}
+				return values
+			}(),
+		},
+		{
+			name:   "preroll trailer sources",
+			schema: "PrerollTrailerSource",
+			want:   []any{preroll.SourceLibrary, preroll.SourceTheaters},
 		},
 		{
 			name:   "hardware acceleration devices",

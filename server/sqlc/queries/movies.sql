@@ -357,6 +357,20 @@ INNER JOIN movie_production_companies AS mpc
 WHERE mpc.movie_id = ?
 ORDER BY pc.name;
 
+-- name: GetRandomLibraryTrailers :many
+-- One random YouTube trailer per movie, bounded by row_limit, for the pre-roll
+-- library pool. The bare ev.key under GROUP BY picks any of the movie's trailers.
+SELECT m.id AS movie_id, m.title, m.tmdb_id, ev.key AS youtube_key
+FROM movies AS m
+INNER JOIN movie_extra_videos AS mev ON mev.movie_id = m.id
+INNER JOIN extra_videos AS ev ON ev.id = mev.extra_video_id
+WHERE ev.type = 'trailer'
+  AND ev.site = 'youtube'
+  AND m.id <> sqlc.arg(exclude_movie_id)
+GROUP BY m.id
+ORDER BY RANDOM()
+LIMIT sqlc.arg(row_limit);
+
 -- name: GetMovieExtraVideos :many
 -- List all extra videos (trailers, special features) linked to a movie.
 SELECT

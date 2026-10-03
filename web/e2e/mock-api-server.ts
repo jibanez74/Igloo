@@ -10,6 +10,7 @@ import type {
   ShowEpisodePlaybackDataType,
   ShowEpisodeTechnicalDetailsDataType,
   WatchProgressType,
+  TrailerPreferencesData,
 } from "../src/types";
 import {
   apiResponse,
@@ -19,7 +20,12 @@ import {
   nullableString,
 } from "./e2e-api";
 import { intEnv, readE2EEnv } from "./e2e-env";
-import { libraryMovie, libraryMovieDetails, MOCK_MOVIE_ID } from "./fixtures/movies";
+import {
+  libraryMovie,
+  libraryMovieDetails,
+  MOCK_MOVIE_ID,
+  prerollTrailers,
+} from "./fixtures/movies";
 import {
   libraryShow,
   MOCK_EPISODE_ID,
@@ -155,6 +161,17 @@ let serverPlaybackSettings: ServerPlaybackSettings = {
   server_upload_mbps: null,
   hardware_acceleration_device: "cpu",
 };
+
+// Account-scoped trailer pre-roll preferences, per user id; a missing entry
+// is the server's default (off). The preroll route serves a fixed queue
+// while the feature is on, so specs restore the entry they changed.
+const DEFAULT_TRAILER_PREFERENCES: TrailerPreferencesData = {
+  enabled: false,
+  count: 2,
+  source: "both",
+};
+const TRAILER_SOURCES = ["library", "theaters", "both"];
+const trailerPreferences = new Map<number, TrailerPreferencesData>();
 
 // The server's transcode catalog, labelled the way the Go handler labels it.
 const playbackProfiles = STREAM_MODES.filter(mode => mode.type === "transcode").map(
@@ -702,6 +719,34 @@ async function handleUserRoutes(
     return true;
   }
 
+  if (url.pathname === "/api/user/preferences/trailers" && method === "GET") {
+    sendSuccess(response, trailerPreferences.get(user.id) ?? DEFAULT_TRAILER_PREFERENCES);
+    return true;
+  }
+
+  if (url.pathname === "/api/user/preferences/trailers" && method === "PUT") {
+    const body = await readJSONBody(request);
+    const enabled = body.enabled;
+    const count = body.count;
+    const source = body.source;
+    if (typeof enabled !== "boolean" || typeof count !== "number" || typeof source !== "string") {
+      sendFailure(response, 400, "invalid request body");
+      return true;
+    }
+    if (!Number.isInteger(count) || count < 1 || count > 5) {
+      sendFailure(response, 400, "trailer count must be between 1 and 5");
+      return true;
+    }
+    if (!TRAILER_SOURCES.includes(source)) {
+      sendFailure(response, 400, "trailer source must be library, theaters or both");
+      return true;
+    }
+    const prefs = { enabled, count, source } as TrailerPreferencesData;
+    trailerPreferences.set(user.id, prefs);
+    sendSuccess(response, prefs);
+    return true;
+  }
+
   if (url.pathname === "/api/user" && method === "DELETE") {
     removeUser(user.id);
     sendSuccess(response, {}, 200, "Account deleted", { "Set-Cookie": CLEAR_SESSION_COOKIE });
@@ -1027,9 +1072,24 @@ function handleMoviesRoutes(
   request: IncomingMessage,
   response: ServerResponse,
   url: URL,
+  user: User,
 ) {
   if ((request.method ?? "GET") !== "GET") {
     return false;
+  }
+
+  const prerollMatch = url.pathname.match(/^\/api\/movies\/(\d+)\/preroll$/);
+  if (prerollMatch) {
+    const movie = libraryMovies.find(item => item.id === Number(prerollMatch[1]));
+    if (!movie) {
+      sendFailure(response, 404, "movie not found");
+      return true;
+    }
+    const prefs = trailerPreferences.get(user.id) ?? DEFAULT_TRAILER_PREFERENCES;
+    sendSuccess(response, {
+      trailers: prefs.enabled ? prerollTrailers().slice(0, prefs.count) : [],
+    });
+    return true;
   }
 
   if (url.pathname === "/api/movies/latest") {
@@ -1254,7 +1314,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (await handleAdminRoutes(request, response, url)) return;
     }
     if (await handleSettingsRoutes(request, response, url, user)) return;
-    if (handleMoviesRoutes(request, response, url)) return;
+    if (handleMoviesRoutes(request, response, url, user)) return;
     if (handleShowsRoutes(request, response, url)) return;
     if (handleHomeRoutes(request, response, url)) return;
     if (handleSharedRoutes(request, response, url)) return;

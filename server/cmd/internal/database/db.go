@@ -531,6 +531,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getProductionCompaniesByShowIDStmt, err = db.PrepareContext(ctx, getProductionCompaniesByShowID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetProductionCompaniesByShowID: %w", err)
 	}
+	if q.getRandomLibraryTrailersStmt, err = db.PrepareContext(ctx, getRandomLibraryTrailers); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRandomLibraryTrailers: %w", err)
+	}
 	if q.getRandomTracksStmt, err = db.PrepareContext(ctx, getRandomTracks); err != nil {
 		return nil, fmt.Errorf("error preparing query GetRandomTracks: %w", err)
 	}
@@ -677,6 +680,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getUserPinStmt, err = db.PrepareContext(ctx, getUserPin); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserPin: %w", err)
+	}
+	if q.getUserPreferencesStmt, err = db.PrepareContext(ctx, getUserPreferences); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserPreferences: %w", err)
 	}
 	if q.getUserRecentlyPlayedStmt, err = db.PrepareContext(ctx, getUserRecentlyPlayed); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserRecentlyPlayed: %w", err)
@@ -1082,6 +1088,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertTrackFileFingerprintStmt, err = db.PrepareContext(ctx, upsertTrackFileFingerprint); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertTrackFileFingerprint: %w", err)
+	}
+	if q.upsertUserPreferencesStmt, err = db.PrepareContext(ctx, upsertUserPreferences); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertUserPreferences: %w", err)
 	}
 	if q.upsertUserTrackStatsStmt, err = db.PrepareContext(ctx, upsertUserTrackStats); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertUserTrackStats: %w", err)
@@ -1939,6 +1948,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getProductionCompaniesByShowIDStmt: %w", cerr)
 		}
 	}
+	if q.getRandomLibraryTrailersStmt != nil {
+		if cerr := q.getRandomLibraryTrailersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRandomLibraryTrailersStmt: %w", cerr)
+		}
+	}
 	if q.getRandomTracksStmt != nil {
 		if cerr := q.getRandomTracksStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getRandomTracksStmt: %w", cerr)
@@ -2182,6 +2196,11 @@ func (q *Queries) Close() error {
 	if q.getUserPinStmt != nil {
 		if cerr := q.getUserPinStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserPinStmt: %w", cerr)
+		}
+	}
+	if q.getUserPreferencesStmt != nil {
+		if cerr := q.getUserPreferencesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserPreferencesStmt: %w", cerr)
 		}
 	}
 	if q.getUserRecentlyPlayedStmt != nil {
@@ -2859,6 +2878,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertTrackFileFingerprintStmt: %w", cerr)
 		}
 	}
+	if q.upsertUserPreferencesStmt != nil {
+		if cerr := q.upsertUserPreferencesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertUserPreferencesStmt: %w", cerr)
+		}
+	}
 	if q.upsertUserTrackStatsStmt != nil {
 		if cerr := q.upsertUserTrackStatsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertUserTrackStatsStmt: %w", cerr)
@@ -3077,6 +3101,7 @@ type Queries struct {
 	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
 	getProductionCompaniesByMovieIDStmt         *sql.Stmt
 	getProductionCompaniesByShowIDStmt          *sql.Stmt
+	getRandomLibraryTrailersStmt                *sql.Stmt
 	getRandomTracksStmt                         *sql.Stmt
 	getRemuxSafetyVerdictStmt                   *sql.Stmt
 	getSettingsStmt                             *sql.Stmt
@@ -3126,6 +3151,7 @@ type Queries struct {
 	getUserIsAdminStmt                          *sql.Stmt
 	getUserListeningStatsStmt                   *sql.Stmt
 	getUserPinStmt                              *sql.Stmt
+	getUserPreferencesStmt                      *sql.Stmt
 	getUserRecentlyPlayedStmt                   *sql.Stmt
 	getUserTopAlbumsStmt                        *sql.Stmt
 	getUserTopGenresStmt                        *sql.Stmt
@@ -3261,6 +3287,7 @@ type Queries struct {
 	upsertShowRemuxSafetyVerdictStmt            *sql.Stmt
 	upsertTrackStmt                             *sql.Stmt
 	upsertTrackFileFingerprintStmt              *sql.Stmt
+	upsertUserPreferencesStmt                   *sql.Stmt
 	upsertUserTrackStatsStmt                    *sql.Stmt
 	userExistsStmt                              *sql.Stmt
 }
@@ -3438,6 +3465,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
 		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,
 		getProductionCompaniesByShowIDStmt:          q.getProductionCompaniesByShowIDStmt,
+		getRandomLibraryTrailersStmt:                q.getRandomLibraryTrailersStmt,
 		getRandomTracksStmt:                         q.getRandomTracksStmt,
 		getRemuxSafetyVerdictStmt:                   q.getRemuxSafetyVerdictStmt,
 		getSettingsStmt:                             q.getSettingsStmt,
@@ -3487,6 +3515,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserIsAdminStmt:                          q.getUserIsAdminStmt,
 		getUserListeningStatsStmt:                   q.getUserListeningStatsStmt,
 		getUserPinStmt:                              q.getUserPinStmt,
+		getUserPreferencesStmt:                      q.getUserPreferencesStmt,
 		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,
 		getUserTopAlbumsStmt:                        q.getUserTopAlbumsStmt,
 		getUserTopGenresStmt:                        q.getUserTopGenresStmt,
@@ -3622,6 +3651,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertShowRemuxSafetyVerdictStmt:            q.upsertShowRemuxSafetyVerdictStmt,
 		upsertTrackStmt:                             q.upsertTrackStmt,
 		upsertTrackFileFingerprintStmt:              q.upsertTrackFileFingerprintStmt,
+		upsertUserPreferencesStmt:                   q.upsertUserPreferencesStmt,
 		upsertUserTrackStatsStmt:                    q.upsertUserTrackStatsStmt,
 		userExistsStmt:                              q.userExistsStmt,
 	}

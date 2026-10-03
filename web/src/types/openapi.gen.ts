@@ -351,6 +351,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/user/preferences/trailers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current user's trailer pre-roll preferences
+         * @description Account-scoped settings for the trailers played before a movie starts from the beginning. A user who never saved any gets the defaults: disabled, two trailers, both sources.
+         */
+        get: operations["getTrailerPreferences"];
+        /** Update the current user's trailer pre-roll preferences */
+        put: operations["updateTrailerPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/user": {
         parameters: {
             query?: never;
@@ -1378,6 +1399,26 @@ export interface paths {
         get?: never;
         /** Mark or unmark a movie as watched */
         put: operations["setMovieWatched"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/movies/{id}/preroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the trailer queue to play before a movie
+         * @description The ordered YouTube trailers the caller's saved preferences select for this movie: in-theaters trailers first, then library trailers, never the movie itself, deduplicated by TMDB id, with either pool topping up the other. The list is empty when the feature is disabled or no trailer is available. Trailers stream from YouTube; the server never stores or proxies them. Works with a cookie session or a device bearer token.
+         */
+        get: operations["getMoviePreroll"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3183,6 +3224,51 @@ export interface components {
                 watched: boolean;
             };
         };
+        /**
+         * @description Where pre-roll trailers come from: the user's library, TMDB's now-playing movies, or both (theaters first).
+         * @enum {string}
+         */
+        TrailerSource: "library" | "theaters" | "both";
+        TrailerPreferencesData: {
+            /** @description Off by default. */
+            enabled: boolean;
+            /** @description How many trailers to play; defaults to 2. */
+            count: number;
+            source: components["schemas"]["TrailerSource"];
+        };
+        UpdateTrailerPreferencesRequest: {
+            enabled: boolean;
+            count: number;
+            source: components["schemas"]["TrailerSource"];
+        };
+        TrailerPreferencesEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["TrailerPreferencesData"];
+        };
+        /** @enum {string} */
+        PrerollTrailerSource: "library" | "theaters";
+        PrerollTrailer: {
+            /** @description The movie's title. */
+            title: string;
+            /** @description YouTube video id, played through the IFrame player. */
+            youtube_key: string;
+            source: components["schemas"]["PrerollTrailerSource"];
+            /**
+             * Format: int64
+             * @description Library movie id; null for theaters trailers.
+             */
+            movie_id: number | null;
+            /**
+             * Format: int64
+             * @description TMDB movie id when known; null otherwise.
+             */
+            tmdb_id: number | null;
+        };
+        MoviePrerollData: {
+            trailers: components["schemas"]["PrerollTrailer"][];
+        };
+        MoviePrerollEnvelope: components["schemas"]["JsonSuccess"] & {
+            data: components["schemas"]["MoviePrerollData"];
+        };
         ClearedEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
                 cleared: boolean;
@@ -4899,6 +4985,24 @@ export interface components {
                 "application/json": components["schemas"]["WatchProgressUpdateEnvelope"];
             };
         };
+        /** @description Trailer pre-roll preferences response. */
+        TrailerPreferencesResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["TrailerPreferencesEnvelope"];
+            };
+        };
+        /** @description Trailer pre-roll queue response. */
+        MoviePrerollResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["MoviePrerollEnvelope"];
+            };
+        };
         /** @description Clear operation response. */
         ClearedResponse: {
             headers: {
@@ -5847,6 +5951,11 @@ export interface components {
                 "application/json": components["schemas"]["UpdateUserNameRequest"];
             };
         };
+        UpdateTrailerPreferencesRequest: {
+            content: {
+                "application/json": components["schemas"]["UpdateTrailerPreferencesRequest"];
+            };
+        };
         UpdateUserEmailRequest: {
             content: {
                 "application/json": components["schemas"]["UpdateUserEmailRequest"];
@@ -6347,6 +6456,35 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             413: components["responses"]["PayloadTooLarge"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getTrailerPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["TrailerPreferencesResponse"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    updateTrailerPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["UpdateTrailerPreferencesRequest"];
+        responses: {
+            200: components["responses"]["TrailerPreferencesResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -7811,6 +7949,24 @@ export interface operations {
         requestBody: components["requestBodies"]["SetWatchedRequest"];
         responses: {
             200: components["responses"]["MovieWatchedResponse"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getMoviePreroll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MoviePrerollResponse"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];

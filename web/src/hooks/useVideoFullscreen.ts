@@ -18,6 +18,15 @@ type VideoFullscreenOptions = {
 
 type FullscreenMode = "none" | "document" | "webkitVideo" | "immersiveViewport";
 
+type ToggleFullscreenOptions = {
+  /**
+   * Whether a browser without element fullscreen may take the video element
+   * fullscreen on its own. The trailer pre-roll turns this off: the element
+   * there is the movie warming up underneath, not what the viewer is watching.
+   */
+  videoFallback?: boolean;
+};
+
 function fullscreenModeReducer(
   mode: FullscreenMode,
   nextMode: FullscreenMode,
@@ -94,17 +103,22 @@ export function useVideoFullscreen({
     };
   }, [isImmersiveViewport]);
 
-  const toggleFullscreen = async () => {
+  // The container is what goes fullscreen; the video element only matters
+  // for the WebKit video-only paths, and it is absent while the trailer
+  // pre-roll plays, which must still be able to go fullscreen.
+  const toggleFullscreen = async ({
+    videoFallback = true,
+  }: ToggleFullscreenOptions = {}) => {
     const container = containerRef.current;
     const video = videoRef.current;
-    if (!container || !video) return;
+    if (!container) return;
 
     if (getFullscreenElement()) {
       void exitDocumentFullscreen();
       return;
     }
     if (fullscreenModeRef.current === "webkitVideo") {
-      tryWebKitVideoExitFullscreen(video);
+      if (video) tryWebKitVideoExitFullscreen(video);
       return;
     }
     if (fullscreenModeRef.current === "immersiveViewport") {
@@ -114,7 +128,7 @@ export function useVideoFullscreen({
     }
 
     const enterFallback = () => {
-      if (tryWebKitVideoEnterFullscreen(video)) {
+      if (videoFallback && video && tryWebKitVideoEnterFullscreen(video)) {
         return;
       }
       fullscreenModeRef.current = "immersiveViewport";

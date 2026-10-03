@@ -28,6 +28,46 @@ const successfulUpdate = {
 };
 
 describe("watch progress saver", () => {
+  it("saves nothing while disabled, not even on exit or tab hide", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(successfulUpdate), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const currentTimeRef = { current: 300 };
+      const durationRef = { current: 1000 };
+      const { result } = renderHook(() =>
+        useWatchProgressSaver({
+          media: movieMediaRef(7),
+          playing: true,
+          currentTimeRef,
+          durationRef,
+          enabled: false,
+        }),
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+      await act(async () => {
+        await result.current.handlePauseSave();
+        await result.current.handleEndedSave();
+        await result.current.flushProgress();
+      });
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.dispatchEvent(new Event("pagehide"));
+      });
+
+      expect(updateMediaWatchProgress).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("queues the exit snapshot after an in-flight save", async () => {
     const firstSave = deferred<typeof successfulUpdate>();
     updateMediaWatchProgress
