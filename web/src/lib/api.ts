@@ -78,6 +78,9 @@ import type {
   SpotifyTrackSearchRequest,
   SpotifyTrackSearchResultType,
   SpotifyStatusType,
+  TrailerPreferencesData,
+  UpdateTrailerPreferencesRequest,
+  MoviePrerollData,
 } from "@/types";
 import {
   ALBUMS_PER_PAGE,
@@ -110,6 +113,8 @@ type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type ApiRequestOptions = {
   method?: HttpMethod;
   body?: unknown;
+  /** Aborting resolves the usual network-failure envelope; it never throws. */
+  signal?: AbortSignal;
 };
 
 function withQuery(path: string, params: Record<string, string | number | boolean>) {
@@ -130,7 +135,7 @@ async function apiRequest<T extends Record<string, unknown>>(
   endpoint: string,
   options: ApiRequestOptions = {},
 ): Promise<ApiResponseType<T>> {
-  const { method = "GET", body } = options;
+  const { method = "GET", body, signal } = options;
 
   try {
     const res = await fetch(endpoint, {
@@ -138,6 +143,7 @@ async function apiRequest<T extends Record<string, unknown>>(
       credentials: "include",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
+      signal,
     });
 
     if (res.status === 404) {
@@ -766,6 +772,22 @@ export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
     method: "PUT",
     body: data,
   });
+
+// ============================================================================
+// Trailer pre-roll
+// ============================================================================
+
+export const getTrailerPreferences = () =>
+  apiRequest<TrailerPreferencesData>("/api/user/preferences/trailers");
+
+export const updateTrailerPreferences = (data: UpdateTrailerPreferencesRequest) =>
+  apiRequest<TrailerPreferencesData>("/api/user/preferences/trailers", {
+    method: "PUT",
+    body: data,
+  });
+
+export const getMoviePreroll = (movieId: number, signal?: AbortSignal) =>
+  apiRequest<MoviePrerollData>(`/api/movies/${movieId}/preroll`, { signal });
 
 export const triggerMusicScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/music", {

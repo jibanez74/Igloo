@@ -173,6 +173,11 @@ export type {
   WatchProgressType,
   PlaybackSettings,
   StreamModeId,
+  TrailerPreferencesData,
+  UpdateTrailerPreferencesRequest,
+  TrailerSource,
+  PrerollTrailer,
+  MoviePrerollData,
 } from "./playback";
 
 // Search types

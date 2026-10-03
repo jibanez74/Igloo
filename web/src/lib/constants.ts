@@ -15,6 +15,7 @@ export const PLAYBACK_SETTINGS_KEY = "playback-settings";
 
 export const DEVICES_KEY = "devices";
 export const USER_PIN_KEY = "user-pin";
+export const TRAILER_PREFERENCES_KEY = "trailer-preferences";
 
 export const NOTIFICATIONS_KEY = "notifications";
 export const NOTIFICATIONS_UNREAD_COUNT_KEY = "notifications-unread-count";
@@ -69,6 +70,7 @@ export const MOVIES_STATS_KEY = "movies-stats";
 export const MOVIES_LIKED_KEY = "movies-liked";
 export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
 export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";
+export const MOVIE_PREROLL_KEY = "movie-preroll";
 export const EPISODE_KEY = "episode";
 export const EPISODE_TECHNICAL_DETAILS_KEY = "episode-technical-details";
 export const EPISODE_WATCH_PROGRESS_KEY = "episode-watch-progress";
@@ -266,6 +268,19 @@ export const WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS = 2_000;
 export const PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 /** Seconds the up-next card counts down before starting the next episode. */
 export const UP_NEXT_COUNTDOWN_SEC = 10;
+
+// Trailer pre-roll. The queue request is bounded so a slow server never
+// delays the movie, and the movie stream is prepared (mounting the player
+// starts the HLS session) only in the final seconds of the last trailer so
+// no transcode slot is held for the whole pre-roll.
+export const PREROLL_FETCH_TIMEOUT_MS = 8_000;
+export const PREROLL_MOVIE_WARMUP_SEC = 20;
+export const TRAILER_COUNT_OPTIONS = [1, 2, 3, 4, 5] as const;
+export const TRAILER_SOURCE_OPTIONS = [
+  { value: "library", label: "My library" },
+  { value: "theaters", label: "In theaters" },
+  { value: "both", label: "Both" },
+] as const satisfies ReadonlyArray<{ value: string; label: string }>;
 /** Floor for persisting/offering resume; the server's continue-watching query uses the same 30s floor. */
 export const WATCH_PROGRESS_MIN_SECONDS = 30;
 /** Share of the runtime at which the server marks an item watched; resume stops being offered there. */

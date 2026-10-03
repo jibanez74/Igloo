@@ -37,6 +37,13 @@ export type PlaybackChapterType = Omit<ChapterType, "movie_id">;
 // GET /api/shows/episodes/{id}/watch-progress.
 export type WatchProgressType = components["schemas"]["WatchProgress"];
 
+export type TrailerPreferencesData = components["schemas"]["TrailerPreferencesData"];
+export type UpdateTrailerPreferencesRequest =
+  components["schemas"]["UpdateTrailerPreferencesRequest"];
+export type TrailerSource = components["schemas"]["TrailerSource"];
+export type PrerollTrailer = components["schemas"]["PrerollTrailer"];
+export type MoviePrerollData = components["schemas"]["MoviePrerollData"];
+
 export type PlaybackSettings = {
   mode: StreamModeId;
   audioTrack: number;
