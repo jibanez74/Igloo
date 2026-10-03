@@ -22,6 +22,12 @@ type WatchProgressSaverOptions = {
    * duration late). Without it, exit saves before metadata loads are dropped.
    */
   fallbackDurationSec?: number;
+  /**
+   * False while nothing the viewer did should count as watching the media:
+   * the trailer pre-roll runs before the movie, so no save of any kind (the
+   * interval, pause/end, tab-hidden keepalive, or the exit flush) may run.
+   */
+  enabled?: boolean;
 };
 
 export function useWatchProgressSaver({
@@ -30,6 +36,7 @@ export function useWatchProgressSaver({
   currentTimeRef,
   durationRef,
   fallbackDurationSec,
+  enabled = true,
 }: WatchProgressSaverOptions) {
   // Null until the first save; the chain starts from a resolved promise then.
   const pendingSaveRef = useRef<Promise<void> | null>(null);
@@ -70,7 +77,7 @@ export function useWatchProgressSaver({
   );
 
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || !enabled) return;
     const interval = window.setInterval(async () => {
       try {
         await queueProgressSave(
@@ -84,9 +91,10 @@ export function useWatchProgressSaver({
     return () => {
       window.clearInterval(interval);
     };
-  }, [playing, currentTimeRef, effectiveDurationSec, queueProgressSave]);
+  }, [playing, enabled, currentTimeRef, effectiveDurationSec, queueProgressSave]);
 
   useEffect(() => {
+    if (!enabled) return;
     // On a real page close, visibilitychange (hidden) usually fires and then
     // pagehide follows; the dedupe window keeps that from double-saving while
     // still covering browsers/platforms that only deliver one of the two.
@@ -126,9 +134,10 @@ export function useWatchProgressSaver({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", flushKeepalive);
     };
-  }, [currentTimeRef, effectiveDurationSec, kind, id]);
+  }, [enabled, currentTimeRef, effectiveDurationSec, kind, id]);
 
   const handlePauseSave = async () => {
+    if (!enabled) return;
     try {
       await queueProgressSave(
         currentTimeRef.current,
@@ -140,6 +149,7 @@ export function useWatchProgressSaver({
   };
 
   const handleEndedSave = async () => {
+    if (!enabled) return;
     const durationSec = effectiveDurationSec();
     try {
       await queueProgressSave(durationSec, durationSec);
@@ -151,8 +161,10 @@ export function useWatchProgressSaver({
     }
   };
 
-  const flushProgress = () =>
-    queueProgressSave(currentTimeRef.current, effectiveDurationSec());
+  const flushProgress = () => {
+    if (!enabled) return Promise.resolve();
+    return queueProgressSave(currentTimeRef.current, effectiveDurationSec());
+  };
 
   return { handlePauseSave, handleEndedSave, flushProgress };
 }

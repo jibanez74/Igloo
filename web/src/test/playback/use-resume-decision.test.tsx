@@ -28,11 +28,39 @@ describe("useResumeDecision", () => {
     });
 
     expect(result.current.resumeDialogOpen).toBe(false);
+    expect(result.current.resumeDecisionPending).toBe(true);
 
     rerender(eligibleProps);
 
     expect(result.current.resumeDialogOpen).toBe(true);
     expect(result.current.resumeTargetSec).toBe(900);
+    expect(result.current.resumeDecisionPending).toBe(false);
+  });
+
+  it("settles as dismissed, not pending, when there is no saved progress", () => {
+    const { result } = renderDecision({
+      ...eligibleProps,
+      savedProgressSec: null,
+      savedDurationSec: null,
+    });
+
+    expect(result.current.resumeDecisionPending).toBe(false);
+    expect(result.current.resumeDialogOpen).toBe(false);
+  });
+
+  it("stays settled after the progress query is removed again", () => {
+    const { result, rerender } = renderDecision(eligibleProps);
+    expect(result.current.resumeDialogOpen).toBe(true);
+
+    // "Start from beginning" clears the query, which reports pending again.
+    rerender({
+      ...eligibleProps,
+      watchProgressPending: true,
+      savedProgressSec: null,
+      savedDurationSec: null,
+    });
+
+    expect(result.current.resumeDecisionPending).toBe(false);
   });
 
   it("treats progress at the eligibility floor as resumable", () => {
