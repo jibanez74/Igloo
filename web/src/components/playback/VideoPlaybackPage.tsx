@@ -130,6 +130,7 @@ export default function VideoPlaybackPage({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
+  const prerollSkipButtonRef = useRef<HTMLButtonElement>(null);
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
@@ -906,7 +907,10 @@ export default function VideoPlaybackPage({
         pending={resumeActionPending}
         onResume={handleResume}
         onStartFromBeginning={() => void handleStartFromBeginning()}
-        restoreFocusRef={containerRef}
+        // Closing after "Start from beginning" lands on the pre-roll's
+        // primary control; after "Resume" the pre-roll is bypassed and the
+        // player region takes focus as before.
+        restoreFocusRef={prerollPhase ? prerollSkipButtonRef : containerRef}
       />
 
       {showShortcutHints && !prerollActive && (
@@ -975,6 +979,7 @@ export default function VideoPlaybackPage({
             controlsVisible={controlsVisible}
             isFullscreen={isFullscreen}
             isImmersiveViewport={isImmersiveViewport}
+            skipButtonRef={prerollSkipButtonRef}
             onFinish={handlePrerollFinish}
             onWarmup={() => setPrerollWarmup(true)}
             onShowControls={showControlsAndResetIdle}

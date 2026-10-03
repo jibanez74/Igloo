@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import PrerollPlayer from "@/components/playback/PrerollPlayer";
@@ -85,6 +86,7 @@ function renderPreroll(
     controlsVisible: true,
     isFullscreen: false,
     isImmersiveViewport: false,
+    skipButtonRef: createRef<HTMLButtonElement>(),
     onFinish: vi.fn(),
     onWarmup: vi.fn(),
     onShowControls: vi.fn(),

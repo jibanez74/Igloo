@@ -1,5 +1,5 @@
 import { Maximize, Minimize, Pause, Play } from "lucide-react";
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 
 import ProgressBar from "@/components/playback/ProgressBar";
 import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
@@ -27,6 +27,12 @@ type PrerollPlayerProps = {
   controlsVisible: boolean;
   isFullscreen: boolean;
   isImmersiveViewport: boolean;
+  /**
+   * The "Skip trailer" button, the pre-roll's primary control. The page
+   * also hands it to the resume dialog as its focus-restore target, since
+   * the dialog closes (and restores focus) after the pre-roll has appeared.
+   */
+  skipButtonRef: RefObject<HTMLButtonElement | null>;
   /** The pre-roll is over, by any route; the movie starts. */
   onFinish: () => void;
   /**
@@ -52,6 +58,7 @@ export default function PrerollPlayer({
   controlsVisible,
   isFullscreen,
   isImmersiveViewport,
+  skipButtonRef,
   onFinish,
   onWarmup,
   onShowControls,
@@ -60,7 +67,6 @@ export default function PrerollPlayer({
 }: PrerollPlayerProps) {
   const queue = usePrerollQueue({ trailers, loadFailed });
   const { loading, done, current, position, total, isLast } = queue;
-  const skipButtonRef = useRef<HTMLButtonElement | null>(null);
   const warmupFiredRef = useRef(false);
   // An embed error arrives twice: through onError, which skips the trailer,
   // and as the hook's error state. An error state on a trailer that reported
@@ -115,7 +121,7 @@ export default function PrerollPlayer({
   useEffect(() => {
     if (loading || done) return;
     skipButtonRef.current?.focus({ preventScroll: true });
-  }, [loading, done]);
+  }, [loading, done, skipButtonRef]);
 
   const handleKeyboardShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (
