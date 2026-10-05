@@ -34,6 +34,13 @@ type VideoPlayerProps = {
   src: string;
   /** True when `src` is an HLS playlist rather than a direct-play file. */
   isHlsSource: boolean;
+  /**
+   * Plays the replacement when this component swaps the element's source
+   * while it is playing or a `play()` is still pending. Tearing a source down
+   * rejects that play with AbortError and leaves the element paused, so the
+   * viewer's press would otherwise be dropped.
+   */
+  resumePlayAcrossSourceChanges?: boolean;
   title: string;
   isFullscreen?: boolean;
   onError: (message: string) => void;
@@ -193,6 +200,7 @@ export default function VideoPlayer({
   videoRef,
   src,
   isHlsSource,
+  resumePlayAcrossSourceChanges = false,
   title,
   isFullscreen = false,
   onError,
@@ -239,6 +247,10 @@ export default function VideoPlayer({
   // to be re-armed on the next seek, or a jump back past the back buffer
   // never fetches again; a seek into the same tail just re-enters the branch.
   const hlsLoadStoppedAtEndRef = useRef(false);
+  // Set when a source is torn down under a playing element or a pending
+  // play(); the next source this component puts in place plays. Cleared only
+  // once applied, so a rebuild cancelled before attaching passes it on.
+  const playRequestedAcrossSourceRef = useRef(false);
 
   const resumeHlsLoadAfterEnd = (video: HTMLVideoElement) => {
     const hls = hlsRef.current;
@@ -302,6 +314,24 @@ export default function VideoPlayer({
 
   const handleStartApplied = useEffectEvent((time: number) => {
     onStartApplied?.(time);
+  });
+
+  // `paused` turns false the moment play() is called, before any data
+  // arrives, so it also catches a press still waiting on the old source.
+  const carryPlayRequest = useEffectEvent((video: HTMLVideoElement) => {
+    if (resumePlayAcrossSourceChanges && !video.paused) {
+      playRequestedAcrossSourceRef.current = true;
+    }
+  });
+
+  const resumePlayRequest = useEffectEvent(async (video: HTMLVideoElement) => {
+    if (!playRequestedAcrossSourceRef.current) return;
+    playRequestedAcrossSourceRef.current = false;
+    try {
+      await video.play();
+    } catch {
+      // Best-effort, like the page's own resume after a rebase.
+    }
   });
 
   const applyStartTime = useEffectEvent((video: HTMLVideoElement) => {
@@ -431,6 +461,11 @@ export default function VideoPlayer({
 
         hls.loadSource(src);
         hls.attachMedia(video);
+        // Not earlier: attaching assigns the MediaSource (and with
+        // ManagedMediaSource calls load()), which aborts any pending play.
+        hls.once(Hls.Events.MEDIA_ATTACHED, () => {
+          void resumePlayRequest(video);
+        });
 
         if (startSec > 0) {
           hls.once(Hls.Events.MANIFEST_PARSED, () => {
@@ -613,6 +648,8 @@ export default function VideoPlayer({
 
     return () => {
       cancelled = true;
+      // Before the dispose: detaching is what pauses the element.
+      carryPlayRequest(video);
       disposeHls?.();
     };
   }, [isHlsSource, src, startSec, videoRef]);
@@ -628,12 +665,17 @@ export default function VideoPlayer({
     if (isHlsSource && !prefersNativeHLS) return;
 
     settledTimeRef.current = null;
+    const assignSource = () => {
+      video.src = src;
+      void resumePlayRequest(video);
+    };
     const clearSource = () => {
+      carryPlayRequest(video);
       video.removeAttribute("src");
       video.load();
     };
     if (!needsNativeManifestPreflight) {
-      video.src = src;
+      assignSource();
       return clearSource;
     }
 
@@ -680,14 +722,14 @@ export default function VideoPlayer({
           reportManifestMetadata(response.headers);
         }
         if (!cancelled) {
-          video.src = src;
+          assignSource();
         }
       } catch {
         window.clearTimeout(timeoutId);
         if (!cancelled) {
           // Metadata is advisory. Let the native player use its existing
           // loading and error behavior when the preflight itself fails.
-          video.src = src;
+          assignSource();
         }
       }
     })();

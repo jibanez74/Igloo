@@ -1,5 +1,11 @@
 import { focusManager, onlineManager } from "@tanstack/react-query";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
@@ -446,5 +452,57 @@ describe("movie play route trailer pre-roll", () => {
     expect(
       requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/watch-progress`, "DELETE"),
     ).toHaveLength(1);
+  });
+});
+
+describe("movie play route play button", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    hlsSupport.native = false;
+  });
+
+  async function pressPlay(rejection: DOMException) {
+    mockMovieApi();
+    playSpy().mockRejectedValue(rejection);
+    await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+    await movieVideo();
+    const controls = await screen.findByRole("group", {
+      name: "Playback controls",
+    });
+    await act(async () => {
+      fireEvent.click(within(controls).getByRole("button", { name: /^Play/ }));
+    });
+  }
+
+  // A restored tab's first press used to land here: the fresh session's
+  // start correction replaced the source under the pending play.
+  it("does not report a play the player's own source swap cut short", async () => {
+    await pressPlay(
+      new DOMException(
+        "The play() request was interrupted by a new load request.",
+        "AbortError",
+      ),
+    );
+
+    expect(playSpy()).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Playback failed")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Video player for Signal Fire" }),
+    ).toBeInTheDocument();
+  });
+
+  it("still reports a play the browser refused", async () => {
+    await pressPlay(
+      new DOMException("The element has no supported sources.", "NotSupportedError"),
+    );
+
+    expect(await screen.findByText("Playback failed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Playback failed — the browser could not play this stream.",
+      ),
+    ).toBeInTheDocument();
   });
 });

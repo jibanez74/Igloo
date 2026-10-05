@@ -29,6 +29,7 @@ import {
   stopHlsPlaybackSession,
   derivePlaybackStatus,
   displayedMediaDuration,
+  isInterruptedPlayError,
   shouldRebaseHlsSession,
   toAbsoluteDuration,
   toAbsolutePlaybackTime,
@@ -445,7 +446,12 @@ export default function VideoPlaybackPage({
     try {
       await video.play();
       setPlaybackError(null);
-    } catch {
+    } catch (error) {
+      // Cut short, not failed: the viewer paused, or the player replaced its
+      // source while the play was pending (a fresh remux session's start
+      // correction, a rebase, a recovery, a capacity retry) and plays the
+      // replacement itself (resumePlayAcrossSourceChanges).
+      if (isInterruptedPlayError(error)) return;
       setPlaybackError(
         "Playback failed — the browser could not play this stream.",
       );
@@ -756,6 +762,7 @@ export default function VideoPlaybackPage({
       videoRef={videoRef}
       src={streamUrl}
       isHlsSource={isHlsPlayback}
+      resumePlayAcrossSourceChanges
       title={title}
       isFullscreen={chromeFullscreenMode}
       onError={(msg) => {
