@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -227,6 +229,116 @@ func TestUserAvatar_ReplacingOrClearingRemovesTheUploadedFile(t *testing.T) {
 	}
 	if stored.Avatar.Valid {
 		t.Fatalf("cleared avatar = %+v, want NULL", stored.Avatar)
+	}
+}
+
+// uploadAvatarAs uploads a PNG avatar for userID and returns the file it wrote.
+func uploadAvatarAs(t *testing.T, app *Application, userID int64) string {
+	t.Helper()
+
+	w := httptest.NewRecorder()
+	authenticatedRouter(t, app, userID).ServeHTTP(w, avatarUploadRequest(t, "avatar", "avatar.png", []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")))
+	if w.Code != http.StatusOK {
+		t.Fatalf("upload avatar for user %d status = %d: %s", userID, w.Code, w.Body.String())
+	}
+
+	path := filepath.Join(app.CurrentSettings().StaticDir, "avatars", fmt.Sprintf("%d.png", userID))
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("uploaded avatar %s is missing: %v", path, err)
+	}
+	return path
+}
+
+func TestUpdateUserAvatar_RejectsValuesThatAreNotExternalURLs(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Uploader", "uploader@example.com", false)
+	handler := authenticatedRouter(t, app, user.ID)
+	uploaded := uploadAvatarAs(t, app, user.ID)
+
+	for _, avatar := range []string{
+		"/api/static/../../igloo.db",
+		"/api/static/avatars/1.png",
+		"javascript:alert(1)",
+		"ftp://example.com/avatar.png",
+		"example.com/avatar.png",
+	} {
+		req := newOpenAPIJSONRequest(http.MethodPut, "/api/user/avatar", fmt.Sprintf(`{"avatar":%q}`, avatar))
+		serveOpenAPIExchange(t, handler, "updateUserAvatar", req, http.StatusBadRequest)
+	}
+
+	stored, err := app.Queries.GetUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Avatar.String != uploadedAvatarURLPrefix+filepath.Base(uploaded) {
+		t.Fatalf("stored avatar = %+v, want the upload kept after rejected updates", stored.Avatar)
+	}
+	if _, err := os.Stat(uploaded); err != nil {
+		t.Fatalf("rejected updates removed the uploaded avatar: %v", err)
+	}
+}
+
+// A stored avatar may predate the URL validation, so replacing it, or deleting
+// its user, must only ever remove that user's own upload.
+func TestAvatarDeletion_OnlyRemovesTheOwnersUpload(t *testing.T) {
+	app := setupSessionTestApp(t)
+	ctx := context.Background()
+	owner := createTestUser(t, app, "Owner", "owner@example.com", false)
+	other := createTestUser(t, app, "Other", "other@example.com", false)
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+
+	otherUpload := uploadAvatarAs(t, app, other.ID)
+	outside := filepath.Join(filepath.Dir(app.CurrentSettings().StaticDir), "outside.txt")
+	if err := os.WriteFile(outside, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seed := func(avatar string) {
+		t.Helper()
+		_, err := app.Queries.UpdateUserAvatar(ctx, database.UpdateUserAvatarParams{
+			Avatar: sql.NullString{String: avatar, Valid: true},
+			ID:     owner.ID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertKept := func(t *testing.T, when string) {
+		t.Helper()
+		for _, path := range []string{outside, otherUpload} {
+			if _, err := os.Stat(path); err != nil {
+				t.Fatalf("%s removed %s: %v", when, path, err)
+			}
+		}
+	}
+
+	ownerHandler := authenticatedRouter(t, app, owner.ID)
+	for _, avatar := range []string{
+		"/api/static/../outside.txt",
+		"/api/static/avatars/../../outside.txt",
+		uploadedAvatarURLPrefix + filepath.Base(otherUpload),
+	} {
+		seed(avatar)
+		req := newOpenAPIJSONRequest(http.MethodPut, "/api/user/avatar", `{"avatar":"https://example.com/avatar.png"}`)
+		serveOpenAPIExchange(t, ownerHandler, "updateUserAvatar", req, http.StatusOK)
+		assertKept(t, "replacing "+avatar)
+	}
+
+	seed("/api/static/../outside.txt")
+	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/"+strconv.FormatInt(owner.ID, 10), nil)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, admin.ID), "adminDeleteUser", req, http.StatusOK)
+	assertKept(t, "deleting the user")
+}
+
+func TestDeleteUserAccount_RemovesTheUploadedAvatar(t *testing.T) {
+	app := setupSessionTestApp(t)
+	user := createTestUser(t, app, "Leaving", "leaving@example.com", false)
+	uploaded := uploadAvatarAs(t, app, user.ID)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/user", nil)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, user.ID), "deleteUserAccount", req, http.StatusOK)
+
+	if _, err := os.Stat(uploaded); !os.IsNotExist(err) {
+		t.Fatalf("avatar %s after account deletion: %v, want it removed", uploaded, err)
 	}
 }
 

@@ -267,6 +267,13 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Uploaded avatars are set only by UploadUserAvatar; this endpoint takes an
+	// external image URL or clears the avatar.
+	if !isOptionalHTTPURL(req.Avatar) {
+		helpers.ErrorJSON(w, errors.New("avatar must be an http or https URL"), http.StatusBadRequest)
+		return
+	}
+
 	currentUser, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to get user for avatar update", "error", err, "user_id", userID)
@@ -274,8 +281,8 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if currentUser.Avatar.Valid && isUploadedAvatar(currentUser.Avatar.String) {
-		app.deleteAvatarFile(currentUser.Avatar.String)
+	if currentUser.Avatar.Valid {
+		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
 	}
 
 	var avatarValue sql.NullString
@@ -302,6 +309,10 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
+
+// uploadedAvatarURLPrefix is the URL UploadUserAvatar publishes an avatar
+// under; the file behind it is static/avatars/<userID><ext>.
+const uploadedAvatarURLPrefix = "/api/static/avatars/"
 
 var allowedAvatarMimeTypes = map[string]string{
 	"image/jpeg": ".jpg",
@@ -363,8 +374,8 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if currentUser.Avatar.Valid && isUploadedAvatar(currentUser.Avatar.String) {
-		app.deleteAvatarFile(currentUser.Avatar.String)
+	if currentUser.Avatar.Valid {
+		app.deleteUploadedAvatar(userID, currentUser.Avatar.String)
 	}
 
 	avatarsDir := filepath.Join(app.CurrentSettings().StaticDir, "avatars")
@@ -392,7 +403,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	avatarURL := fmt.Sprintf("/api/static/avatars/%s", filename)
+	avatarURL := uploadedAvatarURLPrefix + filename
 
 	user, err := app.Queries.UpdateUserAvatar(r.Context(), database.UpdateUserAvatarParams{
 		Avatar: sql.NullString{String: avatarURL, Valid: true},
@@ -423,14 +434,29 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func isUploadedAvatar(avatarURL string) bool {
-	return strings.HasPrefix(avatarURL, "/api/static/")
-}
+// deleteUploadedAvatar removes the file UploadUserAvatar wrote for userID.
+// A stored avatar URL may predate the URL validation or name another user's
+// file, so only the exact name the upload produces for this user is deleted;
+// any other value, including one that climbs out of the static directory, is
+// left alone.
+func (app *Application) deleteUploadedAvatar(userID int64, avatarURL string) {
+	name, ok := strings.CutPrefix(avatarURL, uploadedAvatarURLPrefix)
+	if !ok {
+		return
+	}
 
-func (app *Application) deleteAvatarFile(avatarURL string) {
-	relativePath := strings.TrimPrefix(avatarURL, "/api/static/")
-	fullPath := filepath.Join(app.CurrentSettings().StaticDir, relativePath)
+	ownUpload := false
+	for _, ext := range allowedAvatarMimeTypes {
+		if name == fmt.Sprintf("%d%s", userID, ext) {
+			ownUpload = true
+			break
+		}
+	}
+	if !ownUpload {
+		return
+	}
 
+	fullPath := filepath.Join(app.CurrentSettings().StaticDir, "avatars", name)
 	if err := os.Remove(fullPath); err != nil {
 		if !os.IsNotExist(err) {
 			app.Logger.Error("failed to delete old avatar file", "error", err, "path", fullPath)
@@ -470,6 +496,10 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 	}
 
 	app.forgetUserDevices(userID)
+
+	if user.Avatar.Valid {
+		app.deleteUploadedAvatar(userID, user.Avatar.String)
+	}
 
 	err = app.SessionManager.Destroy(r.Context())
 	if err != nil {

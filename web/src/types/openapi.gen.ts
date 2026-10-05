@@ -336,7 +336,7 @@ export interface paths {
         get?: never;
         /**
          * Update the current user's avatar URL
-         * @description Stores the value as the avatar URL without validating it. When the current avatar is a /api/static/ path, the file it names under the static directory is deleted first.
+         * @description Replaces the avatar URL. When the current avatar is an uploaded image, its file is deleted.
          */
         put: operations["updateUserAvatar"];
         post?: never;
@@ -357,7 +357,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a user avatar image
-         * @description Writes the image to the static directory's avatars folder and points the account at it. When the current avatar is a /api/static/ path, the file it names under the static directory is deleted first.
+         * @description Writes the image to the static directory's avatars folder and points the account at it. When the current avatar is an uploaded image, its file is deleted first.
          */
         post: operations["uploadUserAvatar"];
         delete?: never;
@@ -399,7 +399,7 @@ export interface paths {
         post?: never;
         /**
          * Delete the current user's account
-         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes its device tokens and ends the current session.
+         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes its device tokens and uploaded avatar file, and ends the current session.
          */
         delete: operations["deleteUserAccount"];
         options?: never;
@@ -1685,7 +1685,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a user
-         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes their device tokens and, when their avatar is a /api/static/ path, the file it names.
+         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes their device tokens and uploaded avatar file.
          */
         delete: operations["adminDeleteUser"];
         options?: never;
@@ -2673,7 +2673,7 @@ export interface components {
             new_password: string;
         };
         UpdateUserAvatarRequest: {
-            /** @description Avatar URL. Empty string removes the avatar. */
+            /** @description An absolute http or https URL, or an empty string to remove the avatar. Any other value returns 400; uploaded avatars are set through POST /api/user/avatar/upload. */
             avatar: string;
         };
         UpdateUserPinRequest: {
