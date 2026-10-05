@@ -13,13 +13,12 @@ const countUnreadNotificationsForUser = `-- name: CountUnreadNotificationsForUse
 SELECT
   COUNT(*) AS unread_count
 FROM notifications AS n
-WHERE n.is_admin = true
-  AND NOT EXISTS (
-    SELECT 1
-    FROM notification_reads AS nr
-    WHERE nr.notification_id = n.id
-      AND nr.user_id = ?1
-  )
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM notification_reads AS nr
+  WHERE nr.notification_id = n.id
+    AND nr.user_id = ?1
+)
 `
 
 func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error) {
@@ -33,33 +32,25 @@ const createNotification = `-- name: CreateNotification :exec
 INSERT INTO notifications (
   created_by_user_id,
   title,
-  message,
-  is_admin
+  message
 )
-VALUES (?, ?, ?, ?)
+VALUES (?, ?, ?)
 `
 
 type CreateNotificationParams struct {
 	CreatedByUserID int64  `json:"created_by_user_id"`
 	Title           string `json:"title"`
 	Message         string `json:"message"`
-	IsAdmin         bool   `json:"is_admin"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) error {
-	_, err := q.exec(ctx, q.createNotificationStmt, createNotification,
-		arg.CreatedByUserID,
-		arg.Title,
-		arg.Message,
-		arg.IsAdmin,
-	)
+	_, err := q.exec(ctx, q.createNotificationStmt, createNotification, arg.CreatedByUserID, arg.Title, arg.Message)
 	return err
 }
 
 const deleteNotificationForUser = `-- name: DeleteNotificationForUser :execrows
 DELETE FROM notifications
 WHERE id = ?1
-  AND is_admin = true
 `
 
 func (q *Queries) DeleteNotificationForUser(ctx context.Context, notificationID int64) (int64, error) {
@@ -76,13 +67,12 @@ SELECT
     WHEN u.is_admin THEN (
       SELECT COUNT(*)
       FROM notifications AS n
-      WHERE n.is_admin = true
-        AND NOT EXISTS (
-          SELECT 1
-          FROM notification_reads AS nr
-          WHERE nr.notification_id = n.id
-            AND nr.user_id = u.id
-        )
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM notification_reads AS nr
+        WHERE nr.notification_id = n.id
+          AND nr.user_id = u.id
+      )
     )
     ELSE 0
   END AS unread_count
@@ -108,7 +98,6 @@ SELECT
   n.id,
   n.title,
   n.message,
-  n.is_admin,
   n.created_at,
   creator.name AS created_by_name,
   CAST((nr.notification_id IS NOT NULL) AS BOOLEAN) AS is_read
@@ -118,7 +107,6 @@ INNER JOIN users AS creator
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id
   AND nr.user_id = ?1
-WHERE n.is_admin = true
 ORDER BY n.created_at DESC
 LIMIT ?2
 `
@@ -132,7 +120,6 @@ type ListNotificationsForUserRow struct {
 	ID            int64  `json:"id"`
 	Title         string `json:"title"`
 	Message       string `json:"message"`
-	IsAdmin       bool   `json:"is_admin"`
 	CreatedAt     string `json:"created_at"`
 	CreatedByName string `json:"created_by_name"`
 	IsRead        bool   `json:"is_read"`
@@ -154,7 +141,6 @@ func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotifica
 			&i.ID,
 			&i.Title,
 			&i.Message,
-			&i.IsAdmin,
 			&i.CreatedAt,
 			&i.CreatedByName,
 			&i.IsRead,
@@ -176,10 +162,12 @@ const markAllNotificationsReadForUser = `-- name: MarkAllNotificationsReadForUse
 INSERT INTO notification_reads (notification_id, user_id)
 SELECT n.id, ?1
 FROM notifications AS n
-WHERE n.is_admin = true
+WHERE true
 ON CONFLICT (notification_id, user_id) DO NOTHING
 `
 
+// SQLite needs a WHERE clause before an upsert's ON CONFLICT in INSERT ... SELECT,
+// or it parses ON as a join constraint.
 func (q *Queries) MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error {
 	_, err := q.exec(ctx, q.markAllNotificationsReadForUserStmt, markAllNotificationsReadForUser, userID)
 	return err
@@ -190,7 +178,6 @@ INSERT INTO notification_reads (notification_id, user_id)
 SELECT n.id, ?1
 FROM notifications AS n
 WHERE n.id = ?2
-  AND n.is_admin = true
 ON CONFLICT (notification_id, user_id) DO NOTHING
 `
 

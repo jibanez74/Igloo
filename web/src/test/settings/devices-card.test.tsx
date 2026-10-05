@@ -30,7 +30,6 @@ function device(overrides: Partial<DeviceType> = {}): DeviceType {
     app_version: "1.0.0",
     created_at: "2026-07-01 10:00:00",
     last_used_at: "2026-07-05 20:00:00",
-    is_current: false,
     ...overrides,
   };
 }

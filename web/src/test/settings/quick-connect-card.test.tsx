@@ -37,7 +37,6 @@ function makeDevice(id: number, name: string): DeviceType {
     app_version: "1.0.0",
     created_at: "2026-07-13 12:00:00",
     last_used_at: "2026-07-13 12:00:00",
-    is_current: false,
   };
 }
 

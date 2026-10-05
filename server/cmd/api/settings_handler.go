@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -27,7 +26,6 @@ type generalSettingsResponse struct {
 	DownloadImages      bool    `json:"download_images"`
 	StaticDir           string  `json:"static_dir"`
 	TranscodeDir        string  `json:"transcode_dir"`
-	RestartRequired     bool    `json:"restart_required,omitempty"`
 }
 
 type updateGeneralSettingsRequest struct {
@@ -56,7 +54,7 @@ type updateLibrarySettingsRequest struct {
 	MusicDir  *string `json:"music_dir"`
 }
 
-func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool) generalSettingsResponse {
+func mapGeneralSettingsResponse(settings database.Setting) generalSettingsResponse {
 	return generalSettingsResponse{
 		TmdbKey:             helpers.StringPtrFromNull(settings.TmdbKey),
 		ImmichBaseURL:       helpers.StringPtrFromNull(settings.ImmichBaseUrl),
@@ -69,7 +67,6 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 		DownloadImages:      settings.DownloadImages,
 		StaticDir:           settings.StaticDir,
 		TranscodeDir:        settings.TranscodeDir,
-		RestartRequired:     restartRequired,
 	}
 }
 
@@ -159,7 +156,7 @@ func (app *Application) GetGeneralSettings(w http.ResponseWriter, _ *http.Reques
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"settings": mapGeneralSettingsResponse(settings, false),
+			"settings": mapGeneralSettingsResponse(settings),
 		},
 	})
 }
@@ -209,20 +206,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = helpers.GetOrCreateDir(filepath.Join(req.StaticDir, "albums"))
-	if err != nil {
-		app.Logger.Error("failed to validate static albums directory", "error", err, "path", req.StaticDir)
-		helpers.ErrorJSON(w, errors.New("static directory is not accessible"), http.StatusBadRequest)
-		return
-	}
-
-	_, err = helpers.GetOrCreateDir(filepath.Join(req.StaticDir, "musicians"))
-	if err != nil {
-		app.Logger.Error("failed to validate static musicians directory", "error", err, "path", req.StaticDir)
-		helpers.ErrorJSON(w, errors.New("static directory is not accessible"), http.StatusBadRequest)
-		return
-	}
-
 	_, err = helpers.GetOrCreateDir(req.TranscodeDir)
 	if err != nil {
 		app.Logger.Error("failed to validate transcode directory", "error", err, "path", req.TranscodeDir)
@@ -265,24 +248,22 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		Error:   false,
 		Message: "Settings updated",
 		Data: map[string]any{
-			"settings":         mapGeneralSettingsResponse(updatedSettings, restartRequired),
+			"settings":         mapGeneralSettingsResponse(updatedSettings),
 			"restart_required": restartRequired,
 		},
 	})
 }
 
+// generalSettingsRestartRequired reports whether a change only takes effect
+// after a restart: the TMDB and Spotify clients are built once at startup.
+// The static and transcode directories are read live, and the remaining
+// integration values are stored without a server feature that reads them.
 func generalSettingsRestartRequired(previous *database.Setting, next database.Setting) bool {
 	if previous == nil {
 		return false
 	}
 
-	return previous.StaticDir != next.StaticDir ||
-		previous.TranscodeDir != next.TranscodeDir ||
-		previous.TmdbKey != next.TmdbKey ||
-		previous.ImmichBaseUrl != next.ImmichBaseUrl ||
-		previous.ImmichApiKey != next.ImmichApiKey ||
-		previous.JellyfinBaseUrl != next.JellyfinBaseUrl ||
-		previous.JellyfinApiKey != next.JellyfinApiKey ||
+	return previous.TmdbKey != next.TmdbKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
 		previous.SpotifyClientSecret != next.SpotifyClientSecret
 }

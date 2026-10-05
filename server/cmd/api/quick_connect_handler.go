@@ -107,7 +107,7 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 			Data: map[string]any{
 				"status": "approved",
 				"token":  token,
-				"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt, true),
+				"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt),
 			},
 		})
 	default:
@@ -245,7 +245,7 @@ func normalizeQuickConnectCode(code string) string {
 	return strings.Map(stripSeparators, strings.ToUpper(strings.TrimSpace(code)))
 }
 
-func deviceResponseMap(id int64, name, platform string, appVersion sql.NullString, createdAt, lastUsedAt string, isCurrent bool) map[string]any {
+func deviceResponseMap(id int64, name, platform string, appVersion sql.NullString, createdAt, lastUsedAt string) map[string]any {
 	var version *string
 	if appVersion.Valid {
 		version = &appVersion.String
@@ -258,6 +258,5 @@ func deviceResponseMap(id int64, name, platform string, appVersion sql.NullStrin
 		"app_version":  version,
 		"created_at":   createdAt,
 		"last_used_at": lastUsedAt,
-		"is_current":   isCurrent,
 	}
 }

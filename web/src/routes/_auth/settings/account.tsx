@@ -93,7 +93,6 @@ const ALLOWED_AVATAR_TYPES = [
   "image/png",
   "image/gif",
   "image/webp",
-  "image/avif",
 ];
 
 function AccountSettings() {
@@ -450,7 +449,7 @@ function AccountSettings() {
 
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
       const message =
-        "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.";
+        "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.";
       setErrors(current => ({ ...current, avatarUpload: message }));
       showValidationError(message);
       document.getElementById(avatarUploadId)?.focus();
@@ -697,7 +696,7 @@ function AccountSettings() {
               </div>
             </div>
             <p id={avatarUploadDescriptionId} className="text-xs text-muted-foreground">
-              JPEG, PNG, GIF, WebP, or AVIF (max 20MB)
+              JPEG, PNG, GIF, or WebP (max 20MB)
             </p>
             {errors.avatarUpload && (
               <p

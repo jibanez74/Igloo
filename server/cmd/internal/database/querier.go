@@ -465,6 +465,8 @@ type Querier interface {
 	// from notification_reads.
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
 	ListWatchRoomIDsByMovieID(ctx context.Context, movieID int64) ([]int64, error)
+	// SQLite needs a WHERE clause before an upsert's ON CONFLICT in INSERT ... SELECT,
+	// or it parses ON as a join constraint.
 	MarkAllNotificationsReadForUser(ctx context.Context, userID int64) error
 	MarkMovieTmdbRetry(ctx context.Context, movieID int64) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error

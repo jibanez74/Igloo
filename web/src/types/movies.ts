@@ -220,7 +220,7 @@ export type ChapterType = {
   movie_id: NullableInt64;
 };
 
-// TMDB search result (from POST /api/movies/:id/tmdb-search)
+// TMDB search result (from POST /api/tmdb/movies/search)
 export type TmdbSearchResultType = {
   tmdb_id: number;
   title: string;

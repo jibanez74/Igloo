@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -123,23 +124,7 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	limit := int64(50)
-	l := r.URL.Query().Get("limit")
-	if l != "" {
-		parsed, err := strconv.ParseInt(l, 10, 64)
-		if err == nil && parsed > 0 && parsed <= 100 {
-			limit = parsed
-		}
-	}
-
-	offset := int64(0)
-	o := r.URL.Query().Get("offset")
-	if o != "" {
-		parsed, err := strconv.ParseInt(o, 10, 64)
-		if err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
+	limit, offset := parseLimitOffsetParams(r, 50, 100)
 
 	tracks, err := app.Queries.GetPlaylistTracksInfinite(r.Context(), database.GetPlaylistTracksInfiniteParams{
 		PlaylistID: playlistId,
@@ -423,8 +408,17 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
 		})
 		if err != nil {
-			app.Logger.Warn("failed to add track to playlist", "error", err, "track_id", trackId, "playlist_id", playlistId)
-			continue
+			// An unknown track id fails the track_id foreign key and is skipped,
+			// as AddMoviesToMoviePlaylist does; any other failure aborts the batch.
+			trackOK, existsErr := qtx.TrackExists(r.Context(), trackId)
+			if existsErr == nil && !trackOK {
+				skippedCount++
+				app.Logger.Warn("skip unknown track id for playlist", "track_id", trackId)
+				continue
+			}
+			app.Logger.Error("failed to add track to playlist", "error", err, "track_id", trackId, "playlist_id", playlistId)
+			helpers.ErrorJSON(w, errors.New("failed to add tracks"))
+			return
 		}
 		if rowsAffected == 0 {
 			skippedCount++
@@ -433,11 +427,13 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		addedCount++
 	}
 
-	timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
-	if timestampErr != nil {
-		app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistId)
-		helpers.ErrorJSON(w, errors.New("failed to add tracks"))
-		return
+	if addedCount > 0 {
+		timestampErr := qtx.UpdatePlaylistTimestamp(r.Context(), playlistId)
+		if timestampErr != nil {
+			app.Logger.Error(updatePlaylistTimestampLogMessage, "error", timestampErr, "playlist_id", playlistId)
+			helpers.ErrorJSON(w, errors.New("failed to add tracks"))
+			return
+		}
 	}
 
 	err = tx.Commit()
@@ -765,6 +761,10 @@ func (app *Application) addCollaborator(
 		CanEdit:    req.CanEdit,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), uniqueConstraintErrorFragment) {
+			helpers.ErrorJSON(w, errors.New("that user is already a collaborator on this playlist"), http.StatusConflict)
+			return
+		}
 		app.Logger.Error("failed to add collaborator", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to add collaborator"))
 		return

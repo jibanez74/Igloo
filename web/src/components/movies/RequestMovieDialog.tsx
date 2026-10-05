@@ -55,7 +55,6 @@ export default function RequestMovieDialog({
     const response = await createNotification({
       title: NOTIFICATION_TITLES.MOVIE_REQUEST,
       message: lines.join("\n"),
-      isAdmin: true,
     });
 
     if (response.error) {

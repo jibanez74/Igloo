@@ -29,7 +29,6 @@ const (
 type CreateNotificationRequest struct {
 	Title   string `json:"title"`
 	Message string `json:"message"`
-	IsAdmin bool   `json:"isAdmin"`
 }
 
 // notificationResponse is the client-facing shape of a notification. It
@@ -38,7 +37,6 @@ type notificationResponse struct {
 	ID            int64  `json:"id"`
 	Title         string `json:"title"`
 	Message       string `json:"message"`
-	IsAdmin       bool   `json:"is_admin"`
 	IsRead        bool   `json:"is_read"`
 	CreatedByName string `json:"created_by_name"`
 	CreatedAt     string `json:"created_at"`
@@ -49,7 +47,6 @@ func newNotificationResponse(row database.ListNotificationsForUserRow) notificat
 		ID:            row.ID,
 		Title:         row.Title,
 		Message:       row.Message,
-		IsAdmin:       row.IsAdmin,
 		IsRead:        row.IsRead,
 		CreatedByName: row.CreatedByName,
 		CreatedAt:     row.CreatedAt,
@@ -118,13 +115,6 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Notifications are the shared admin request queue; there is no per-user
-	// targeting, so isAdmin must be true.
-	if !req.IsAdmin {
-		helpers.ErrorJSON(w, errors.New("isAdmin must be true: notifications are the shared admin queue"), http.StatusBadRequest)
-		return
-	}
-
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -134,7 +124,6 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		CreatedByUserID: userID,
 		Title:           req.Title,
 		Message:         req.Message,
-		IsAdmin:         req.IsAdmin,
 	})
 
 	if err != nil {
@@ -243,8 +232,8 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 }
 
 // MarkNotificationRead records that the current user has read a single
-// notification. It is idempotent and relevance-gated in SQL, so marking an
-// already-read or out-of-scope notification is a harmless no-op.
+// notification. It is idempotent, so marking an already-read or nonexistent
+// notification is a harmless no-op.
 func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
@@ -326,8 +315,8 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Non-admins can never see a notification, so for them the delete is the
-	// same not-found it always was.
+	// Non-admins can never see a notification, so for them the delete is a
+	// not-found.
 	var rowsAffected int64
 	if isAdmin {
 		var err error

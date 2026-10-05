@@ -308,7 +308,6 @@ var allowedAvatarMimeTypes = map[string]string{
 	"image/png":  ".png",
 	"image/gif":  ".gif",
 	"image/webp": ".webp",
-	"image/avif": ".avif",
 }
 
 const maxAvatarSize = 20 << 20
@@ -348,7 +347,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 
 	ext, ok := allowedAvatarMimeTypes[contentType]
 	if !ok {
-		helpers.ErrorJSON(w, errors.New("invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New("invalid file type. Allowed: JPEG, PNG, GIF, WebP"), http.StatusBadRequest)
 		return
 	}
 

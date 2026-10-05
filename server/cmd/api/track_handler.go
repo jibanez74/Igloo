@@ -256,24 +256,7 @@ func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Request) {
-	limit := int64(50)
-	if l := r.URL.Query().Get("limit"); l != "" {
-		parsed, err := strconv.ParseInt(l, 10, 64)
-		if err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	offset := int64(0)
-	if o := r.URL.Query().Get("offset"); o != "" {
-		parsed, err := strconv.ParseInt(o, 10, 64)
-		if err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
+	limit, offset := parseLimitOffsetParams(r, 50, 100)
 
 	total, err := app.Queries.GetTracksCount(r.Context())
 	if err != nil {

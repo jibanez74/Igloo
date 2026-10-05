@@ -225,17 +225,6 @@ func (app *Application) InitDirs() error {
 		app.Logger.Info("created static directory", "path", settings.StaticDir)
 	}
 
-	// Scanner-downloaded artwork is stored beneath static/.
-	_, err = helpers.GetOrCreateDir(filepath.Join(settings.StaticDir, "albums"))
-	if err != nil {
-		return fmt.Errorf("failed to initialize static/albums: %w", err)
-	}
-
-	_, err = helpers.GetOrCreateDir(filepath.Join(settings.StaticDir, "musicians"))
-	if err != nil {
-		return fmt.Errorf("failed to initialize static/musicians: %w", err)
-	}
-
 	transcodeDir := settings.TranscodeDir
 	if transcodeDir != "" {
 		created, err = helpers.GetOrCreateDir(transcodeDir)

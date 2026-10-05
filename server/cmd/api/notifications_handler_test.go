@@ -23,8 +23,7 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := newOpenAPIJSONRequest(http.MethodPost, "/api/notifications", `{
 		"title": "movie_request",
-		"message": "Requester: requester@example.com",
-		"isAdmin": true
+		"message": "Requester: requester@example.com"
 	}`)
 	handler.ServeHTTP(w, req)
 
@@ -43,13 +42,12 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	}
 	var creatorID int64
 	var title, message string
-	var isAdmin bool
-	err = app.DB.QueryRow("SELECT created_by_user_id, title, message, is_admin FROM notifications").Scan(&creatorID, &title, &message, &isAdmin)
+	err = app.DB.QueryRow("SELECT created_by_user_id, title, message FROM notifications").Scan(&creatorID, &title, &message)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if creatorID != user.ID || title != notificationTitleMovieRequest || message != "Requester: requester@example.com" || !isAdmin {
-		t.Fatalf("stored notification = %d/%q/%q/%t", creatorID, title, message, isAdmin)
+	if creatorID != user.ID || title != notificationTitleMovieRequest || message != "Requester: requester@example.com" {
+		t.Fatalf("stored notification = %d/%q/%q", creatorID, title, message)
 	}
 }
 
@@ -63,9 +61,9 @@ func TestCreateNotification_HTTPRejectsInvalidRequests(t *testing.T) {
 		body        string
 		wantMessage string
 	}{
-		{"unknown title", `{"title":"invalid","message":"Requester: requester@example.com","isAdmin":true}`, ""},
-		{"blank message", `{"title":"movie_request","message":"   ","isAdmin":true}`, ""},
-		{"isAdmin false", `{"title":"movie_request","message":"Requester: requester@example.com","isAdmin":false}`, "isAdmin must be true: notifications are the shared admin queue"},
+		{"unknown title", `{"title":"invalid","message":"Requester: requester@example.com"}`, ""},
+		{"blank message", `{"title":"movie_request","message":"   "}`, ""},
+		{"unknown isAdmin field", `{"title":"movie_request","message":"Requester: requester@example.com","isAdmin":true}`, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,7 +93,6 @@ type notificationListResponse struct {
 			ID            int64  `json:"id"`
 			Title         string `json:"title"`
 			Message       string `json:"message"`
-			IsAdmin       bool   `json:"is_admin"`
 			IsRead        bool   `json:"is_read"`
 			CreatedByName string `json:"created_by_name"`
 		} `json:"notifications"`
@@ -109,7 +106,6 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 		CreatedByUserID: requesterID,
 		Title:           notificationTitleMovieRequest,
 		Message:         message,
-		IsAdmin:         true,
 	})
 	if err != nil {
 		t.Fatalf("failed to seed notification: %v", err)

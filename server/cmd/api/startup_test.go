@@ -619,8 +619,6 @@ func TestInitDirs(t *testing.T) {
 	for _, dir := range []string{
 		app.settings.StaticDir,
 		app.settings.TranscodeDir,
-		filepath.Join(app.settings.StaticDir, "albums"),
-		filepath.Join(app.settings.StaticDir, "musicians"),
 	} {
 		info, err := os.Stat(dir)
 		if err != nil {

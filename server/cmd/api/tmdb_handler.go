@@ -68,14 +68,6 @@ var supportedTmdbImageSizes = map[string]bool{
 }
 
 func (app *Application) SearchTmdbMovies(w http.ResponseWriter, r *http.Request) {
-	app.handleTmdbMovieSearch(w, r)
-}
-
-func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request) {
-	app.handleTmdbMovieSearch(w, r)
-}
-
-func (app *Application) handleTmdbMovieSearch(w http.ResponseWriter, r *http.Request) {
 	if !app.ensureTmdbAvailable(w) {
 		return
 	}

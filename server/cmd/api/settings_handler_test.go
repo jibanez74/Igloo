@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/scanner"
 )
@@ -75,6 +77,39 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	}
 	if app.settings.ImmichApiKey.String != "immich-api-key" || !app.settings.ImmichApiKey.Valid {
 		t.Fatalf("expected app.settings Immich API key to be saved, got %q valid=%v", app.settings.ImmichApiKey.String, app.settings.ImmichApiKey.Valid)
+	}
+}
+
+func TestGeneralSettingsRestartRequired_OnlyForStartupClients(t *testing.T) {
+	previous := database.Setting{
+		TmdbKey:      sql.NullString{String: "tmdb-key", Valid: true},
+		StaticDir:    "/srv/igloo/static",
+		TranscodeDir: "/srv/igloo/transcode",
+	}
+	tests := []struct {
+		name   string
+		change func(*database.Setting)
+		want   bool
+	}{
+		{"tmdb key", func(s *database.Setting) { s.TmdbKey.String = "rotated" }, true},
+		{"spotify client id", func(s *database.Setting) { s.SpotifyClientID = sql.NullString{String: "id", Valid: true} }, true},
+		{"spotify client secret", func(s *database.Setting) { s.SpotifyClientSecret = sql.NullString{String: "secret", Valid: true} }, true},
+		{"static dir", func(s *database.Setting) { s.StaticDir = "/elsewhere/static" }, false},
+		{"transcode dir", func(s *database.Setting) { s.TranscodeDir = "/elsewhere/transcode" }, false},
+		{"jellyfin api key", func(s *database.Setting) { s.JellyfinApiKey = sql.NullString{String: "key", Valid: true} }, false},
+		{"immich base url", func(s *database.Setting) {
+			s.ImmichBaseUrl = sql.NullString{String: "http://immich.local", Valid: true}
+		}, false},
+		{"watcher flag", func(s *database.Setting) { s.EnableWatcher = true }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			next := previous
+			tt.change(&next)
+			if got := generalSettingsRestartRequired(&previous, next); got != tt.want {
+				t.Fatalf("restart required = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

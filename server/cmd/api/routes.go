@@ -186,7 +186,6 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 		r.Head("/{id}/stream", app.StreamMovie)
 		r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
 
-		r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
 		r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
 		r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
 		r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)

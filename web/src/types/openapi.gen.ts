@@ -32,7 +32,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password
-         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         * @description The email is matched exactly as sent: it is not trimmed and the match is case-sensitive. Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
          */
         post: operations["authenticateUser"];
         delete?: never;
@@ -89,7 +89,7 @@ export interface paths {
         put?: never;
         /**
          * Log in with email and password from a TV or mobile client and receive a device token
-         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401.
+         * @description Passwords exceeding 72 UTF-8 bytes are invalid credentials and return 401. Rate limited to 10 requests per 5 minutes per client IP (the TCP peer address, not forwarded headers).
          */
         post: operations["authenticateDevice"];
         delete?: never;
@@ -107,7 +107,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request a quick-connect code to display on a device */
+        /**
+         * Request a quick-connect code to display on a device
+         * @description Starts a pairing. The code expires 5 minutes after this request; approval does not extend it. Rate limited to 10 requests per minute per client IP (the TCP peer address, not forwarded headers). Returns 503 while 1,000 codes are already pending.
+         */
         post: operations["initiateQuickConnect"];
         delete?: never;
         options?: never;
@@ -126,7 +129,7 @@ export interface paths {
         put?: never;
         /**
          * Poll a quick-connect code and receive a device token once approved
-         * @description Quick Connect pairings are kept in this server process's memory. In multi-instance deployments, initiate, approve, and redeem must reach the same instance through sticky routing or a shared store; otherwise cross-instance requests can return 404. Devices poll this endpoint at the advertised interval. A 404 means the code is unknown, expired, or the secret does not match (including after a server restart); the device should request a new code and start over. Approved codes are consumed: the token is returned exactly once.
+         * @description Devices poll this endpoint at the advertised interval. Pending codes live only in this server process's memory, so a restart discards them. A 404 means the code or secret is missing, unknown, expired, or mismatched; the device should request a new code and start over. 400 is returned only for a malformed body. The approved response consumes the code. Rate limited to 60 requests per minute per client IP.
          */
         post: operations["redeemQuickConnect"];
         delete?: never;
@@ -146,7 +149,7 @@ export interface paths {
         put?: never;
         /**
          * Look up the device behind a pending quick-connect code
-         * @description Returns the pending device's name, platform, and app version so the user can see what they are approving. Does not bind or consume the code. Session-authenticated users only, and it shares the approve endpoint's rate limit so lookups cannot be used to guess codes faster.
+         * @description Returns the pending device's name, platform, and app version so the user can see what they are approving. Does not bind or consume the code. Session-authenticated users only. Shares the approve endpoint's rate limit (10 requests per 5 minutes per user) so lookups cannot be used to guess codes faster. A missing, unknown, expired, or already approved code returns 404.
          */
         post: operations["lookupQuickConnect"];
         delete?: never;
@@ -166,7 +169,7 @@ export interface paths {
         put?: never;
         /**
          * Approve a quick-connect code for the current user
-         * @description Session-authenticated users only: requests carrying a device bearer token are rejected so a device token cannot mint further devices.
+         * @description Session-authenticated users only: requests carrying a device bearer token are rejected so a device token cannot mint further devices. A missing, unknown, expired, or already approved code returns 404. Rate limited to 10 requests per 5 minutes per user, shared with lookup.
          */
         post: operations["approveQuickConnect"];
         delete?: never;
@@ -227,7 +230,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update the current user's name */
+        /**
+         * Update the current user's name
+         * @description The name is stored as sent; it is not trimmed.
+         */
         put: operations["updateUserName"];
         post?: never;
         delete?: never;
@@ -244,7 +250,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update the current user's email */
+        /**
+         * Update the current user's email
+         * @description The email is trimmed and stored without format validation. An address another account already uses (case-sensitive comparison) returns 409.
+         */
         put: operations["updateUserEmail"];
         post?: never;
         delete?: never;
@@ -287,7 +296,7 @@ export interface paths {
         get: operations["getUserPin"];
         /**
          * Set, change, or remove the current user's profile PIN
-         * @description An empty pin removes the PIN. When a PIN is already set, current_pin is required and attempts are rate limited.
+         * @description An empty pin removes the PIN. Setting the first PIN needs no current_pin. When a PIN is already set, current_pin is required (400 when missing) and a wrong current_pin returns 401; those attempts share a 5-per-minute per-user rate limit with PIN verification.
          */
         put: operations["updateUserPin"];
         post?: never;
@@ -308,7 +317,7 @@ export interface paths {
         put?: never;
         /**
          * Verify the current user's profile PIN
-         * @description Used by TV clients when switching profiles. A wrong PIN returns 200 with valid=false; attempts are rate limited.
+         * @description Used by TV clients when switching profiles. A wrong PIN returns 200 with valid=false. Returns 400 when the account has no PIN. Every verification, correct or not, counts toward a 5-per-minute per-user rate limit shared with PIN changes.
          */
         post: operations["verifyUserPin"];
         delete?: never;
@@ -325,7 +334,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update the current user's avatar URL */
+        /**
+         * Update the current user's avatar URL
+         * @description Stores the value as the avatar URL without validating it. When the current avatar is a /api/static/ path, the file it names under the static directory is deleted first.
+         */
         put: operations["updateUserAvatar"];
         post?: never;
         delete?: never;
@@ -343,7 +355,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload a user avatar image */
+        /**
+         * Upload a user avatar image
+         * @description Writes the image to the static directory's avatars folder and points the account at it. When the current avatar is a /api/static/ path, the file it names under the static directory is deleted first.
+         */
         post: operations["uploadUserAvatar"];
         delete?: never;
         options?: never;
@@ -384,7 +399,7 @@ export interface paths {
         post?: never;
         /**
          * Delete the current user's account
-         * @description Admin accounts cannot delete themselves through this endpoint.
+         * @description Admin accounts cannot delete themselves through this endpoint. Deleting the account also deletes its device tokens and ends the current session.
          */
         delete: operations["deleteUserAccount"];
         options?: never;
@@ -401,7 +416,7 @@ export interface paths {
         };
         /**
          * Serve a static asset
-         * @description Serves uploaded avatars and scanner-downloaded artwork from the configured static directory. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
+         * @description Serves files from the configured static directory, such as uploaded avatars. Content-Type comes from the file extension using the host MIME registry, falling back to application/octet-stream. Successful responses set Cache-Control: public, max-age=31536000 and X-Content-Type-Options: nosniff. Last-Modified supports date revalidation; this endpoint does not emit ETag.
          */
         get: operations["serveStaticFiles"];
         put?: never;
@@ -419,10 +434,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List notifications for the current user */
+        /**
+         * List the admin request queue
+         * @description Returns at most the 50 newest items, newest first. unread_count counts every item the caller has not read, including ones beyond the first 50. Non-administrators always receive an empty list and an unread_count of 0.
+         */
         get: operations["listNotifications"];
         put?: never;
-        /** Create a notification */
+        /**
+         * File a request in the admin queue
+         * @description Any authenticated user, including a device token, can file a request. The title and message are trimmed before validation.
+         */
         post: operations["createNotification"];
         delete?: never;
         options?: never;
@@ -437,7 +458,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get the unread notification count for the current user */
+        /**
+         * Get the caller's unread request count
+         * @description Always 0 for non-administrators.
+         */
         get: operations["getUnreadNotificationCount"];
         put?: never;
         post?: never;
@@ -456,7 +480,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mark all visible notifications as read */
+        /**
+         * Mark every queue item as read for the caller
+         * @description A no-op for non-administrators.
+         */
         post: operations["markAllNotificationsRead"];
         delete?: never;
         options?: never;
@@ -473,7 +500,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mark a notification as read */
+        /**
+         * Mark a queue item as read for the caller
+         * @description Idempotent. An unknown id, or a caller who is not an administrator, is a 200 no-op.
+         */
         post: operations["markNotificationRead"];
         delete?: never;
         options?: never;
@@ -491,7 +521,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a notification */
+        /**
+         * Delete a queue item
+         * @description Removes the item for every administrator. Non-administrators always receive 404.
+         */
         delete: operations["deleteNotification"];
         options?: never;
         head?: never;
@@ -573,7 +606,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Proxy a TMDB image */
+        /**
+         * Proxy a TMDB image
+         * @description Works whether or not a TMDB key is configured. Content-Type, Cache-Control, ETag, and Last-Modified are copied from the upstream response. A file name containing `..` returns 400.
+         */
         get: operations["proxyTmdbImage"];
         put?: never;
         post?: never;
@@ -592,7 +628,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Search TMDB movies */
+        /**
+         * Search TMDB movies
+         * @description Requires a nonblank title (trimmed) or a positive tmdb_id; otherwise 400. A positive tmdb_id returns that single TMDB movie and ignores title and year. Upstream TMDB failures return 500.
+         */
         post: operations["searchTmdbMovies"];
         delete?: never;
         options?: never;
@@ -624,7 +663,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get TMDB movie details by TMDB ID */
+        /**
+         * Get TMDB movie details by TMDB ID
+         * @description Any TMDB lookup failure, including an unknown TMDB ID, returns 500.
+         */
         get: operations["getMovieByTmdbID"];
         put?: never;
         post?: never;
@@ -641,7 +683,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Proxy a YouTube video thumbnail */
+        /**
+         * Proxy a YouTube video thumbnail
+         * @description Content-Type, Cache-Control, ETag, and Last-Modified are copied from the upstream response.
+         */
         get: operations["proxyYouTubeThumbnail"];
         put?: never;
         post?: never;
@@ -1001,7 +1046,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stop a personal episode HLS playback session */
+        /**
+         * Stop a personal episode HLS playback session
+         * @description Ends every session the caller has for this media and playback_session, across profiles, audio selections, and start windows. Always returns 200, including when no session exists or the id is unknown; an invalid playback_session returns 400.
+         */
         post: operations["stopEpisodeHlsSession"];
         delete?: never;
         options?: never;
@@ -1018,7 +1066,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a TV episode
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. A cold manifest request can spend up to 15 seconds waiting for transcode capacity and up to 30 seconds waiting for the first copy-video playlist, for a maximum 45-second server wait before a retryable 503.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media.
          */
         get: operations["episodeHlsManifest"];
         put?: never;
@@ -1038,7 +1086,7 @@ export interface paths {
         };
         /**
          * Get an HLS initialization file or media segment for a TV episode
-         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
          */
         get: operations["episodeHlsSegment"];
         put?: never;
@@ -1099,7 +1147,7 @@ export interface paths {
         };
         /**
          * List what the current user is watching
-         * @description Returns up to 12 movies and TV episodes the current user has started watching but not finished or marked watched, most recently watched first. A show contributes at most one entry: its most recently watched in-progress episode.
+         * @description Returns up to 12 movies and TV episodes the current user has a saved position of at least 30 seconds in, without having finished them or marked them watched, most recently watched first. Episodes without a media file are left out. A show contributes at most one entry: its most recently watched in-progress episode.
          */
         get: operations["getContinueWatching"];
         put?: never;
@@ -1219,10 +1267,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List movies in a movie playlist */
+        /**
+         * List movies in a movie playlist
+         * @description Ordered by movie title (case-insensitive, then id), not by the order the movies were added; sort reverses the order.
+         */
         get: operations["getMoviePlaylistMovies"];
         put?: never;
-        /** Add movies to a movie playlist */
+        /**
+         * Add movies to a movie playlist
+         * @description Owner or editing collaborator. Movies are appended in request order. Ids already in the playlist, repeated ids, and unknown ids count as skipped; any other failure adds nothing and returns 500. updated_at changes only when a movie was added.
+         */
         post: operations["addMoviesToMoviePlaylist"];
         delete?: never;
         options?: never;
@@ -1240,7 +1294,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a movie from a movie playlist */
+        /**
+         * Remove a movie from a movie playlist
+         * @description Owner or editing collaborator. Returns 200 even when the movie is not in the playlist.
+         */
         delete: operations["removeMovieFromMoviePlaylist"];
         options?: never;
         head?: never;
@@ -1254,7 +1311,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List movie playlists visible to the current user */
+        /**
+         * List movie playlists the current user owns or collaborates on
+         * @description Most recently updated first. Other users' public playlists are not listed, though they can be read by id.
+         */
         get: operations["getMoviePlaylists"];
         put?: never;
         /** Create a movie playlist */
@@ -1272,12 +1332,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a movie playlist */
+        /**
+         * Get a movie playlist
+         * @description collaborators is filled only for the owner and is null for everyone else.
+         */
         get: operations["getMoviePlaylist"];
-        /** Update a movie playlist */
+        /**
+         * Update a movie playlist
+         * @description Owner only; collaborators receive 403. Replaces the metadata: an omitted or empty description or cover_image is cleared, and an omitted is_public becomes false. cover_image is stored without validation. An omitted or null movie_id keeps the current movie; it cannot be cleared.
+         */
         put: operations["updateMoviePlaylist"];
         post?: never;
-        /** Delete a movie playlist */
+        /**
+         * Delete a movie playlist
+         * @description Owner only; collaborators receive 403. The playlist's items and collaborators are deleted with it.
+         */
         delete: operations["deleteMoviePlaylist"];
         options?: never;
         head?: never;
@@ -1291,10 +1360,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List movie playlist collaborators */
+        /**
+         * List movie playlist collaborators
+         * @description Owner only; collaborators receive 403. Oldest first, including each collaborator's email.
+         */
         get: operations["getMoviePlaylistCollaborators"];
         put?: never;
-        /** Add a collaborator to a movie playlist */
+        /**
+         * Add a collaborator to a movie playlist
+         * @description Owner only. Adding yourself returns 400, an unknown user returns 404, and a user who is already a collaborator returns 409; to change can_edit, remove and add the collaborator again.
+         */
         post: operations["addMoviePlaylistCollaborator"];
         delete?: never;
         options?: never;
@@ -1312,7 +1387,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a collaborator from a movie playlist */
+        /**
+         * Remove a collaborator from a movie playlist
+         * @description Owner only, so a collaborator cannot remove themselves. Removing a user who is not a collaborator still returns 200.
+         */
         delete: operations["removeMoviePlaylistCollaborator"];
         options?: never;
         head?: never;
@@ -1435,7 +1513,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a movie
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. A cold manifest request can spend up to 15 seconds waiting for transcode capacity and up to 30 seconds waiting for the first copy-video playlist, for a maximum 45-second server wait before a retryable 503.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media.
          */
         get: operations["hlsManifest"];
         put?: never;
@@ -1455,7 +1533,7 @@ export interface paths {
         };
         /**
          * Get an HLS initialization file or media segment for a movie
-         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and preserve the manifest URL's profile and query parameters so the same owner-scoped session key is used. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
+         * @description Serves an asset from a previously created personal HLS session. Request the manifest first, authenticate this request independently, and fetch the asset URLs exactly as the playlist rewrites them; they carry the normalized start and the other query parameters that select the same owner-scoped session. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
          */
         get: operations["hlsSegment"];
         put?: never;
@@ -1507,26 +1585,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/movies/{id}/tmdb-search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Search TMDB candidates for a local movie
-         * @description Admin-only endpoint. Candidates use the same title-dominant ranking as automatic scans, with bounded release-year and popularity/vote signals and deterministic title/ID tie-breaking. Low confidence does not exclude candidates.
-         */
-        post: operations["tmdbSearchMovies"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/movies/{id}/identify": {
         parameters: {
             query?: never;
@@ -1537,7 +1595,7 @@ export interface paths {
         get?: never;
         /**
          * Replace local movie metadata from a TMDB movie
-         * @description Admin-only endpoint. Successful Identify atomically replaces TMDB descriptive metadata and relationships and clears pending enrichment retries. Audience rating and file-derived duration/runtime are preserved. Automatic scans retain the selected TMDB identity; stale in-flight enrichment cannot overwrite a changed identity. Failed Identify leaves metadata and retry state unchanged.
+         * @description Admin-only endpoint. Returns 503 when TMDB is not configured and 404 for an unknown movie before TMDB is contacted; a failed TMDB lookup returns 500. Successful Identify atomically replaces TMDB descriptive metadata and relationships and clears pending enrichment retries. Audience rating and file-derived duration/runtime are preserved. Automatic scans retain the selected TMDB identity; stale in-flight enrichment cannot overwrite a changed identity. Failed Identify leaves metadata and retry state unchanged.
          */
         put: operations["identifyMovie"];
         post?: never;
@@ -1559,14 +1617,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a movie from the library
-         * @description Admin-only endpoint. The request body is optional; delete_file defaults to false.
+         * @description Admin-only endpoint. The request body is optional and is never rejected; the file is deleted only when the body sets delete_file to true, even if other parts of the body are malformed. Deleting the movie also deletes its watch rooms: their members receive room_deleted and their connections close. With delete_file true the file is removed from disk; a failure to remove it is logged and the response is still 200.
          */
         delete: operations["deleteMovie"];
         options?: never;
         head?: never;
         /**
          * Partially update local movie metadata
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Only the fields present in the body change; a field sent as null is left unchanged. An empty string clears any field other than title to null (an empty title is stored as an empty string), and year 0 clears the year. Values are stored without format validation.
          */
         patch: operations["updateMovieMetadata"];
         trace?: never;
@@ -1578,7 +1636,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List users available for watch-room invites */
+        /**
+         * List users available for watch-room invites
+         * @description Every user except the caller, ordered by name, without pagination.
+         */
         get: operations["getUsers"];
         put?: never;
         post?: never;
@@ -1624,14 +1685,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a user
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Returns 403 for deleting your own account or the last administrator. Deleting a user also deletes their device tokens and, when their avatar is a /api/static/ path, the file it names.
          */
         delete: operations["adminDeleteUser"];
         options?: never;
         head?: never;
         /**
          * Update a user
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Replaces the user's name, email, and admin flag; name and email are trimmed. Returns 403 when an administrator removes their own admin status or the last administrator's status, and 409 when the email belongs to another user.
          */
         patch: operations["adminUpdateUser"];
         trace?: never;
@@ -1646,7 +1707,7 @@ export interface paths {
         get?: never;
         /**
          * Reset a user's password
-         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing.
+         * @description Admin-only endpoint. New passwords must contain at least 9 Unicode characters and at most 72 UTF-8 bytes. Passwords outside these limits are rejected with 400 before hashing. An unknown user returns 404.
          */
         put: operations["adminResetUserPassword"];
         post?: never;
@@ -1668,7 +1729,7 @@ export interface paths {
         put?: never;
         /**
          * Create a watch room
-         * @description subtitle_track is null to disable subtitles, or a zero-based ordinal below the current subtitle count (ordered by stream_index); non-null selection is rejected when no subtitles exist. Direct mode requires video/mp4, a primary H.264/AVC video stream, and browser-safe scanned video metadata: no bit depth above 8, no interlacing, no 10-bit/4:2:2/4:4:4 profile, and a known nonempty pixel format must be yuv420p, yuvj420p, nv12, or nv21. Missing optional video metadata is tolerated. Embedded cover-art streams are skipped when selecting primary video if a real video stream exists. Direct audio_track must be 0; with multiple audio streams, either none may be marked default or exactly the first must be the sole default. The server does not check direct-play audio codec support at room creation. Invalid selections or direct-play eligibility return 400.
+         * @description subtitle_track is null to disable subtitles, or a zero-based ordinal below the current subtitle count (ordered by stream_index); non-null selection is rejected when no subtitles exist. Direct mode requires video/mp4, a primary H.264/AVC video stream, and browser-safe scanned video metadata: no bit depth above 8, no interlacing, no 10-bit/4:2:2/4:4:4 profile, and a known nonempty pixel format must be yuv420p, yuvj420p, nv12, or nv21. Missing optional video metadata is tolerated. Embedded cover-art streams are skipped when selecting primary video if a real video stream exists. Direct audio_track must be 0; with multiple audio streams, either none may be marked default or exactly the first must be the sole default. The server does not check direct-play audio codec support at room creation. Invalid selections or direct-play eligibility return 400. An unknown movie_id returns 400. invited_user_ids drops the owner's own id and duplicates; an unknown id returns 400. audio_track defaults to 0, subtitle_track to null, and invited_user_ids to an empty list. HLS rooms start their session before responding, which can include a 30-second remux preflight; if it cannot start, including when transcode capacity or transcode storage is exhausted, the room is deleted and 500 is returned.
          */
         post: operations["createWatchRoom"];
         delete?: never;
@@ -1710,7 +1771,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Join a watch room */
+        /**
+         * Confirm watch-room membership
+         * @description Confirms that the caller is a member. Membership is granted only when the room is created, through invited_user_ids; this endpoint never adds members. Returns 404 for an unknown room and 403 for a non-member.
+         */
         post: operations["joinWatchRoom"];
         delete?: never;
         options?: never;
@@ -1727,7 +1791,7 @@ export interface paths {
         };
         /**
          * Open a watch-room WebSocket
-         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request scheme and host, the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, and presence changes broadcast member_joined/member_left. Room deletion sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. WebSocket ping/pong control frames also keep the connection alive.
+         * @description Requires an authenticated room member before upgrading. Invalid room IDs, authentication failures, membership denial (including nonexistent rooms), and database failures use JSON error envelopes. Upgrade failures use text/plain: 400 for malformed handshake headers or key/version, 403 for a rejected Origin, and 500 for an unsupported server upgrade. Origin may be absent; otherwise it must match the request host with an https scheme when the server itself terminates TLS and http otherwise (X-Forwarded-Proto is not consulted), the configured VITE_DEV_SERVER origin, or HTTP port 3000 on the same local development hostname (localhost, 127.0.0.1, or ::1). On connection the server sends room_snapshot immediately. Client JSON messages follow WatchRoomClientEvent; server messages follow WatchRoomServerEvent. Any member may send playback commands. join requests another snapshot, ping receives pong, playback commands broadcast playback_changed to all room connections, member_joined goes to the other connections when a user opens their first connection, and member_left when a user's last connection closes while others remain. Playback state lives in server memory and resets to paused at 0 when the last connection leaves. Room deletion, including the removal of its movie, sends room_deleted and closes connections. Invalid JSON and unknown event types are ignored. WebSocket ping/pong control frames also keep the connection alive.
          */
         get: operations["watchRoomWebSocket"];
         put?: never;
@@ -1747,7 +1811,7 @@ export interface paths {
         };
         /**
          * Direct-stream a watch-room movie
-         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.
+         * @description Authenticates the requester and authorizes current room membership on every request, including range requests. Successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.
          */
         get: operations["streamWatchRoomMovie"];
         put?: never;
@@ -1756,7 +1820,7 @@ export interface paths {
         options?: never;
         /**
          * Headers for a direct watch-room movie stream
-         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.
+         * @description Identical to GET but returns headers only, with no response body. The requester is authenticated and current room membership is authorized on every request; successful membership lookups may be cached for up to 30 seconds. Serves the original file with its media MIME type, a strong ETag, Last-Modified, byte ranges, and conditional request support. A matching If-None-Match returns 304; failed If-Match or If-Unmodified-Since returns empty 412. Range errors use text/plain. Content-Type describes the corresponding GET response, including application/json for handler/middleware errors or text/plain for range errors. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null.
          */
         head: operations["streamWatchRoomMovieHead"];
         patch?: never;
@@ -1771,7 +1835,7 @@ export interface paths {
         };
         /**
          * Get the HLS playlist for a watch room
-         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. A cold manifest request has the same maximum 45-second server wait budget as personal HLS before a retryable 503. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null.
+         * @description Creates or reuses the room-scoped HLS session and returns its media playlist. Every member must authenticate every manifest and asset request; room membership is authorized on each request, with successful membership lookups cached for up to 30 seconds. Credentials are not embedded in playlist URLs. Rewritten asset URLs carry the room's selected audio_track. Room sessions never wait for transcode capacity: a full pool returns 503 at once. A cold room can spend up to 30 seconds on a remux preflight and up to 30 seconds waiting for the first output before a retryable 503. A direct-mode room returns 400. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The audio check is skipped when the room was created for a movie without audio, and the subtitle check when subtitle_track is null.
          */
         get: operations["watchRoomHLSManifest"];
         put?: never;
@@ -1791,7 +1855,7 @@ export interface paths {
         };
         /**
          * Get a watch-room HLS initialization file or media segment
-         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URL, including audio_track. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
+         * @description Serves an asset from a room HLS session after independently authenticating the requester and authorizing current room membership. Successful membership lookups are cached for up to 30 seconds. Request the room manifest first and follow its rewritten asset URLs. The session is selected by the room alone; query parameters on asset URLs are ignored. A ready file supports conditional and byte-range requests. A file that FFmpeg has not completed yet can wait up to 120 seconds before a retryable 503. Ready assets use video/mp4 and Last-Modified, without ETag. If-Match with a specific entity tag fails with empty 412; If-None-Match: * returns 304. If-Range supports date validators; a nonmatching validator causes a full 200 response.
          */
         get: operations["watchRoomHLSSegment"];
         put?: never;
@@ -1828,12 +1892,12 @@ export interface paths {
         };
         /**
          * Get general application settings
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. API keys and secrets are returned in plain text.
          */
         get: operations["getGeneralSettings"];
         /**
          * Update general application settings
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Replaces every general setting; see restart_required in the response for values that need a restart.
          */
         put: operations["updateGeneralSettings"];
         post?: never;
@@ -1853,7 +1917,7 @@ export interface paths {
         get?: never;
         /**
          * Update configured library paths
-         * @description Admin-only endpoint. Directory paths must already exist; null clears a library path.
+         * @description Admin-only endpoint. Paths are trimmed and must name an existing directory (400 otherwise). null, a blank string, or an omitted field clears that library path. At startup, a configured path that is not accessible is treated as unset and reported as null without changing the stored value, until the next settings save reloads the stored path.
          */
         put: operations["updateLibrarySettings"];
         post?: never;
@@ -1874,7 +1938,7 @@ export interface paths {
         get: operations["getPlaybackSettings"];
         /**
          * Update server playback settings
-         * @description Admin-only. Updates the server-wide upload bandwidth cap and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage. Unknown fields and a null body return 400.
+         * @description Admin-only. Updates the server's advertised upload bandwidth and hardware acceleration device; fields absent from the body keep their current value. Per-device playback preferences are not stored on the server; they live in the client's local storage. Unknown fields and a null body return 400.
          */
         put: operations["updatePlaybackSettings"];
         post?: never;
@@ -1899,7 +1963,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a music library scan
-         * @description Admin-only endpoint. The scan runs asynchronously. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and Spotify counts.
+         * @description Admin-only endpoint. The scan runs asynchronously; returns 200 when started, 409 when already running, and 500 when no music directory is configured. Files are inspected by cleaned catalog path using persisted filesystem fingerprints and full-file SHA-256. Matching filesystem metadata skips hashing and probing; identical bytes with changed metadata update only the fingerprint. New or changed bytes are processed after a 60-second quiet period from the later of modification and status-change time. Recent, future-dated, or unstable files preserve their previous records and retry on the next startup or manual scan; deferred totals are logged separately from failures. When Spotify is available, missing or failed artist and album enrichment is retried from catalog metadata even for unchanged files, without probing them again; confirmed matches and non-matches are retained. Local sort tags and album dates are reconciled from current track contributions, with Spotify dates used only when no valid local date remains. Music identities normalize surrounding whitespace and case; Spotify collisions retain the existing owner and preserve track IDs. Track changes and deletions reconcile local artist, album, and genre relationships and derived sorting and dates. Missing-file cleanup runs before Spotify retries. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows a successful walk and final batch; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include local, cleanup and Spotify counts.
          */
         post: operations["triggerMusicScan"];
         delete?: never;
@@ -1923,7 +1987,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a movie library scan
-         * @description Admin-only endpoint. The scan runs asynchronously. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify or a technical rescan resets it. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
+         * @description Admin-only endpoint. The scan runs asynchronously; returns 200 when started, 409 when already running, and 500 when no movies directory is configured. Discovery establishes eligible file totals before two bounded probe workers process new or changed files. Movie scans read no content for change detection: size, nanosecond modification/change times, device and inode form the baseline. Unchanged files skip probing. Changed filesystem metadata triggers a reprobe and playback-cache invalidation even when bytes are identical; scans do not prove byte equality. Files must be quiet for 60 seconds. Deferred paths receive at most two retries within 120 seconds after initial processing; unresolved paths remain deferred. Technical metadata, streams, chapters, baselines and pending enrichment commit atomically before TMDB requests. Imports require accepted video; moving MJPEG is supported, while attached artwork alone is rejected. TMDB failures preserve existing descriptions and relationships; new movies use filename-derived defaults. Later startup or manual scans retry eligible unchanged movies with pending enrichment or no TMDB identity at most once per movie per scan, without probing again, rebuilding streams or chapters, or invalidating playback caches and keyframe/remux data. Unavailable TMDB leaves a movie eligible for the next scan. A definitive no-match is retried once on the next scan; from the second consecutive miss the movie backs off, doubling from one day up to seven days, until Identify or a technical rescan resets it. Identified movies fetch details by stored TMDB ID and never automatically rematch. Successful enrichment replaces descriptive metadata, including manual edits, while preserving audience rating and file-derived duration/runtime; it clears the internal retry state. Persistence discards stale enrichment after a concurrent identity change and discards work for deleted or replaced catalog rows. After local processing and cleanup, two workers enrich movies with serialized persistence. Complete TMDB resolution is limited to 30 seconds including HTTP retries. Three consecutive transient provider failures or an authentication failure stop further dispatch; already active requests may finish. No-match responses are distinguished from outages. Catalog identity, pending state and filesystem baseline are checked before applying enrichment. GET returns the current/latest in-memory report; POST duplicate protection lasts for the entire run. Completion logs include successful and outstanding enrichment counts. Startup and manual scans remove confirmed missing catalog files, including broken symlink targets and rows without fingerprints, only within the directory captured at scan start. Cleanup follows successful discovery and local processing, including bounded deferred retries; files seen during the scan remain protected even if processing fails or is deferred. Cancellation, fatal walk failures, and unavailable or replaced roots prevent cleanup. Permission and I/O failures and symlink loops preserve records. Root accessibility and identity and file absence are rechecked before each deletion commits; runtime caches are invalidated after commit. Unreferenced shared metadata remains. Renames import the new path and delete the missing old path. No forced refresh is performed.
          */
         post: operations["triggerMovieScan"];
         delete?: never;
@@ -1947,7 +2011,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a TV show library scan
-         * @description Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Accepts Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly inside the show folder, where the token names the season. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; changed filesystem metadata re-probes the file without reading its content, and a technical change never re-queues matched metadata. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan, with the entity total published before the first request. Failed requests preserve existing metadata and retry state; a definitive no-match is reported as unmatched and backs off before the show is searched again; an authentication failure or repeated transient failures stop enrichment for the run; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes the affected season of unreferenced episodes and then the empty season and show, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. Scanned shows are browsable through the TV show details endpoints; playback and manual identification are not provided.
+         * @description Admin-only endpoint. Starts an asynchronous scan of the configured shows directory; returns 200 when started, 409 when already running, and 500 when unconfigured. Accepts Show/Season N/file, Show/Season N - Title/file, Show/SN/file, Show/Specials/file, and episode files directly inside the show folder, where the token names the season. Hidden entries and nested extras are excluded. Files use the movie video extensions and symlink behavior. Standard season/episode tokens, inclusive ranges, and repeated episode tokens identify logical episodes; filename seasons must match their directories. Each new or changed file is probed once after the shared 60-second quiet period and commits technical metadata, episode links, fingerprints, fallback catalog records, and pending enrichment atomically. Combined files retain one duration without inferred episode boundaries. Unchanged files skip probing; changed filesystem metadata re-probes the file without reading its content, and a technical change never re-queues matched metadata. After safe missing-file cleanup, pending show, season, and locally represented episode metadata is enriched sequentially through TMDB, at most once per entity per scan, with the entity total published before the first request. Failed requests preserve existing metadata and retry state; a definitive no-match is reported as unmatched and backs off before the show is searched again; an authentication failure or repeated transient failures stop enrichment for the run; matched shows use stored TMDB IDs without automatic rematching. Cleanup deletes only confirmed missing files within the captured, readable, unchanged root, prunes the affected season of unreferenced episodes and then the empty season and show, and retains shared metadata. Observed failures and deferred files remain protected. Cancellation, unavailable or replaced roots, and fatal walks prevent cleanup. Saving settings does not start a scan. Scanned shows are browsable and playable through the TV show endpoints; manual identification is not provided.
          */
         post: operations["triggerShowScan"];
         delete?: never;
@@ -1980,7 +2044,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List albums alphabetically */
+        /**
+         * List albums alphabetically
+         * @description Sorted by title, case-insensitively. Titles that do not start with a letter A-Z are grouped under # and listed first.
+         */
         get: operations["getAlbumsAlphabetical"];
         put?: never;
         post?: never;
@@ -2014,7 +2081,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List latest albums */
+        /**
+         * List recently added albums
+         * @description The 12 albums most recently added to the library, by import time rather than release date.
+         */
         get: operations["getLatestAlbums"];
         put?: never;
         post?: never;
@@ -2036,7 +2106,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an album
-         * @description Admin-only endpoint.
+         * @description Admin-only endpoint. Removes the album and its tracks from the database, along with those tracks' playlist entries, likes, play history, and listening statistics. Musicians are kept. Audio files stay on disk, so a later music scan imports them again.
          */
         delete: operations["deleteAlbum"];
         options?: never;
@@ -2051,7 +2121,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List musicians alphabetically */
+        /**
+         * List musicians alphabetically
+         * @description Sorted by sort_name. Names that do not start with a letter A-Z are grouped under # and listed first.
+         */
         get: operations["getMusiciansAlphabetical"];
         put?: never;
         post?: never;
@@ -2102,7 +2175,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get random tracks for shuffle playback */
+        /**
+         * Get random tracks for shuffle playback
+         * @description Tracks come back in random order.
+         */
         get: operations["getShuffleTracks"];
         put?: never;
         post?: never;
@@ -2177,7 +2253,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List tracks liked by the current user */
+        /**
+         * List tracks liked by the current user
+         * @description Most recently liked first.
+         */
         get: operations["getLikedTracks"];
         put?: never;
         post?: never;
@@ -2211,7 +2290,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List music playlists visible to the current user */
+        /**
+         * List music playlists the current user owns or collaborates on
+         * @description Most recently updated first. Other users' public playlists are not listed, though they can be read by id.
+         */
         get: operations["getPlaylists"];
         put?: never;
         /** Create a music playlist */
@@ -2229,12 +2311,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a music playlist */
+        /**
+         * Get a music playlist
+         * @description collaborators is filled only for the owner and is null for everyone else. duration is the sum of track durations in milliseconds.
+         */
         get: operations["getPlaylist"];
-        /** Update a music playlist */
+        /**
+         * Update a music playlist
+         * @description Owner only; collaborators receive 403. Replaces the metadata: an omitted or empty description or cover_image is cleared, and an omitted is_public becomes false. cover_image is stored without validation.
+         */
         put: operations["updatePlaylist"];
         post?: never;
-        /** Delete a music playlist */
+        /**
+         * Delete a music playlist
+         * @description Owner only; collaborators receive 403. The playlist's items and collaborators are deleted with it.
+         */
         delete: operations["deletePlaylist"];
         options?: never;
         head?: never;
@@ -2248,10 +2339,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List tracks in a music playlist */
+        /**
+         * List tracks in a music playlist
+         * @description Ordered by playlist position.
+         */
         get: operations["getPlaylistTracks"];
         put?: never;
-        /** Add tracks to a music playlist */
+        /**
+         * Add tracks to a music playlist
+         * @description Owner or editing collaborator. Tracks are appended in request order. Ids already in the playlist, repeated ids, and unknown ids count as skipped; any other failure adds nothing and returns 500. updated_at changes only when a track was added.
+         */
         post: operations["addTracksToPlaylist"];
         delete?: never;
         options?: never;
@@ -2269,7 +2366,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a track from a music playlist */
+        /**
+         * Remove a track from a music playlist
+         * @description Owner or editing collaborator. Returns 200 even when the track is not in the playlist. The remaining positions are not renumbered.
+         */
         delete: operations["removeTrackFromPlaylist"];
         options?: never;
         head?: never;
@@ -2284,7 +2384,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Reorder tracks in a music playlist */
+        /**
+         * Reorder tracks in a music playlist
+         * @description Owner or editing collaborator. Each listed track takes its index in track_ids as its position. Send every track in the playlist: ids not in the playlist are ignored, and tracks left out keep their previous position, which can tie with a new one and leave their relative order undefined.
+         */
         put: operations["reorderPlaylistTracks"];
         post?: never;
         delete?: never;
@@ -2300,10 +2403,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List music playlist collaborators */
+        /**
+         * List music playlist collaborators
+         * @description Owner only; collaborators receive 403. Oldest first, including each collaborator's email.
+         */
         get: operations["getPlaylistCollaborators"];
         put?: never;
-        /** Add a collaborator to a music playlist */
+        /**
+         * Add a collaborator to a music playlist
+         * @description Owner only. Adding yourself returns 400, an unknown user returns 404, and a user who is already a collaborator returns 409; to change can_edit, remove and add the collaborator again.
+         */
         post: operations["addCollaborator"];
         delete?: never;
         options?: never;
@@ -2321,7 +2430,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a collaborator from a music playlist */
+        /**
+         * Remove a collaborator from a music playlist
+         * @description Owner only, so a collaborator cannot remove themselves. Removing a user who is not a collaborator still returns 200.
+         */
         delete: operations["removeCollaborator"];
         options?: never;
         head?: never;
@@ -2414,7 +2526,7 @@ export interface paths {
         };
         /**
          * Get current user's top genres
-         * @description Limit defaults to 10 and is capped at 20; invalid limits use the default. This endpoint does not accept offset pagination.
+         * @description Limit defaults to 10 and is capped at 20; invalid limits use the default. offset is ignored.
          */
         get: operations["getUserTopGenres"];
         put?: never;
@@ -2454,7 +2566,7 @@ export interface paths {
         };
         /**
          * Get current user's recently played tracks
-         * @description Limit defaults to 20 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values.
+         * @description Limit defaults to 20 and is capped at 50; invalid limits use the default. Offset defaults to 0 for missing, invalid, negative, or int64-overflow values. One row per play, newest first, so a track can appear more than once.
          */
         get: operations["getUserRecentlyPlayed"];
         put?: never;
@@ -2474,7 +2586,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stop a personal movie HLS playback session */
+        /**
+         * Stop a personal movie HLS playback session
+         * @description Ends every session the caller has for this media and playback_session, across profiles, audio selections, and start windows. Always returns 200, including when no session exists or the id is unknown; an invalid playback_session returns 400.
+         */
         post: operations["stopPersonalHlsSession"];
         delete?: never;
         options?: never;
@@ -2652,9 +2767,9 @@ export interface components {
             shows_dir: string | null;
         };
         UpdateLibrarySettingsRequest: {
-            music_dir: string | null;
-            movies_dir: string | null;
-            shows_dir: string | null;
+            music_dir?: string | null;
+            movies_dir?: string | null;
+            shows_dir?: string | null;
         };
         SettingsEnvelope: components["schemas"]["JsonSuccess"] & {
             data: components["schemas"]["SettingsData"];
@@ -2668,34 +2783,49 @@ export interface components {
         /** @enum {string} */
         HardwareAccelerationDevice: "cpu" | "apple" | "nvidia" | "intel";
         GeneralSettings: {
+            /** @description Read when the server starts; a change takes effect after a restart. */
             tmdb_key: string | null;
-            /** @description Optional Immich base URL. Non-null values must use http:// or https://. */
+            /** @description Non-null values use http:// or https://. Stored only; no server feature reads this value. */
             immich_base_url: string | null;
+            /** @description Stored only; no server feature reads this value. */
             immich_api_key: string | null;
-            /** @description Optional Jellyfin base URL. Non-null values must use http:// or https://. */
+            /** @description Non-null values use http:// or https://. Stored only; no server feature reads this value. */
             jellyfin_base_url: string | null;
+            /** @description Stored only; no server feature reads this value. */
             jellyfin_api_key: string | null;
+            /** @description Read when the server starts; a change takes effect after a restart. */
             spotify_client_id: string | null;
+            /** @description Read when the server starts; a change takes effect after a restart. */
             spotify_client_secret: string | null;
+            /** @description Stored only; no server feature reads this value. */
             enable_watcher: boolean;
+            /** @description Stored only; no server feature reads this value. */
             download_images: boolean;
+            /** @description Directory /api/static serves files from and avatar uploads are written to. Read on each request. */
             static_dir: string;
+            /** @description Directory new HLS sessions write their output to. */
             transcode_dir: string;
-            restart_required?: boolean;
         };
+        /** @description Replaces every general setting. All strings are trimmed; a blank optional string clears that value. */
         UpdateGeneralSettingsRequest: {
             tmdb_key: string;
-            /** @description Optional Immich base URL. Blank clears the value; nonblank values must use http:// or https://. */
+            /** @description Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value. */
             immich_base_url: string;
+            /** @description Stored only; no server feature reads this value. */
             immich_api_key: string;
-            /** @description Optional Jellyfin base URL. Blank clears the value; nonblank values must use http:// or https://. */
+            /** @description Blank clears the value; nonblank values must use http:// or https://. Stored only; no server feature reads this value. */
             jellyfin_base_url: string;
+            /** @description Stored only; no server feature reads this value. */
             jellyfin_api_key: string;
             spotify_client_id: string;
             spotify_client_secret: string;
+            /** @description Stored only; no server feature reads this value. */
             enable_watcher: boolean;
+            /** @description Stored only; no server feature reads this value. */
             download_images: boolean;
+            /** @description Required. Created when missing; 400 when it cannot be created or accessed. */
             static_dir: string;
+            /** @description Required. Created when missing; 400 when it cannot be created or accessed. */
             transcode_dir: string;
         };
         GeneralSettingsData: {
@@ -2706,6 +2836,7 @@ export interface components {
         };
         UpdateGeneralSettingsData: {
             settings: components["schemas"]["GeneralSettings"];
+            /** @description True when this request changed the stored TMDB key or Spotify credentials compared with the previous save. Those clients are built when the server starts, so the change takes effect after a restart. Every other general setting applies immediately. */
             restart_required: boolean;
         };
         UpdateGeneralSettingsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -2731,7 +2862,7 @@ export interface components {
         };
         /** @description Fields absent from the body keep their current value. */
         UpdatePlaybackSettingsRequest: {
-            /** @description Server upload bandwidth cap in Mbps. Null means uncapped. */
+            /** @description The server's upload bandwidth in Mbps; null means unknown. Clients use it to recommend a profile. The server only applies 80% of it when choosing the fallback transcode for a remux request it cannot remux; explicitly requested profiles are not limited by it. */
             server_upload_mbps?: number | null;
             /** @description Hardware acceleration device used for new transcodes. */
             hardware_acceleration_device?: components["schemas"]["HardwareAccelerationDevice"];
@@ -2912,7 +3043,7 @@ export interface components {
             /** Format: int64 */
             available_episode_count: number;
         };
-        /** @description One episode in a season listing, with the requesting user's watch progress. progress_sec and duration_sec are null until a position is saved; watched is false until the episode is marked or played to completion. Every listed episode is playable: episodes exist only for probed files. */
+        /** @description One episode in a season listing, with the requesting user's watch progress. progress_sec and duration_sec are null until a position is saved; watched is false until the episode is marked watched or a progress save reaches 95% of its duration. Every listed episode is playable: episodes exist only for probed files. */
         ShowEpisode: {
             /** Format: int64 */
             id: number;
@@ -2990,7 +3121,7 @@ export interface components {
             seasons: components["schemas"]["ShowSeasonSummary"][];
             /** @description Capped at 100 rows, ordered by billing order first so the cap keeps the billing TMDB considers most relevant. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
             cast: components["schemas"]["ShowCastCredit"][];
-            /** @description Capped at 100 rows, ordered by department and job first so the cap keeps the billing TMDB considers most relevant. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
+            /** @description Capped at 100 rows, ordered alphabetically by department, then job, then name, so the cap keeps the alphabetically earliest departments. Aggregate credits for a long-running show reach into the thousands; the details page bills a few dozen. */
             crew: components["schemas"]["ShowCrewCredit"][];
             creators: components["schemas"]["ShowPerson"][];
             genres: components["schemas"]["ShowGenre"][];
@@ -3196,13 +3327,19 @@ export interface components {
                 chapters: components["schemas"]["Chapter"][];
             };
         };
-        /** @description One playback position. A save whose progress_sec is at or past 95% of duration_sec marks the item watched and resets its stored position to zero; any lower save stores the position and clears watched. */
+        /** @description One playback position. progress_sec is clamped to the range 0 to duration_sec. A save whose clamped progress_sec is at or past 95% of duration_sec marks the item watched and resets its stored position to zero; any lower save stores the position and clears watched. A save is ignored when its save_session_id matches the stored one and its save_sequence is not greater than the stored sequence. */
         UpdateWatchProgressRequest: {
             progress_sec: number;
             duration_sec: number;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Identifies one playback session. Saves from a different session always apply.
+             */
             save_session_id: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Increases with each save in a session; a save that does not exceed the stored sequence for the same session is ignored.
+             */
             save_sequence: number;
         };
         SetWatchedRequest: {
@@ -3220,7 +3357,7 @@ export interface components {
         };
         WatchProgressUpdateEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
-                /** @description True when this save reached the 95% completion threshold and the item is now marked watched. */
+                /** @description True when this request's clamped progress_sec reached 95% of duration_sec. It reflects the request even when the save was ignored as out of order. */
                 watched: boolean;
             };
         };
@@ -3319,7 +3456,10 @@ export interface components {
             name: string;
             description?: string;
             is_public?: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Movie the playlist belongs to. It must exist (400 otherwise).
+             */
             movie_id?: number | null;
         };
         UpdateMoviePlaylistRequest: {
@@ -3327,7 +3467,10 @@ export interface components {
             description?: string;
             cover_image?: string;
             is_public?: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Movie the playlist belongs to. It must exist (400 otherwise). Omitted or null keeps the current movie.
+             */
             movie_id?: number | null;
         };
         AddMoviesRequest: {
@@ -3434,8 +3577,6 @@ export interface components {
             /** @enum {string} */
             title: "movie_request" | "album_request" | "track_request" | "other";
             message: string;
-            /** @default false */
-            isAdmin: boolean;
         };
         CreateNotificationEnvelope: {
             /** @constant */
@@ -3448,7 +3589,6 @@ export interface components {
             /** @enum {string} */
             title: "movie_request" | "album_request" | "track_request" | "other";
             message: string;
-            is_admin: boolean;
             is_read: boolean;
             created_by_name: string;
             created_at: string;
@@ -3625,13 +3765,19 @@ export interface components {
             /**
              * Format: int64
              * @description Zero-based ordinal into the movie's audio streams. Must be less than the movie's audio stream count, must be 0 for a movie without audio, and must be 0 when `mode` is `direct` because direct playback always serves the container's first audio track.
+             * @default 0
              */
             audio_track: number;
             /**
              * Format: int64
              * @description Null disables subtitles. Otherwise a zero-based ordinal into subtitle rows ordered by stream_index, strictly less than the current subtitle count. Non-null values are invalid for a movie without subtitles.
+             * @default null
              */
             subtitle_track: number | null;
+            /**
+             * @description Users who become room members. The owner is always a member; their own id and duplicates are dropped.
+             * @default []
+             */
             invited_user_ids: number[];
         };
         WatchRoomsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -3716,7 +3862,10 @@ export interface components {
             size: number;
             /** Format: int64 */
             track_index: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Track length in milliseconds.
+             */
             duration: number;
             /** Format: int64 */
             disc: number;
@@ -3739,7 +3888,10 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Track length in milliseconds.
+             */
             duration: number;
             codec: string;
             /** Format: int64 */
@@ -3849,7 +4001,10 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Track length in milliseconds.
+             */
             duration: number;
             codec: string;
             /** Format: int64 */
@@ -3928,7 +4083,8 @@ export interface components {
             cover_image: components["schemas"]["SqlNullString"];
             is_public: boolean;
             movie_id: components["schemas"]["SqlNullInt64"];
-            content_type: string;
+            /** @constant */
+            content_type: "track";
             created_at: string;
             updated_at: string;
         };
@@ -3948,7 +4104,10 @@ export interface components {
             updated_at: string;
             /** Format: int64 */
             track_count: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Sum of track durations in milliseconds.
+             */
             total_duration: number;
             is_owner: boolean;
             can_edit: boolean;
@@ -3963,7 +4122,10 @@ export interface components {
             /** Format: int64 */
             id: number;
             title: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Track length in milliseconds.
+             */
             duration: number;
             codec: string;
             /** Format: int64 */
@@ -4016,6 +4178,10 @@ export interface components {
         AddCollaboratorRequest: {
             /** Format: int64 */
             user_id: number;
+            /**
+             * @description Lets the collaborator add and remove items, and reorder tracks in a music playlist.
+             * @default false
+             */
             can_edit: boolean;
         };
         MusicPlaylistsEnvelope: components["schemas"]["JsonSuccess"] & {
@@ -4028,6 +4194,7 @@ export interface components {
                 playlist: components["schemas"]["Playlist"];
                 /** Format: int64 */
                 track_count: number;
+                /** @description Sum of track durations in milliseconds. */
                 duration: number;
                 is_owner: boolean;
                 can_edit: boolean;
@@ -4062,9 +4229,13 @@ export interface components {
         RecordPlayEventRequest: {
             /** Format: int64 */
             track_id: number;
-            /** Format: int64 */
-            duration_played: number;
-            completed: boolean;
+            /**
+             * Format: int64
+             * @description Seconds listened. Added unchanged to the listening totals; defaults to 0.
+             */
+            duration_played?: number;
+            /** @description Whether the track played to the end. Stored in the play history only; defaults to false. */
+            completed?: boolean;
         };
         RecordedPlayEnvelope: components["schemas"]["JsonSuccess"] & {
             data: {
@@ -4086,13 +4257,19 @@ export interface components {
         TopTrack: {
             /** Format: int64 */
             play_count: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Sum of duration_played, in seconds.
+             */
             total_time_played: number;
             last_played_at: components["schemas"]["SqlNullString"];
             /** Format: int64 */
             id: number;
             title: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Track length in milliseconds.
+             */
             duration: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
@@ -4102,12 +4279,18 @@ export interface components {
         };
         RecentlyPlayedTrack: {
             played_at: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Seconds listened in this play.
+             */
             duration_played: number;
             /** Format: int64 */
             id: number;
             title: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Track length in milliseconds.
+             */
             duration: number;
             album_id: components["schemas"]["SqlNullInt64"];
             album_title: components["schemas"]["SqlNullString"];
@@ -4130,6 +4313,7 @@ export interface components {
             name: string;
             thumb: components["schemas"]["SqlNullString"];
             total_play_count: components["schemas"]["SqlNullFloat64"];
+            /** @description Sum of duration_played, in seconds. */
             total_time_listened: components["schemas"]["SqlNullFloat64"];
             /** Format: int64 */
             unique_tracks_played: number;
@@ -4148,6 +4332,7 @@ export interface components {
             id: number;
             tag: string;
             total_play_count: components["schemas"]["SqlNullFloat64"];
+            /** @description Sum of duration_played, in seconds. */
             total_time_listened: components["schemas"]["SqlNullFloat64"];
             /** Format: int64 */
             unique_tracks_played: number;
@@ -4167,6 +4352,7 @@ export interface components {
             musician: components["schemas"]["SqlNullString"];
             year: components["schemas"]["SqlNullInt64"];
             total_play_count: components["schemas"]["SqlNullFloat64"];
+            /** @description Sum of duration_played, in seconds. */
             total_time_listened: components["schemas"]["SqlNullFloat64"];
             /** Format: int64 */
             unique_tracks_played: number;
@@ -4331,8 +4517,6 @@ export interface components {
             app_version: string | null;
             created_at: string;
             last_used_at: string;
-            /** @description True when the request was authenticated with this device's token. Always false in the device-list response, which is session-only. */
-            is_current: boolean;
         };
         QuickConnectRedeemData: {
             /** @enum {string} */
@@ -4386,7 +4570,7 @@ export interface components {
             /** @description Leading and trailing Unicode whitespace is trimmed before storage and validation. The trimmed name must be nonempty and at most 100 UTF-8 bytes (not characters). The raw input may exceed 100 characters when excess characters are trimmed whitespace. */
             name: string;
         };
-        /** @description Track fields consumed by album details and the audio player. Technical metadata remains available from the track details endpoint. */
+        /** @description Track fields used by album details and the audio player. duration is in milliseconds. Full technical metadata is on GET /api/music/tracks/details/{id}. */
         AlbumTrack: {
             /** Format: int64 */
             id: number;
@@ -5066,7 +5250,7 @@ export interface components {
                 "application/json": components["schemas"]["CreateNotificationEnvelope"];
             };
         };
-        /** @description List of notifications visible to the current user with the unread count. */
+        /** @description The newest admin request queue items with the caller's unread count. */
         NotificationsListResponse: {
             headers: {
                 [name: string]: unknown;
@@ -5151,15 +5335,15 @@ export interface components {
         HLSPlaylistResponse: {
             headers: {
                 "Cache-Control"?: "no-store";
-                /** @description Profile FFmpeg actually ran. This differs from the requested profile in the path whenever the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here. */
+                /** @description Profile FFmpeg actually ran. This differs from the requested profile in the path when the remux safety gate forces a transcode, so a `remux` request can be answered with a transcode profile here, and when a requested transcode profile is taller than the effective encoder supports (software encoding runs 2160p_16mbps as 1080p_8mbps). */
                 "X-Igloo-Effective-Profile": components["schemas"]["HLSProfile"];
                 /** @description Seconds into the movie where the session's media really begins. Stream copy cannot cut mid-GOP, so a copy-video session starts at the source keyframe at or before the requested start. Omitted when it has not been measured. */
                 "X-Igloo-Actual-Start"?: number;
-                /** @description Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac for legacy sessions (copied or stereo-encoded). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions. */
+                /** @description Codec of the audio the session actually produces: the resolved explicit ac3/eac3 encode, or aac in the default audio mode (a copied AAC-LC track or the stereo AAC encode). Diagnostic only; the media stream stays the playback authority. Omitted for video-only sessions. */
                 "X-Igloo-Effective-Audio-Codec"?: components["schemas"]["HLSEffectiveAudioCodec"];
-                /** @description Effective output channel count, resolved from the selected source stream and the requested maximum. For copied legacy AAC this is the stored source channel count. Omitted for video-only sessions and when a copied source's stored channel count is unknown. */
+                /** @description Effective output channel count. Explicit audio profile: the selected stream's stored channel count capped by audio_channels. Default audio mode: the stored source channel count for a copied AAC-LC track, or 2 for the stereo AAC encode. Omitted for video-only sessions and when a copied track's stored channel count is unknown. */
                 "X-Igloo-Effective-Audio-Channels"?: number;
-                /** @description Audio bitrate: the server profile value for encodes (for example 640k or 320k) or the stored source bitrate in bits per second for copied legacy AAC. Omitted for video-only sessions and when the copied source bitrate is unknown. */
+                /** @description Audio bitrate: the server profile value for encodes (for example 640k or 320k), or the stored source bitrate in bits per second for a copied AAC-LC track in the default audio mode. Omitted for video-only sessions and when a copied track's bitrate is unknown. */
                 "X-Igloo-Effective-Audio-Bitrate"?: string;
                 [name: string]: unknown;
             };
@@ -5685,7 +5869,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description The request is syntactically valid but the stored media metadata cannot satisfy it, such as an explicit audio profile against a stream without stored channel metadata. */
+        /** @description The request is syntactically valid but the stored media metadata cannot satisfy it: no valid stored duration, no playable video stream, or an explicit audio profile against a stream without stored channel metadata. */
         UnprocessableEntity: {
             headers: {
                 [name: string]: unknown;
@@ -5732,7 +5916,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Upstream service returned an error. */
+        /** @description The upstream service failed: a network error, a timeout, or an unsuccessful upstream response. */
         BadGateway: {
             headers: {
                 [name: string]: unknown;
@@ -5750,7 +5934,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Rate limit exceeded. */
+        /** @description Rate limit exceeded. Limits are fixed windows held in this server process's memory, and no Retry-After header is sent. Each operation's description states its limit. */
         TooManyRequests: {
             headers: {
                 [name: string]: unknown;
@@ -5869,6 +6053,24 @@ export interface components {
                 "application/json": components["schemas"]["EpisodeWatchedEnvelope"];
             };
         };
+        /** @description TMDB is not configured. The TMDB client is built at startup, so set tmdb_key in the general settings and restart the server. */
+        TmdbNotConfigured: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Spotify is unavailable: no client was built at startup, because spotify_client_id or spotify_client_secret was unset or the startup token request failed. Set valid credentials in the general settings and restart the server. */
+        SpotifyNotConfigured: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
     parameters: {
         IdPath: number;
@@ -5887,25 +6089,31 @@ export interface components {
         HLSProfilePath: components["schemas"]["HLSProfile"];
         /** @description HLS asset name. Valid values are init.mp4 or segment_N.m4s. */
         HLSFilenamePath: string;
-        /** @description Zero-based index into the movie subtitle rows ordered by stream_index. */
+        /** @description Zero-based index into the media's subtitle rows ordered by stream_index. An index past the last subtitle returns 400. */
         TrackIndexPath: number;
         SeasonNumberPath: number;
+        /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
         PageQuery: number;
         /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
         PerPageQuery: number;
+        /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. The response per_page reports the effective value. */
         MusicPerPageQuery: number;
+        /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
         SortQuery: "asc" | "desc";
+        /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. */
         LimitQuery: number;
+        /** @description Default 50; clamped to 200. Missing, non-integer, and nonpositive values use the default. Fewer tracks are returned when the library, minus excluded tracks, is smaller. */
         ShuffleLimitQuery: number;
-        /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
+        /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Only the first 800 comma-separated entries across all exclude values are examined, and at most 200 distinct valid ids from them are used; longer lists are truncated rather than rejected. Duplicates, empty entries, non-numeric values, and ids below 1 are skipped. */
         ShuffleExcludeQuery: number[];
+        /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
         OffsetQuery: number;
         SearchQuery: string;
-        /** @description Case-insensitive name or email substring filter. */
+        /** @description Trimmed substring filter on name or email. Matching is case-insensitive for ASCII letters only. */
         OptionalUserSearchQuery: string;
-        /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+        /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
         AudioTrackQuery: number;
-        /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+        /** @description Session start time in seconds. Values at or beyond the media duration are normalized to five seconds before the end, or zero when the media is shorter than five seconds; rewritten HLS asset URLs carry the normalized value. Asset routes do not normalize it again: an asset request must send the value from its rewritten URL. */
         StartQuery: number;
         /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
         RangeHeader: string;
@@ -5915,11 +6123,11 @@ export interface components {
         PlaybackSessionQuery: string;
         /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
         HLSReloadQuery: string;
-        /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+        /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
         HLSAudioCodecQuery: components["schemas"]["HLSRequestedAudioCodec"];
         /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
         HLSAudioChannelsQuery: components["schemas"]["HLSAudioChannelLimit"];
-        /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
+        /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Cues are extracted with absolute source timestamps, so they are shifted by this value to match the session's media timeline. Omit for direct play and sessions starting at zero. */
         SubtitleStartQuery: number;
         /** @description Entity-tag precondition. Direct streams compare against their strong ETag. Static files and HLS assets emit no ETag, so only * matches an existing representation. A failed precondition returns an empty 412. */
         IfMatchHeader: string;
@@ -5986,7 +6194,7 @@ export interface components {
                 "multipart/form-data": {
                     /**
                      * Format: binary
-                     * @description JPEG, PNG, GIF, WebP, or AVIF image up to 20 MB.
+                     * @description JPEG, PNG, GIF, or WebP image, detected from the file's content rather than its name or part Content-Type. The whole multipart body is limited to 20 MiB.
                      */
                     avatar: string;
                 };
@@ -6741,7 +6949,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
             502: components["responses"]["BadGateway"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["SpotifyNotConfigured"];
         };
     };
     searchSpotifyTracks: {
@@ -6758,7 +6966,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
             502: components["responses"]["BadGateway"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["SpotifyNotConfigured"];
         };
     };
     proxyTmdbImage: {
@@ -6804,7 +7012,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["TmdbNotConfigured"];
         };
     };
     getMoviesInTheaters: {
@@ -6819,7 +7027,7 @@ export interface operations {
             200: components["responses"]["TmdbTheaterMoviesResponse"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["TmdbNotConfigured"];
         };
     };
     getMovieByTmdbID: {
@@ -6837,7 +7045,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
+            503: components["responses"]["TmdbNotConfigured"];
         };
     };
     proxyYouTubeThumbnail: {
@@ -6888,6 +7096,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -6907,6 +7116,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -6926,6 +7136,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -6945,6 +7156,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -6964,6 +7176,7 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -7010,9 +7223,11 @@ export interface operations {
     getShowsLibrary: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
+                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7057,9 +7272,11 @@ export interface operations {
     getShowsByGenreLibrary: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
+                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7244,13 +7461,13 @@ export interface operations {
     episodeHlsManifest: {
         parameters: {
             query: {
-                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
-                /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+                /** @description Session start time in seconds. Values at or beyond the media duration are normalized to five seconds before the end, or zero when the media is shorter than five seconds; rewritten HLS asset URLs carry the normalized value. Asset routes do not normalize it again: an asset request must send the value from its rewritten URL. */
                 start: components["parameters"]["StartQuery"];
                 /** @description UUID that scopes one personal HLS playback session. */
                 playback_session: components["parameters"]["PlaybackSessionQuery"];
@@ -7278,13 +7495,13 @@ export interface operations {
     episodeHlsSegment: {
         parameters: {
             query: {
-                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
-                /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+                /** @description Session start time in seconds. Values at or beyond the media duration are normalized to five seconds before the end, or zero when the media is shorter than five seconds; rewritten HLS asset URLs carry the normalized value. Asset routes do not normalize it again: an asset request must send the value from its rewritten URL. */
                 start: components["parameters"]["StartQuery"];
                 /** @description UUID that scopes one personal HLS playback session. */
                 playback_session: components["parameters"]["PlaybackSessionQuery"];
@@ -7436,7 +7653,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            /** @description Missing or invalid credentials. No response body is sent for HEAD. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -7482,13 +7699,13 @@ export interface operations {
     episodeSubtitleWebVTT: {
         parameters: {
             query?: {
-                /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
+                /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Cues are extracted with absolute source timestamps, so they are shifted by this value to match the session's media timeline. Omit for direct play and sessions starting at zero. */
                 start?: components["parameters"]["SubtitleStartQuery"];
             };
             header?: never;
             path: {
                 id: components["parameters"]["IdPath"];
-                /** @description Zero-based index into the movie subtitle rows ordered by stream_index. */
+                /** @description Zero-based index into the media's subtitle rows ordered by stream_index. An index past the last subtitle returns 400. */
                 trackIndex: components["parameters"]["TrackIndexPath"];
             };
             cookie?: never;
@@ -7520,9 +7737,11 @@ export interface operations {
     getMoviesLibrary: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
+                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7553,9 +7772,11 @@ export interface operations {
     getLikedMovies: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
+                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7603,9 +7824,11 @@ export interface operations {
     getMoviesByGenreLibrary: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
+                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7625,9 +7848,11 @@ export interface operations {
     getMoviePlaylistMovies: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
+                /** @description Sort direction. The value is trimmed and case-insensitive; anything other than desc sorts ascending. */
                 sort?: components["parameters"]["SortQuery"];
             };
             header?: never;
@@ -7806,6 +8031,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -7976,13 +8202,13 @@ export interface operations {
     hlsManifest: {
         parameters: {
             query: {
-                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
-                /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+                /** @description Session start time in seconds. Values at or beyond the media duration are normalized to five seconds before the end, or zero when the media is shorter than five seconds; rewritten HLS asset URLs carry the normalized value. Asset routes do not normalize it again: an asset request must send the value from its rewritten URL. */
                 start: components["parameters"]["StartQuery"];
                 /** @description UUID that scopes one personal HLS playback session. */
                 playback_session: components["parameters"]["PlaybackSessionQuery"];
@@ -8010,13 +8236,13 @@ export interface operations {
     hlsSegment: {
         parameters: {
             query: {
-                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
+                /** @description Zero-based ordinal into the media's audio streams ordered by stream_index (not the ffprobe stream index). Required for media with audio; omit it for video-only media. */
                 audio_track?: components["parameters"]["AudioTrackQuery"];
-                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both preserves legacy audio behavior (a confirmed copy-safe AAC-LC source track is copied, every other selected track becomes stereo AAC at 320 kbps). Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
+                /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
                 audio_codec?: components["parameters"]["HLSAudioCodecQuery"];
                 /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
                 audio_channels?: components["parameters"]["HLSAudioChannelsQuery"];
-                /** @description Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value. */
+                /** @description Session start time in seconds. Values at or beyond the media duration are normalized to five seconds before the end, or zero when the media is shorter than five seconds; rewritten HLS asset URLs carry the normalized value. Asset routes do not normalize it again: an asset request must send the value from its rewritten URL. */
                 start: components["parameters"]["StartQuery"];
                 /** @description UUID that scopes one personal HLS playback session. */
                 playback_session: components["parameters"]["PlaybackSessionQuery"];
@@ -8168,7 +8394,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            /** @description Missing or invalid credentials. No response body is sent for HEAD. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -8214,13 +8440,13 @@ export interface operations {
     subtitleWebVTT: {
         parameters: {
             query?: {
-                /** @description HLS session start in seconds. Cues are extracted with absolute source timestamps, so they are shifted by this value to match a rebased session's media timeline. Omit for direct play and sessions starting at zero. */
+                /** @description The HLS session's actual media start in seconds: X-Igloo-Actual-Start from the manifest response when present, otherwise the normalized start. Cues are extracted with absolute source timestamps, so they are shifted by this value to match the session's media timeline. Omit for direct play and sessions starting at zero. */
                 start?: components["parameters"]["SubtitleStartQuery"];
             };
             header?: never;
             path: {
                 id: components["parameters"]["IdPath"];
-                /** @description Zero-based index into the movie subtitle rows ordered by stream_index. */
+                /** @description Zero-based index into the media's subtitle rows ordered by stream_index. An index past the last subtitle returns 400. */
                 trackIndex: components["parameters"]["TrackIndexPath"];
             };
             cookie?: never;
@@ -8233,25 +8459,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalServerError"];
-        };
-    };
-    tmdbSearchMovies: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["TmdbSearchMoviesRequest"];
-        responses: {
-            200: components["responses"]["TmdbSearchResultsResponse"];
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            500: components["responses"]["InternalServerError"];
-            503: components["responses"]["ServiceUnavailable"];
         };
     };
     identifyMovie: {
@@ -8271,6 +8478,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
+            503: components["responses"]["TmdbNotConfigured"];
         };
     };
     deleteMovie: {
@@ -8314,7 +8522,7 @@ export interface operations {
     getUsers: {
         parameters: {
             query?: {
-                /** @description Case-insensitive name or email substring filter. */
+                /** @description Trimmed substring filter on name or email. Matching is case-insensitive for ASCII letters only. */
                 q?: components["parameters"]["OptionalUserSearchQuery"];
             };
             header?: never;
@@ -8414,6 +8622,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -8584,7 +8793,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            /** @description Request conflicts with existing data. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null. */
+            /** @description Request conflicts with existing data. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8672,7 +8881,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            /** @description Missing or invalid credentials. No response body is sent for HEAD. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -8693,7 +8902,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Request conflicts with existing data. No response body is sent for HEAD. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null. */
+            /** @description Request conflicts with existing data. No response body is sent for HEAD. Returns 409 when a pinned selected subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The check is skipped when subtitle_track is null. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8745,7 +8954,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            /** @description Request conflicts with existing data. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. Checks are skipped when the corresponding stream pin is null. */
+            /** @description Request conflicts with existing data. Returns 409 when a pinned selected audio or subtitle ordinal is out of range after rescanning, selects a different stream_index, or its pinned non-null language changes. Recreate the room to select current tracks. The audio check is skipped when the room was created for a movie without audio, and the subtitle check when subtitle_track is null. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8761,10 +8970,7 @@ export interface operations {
     };
     watchRoomHLSSegment: {
         parameters: {
-            query?: {
-                /** @description Zero-based audio track index. Required for movies with audio; omit for video-only movies. */
-                audio_track?: components["parameters"]["AudioTrackQuery"];
-            };
+            query?: never;
             header?: {
                 /** @description Byte ranges, including suffix and multiple ranges. A single satisfiable range returns 206 with Content-Range; multiple ranges return multipart/byteranges with per-part Content-Type and Content-Range. Malformed or non-overlapping ranges return plain-text 416. Ranges whose summed length exceeds the file size are ignored. HEAD also honors Range, but sends no body. */
                 Range?: components["parameters"]["RangeHeader"];
@@ -9002,6 +9208,7 @@ export interface operations {
     getAlbumsAlphabetical: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -9071,6 +9278,7 @@ export interface operations {
     getMusiciansAlphabetical: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
                 /** @description Default 24; clamped to 48. Larger values are clamped rather than rejected; missing, non-integer and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["PerPageQuery"];
@@ -9107,7 +9315,9 @@ export interface operations {
     getTracksAlphabetical: {
         parameters: {
             query?: {
+                /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. */
                 limit?: components["parameters"]["LimitQuery"];
+                /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -9124,8 +9334,9 @@ export interface operations {
     getShuffleTracks: {
         parameters: {
             query?: {
+                /** @description Default 50; clamped to 200. Missing, non-integer, and nonpositive values use the default. Fewer tracks are returned when the library, minus excluded tracks, is smaller. */
                 limit?: components["parameters"]["ShuffleLimitQuery"];
-                /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Ids past the first 200, non-numeric values, and ids below 1 are ignored rather than rejected. */
+                /** @description Track ids the client already holds, as one comma-separated list (`exclude=1,2,3`); those tracks are left out of the random sample, so an endless shuffle queue is not handed back what it is already playing. Repeating the parameter works too. Only the first 800 comma-separated entries across all exclude values are examined, and at most 200 distinct valid ids from them are used; longer lists are truncated rather than rejected. Duplicates, empty entries, non-numeric values, and ids below 1 are skipped. */
                 exclude?: components["parameters"]["ShuffleExcludeQuery"];
             };
             header?: never;
@@ -9266,7 +9477,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing or invalid session. No response body is sent for HEAD. */
+            /** @description Missing or invalid credentials. No response body is sent for HEAD. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -9330,7 +9541,9 @@ export interface operations {
     getLikedTracks: {
         parameters: {
             query?: {
+                /** @description 1-based page number. Missing, non-integer, and nonpositive values use page 1. */
                 page?: components["parameters"]["PageQuery"];
+                /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. The response per_page reports the effective value. */
                 per_page?: components["parameters"]["MusicPerPageQuery"];
             };
             header?: never;
@@ -9447,7 +9660,9 @@ export interface operations {
     getPlaylistTracks: {
         parameters: {
             query?: {
+                /** @description Default 50; clamped to 100. Larger values are clamped rather than rejected; missing, non-integer, and nonpositive values use the default. */
                 limit?: components["parameters"]["LimitQuery"];
+                /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -9559,6 +9774,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -9617,6 +9833,7 @@ export interface operations {
             query?: {
                 /** @description Default 20; capped at 100. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
                 limit?: components["parameters"]["TopTracksLimitQuery"];
+                /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -9635,6 +9852,7 @@ export interface operations {
             query?: {
                 /** @description Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
                 limit?: components["parameters"]["TopMusiciansLimitQuery"];
+                /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -9670,6 +9888,7 @@ export interface operations {
             query?: {
                 /** @description Default 10; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
                 limit?: components["parameters"]["TopAlbumsLimitQuery"];
+                /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;
@@ -9688,6 +9907,7 @@ export interface operations {
             query?: {
                 /** @description Default 20; capped at 50. Positive integers above the cap are clamped. Missing, empty, non-integer, nonpositive, and int64-overflow values use the default. The response limit reports the effective value. */
                 limit?: components["parameters"]["RecentlyPlayedLimitQuery"];
+                /** @description Rows to skip. Missing, non-integer, and negative values use 0. */
                 offset?: components["parameters"]["OffsetQuery"];
             };
             header?: never;

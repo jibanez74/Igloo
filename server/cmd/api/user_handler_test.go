@@ -127,7 +127,7 @@ func TestUploadUserAvatar_RejectsMissingAndNonImageFiles(t *testing.T) {
 		wantMessage string
 	}{
 		{"missing avatar field", avatarUploadRequest(t, "file", "avatar.png", []byte("\x89PNG\r\n\x1a\n")), "no file uploaded"},
-		{"non-image content", avatarUploadRequest(t, "avatar", "avatar.txt", []byte("plain text is not an image")), "invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF"},
+		{"non-image content", avatarUploadRequest(t, "avatar", "avatar.txt", []byte("plain text is not an image")), "invalid file type. Allowed: JPEG, PNG, GIF, WebP"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
