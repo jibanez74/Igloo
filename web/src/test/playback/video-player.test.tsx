@@ -60,6 +60,7 @@ vi.mock("hls.js/light", () => {
       MANIFEST_LOADED: "hlsManifestLoaded",
       FRAG_BUFFERED: "hlsFragBuffered",
       BUFFER_EOS: "hlsBufferEos",
+      MEDIA_ATTACHED: "hlsMediaAttached",
     };
     static ErrorDetails = {
       FRAG_LOAD_ERROR: "fragLoadError",
@@ -370,6 +371,136 @@ describe("VideoPlayer source lifecycle on start changes", () => {
     rerender(<VideoPlayer {...baseProps} startSec={8} />);
     await act(async () => {});
     expect(fakeHlsInstances).toHaveLength(2);
+  });
+});
+
+// A restored tab used to land on "Playback failed": the viewer pressed Play
+// while a fresh remux session was still loading, the manifest's actual start
+// rebuilt hls.js, and the teardown rejected the pending play() and paused
+// the element. The press must carry over to the replacement source.
+describe("VideoPlayer play request across a source swap", () => {
+  const hlsSrc =
+    "/api/movies/1/hls/remux/playlist.m3u8?playback_session=uuid&start=590";
+
+  // jsdom never plays media; a running or still-pending play() is what turns
+  // `paused` false.
+  function setPaused(video: HTMLVideoElement, paused: boolean) {
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+  }
+
+  function spyOnPlay() {
+    return vi
+      .spyOn(window.HTMLMediaElement.prototype, "play")
+      .mockResolvedValue(undefined);
+  }
+
+  async function renderHlsRebuild({
+    resumePlayAcrossSourceChanges,
+    paused,
+  }: {
+    resumePlayAcrossSourceChanges?: boolean;
+    paused: boolean;
+  }) {
+    const play = spyOnPlay();
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      src: hlsSrc,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+      resumePlayAcrossSourceChanges,
+    };
+    const { rerender } = render(<VideoPlayer {...baseProps} startSec={10} />);
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(1);
+    setPaused(videoRef.current!, paused);
+
+    // The actual-start correction: same URL, new local offset.
+    rerender(<VideoPlayer {...baseProps} startSec={11.4} />);
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(2);
+    expect(fakeHlsInstances[0].destroyed).toBe(true);
+    return { play, rebuilt: fakeHlsInstances[1] };
+  }
+
+  it("plays the rebuilt hls.js instance once its media is attached", async () => {
+    const { play, rebuilt } = await renderHlsRebuild({
+      resumePlayAcrossSourceChanges: true,
+      paused: false,
+    });
+    // Attaching assigns the MediaSource, which would abort an earlier play.
+    expect(play).not.toHaveBeenCalled();
+
+    act(() => {
+      rebuilt.trigger("hlsMediaAttached", {});
+    });
+
+    expect(play).toHaveBeenCalledOnce();
+  });
+
+  it("leaves a paused element paused across the rebuild", async () => {
+    const { play, rebuilt } = await renderHlsRebuild({
+      resumePlayAcrossSourceChanges: true,
+      paused: true,
+    });
+
+    act(() => {
+      rebuilt.trigger("hlsMediaAttached", {});
+    });
+
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for a consumer that did not opt in", async () => {
+    const { play, rebuilt } = await renderHlsRebuild({ paused: false });
+
+    act(() => {
+      rebuilt.trigger("hlsMediaAttached", {});
+    });
+
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("plays a replacement native source right after assigning it", async () => {
+    nativeHlsSupport.supported = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => ({
+        status: 200,
+        ok: true,
+        headers: new Headers(),
+        body: { cancel: vi.fn().mockResolvedValue(undefined) },
+      })),
+    );
+    const play = spyOnPlay();
+    const videoRef = createRef<HTMLVideoElement>();
+    const baseProps = {
+      videoRef,
+      isHlsSource: true,
+      title: "Test Movie",
+      onError: vi.fn(),
+      onManifestLoaded: vi.fn(),
+      resumePlayAcrossSourceChanges: true,
+    };
+    const nextSrc =
+      "/api/movies/1/hls/remux/playlist.m3u8?playback_session=uuid&start=1200";
+    const { rerender } = render(<VideoPlayer {...baseProps} src={hlsSrc} />);
+    await waitFor(() => {
+      expect(videoRef.current).toHaveAttribute("src", hlsSrc);
+    });
+    expect(play).not.toHaveBeenCalled();
+    setPaused(videoRef.current!, false);
+
+    rerender(<VideoPlayer {...baseProps} src={nextSrc} />);
+
+    await waitFor(() => {
+      expect(videoRef.current).toHaveAttribute("src", nextSrc);
+    });
+    expect(play).toHaveBeenCalledOnce();
   });
 });
 

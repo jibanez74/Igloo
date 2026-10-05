@@ -148,6 +148,20 @@ export async function stopHlsPlaybackSession(
   }
 }
 
+/**
+ * Whether a rejected `play()` was cut short rather than refused. A new load
+ * (the player replacing the element's source) or a `pause()` rejects a
+ * pending play with AbortError, which says nothing about the stream itself.
+ */
+export function isInterruptedPlayError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError"
+  );
+}
+
 export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
   if (args.notFound) return { kind: "notFound" };
   if (args.detailsPending || !args.hasDetails) {

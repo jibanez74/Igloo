@@ -11,7 +11,11 @@ import {
   mediaWatchProgressQueryKey,
   movieTechnicalDetailsQueryOpts,
 } from "@/lib/query-opts";
-import { buildStreamUrl, releaseResponseBody } from "@/lib/video-playback";
+import {
+  buildStreamUrl,
+  isInterruptedPlayError,
+  releaseResponseBody,
+} from "@/lib/video-playback";
 
 const session = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4";
 
@@ -94,5 +98,34 @@ describe("releaseResponseBody", () => {
     vi.spyOn(response.body!, "cancel").mockRejectedValue(new Error("locked"));
 
     await expect(releaseResponseBody(response)).resolves.toBeUndefined();
+  });
+});
+
+describe("isInterruptedPlayError", () => {
+  it("recognizes a play() cut short by a new load or a pause", () => {
+    expect(
+      isInterruptedPlayError(
+        new DOMException(
+          "The play() request was interrupted by a new load request.",
+          "AbortError",
+        ),
+      ),
+    ).toBe(true);
+    expect(isInterruptedPlayError({ name: "AbortError" })).toBe(true);
+  });
+
+  it("leaves refusals and real failures to the caller", () => {
+    expect(
+      isInterruptedPlayError(new DOMException("blocked", "NotAllowedError")),
+    ).toBe(false);
+    expect(
+      isInterruptedPlayError(
+        new DOMException("no supported sources", "NotSupportedError"),
+      ),
+    ).toBe(false);
+    expect(isInterruptedPlayError(new Error("AbortError"))).toBe(false);
+    expect(isInterruptedPlayError("AbortError")).toBe(false);
+    expect(isInterruptedPlayError(null)).toBe(false);
+    expect(isInterruptedPlayError(undefined)).toBe(false);
   });
 });
