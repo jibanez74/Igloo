@@ -108,7 +108,6 @@ export default function SpotifyRequestDialog<T extends SpotifySearchResult>({
     const response = await createNotification({
       title: copy.notificationTitle,
       message: lines.join("\n"),
-      isAdmin: true,
     });
 
     if (response.error) {

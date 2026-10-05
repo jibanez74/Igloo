@@ -21,7 +21,7 @@ var errWatchRoomStreamDrift = errors.New("this room's movie file was replaced an
 
 // verifyWatchRoomAudioPin re-resolves the room's stored audio ordinal against
 // the movie's current streams and compares it with the identity pinned at
-// creation. A NULL pin (legacy room, silent movie) skips the check.
+// creation. A NULL pin (a movie without audio) skips the check.
 //
 // It returns the audio streams it loaded so the caller can hand them to
 // GetOrCreateRoomHLSSession as preloadedAudio; on a session miss that branch

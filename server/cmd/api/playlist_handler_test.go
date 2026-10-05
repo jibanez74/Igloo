@@ -285,6 +285,50 @@ func createPlaylistFixtures(t *testing.T, app *Application) playlistFixtures {
 	}
 }
 
+func TestAddTracksToPlaylist_SkipsUnknownIDs(t *testing.T) {
+	app := setupTestApp(t)
+	fixtures := createPlaylistFixtures(t, app)
+	handler := authenticatedRouter(t, app, fixtures.owner.ID)
+	tracksPath := "/api/music/playlists/" + strconv.FormatInt(fixtures.trackPlaylist.ID, 10) + "/tracks"
+
+	body := fmt.Sprintf(`{"track_ids":[%d,999999,%d]}`, fixtures.trackID, fixtures.trackID)
+	added := serveOpenAPIExchange(t, handler, "addTracksToPlaylist", newOpenAPIJSONRequest(http.MethodPost, tracksPath, body), http.StatusOK)
+	var addResponse struct {
+		Data struct {
+			Added   int `json:"added"`
+			Skipped int `json:"skipped"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(added.Body.Bytes(), &addResponse)
+	if err != nil {
+		t.Fatalf("decode add response: %v", err)
+	}
+	if addResponse.Data.Added != 1 || addResponse.Data.Skipped != 2 {
+		t.Fatalf("added/skipped = %d/%d, want 1/2 (the unknown id and the repeat are skipped)", addResponse.Data.Added, addResponse.Data.Skipped)
+	}
+}
+
+func TestParseLimitOffsetParams(t *testing.T) {
+	tests := []struct {
+		query                 string
+		wantLimit, wantOffset int64
+	}{
+		{"", 50, 0},
+		{"limit=20&offset=40", 20, 40},
+		{"limit=500", 100, 0},
+		{"limit=0&offset=-1", 50, 0},
+		{"limit=abc&offset=abc", 50, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			limit, offset := parseLimitOffsetParams(httptest.NewRequest(http.MethodGet, "/?"+tt.query, nil), 50, 100)
+			if limit != tt.wantLimit || offset != tt.wantOffset {
+				t.Fatalf("limit/offset = %d/%d, want %d/%d", limit, offset, tt.wantLimit, tt.wantOffset)
+			}
+		})
+	}
+}
+
 func TestPlaylistAccessAndContentTypes(t *testing.T) {
 	app := setupTestApp(t)
 	fixtures := createPlaylistFixtures(t, app)
@@ -442,6 +486,9 @@ func TestMoviePlaylistCollaboratorManagement(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("owner add collaborator status = %d, want 201: %s", w.Code, w.Body.String())
 	}
+
+	duplicate := newOpenAPIJSONRequest(http.MethodPost, collaboratorsPath, `{"user_id":`+outsiderID+`,"can_edit":false}`)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, fixtures.owner.ID), "addMoviePlaylistCollaborator", duplicate, http.StatusConflict)
 
 	w = serveAs(t, app, fixtures.owner.ID, http.MethodGet, collaboratorsPath, "")
 	if w.Code != http.StatusOK {

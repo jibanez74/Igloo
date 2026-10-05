@@ -5,6 +5,7 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/scanner"
 	moviescanner "igloo/cmd/internal/scanner/movie"
 	"igloo/cmd/internal/tmdb"
 	"net/http"
@@ -30,12 +31,24 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if app.Tmdb == nil {
-		helpers.ErrorJSON(w, errors.New("TMDB is not configured"))
+	if !app.ensureTmdbAvailable(w) {
 		return
 	}
 
 	ctx := r.Context()
+
+	// Answer an unknown movie before spending a TMDB request on it. The
+	// transaction below looks the movie up again for a concurrent delete.
+	exists, err := app.Queries.MovieExists(ctx, id)
+	if err != nil {
+		app.Logger.Error(getMovieLogMessage, "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch movie"))
+		return
+	}
+	if !exists {
+		helpers.ErrorJSON(w, errors.New(movieNotFoundMessage), http.StatusNotFound)
+		return
+	}
 
 	tmdbMovie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
 	if err := app.Tmdb.GetTmdbMovieByID(ctx, tmdbMovie); err != nil {
@@ -236,18 +249,28 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = app.Queries.DeleteMovie(ctx, id); err != nil {
+	// The cascade removes the movie's watch rooms, so their ids are read in the
+	// same transaction and invalidated after the commit, as the scanner does.
+	// Caches are evicted after the delete, never before: a request that missed
+	// the cache while the row still existed would otherwise republish it.
+	var roomIDs []int64
+	tx := scanner.TxRunner{DB: app.DB, Mu: &app.ScannerDBMu, Queries: app.Queries}
+	err = tx.Run(ctx, func(qtx *database.Queries) error {
+		var err error
+		roomIDs, err = qtx.ListWatchRoomIDsByMovieID(ctx, id)
+		if err != nil {
+			return err
+		}
+		return qtx.DeleteMovie(ctx, id)
+	}, func() {
+		app.invalidateDeletedWatchRooms(roomIDs)
+		app.invalidateCommittedMovie(id)
+	})
+	if err != nil {
 		app.Logger.Error("failed to delete movie", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to delete movie"))
 		return
 	}
-
-	// After the delete, never before: a request that missed the cache while the
-	// row still existed would otherwise republish it behind the eviction.
-	app.invalidateSubtitleVTTCache(mediaKindMovie, id)
-	app.StreamFileCache.invalidate(movieStreamFileKey(id))
-	app.MovieStreamsCache.invalidate(movieStreamsKey(id))
-	app.invalidateHLSSessionsForFile(mediaKindMovie, id)
 
 	if payload.DeleteFile {
 		if err := os.Remove(movie.FilePath); err != nil && !os.IsNotExist(err) {

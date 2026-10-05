@@ -121,7 +121,7 @@ const sessions = new Map<string, number>();
 // settings page see no devices. Bearer-token auth on other routes is
 // deliberately not simulated: token validity/revocation semantics are covered
 // by the Go integration tests and the live-gated device-lifecycle spec.
-const devices: Omit<DeviceType, "is_current">[] = [];
+const devices: DeviceType[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
 
 const users: User[] = [
@@ -615,7 +615,7 @@ async function handleQuickConnectPublicRoutes(
     sendSuccess(response, {
       status: "approved",
       token: `igd_mock_${randomUUID()}`,
-      device: { ...device, is_current: true },
+      device,
     });
     return true;
   }
@@ -1192,9 +1192,7 @@ async function handleDeviceRoutes(
   const method = request.method ?? "GET";
 
   if (url.pathname === "/api/devices" && method === "GET") {
-    sendSuccess(response, {
-      devices: devices.map(device => ({ ...device, is_current: false })),
-    });
+    sendSuccess(response, { devices });
     return true;
   }
 

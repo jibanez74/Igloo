@@ -74,7 +74,6 @@ function notification(
     id: 1,
     title: "movie_request",
     message: "Requester wants Dune",
-    is_admin: true,
     is_read: false,
     created_by_name: "Music Fan",
     created_at: "2026-01-01 00:00:00",

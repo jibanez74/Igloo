@@ -215,7 +215,6 @@ describe("RequestMovieDialog", () => {
     await waitFor(() => {
       expect(apiMocks.createNotification).toHaveBeenCalledWith({
         title: "movie_request",
-        isAdmin: true,
         message: [
           "Requester: Movie Fan <movie-fan@example.com>",
           "Movie: Coherence",

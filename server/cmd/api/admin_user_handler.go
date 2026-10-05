@@ -361,6 +361,17 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	exists, err := app.Queries.UserExists(r.Context(), targetID)
+	if err != nil {
+		app.Logger.Error("admin: failed to check user for password reset", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+		return
+	}
+	if !exists {
+		helpers.ErrorJSON(w, errors.New(userNotFoundMessage), http.StatusNotFound)
+		return
+	}
+
 	hashedPassword, err := helpers.HashPassword(req.Password)
 	if err != nil {
 		app.Logger.Error("admin: failed to hash password for reset", "error", err)

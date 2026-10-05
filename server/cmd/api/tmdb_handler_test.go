@@ -95,7 +95,7 @@ func movieGenreTags(genres []database.GetGenresByMovieIDRow) string {
 	return strings.Join(tags, ",")
 }
 
-func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
+func TestSearchTmdbMovies_HTTPSearchRanksResults(t *testing.T) {
 	app := setupTestApp(t)
 
 	app.Tmdb = &stubTmdbClient{
@@ -110,7 +110,7 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
-	req := newOpenAPIJSONRequest(http.MethodPost, "/api/movies/10/tmdb-search", `{
+	req := newOpenAPIJSONRequest(http.MethodPost, "/api/tmdb/movies/search", `{
 		"title": "Casino Royale",
 		"year": 2006
 	}`)
@@ -119,7 +119,7 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
-	assertOpenAPIExchange(t, "tmdbSearchMovies", req, w)
+	assertOpenAPIExchange(t, "searchTmdbMovies", req, w)
 
 	var resp struct {
 		Error bool `json:"error"`
@@ -217,7 +217,7 @@ func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	}
 }
 
-func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
+func TestSearchTmdbMovies_HTTPByID(t *testing.T) {
 	app := setupTestApp(t)
 
 	app.Tmdb = &stubTmdbClient{
@@ -235,7 +235,7 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	router := authenticatedRouter(t, app, actor.ID)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/movies/10/tmdb-search", strings.NewReader(`{"tmdb_id":603}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/tmdb/movies/search", strings.NewReader(`{"tmdb_id":603}`))
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -262,7 +262,6 @@ func TestTmdbHandlers_HTTPUnavailable(t *testing.T) {
 	handler := authenticatedRouter(t, app, admin.ID)
 	for _, tc := range []struct{ method, path, operation string }{
 		{http.MethodPost, "/api/tmdb/movies/search", "searchTmdbMovies"},
-		{http.MethodPost, "/api/movies/1/tmdb-search", "tmdbSearchMovies"},
 		{http.MethodGet, "/api/tmdb/movies/in-theaters", "getMoviesInTheaters"},
 		{http.MethodGet, "/api/tmdb/movies/603", "getMovieByTmdbID"},
 	} {
@@ -686,17 +685,13 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 	actor := createTestUser(t, app, "Actor", "actor@example.com", true)
 	router := authenticatedRouter(t, app, actor.ID)
 
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPut, "/api/movies/1/identify", strings.NewReader(`{"tmdb_id":603}`))
-	router.ServeHTTP(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("unconfigured TMDB status = %d, want 500", w.Code)
-	}
+	unconfigured := newOpenAPIJSONRequest(http.MethodPut, "/api/movies/1/identify", `{"tmdb_id":603}`)
+	serveOpenAPIExchange(t, router, "identifyMovie", unconfigured, http.StatusServiceUnavailable)
 
 	app.Tmdb = &stubTmdbClient{detailMovies: map[int]tmdb.TmdbMovie{603: {TmdbID: 603, Title: "The Matrix"}}}
 
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPut, "/api/movies/bad/identify", strings.NewReader(`{"tmdb_id":603}`))
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/movies/bad/identify", strings.NewReader(`{"tmdb_id":603}`))
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("invalid movie id status = %d, want 400", w.Code)
@@ -709,8 +704,9 @@ func TestIdentifyMovie_HTTPErrorPaths(t *testing.T) {
 		t.Fatalf("invalid tmdb id status = %d, want 400", w.Code)
 	}
 
+	// The stub fails TMDB id 604, so a 404 proves the movie was checked first.
 	w = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPut, "/api/movies/999/identify", strings.NewReader(`{"tmdb_id":603}`))
+	req = httptest.NewRequest(http.MethodPut, "/api/movies/999/identify", strings.NewReader(`{"tmdb_id":604}`))
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("missing movie status = %d, want 404", w.Code)
@@ -878,7 +874,7 @@ func TestIdentifyMovieDuringScannerLookup(t *testing.T) {
 	}
 }
 
-// Ranking is asserted through the route in TestTmdbSearchMovies_HTTPSearchRanksResults;
+// Ranking is asserted through the route in TestSearchTmdbMovies_HTTPSearchRanksResults;
 // the client's no-results sentinel must surface as an empty list, not an error.
 func TestSearchTmdbMovies_NoResultsSentinelIsEmpty(t *testing.T) {
 	app := setupTestApp(t)

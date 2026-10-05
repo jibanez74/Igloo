@@ -128,7 +128,7 @@ func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	limit, offset := parseStatsPaginationParams(r, 20, 100)
+	limit, offset := parseLimitOffsetParams(r, 20, 100)
 
 	tracks, err := app.Queries.GetUserTopTracks(r.Context(), database.GetUserTopTracksParams{
 		UserID: userID,
@@ -158,7 +158,7 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	limit, offset := parseStatsPaginationParams(r, 10, 50)
+	limit, offset := parseLimitOffsetParams(r, 10, 50)
 
 	musicians, err := app.Queries.GetUserTopMusicians(r.Context(), database.GetUserTopMusiciansParams{
 		UserID: userID,
@@ -224,7 +224,7 @@ func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	limit, offset := parseStatsPaginationParams(r, 10, 50)
+	limit, offset := parseLimitOffsetParams(r, 10, 50)
 
 	albums, err := app.Queries.GetUserTopAlbums(r.Context(), database.GetUserTopAlbumsParams{
 		UserID: userID,
@@ -254,7 +254,7 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	limit, offset := parseStatsPaginationParams(r, 20, 50)
+	limit, offset := parseLimitOffsetParams(r, 20, 50)
 
 	tracks, err := app.Queries.GetUserRecentlyPlayed(r.Context(), database.GetUserRecentlyPlayedParams{
 		UserID: userID,
@@ -278,7 +278,10 @@ func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func parseStatsPaginationParams(r *http.Request, defaultLimit, maxLimit int64) (int64, int64) {
+// parseLimitOffsetParams reads limit and offset. A missing, non-integer or
+// nonpositive limit uses defaultLimit and a larger one is clamped to maxLimit;
+// an invalid offset is 0.
+func parseLimitOffsetParams(r *http.Request, defaultLimit, maxLimit int64) (int64, int64) {
 	limit := defaultLimit
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 {

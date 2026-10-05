@@ -235,7 +235,7 @@ describe("Account settings", () => {
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
-      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.",
+      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
     );
     expect(upload).toHaveAttribute("aria-invalid", "true");
     expect(upload).toHaveAttribute(
@@ -243,7 +243,7 @@ describe("Account settings", () => {
       expect.stringContaining(alert.id),
     );
     expect(showValidationErrorMock).toHaveBeenCalledWith(
-      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.",
+      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
     );
     expect(requestsFor(requests, "POST", "/api/user/avatar/upload")).toHaveLength(
       0,

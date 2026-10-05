@@ -24,10 +24,9 @@ type quickConnectRedeemResponse struct {
 		Status string `json:"status"`
 		Token  string `json:"token"`
 		Device struct {
-			ID        int64  `json:"id"`
-			Name      string `json:"name"`
-			Platform  string `json:"platform"`
-			IsCurrent bool   `json:"is_current"`
+			ID       int64  `json:"id"`
+			Name     string `json:"name"`
+			Platform string `json:"platform"`
 		} `json:"device"`
 	} `json:"data"`
 }
@@ -171,8 +170,8 @@ func TestQuickConnect_FullPairingFlow(t *testing.T) {
 	if !strings.HasPrefix(approved.Data.Token, deviceTokenPrefix) {
 		t.Fatalf("token = %q, want %q prefix", approved.Data.Token, deviceTokenPrefix)
 	}
-	if approved.Data.Device.Name != "Living Room TV" || !approved.Data.Device.IsCurrent {
-		t.Fatalf("device = %+v, want the initiating device marked current", approved.Data.Device)
+	if approved.Data.Device.Name != "Living Room TV" {
+		t.Fatalf("device = %+v, want the initiating device", approved.Data.Device)
 	}
 
 	// The token authenticates API requests for the approving user.

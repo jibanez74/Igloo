@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -202,6 +204,40 @@ func (p *cleanupRescanProbe) GetMetadata(context.Context, string) (*ffprobe.Ffpr
 		Format:  ffprobe.Format{Duration: "120"},
 		Streams: []ffprobe.Stream{{Index: 0, CodecName: "h264", CodecType: "video", Width: 1280, Height: 720}},
 	}, nil
+}
+
+func TestAdminMovieDeleteTearsDownWatchRooms(t *testing.T) {
+	app := setupTestApp(t)
+	ctx := context.Background()
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	_, err := app.loadAuthorizedWatchRoom(ctx, room.ID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := setupWatchRoomWSTestServer(t, app)
+	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer conn.Close()
+	readUntilEventType(t, conn, "room_snapshot")
+
+	request := newOpenAPIJSONRequest(http.MethodDelete, "/api/movies/"+strconv.FormatInt(movieID, 10), `{"delete_file":false}`)
+	serveOpenAPIExchange(t, authenticatedRouter(t, app, admin.ID), "deleteMovie", request, http.StatusOK)
+
+	event := readUntilEventType(t, conn, "room_deleted")
+	if event.RoomID != room.ID {
+		t.Fatal(event)
+	}
+	app.WatchRoomAuthCache.mu.Lock()
+	_, cached := app.WatchRoomAuthCache.entries[watchRoomAuthKey{roomID: room.ID, userID: ownerID}]
+	app.WatchRoomAuthCache.mu.Unlock()
+	if cached {
+		t.Fatal("room authorization survived the movie delete")
+	}
+	if !app.isRoomHLSSessionDeleted(room.ID) {
+		t.Fatal("room HLS session was not marked deleted")
+	}
 }
 
 func TestMovieRescanPreservesWatchRooms(t *testing.T) {

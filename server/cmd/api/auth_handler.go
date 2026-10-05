@@ -153,7 +153,7 @@ func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Reques
 		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),
 		Data: map[string]any{
 			"token":  token,
-			"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt, true),
+			"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt),
 		},
 	})
 }

@@ -278,7 +278,6 @@ describe.each(CASES)("$name", (testCase) => {
     await waitFor(() => {
       expect(apiMocks.createNotification).toHaveBeenCalledWith({
         title: testCase.notificationTitle,
-        isAdmin: true,
         message: testCase.message,
       });
     });

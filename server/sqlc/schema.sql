@@ -738,14 +738,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_by_user_id INTEGER NOT NULL,
   title TEXT NOT NULL CHECK (title IN ('movie_request', 'album_request', 'track_request', 'other')),
   message TEXT NOT NULL,
-  is_admin BOOLEAN NOT NULL DEFAULT false,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_created_by_user ON notifications (created_by_user_id);
 
-CREATE INDEX IF NOT EXISTS idx_notifications_admin_created_at ON notifications (is_admin, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC);
 
 CREATE TABLE IF NOT EXISTS notification_reads (
   notification_id INTEGER NOT NULL,

@@ -18,7 +18,6 @@ type deviceListResponse struct {
 			Name       string  `json:"name"`
 			Platform   string  `json:"platform"`
 			AppVersion *string `json:"app_version"`
-			IsCurrent  bool    `json:"is_current"`
 		} `json:"devices"`
 	} `json:"data"`
 }
@@ -109,8 +108,8 @@ func TestGetDevices_SessionListsOwnDevices(t *testing.T) {
 	if len(resp.Data.Devices) != 1 {
 		t.Fatalf("devices = %d, want 1 (only own devices)", len(resp.Data.Devices))
 	}
-	if resp.Data.Devices[0].Name != "Living Room TV" || resp.Data.Devices[0].IsCurrent {
-		t.Fatalf("device = %+v, want own device with is_current false in the session-only list", resp.Data.Devices[0])
+	if resp.Data.Devices[0].Name != "Living Room TV" {
+		t.Fatalf("device = %+v, want own device", resp.Data.Devices[0])
 	}
 }
 
