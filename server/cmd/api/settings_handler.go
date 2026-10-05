@@ -78,7 +78,7 @@ func mapLibrarySettingsResponse(settings database.Setting) librarySettingsRespon
 	}
 }
 
-func isOptionalHTTPBaseURL(value string) bool {
+func isOptionalHTTPURL(value string) bool {
 	if value == "" {
 		return true
 	}
@@ -179,12 +179,12 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	req.StaticDir = strings.TrimSpace(req.StaticDir)
 	req.TranscodeDir = strings.TrimSpace(req.TranscodeDir)
 
-	if !isOptionalHTTPBaseURL(req.JellyfinBaseURL) {
+	if !isOptionalHTTPURL(req.JellyfinBaseURL) {
 		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
 		return
 	}
 
-	if !isOptionalHTTPBaseURL(req.ImmichBaseURL) {
+	if !isOptionalHTTPURL(req.ImmichBaseURL) {
 		helpers.ErrorJSON(w, errors.New("immich base URL must be a valid http or https URL"), http.StatusBadRequest)
 		return
 	}

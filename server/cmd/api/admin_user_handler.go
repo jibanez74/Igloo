@@ -326,8 +326,8 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	app.forgetUserDevices(targetID)
 
-	if user.Avatar.Valid && isUploadedAvatar(user.Avatar.String) {
-		app.deleteAvatarFile(user.Avatar.String)
+	if user.Avatar.Valid {
+		app.deleteUploadedAvatar(targetID, user.Avatar.String)
 	}
 
 	app.Logger.Info("admin: user deleted", "user_id", targetID, "email", user.Email)
