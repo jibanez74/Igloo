@@ -12,6 +12,10 @@ import {
   watchRoomWebSocketUrl,
 } from "@/lib/watch-room";
 import { showInfo } from "@/lib/toast-helpers";
+import {
+  isInterruptedPlayError,
+  isSourceFailurePlayError,
+} from "@/lib/video-playback";
 import type {
   WatchRoomPlaybackStateType,
   WatchRoomServerEventType,
@@ -24,6 +28,11 @@ type WatchRoomPlaybackEventType =
   | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY
   | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE
   | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.SEEK;
+
+type RoomPlaybackSnapshot = {
+  state: WatchRoomPlaybackStateType;
+  receivedAt: number;
+};
 
 type UseWatchRoomConnectionOptions = {
   currentRoomId: number | null;
@@ -52,10 +61,12 @@ export function useWatchRoomConnection({
   const socketInstanceIdRef = useRef(0);
   const prevRoomIdRef = useRef<number | null>(null);
   const roomDeletionHandledRef = useRef(false);
-  const pendingPlaybackRef = useRef<{
-    state: WatchRoomPlaybackStateType;
-    receivedAt: number;
-  } | null>(null);
+  const pendingPlaybackRef = useRef<RoomPlaybackSnapshot | null>(null);
+  // The room's latest known playback state: what the server last sent, or
+  // what this viewer last sent it (the server does not echo a sender's own
+  // events). A replaced stream source starts over at its beginning, paused,
+  // so this is applied to it again.
+  const roomPlaybackRef = useRef<RoomPlaybackSnapshot | null>(null);
 
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [syncAnnouncementState, setSyncAnnouncementState] = useState<
@@ -129,10 +140,17 @@ export function useWatchRoomConnection({
         setPlaybackError(null);
         onPlayingChange(true);
         return true;
-      } catch {
-        setPlaybackError(
-          "Playback sync is waiting for browser permission. Press play to continue syncing with the room.",
-        );
+      } catch (error) {
+        // Not a refusal: a source swap or a pause cut the play short, and the
+        // state stays pending for the next canplay; or the source failed,
+        // which the player's error event reports.
+        const refused =
+          !isInterruptedPlayError(error) && !isSourceFailurePlayError(error);
+        if (refused) {
+          setPlaybackError(
+            "Playback sync is waiting for browser permission. Press play to continue syncing with the room.",
+          );
+        }
         return false;
       }
     },
@@ -193,10 +211,9 @@ export function useWatchRoomConnection({
 
     if (!event.playback) return;
 
-    pendingPlaybackRef.current = {
-      state: event.playback,
-      receivedAt: Date.now(),
-    };
+    const snapshot = { state: event.playback, receivedAt: Date.now() };
+    pendingPlaybackRef.current = snapshot;
+    roomPlaybackRef.current = snapshot;
     await flushPendingPlayback();
   });
 
@@ -249,6 +266,7 @@ export function useWatchRoomConnection({
       prevRoomIdRef.current = currentRoomId;
       reconnectAttemptsRef.current = 0;
       pendingPlaybackRef.current = null;
+      roomPlaybackRef.current = null;
     }
     if (!currentRoomId) return;
 
@@ -335,6 +353,14 @@ export function useWatchRoomConnection({
     const video = videoRef.current;
     if (!video) return;
 
+    // A new stream URL for the same room is a recovery or capacity reload,
+    // which rebuilds the player at the start of the stream, paused. Without
+    // the room's state re-applied the viewer sat there, and their next Play
+    // broadcast that position and pulled the whole room back.
+    if (!pendingPlaybackRef.current && roomPlaybackRef.current) {
+      pendingPlaybackRef.current = roomPlaybackRef.current;
+    }
+
     const roomIdAtEffectTime = currentRoomId;
     const handleReady = () => {
       if (prevRoomIdRef.current === roomIdAtEffectTime) {
@@ -362,6 +388,19 @@ export function useWatchRoomConnection({
         position_sec: positionSec,
       }),
     );
+
+    // A seek keeps the room playing or paused as it was.
+    let paused = roomPlaybackRef.current?.state.paused ?? true;
+    if (type === WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY) paused = false;
+    if (type === WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE) paused = true;
+    roomPlaybackRef.current = {
+      state: {
+        paused,
+        position_sec: positionSec,
+        updated_at: new Date().toISOString(),
+      },
+      receivedAt: Date.now(),
+    };
   };
 
   const syncToPendingPlayback = () => {
