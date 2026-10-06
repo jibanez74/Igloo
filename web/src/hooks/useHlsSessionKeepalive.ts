@@ -70,6 +70,7 @@ export function useHlsSessionKeepalive({
         // Only the request matters. Releasing the body frees the connection
         // instead of leaving the playlist unread.
         await releaseResponseBody(response);
+        if (controller.signal.aborted) return;
         const sessionLost = refreshOnly && response.status === 404;
         if (sessionLost && !lostReported) {
           lostReported = true;
