@@ -1745,6 +1745,52 @@ func TestHLSSegment_RejectsBadRequests(t *testing.T) {
 	})
 }
 
+// Session-scoped, temporary output must never be cached, and that includes the
+// error answers: a cached 404 or 503 would outlive the condition it described.
+func TestHLSResponsesAreNeverCached(t *testing.T) {
+	app := setupTestApp(t)
+	userID := int64(100)
+	handler := authenticatedRouter(t, app, userID)
+
+	stoppedKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	app.HLSSessionCache.SetDefault(stoppedKey, &HLSSession{
+		Media:           movieRef(6),
+		OwnerUserID:     userID,
+		PlaybackSession: testPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		Exited:          true,
+		ExitErr:         fmt.Errorf("signal: killed"),
+		ExpectedStop:    true,
+	})
+
+	cases := []struct {
+		name   string
+		method string
+		target string
+	}{
+		{"manifest with a malformed playback session", http.MethodGet, "/api/movies/5/hls/remux/playlist.m3u8?audio_track=0&playback_session=nope&start=0"},
+		{"segment of an uncached session", http.MethodGet, fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID)},
+		{"segment of a stopped session", http.MethodGet, fmt.Sprintf("/api/movies/6/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID)},
+		{"stop with a malformed playback session", http.MethodPost, "/api/movies/5/hls/session/stop?playback_session=nope"},
+		{"episode manifest with a malformed playback session", http.MethodGet, "/api/shows/episodes/5/hls/remux/playlist.m3u8?audio_track=0&playback_session=nope&start=0"},
+		{"room manifest of an unknown room", http.MethodGet, "/api/watch-rooms/999/hls/playlist.m3u8"},
+		{"room segment of an unknown room", http.MethodGet, "/api/watch-rooms/999/hls/segment_0.m4s"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(tc.method, tc.target, nil))
+
+			if recorder.Code < http.StatusBadRequest {
+				t.Fatalf("status = %d, want an error: %s", recorder.Code, recorder.Body.String())
+			}
+			if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+				t.Fatalf("Cache-Control = %q on a %d, want no-store", got, recorder.Code)
+			}
+		})
+	}
+}
+
 func TestStopPersonalHLSSession_RejectsBadRequests(t *testing.T) {
 	app := setupTestApp(t)
 

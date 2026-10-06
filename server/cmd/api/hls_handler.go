@@ -113,6 +113,9 @@ func (app *Application) EpisodeHLSManifest(w http.ResponseWriter, r *http.Reques
 // at segment_0 on disk. The web player keeps absolute media time in the UI and
 // converts seeks to session-relative media time client-side.
 func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	// Set before anything can answer, so error responses inherit it too.
+	w.Header().Set("Cache-Control", "no-store")
+
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -231,6 +234,8 @@ func (app *Application) EpisodeHLSSegment(w http.ResponseWriter, r *http.Request
 
 // FFmpeg writes segments asynchronously; serve only once complete.
 func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	w.Header().Set("Cache-Control", "no-store")
+
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -643,6 +648,8 @@ func (app *Application) StopEpisodeHLSSession(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	w.Header().Set("Cache-Control", "no-store")
+
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return

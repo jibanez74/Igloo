@@ -103,6 +103,9 @@ func (app *Application) rejectDriftedWatchRoom(w http.ResponseWriter, room datab
 }
 
 func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Request) {
+	// Set before anything can answer, so error responses inherit it too.
+	w.Header().Set("Cache-Control", "no-store")
+
 	room, _, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {
 		return
@@ -149,6 +152,8 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 }
 
 func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+
 	room, _, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {
 		return
