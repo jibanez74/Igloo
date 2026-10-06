@@ -863,7 +863,14 @@ require the full playback test pass.
   (`useIdleControls`), sliding back on pointer/touch/key input. A `sr-only`
   paragraph documents the keyboard map (Space/K, J/L, arrows, M, F, Esc),
   and the controls name their shortcuts — both dropped on touch (§1.7);
-  `ResumeDialog` offers resume vs. start-over; announcements via five
+  `ResumeDialog` offers resume vs. start-over (which clears the saved
+  progress). A page opened mid-media (a restored tab, a reload, Back into the
+  player, a chapter link) offers it only when the saved position is more than
+  `RESUME_AHEAD_THRESHOLD_SEC` past the URL's start, and then the alternative
+  is "Play from {start}", which keeps the progress; an up-next hand-off is
+  never interrupted. No progress is saved while the offer is undecided, so
+  leaving or switching tabs cannot overwrite what it offers. Announcements
+  via five
   `LiveAnnouncer`s (play/pause state, capacity waiting, chapter jumps,
   direct-play fallback, and HLS session recovery — the watch room announces
   recovery the same way). Fatal playback errors self-announce: the status
@@ -900,7 +907,8 @@ require the full playback test pass.
   coherent. It runs only for a movie starting from the beginning: the resume
   decision resolves first, Resume bypasses it, Start over and a fresh play run
   it; TV episodes, watch rooms, chapter links and Continue Watching never see
-  it. The queue comes from `GET /api/movies/{id}/preroll` (the server owns
+  it. That is decided once, from how the page opened, so seeking back to 0:00
+  in a movie opened mid-way never brings it up. The queue comes from `GET /api/movies/{id}/preroll` (the server owns
   selection), fetched once per play with a short timeout and never refetched
   on focus or reconnect; an empty or failed answer starts the movie as before,
   paused, while a pre-roll that played starts the movie on its own (a

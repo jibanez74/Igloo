@@ -14,6 +14,7 @@ import {
 import {
   buildStreamUrl,
   isInterruptedPlayError,
+  isSourceFailurePlayError,
   releaseResponseBody,
 } from "@/lib/video-playback";
 
@@ -129,3 +130,25 @@ describe("isInterruptedPlayError", () => {
     expect(isInterruptedPlayError(undefined)).toBe(false);
   });
 });
+describe("isSourceFailurePlayError", () => {
+  it("recognizes a play() rejected because the source failed", () => {
+    expect(
+      isSourceFailurePlayError(
+        new DOMException("The element has no supported sources.", "NotSupportedError"),
+      ),
+    ).toBe(true);
+    expect(isSourceFailurePlayError({ name: "NotSupportedError" })).toBe(true);
+  });
+
+  it("leaves interruptions and refusals to the caller", () => {
+    expect(
+      isSourceFailurePlayError(new DOMException("interrupted", "AbortError")),
+    ).toBe(false);
+    expect(
+      isSourceFailurePlayError(new DOMException("blocked", "NotAllowedError")),
+    ).toBe(false);
+    expect(isSourceFailurePlayError(new Error("NotSupportedError"))).toBe(false);
+    expect(isSourceFailurePlayError(null)).toBe(false);
+  });
+});
+

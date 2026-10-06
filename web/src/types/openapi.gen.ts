@@ -1066,7 +1066,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a TV episode
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media, and a keepalive=1 request whose session no longer exists.
          */
         get: operations["episodeHlsManifest"];
         put?: never;
@@ -1513,7 +1513,7 @@ export interface paths {
         };
         /**
          * Get an HLS playlist for a movie
-         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media.
+         * @description Creates or reuses the authenticated user's HLS session, then returns its media playlist. The same cookie or bearer authentication is required again on every rewritten manifest and asset request; credentials are not embedded in playlist URLs. Asset URLs propagate audio_track, the explicit audio profile pair, the normalized start, playback_session, and reload so they resolve the same session. Each user holds at most HLS_MAX_SESSIONS_PER_USER sessions (3 by default): at the cap the user's least recently used sessions are evicted, and 503 is returned only when every slot is still being created. Sessions expire after 5 minutes without a manifest or asset request. Creating a session ends the user's other sessions for the same media and playback_session (an earlier seek window, profile, or audio track), whose assets then return 404. A session whose FFmpeg process failed is replaced on the next manifest request. A cold manifest request can wait up to 30 seconds for a remux preflight (remux requests without a stored verdict), up to 15 seconds for transcode capacity, and up to 30 seconds for the first published output (init.mp4 for transcodes, the first segment for copy-video), so about 75 seconds in the worst case before a retryable 503. 404 also covers a start position with no playable media, and a keepalive=1 request whose session no longer exists.
          */
         get: operations["hlsManifest"];
         put?: never;
@@ -5840,10 +5840,10 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description The HLS session does not exist (request the manifest again), or FFmpeg finished cleanly and never wrote this segment. Only the second case carries X-Igloo-Segment: past-end; a synthesized transcode playlist can list one or two segments more than FFmpeg produces when a source's audio outlasts its video, and a client must treat that 404 as the end of the media rather than as a lost session. */
+        /** @description The HLS session does not exist or was stopped while the request waited (request the manifest again), or FFmpeg finished cleanly and never wrote this segment. Only the second case carries X-Igloo-Segment: past-end; a synthesized transcode playlist can list one or two segments more than FFmpeg produces when a source's audio outlasts its video, and a client must treat that 404 as the end of the media rather than as a lost session. */
         HLSSegmentNotFound: {
             headers: {
-                /** @description Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown. */
+                /** @description Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown or was stopped. */
                 "X-Igloo-Segment"?: "past-end";
                 [name: string]: unknown;
             };
@@ -6123,6 +6123,8 @@ export interface components {
         PlaybackSessionQuery: string;
         /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
         HLSReloadQuery: string;
+        /** @description Set to 1 for a keepalive ping: the request refreshes the session's idle TTL and returns the playlist as usual, but never creates a session. When the session is gone (evicted, stopped, or failed) it returns 404, so the client can rebase at its playhead instead of having a session recreated at a stale start. Not propagated into asset URLs. */
+        HLSKeepaliveQuery: "1";
         /** @description Requested Dolby output codec for an explicit audio profile. Must appear together with audio_channels; supplying only one of the pair returns HTTP 400. Omitting both selects the default audio mode: a selected track confirmed as AAC-LC is copied unchanged, keeping its channel count, and every other selected track is encoded to stereo AAC at 320 kbps. Watch-room HLS always uses the default audio mode. Explicit requests always encode at a server-owned bitrate; aac is not an accepted explicit value. */
         HLSAudioCodecQuery: components["schemas"]["HLSRequestedAudioCodec"];
         /** @description Maximum output channels for an explicit audio profile: 2 means at most stereo, 6 preserves up to 5.1. A ceiling, never a target - mono and stereo sources are never upmixed, and sources above the maximum are downmixed with a full channel-layout conversion. Must appear together with audio_codec; supplying only one of the pair returns HTTP 400. */
@@ -7473,6 +7475,8 @@ export interface operations {
                 playback_session: components["parameters"]["PlaybackSessionQuery"];
                 /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
                 reload?: components["parameters"]["HLSReloadQuery"];
+                /** @description Set to 1 for a keepalive ping: the request refreshes the session's idle TTL and returns the playlist as usual, but never creates a session. When the session is gone (evicted, stopped, or failed) it returns 404, so the client can rebase at its playhead instead of having a session recreated at a stale start. Not propagated into asset URLs. */
+                keepalive?: components["parameters"]["HLSKeepaliveQuery"];
             };
             header?: never;
             path: {
@@ -8214,6 +8218,8 @@ export interface operations {
                 playback_session: components["parameters"]["PlaybackSessionQuery"];
                 /** @description Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key. */
                 reload?: components["parameters"]["HLSReloadQuery"];
+                /** @description Set to 1 for a keepalive ping: the request refreshes the session's idle TTL and returns the playlist as usual, but never creates a session. When the session is gone (evicted, stopped, or failed) it returns 404, so the client can rebase at its playhead instead of having a session recreated at a stale start. Not propagated into asset URLs. */
+                keepalive?: components["parameters"]["HLSKeepaliveQuery"];
             };
             header?: never;
             path: {

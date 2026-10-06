@@ -25,11 +25,12 @@ import {
 } from "@/lib/query-opts";
 import {
   clampPlaybackTime,
-  getOrCreateHlsPlaybackSessionId,
+  createPlaybackSessionId,
   stopHlsPlaybackSession,
   derivePlaybackStatus,
   displayedMediaDuration,
   isInterruptedPlayError,
+  isSourceFailurePlayError,
   shouldRebaseHlsSession,
   toAbsoluteDuration,
   toAbsolutePlaybackTime,
@@ -138,6 +139,10 @@ export default function VideoPlaybackPage({
   // Seeded from the URL so the up-next hand-off starts the next episode the
   // way a rebase resumes the current one: on the first canplay.
   const pendingAutoPlayOnLoadRef = useRef(search.autoplay === true);
+  // A play the player carries across a source swap (see VideoPlayer). While
+  // it is set the element sits paused without having fired `pause`, so the
+  // controls still show Pause, and a Pause press must withdraw it.
+  const carriedPlayRef = useRef(false);
   // VideoPlayer calls onNativeError then synchronously onError; when a
   // fallback consumed the native error, the paired onError must not raise
   // the error screen.
@@ -161,6 +166,13 @@ export default function VideoPlaybackPage({
   // by any route (last trailer, Start movie, an empty or failed queue). The
   // movie surface stays unmounted meanwhile, because mounting it is what
   // starts the stream, until the last trailer's final seconds (warm-up).
+  // Whether the page opened that way is decided once (the page remounts per
+  // item): the URL changes under a playing movie, so reading it live put a
+  // movie opened mid-way into the pre-roll when a seek back to 0:00 rebased
+  // to start=0, or when a hand-off's spent autoplay flag left the URL.
+  const [openedFromBeginning] = useState(
+    () => kind === "movie" && start === 0 && search.autoplay !== true,
+  );
   const [prerollBypassed, setPrerollBypassed] = useState(false);
   const [prerollFinished, setPrerollFinished] = useState(false);
   const [prerollWarmup, setPrerollWarmup] = useState(false);
@@ -171,18 +183,19 @@ export default function VideoPlaybackPage({
     streamWindowKey: string;
     profile: string;
   } | null>(null);
-  // State rather than useMemo: the getter writes sessionStorage and mints a
-  // fresh random id when storage is unavailable, so a discarded memo cache
-  // could change the session id mid-playback. State guarantees identity;
-  // the render-phase reset re-seeds it when navigating to another item.
+  // One id per page mount, never shared through storage: a reloaded,
+  // restored, or duplicated tab would otherwise reuse it, and the closing
+  // tab's late stop request would tear down the new page's session. State
+  // rather than useMemo, since a discarded memo cache would mint a new id
+  // mid-playback; the render-phase reset re-seeds it for another item.
   const [playbackSession, setPlaybackSession] = useState(() => ({
     mediaKey: currentMediaKey,
-    id: getOrCreateHlsPlaybackSessionId(media),
+    id: createPlaybackSessionId(),
   }));
   if (playbackSession.mediaKey !== currentMediaKey) {
     setPlaybackSession({
       mediaKey: currentMediaKey,
-      id: getOrCreateHlsPlaybackSessionId(media),
+      id: createPlaybackSessionId(),
     });
   }
   const playbackSessionId = playbackSession.id;
@@ -260,11 +273,7 @@ export default function VideoPlaybackPage({
     modeUnavailable,
     playbackError,
   });
-  const prerollEligible =
-    kind === "movie" &&
-    start === 0 &&
-    search.autoplay !== true &&
-    !prerollBypassed;
+  const prerollEligible = openedFromBeginning && !prerollBypassed;
   const prerollPhase = prerollEligible && !prerollFinished;
   // Fetched from the first render, alongside watch progress, so the queue is
   // normally known before the resume decision lands; a slow or failed request
@@ -334,10 +343,12 @@ export default function VideoPlaybackPage({
     resumeDecisionPending,
     resumeDialogOpen,
     resumeTargetSec,
+    playFromSec,
     dismissResumeDecision,
   } = useResumeDecision({
     mediaKey: currentMediaKey,
     start,
+    autoplay: search.autoplay === true,
     playing,
     watchProgressPending,
     savedProgressSec,
@@ -450,28 +461,46 @@ export default function VideoPlaybackPage({
       // Cut short, not failed: the viewer paused, or the player replaced its
       // source while the play was pending (a fresh remux session's start
       // correction, a rebase, a recovery, a capacity retry) and plays the
-      // replacement itself (resumePlayAcrossSourceChanges).
+      // replacement itself (carriedPlayRef).
       if (isInterruptedPlayError(error)) return;
+      // The source failed. The element's error event reports that, unless
+      // the direct-play fallback consumed it and is switching to remux, when
+      // a report from here would raise the error screen over the fallback.
+      if (isSourceFailurePlayError(error)) return;
       setPlaybackError(
         "Playback failed — the browser could not play this stream.",
       );
     }
   };
 
+  // Also withdraws a play still waiting on a source swap or a rebase. The
+  // swap left the element paused without a `pause` event, so pausing it
+  // again would change nothing and the controls would keep showing Pause.
   const pauseVideo = () => {
-    videoRef.current?.pause();
+    carriedPlayRef.current = false;
+    pendingAutoPlayOnLoadRef.current = false;
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      setPlaying(false);
+      return;
+    }
+    video.pause();
   };
 
   const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (video.paused) {
-      await playVideo();
+    // A carried play is playing as far as the viewer can tell.
+    const playIntended = !video.paused || carriedPlayRef.current;
+    if (playIntended) {
+      pauseVideo();
       return;
     }
 
-    pauseVideo();
+    await playVideo();
   };
 
   const handlePlaybackSurfaceClick = async (
@@ -575,15 +604,20 @@ export default function VideoPlaybackPage({
       currentTimeRef,
       durationRef,
       fallbackDurationSec: mediaDurationSec,
-      enabled: !prerollActive,
+      // Nor while the resume offer is undecided: a page opened mid-media sits
+      // at its URL start, and saving that (on a tab switch, or on leaving
+      // without choosing) would overwrite the very progress being offered.
+      enabled: !prerollActive && !resumeDecisionPending && !resumeDialogOpen,
     });
 
-  // Paused while the stream waits for server capacity: the ping is a
-  // manifest request, so it would queue for a transcode permit alongside the
-  // retry it is meant to keep alive.
+  // Paused while the stream waits for server capacity: there is no session
+  // to refresh until the retry creates one, and a refresh-only ping would
+  // read that as a lost session. An evicted session (a long sleep, a frozen
+  // tab) is rebased at the playhead rather than recreated at the window start.
   useHlsSessionKeepalive({
     enabled: isHlsPlayback && playerMounted && !waitingForCapacity,
     streamUrl,
+    onSessionLost: () => handleSessionLost(currentTimeRef.current),
   });
 
   useBlocker({
@@ -624,10 +658,14 @@ export default function VideoPlaybackPage({
     if (!video) return;
 
     const resumePlayback = async () => {
-      try {
-        await video.play();
-      } catch {
-        // Best-effort playback resume after rebasing the HLS session.
+      // Read at canplay, not when armed: a Pause pressed while the new
+      // stream loaded withdrew it.
+      if (pendingAutoPlayOnLoadRef.current) {
+        try {
+          await video.play();
+        } catch {
+          // Best-effort playback resume after rebasing the HLS session.
+        }
       }
 
       pendingAutoPlayOnLoadRef.current = false;
@@ -762,7 +800,7 @@ export default function VideoPlaybackPage({
       videoRef={videoRef}
       src={streamUrl}
       isHlsSource={isHlsPlayback}
-      resumePlayAcrossSourceChanges
+      carriedPlayRef={carriedPlayRef}
       title={title}
       isFullscreen={chromeFullscreenMode}
       onError={(msg) => {
@@ -865,6 +903,8 @@ export default function VideoPlaybackPage({
         onBack={handleBack}
         onRetry={() => {
           resetRecovery();
+          // Try again remounts the player paused, as it always has.
+          carriedPlayRef.current = false;
           setPlaybackError(null);
           setPlaying(false);
           setCurrentTime(0);
@@ -917,9 +957,12 @@ export default function VideoPlaybackPage({
       <ResumeDialog
         open={resumeDialogOpen}
         resumeTargetSec={resumeTargetSec}
+        playFromSec={playFromSec}
         pending={resumeActionPending}
         onResume={handleResume}
         onStartFromBeginning={() => void handleStartFromBeginning()}
+        // The player is already at the URL's start; the saved progress stays.
+        onPlayFrom={dismissResumeDecision}
         // Closing after "Start from beginning" lands on the pre-roll's
         // primary control; after "Resume" the pre-roll is bypassed and the
         // player region takes focus as before.

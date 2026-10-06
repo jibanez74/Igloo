@@ -33,7 +33,10 @@ type FakeHlsInstance = {
   triggered: Array<{ event: string; data: unknown }>;
   levels: Array<{ details?: FakeLevelDetails }>;
   destroyed: boolean;
+  config: { startPosition?: number };
   startLoadCalls: number;
+  /** The position each startLoad() call passed, undefined for a bare call. */
+  startLoadPositions: Array<number | undefined>;
   loadSourceCalls: number;
   stopLoadCalls: number;
   recoverMediaErrorCalls: number;
@@ -72,12 +75,15 @@ vi.mock("hls.js/light", () => {
     triggered: Array<{ event: string; data: unknown }> = [];
     levels: Array<{ details?: FakeLevelDetails }> = [];
     destroyed = false;
+    config: { startPosition?: number };
     startLoadCalls = 0;
+    startLoadPositions: Array<number | undefined> = [];
     loadSourceCalls = 0;
     stopLoadCalls = 0;
     recoverMediaErrorCalls = 0;
 
-    constructor() {
+    constructor(config: { startPosition?: number } = {}) {
+      this.config = config;
       fakeHlsInstances.push(this);
     }
 
@@ -104,8 +110,9 @@ vi.mock("hls.js/light", () => {
     recoverMediaError() {
       this.recoverMediaErrorCalls += 1;
     }
-    startLoad() {
+    startLoad(position?: number) {
       this.startLoadCalls += 1;
+      this.startLoadPositions.push(position);
     }
     stopLoad() {
       this.stopLoadCalls += 1;
@@ -398,10 +405,10 @@ describe("VideoPlayer play request across a source swap", () => {
   }
 
   async function renderHlsRebuild({
-    resumePlayAcrossSourceChanges,
+    carriedPlayRef,
     paused,
   }: {
-    resumePlayAcrossSourceChanges?: boolean;
+    carriedPlayRef?: { current: boolean };
     paused: boolean;
   }) {
     const play = spyOnPlay();
@@ -412,7 +419,7 @@ describe("VideoPlayer play request across a source swap", () => {
       isHlsSource: true,
       title: "Test Movie",
       onError: vi.fn(),
-      resumePlayAcrossSourceChanges,
+      carriedPlayRef,
     };
     const { rerender } = render(<VideoPlayer {...baseProps} startSec={10} />);
     await act(async () => {});
@@ -428,25 +435,47 @@ describe("VideoPlayer play request across a source swap", () => {
   }
 
   it("plays the rebuilt hls.js instance once its media is attached", async () => {
+    const carriedPlayRef = { current: false };
     const { play, rebuilt } = await renderHlsRebuild({
-      resumePlayAcrossSourceChanges: true,
+      carriedPlayRef,
       paused: false,
     });
     // Attaching assigns the MediaSource, which would abort an earlier play.
     expect(play).not.toHaveBeenCalled();
+    expect(carriedPlayRef.current).toBe(true);
 
     act(() => {
       rebuilt.trigger("hlsMediaAttached", {});
     });
 
     expect(play).toHaveBeenCalledOnce();
+    expect(carriedPlayRef.current).toBe(false);
   });
 
   it("leaves a paused element paused across the rebuild", async () => {
+    const carriedPlayRef = { current: false };
     const { play, rebuilt } = await renderHlsRebuild({
-      resumePlayAcrossSourceChanges: true,
+      carriedPlayRef,
       paused: true,
     });
+
+    act(() => {
+      rebuilt.trigger("hlsMediaAttached", {});
+    });
+
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  // The swap leaves the element paused without a pause event, so a Pause
+  // pressed before the replacement attaches can only withdraw the play
+  // through the consumer's ref.
+  it("drops a play the consumer withdrew before the new media attached", async () => {
+    const carriedPlayRef = { current: false };
+    const { play, rebuilt } = await renderHlsRebuild({
+      carriedPlayRef,
+      paused: false,
+    });
+    carriedPlayRef.current = false;
 
     act(() => {
       rebuilt.trigger("hlsMediaAttached", {});
@@ -484,7 +513,7 @@ describe("VideoPlayer play request across a source swap", () => {
       title: "Test Movie",
       onError: vi.fn(),
       onManifestLoaded: vi.fn(),
-      resumePlayAcrossSourceChanges: true,
+      carriedPlayRef: { current: false },
     };
     const nextSrc =
       "/api/movies/1/hls/remux/playlist.m3u8?playback_session=uuid&start=1200";
@@ -830,6 +859,39 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(hls.startLoadCalls).toBe(HLS_SEGMENT_NOT_READY_MAX_RETRIES);
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0][0]).toMatch(/still preparing/i);
+  });
+
+  // hls.js's default start (-1) joins a live playlist at its edge, and a copy
+  // session's playlist is a live EVENT one until FFmpeg finishes: a play from
+  // the start began about 40 s in.
+  it("starts hls.js at an explicit position, 0 included", async () => {
+    const hls = await renderHlsPlayer({ startSec: 0 });
+
+    expect(hls.config.startPosition).toBe(0);
+  });
+
+  // Before anything buffers, a bare startLoad() also falls back to the live
+  // edge, so a retry that early restarts at the start the source was built
+  // for. After that, hls.js resumes from the playhead by itself.
+  it("restarts an early retry at the source start, a later one at the playhead", async () => {
+    const hls = await renderHlsPlayer({ startSec: 12 });
+    const notReady = {
+      type: "networkError",
+      details: "fragLoadError",
+      fatal: true,
+      response: { code: 503 },
+    };
+
+    act(() => {
+      hls.trigger("hlsError", notReady);
+    });
+    expect(hls.startLoadPositions).toEqual([12]);
+
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+      hls.trigger("hlsError", notReady);
+    });
+    expect(hls.startLoadPositions).toEqual([12, -1]);
   });
 
   // A buffered fragment proves the stream recovered, so the one-shot budgets
@@ -1229,6 +1291,109 @@ function nativeManifestResponse(
   } as unknown as Response;
   return { response, cancel };
 }
+
+describe("VideoPlayer native HLS network error", () => {
+  const src = "/api/movies/1/hls/remux/playlist.m3u8?start=590";
+
+  // jsdom has no MediaError, which the error handler reads.
+  function stubMediaError() {
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+    });
+  }
+
+  function failMedia(
+    video: HTMLElement,
+    code: number,
+    { readyState, currentTime }: { readyState: number; currentTime: number },
+  ) {
+    Object.defineProperty(video, "readyState", {
+      configurable: true,
+      get: () => readyState,
+    });
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+    });
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+  }
+
+  async function renderNativeHls(
+    props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
+  ) {
+    nativeHlsSupport.supported = true;
+    stubMediaError();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(nativeManifestResponse(200).response),
+    );
+    const onError = vi.fn();
+    const onSessionLost = vi.fn();
+    const { video } = renderPlayer({
+      src,
+      isHlsSource: true,
+      startSec: 30,
+      onError,
+      onSessionLost,
+      ...props,
+    });
+    await waitFor(() => {
+      expect(video).toHaveAttribute("src", src);
+    });
+    return { video, onError, onSessionLost };
+  }
+
+  // The native engine reports an evicted session's segment 404 only as a
+  // network error. It used to go straight to the error screen.
+  it("rebases at the playhead instead of failing", async () => {
+    const { video, onError, onSessionLost } = await renderNativeHls();
+
+    failMedia(video, 2, { readyState: 4, currentTime: 95 });
+
+    expect(onSessionLost).toHaveBeenCalledExactlyOnceWith(95);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("rebases at the source start when nothing has loaded", async () => {
+    const { video, onSessionLost } = await renderNativeHls();
+
+    failMedia(video, 2, { readyState: 0, currentTime: 0 });
+
+    expect(onSessionLost).toHaveBeenCalledExactlyOnceWith(30);
+  });
+
+  it("still reports a decode error", async () => {
+    const { video, onError, onSessionLost } = await renderNativeHls();
+
+    failMedia(video, 3, { readyState: 4, currentTime: 95 });
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
+  it("leaves a direct-play network error to the error report", () => {
+    stubMediaError();
+    const onError = vi.fn();
+    const onSessionLost = vi.fn();
+    const { video } = renderPlayer({ onError, onSessionLost });
+
+    failMedia(video, 2, { readyState: 4, currentTime: 95 });
+
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      "A network error interrupted video playback.",
+    );
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+});
 
 describe("VideoPlayer native HLS manifest preflight", () => {
   const firstSrc = "/api/movies/1/hls/remux/playlist.m3u8?start=590";

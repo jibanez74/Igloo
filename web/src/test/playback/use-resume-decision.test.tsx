@@ -1,13 +1,17 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useResumeDecision } from "@/hooks/useResumeDecision";
-import { WATCH_PROGRESS_MIN_SECONDS } from "@/lib/constants";
+import {
+  RESUME_AHEAD_THRESHOLD_SEC,
+  WATCH_PROGRESS_MIN_SECONDS,
+} from "@/lib/constants";
 
 type HookProps = Parameters<typeof useResumeDecision>[0];
 
 const eligibleProps: HookProps = {
   mediaKey: "movie:7",
   start: 0,
+  autoplay: false,
   playing: false,
   watchProgressPending: false,
   savedProgressSec: 900,
@@ -101,17 +105,53 @@ describe("useResumeDecision", () => {
     expect(result.current.resumeTargetSec).toBe(900);
   });
 
-  it("never shows when the route already carries a start offset", () => {
-    const { result, rerender } = renderDecision({
+  it("offers starting over as the alternative from the beginning", () => {
+    const { result } = renderDecision(eligibleProps);
+
+    expect(result.current.resumeDialogOpen).toBe(true);
+    expect(result.current.playFromSec).toBeNull();
+  });
+
+  // The URL keeps the last seek, not the last position, so a restored tab or a
+  // reload used to open well behind where the viewer stopped, with no offer.
+  it("offers progress well past a mid-media start, alongside playing from it", () => {
+    const { result } = renderDecision({
       ...eligibleProps,
-      start: 900,
+      start: 600,
+      savedProgressSec: 1200,
+    });
+
+    expect(result.current.resumeDialogOpen).toBe(true);
+    expect(result.current.resumeTargetSec).toBe(1200);
+    expect(result.current.playFromSec).toBe(600);
+  });
+
+  it("stays quiet when progress is not clearly past a mid-media start", () => {
+    for (const savedProgressSec of [
+      600 + RESUME_AHEAD_THRESHOLD_SEC,
+      300,
+    ]) {
+      const { result } = renderDecision({
+        ...eligibleProps,
+        start: 600,
+        savedProgressSec,
+      });
+
+      expect(result.current.resumeDialogOpen).toBe(false);
+      expect(result.current.resumeDecisionPending).toBe(false);
+    }
+  });
+
+  it("never interrupts an up-next hand-off that plays on its own", () => {
+    const { result } = renderDecision({
+      ...eligibleProps,
+      start: 600,
+      autoplay: true,
+      savedProgressSec: 1200,
     });
 
     expect(result.current.resumeDialogOpen).toBe(false);
-
-    rerender({ ...eligibleProps, start: 900, savedProgressSec: 1200 });
-
-    expect(result.current.resumeDialogOpen).toBe(false);
+    expect(result.current.resumeDecisionPending).toBe(false);
   });
 
   it("dismisses when playback starts before the query resolves", () => {

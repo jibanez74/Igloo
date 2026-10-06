@@ -1242,6 +1242,225 @@ describe("WatchRoomPageContent", () => {
     expect(socket.readyState).toBe(FakeWebSocket.OPEN);
   });
 
+  // Pressing Pause while a play is still pending (or a stream reload) rejects
+  // that play with AbortError. It used to show "Playback failed" and switch
+  // the keepalive and media session off.
+  it("does not report a local play that was cut short", async () => {
+    const user = userEvent.setup();
+    renderRoomPage(buildRoom({ is_owner: false }));
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(mockVideoController.element).not.toBeNull();
+    });
+    const socket = FakeWebSocket.instances[0];
+    Object.defineProperty(mockVideoController.element, "play", {
+      configurable: true,
+      value: vi.fn(async () => {
+        throw new DOMException(
+          "The play() request was interrupted by a call to pause().",
+          "AbortError",
+        );
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: /play playback/i }));
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/playback failed/i)).toBeNull();
+    expect(socket.sentMessages.map((message) => JSON.parse(message).type)).not.toContain("play");
+  });
+
+  // The room's join snapshot waits for the media to load. A Play pressed
+  // meanwhile used to be paused by it at loadedmetadata (the snapshot said the
+  // room was paused), so the press was lost. The press is newer: the room's
+  // position still applies, its paused state does not.
+  it("lets a Play pressed before the stream loads win over the join snapshot", async () => {
+    const user = userEvent.setup();
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(mockVideoController.element).not.toBeNull();
+    });
+    const socket = FakeWebSocket.instances[0];
+    socket.emitMessage({
+      type: "room_snapshot",
+      room_id: 7,
+      playback: {
+        paused: true,
+        position_sec: 30,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+
+    // A real pending play: it resolves once the media can play, and a pause
+    // in between rejects it.
+    const video = mockVideoController.element!;
+    let settlePlay: (() => void) | null = null;
+    const pause = vi.fn(() => {
+      mockVideoController.paused = true;
+    });
+    Object.defineProperty(video, "pause", { configurable: true, value: pause });
+    Object.defineProperty(video, "play", {
+      configurable: true,
+      value: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            mockVideoController.paused = false;
+            settlePlay = () => {
+              if (mockVideoController.paused) {
+                reject(new DOMException("interrupted by pause()", "AbortError"));
+                return;
+              }
+              resolve();
+            };
+          }),
+      ),
+    });
+
+    await user.click(screen.getByRole("button", { name: /play playback/i }));
+    act(() => {
+      mockVideoController.setReadyState(4);
+    });
+    await act(async () => {
+      settlePlay?.();
+    });
+
+    expect(pause).not.toHaveBeenCalled();
+    expect(mockVideoController.paused).toBe(false);
+    // The room was paused there: no time passed in it while the media loaded.
+    expect(mockVideoController.currentTime).toBe(30);
+    await waitFor(() => {
+      const play = socket.sentMessages
+        .map((message) => JSON.parse(message))
+        .find((message) => message.type === "play");
+      expect(play?.position_sec).toBe(30);
+    });
+  });
+
+  it("keeps an interrupted synced play pending without the permission message", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(mockVideoController.element).not.toBeNull();
+    });
+    const video = mockVideoController.element!;
+    Object.defineProperty(video, "play", {
+      configurable: true,
+      value: vi.fn(async () => {
+        throw new DOMException("interrupted by a new load", "AbortError");
+      }),
+    });
+
+    FakeWebSocket.instances[0].emitMessage({
+      type: "playback_changed",
+      room_id: 7,
+      playback: {
+        paused: false,
+        position_sec: 30,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+    await waitFor(() => {
+      expect(video.play).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/press play to continue syncing/i)).toBeNull();
+
+    // The replacement source can play: the pending state is applied then.
+    Object.defineProperty(video, "play", {
+      configurable: true,
+      value: vi.fn(async () => {
+        mockVideoController.paused = false;
+      }),
+    });
+    act(() => {
+      mockVideoController.setReadyState(4);
+    });
+    await waitFor(() => {
+      expect(mockVideoController.paused).toBe(false);
+    });
+  });
+
+  // A recovery rebuilds the player at the start of the stream, paused. The
+  // room's state used to be cleared once applied, so nothing put the viewer
+  // back, and their next Play pulled the whole room to the start.
+  it("re-applies the room's playback state to a reloaded stream", async () => {
+    renderRoomPage(buildRoom({ is_owner: false, playback_mode: "720p_3mbps" }));
+    await screen.findByTestId("video-player");
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    FakeWebSocket.instances[0].emitMessage({
+      type: "playback_changed",
+      room_id: 7,
+      playback: {
+        paused: false,
+        position_sec: 30,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+    await waitFor(() => {
+      expect(mockVideoController.paused).toBe(false);
+    });
+    const playsBeforeReload = mockVideoController.playCalls;
+
+    act(() => {
+      lastVideoPlayerProps.current?.onSessionLost?.(40);
+    });
+    await waitFor(() => {
+      expect(lastVideoPlayerProps.current?.src).toContain("reload=1");
+    });
+    // What the rebuild leaves behind.
+    mockVideoController.paused = true;
+    mockVideoController.currentTime = 0;
+    act(() => {
+      mockVideoController.setReadyState(4);
+    });
+
+    await waitFor(() => {
+      expect(mockVideoController.paused).toBe(false);
+    });
+    expect(mockVideoController.playCalls).toBe(playsBeforeReload + 1);
+    expect(mockVideoController.currentTime).toBeGreaterThanOrEqual(30);
+    expect(mockVideoController.currentTime).toBeLessThan(35);
+  });
+
+  it("re-applies this viewer's own last event to a reloaded stream", async () => {
+    const user = userEvent.setup();
+    renderRoomPage(buildRoom({ is_owner: false, playback_mode: "720p_3mbps" }));
+    await screen.findByTestId("video-player");
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    await user.click(screen.getByRole("button", { name: /play playback/i }));
+    await user.click(
+      screen.getByRole("button", {
+        name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: /pause playback/i }));
+    const playsBeforeReload = mockVideoController.playCalls;
+
+    act(() => {
+      lastVideoPlayerProps.current?.onSessionLost?.(WATCH_ROOM_SEEK_STEP_SEC);
+    });
+    await waitFor(() => {
+      expect(lastVideoPlayerProps.current?.src).toContain("reload=1");
+    });
+    mockVideoController.currentTime = 0;
+    act(() => {
+      mockVideoController.setReadyState(4);
+    });
+
+    await waitFor(() => {
+      expect(mockVideoController.currentTime).toBe(WATCH_ROOM_SEEK_STEP_SEC);
+    });
+    expect(mockVideoController.paused).toBe(true);
+    expect(mockVideoController.playCalls).toBe(playsBeforeReload);
+  });
+
   it("exhausts fragment-loss recovery across successive reload URLs", async () => {
     const nowSpy = vi.spyOn(Date, "now");
     let now = 10_000;

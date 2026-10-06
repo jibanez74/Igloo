@@ -257,6 +257,8 @@ function streamModeIds<T extends readonly { id: string }[]>(modes: T) {
 export const STREAM_MODE_IDS = streamModeIds(STREAM_MODES);
 
 export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
+/** Marks a manifest request as a refresh-only keepalive ping (see useHlsSessionKeepalive). */
+export const HLS_KEEPALIVE_QUERY_PARAM = "keepalive";
 export const MOVIE_SEEK_STEP_SEC = 10;
 export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
@@ -283,6 +285,13 @@ export const TRAILER_SOURCE_OPTIONS = [
 ] as const satisfies ReadonlyArray<{ value: string; label: string }>;
 /** Floor for persisting/offering resume; the server's continue-watching query uses the same 30s floor. */
 export const WATCH_PROGRESS_MIN_SECONDS = 30;
+/**
+ * How far saved progress must be past a play URL's `start` before the page
+ * offers it. The URL keeps the last seek, not the last position, so a
+ * restored tab or a reload can open well behind where the viewer stopped;
+ * progress is saved every 15 s, so a small lead is just the save cadence.
+ */
+export const RESUME_AHEAD_THRESHOLD_SEC = 30;
 /** Share of the runtime at which the server marks an item watched; resume stops being offered there. */
 export const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.95;
 export const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;

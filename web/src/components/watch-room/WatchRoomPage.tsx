@@ -31,7 +31,11 @@ import {
   watchRoomQueryOpts,
 } from "@/lib/query-opts";
 import { movieMediaRef } from "@/lib/media-ref";
-import { buildSubtitleTrackInfo } from "@/lib/video-playback";
+import {
+  buildSubtitleTrackInfo,
+  isInterruptedPlayError,
+  isSourceFailurePlayError,
+} from "@/lib/video-playback";
 import { watchRoomStreamUrl } from "@/lib/watch-room";
 import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
 import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
@@ -131,8 +135,8 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   // Room HLS sessions can be evicted or refused exactly like personal ones, and
   // until now a room had no recovery at all: a fragment 404 or a capacity 503
   // went straight to a dead "Stream error" (audit H9). Recovery rebuilds the
-  // player; the WebSocket sync then pulls the playhead back to the host's
-  // position, so participants are not thrown back to the start.
+  // player; the connection then re-applies the room's last known state to the
+  // new source, so participants are not thrown back to the start.
   const { waitingForCapacity, handleCapacityBusy, notifyManifestLoaded } =
     useHlsCapacityRetry({
       streamWindowKey,
@@ -169,7 +173,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       setPlaybackError(null);
       clearPendingPlayback();
       sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY, video.currentTime);
-    } catch {
+    } catch (error) {
+      // Cut short, not failed: a Pause (this viewer's or the room's) or a
+      // stream reload interrupted the pending play. Nothing played, so
+      // nothing is broadcast. A failed source is reported by the player's
+      // error event.
+      if (isInterruptedPlayError(error) || isSourceFailurePlayError(error)) {
+        return;
+      }
       setPlaybackError(
         "Playback failed - the browser could not play this stream.",
       );

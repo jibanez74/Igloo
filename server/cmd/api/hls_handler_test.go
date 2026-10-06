@@ -483,6 +483,9 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		if strings.Contains(playlist, "#EXT-X-ENDLIST") {
 			t.Fatalf("a still-encoding session must not be advertised as complete: %s", playlist)
 		}
+		if !strings.HasPrefix(playlist, "#EXTM3U\n"+hlsStartAtBeginningTag+"\n") {
+			t.Fatalf("a live playlist must start players at its first segment: %s", playlist)
+		}
 	})
 
 	// Without a published playlist the request must not fall back to a synthesized
@@ -525,6 +528,10 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		if !strings.Contains(playlist, "/api/hls/init.mp4?start=0") {
 			t.Fatalf("final playlist did not rewrite init URL: %s", playlist)
 		}
+		// A VOD playlist already starts at its beginning.
+		if strings.Contains(playlist, "#EXT-X-START") {
+			t.Fatalf("a final playlist needs no start tag: %s", playlist)
+		}
 		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
 			t.Fatalf("final playlist did not rewrite segment URL: %s", playlist)
 		}
@@ -538,6 +545,22 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
 		if !errors.Is(err, errHLSSessionFailed) {
 			t.Fatalf("expected a failed-session error, got %v", err)
+		}
+	})
+
+	// A stop kills FFmpeg before it may have written playlist.m3u8; that is a
+	// lost session, which clients rebase on, not a failed one.
+	t.Run("a stopped session reports a lost session", func(t *testing.T) {
+		for _, copyVideo := range []bool{true, false} {
+			session := &HLSSession{DurationSec: 600, CopyVideo: copyVideo, TempDir: t.TempDir()}
+			session.Exited = true
+			session.ExitErr = errors.New("signal: killed")
+			session.ExpectedStop = true
+
+			_, err := buildHLSPlaylistBody(t.Context(), session, session.DurationSec, "/api/hls/", "")
+			if !errors.Is(err, errHLSSessionNotFound) {
+				t.Fatalf("copy video %v: expected a session-not-found error, got %v", copyVideo, err)
+			}
 		}
 	})
 
@@ -872,6 +895,59 @@ func TestServeReadyHLSSegment(t *testing.T) {
 		}
 		if got := w.Header().Get(hlsSegmentStatusHeader); got != hlsSegmentStatusPastEnd {
 			t.Fatalf("%s = %q, want %q", hlsSegmentStatusHeader, got, hlsSegmentStatusPastEnd)
+		}
+	})
+
+	// A stop kills FFmpeg (so ExitErr is set) and removes the temp directory.
+	// Clients rebase on a plain 404 but treat a 500 on init.mp4 as terminal,
+	// and a past-end 404 as the end of the film.
+	t.Run("answers a stopped session's missing segment as a lost session", func(t *testing.T) {
+		for _, exitErr := range []error{fmt.Errorf("signal: killed"), nil} {
+			session := &HLSSession{TempDir: t.TempDir(), Exited: true, ExitErr: exitErr, ExpectedStop: true}
+			req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+			w := httptest.NewRecorder()
+			serveReadyHLSSegment(w, req, session, helpers.HLS_SEGMENT_FILENAME_PREFIX+"3"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("exit error %v: status = %d, want 404: %s", exitErr, w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), hlsSessionNotFoundMessage) {
+				t.Fatalf("exit error %v: body = %q, want the session-not-found message", exitErr, w.Body.String())
+			}
+			if got := w.Header().Get(hlsSegmentStatusHeader); got != "" {
+				t.Fatalf("exit error %v: %s = %q on a stopped session, want unset", exitErr, hlsSegmentStatusHeader, got)
+			}
+		}
+	})
+
+	t.Run("a segment request waiting when the session is stopped gets a 404", func(t *testing.T) {
+		session := &HLSSession{TempDir: t.TempDir()}
+		req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+		w := httptest.NewRecorder()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			serveReadyHLSSegment(w, req, session, helpers.HLS_SEGMENT_FILENAME_PREFIX+"40"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+		}()
+
+		// What a stop does: mark it, kill FFmpeg (onExit records the kill),
+		// remove the temp directory.
+		time.Sleep(3 * hlsSegmentPoll)
+		cleanupHLSSession(session)
+		session.ExitMu.Lock()
+		session.Exited = true
+		session.ExitErr = fmt.Errorf("signal: killed")
+		session.ExitMu.Unlock()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("segment request kept waiting on a stopped session")
+		}
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404: %s", w.Code, w.Body.String())
 		}
 	})
 
@@ -1359,6 +1435,59 @@ func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 	}
 }
 
+// A keepalive ping used to be an ordinary manifest request, which recreates an
+// evicted session at the window start: after a laptop sleep a transcode then
+// re-encoded from there while the playhead waited far ahead.
+func TestHLSManifest_KeepaliveRefreshesAndNeverCreates(t *testing.T) {
+	app := setupTestApp(t)
+	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+	app.FFmpeg = ffmpegRunner
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	userID := int64(42)
+	handler := authenticatedRouter(t, app, userID)
+
+	manifestURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=590",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+	)
+	keepaliveURL := manifestURL + "&" + hlsKeepaliveQueryParam + "=1"
+	get := func(target string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		return recorder
+	}
+
+	missing := get(keepaliveURL)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("keepalive without a session: status = %d, want 404: %s", missing.Code, missing.Body.String())
+	}
+	if calls := ffmpegRunner.CallCount(); calls != 0 {
+		t.Fatalf("keepalive started FFmpeg %d times, want 0", calls)
+	}
+	if items := app.HLSSessionCache.ItemCount(); items != 0 {
+		t.Fatalf("keepalive cached %d sessions, want 0", items)
+	}
+
+	created := get(manifestURL)
+	if created.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200: %s", created.Code, created.Body.String())
+	}
+
+	refreshed := get(keepaliveURL)
+	if refreshed.Code != http.StatusOK {
+		t.Fatalf("keepalive on a live session: status = %d, want 200: %s", refreshed.Code, refreshed.Body.String())
+	}
+	if strings.Contains(refreshed.Body.String(), hlsKeepaliveQueryParam) {
+		t.Fatalf("asset URLs must not carry the keepalive flag: %s", refreshed.Body.String())
+	}
+	if calls := ffmpegRunner.CallCount(); calls != 1 {
+		t.Fatalf("FFmpeg calls = %d, want 1", calls)
+	}
+}
+
 func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testing.T) {
 	app := setupTestApp(t)
 
@@ -1674,6 +1803,52 @@ func TestHLSSegment_RejectsBadRequests(t *testing.T) {
 			t.Fatal("expected the unusable cache entry to be evicted")
 		}
 	})
+}
+
+// Session-scoped, temporary output must never be cached, and that includes the
+// error answers: a cached 404 or 503 would outlive the condition it described.
+func TestHLSResponsesAreNeverCached(t *testing.T) {
+	app := setupTestApp(t)
+	userID := int64(100)
+	handler := authenticatedRouter(t, app, userID)
+
+	stoppedKey := HLSSessionKey(movieRef(6), helpers.HLS_PROFILE_REMUX, testIntPtr(0), nil, testPlaybackSessionID, 0, userID)
+	app.HLSSessionCache.SetDefault(stoppedKey, &HLSSession{
+		Media:           movieRef(6),
+		OwnerUserID:     userID,
+		PlaybackSession: testPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		Exited:          true,
+		ExitErr:         fmt.Errorf("signal: killed"),
+		ExpectedStop:    true,
+	})
+
+	cases := []struct {
+		name   string
+		method string
+		target string
+	}{
+		{"manifest with a malformed playback session", http.MethodGet, "/api/movies/5/hls/remux/playlist.m3u8?audio_track=0&playback_session=nope&start=0"},
+		{"segment of an uncached session", http.MethodGet, fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID)},
+		{"segment of a stopped session", http.MethodGet, fmt.Sprintf("/api/movies/6/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID)},
+		{"stop with a malformed playback session", http.MethodPost, "/api/movies/5/hls/session/stop?playback_session=nope"},
+		{"episode manifest with a malformed playback session", http.MethodGet, "/api/shows/episodes/5/hls/remux/playlist.m3u8?audio_track=0&playback_session=nope&start=0"},
+		{"room manifest of an unknown room", http.MethodGet, "/api/watch-rooms/999/hls/playlist.m3u8"},
+		{"room segment of an unknown room", http.MethodGet, "/api/watch-rooms/999/hls/segment_0.m4s"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(tc.method, tc.target, nil))
+
+			if recorder.Code < http.StatusBadRequest {
+				t.Fatalf("status = %d, want an error: %s", recorder.Code, recorder.Body.String())
+			}
+			if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+				t.Fatalf("Cache-Control = %q on a %d, want no-store", got, recorder.Code)
+			}
+		})
+	}
 }
 
 func TestStopPersonalHLSSession_RejectsBadRequests(t *testing.T) {

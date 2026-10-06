@@ -1,40 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  getOrCreateHlsPlaybackSessionId,
+  createPlaybackSessionId,
   stopHlsPlaybackSession,
 } from "@/lib/video-playback";
 import { episodeMediaRef, movieMediaRef } from "@/lib/media-ref";
 
-type MemoryStorage = Pick<Storage, "getItem" | "setItem"> & {
-  entries: () => [string, string][];
-};
-
 const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-function createMemoryStorage(initial: Record<string, string> = {}): MemoryStorage {
-  const values = new Map(Object.entries(initial));
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      values.set(key, value);
-    },
-    entries: () => Array.from(values.entries()),
-  };
-}
-
 describe("HLS playback sessions", () => {
-  it("stores different sessions for a movie and an episode with the same id", () => {
-    const storage = createMemoryStorage();
+  it("mints a fresh UUID for every call", () => {
+    const first = createPlaybackSessionId();
+    const second = createPlaybackSessionId();
 
-    const movie = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
-    const episode = getOrCreateHlsPlaybackSessionId(episodeMediaRef(6), storage);
-
-    expect(episode).toMatch(uuidPattern);
-    expect(episode).not.toBe(movie);
-    expect(storage.entries().map(([key]) => key)).toEqual([
-      "igloo:hls-playback-session:movie:6",
-      "igloo:hls-playback-session:episode:6",
-    ]);
+    expect(first).toMatch(uuidPattern);
+    expect(second).toMatch(uuidPattern);
+    expect(second).not.toBe(first);
   });
 
   it("stops an episode session on the episode route", async () => {
@@ -54,48 +34,6 @@ describe("HLS playback sessions", () => {
         keepalive: false,
       },
     );
-  });
-
-  it("reuses the same stored UUID for the same movie", () => {
-    const storage = createMemoryStorage();
-
-    const first = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
-    const second = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
-
-    expect(first).toMatch(uuidPattern);
-    expect(second).toBe(first);
-  });
-
-  it("stores different sessions for different movies", () => {
-    const storage = createMemoryStorage();
-
-    const first = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
-    const second = getOrCreateHlsPlaybackSessionId(movieMediaRef(7), storage);
-
-    expect(second).toMatch(uuidPattern);
-    expect(second).not.toBe(first);
-    expect(storage.entries()).toHaveLength(2);
-    expect(storage.entries().map(([, value]) => value)).toEqual([
-      first,
-      second,
-    ]);
-  });
-
-  it("replaces malformed stored values", () => {
-    const storage = createMemoryStorage();
-    getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
-    const [[key]] = storage.entries();
-    storage.setItem(key, "bad-session");
-
-    const next = getOrCreateHlsPlaybackSessionId(movieMediaRef(6), storage);
-
-    expect(next).toMatch(uuidPattern);
-    expect(next).not.toBe("bad-session");
-    expect(storage.getItem(key)).toBe(next);
-  });
-
-  it("falls back when storage is unavailable", () => {
-    expect(getOrCreateHlsPlaybackSessionId(movieMediaRef(6), null)).toMatch(uuidPattern);
   });
 
   it("sends a credentialed keepalive stop request", async () => {

@@ -54,6 +54,9 @@ const (
 	// of the media), and guessing from the segment index is wrong both ways.
 	hlsSegmentStatusHeader  = "X-Igloo-Segment"
 	hlsSegmentStatusPastEnd = "past-end"
+	// hlsKeepaliveQueryParam marks a manifest request as a keepalive ping,
+	// which refreshes the session and never creates one.
+	hlsKeepaliveQueryParam = "keepalive"
 )
 
 // Said by the personal segment handler and the watch-room one alike.
@@ -113,6 +116,9 @@ func (app *Application) EpisodeHLSManifest(w http.ResponseWriter, r *http.Reques
 // at segment_0 on disk. The web player keeps absolute media time in the UI and
 // converts seeks to session-relative media time client-side.
 func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	// Set before anything can answer, so error responses inherit it too.
+	w.Header().Set("Cache-Control", "no-store")
+
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -123,7 +129,15 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	session, key, err := app.GetOrCreateHLSSession(
+	// A keepalive ping must not recreate an evicted session: that would start
+	// it again at the window start, which after a long sleep can be far behind
+	// the playhead. The 404 tells the client to rebase where it is instead.
+	refreshOnly := r.URL.Query().Get(hlsKeepaliveQueryParam) == "1"
+	getSession := app.GetOrCreateHLSSession
+	if refreshOnly {
+		getSession = app.RefreshHLSSession
+	}
+	session, key, err := getSession(
 		r.Context(),
 		params.Media,
 		params.Profile,
@@ -135,11 +149,17 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	)
 	if err != nil {
 		// Session creation can park waiting for a transcode permit, so a client
-		// that navigates away lands here. That is not a server failure.
-		if errors.Is(err, context.Canceled) {
+		// that navigates away lands here. That is not a server failure, and
+		// nobody is left to answer. Only this request's own context decides:
+		// answering a live client with nothing sends it an empty 200.
+		clientGone := r.Context().Err() != nil
+		if clientGone {
 			return
 		}
-		app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())
+		evictedKeepalive := refreshOnly && errors.Is(err, errHLSSessionNotFound)
+		if !evictedKeepalive {
+			app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())
+		}
 		writeHLSSessionError(w, err)
 		return
 	}
@@ -159,7 +179,12 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		app.Logger.Error("hls playlist unavailable", "error", err, "media", params.Media.String())
+		// A session stopped mid-wait is an ordinary race (a seek, a stop), not
+		// a server fault.
+		lostSession := errors.Is(err, errHLSSessionNotFound)
+		if !lostSession {
+			app.Logger.Error("hls playlist unavailable", "error", err, "media", params.Media.String())
+		}
 		writeHLSSessionError(w, err)
 		return
 	}
@@ -223,6 +248,8 @@ func (app *Application) EpisodeHLSSegment(w http.ResponseWriter, r *http.Request
 
 // FFmpeg writes segments asynchronously; serve only once complete.
 func (app *Application) serveHLSSegment(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	w.Header().Set("Cache-Control", "no-store")
+
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
@@ -366,6 +393,12 @@ func buildHLSPlaylistBody(
 		// ENDLIST, which it reloads forever while playback sits stalled.
 		exited, exitErr := session.exitStatus()
 		if exited {
+			// A stop Igloo asked for (an explicit stop, eviction, a superseded
+			// window) is a lost session, not a failed one: clients rebase on a
+			// 404, while a manifest 500 is terminal for them.
+			if session.stopped() {
+				return "", errHLSSessionNotFound
+			}
 			if exitErr != nil {
 				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
 			}
@@ -375,7 +408,7 @@ func buildHLSPlaylistBody(
 		if session.CopyVideo {
 			livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
 			if readErr == nil {
-				return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+				return rewritePlaylistURLs(startLivePlaylistAtBeginning(livePlaylist), baseURL, querySuffix), nil
 			}
 		} else {
 			initReady := segmentReady(session, helpers.HLS_INIT_FILENAME)
@@ -408,6 +441,12 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 		if segmentReady(session, filename) {
 			file, openErr := os.Open(filePath)
 			if openErr != nil {
+				// The stop removed the temp directory between the ready check
+				// and the open.
+				if session.stopped() {
+					helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
+					return
+				}
 				logHLSAssetServeError(session, filename, filePath, "open", openErr)
 				helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
 				return
@@ -428,7 +467,14 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 
 		exited, exitErr := session.exitStatus()
 		if exited && !fileReady(filePath) {
-			if exitErr != nil {
+			// Read after the missing file: the stop is marked before the temp
+			// directory goes, so a file the stop removed is never reported as
+			// an FFmpeg failure (500) or as the end of the media (past-end),
+			// which the clients would not rebase on.
+			stopped := session.stopped()
+			if stopped {
+				helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
+			} else if exitErr != nil {
 				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
 			} else {
 				// A clean exit wrote every segment it ever will, so a missing
@@ -616,6 +662,8 @@ func (app *Application) StopEpisodeHLSSession(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) stopPersonalHLSSession(w http.ResponseWriter, r *http.Request, kind mediaKind) {
+	w.Header().Set("Cache-Control", "no-store")
+
 	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return

@@ -411,6 +411,57 @@ describe("movie play route trailer pre-roll", () => {
     ).toHaveLength(0);
   });
 
+  // Eligibility used to follow the live URL: seeking back to 0:00 rebases the
+  // stream to start=0, which put a movie opened mid-way into the pre-roll and
+  // unmounted the player in the middle of the film.
+  it("never starts the trailers when a mid-movie page seeks back to the start", async () => {
+    const fetchMock = mockMovieApi({ preroll: twoTrailers });
+    hlsSupport.native = true;
+    const { router } = await renderMovieRoute(
+      "mode=remux&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+    Object.defineProperty(video, "readyState", {
+      configurable: true,
+      get: () => 4,
+    });
+
+    fireEvent.keyDown(document.body, { key: "Home" });
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.start).toBe(0);
+    });
+
+    expect(prerollRegion()).toBeNull();
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
+    ).toHaveLength(0);
+    expect(
+      screen.getByRole("region", { name: "Video player for Signal Fire" }),
+    ).toBeInTheDocument();
+  });
+
+  // A route opened with autoplay=true never runs the pre-roll, but the flag is
+  // dropped from the URL once it has played, which made the movie eligible.
+  it("never starts the trailers once a spent autoplay flag leaves the URL", async () => {
+    const fetchMock = mockMovieApi({ preroll: twoTrailers });
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=0&autoplay=true",
+    );
+
+    reportCanPlay(await movieVideo());
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.autoplay).toBeUndefined();
+    });
+
+    expect(prerollRegion()).toBeNull();
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
+    ).toHaveLength(0);
+    expect(document.querySelector("video")).not.toBeNull();
+  });
+
   it("skips the trailers on Resume", async () => {
     mockMovieApi({
       preroll: twoTrailers,
@@ -455,6 +506,216 @@ describe("movie play route trailer pre-roll", () => {
   });
 });
 
+describe("movie play route resume offer", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    hlsSupport.native = false;
+  });
+
+  // A restored tab reopens the play URL, whose start is the last seek rather
+  // than the last position. It used to start there without any offer.
+  it("offers saved progress past a mid-media start and can keep the start", async () => {
+    const fetchMock = mockMovieApi({
+      progress: { progress_sec: 1500, duration_sec: 6000 },
+    });
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Resume playback?",
+    });
+    expect(
+      within(dialog).getByText("Resume from 25:00 or play from 15:00."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Play from 15:00" }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const search = router.state.location.search as Record<string, unknown>;
+    expect(search.start).toBe(900);
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/watch-progress`, "DELETE"),
+    ).toHaveLength(0);
+  });
+
+  // The page sits at its URL start while the offer stands. Saving that on a
+  // tab switch or on leaving overwrote the progress the dialog was offering.
+  it("saves no progress while the offer is undecided", async () => {
+    const fetchMock = mockMovieApi({
+      progress: { progress_sec: 1500, duration_sec: 6000 },
+    });
+    await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+    await screen.findByRole("dialog", { name: "Resume playback?" });
+    const video = await movieVideo();
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => 900,
+    });
+
+    act(() => {
+      video.dispatchEvent(new Event("timeupdate"));
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/watch-progress`, "PUT"),
+    ).toHaveLength(0);
+  });
+
+  it("resumes from the saved progress", async () => {
+    mockMovieApi({ progress: { progress_sec: 1500, duration_sec: 6000 } });
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Resume playback?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Resume" }));
+
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.start).toBe(1500);
+    });
+  });
+});
+
+describe("movie play route HLS session", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    // jsdom has no MediaSource; native HLS fetches the manifest itself first.
+    hlsSupport.native = true;
+  });
+
+  function manifestSessionIds(fetchMock: ReturnType<typeof mockMovieApi>) {
+    return fetchMock.mock.calls
+      .map(([input]) => requestURL(input))
+      .filter((url) => url.includes("/hls/remux/playlist.m3u8"))
+      .map((url) => new URL(url, "http://igloo.test").searchParams.get("playback_session"));
+  }
+
+  // A reloaded, restored, or duplicated tab used to reuse the id from
+  // sessionStorage, so the closing tab's late stop request could tear down
+  // the session the new page had just created.
+  it("gives every page its own playback session", async () => {
+    const fetchMock = mockMovieApi();
+    const search = "mode=remux&audio_track=0&subtitle_track=off&start=900";
+
+    const first = await renderMovieRoute(search);
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(1));
+    first.unmount();
+
+    await renderMovieRoute(search);
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(2));
+
+    const [firstId, secondId] = manifestSessionIds(fetchMock);
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(secondId).not.toBe(firstId);
+  });
+});
+
+describe("movie play route pause during a source swap", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    // Native HLS: the element sits without a source while the replacement's
+    // manifest is fetched, which is the window this is about.
+    hlsSupport.native = true;
+  });
+
+  // Replacing a source pauses the element without a pause event, so the
+  // controls kept showing Pause; pressing it played instead of pausing, and
+  // the carried play started the new stream anyway.
+  it("withdraws the play carried to the next source", async () => {
+    const baseFetch = mockMovieApi();
+    let releaseManifest: () => void = () => {};
+    const heldManifest = new Promise<Response>((resolve) => {
+      releaseManifest = () => resolve(new Response("#EXTM3U"));
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestURL(input);
+        const replacementManifest =
+          url.includes("/hls/remux/playlist.m3u8") && !url.includes("start=890");
+        if (replacementManifest) return heldManifest;
+        return baseFetch(input, init);
+      }),
+    );
+
+    await renderMovieRoute("mode=remux&audio_track=0&subtitle_track=off&start=900");
+    const video = await movieVideo();
+    await waitFor(() => expect(video.getAttribute("src")).toContain("start=890"));
+    // jsdom never plays: a running play() is what turns `paused` false, and a
+    // new load turns it back without firing `pause`.
+    let paused = true;
+    let readyState = 4;
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      get: () => 5110,
+    });
+    act(() => {
+      video.dispatchEvent(new Event("durationchange"));
+    });
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    Object.defineProperty(video, "readyState", {
+      configurable: true,
+      get: () => readyState,
+    });
+    playSpy().mockImplementation(async () => {
+      paused = false;
+      video.dispatchEvent(new Event("play"));
+    });
+    vi.mocked(window.HTMLMediaElement.prototype.load).mockImplementation(() => {
+      paused = true;
+      readyState = 0;
+    });
+    // The chrome re-renders across the swap, so each step looks it up again.
+    const controls = () =>
+      screen.getByRole("group", { name: "Playback controls" });
+    await screen.findByRole("group", { name: "Playback controls" });
+
+    await act(async () => {
+      fireEvent.click(within(controls()).getByRole("button", { name: /^Play/ }));
+    });
+    expect(playSpy()).toHaveBeenCalledOnce();
+
+    // A far seek rebases the session, which replaces the source.
+    fireEvent.keyDown(screen.getByRole("slider", { name: /seek/i }), {
+      key: "End",
+    });
+    await waitFor(() => expect(video.hasAttribute("src")).toBe(false));
+    expect(
+      within(controls()).getByRole("button", { name: /^Pause/ }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(controls()).getByRole("button", { name: /^Pause/ }));
+    });
+    await waitFor(() =>
+      expect(
+        within(controls()).getByRole("button", { name: /^Play/ }),
+      ).toBeInTheDocument(),
+    );
+
+    await act(async () => {
+      releaseManifest();
+    });
+    await waitFor(() => expect(video.hasAttribute("src")).toBe(true));
+    reportCanPlay(video);
+
+    expect(playSpy()).toHaveBeenCalledOnce();
+  });
+});
+
 describe("movie play route play button", () => {
   beforeEach(() => {
     stubMediaElement();
@@ -495,7 +756,7 @@ describe("movie play route play button", () => {
 
   it("still reports a play the browser refused", async () => {
     await pressPlay(
-      new DOMException("The element has no supported sources.", "NotSupportedError"),
+      new DOMException("play() is not allowed here.", "NotAllowedError"),
     );
 
     expect(await screen.findByText("Playback failed")).toBeInTheDocument();
@@ -503,6 +764,58 @@ describe("movie play route play button", () => {
       screen.getByText(
         "Playback failed — the browser could not play this stream.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  // The browser rejects a pending play with NotSupportedError right after the
+  // element's error event, which the direct-play fallback has just consumed.
+  // Reporting the rejection raised the error screen over the remux stream the
+  // fallback was switching to.
+  it("lets the direct-play fallback take a pending play", async () => {
+    mockMovieApi();
+    hlsSupport.native = true;
+    let rejectPlay: (reason: unknown) => void = () => {};
+    playSpy().mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPlay = reject;
+        }),
+    );
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+    const controls = await screen.findByRole("group", {
+      name: "Playback controls",
+    });
+    await act(async () => {
+      fireEvent.click(within(controls).getByRole("button", { name: /^Play/ }));
+    });
+
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED,
+    });
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: MEDIA_ERR_SRC_NOT_SUPPORTED },
+    });
+    await act(async () => {
+      video.dispatchEvent(new Event("error"));
+      rejectPlay(
+        new DOMException("The element has no supported sources.", "NotSupportedError"),
+      );
+    });
+
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.mode).toBe("remux");
+    });
+    expect(screen.queryByText("Playback failed")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Video player for Signal Fire" }),
     ).toBeInTheDocument();
   });
 });

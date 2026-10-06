@@ -35,12 +35,15 @@ type VideoPlayerProps = {
   /** True when `src` is an HLS playlist rather than a direct-play file. */
   isHlsSource: boolean;
   /**
-   * Plays the replacement when this component swaps the element's source
-   * while it is playing or a `play()` is still pending. Tearing a source down
-   * rejects that play with AbortError and leaves the element paused, so the
-   * viewer's press would otherwise be dropped.
+   * Opt-in, owned by the consumer: plays the replacement when this component
+   * swaps the element's source while it is playing or a `play()` is still
+   * pending. Tearing a source down rejects that play with AbortError and
+   * leaves the element paused (without a `pause` event), so the viewer's
+   * press would otherwise be dropped. The player sets it at the teardown and
+   * clears it when the next source plays; the consumer clears it to withdraw
+   * the play, as a Pause pressed in between must.
    */
-  resumePlayAcrossSourceChanges?: boolean;
+  carriedPlayRef?: RefObject<boolean>;
   title: string;
   isFullscreen?: boolean;
   onError: (message: string) => void;
@@ -200,7 +203,7 @@ export default function VideoPlayer({
   videoRef,
   src,
   isHlsSource,
-  resumePlayAcrossSourceChanges = false,
+  carriedPlayRef,
   title,
   isFullscreen = false,
   onError,
@@ -247,10 +250,6 @@ export default function VideoPlayer({
   // to be re-armed on the next seek, or a jump back past the back buffer
   // never fetches again; a seek into the same tail just re-enters the branch.
   const hlsLoadStoppedAtEndRef = useRef(false);
-  // Set when a source is torn down under a playing element or a pending
-  // play(); the next source this component puts in place plays. Cleared only
-  // once applied, so a rebuild cancelled before attaching passes it on.
-  const playRequestedAcrossSourceRef = useRef(false);
 
   const resumeHlsLoadAfterEnd = (video: HTMLVideoElement) => {
     const hls = hlsRef.current;
@@ -318,15 +317,17 @@ export default function VideoPlayer({
 
   // `paused` turns false the moment play() is called, before any data
   // arrives, so it also catches a press still waiting on the old source.
+  // Cleared only once applied, so a rebuild cancelled before attaching passes
+  // the play on to the next one.
   const carryPlayRequest = useEffectEvent((video: HTMLVideoElement) => {
-    if (resumePlayAcrossSourceChanges && !video.paused) {
-      playRequestedAcrossSourceRef.current = true;
+    if (carriedPlayRef && !video.paused) {
+      carriedPlayRef.current = true;
     }
   });
 
   const resumePlayRequest = useEffectEvent(async (video: HTMLVideoElement) => {
-    if (!playRequestedAcrossSourceRef.current) return;
-    playRequestedAcrossSourceRef.current = false;
+    if (!carriedPlayRef?.current) return;
+    carriedPlayRef.current = false;
     try {
       await video.play();
     } catch {
@@ -444,7 +445,11 @@ export default function VideoPlayer({
           playlistLoadPolicy: loadPolicyForTimeout(HLS_JS_LOAD_TIMEOUT_MS),
           fragLoadPolicy: loadPolicyForTimeout(HLS_JS_FRAG_LOAD_TIMEOUT_MS),
           backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
-          startPosition: startSec > 0 ? startSec : -1,
+          // Always explicit, 0 included: hls.js's default (-1) joins a live
+          // playlist at its edge, and a copy session's playlist is a live
+          // EVENT one until FFmpeg finishes, so a play from the start began
+          // tens of seconds in.
+          startPosition: startSec,
         });
         hlsRef.current = hls;
         hlsLoadStoppedAtEndRef.current = false;
@@ -500,6 +505,13 @@ export default function VideoPlayer({
         let networkRecoveryAttempts = 0;
         let segmentNotReadyRetries = 0;
         let fragmentBuffered = false;
+        // A bare startLoad() resumes from the playhead only once something has
+        // buffered; before that it falls back to the live edge of a copy
+        // session's playlist, so a retry that early restarts at the start this
+        // source was built for.
+        const restartLoad = () => {
+          hls.startLoad(fragmentBuffered ? -1 : startSec);
+        };
         // One report per instance: a lost session fails the requests that
         // are still in flight too, and the page replaces this instance after
         // the first report. Reporting each of them used to spend the
@@ -577,7 +589,7 @@ export default function VideoPlayer({
           ) {
             if (segmentNotReadyRetries < HLS_SEGMENT_NOT_READY_MAX_RETRIES) {
               segmentNotReadyRetries += 1;
-              hls.startLoad();
+              restartLoad();
               return;
             }
             reportError(
@@ -631,7 +643,7 @@ export default function VideoPlayer({
               if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
                 hls.loadSource(src);
               } else {
-                hls.startLoad();
+                restartLoad();
               }
             }, delayMs);
             return;
@@ -880,9 +892,27 @@ export default function VideoPlayer({
                   "Playback was interrupted before the stream finished loading.",
                 );
                 return;
-              case MediaError.MEDIA_ERR_NETWORK:
+              case MediaError.MEDIA_ERR_NETWORK: {
+                // A native HLS engine (iPhone Safari) reports a segment 404
+                // from an evicted or stopped session only as a network error,
+                // so it goes through the same rebase as hls.js's 404s. The
+                // recovery budget bounds a real outage, which then ends on
+                // the page's own error.
+                const video = e.currentTarget;
+                const nativeHls = isHlsSource && prefersNativeHLS;
+                if (nativeHls && onSessionLost) {
+                  // Nothing loaded yet: the start this source was built for
+                  // is where the viewer is, as reportSessionLostAtStart says.
+                  const position =
+                    video.readyState >= HTMLMediaElement.HAVE_METADATA
+                      ? video.currentTime
+                      : startSec;
+                  onSessionLost(position);
+                  return;
+                }
                 onError("A network error interrupted video playback.");
                 return;
+              }
               case MediaError.MEDIA_ERR_DECODE:
                 onError("The browser could not decode this video stream.");
                 return;
