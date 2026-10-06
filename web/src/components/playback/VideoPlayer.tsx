@@ -35,12 +35,15 @@ type VideoPlayerProps = {
   /** True when `src` is an HLS playlist rather than a direct-play file. */
   isHlsSource: boolean;
   /**
-   * Plays the replacement when this component swaps the element's source
-   * while it is playing or a `play()` is still pending. Tearing a source down
-   * rejects that play with AbortError and leaves the element paused, so the
-   * viewer's press would otherwise be dropped.
+   * Opt-in, owned by the consumer: plays the replacement when this component
+   * swaps the element's source while it is playing or a `play()` is still
+   * pending. Tearing a source down rejects that play with AbortError and
+   * leaves the element paused (without a `pause` event), so the viewer's
+   * press would otherwise be dropped. The player sets it at the teardown and
+   * clears it when the next source plays; the consumer clears it to withdraw
+   * the play, as a Pause pressed in between must.
    */
-  resumePlayAcrossSourceChanges?: boolean;
+  carriedPlayRef?: RefObject<boolean>;
   title: string;
   isFullscreen?: boolean;
   onError: (message: string) => void;
@@ -200,7 +203,7 @@ export default function VideoPlayer({
   videoRef,
   src,
   isHlsSource,
-  resumePlayAcrossSourceChanges = false,
+  carriedPlayRef,
   title,
   isFullscreen = false,
   onError,
@@ -247,10 +250,6 @@ export default function VideoPlayer({
   // to be re-armed on the next seek, or a jump back past the back buffer
   // never fetches again; a seek into the same tail just re-enters the branch.
   const hlsLoadStoppedAtEndRef = useRef(false);
-  // Set when a source is torn down under a playing element or a pending
-  // play(); the next source this component puts in place plays. Cleared only
-  // once applied, so a rebuild cancelled before attaching passes it on.
-  const playRequestedAcrossSourceRef = useRef(false);
 
   const resumeHlsLoadAfterEnd = (video: HTMLVideoElement) => {
     const hls = hlsRef.current;
@@ -318,15 +317,17 @@ export default function VideoPlayer({
 
   // `paused` turns false the moment play() is called, before any data
   // arrives, so it also catches a press still waiting on the old source.
+  // Cleared only once applied, so a rebuild cancelled before attaching passes
+  // the play on to the next one.
   const carryPlayRequest = useEffectEvent((video: HTMLVideoElement) => {
-    if (resumePlayAcrossSourceChanges && !video.paused) {
-      playRequestedAcrossSourceRef.current = true;
+    if (carriedPlayRef && !video.paused) {
+      carriedPlayRef.current = true;
     }
   });
 
   const resumePlayRequest = useEffectEvent(async (video: HTMLVideoElement) => {
-    if (!playRequestedAcrossSourceRef.current) return;
-    playRequestedAcrossSourceRef.current = false;
+    if (!carriedPlayRef?.current) return;
+    carriedPlayRef.current = false;
     try {
       await video.play();
     } catch {

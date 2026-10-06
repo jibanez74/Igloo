@@ -490,6 +490,102 @@ describe("movie play route HLS session", () => {
   });
 });
 
+describe("movie play route pause during a source swap", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    // Native HLS: the element sits without a source while the replacement's
+    // manifest is fetched, which is the window this is about.
+    hlsSupport.native = true;
+  });
+
+  // Replacing a source pauses the element without a pause event, so the
+  // controls kept showing Pause; pressing it played instead of pausing, and
+  // the carried play started the new stream anyway.
+  it("withdraws the play carried to the next source", async () => {
+    const baseFetch = mockMovieApi();
+    let releaseManifest: () => void = () => {};
+    const heldManifest = new Promise<Response>((resolve) => {
+      releaseManifest = () => resolve(new Response("#EXTM3U"));
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestURL(input);
+        const replacementManifest =
+          url.includes("/hls/remux/playlist.m3u8") && !url.includes("start=890");
+        if (replacementManifest) return heldManifest;
+        return baseFetch(input, init);
+      }),
+    );
+
+    await renderMovieRoute("mode=remux&audio_track=0&subtitle_track=off&start=900");
+    const video = await movieVideo();
+    await waitFor(() => expect(video.getAttribute("src")).toContain("start=890"));
+    // jsdom never plays: a running play() is what turns `paused` false, and a
+    // new load turns it back without firing `pause`.
+    let paused = true;
+    let readyState = 4;
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      get: () => 5110,
+    });
+    act(() => {
+      video.dispatchEvent(new Event("durationchange"));
+    });
+    Object.defineProperty(video, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    Object.defineProperty(video, "readyState", {
+      configurable: true,
+      get: () => readyState,
+    });
+    playSpy().mockImplementation(async () => {
+      paused = false;
+      video.dispatchEvent(new Event("play"));
+    });
+    vi.mocked(window.HTMLMediaElement.prototype.load).mockImplementation(() => {
+      paused = true;
+      readyState = 0;
+    });
+    // The chrome re-renders across the swap, so each step looks it up again.
+    const controls = () =>
+      screen.getByRole("group", { name: "Playback controls" });
+    await screen.findByRole("group", { name: "Playback controls" });
+
+    await act(async () => {
+      fireEvent.click(within(controls()).getByRole("button", { name: /^Play/ }));
+    });
+    expect(playSpy()).toHaveBeenCalledOnce();
+
+    // A far seek rebases the session, which replaces the source.
+    fireEvent.keyDown(screen.getByRole("slider", { name: /seek/i }), {
+      key: "End",
+    });
+    await waitFor(() => expect(video.hasAttribute("src")).toBe(false));
+    expect(
+      within(controls()).getByRole("button", { name: /^Pause/ }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(controls()).getByRole("button", { name: /^Pause/ }));
+    });
+    await waitFor(() =>
+      expect(
+        within(controls()).getByRole("button", { name: /^Play/ }),
+      ).toBeInTheDocument(),
+    );
+
+    await act(async () => {
+      releaseManifest();
+    });
+    await waitFor(() => expect(video.hasAttribute("src")).toBe(true));
+    reportCanPlay(video);
+
+    expect(playSpy()).toHaveBeenCalledOnce();
+  });
+});
+
 describe("movie play route play button", () => {
   beforeEach(() => {
     stubMediaElement();

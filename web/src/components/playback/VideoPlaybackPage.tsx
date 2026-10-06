@@ -139,6 +139,10 @@ export default function VideoPlaybackPage({
   // Seeded from the URL so the up-next hand-off starts the next episode the
   // way a rebase resumes the current one: on the first canplay.
   const pendingAutoPlayOnLoadRef = useRef(search.autoplay === true);
+  // A play the player carries across a source swap (see VideoPlayer). While
+  // it is set the element sits paused without having fired `pause`, so the
+  // controls still show Pause, and a Pause press must withdraw it.
+  const carriedPlayRef = useRef(false);
   // VideoPlayer calls onNativeError then synchronously onError; when a
   // fallback consumed the native error, the paired onError must not raise
   // the error screen.
@@ -452,7 +456,7 @@ export default function VideoPlaybackPage({
       // Cut short, not failed: the viewer paused, or the player replaced its
       // source while the play was pending (a fresh remux session's start
       // correction, a rebase, a recovery, a capacity retry) and plays the
-      // replacement itself (resumePlayAcrossSourceChanges).
+      // replacement itself (carriedPlayRef).
       if (isInterruptedPlayError(error)) return;
       // The source failed. The element's error event reports that, unless
       // the direct-play fallback consumed it and is switching to remux, when
@@ -464,20 +468,34 @@ export default function VideoPlaybackPage({
     }
   };
 
+  // Also withdraws a play still waiting on a source swap or a rebase. The
+  // swap left the element paused without a `pause` event, so pausing it
+  // again would change nothing and the controls would keep showing Pause.
   const pauseVideo = () => {
-    videoRef.current?.pause();
+    carriedPlayRef.current = false;
+    pendingAutoPlayOnLoadRef.current = false;
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      setPlaying(false);
+      return;
+    }
+    video.pause();
   };
 
   const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (video.paused) {
-      await playVideo();
+    // A carried play is playing as far as the viewer can tell.
+    const playIntended = !video.paused || carriedPlayRef.current;
+    if (playIntended) {
+      pauseVideo();
       return;
     }
 
-    pauseVideo();
+    await playVideo();
   };
 
   const handlePlaybackSurfaceClick = async (
@@ -632,10 +650,14 @@ export default function VideoPlaybackPage({
     if (!video) return;
 
     const resumePlayback = async () => {
-      try {
-        await video.play();
-      } catch {
-        // Best-effort playback resume after rebasing the HLS session.
+      // Read at canplay, not when armed: a Pause pressed while the new
+      // stream loaded withdrew it.
+      if (pendingAutoPlayOnLoadRef.current) {
+        try {
+          await video.play();
+        } catch {
+          // Best-effort playback resume after rebasing the HLS session.
+        }
       }
 
       pendingAutoPlayOnLoadRef.current = false;
@@ -770,7 +792,7 @@ export default function VideoPlaybackPage({
       videoRef={videoRef}
       src={streamUrl}
       isHlsSource={isHlsPlayback}
-      resumePlayAcrossSourceChanges
+      carriedPlayRef={carriedPlayRef}
       title={title}
       isFullscreen={chromeFullscreenMode}
       onError={(msg) => {
@@ -873,6 +895,8 @@ export default function VideoPlaybackPage({
         onBack={handleBack}
         onRetry={() => {
           resetRecovery();
+          // Try again remounts the player paused, as it always has.
+          carriedPlayRef.current = false;
           setPlaybackError(null);
           setPlaying(false);
           setCurrentTime(0);

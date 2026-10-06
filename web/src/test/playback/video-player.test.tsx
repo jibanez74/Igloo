@@ -405,10 +405,10 @@ describe("VideoPlayer play request across a source swap", () => {
   }
 
   async function renderHlsRebuild({
-    resumePlayAcrossSourceChanges,
+    carriedPlayRef,
     paused,
   }: {
-    resumePlayAcrossSourceChanges?: boolean;
+    carriedPlayRef?: { current: boolean };
     paused: boolean;
   }) {
     const play = spyOnPlay();
@@ -419,7 +419,7 @@ describe("VideoPlayer play request across a source swap", () => {
       isHlsSource: true,
       title: "Test Movie",
       onError: vi.fn(),
-      resumePlayAcrossSourceChanges,
+      carriedPlayRef,
     };
     const { rerender } = render(<VideoPlayer {...baseProps} startSec={10} />);
     await act(async () => {});
@@ -435,25 +435,47 @@ describe("VideoPlayer play request across a source swap", () => {
   }
 
   it("plays the rebuilt hls.js instance once its media is attached", async () => {
+    const carriedPlayRef = { current: false };
     const { play, rebuilt } = await renderHlsRebuild({
-      resumePlayAcrossSourceChanges: true,
+      carriedPlayRef,
       paused: false,
     });
     // Attaching assigns the MediaSource, which would abort an earlier play.
     expect(play).not.toHaveBeenCalled();
+    expect(carriedPlayRef.current).toBe(true);
 
     act(() => {
       rebuilt.trigger("hlsMediaAttached", {});
     });
 
     expect(play).toHaveBeenCalledOnce();
+    expect(carriedPlayRef.current).toBe(false);
   });
 
   it("leaves a paused element paused across the rebuild", async () => {
+    const carriedPlayRef = { current: false };
     const { play, rebuilt } = await renderHlsRebuild({
-      resumePlayAcrossSourceChanges: true,
+      carriedPlayRef,
       paused: true,
     });
+
+    act(() => {
+      rebuilt.trigger("hlsMediaAttached", {});
+    });
+
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  // The swap leaves the element paused without a pause event, so a Pause
+  // pressed before the replacement attaches can only withdraw the play
+  // through the consumer's ref.
+  it("drops a play the consumer withdrew before the new media attached", async () => {
+    const carriedPlayRef = { current: false };
+    const { play, rebuilt } = await renderHlsRebuild({
+      carriedPlayRef,
+      paused: false,
+    });
+    carriedPlayRef.current = false;
 
     act(() => {
       rebuilt.trigger("hlsMediaAttached", {});
@@ -491,7 +513,7 @@ describe("VideoPlayer play request across a source swap", () => {
       title: "Test Movie",
       onError: vi.fn(),
       onManifestLoaded: vi.fn(),
-      resumePlayAcrossSourceChanges: true,
+      carriedPlayRef: { current: false },
     };
     const nextSrc =
       "/api/movies/1/hls/remux/playlist.m3u8?playback_session=uuid&start=1200";
