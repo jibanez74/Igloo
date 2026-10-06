@@ -26,17 +26,6 @@ LEFT JOIN notification_reads AS nr
 ORDER BY n.created_at DESC
 LIMIT sqlc.arg(row_limit);
 
--- name: CountUnreadNotificationsForUser :one
-SELECT
-  COUNT(*) AS unread_count
-FROM notifications AS n
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM notification_reads AS nr
-  WHERE nr.notification_id = n.id
-    AND nr.user_id = sqlc.arg(user_id)
-);
-
 -- name: MarkNotificationReadForUser :exec
 -- Idempotent: marking an already-read or nonexistent notification is a no-op.
 INSERT INTO notification_reads (notification_id, user_id)
@@ -59,13 +48,14 @@ DELETE FROM notifications
 WHERE id = sqlc.arg(notification_id);
 
 -- name: GetNotificationBadgeForUser :one
--- The bell badge in one round trip. The client polls this endpoint, and the
--- database runs on a single shared connection (InitDB), so the admin check and
--- the count are folded into one statement instead of GetUserIsAdmin followed by
--- CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
--- short-circuits to 0 without touching notifications at all. No rows means the
--- session outlived its user, which the handler treats as a stale session.
+-- The viewer's admin flag and unread count in one round trip. The client polls
+-- the badge endpoint, the list endpoint needs both values too, and the database
+-- runs on a single shared connection (InitDB), so the admin check and the count
+-- share one statement. The queue is admin-only, so a non-admin short-circuits
+-- to 0 without touching notifications at all. No rows means the session
+-- outlived its user, which the handlers treat as a stale session.
 SELECT
+  u.is_admin,
   CASE
     WHEN u.is_admin THEN (
       SELECT COUNT(*)

@@ -2,7 +2,6 @@ package show
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -74,14 +73,15 @@ func (s *Scanner) collectPendingShows(ctx context.Context, scan *showScanContext
 	total := 0
 	var after int64
 	for {
-		shows, err := s.Queries.GetPendingShows(ctx, after)
+		rows, err := s.Queries.GetPendingShows(ctx, after)
 		if err != nil {
 			return nil, 0, err
 		}
-		if len(shows) == 0 {
+		if len(rows) == 0 {
 			return result, total, ctx.Err()
 		}
-		for _, show := range shows {
+		for _, row := range rows {
+			show := row.Show
 			after = show.ID
 			seasons, err := s.Queries.GetShowSeasons(ctx, show.ID)
 			if err != nil {
@@ -96,13 +96,8 @@ func (s *Scanner) collectPendingShows(ctx context.Context, scan *showScanContext
 			if len(touched) == 0 {
 				continue
 			}
-			retry, err := s.Queries.GetShowRetry(ctx, show.ID)
-			pending := err == nil
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return nil, 0, err
-			}
-			lookup := pending || !show.TmdbID.Valid
-			backedOff := lookup && !scanner.MissBackoffElapsed(retry.Attempts, retry.LastAttemptAt, now)
+			lookup := row.PendingRetry || !show.TmdbID.Valid
+			backedOff := lookup && !scanner.MissBackoffElapsed(row.RetryAttempts.Int64, row.LastAttemptAt, now)
 			if backedOff {
 				continue
 			}

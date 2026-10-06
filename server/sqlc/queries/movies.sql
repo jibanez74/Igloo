@@ -35,15 +35,6 @@ SELECT
 FROM movies
 WHERE tmdb_id IN (sqlc.slice(tmdb_ids));
 
--- name: GetMoviesByIDs :many
--- Card-sized projection: the watch-room listing only renders title and poster.
-SELECT
-  id,
-  title,
-  poster_path
-FROM movies
-WHERE id IN (sqlc.slice(ids));
-
 -- name: GetMovieScanIndex :many
 SELECT c.id, c.file_path, c.tmdb_id, r.movie_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at, c.size, f.mtime_ns, f.ctime_ns, f.device, f.inode
 FROM movies c
@@ -360,16 +351,23 @@ ORDER BY pc.name;
 -- name: GetRandomLibraryTrailers :many
 -- One random YouTube trailer per movie, bounded by row_limit, for the pre-roll
 -- library pool. The bare ev.key under GROUP BY picks any of the movie's trailers.
-SELECT m.id AS movie_id, m.title, m.tmdb_id, ev.key AS youtube_key
-FROM movies AS m
-INNER JOIN movie_extra_videos AS mev ON mev.movie_id = m.id
-INNER JOIN extra_videos AS ev ON ev.id = mev.extra_video_id
-WHERE ev.type = 'trailer'
-  AND ev.site = 'youtube'
-  AND m.id <> sqlc.arg(exclude_movie_id)
-GROUP BY m.id
-ORDER BY RANDOM()
-LIMIT sqlc.arg(row_limit);
+-- The pick runs on the link table alone, so movies is read only for the chosen
+-- rows; the movie_id foreign key means the join drops none of them. The outer
+-- ORDER BY keeps the random order, which preroll.Select consumes as given.
+SELECT m.id AS movie_id, m.title, m.tmdb_id, pick.youtube_key
+FROM (
+  SELECT mev.movie_id, ev.key AS youtube_key, RANDOM() AS shuffle
+  FROM movie_extra_videos AS mev
+  INNER JOIN extra_videos AS ev ON ev.id = mev.extra_video_id
+  WHERE ev.type = 'trailer'
+    AND ev.site = 'youtube'
+    AND mev.movie_id <> sqlc.arg(exclude_movie_id)
+  GROUP BY mev.movie_id
+  ORDER BY shuffle
+  LIMIT sqlc.arg(row_limit)
+) AS pick
+INNER JOIN movies AS m ON m.id = pick.movie_id
+ORDER BY pick.shuffle;
 
 -- name: GetMovieExtraVideos :many
 -- List all extra videos (trailers, special features) linked to a movie.

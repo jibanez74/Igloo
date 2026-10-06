@@ -158,12 +158,14 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	isAdmin, ok := app.notificationViewerIsAdmin(w, r, userID)
-	if !ok {
+	// One statement answers both the admin check and the unread count.
+	badge, err := app.Queries.GetNotificationBadgeForUser(r.Context(), userID)
+	if err != nil {
+		app.writeNotificationViewerError(w, r, userID, err)
 		return
 	}
 
-	if !isAdmin {
+	if !badge.IsAdmin {
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 			Error: false,
 			Data: map[string]any{
@@ -174,21 +176,12 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ctx := r.Context()
-
-	rows, err := app.Queries.ListNotificationsForUser(ctx, database.ListNotificationsForUserParams{
+	rows, err := app.Queries.ListNotificationsForUser(r.Context(), database.ListNotificationsForUserParams{
 		UserID:   userID,
 		RowLimit: notificationListLimit,
 	})
 	if err != nil {
 		app.Logger.Error("failed to list notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
-	}
-
-	unreadCount, err := app.Queries.CountUnreadNotificationsForUser(ctx, userID)
-	if err != nil {
-		app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
@@ -202,7 +195,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 		Error: false,
 		Data: map[string]any{
 			"notifications": notifications,
-			"unread_count":  unreadCount,
+			"unread_count":  badge.UnreadCount,
 		},
 	})
 }
@@ -226,7 +219,7 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"unread_count": badge,
+			"unread_count": badge.UnreadCount,
 		},
 	})
 }

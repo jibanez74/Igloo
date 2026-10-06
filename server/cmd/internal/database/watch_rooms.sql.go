@@ -337,22 +337,30 @@ func (q *Queries) GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []in
 
 const getWatchRoomsForUser = `-- name: GetWatchRoomsForUser :many
 SELECT
-  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.created_at
+  wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.created_at,
+  m.title AS movie_title,
+  m.poster_path AS movie_poster_path
 FROM watch_rooms AS wr
 INNER JOIN watch_room_members AS wrm
   ON wr.id = wrm.room_id
+INNER JOIN movies AS m
+  ON m.id = wr.movie_id
 WHERE wrm.user_id = ?
 ORDER BY wr.created_at DESC
 `
 
 type GetWatchRoomsForUserRow struct {
-	ID           int64  `json:"id"`
-	OwnerUserID  int64  `json:"owner_user_id"`
-	MovieID      int64  `json:"movie_id"`
-	PlaybackMode string `json:"playback_mode"`
-	CreatedAt    string `json:"created_at"`
+	ID              int64          `json:"id"`
+	OwnerUserID     int64          `json:"owner_user_id"`
+	MovieID         int64          `json:"movie_id"`
+	PlaybackMode    string         `json:"playback_mode"`
+	CreatedAt       string         `json:"created_at"`
+	MovieTitle      string         `json:"movie_title"`
+	MoviePosterPath sql.NullString `json:"movie_poster_path"`
 }
 
+// The movie's card fields ride along, so the listing needs no second lookup;
+// the movie_id foreign key cascades, so the inner join drops no room.
 func (q *Queries) GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error) {
 	rows, err := q.query(ctx, q.getWatchRoomsForUserStmt, getWatchRoomsForUser, userID)
 	if err != nil {
@@ -368,6 +376,8 @@ func (q *Queries) GetWatchRoomsForUser(ctx context.Context, userID int64) ([]Get
 			&i.MovieID,
 			&i.PlaybackMode,
 			&i.CreatedAt,
+			&i.MovieTitle,
+			&i.MoviePosterPath,
 		); err != nil {
 			return nil, err
 		}

@@ -86,6 +86,8 @@ SET
   updated_at = CURRENT_TIMESTAMP
 RETURNING id, spotify_id, cover;
 
--- name: DeleteAlbum :exec
+-- name: DeleteAlbum :one
+-- RETURNING doubles as the existence check: no row means no such album.
 DELETE FROM albums
-WHERE id = ?;
+WHERE id = ?
+RETURNING title;

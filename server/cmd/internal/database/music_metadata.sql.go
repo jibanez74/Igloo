@@ -478,34 +478,32 @@ func (q *Queries) MusicCompoundReconciliationCandidates(ctx context.Context, aft
 	return items, nil
 }
 
-const musicTrackAffectedAlbum = `-- name: MusicTrackAffectedAlbum :one
-SELECT album_id FROM tracks WHERE file_path=?
+const musicTrackAffected = `-- name: MusicTrackAffected :many
+SELECT t.album_id, tm.musician_id FROM tracks t LEFT JOIN track_musicians tm ON tm.track_id=t.id
+WHERE t.file_path=? ORDER BY tm.musician_id
 `
 
-func (q *Queries) MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error) {
-	row := q.queryRow(ctx, q.musicTrackAffectedAlbumStmt, musicTrackAffectedAlbum, filePath)
-	var album_id sql.NullInt64
-	err := row.Scan(&album_id)
-	return album_id, err
+type MusicTrackAffectedRow struct {
+	AlbumID    sql.NullInt64 `json:"album_id"`
+	MusicianID sql.NullInt64 `json:"musician_id"`
 }
 
-const musicTrackAffectedArtists = `-- name: MusicTrackAffectedArtists :many
-SELECT musician_id FROM track_musicians WHERE track_id=(SELECT id FROM tracks WHERE file_path=?)
-`
-
-func (q *Queries) MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error) {
-	rows, err := q.query(ctx, q.musicTrackAffectedArtistsStmt, musicTrackAffectedArtists, filePath)
+// The album and artists a track contributes to, read before a rewrite or delete
+// so both sides can be reconciled. One row per artist (album_id repeats); a
+// single row with a NULL musician_id means no artists; no rows means no track.
+func (q *Queries) MusicTrackAffected(ctx context.Context, filePath string) ([]MusicTrackAffectedRow, error) {
+	rows, err := q.query(ctx, q.musicTrackAffectedStmt, musicTrackAffected, filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []int64{}
+	items := []MusicTrackAffectedRow{}
 	for rows.Next() {
-		var musician_id int64
-		if err := rows.Scan(&musician_id); err != nil {
+		var i MusicTrackAffectedRow
+		if err := rows.Scan(&i.AlbumID, &i.MusicianID); err != nil {
 			return nil, err
 		}
-		items = append(items, musician_id)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

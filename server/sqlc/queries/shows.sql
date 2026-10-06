@@ -104,14 +104,18 @@ SELECT * FROM show_seasons WHERE show_id = ? ORDER BY season_number;
 SELECT * FROM show_episodes WHERE season_id = ? ORDER BY episode_number;
 
 -- name: GetPendingShows :many
-SELECT s.* FROM shows s WHERE s.id > sqlc.arg(after_id) AND (
- EXISTS (SELECT 1 FROM show_tmdb_retries r WHERE r.show_id = s.id) OR
- EXISTS (SELECT 1 FROM show_seasons se JOIN show_season_tmdb_retries r ON r.season_id = se.id WHERE se.show_id = s.id) OR
- EXISTS (SELECT 1 FROM show_seasons se JOIN show_episodes e ON e.season_id = se.id JOIN show_episode_tmdb_retries r ON r.episode_id = e.id WHERE se.show_id = s.id))
+-- The show-level retry row is joined in, so its miss backoff needs no second
+-- lookup per show. The season and episode branches are uncorrelated, so each
+-- list is built once per statement from its retry table (CROSS JOIN keeps the
+-- small retry table outermost) instead of walking every season and episode of
+-- every show. The OR only builds them when a show has no show-level retry row.
+SELECT sqlc.embed(s), r.show_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at
+FROM shows s LEFT JOIN show_tmdb_retries r ON r.show_id = s.id
+WHERE s.id > sqlc.arg(after_id) AND (
+ r.show_id IS NOT NULL OR
+ s.id IN (SELECT se.show_id FROM show_season_tmdb_retries sr CROSS JOIN show_seasons se ON se.id = sr.season_id) OR
+ s.id IN (SELECT se.show_id FROM show_episode_tmdb_retries er CROSS JOIN show_episodes e ON e.id = er.episode_id CROSS JOIN show_seasons se ON se.id = e.season_id))
  ORDER BY s.id LIMIT 100;
-
--- name: GetShowRetry :one
-SELECT attempts, last_attempt_at FROM show_tmdb_retries WHERE show_id = ?;
 
 -- name: GetShowPendingSeasonIDs :many
 SELECT r.season_id FROM show_season_tmdb_retries r JOIN show_seasons se ON se.id = r.season_id WHERE se.show_id = ?;
@@ -143,7 +147,7 @@ INSERT INTO show_file_fingerprints (file_id, mtime_ns, ctime_ns, device, inode) 
 ON CONFLICT (file_id) DO UPDATE SET mtime_ns = excluded.mtime_ns, ctime_ns = excluded.ctime_ns, device = excluded.device, inode = excluded.inode;
 
 -- name: GetShowScanIndex :many
-SELECT f.*, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id;
+SELECT f.id, f.season_id, f.file_path, f.size, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id;
 
 -- name: DeleteMissingShowFile :one
 DELETE FROM show_files WHERE id = ? AND file_path = ? RETURNING season_id;
@@ -528,10 +532,12 @@ ORDER BY
 LIMIT 1;
 
 -- name: GetShowFileForEpisode :one
--- The physical file behind an episode. An episode may be linked to more than
--- one file (duplicate copies), so the lowest file id is the deterministic
--- playback target; a combined file is returned whole, playback never seeks to
--- a guessed episode offset.
+-- The physical file behind an episode, for playback and for direct streaming.
+-- An episode may be linked to more than one file (duplicate copies), so the
+-- lowest file id is the deterministic playback target; a combined file is
+-- returned whole, playback never seeks to a guessed episode offset. Ordering on
+-- l.file_id (equal to f.id through the join) lets the (episode_id, file_id)
+-- primary key supply the order.
 SELECT
   f.id,
   f.season_id,
@@ -546,22 +552,7 @@ FROM show_episode_files AS l
 INNER JOIN show_files AS f
   ON f.id = l.file_id
 WHERE l.episode_id = ?
-ORDER BY f.id
-LIMIT 1;
-
--- name: GetShowEpisodeForDirectStream :one
--- Direct-stream twin of GetMovieForDirectStream, resolved through the same
--- lowest-file-id rule as GetShowFileForEpisode.
-SELECT
-  f.file_path,
-  f.file_name,
-  f.container,
-  f.mime_type
-FROM show_episode_files AS l
-INNER JOIN show_files AS f
-  ON f.id = l.file_id
-WHERE l.episode_id = ?
-ORDER BY f.id
+ORDER BY l.file_id
 LIMIT 1;
 
 -- name: GetShowFileEpisodeIDs :many

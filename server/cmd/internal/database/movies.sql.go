@@ -939,55 +939,6 @@ func (q *Queries) GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenre
 	return items, nil
 }
 
-const getMoviesByIDs = `-- name: GetMoviesByIDs :many
-SELECT
-  id,
-  title,
-  poster_path
-FROM movies
-WHERE id IN (/*SLICE:ids*/?)
-`
-
-type GetMoviesByIDsRow struct {
-	ID         int64          `json:"id"`
-	Title      string         `json:"title"`
-	PosterPath sql.NullString `json:"poster_path"`
-}
-
-// Card-sized projection: the watch-room listing only renders title and poster.
-func (q *Queries) GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error) {
-	query := getMoviesByIDs
-	var queryParams []interface{}
-	if len(ids) > 0 {
-		for _, v := range ids {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
-	}
-	rows, err := q.query(ctx, nil, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetMoviesByIDsRow{}
-	for rows.Next() {
-		var i GetMoviesByIDsRow
-		if err := rows.Scan(&i.ID, &i.Title, &i.PosterPath); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getMoviesByTmdbIDs = `-- name: GetMoviesByTmdbIDs :many
 SELECT
   id,
@@ -1207,16 +1158,20 @@ func (q *Queries) GetProductionCompaniesByMovieID(ctx context.Context, movieID i
 }
 
 const getRandomLibraryTrailers = `-- name: GetRandomLibraryTrailers :many
-SELECT m.id AS movie_id, m.title, m.tmdb_id, ev.key AS youtube_key
-FROM movies AS m
-INNER JOIN movie_extra_videos AS mev ON mev.movie_id = m.id
-INNER JOIN extra_videos AS ev ON ev.id = mev.extra_video_id
-WHERE ev.type = 'trailer'
-  AND ev.site = 'youtube'
-  AND m.id <> ?1
-GROUP BY m.id
-ORDER BY RANDOM()
-LIMIT ?2
+SELECT m.id AS movie_id, m.title, m.tmdb_id, pick.youtube_key
+FROM (
+  SELECT mev.movie_id, ev.key AS youtube_key, RANDOM() AS shuffle
+  FROM movie_extra_videos AS mev
+  INNER JOIN extra_videos AS ev ON ev.id = mev.extra_video_id
+  WHERE ev.type = 'trailer'
+    AND ev.site = 'youtube'
+    AND mev.movie_id <> ?1
+  GROUP BY mev.movie_id
+  ORDER BY shuffle
+  LIMIT ?2
+) AS pick
+INNER JOIN movies AS m ON m.id = pick.movie_id
+ORDER BY pick.shuffle
 `
 
 type GetRandomLibraryTrailersParams struct {
@@ -1233,6 +1188,9 @@ type GetRandomLibraryTrailersRow struct {
 
 // One random YouTube trailer per movie, bounded by row_limit, for the pre-roll
 // library pool. The bare ev.key under GROUP BY picks any of the movie's trailers.
+// The pick runs on the link table alone, so movies is read only for the chosen
+// rows; the movie_id foreign key means the join drops none of them. The outer
+// ORDER BY keeps the random order, which preroll.Select consumes as given.
 func (q *Queries) GetRandomLibraryTrailers(ctx context.Context, arg GetRandomLibraryTrailersParams) ([]GetRandomLibraryTrailersRow, error) {
 	rows, err := q.query(ctx, q.getRandomLibraryTrailersStmt, getRandomLibraryTrailers, arg.ExcludeMovieID, arg.RowLimit)
 	if err != nil {

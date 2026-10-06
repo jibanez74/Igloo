@@ -269,7 +269,7 @@ WHERE id = ?
 LIMIT 1
 `
 
-// Narrow admin check for hot paths (middleware, polled notification counts);
+// Narrow admin check for hot paths (middleware, notification actions);
 // avoids shipping the full user row with its password hash.
 func (q *Queries) GetUserIsAdmin(ctx context.Context, id int64) (bool, error) {
 	row := q.queryRow(ctx, q.getUserIsAdminStmt, getUserIsAdmin, id)

@@ -264,7 +264,7 @@ WHERE t.id IN (
   SELECT primary_t.id
   FROM tracks AS primary_t
   WHERE primary_t.musician_id = ?1
-  UNION
+  UNION ALL
   SELECT credited_tm.track_id
   FROM track_musicians AS credited_tm
   WHERE credited_tm.musician_id = ?1
@@ -284,7 +284,8 @@ type GetTracksByMusicianIDRow struct {
 }
 
 // Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
-// the equivalent OR over tracks and track_musicians cannot use an index.
+// the equivalent OR over tracks and track_musicians cannot use an index. IN
+// ignores duplicates, so UNION ALL skips the sort that UNION would add.
 func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error) {
 	rows, err := q.query(ctx, q.getTracksByMusicianIDStmt, getTracksByMusicianID, musicianID)
 	if err != nil {
