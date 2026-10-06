@@ -8293,11 +8293,11 @@
         }
       },
       "HLSSegmentNotFound": {
-        "description": "The HLS session does not exist (request the manifest again), or FFmpeg finished cleanly and never wrote this segment. Only the second case carries X-Igloo-Segment: past-end; a synthesized transcode playlist can list one or two segments more than FFmpeg produces when a source's audio outlasts its video, and a client must treat that 404 as the end of the media rather than as a lost session.",
+        "description": "The HLS session does not exist or was stopped while the request waited (request the manifest again), or FFmpeg finished cleanly and never wrote this segment. Only the second case carries X-Igloo-Segment: past-end; a synthesized transcode playlist can list one or two segments more than FFmpeg produces when a source's audio outlasts its video, and a client must treat that 404 as the end of the media rather than as a lost session.",
         "headers": {
           "X-Igloo-Segment": {
             "required": false,
-            "description": "Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown.",
+            "description": "Present with the value past-end when FFmpeg exited cleanly without writing the requested segment, so the client can end the stream instead of rebasing the session. Absent when the session is unknown or was stopped.",
             "schema": {
               "type": "string",
               "enum": [

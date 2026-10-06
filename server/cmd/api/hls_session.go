@@ -166,6 +166,16 @@ func (s *HLSSession) failed() bool {
 	return s.Exited && s.ExitErr != nil && !s.ExpectedStop
 }
 
+// stopped reports whether Igloo is tearing the session down. cleanupHLSSession
+// sets ExpectedStop before it cancels FFmpeg or removes the temp directory, so
+// a request that finds its file missing after the stop observes it.
+func (s *HLSSession) stopped() bool {
+	s.ExitMu.Lock()
+	defer s.ExitMu.Unlock()
+
+	return s.ExpectedStop
+}
+
 // hlsAudioMetadataError reports an explicit audio request against a stream
 // whose stored channel metadata cannot resolve a safe output profile. It is a
 // media-profile problem (HTTP 422), not a malformed query.

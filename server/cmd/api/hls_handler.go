@@ -159,7 +159,12 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		app.Logger.Error("hls playlist unavailable", "error", err, "media", params.Media.String())
+		// A session stopped mid-wait is an ordinary race (a seek, a stop), not
+		// a server fault.
+		lostSession := errors.Is(err, errHLSSessionNotFound)
+		if !lostSession {
+			app.Logger.Error("hls playlist unavailable", "error", err, "media", params.Media.String())
+		}
 		writeHLSSessionError(w, err)
 		return
 	}
@@ -366,6 +371,12 @@ func buildHLSPlaylistBody(
 		// ENDLIST, which it reloads forever while playback sits stalled.
 		exited, exitErr := session.exitStatus()
 		if exited {
+			// A stop Igloo asked for (an explicit stop, eviction, a superseded
+			// window) is a lost session, not a failed one: clients rebase on a
+			// 404, while a manifest 500 is terminal for them.
+			if session.stopped() {
+				return "", errHLSSessionNotFound
+			}
 			if exitErr != nil {
 				return "", fmt.Errorf("%w: %v", errHLSSessionFailed, exitErr)
 			}
@@ -408,6 +419,12 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 		if segmentReady(session, filename) {
 			file, openErr := os.Open(filePath)
 			if openErr != nil {
+				// The stop removed the temp directory between the ready check
+				// and the open.
+				if session.stopped() {
+					helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
+					return
+				}
 				logHLSAssetServeError(session, filename, filePath, "open", openErr)
 				helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
 				return
@@ -428,7 +445,14 @@ func serveReadyHLSSegment(w http.ResponseWriter, r *http.Request, session *HLSSe
 
 		exited, exitErr := session.exitStatus()
 		if exited && !fileReady(filePath) {
-			if exitErr != nil {
+			// Read after the missing file: the stop is marked before the temp
+			// directory goes, so a file the stop removed is never reported as
+			// an FFmpeg failure (500) or as the end of the media (past-end),
+			// which the clients would not rebase on.
+			stopped := session.stopped()
+			if stopped {
+				helpers.ErrorJSON(w, errors.New(hlsSessionNotFoundMessage), http.StatusNotFound)
+			} else if exitErr != nil {
 				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
 			} else {
 				// A clean exit wrote every segment it ever will, so a missing
