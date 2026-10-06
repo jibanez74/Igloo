@@ -455,6 +455,85 @@ describe("movie play route trailer pre-roll", () => {
   });
 });
 
+describe("movie play route resume offer", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    hlsSupport.native = false;
+  });
+
+  // A restored tab reopens the play URL, whose start is the last seek rather
+  // than the last position. It used to start there without any offer.
+  it("offers saved progress past a mid-media start and can keep the start", async () => {
+    const fetchMock = mockMovieApi({
+      progress: { progress_sec: 1500, duration_sec: 6000 },
+    });
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Resume playback?",
+    });
+    expect(
+      within(dialog).getByText("Resume from 25:00 or play from 15:00."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Play from 15:00" }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const search = router.state.location.search as Record<string, unknown>;
+    expect(search.start).toBe(900);
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/watch-progress`, "DELETE"),
+    ).toHaveLength(0);
+  });
+
+  // The page sits at its URL start while the offer stands. Saving that on a
+  // tab switch or on leaving overwrote the progress the dialog was offering.
+  it("saves no progress while the offer is undecided", async () => {
+    const fetchMock = mockMovieApi({
+      progress: { progress_sec: 1500, duration_sec: 6000 },
+    });
+    await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+    await screen.findByRole("dialog", { name: "Resume playback?" });
+    const video = await movieVideo();
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => 900,
+    });
+
+    act(() => {
+      video.dispatchEvent(new Event("timeupdate"));
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/watch-progress`, "PUT"),
+    ).toHaveLength(0);
+  });
+
+  it("resumes from the saved progress", async () => {
+    mockMovieApi({ progress: { progress_sec: 1500, duration_sec: 6000 } });
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Resume playback?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Resume" }));
+
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.start).toBe(1500);
+    });
+  });
+});
+
 describe("movie play route HLS session", () => {
   beforeEach(() => {
     stubMediaElement();

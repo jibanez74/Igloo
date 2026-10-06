@@ -340,10 +340,12 @@ export default function VideoPlaybackPage({
     resumeDecisionPending,
     resumeDialogOpen,
     resumeTargetSec,
+    playFromSec,
     dismissResumeDecision,
   } = useResumeDecision({
     mediaKey: currentMediaKey,
     start,
+    autoplay: search.autoplay === true,
     playing,
     watchProgressPending,
     savedProgressSec,
@@ -599,7 +601,10 @@ export default function VideoPlaybackPage({
       currentTimeRef,
       durationRef,
       fallbackDurationSec: mediaDurationSec,
-      enabled: !prerollActive,
+      // Nor while the resume offer is undecided: a page opened mid-media sits
+      // at its URL start, and saving that (on a tab switch, or on leaving
+      // without choosing) would overwrite the very progress being offered.
+      enabled: !prerollActive && !resumeDecisionPending && !resumeDialogOpen,
     });
 
   // Paused while the stream waits for server capacity: there is no session
@@ -949,9 +954,12 @@ export default function VideoPlaybackPage({
       <ResumeDialog
         open={resumeDialogOpen}
         resumeTargetSec={resumeTargetSec}
+        playFromSec={playFromSec}
         pending={resumeActionPending}
         onResume={handleResume}
         onStartFromBeginning={() => void handleStartFromBeginning()}
+        // The player is already at the URL's start; the saved progress stays.
+        onPlayFrom={dismissResumeDecision}
         // Closing after "Start from beginning" lands on the pre-roll's
         // primary control; after "Resume" the pre-roll is bypassed and the
         // player region takes focus as before.

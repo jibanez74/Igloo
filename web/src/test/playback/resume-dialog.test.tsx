@@ -68,6 +68,37 @@ describe("ResumeDialog", () => {
     });
   });
 
+  // Opened mid-media, the alternative to resuming is the page's own start,
+  // and choosing it keeps the saved progress.
+  it("offers playing from a mid-media start instead of starting over", async () => {
+    const onPlayFrom = vi.fn();
+    const onStartFromBeginning = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ResumeDialog
+        open
+        resumeTargetSec={1200}
+        playFromSec={600}
+        pending={false}
+        onResume={vi.fn()}
+        onStartFromBeginning={onStartFromBeginning}
+        onPlayFrom={onPlayFrom}
+      />,
+    );
+
+    expect(
+      screen.getByText("Resume from 20:00 or play from 10:00."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start from beginning" }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Play from 10:00" }));
+
+    expect(onPlayFrom).toHaveBeenCalledOnce();
+    expect(onStartFromBeginning).not.toHaveBeenCalled();
+  });
+
   it("disables both choices while an action is pending", () => {
     render(
       <ResumeDialog

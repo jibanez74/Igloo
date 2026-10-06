@@ -863,7 +863,14 @@ require the full playback test pass.
   (`useIdleControls`), sliding back on pointer/touch/key input. A `sr-only`
   paragraph documents the keyboard map (Space/K, J/L, arrows, M, F, Esc),
   and the controls name their shortcuts — both dropped on touch (§1.7);
-  `ResumeDialog` offers resume vs. start-over; announcements via five
+  `ResumeDialog` offers resume vs. start-over (which clears the saved
+  progress). A page opened mid-media (a restored tab, a reload, Back into the
+  player, a chapter link) offers it only when the saved position is more than
+  `RESUME_AHEAD_THRESHOLD_SEC` past the URL's start, and then the alternative
+  is "Play from {start}", which keeps the progress; an up-next hand-off is
+  never interrupted. No progress is saved while the offer is undecided, so
+  leaving or switching tabs cannot overwrite what it offers. Announcements
+  via five
   `LiveAnnouncer`s (play/pause state, capacity waiting, chapter jumps,
   direct-play fallback, and HLS session recovery — the watch room announces
   recovery the same way). Fatal playback errors self-announce: the status
