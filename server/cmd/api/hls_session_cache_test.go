@@ -672,6 +672,72 @@ func TestGetOrCreateHLSSession_WaitsForAPermitInsteadOfRefusing(t *testing.T) {
 	}
 }
 
+// The flight runs on the context of the request that started it. A follower
+// that joined it while the leader was parked on a full pool used to inherit
+// the leader's cancellation when that client went away, and its handler then
+// answered a live client with an empty 200.
+func TestGetOrCreateHLSSession_FollowerOutlivesCancelledLeader(t *testing.T) {
+	app := setupTestApp(t)
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
+
+	withTestHLSTranscodeAcquireWait(t, 10*time.Second)
+	app.HLSCPUTranscodeLimiter = newHLSTranscodeLimiter(hlsTranscodePoolCPU, 1)
+	release := holdHLSTranscodePermit(t, app, hlsTranscodePoolCPU)
+
+	userID := int64(100)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	create := func(ctx context.Context) (*HLSSession, error) {
+		session, _, err := app.GetOrCreateHLSSession(
+			ctx, movieRef(movieID), helpers.HLS_PROFILE_720P_3MBPS,
+			testIntPtr(0), nil, testPlaybackSessionID, 0, userID,
+		)
+		return session, err
+	}
+
+	type createResult struct {
+		session *HLSSession
+		err     error
+	}
+	leaderCtx, cancelLeader := context.WithCancel(context.Background())
+	defer cancelLeader()
+	leaderCh := make(chan createResult, 1)
+	go func() {
+		session, err := create(leaderCtx)
+		leaderCh <- createResult{session: session, err: err}
+	}()
+	// Let the leader park on the full pool before the follower joins its flight.
+	time.Sleep(100 * time.Millisecond)
+
+	followerCh := make(chan createResult, 1)
+	go func() {
+		session, err := create(context.Background())
+		followerCh <- createResult{session: session, err: err}
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	cancelLeader()
+	select {
+	case leader := <-leaderCh:
+		if !errors.Is(leader.err, context.Canceled) {
+			t.Fatalf("leader err = %v, want context.Canceled", leader.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the cancelled leader never returned")
+	}
+
+	release()
+
+	select {
+	case follower := <-followerCh:
+		if follower.err != nil {
+			t.Fatalf("follower err = %v, want a session", follower.err)
+		}
+		defer cleanupHLSSession(follower.session)
+	case <-time.After(10 * time.Second):
+		t.Fatal("the follower never resolved after the permit freed")
+	}
+}
+
 // Reclaim exists to free a transcode permit. A copy-video session never held
 // one, so killing it would interrupt playback and buy nothing.
 func TestReclaimIdlePersonalHLSSession_SkipsCopyVideoSessions(t *testing.T) {

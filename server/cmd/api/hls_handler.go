@@ -135,8 +135,11 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 	)
 	if err != nil {
 		// Session creation can park waiting for a transcode permit, so a client
-		// that navigates away lands here. That is not a server failure.
-		if errors.Is(err, context.Canceled) {
+		// that navigates away lands here. That is not a server failure, and
+		// nobody is left to answer. Only this request's own context decides:
+		// answering a live client with nothing sends it an empty 200.
+		clientGone := r.Context().Err() != nil
+		if clientGone {
 			return
 		}
 		app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())

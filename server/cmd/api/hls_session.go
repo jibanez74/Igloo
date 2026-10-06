@@ -1400,7 +1400,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 	}
 
-	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
+	v, err := app.doHLSSessionFlight(ctx, key, func() (interface{}, error) {
 		existing, cacheErr := app.cachedPersonalHLSSession(key, media, ownerUserID)
 		if cacheErr != nil || existing != nil {
 			return existing, cacheErr
@@ -1473,6 +1473,34 @@ func (app *Application) GetOrCreateHLSSession(
 	return session, key, nil
 }
 
+// hlsSessionFlightAttempts bounds how often a caller re-runs a creation whose
+// shared flight ended in someone else's cancellation.
+const hlsSessionFlightAttempts = 3
+
+// doHLSSessionFlight runs create once per key across concurrent callers. The
+// flight runs on the context of the request that started it, so when that
+// client goes away (a seek, a closed tab, an aborted keepalive) every request
+// that joined it receives the same context.Canceled. A joined request whose
+// own context is still live would answer its client with nothing at all, so it
+// runs the creation again under its own context instead.
+func (app *Application) doHLSSessionFlight(
+	ctx context.Context,
+	key string,
+	create func() (interface{}, error),
+) (interface{}, error) {
+	var value interface{}
+	var err error
+	for attempt := 0; attempt < hlsSessionFlightAttempts; attempt++ {
+		var shared bool
+		value, err, shared = app.HLSSessionGroup.Do(key, create)
+		inheritedCancellation := shared && errors.Is(err, context.Canceled) && ctx.Err() == nil
+		if !inheritedCancellation {
+			return value, err
+		}
+	}
+	return value, err
+}
+
 // WarmUpRoomHLSSession starts an HLS session for a watch room immediately after creation.
 // It uses RoomHLSSessionKey so the session is isolated from personal playback sessions.
 // If a session for this room already exists in the cache, it is a no-op.
@@ -1517,7 +1545,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		return session, nil
 	}
 
-	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
+	v, err := app.doHLSSessionFlight(ctx, key, func() (interface{}, error) {
 		existing, found, getErr := app.liveRoomHLSSession(roomID, key)
 		if getErr != nil {
 			return nil, getErr
