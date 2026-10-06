@@ -307,3 +307,53 @@ test("home page is clean, responsive, and keyboard reachable", async ({ page }) 
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
+
+test("continue watching reveals the same resume action on movies and episodes", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockHomeApi(page);
+  // Hovering a card warms its details page (design-system §PosterCard);
+  // registered after the catch-all, this route answers those requests first.
+  const prefetched = new Set<string>();
+  await page.route(
+    /\/api\/(movies\/(details\/)?104|shows\/details\/301)(\/|$)/,
+    async route => {
+      prefetched.add(new URL(route.request().url()).pathname);
+      await fulfillJSON(route, apiResponse(null));
+    },
+  );
+
+  await page.setViewportSize(VIEWPORTS.desktop);
+  await page.goto("/");
+
+  const watching = page.getByRole("region", { name: "Continue Watching" });
+  // The play control is an icon revealed on hover, so its name is the only
+  // wording a viewer gets; both kinds in the row must read the same.
+  for (const [card, action] of [
+    ["Ember Line 2026, 34% watched", "Resume Ember Line 2026"],
+    [
+      "Frost Harbor, S1 E4 · Thin Ice, 25% watched",
+      "Resume Frost Harbor S1 E4 · Thin Ice",
+    ],
+  ]) {
+    const resume = watching.getByRole("link", { name: action });
+    // The hidden play control covers the poster's centre, so enter the card
+    // by its corner the way a pointer sweeping across the row would.
+    await watching
+      .getByRole("link", { name: card })
+      .hover({ position: { x: 12, y: 12 } });
+    await expect(resume).toHaveCSS("opacity", "1");
+  }
+  await expect(watching.getByRole("link", { name: /^Play / })).toHaveCount(0);
+  await expect
+    .poll(() => [...prefetched])
+    .toEqual(
+      expect.arrayContaining([
+        "/api/movies/details/104",
+        "/api/shows/details/301",
+      ]),
+    );
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});

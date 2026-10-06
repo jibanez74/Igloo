@@ -23,10 +23,13 @@ export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
   const releaseYear = unwrapInt(year);
   const ariaTitle = releaseYear == null ? title : `${title} ${releaseYear}`;
 
-  const detailsLabel =
-    watchProgress && watchProgress.durationSec > 0
-      ? `${ariaTitle}, ${watchProgressPercent(watchProgress.progressSec, watchProgress.durationSec)}% watched`
-      : ariaTitle;
+  // A saved position makes the play action a resume, the same wording the
+  // episode cards beside it in Continue Watching use.
+  const hasProgress =
+    watchProgress !== undefined && watchProgress.durationSec > 0;
+  const detailsLabel = hasProgress
+    ? `${ariaTitle}, ${watchProgressPercent(watchProgress.progressSec, watchProgress.durationSec)}% watched`
+    : ariaTitle;
 
   const posterUrl = buildTmdbImageUrl(
     unwrapString(poster_path),
@@ -42,7 +45,7 @@ export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
       title={title}
       subtitle={releaseYear == null ? undefined : String(releaseYear)}
       detailsLabel={detailsLabel}
-      playLabel={`Play ${ariaTitle}`}
+      playLabel={`${hasProgress ? "Resume" : "Play"} ${ariaTitle}`}
       watchProgress={watchProgress}
       onPrefetch={handlePrefetch}
     />

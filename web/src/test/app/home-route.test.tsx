@@ -1,5 +1,5 @@
 import type React from "react";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   MOTION_SECTION_ENTER_CLASS,
@@ -252,6 +252,27 @@ describe("home continue watching section", () => {
     expect(
       screen.getByText("2 titles available in continue watching."),
     ).toBeInTheDocument();
+  });
+
+  it("names every play action in the row as a resume", async () => {
+    await renderHomeRoute();
+
+    const watchingRegion = await screen.findByRole("region", {
+      name: "Continue Watching",
+    });
+    expect(
+      within(watchingRegion).getByRole("link", {
+        name: "Resume Ember Line 2026",
+      }),
+    ).toHaveAttribute("href", "/movies/104/play");
+    // Movies and episodes share the row, so they share the verb.
+    const playActions = within(watchingRegion).getAllByRole("link", {
+      name: /^(Play|Resume) /,
+    });
+    expect(playActions.map(link => link.getAttribute("aria-label"))).toEqual([
+      "Resume Ember Line 2026",
+      "Resume Frost Harbor S1 E4 · Thin Ice",
+    ]);
   });
 
   it("does not render when nothing is in progress", async () => {

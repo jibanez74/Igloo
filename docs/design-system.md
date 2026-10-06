@@ -613,6 +613,12 @@ The contract:
   one `playLink` prop: a card with nothing single to play (`ShowCard`,
   `InTheatersCard`, `MusicianCard`) omits it and renders neither, rather than
   washing out on hover for nothing.
+- The play control is an icon alone, so its `playLabel` is the only wording
+  it carries, and it follows the app-wide rule: "Play <title>", or
+  "Resume <title>" when a position is saved. `MovieCard` derives the verb from
+  its `watchProgress`; `ContinueWatchingEpisodeCard` always resumes. Every card
+  in the home Continue Watching row therefore reads "Resume …", whatever its
+  kind.
 - Every hover reveal also fires on `group-focus-within` (§1.7).
 - Progress is always `WatchProgressBar`, and the percent comes from
   `watchProgressPercent` in `lib/format.ts` — the one definition shared by the
