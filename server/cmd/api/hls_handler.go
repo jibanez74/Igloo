@@ -54,6 +54,9 @@ const (
 	// of the media), and guessing from the segment index is wrong both ways.
 	hlsSegmentStatusHeader  = "X-Igloo-Segment"
 	hlsSegmentStatusPastEnd = "past-end"
+	// hlsKeepaliveQueryParam marks a manifest request as a keepalive ping,
+	// which refreshes the session and never creates one.
+	hlsKeepaliveQueryParam = "keepalive"
 )
 
 // Said by the personal segment handler and the watch-room one alike.
@@ -126,7 +129,15 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	session, key, err := app.GetOrCreateHLSSession(
+	// A keepalive ping must not recreate an evicted session: that would start
+	// it again at the window start, which after a long sleep can be far behind
+	// the playhead. The 404 tells the client to rebase where it is instead.
+	refreshOnly := r.URL.Query().Get(hlsKeepaliveQueryParam) == "1"
+	getSession := app.GetOrCreateHLSSession
+	if refreshOnly {
+		getSession = app.RefreshHLSSession
+	}
+	session, key, err := getSession(
 		r.Context(),
 		params.Media,
 		params.Profile,
@@ -145,7 +156,10 @@ func (app *Application) serveHLSManifest(w http.ResponseWriter, r *http.Request,
 		if clientGone {
 			return
 		}
-		app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())
+		evictedKeepalive := refreshOnly && errors.Is(err, errHLSSessionNotFound)
+		if !evictedKeepalive {
+			app.Logger.Error("hls session failed", "error", err, "media", params.Media.String())
+		}
 		writeHLSSessionError(w, err)
 		return
 	}

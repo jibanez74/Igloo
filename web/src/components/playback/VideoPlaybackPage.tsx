@@ -578,12 +578,14 @@ export default function VideoPlaybackPage({
       enabled: !prerollActive,
     });
 
-  // Paused while the stream waits for server capacity: the ping is a
-  // manifest request, so it would queue for a transcode permit alongside the
-  // retry it is meant to keep alive.
+  // Paused while the stream waits for server capacity: there is no session
+  // to refresh until the retry creates one, and a refresh-only ping would
+  // read that as a lost session. An evicted session (a long sleep, a frozen
+  // tab) is rebased at the playhead rather than recreated at the window start.
   useHlsSessionKeepalive({
     enabled: isHlsPlayback && playerMounted && !waitingForCapacity,
     streamUrl,
+    onSessionLost: () => handleSessionLost(currentTimeRef.current),
   });
 
   useBlocker({

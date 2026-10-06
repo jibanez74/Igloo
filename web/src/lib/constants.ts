@@ -257,6 +257,8 @@ function streamModeIds<T extends readonly { id: string }[]>(modes: T) {
 export const STREAM_MODE_IDS = streamModeIds(STREAM_MODES);
 
 export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
+/** Marks a manifest request as a refresh-only keepalive ping (see useHlsSessionKeepalive). */
+export const HLS_KEEPALIVE_QUERY_PARAM = "keepalive";
 export const MOVIE_SEEK_STEP_SEC = 10;
 export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;

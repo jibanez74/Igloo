@@ -1435,6 +1435,59 @@ func TestHLSManifest_RepeatedRequestsReusePersonalSession(t *testing.T) {
 	}
 }
 
+// A keepalive ping used to be an ordinary manifest request, which recreates an
+// evicted session at the window start: after a laptop sleep a transcode then
+// re-encoded from there while the playhead waited far ahead.
+func TestHLSManifest_KeepaliveRefreshesAndNeverCreates(t *testing.T) {
+	app := setupTestApp(t)
+	ffmpegRunner := &fakeFFmpeg{plans: []fakeFFmpegRunPlan{hlsRunPlan(transcodeFixture)}}
+	app.FFmpeg = ffmpegRunner
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	userID := int64(42)
+	handler := authenticatedRouter(t, app, userID)
+
+	manifestURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=590",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+	)
+	keepaliveURL := manifestURL + "&" + hlsKeepaliveQueryParam + "=1"
+	get := func(target string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+		return recorder
+	}
+
+	missing := get(keepaliveURL)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("keepalive without a session: status = %d, want 404: %s", missing.Code, missing.Body.String())
+	}
+	if calls := ffmpegRunner.CallCount(); calls != 0 {
+		t.Fatalf("keepalive started FFmpeg %d times, want 0", calls)
+	}
+	if items := app.HLSSessionCache.ItemCount(); items != 0 {
+		t.Fatalf("keepalive cached %d sessions, want 0", items)
+	}
+
+	created := get(manifestURL)
+	if created.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200: %s", created.Code, created.Body.String())
+	}
+
+	refreshed := get(keepaliveURL)
+	if refreshed.Code != http.StatusOK {
+		t.Fatalf("keepalive on a live session: status = %d, want 200: %s", refreshed.Code, refreshed.Body.String())
+	}
+	if strings.Contains(refreshed.Body.String(), hlsKeepaliveQueryParam) {
+		t.Fatalf("asset URLs must not carry the keepalive flag: %s", refreshed.Body.String())
+	}
+	if calls := ffmpegRunner.CallCount(); calls != 1 {
+		t.Fatalf("FFmpeg calls = %d, want 1", calls)
+	}
+}
+
 func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testing.T) {
 	app := setupTestApp(t)
 

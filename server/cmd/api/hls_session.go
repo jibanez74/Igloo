@@ -1363,6 +1363,82 @@ func (app *Application) startHLSSession(ctx context.Context, params *hlsSessionS
 	return session, nil
 }
 
+// personalHLSSessionTarget is where a personal manifest request resolves to
+// once its start is normalized: the cache key and what a creation needs.
+type personalHLSSessionTarget struct {
+	key               string
+	source            playbackSource
+	effectiveStartSec int
+}
+
+// lookupPersonalHLSSession returns the owner's cached session for a manifest
+// request, or a nil session with the normalized target a creation needs.
+func (app *Application) lookupPersonalHLSSession(
+	ctx context.Context,
+	media mediaRef,
+	profile string,
+	audioTrack *int,
+	audioProfile *helpers.HLSAudioProfileRequest,
+	playbackSession string,
+	startSec int,
+	ownerUserID int64,
+) (*HLSSession, personalHLSSessionTarget, error) {
+	requestedKey := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
+	target := personalHLSSessionTarget{key: requestedKey}
+
+	// Warm path first, before touching the database. The stored key uses the
+	// normalized start, which equals the raw start whenever it was not clamped
+	// to the duration tail -- every keepalive and live-playlist re-fetch -- so
+	// this lookup hits without needing the media row. A clamped start simply
+	// misses here and takes the load-and-normalize path below.
+	cached, err := app.cachedPersonalHLSSession(requestedKey, media, ownerUserID)
+	if err != nil || cached != nil {
+		return cached, target, err
+	}
+
+	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, media, startSec)
+	if err != nil {
+		return nil, target, err
+	}
+	target.key = HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
+	target.source = source
+	target.effectiveStartSec = effectiveStartSec
+
+	if target.key != requestedKey {
+		cached, err = app.cachedPersonalHLSSession(target.key, media, ownerUserID)
+		if err != nil || cached != nil {
+			return cached, target, err
+		}
+	}
+
+	return nil, target, nil
+}
+
+// RefreshHLSSession refreshes the TTL of a cached personal session and never
+// creates one, answering errHLSSessionNotFound when it is gone. It serves the
+// client's keepalive ping: a manifest request would recreate an evicted
+// session at the window start, which after a long sleep can be far behind the
+// playhead, whereas a miss tells the client to rebase where it is.
+func (app *Application) RefreshHLSSession(
+	ctx context.Context,
+	media mediaRef,
+	profile string,
+	audioTrack *int,
+	audioProfile *helpers.HLSAudioProfileRequest,
+	playbackSession string,
+	startSec int,
+	ownerUserID int64,
+) (*HLSSession, string, error) {
+	cached, target, err := app.lookupPersonalHLSSession(ctx, media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
+	if err != nil {
+		return nil, target.key, err
+	}
+	if cached == nil {
+		return nil, target.key, errHLSSessionNotFound
+	}
+	return cached, target.key, nil
+}
+
 // GetOrCreateHLSSession returns a cached personal session or creates a new one.
 // Personal sessions are isolated by owner, playback_session, and normalized start time.
 func (app *Application) GetOrCreateHLSSession(
@@ -1375,30 +1451,13 @@ func (app *Application) GetOrCreateHLSSession(
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	requestedKey := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
-
-	// Warm path first, before touching the database. The stored key uses the
-	// normalized start, which equals the raw start whenever it was not clamped
-	// to the duration tail -- every keepalive and live-playlist re-fetch -- so
-	// this lookup hits without needing the media row. A clamped start simply
-	// misses here and takes the load-and-normalize path below.
-	cached, err := app.cachedPersonalHLSSession(requestedKey, media, ownerUserID)
+	cached, target, err := app.lookupPersonalHLSSession(ctx, media, profile, audioTrack, audioProfile, playbackSession, startSec, ownerUserID)
 	if err != nil || cached != nil {
-		return cached, requestedKey, err
+		return cached, target.key, err
 	}
-
-	source, effectiveStartSec, err := app.loadHLSSourceForSession(ctx, media, startSec)
-	if err != nil {
-		return nil, requestedKey, err
-	}
-	key := HLSSessionKey(media, profile, audioTrack, audioProfile, playbackSession, effectiveStartSec, ownerUserID)
-
-	if key != requestedKey {
-		cached, err = app.cachedPersonalHLSSession(key, media, ownerUserID)
-		if err != nil || cached != nil {
-			return cached, key, err
-		}
-	}
+	key := target.key
+	source := target.source
+	effectiveStartSec := target.effectiveStartSec
 
 	v, err := app.doHLSSessionFlight(ctx, key, func() (interface{}, error) {
 		existing, cacheErr := app.cachedPersonalHLSSession(key, media, ownerUserID)
