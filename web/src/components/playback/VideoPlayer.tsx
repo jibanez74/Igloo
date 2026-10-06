@@ -444,7 +444,11 @@ export default function VideoPlayer({
           playlistLoadPolicy: loadPolicyForTimeout(HLS_JS_LOAD_TIMEOUT_MS),
           fragLoadPolicy: loadPolicyForTimeout(HLS_JS_FRAG_LOAD_TIMEOUT_MS),
           backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
-          startPosition: startSec > 0 ? startSec : -1,
+          // Always explicit, 0 included: hls.js's default (-1) joins a live
+          // playlist at its edge, and a copy session's playlist is a live
+          // EVENT one until FFmpeg finishes, so a play from the start began
+          // tens of seconds in.
+          startPosition: startSec,
         });
         hlsRef.current = hls;
         hlsLoadStoppedAtEndRef.current = false;
@@ -500,6 +504,13 @@ export default function VideoPlayer({
         let networkRecoveryAttempts = 0;
         let segmentNotReadyRetries = 0;
         let fragmentBuffered = false;
+        // A bare startLoad() resumes from the playhead only once something has
+        // buffered; before that it falls back to the live edge of a copy
+        // session's playlist, so a retry that early restarts at the start this
+        // source was built for.
+        const restartLoad = () => {
+          hls.startLoad(fragmentBuffered ? -1 : startSec);
+        };
         // One report per instance: a lost session fails the requests that
         // are still in flight too, and the page replaces this instance after
         // the first report. Reporting each of them used to spend the
@@ -577,7 +588,7 @@ export default function VideoPlayer({
           ) {
             if (segmentNotReadyRetries < HLS_SEGMENT_NOT_READY_MAX_RETRIES) {
               segmentNotReadyRetries += 1;
-              hls.startLoad();
+              restartLoad();
               return;
             }
             reportError(
@@ -631,7 +642,7 @@ export default function VideoPlayer({
               if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
                 hls.loadSource(src);
               } else {
-                hls.startLoad();
+                restartLoad();
               }
             }, delayMs);
             return;

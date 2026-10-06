@@ -33,7 +33,10 @@ type FakeHlsInstance = {
   triggered: Array<{ event: string; data: unknown }>;
   levels: Array<{ details?: FakeLevelDetails }>;
   destroyed: boolean;
+  config: { startPosition?: number };
   startLoadCalls: number;
+  /** The position each startLoad() call passed, undefined for a bare call. */
+  startLoadPositions: Array<number | undefined>;
   loadSourceCalls: number;
   stopLoadCalls: number;
   recoverMediaErrorCalls: number;
@@ -72,12 +75,15 @@ vi.mock("hls.js/light", () => {
     triggered: Array<{ event: string; data: unknown }> = [];
     levels: Array<{ details?: FakeLevelDetails }> = [];
     destroyed = false;
+    config: { startPosition?: number };
     startLoadCalls = 0;
+    startLoadPositions: Array<number | undefined> = [];
     loadSourceCalls = 0;
     stopLoadCalls = 0;
     recoverMediaErrorCalls = 0;
 
-    constructor() {
+    constructor(config: { startPosition?: number } = {}) {
+      this.config = config;
       fakeHlsInstances.push(this);
     }
 
@@ -104,8 +110,9 @@ vi.mock("hls.js/light", () => {
     recoverMediaError() {
       this.recoverMediaErrorCalls += 1;
     }
-    startLoad() {
+    startLoad(position?: number) {
       this.startLoadCalls += 1;
+      this.startLoadPositions.push(position);
     }
     stopLoad() {
       this.stopLoadCalls += 1;
@@ -830,6 +837,39 @@ describe("VideoPlayer hls.js error routing", () => {
     expect(hls.startLoadCalls).toBe(HLS_SEGMENT_NOT_READY_MAX_RETRIES);
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0][0]).toMatch(/still preparing/i);
+  });
+
+  // hls.js's default start (-1) joins a live playlist at its edge, and a copy
+  // session's playlist is a live EVENT one until FFmpeg finishes: a play from
+  // the start began about 40 s in.
+  it("starts hls.js at an explicit position, 0 included", async () => {
+    const hls = await renderHlsPlayer({ startSec: 0 });
+
+    expect(hls.config.startPosition).toBe(0);
+  });
+
+  // Before anything buffers, a bare startLoad() also falls back to the live
+  // edge, so a retry that early restarts at the start the source was built
+  // for. After that, hls.js resumes from the playhead by itself.
+  it("restarts an early retry at the source start, a later one at the playhead", async () => {
+    const hls = await renderHlsPlayer({ startSec: 12 });
+    const notReady = {
+      type: "networkError",
+      details: "fragLoadError",
+      fatal: true,
+      response: { code: 503 },
+    };
+
+    act(() => {
+      hls.trigger("hlsError", notReady);
+    });
+    expect(hls.startLoadPositions).toEqual([12]);
+
+    act(() => {
+      hls.trigger("hlsFragBuffered", {});
+      hls.trigger("hlsError", notReady);
+    });
+    expect(hls.startLoadPositions).toEqual([12, -1]);
   });
 
   // A buffered fragment proves the stream recovered, so the one-shot budgets

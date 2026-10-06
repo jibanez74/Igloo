@@ -483,6 +483,9 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		if strings.Contains(playlist, "#EXT-X-ENDLIST") {
 			t.Fatalf("a still-encoding session must not be advertised as complete: %s", playlist)
 		}
+		if !strings.HasPrefix(playlist, "#EXTM3U\n"+hlsStartAtBeginningTag+"\n") {
+			t.Fatalf("a live playlist must start players at its first segment: %s", playlist)
+		}
 	})
 
 	// Without a published playlist the request must not fall back to a synthesized
@@ -524,6 +527,10 @@ func TestBuildHLSPlaylistBody(t *testing.T) {
 		}
 		if !strings.Contains(playlist, "/api/hls/init.mp4?start=0") {
 			t.Fatalf("final playlist did not rewrite init URL: %s", playlist)
+		}
+		// A VOD playlist already starts at its beginning.
+		if strings.Contains(playlist, "#EXT-X-START") {
+			t.Fatalf("a final playlist needs no start tag: %s", playlist)
 		}
 		if !strings.Contains(playlist, "/api/hls/segment_0.m4s?start=0") {
 			t.Fatalf("final playlist did not rewrite segment URL: %s", playlist)

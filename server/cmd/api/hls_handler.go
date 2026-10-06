@@ -394,7 +394,7 @@ func buildHLSPlaylistBody(
 		if session.CopyVideo {
 			livePlaylist, readErr := readLiveHLSPlaylist(session.TempDir)
 			if readErr == nil {
-				return rewritePlaylistURLs(livePlaylist, baseURL, querySuffix), nil
+				return rewritePlaylistURLs(startLivePlaylistAtBeginning(livePlaylist), baseURL, querySuffix), nil
 			}
 		} else {
 			initReady := segmentReady(session, helpers.HLS_INIT_FILENAME)

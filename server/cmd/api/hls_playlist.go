@@ -57,6 +57,22 @@ func finalizeEventPlaylist(raw string) string {
 	return out
 }
 
+// hlsStartAtBeginningTag pins a playlist's start to its first segment.
+const hlsStartAtBeginningTag = "#EXT-X-START:TIME-OFFSET=0"
+
+// startLivePlaylistAtBeginning tells players to start a copy-video session's
+// live EVENT playlist at its first segment. With no #EXT-X-ENDLIST a player
+// treats the playlist as live and, without a start position of its own, joins
+// near the live edge, which is tens of seconds in because stream copy runs far
+// ahead of real time. Native HLS (iPhone Safari) has no other way to be told;
+// hls.js and the TV client pass an explicit position, which overrides the tag.
+func startLivePlaylistAtBeginning(playlist string) string {
+	if strings.Contains(playlist, "#EXT-X-START:") {
+		return playlist
+	}
+	return strings.Replace(playlist, "#EXTM3U", "#EXTM3U\n"+hlsStartAtBeginningTag, 1)
+}
+
 // rewritePlaylistURLs prepends baseURL and appends the audio_track query
 // parameter to every segment and init-map URI in a finalized playlist.
 func rewritePlaylistURLs(playlist, baseURL, querySuffix string) string {

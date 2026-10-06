@@ -87,6 +87,24 @@ func TestFinalizeEventPlaylist(t *testing.T) {
 	}
 }
 
+func TestStartLivePlaylistAtBeginning(t *testing.T) {
+	live := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.000000,\nsegment_0.m4s\n"
+
+	pinned := startLivePlaylistAtBeginning(live)
+	want := "#EXTM3U\n" + hlsStartAtBeginningTag + "\n#EXT-X-VERSION:7\n"
+	if !strings.HasPrefix(pinned, want) {
+		t.Fatalf("start tag must follow the header:\n%s", pinned)
+	}
+	if strings.Count(pinned, "#EXT-X-START") != 1 {
+		t.Fatalf("expected exactly one start tag:\n%s", pinned)
+	}
+
+	// The tag may appear only once per playlist.
+	if again := startLivePlaylistAtBeginning(pinned); again != pinned {
+		t.Fatalf("a playlist that already has a start tag must be left alone:\n%s", again)
+	}
+}
+
 func TestRewritePlaylistURLs(t *testing.T) {
 	playlist := strings.Join([]string{
 		"#EXTM3U",
