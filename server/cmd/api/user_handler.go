@@ -435,10 +435,9 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 }
 
 // deleteUploadedAvatar removes the file UploadUserAvatar wrote for userID.
-// A stored avatar URL may predate the URL validation or name another user's
-// file, so only the exact name the upload produces for this user is deleted;
-// any other value, including one that climbs out of the static directory, is
-// left alone.
+// The path comes from a stored value, so only the exact name the upload
+// produces for this user is deleted; any other value, including another user's
+// file or one that climbs out of the static directory, is left alone.
 func (app *Application) deleteUploadedAvatar(userID int64, avatarURL string) {
 	name, ok := strings.CutPrefix(avatarURL, uploadedAvatarURLPrefix)
 	if !ok {

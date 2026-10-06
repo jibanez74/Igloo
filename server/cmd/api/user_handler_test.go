@@ -278,8 +278,8 @@ func TestUpdateUserAvatar_RejectsValuesThatAreNotExternalURLs(t *testing.T) {
 	}
 }
 
-// A stored avatar may predate the URL validation, so replacing it, or deleting
-// its user, must only ever remove that user's own upload.
+// Whatever avatar value is stored, replacing it, or deleting its user, must
+// only ever remove that user's own upload.
 func TestAvatarDeletion_OnlyRemovesTheOwnersUpload(t *testing.T) {
 	app := setupSessionTestApp(t)
 	ctx := context.Background()

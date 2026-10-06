@@ -267,8 +267,9 @@ func isHDRStream(stream *database.VideoStream) bool {
 
 // isInterlacedStream returns true when the scanned field_order marks the
 // stream interlaced (tt/bb/tb/bt). "progressive", NULL, and unrecognized
-// values are treated as progressive: rows scanned before field_order was
-// persisted are NULL and must not be punished.
+// values are treated as progressive: ffprobe omits field_order for many
+// streams, the scanner stores that as NULL, and an unknown order must not cost
+// a stream its remux or add a deinterlace pass to its transcode.
 func isInterlacedStream(stream *database.VideoStream) bool {
 	if !stream.FieldOrder.Valid {
 		return false

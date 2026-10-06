@@ -150,58 +150,6 @@ func TestSearchShowsTypoInOneTokenRanksTargetFirst(t *testing.T) {
 	}
 }
 
-// The show index ships after the shows table, so schema.sql backfills it once
-// for libraries scanned before it existed.
-func TestShowSearchIndexBackfillsExistingLibrary(t *testing.T) {
-	app := setupTestApp(t)
-
-	// Simulate a database whose shows predate the index.
-	_, err := app.DB.Exec("DROP TRIGGER shows_ai; DROP TRIGGER shows_au")
-	if err != nil {
-		t.Fatalf("drop show index triggers: %v", err)
-	}
-	createSearchShow(t, app, "Legacy Show", "/shows/Legacy Show", "", "")
-
-	var terms int
-	err = app.DB.QueryRow("SELECT COUNT(*) FROM shows_fts_vocab").Scan(&terms)
-	if err != nil {
-		t.Fatalf("count vocabulary terms: %v", err)
-	}
-	if terms != 0 {
-		t.Fatalf("expected an empty index before the backfill, got %d terms", terms)
-	}
-
-	// Reapplying the schema is exactly what the next startup does; it restores
-	// the triggers and runs the guarded rebuild.
-	err = app.InitTables()
-	if err != nil {
-		t.Fatalf("reapply schema: %v", err)
-	}
-
-	results := searchEntityResults(t, app, showSearchEntity, "Legacy")
-	if len(results) != 1 {
-		t.Fatalf("expected the backfill to make 1 show searchable, got %d", len(results))
-	}
-
-	// The guard is monotonic: a second startup must not touch the index.
-	err = app.DB.QueryRow("SELECT COUNT(*) FROM shows_fts_vocab").Scan(&terms)
-	if err != nil {
-		t.Fatalf("count vocabulary terms: %v", err)
-	}
-	err = app.InitTables()
-	if err != nil {
-		t.Fatalf("reapply schema again: %v", err)
-	}
-	var termsAfter int
-	err = app.DB.QueryRow("SELECT COUNT(*) FROM shows_fts_vocab").Scan(&termsAfter)
-	if err != nil {
-		t.Fatalf("count vocabulary terms: %v", err)
-	}
-	if termsAfter != terms {
-		t.Fatalf("second startup changed the index: %d terms, want %d", termsAfter, terms)
-	}
-}
-
 func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
 	app := setupTestApp(t)
 

@@ -1290,16 +1290,6 @@ BEGIN
   WHERE vocab_table = 'shows_fts_vocab';
 END;
 
--- Shows predate this index and the triggers above only see later writes, so an
--- existing database would keep an empty index. The guard reads the vocabulary
--- rather than shows_fts: a bare scan of an external-content FTS table reads the
--- content table, so it reports rows even when the index holds nothing. fts5vocab
--- reads the index itself. One rebuild makes the guard false for good.
-INSERT INTO shows_fts (shows_fts)
-SELECT 'rebuild'
-WHERE EXISTS (SELECT 1 FROM shows)
-  AND NOT EXISTS (SELECT 1 FROM shows_fts_vocab);
-
 -- attempts counts definitive TMDB misses; last_attempt_at (unix seconds) drives
 -- the miss backoff shared with movies.
 CREATE TABLE IF NOT EXISTS show_tmdb_retries (

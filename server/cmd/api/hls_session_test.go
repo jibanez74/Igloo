@@ -784,7 +784,7 @@ func TestIsInterlacedStream(t *testing.T) {
 		fieldOrder sql.NullString
 		want       bool
 	}{
-		// NULL rows predate the field_order column and must stay eligible for
+		// NULL means ffprobe reported no field order; it must stay eligible for
 		// everything progressive content is.
 		{name: "unset field order is progressive", fieldOrder: sql.NullString{}},
 		{name: "progressive", fieldOrder: sql.NullString{String: "progressive", Valid: true}},
