@@ -304,7 +304,9 @@ CREATE TABLE IF NOT EXISTS music_credit_metadata (
   PRIMARY KEY (track_id, musician_id, sort_name)
 );
 
-CREATE INDEX IF NOT EXISTS music_credit_metadata_votes ON music_credit_metadata (musician_id, sort_name, track_id);
+-- track_id before sort_name: the artist-sort vote groups an artist's credits by
+-- track, and this order hands them over already grouped instead of sorting them.
+CREATE INDEX IF NOT EXISTS music_credit_metadata_votes ON music_credit_metadata (musician_id, track_id, sort_name);
 
 -- Spotify dates are a fallback when no valid local track date remains.
 CREATE TABLE IF NOT EXISTS music_album_metadata (
@@ -513,7 +515,8 @@ CREATE TABLE IF NOT EXISTS movie_genres (
   FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_movie_genres_genre ON movie_genres (genre_id);
+-- movie_id makes the genre listings and counts covering reads of this index.
+CREATE INDEX IF NOT EXISTS idx_movie_genres_genre ON movie_genres (genre_id, movie_id);
 
 -- An extra video may be shared by catalog rows representing the same film.
 CREATE TABLE IF NOT EXISTS movie_extra_videos (
@@ -1219,6 +1222,9 @@ CREATE TABLE IF NOT EXISTS shows (
 );
 -- Keep this expression and tie-breaker aligned with GetShowsLibraryAsc/Desc.
 CREATE INDEX IF NOT EXISTS idx_shows_name ON shows (LOWER(name), id);
+-- Ascending on purpose: GetLatestShows reads it backwards, which yields
+-- created_at DESC, id DESC - exactly its ORDER BY.
+CREATE INDEX IF NOT EXISTS idx_shows_created_at ON shows (created_at);
 
 -- Show search infrastructure
 -- This mirrors the movies index in the Search infrastructure section above but
@@ -1503,7 +1509,10 @@ CREATE TABLE IF NOT EXISTS show_cast (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (show_id, artist_id, character, credit_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_cast_artist_id ON show_cast(artist_id);
+-- Billing order for GetCastByShowID, so its 100-row cap can stop early. The
+-- credit tables index no artist, company, network or extra-video column: those
+-- parents are never deleted, so no cascade would use one (see schema_test.go).
+CREATE INDEX IF NOT EXISTS idx_show_cast_order ON show_cast (show_id, cast_order);
 CREATE TABLE IF NOT EXISTS show_crew (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),
@@ -1513,37 +1522,33 @@ CREATE TABLE IF NOT EXISTS show_crew (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (show_id, artist_id, department, job, credit_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_crew_artist_id ON show_crew(artist_id);
+CREATE INDEX IF NOT EXISTS idx_show_crew_show_department_job ON show_crew (show_id, department, job);
 CREATE TABLE IF NOT EXISTS show_genres (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
  genre_id INTEGER NOT NULL REFERENCES genres(id),
  PRIMARY KEY (show_id, genre_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_genres_genre_id ON show_genres(genre_id);
+CREATE INDEX IF NOT EXISTS idx_show_genres_genre_id ON show_genres(genre_id, show_id);
 CREATE TABLE IF NOT EXISTS show_production_companies (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
  production_company_id INTEGER NOT NULL REFERENCES production_companies(id),
  PRIMARY KEY (show_id, production_company_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_production_companies_production_company_id ON show_production_companies(production_company_id);
 CREATE TABLE IF NOT EXISTS show_networks (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
  network_id INTEGER NOT NULL REFERENCES networks(id),
  PRIMARY KEY (show_id, network_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_networks_network_id ON show_networks(network_id);
 CREATE TABLE IF NOT EXISTS show_creators (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),
  PRIMARY KEY (show_id, artist_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_creators_artist_id ON show_creators(artist_id);
 CREATE TABLE IF NOT EXISTS show_extra_videos (
  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
  extra_video_id INTEGER NOT NULL REFERENCES extra_videos(id),
  PRIMARY KEY (show_id, extra_video_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_extra_videos_extra_video_id ON show_extra_videos(extra_video_id);
 CREATE TABLE IF NOT EXISTS show_season_cast (
  season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),
@@ -1553,7 +1558,6 @@ CREATE TABLE IF NOT EXISTS show_season_cast (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (season_id, artist_id, character, credit_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_season_cast_artist_id ON show_season_cast(artist_id);
 CREATE TABLE IF NOT EXISTS show_season_crew (
  season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),
@@ -1563,13 +1567,11 @@ CREATE TABLE IF NOT EXISTS show_season_crew (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (season_id, artist_id, department, job, credit_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_season_crew_artist_id ON show_season_crew(artist_id);
 CREATE TABLE IF NOT EXISTS show_season_extra_videos (
  season_id INTEGER NOT NULL REFERENCES show_seasons(id) ON DELETE CASCADE,
  extra_video_id INTEGER NOT NULL REFERENCES extra_videos(id),
  PRIMARY KEY (season_id, extra_video_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_season_extra_videos_extra_video_id ON show_season_extra_videos(extra_video_id);
 CREATE TABLE IF NOT EXISTS show_episode_crew (
  episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),
@@ -1579,7 +1581,6 @@ CREATE TABLE IF NOT EXISTS show_episode_crew (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (episode_id, artist_id, department, job, credit_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_episode_crew_artist_id ON show_episode_crew(artist_id);
 CREATE TABLE IF NOT EXISTS show_episode_guest_cast (
  episode_id INTEGER NOT NULL REFERENCES show_episodes(id) ON DELETE CASCADE,
  artist_id INTEGER NOT NULL REFERENCES artist(id),
@@ -1589,4 +1590,3 @@ CREATE TABLE IF NOT EXISTS show_episode_guest_cast (
  episode_count INTEGER NOT NULL,
  PRIMARY KEY (episode_id, artist_id, character, credit_id)
 );
-CREATE INDEX IF NOT EXISTS idx_show_episode_guest_cast_artist_id ON show_episode_guest_cast(artist_id);

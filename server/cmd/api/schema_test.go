@@ -30,6 +30,10 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_albums_created_at",
 		"idx_musicians_alpha",
 		"idx_user_liked_tracks_user_created",
+		"idx_shows_created_at",
+		// Billing order for the capped show cast and crew lists.
+		"idx_show_cast_order",
+		"idx_show_crew_show_department_job",
 		// Foreign key columns that no other index covers. See
 		// TestSchema_ForeignKeysAreIndexed for the general rule.
 		"idx_chapters_movie",
@@ -76,6 +80,17 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_audio_streams_language",
 		"idx_subtitles_language",
 		"idx_user_track_stats_last_played",
+		"idx_show_cast_artist_id",
+		"idx_show_crew_artist_id",
+		"idx_show_creators_artist_id",
+		"idx_show_season_cast_artist_id",
+		"idx_show_season_crew_artist_id",
+		"idx_show_episode_crew_artist_id",
+		"idx_show_episode_guest_cast_artist_id",
+		"idx_show_production_companies_production_company_id",
+		"idx_show_networks_network_id",
+		"idx_show_extra_videos_extra_video_id",
+		"idx_show_season_extra_videos_extra_video_id",
 	}
 
 	for _, indexName := range removedIndexes {
@@ -106,6 +121,21 @@ func TestInitTables_Indexes(t *testing.T) {
 	if !strings.Contains(watchProgressIndexSQL, "WHERE watched = false") {
 		t.Fatalf("Expected movie watch progress index to exclude watched movies, got %q", watchProgressIndexSQL)
 	}
+
+	// The artist-sort vote groups credits by track, so track_id must follow
+	// musician_id; with sort_name second every reconcile sorts the artist's credits.
+	var creditVotesIndexSQL string
+	err = db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+		"music_credit_metadata_votes",
+	).Scan(&creditVotesIndexSQL)
+	if err != nil {
+		t.Fatalf("Failed to read music credit votes index definition: %v", err)
+	}
+
+	if !strings.Contains(creditVotesIndexSQL, "(musician_id, track_id, sort_name)") {
+		t.Fatalf("Expected music credit votes index on (musician_id, track_id, sort_name), got %q", creditVotesIndexSQL)
+	}
 }
 
 // parentTablesNeverDeleted lists the catalog tables that no code path ever deletes
@@ -116,10 +146,11 @@ func TestInitTables_Indexes(t *testing.T) {
 // If you add a delete path for one of these tables, remove it from this list and
 // add the index the test then asks for.
 var parentTablesNeverDeleted = map[string]string{
-	"artist":               "cast and crew rows are replaced per movie, artists themselves are never removed",
-	"production_companies": "only upserted by the movie scanner",
-	"extra_videos":         "only upserted by the movie scanner",
+	"artist":               "cast and crew rows are replaced per movie or show, artists themselves are never removed",
+	"production_companies": "only upserted by the movie and show scanners",
+	"extra_videos":         "only upserted by the movie and show scanners",
 	"genres":               "only upserted via GetOrCreateGenre",
+	"networks":             "only upserted by the show scanner",
 }
 
 // TestSchema_ForeignKeysAreIndexed asserts that every foreign key's child columns
