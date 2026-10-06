@@ -166,6 +166,13 @@ export default function VideoPlaybackPage({
   // by any route (last trailer, Start movie, an empty or failed queue). The
   // movie surface stays unmounted meanwhile, because mounting it is what
   // starts the stream, until the last trailer's final seconds (warm-up).
+  // Whether the page opened that way is decided once (the page remounts per
+  // item): the URL changes under a playing movie, so reading it live put a
+  // movie opened mid-way into the pre-roll when a seek back to 0:00 rebased
+  // to start=0, or when a hand-off's spent autoplay flag left the URL.
+  const [openedFromBeginning] = useState(
+    () => kind === "movie" && start === 0 && search.autoplay !== true,
+  );
   const [prerollBypassed, setPrerollBypassed] = useState(false);
   const [prerollFinished, setPrerollFinished] = useState(false);
   const [prerollWarmup, setPrerollWarmup] = useState(false);
@@ -266,11 +273,7 @@ export default function VideoPlaybackPage({
     modeUnavailable,
     playbackError,
   });
-  const prerollEligible =
-    kind === "movie" &&
-    start === 0 &&
-    search.autoplay !== true &&
-    !prerollBypassed;
+  const prerollEligible = openedFromBeginning && !prerollBypassed;
   const prerollPhase = prerollEligible && !prerollFinished;
   // Fetched from the first render, alongside watch progress, so the queue is
   // normally known before the resume decision lands; a slow or failed request

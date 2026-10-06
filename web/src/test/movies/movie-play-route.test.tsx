@@ -411,6 +411,57 @@ describe("movie play route trailer pre-roll", () => {
     ).toHaveLength(0);
   });
 
+  // Eligibility used to follow the live URL: seeking back to 0:00 rebases the
+  // stream to start=0, which put a movie opened mid-way into the pre-roll and
+  // unmounted the player in the middle of the film.
+  it("never starts the trailers when a mid-movie page seeks back to the start", async () => {
+    const fetchMock = mockMovieApi({ preroll: twoTrailers });
+    hlsSupport.native = true;
+    const { router } = await renderMovieRoute(
+      "mode=remux&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+    Object.defineProperty(video, "readyState", {
+      configurable: true,
+      get: () => 4,
+    });
+
+    fireEvent.keyDown(document.body, { key: "Home" });
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.start).toBe(0);
+    });
+
+    expect(prerollRegion()).toBeNull();
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
+    ).toHaveLength(0);
+    expect(
+      screen.getByRole("region", { name: "Video player for Signal Fire" }),
+    ).toBeInTheDocument();
+  });
+
+  // A route opened with autoplay=true never runs the pre-roll, but the flag is
+  // dropped from the URL once it has played, which made the movie eligible.
+  it("never starts the trailers once a spent autoplay flag leaves the URL", async () => {
+    const fetchMock = mockMovieApi({ preroll: twoTrailers });
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=0&autoplay=true",
+    );
+
+    reportCanPlay(await movieVideo());
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.autoplay).toBeUndefined();
+    });
+
+    expect(prerollRegion()).toBeNull();
+    expect(
+      requestsTo(fetchMock, `/api/movies/${MOVIE_ID}/preroll`),
+    ).toHaveLength(0);
+    expect(document.querySelector("video")).not.toBeNull();
+  });
+
   it("skips the trailers on Resume", async () => {
     mockMovieApi({
       preroll: twoTrailers,

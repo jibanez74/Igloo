@@ -907,7 +907,8 @@ require the full playback test pass.
   coherent. It runs only for a movie starting from the beginning: the resume
   decision resolves first, Resume bypasses it, Start over and a fresh play run
   it; TV episodes, watch rooms, chapter links and Continue Watching never see
-  it. The queue comes from `GET /api/movies/{id}/preroll` (the server owns
+  it. That is decided once, from how the page opened, so seeking back to 0:00
+  in a movie opened mid-way never brings it up. The queue comes from `GET /api/movies/{id}/preroll` (the server owns
   selection), fetched once per play with a short timeout and never refetched
   on focus or reconnect; an empty or failed answer starts the movie as before,
   paused, while a pre-roll that played starts the movie on its own (a
