@@ -892,9 +892,27 @@ export default function VideoPlayer({
                   "Playback was interrupted before the stream finished loading.",
                 );
                 return;
-              case MediaError.MEDIA_ERR_NETWORK:
+              case MediaError.MEDIA_ERR_NETWORK: {
+                // A native HLS engine (iPhone Safari) reports a segment 404
+                // from an evicted or stopped session only as a network error,
+                // so it goes through the same rebase as hls.js's 404s. The
+                // recovery budget bounds a real outage, which then ends on
+                // the page's own error.
+                const video = e.currentTarget;
+                const nativeHls = isHlsSource && prefersNativeHLS;
+                if (nativeHls && onSessionLost) {
+                  // Nothing loaded yet: the start this source was built for
+                  // is where the viewer is, as reportSessionLostAtStart says.
+                  const position =
+                    video.readyState >= HTMLMediaElement.HAVE_METADATA
+                      ? video.currentTime
+                      : startSec;
+                  onSessionLost(position);
+                  return;
+                }
                 onError("A network error interrupted video playback.");
                 return;
+              }
               case MediaError.MEDIA_ERR_DECODE:
                 onError("The browser could not decode this video stream.");
                 return;

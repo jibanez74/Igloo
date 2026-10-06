@@ -1292,6 +1292,109 @@ function nativeManifestResponse(
   return { response, cancel };
 }
 
+describe("VideoPlayer native HLS network error", () => {
+  const src = "/api/movies/1/hls/remux/playlist.m3u8?start=590";
+
+  // jsdom has no MediaError, which the error handler reads.
+  function stubMediaError() {
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+    });
+  }
+
+  function failMedia(
+    video: HTMLElement,
+    code: number,
+    { readyState, currentTime }: { readyState: number; currentTime: number },
+  ) {
+    Object.defineProperty(video, "readyState", {
+      configurable: true,
+      get: () => readyState,
+    });
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+    });
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code },
+    });
+    act(() => {
+      video.dispatchEvent(new Event("error"));
+    });
+  }
+
+  async function renderNativeHls(
+    props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
+  ) {
+    nativeHlsSupport.supported = true;
+    stubMediaError();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(nativeManifestResponse(200).response),
+    );
+    const onError = vi.fn();
+    const onSessionLost = vi.fn();
+    const { video } = renderPlayer({
+      src,
+      isHlsSource: true,
+      startSec: 30,
+      onError,
+      onSessionLost,
+      ...props,
+    });
+    await waitFor(() => {
+      expect(video).toHaveAttribute("src", src);
+    });
+    return { video, onError, onSessionLost };
+  }
+
+  // The native engine reports an evicted session's segment 404 only as a
+  // network error. It used to go straight to the error screen.
+  it("rebases at the playhead instead of failing", async () => {
+    const { video, onError, onSessionLost } = await renderNativeHls();
+
+    failMedia(video, 2, { readyState: 4, currentTime: 95 });
+
+    expect(onSessionLost).toHaveBeenCalledExactlyOnceWith(95);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("rebases at the source start when nothing has loaded", async () => {
+    const { video, onSessionLost } = await renderNativeHls();
+
+    failMedia(video, 2, { readyState: 0, currentTime: 0 });
+
+    expect(onSessionLost).toHaveBeenCalledExactlyOnceWith(30);
+  });
+
+  it("still reports a decode error", async () => {
+    const { video, onError, onSessionLost } = await renderNativeHls();
+
+    failMedia(video, 3, { readyState: 4, currentTime: 95 });
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
+  it("leaves a direct-play network error to the error report", () => {
+    stubMediaError();
+    const onError = vi.fn();
+    const onSessionLost = vi.fn();
+    const { video } = renderPlayer({ onError, onSessionLost });
+
+    failMedia(video, 2, { readyState: 4, currentTime: 95 });
+
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      "A network error interrupted video playback.",
+    );
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+});
+
 describe("VideoPlayer native HLS manifest preflight", () => {
   const firstSrc = "/api/movies/1/hls/remux/playlist.m3u8?start=590";
   const secondSrc =
