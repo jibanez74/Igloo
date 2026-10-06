@@ -32,6 +32,11 @@ type WatchRoomPlaybackEventType =
 type RoomPlaybackSnapshot = {
   state: WatchRoomPlaybackStateType;
   receivedAt: number;
+  /**
+   * A local Play overtook this paused state before the media loaded: only its
+   * position still applies, since that play is pending and starts the media.
+   */
+  overtakenByPlay?: boolean;
 };
 
 type UseWatchRoomConnectionOptions = {
@@ -107,7 +112,7 @@ export function useWatchRoomConnection({
   };
 
   const applyPlaybackState = useEffectEvent(
-    async (playback: WatchRoomPlaybackStateType) => {
+    async (playback: WatchRoomPlaybackStateType, overtakenByPlay: boolean) => {
       const video = videoRef.current;
       if (!video || video.readyState < 1) {
         return false;
@@ -121,6 +126,9 @@ export function useWatchRoomConnection({
 
       if (playback.paused) {
         onCurrentTimeChange(targetTime);
+        if (overtakenByPlay) {
+          return true;
+        }
         if (!video.paused) {
           video.pause();
         }
@@ -168,7 +176,10 @@ export function useWatchRoomConnection({
       position_sec: pending.state.position_sec + elapsed,
     };
 
-    const applied = await applyPlaybackState(adjustedPlayback);
+    const applied = await applyPlaybackState(
+      adjustedPlayback,
+      pending.overtakenByPlay === true,
+    );
     if (applied && pendingPlaybackRef.current === pending) {
       pendingPlaybackRef.current = null;
     }
@@ -403,15 +414,29 @@ export function useWatchRoomConnection({
     };
   };
 
+  // Called by a local Play before it plays, so the press starts from the
+  // room's position rather than wherever the element happens to be.
   const syncToPendingPlayback = () => {
     const video = videoRef.current;
     const pending = pendingPlaybackRef.current;
-    if (!video || !pending || pending.state.paused) return;
+    if (!video || !pending) return;
 
-    const elapsed = (Date.now() - pending.receivedAt) / 1000;
+    if (video.readyState < 1) {
+      // Nothing has loaded, so the position can only be applied by the flush
+      // once it has. A paused state would then pause this press too, but the
+      // press is newer: only the room's position carries over.
+      if (pending.state.paused) {
+        pendingPlaybackRef.current = { ...pending, overtakenByPlay: true };
+      }
+      return;
+    }
+
+    const elapsed = pending.state.paused
+      ? 0
+      : (Date.now() - pending.receivedAt) / 1000;
     const adjustedPos = pending.state.position_sec + elapsed;
     const drift = Math.abs(video.currentTime - adjustedPos);
-    if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+    if (drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
       video.currentTime = adjustedPos;
       onCurrentTimeChange(adjustedPos);
     }

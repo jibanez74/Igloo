@@ -1270,6 +1270,74 @@ describe("WatchRoomPageContent", () => {
     expect(socket.sentMessages.map((message) => JSON.parse(message).type)).not.toContain("play");
   });
 
+  // The room's join snapshot waits for the media to load. A Play pressed
+  // meanwhile used to be paused by it at loadedmetadata (the snapshot said the
+  // room was paused), so the press was lost. The press is newer: the room's
+  // position still applies, its paused state does not.
+  it("lets a Play pressed before the stream loads win over the join snapshot", async () => {
+    const user = userEvent.setup();
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(mockVideoController.element).not.toBeNull();
+    });
+    const socket = FakeWebSocket.instances[0];
+    socket.emitMessage({
+      type: "room_snapshot",
+      room_id: 7,
+      playback: {
+        paused: true,
+        position_sec: 30,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+
+    // A real pending play: it resolves once the media can play, and a pause
+    // in between rejects it.
+    const video = mockVideoController.element!;
+    let settlePlay: (() => void) | null = null;
+    const pause = vi.fn(() => {
+      mockVideoController.paused = true;
+    });
+    Object.defineProperty(video, "pause", { configurable: true, value: pause });
+    Object.defineProperty(video, "play", {
+      configurable: true,
+      value: vi.fn(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            mockVideoController.paused = false;
+            settlePlay = () => {
+              if (mockVideoController.paused) {
+                reject(new DOMException("interrupted by pause()", "AbortError"));
+                return;
+              }
+              resolve();
+            };
+          }),
+      ),
+    });
+
+    await user.click(screen.getByRole("button", { name: /play playback/i }));
+    act(() => {
+      mockVideoController.setReadyState(4);
+    });
+    await act(async () => {
+      settlePlay?.();
+    });
+
+    expect(pause).not.toHaveBeenCalled();
+    expect(mockVideoController.paused).toBe(false);
+    // The room was paused there: no time passed in it while the media loaded.
+    expect(mockVideoController.currentTime).toBe(30);
+    await waitFor(() => {
+      const play = socket.sentMessages
+        .map((message) => JSON.parse(message))
+        .find((message) => message.type === "play");
+      expect(play?.position_sec).toBe(30);
+    });
+  });
+
   it("keeps an interrupted synced play pending without the permission message", async () => {
     renderRoomPage(buildRoom({ is_owner: false }));
     await waitFor(() => {
