@@ -433,7 +433,7 @@ test("playlists tab creates a playlist from the toolbar dialog", async ({ page }
 
   // The list refetches and shows what the server now holds.
   await expect(page.getByRole("link", { name: /^Fresh Queue, / })).toBeVisible();
-  await expect(page.getByText("3 playlists")).toBeVisible();
+  await expect(page.getByText("3 playlists", { exact: true })).toBeVisible();
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
