@@ -455,6 +455,41 @@ describe("movie play route trailer pre-roll", () => {
   });
 });
 
+describe("movie play route HLS session", () => {
+  beforeEach(() => {
+    stubMediaElement();
+    // jsdom has no MediaSource; native HLS fetches the manifest itself first.
+    hlsSupport.native = true;
+  });
+
+  function manifestSessionIds(fetchMock: ReturnType<typeof mockMovieApi>) {
+    return fetchMock.mock.calls
+      .map(([input]) => requestURL(input))
+      .filter((url) => url.includes("/hls/remux/playlist.m3u8"))
+      .map((url) => new URL(url, "http://igloo.test").searchParams.get("playback_session"));
+  }
+
+  // A reloaded, restored, or duplicated tab used to reuse the id from
+  // sessionStorage, so the closing tab's late stop request could tear down
+  // the session the new page had just created.
+  it("gives every page its own playback session", async () => {
+    const fetchMock = mockMovieApi();
+    const search = "mode=remux&audio_track=0&subtitle_track=off&start=900";
+
+    const first = await renderMovieRoute(search);
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(1));
+    first.unmount();
+
+    await renderMovieRoute(search);
+    await waitFor(() => expect(manifestSessionIds(fetchMock)).toHaveLength(2));
+
+    const [firstId, secondId] = manifestSessionIds(fetchMock);
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(secondId).not.toBe(firstId);
+  });
+});
+
 describe("movie play route play button", () => {
   beforeEach(() => {
     stubMediaElement();

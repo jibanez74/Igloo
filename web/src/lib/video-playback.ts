@@ -8,7 +8,7 @@ import {
   WATCH_PROGRESS_COMPLETION_THRESHOLD,
   WATCH_PROGRESS_MIN_SECONDS,
 } from "@/lib/constants";
-import { mediaApiBasePath, mediaKey } from "@/lib/media-ref";
+import { mediaApiBasePath } from "@/lib/media-ref";
 import {
   formatSubtitleLabel,
   normalizeLang,
@@ -57,53 +57,12 @@ type RebaseOptions = {
   currentVideoTimeSec: number;
 };
 
-const HLS_PLAYBACK_SESSION_STORAGE_PREFIX = "igloo:hls-playback-session:";
 const HLS_PLAYBACK_SESSION_ID_PATTERN = new RegExp(
   "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
 );
 
-type HlsPlaybackSessionStorage = Pick<Storage, "getItem" | "setItem">;
-
-// Keyed on kind and id: a movie and an episode with the same id are different
-// media and must not share a server-side session window.
-function hlsPlaybackSessionStorageKey(media: PlaybackMediaRef): string {
-  return HLS_PLAYBACK_SESSION_STORAGE_PREFIX + mediaKey(media);
-}
-
-function browserSessionStorage(): HlsPlaybackSessionStorage | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
 function validMediaId(media: PlaybackMediaRef): boolean {
   return Number.isFinite(media.id) && media.id > 0;
-}
-
-export function getOrCreateHlsPlaybackSessionId(
-  media: PlaybackMediaRef,
-  storage: HlsPlaybackSessionStorage | null = browserSessionStorage(),
-): string {
-  const create = () => createPlaybackSessionId();
-  if (!validMediaId(media) || !storage) return create();
-
-  const key = hlsPlaybackSessionStorageKey(media);
-  try {
-    const existing = storage.getItem(key);
-    if (existing && HLS_PLAYBACK_SESSION_ID_PATTERN.test(existing)) {
-      return existing;
-    }
-
-    const next = create();
-    storage.setItem(key, next);
-    return next;
-  } catch {
-    return create();
-  }
 }
 
 /**

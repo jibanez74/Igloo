@@ -25,7 +25,7 @@ import {
 } from "@/lib/query-opts";
 import {
   clampPlaybackTime,
-  getOrCreateHlsPlaybackSessionId,
+  createPlaybackSessionId,
   stopHlsPlaybackSession,
   derivePlaybackStatus,
   displayedMediaDuration,
@@ -171,18 +171,19 @@ export default function VideoPlaybackPage({
     streamWindowKey: string;
     profile: string;
   } | null>(null);
-  // State rather than useMemo: the getter writes sessionStorage and mints a
-  // fresh random id when storage is unavailable, so a discarded memo cache
-  // could change the session id mid-playback. State guarantees identity;
-  // the render-phase reset re-seeds it when navigating to another item.
+  // One id per page mount, never shared through storage: a reloaded,
+  // restored, or duplicated tab would otherwise reuse it, and the closing
+  // tab's late stop request would tear down the new page's session. State
+  // rather than useMemo, since a discarded memo cache would mint a new id
+  // mid-playback; the render-phase reset re-seeds it for another item.
   const [playbackSession, setPlaybackSession] = useState(() => ({
     mediaKey: currentMediaKey,
-    id: getOrCreateHlsPlaybackSessionId(media),
+    id: createPlaybackSessionId(),
   }));
   if (playbackSession.mediaKey !== currentMediaKey) {
     setPlaybackSession({
       mediaKey: currentMediaKey,
-      id: getOrCreateHlsPlaybackSessionId(media),
+      id: createPlaybackSessionId(),
     });
   }
   const playbackSessionId = playbackSession.id;
