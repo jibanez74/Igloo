@@ -53,11 +53,12 @@ GROUP BY t.release_date ORDER BY COUNT(*) DESC,t.release_date LIMIT 1),(SELECT s
 -- name: ReconcileMusicAlbumYear :exec
 UPDATE albums SET year=CAST(substr(release_date,1,4) AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE id=? AND year IS NOT CAST(substr(release_date,1,4) AS INTEGER);
 
--- name: MusicTrackAffectedArtists :many
-SELECT musician_id FROM track_musicians WHERE track_id=(SELECT id FROM tracks WHERE file_path=?);
-
--- name: MusicTrackAffectedAlbum :one
-SELECT album_id FROM tracks WHERE file_path=?;
+-- name: MusicTrackAffected :many
+-- The album and artists a track contributes to, read before a rewrite or delete
+-- so both sides can be reconciled. One row per artist (album_id repeats); a
+-- single row with a NULL musician_id means no artists; no rows means no track.
+SELECT t.album_id, tm.musician_id FROM tracks t LEFT JOIN track_musicians tm ON tm.track_id=t.id
+WHERE t.file_path=? ORDER BY tm.musician_id;
 
 -- name: DeleteMusicArtistSpotifyGenres :exec
 DELETE FROM musician_genres WHERE musician_id=? AND source='spotify';

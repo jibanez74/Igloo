@@ -121,6 +121,11 @@ ORDER BY
   track_index ASC;
 
 -- name: GetTracksAlphabetical :many
+-- The page is chosen from idx_track_alpha alone, so the rows OFFSET skips cost
+-- an index step each instead of a track row read plus two joins. CROSS JOIN
+-- keeps the page as the outer loop; left to itself the planner walks every
+-- track in index order and probes the page instead. id breaks title ties so
+-- pages stay stable.
 SELECT
   t.id,
   t.title,
@@ -132,7 +137,21 @@ SELECT
   a.cover AS album_cover,
   m.id AS musician_id,
   m.name AS musician_name
-FROM tracks AS t
+FROM (
+  SELECT id
+  FROM tracks
+  ORDER BY
+    CASE
+      WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(title, 1, 1))
+      ELSE '#'
+    END,
+    UPPER(title),
+    id
+  LIMIT ?
+  OFFSET ?
+) AS page
+CROSS JOIN tracks AS t
+  ON t.id = page.id
 LEFT JOIN albums AS a
   ON t.album_id = a.id
 LEFT JOIN musicians AS m
@@ -142,9 +161,8 @@ ORDER BY
     WHEN UPPER(SUBSTR(t.title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(t.title, 1, 1))
     ELSE '#'
   END,
-  UPPER(t.title)
-LIMIT ?
-OFFSET ?;
+  UPPER(t.title),
+  t.id;
 
 -- name: GetTracksCount :one
 SELECT

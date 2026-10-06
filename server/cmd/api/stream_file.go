@@ -61,11 +61,12 @@ func (app *Application) movieStreamFile(ctx context.Context, movieID int64) (str
 	})
 }
 
-// episodeStreamFile is the TV twin of movieStreamFile. The cache entry is per
-// episode, not per file: a rescan evicts every episode a file backs.
+// episodeStreamFile is the TV twin of movieStreamFile. It resolves the same
+// file playback uses (GetShowFileForEpisode's lowest-file-id rule). The cache
+// entry is per episode, not per file: a rescan evicts every episode a file backs.
 func (app *Application) episodeStreamFile(ctx context.Context, episodeID int64) (streamFile, error) {
 	return app.StreamFileCache.resolve(episodeStreamFileKey(episodeID), func() (streamFile, error) {
-		file, err := app.Queries.GetShowEpisodeForDirectStream(ctx, episodeID)
+		file, err := app.Queries.GetShowFileForEpisode(ctx, episodeID)
 		if err != nil {
 			return streamFile{}, err
 		}

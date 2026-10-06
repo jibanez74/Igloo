@@ -771,51 +771,68 @@ func (q *Queries) GetNetworksByShowID(ctx context.Context, showID int64) ([]GetN
 }
 
 const getPendingShows = `-- name: GetPendingShows :many
-SELECT s.id, s.directory_path, s.local_name, s.premiere_year, s.name, s.tmdb_id, s.imdb_id, s.original_name, s.overview, s.tagline, s.language, s.origin_countries, s.first_air_date, s.last_air_date, s.status, s.type, s.adult, s.poster_path, s.backdrop_path, s.homepage, s.vote_average, s.vote_count, s.popularity, s.certification, s.tmdb_season_count, s.tmdb_episode_count, s.created_at, s.updated_at FROM shows s WHERE s.id > ?1 AND (
- EXISTS (SELECT 1 FROM show_tmdb_retries r WHERE r.show_id = s.id) OR
- EXISTS (SELECT 1 FROM show_seasons se JOIN show_season_tmdb_retries r ON r.season_id = se.id WHERE se.show_id = s.id) OR
- EXISTS (SELECT 1 FROM show_seasons se JOIN show_episodes e ON e.season_id = se.id JOIN show_episode_tmdb_retries r ON r.episode_id = e.id WHERE se.show_id = s.id))
+SELECT s.id, s.directory_path, s.local_name, s.premiere_year, s.name, s.tmdb_id, s.imdb_id, s.original_name, s.overview, s.tagline, s.language, s.origin_countries, s.first_air_date, s.last_air_date, s.status, s.type, s.adult, s.poster_path, s.backdrop_path, s.homepage, s.vote_average, s.vote_count, s.popularity, s.certification, s.tmdb_season_count, s.tmdb_episode_count, s.created_at, s.updated_at, r.show_id IS NOT NULL AS pending_retry, r.attempts AS retry_attempts, r.last_attempt_at
+FROM shows s LEFT JOIN show_tmdb_retries r ON r.show_id = s.id
+WHERE s.id > ?1 AND (
+ r.show_id IS NOT NULL OR
+ s.id IN (SELECT se.show_id FROM show_season_tmdb_retries sr CROSS JOIN show_seasons se ON se.id = sr.season_id) OR
+ s.id IN (SELECT se.show_id FROM show_episode_tmdb_retries er CROSS JOIN show_episodes e ON e.id = er.episode_id CROSS JOIN show_seasons se ON se.id = e.season_id))
  ORDER BY s.id LIMIT 100
 `
 
-func (q *Queries) GetPendingShows(ctx context.Context, afterID int64) ([]Show, error) {
+type GetPendingShowsRow struct {
+	Show          Show          `json:"show"`
+	PendingRetry  bool          `json:"pending_retry"`
+	RetryAttempts sql.NullInt64 `json:"retry_attempts"`
+	LastAttemptAt sql.NullInt64 `json:"last_attempt_at"`
+}
+
+// The show-level retry row is joined in, so its miss backoff needs no second
+// lookup per show. The season and episode branches are uncorrelated, so each
+// list is built once per statement from its retry table (CROSS JOIN keeps the
+// small retry table outermost) instead of walking every season and episode of
+// every show. The OR only builds them when a show has no show-level retry row.
+func (q *Queries) GetPendingShows(ctx context.Context, afterID int64) ([]GetPendingShowsRow, error) {
 	rows, err := q.query(ctx, q.getPendingShowsStmt, getPendingShows, afterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Show{}
+	items := []GetPendingShowsRow{}
 	for rows.Next() {
-		var i Show
+		var i GetPendingShowsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.DirectoryPath,
-			&i.LocalName,
-			&i.PremiereYear,
-			&i.Name,
-			&i.TmdbID,
-			&i.ImdbID,
-			&i.OriginalName,
-			&i.Overview,
-			&i.Tagline,
-			&i.Language,
-			&i.OriginCountries,
-			&i.FirstAirDate,
-			&i.LastAirDate,
-			&i.Status,
-			&i.Type,
-			&i.Adult,
-			&i.PosterPath,
-			&i.BackdropPath,
-			&i.Homepage,
-			&i.VoteAverage,
-			&i.VoteCount,
-			&i.Popularity,
-			&i.Certification,
-			&i.TmdbSeasonCount,
-			&i.TmdbEpisodeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.Show.ID,
+			&i.Show.DirectoryPath,
+			&i.Show.LocalName,
+			&i.Show.PremiereYear,
+			&i.Show.Name,
+			&i.Show.TmdbID,
+			&i.Show.ImdbID,
+			&i.Show.OriginalName,
+			&i.Show.Overview,
+			&i.Show.Tagline,
+			&i.Show.Language,
+			&i.Show.OriginCountries,
+			&i.Show.FirstAirDate,
+			&i.Show.LastAirDate,
+			&i.Show.Status,
+			&i.Show.Type,
+			&i.Show.Adult,
+			&i.Show.PosterPath,
+			&i.Show.BackdropPath,
+			&i.Show.Homepage,
+			&i.Show.VoteAverage,
+			&i.Show.VoteCount,
+			&i.Show.Popularity,
+			&i.Show.Certification,
+			&i.Show.TmdbSeasonCount,
+			&i.Show.TmdbEpisodeCount,
+			&i.Show.CreatedAt,
+			&i.Show.UpdatedAt,
+			&i.PendingRetry,
+			&i.RetryAttempts,
+			&i.LastAttemptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1133,41 +1150,6 @@ func (q *Queries) GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, er
 		&i.VoteCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getShowEpisodeForDirectStream = `-- name: GetShowEpisodeForDirectStream :one
-SELECT
-  f.file_path,
-  f.file_name,
-  f.container,
-  f.mime_type
-FROM show_episode_files AS l
-INNER JOIN show_files AS f
-  ON f.id = l.file_id
-WHERE l.episode_id = ?
-ORDER BY f.id
-LIMIT 1
-`
-
-type GetShowEpisodeForDirectStreamRow struct {
-	FilePath  string `json:"file_path"`
-	FileName  string `json:"file_name"`
-	Container string `json:"container"`
-	MimeType  string `json:"mime_type"`
-}
-
-// Direct-stream twin of GetMovieForDirectStream, resolved through the same
-// lowest-file-id rule as GetShowFileForEpisode.
-func (q *Queries) GetShowEpisodeForDirectStream(ctx context.Context, episodeID int64) (GetShowEpisodeForDirectStreamRow, error) {
-	row := q.queryRow(ctx, q.getShowEpisodeForDirectStreamStmt, getShowEpisodeForDirectStream, episodeID)
-	var i GetShowEpisodeForDirectStreamRow
-	err := row.Scan(
-		&i.FilePath,
-		&i.FileName,
-		&i.Container,
-		&i.MimeType,
 	)
 	return i, err
 }
@@ -1494,7 +1476,7 @@ FROM show_episode_files AS l
 INNER JOIN show_files AS f
   ON f.id = l.file_id
 WHERE l.episode_id = ?
-ORDER BY f.id
+ORDER BY l.file_id
 LIMIT 1
 `
 
@@ -1510,10 +1492,12 @@ type GetShowFileForEpisodeRow struct {
 	UpdatedAt string          `json:"updated_at"`
 }
 
-// The physical file behind an episode. An episode may be linked to more than
-// one file (duplicate copies), so the lowest file id is the deterministic
-// playback target; a combined file is returned whole, playback never seeks to
-// a guessed episode offset.
+// The physical file behind an episode, for playback and for direct streaming.
+// An episode may be linked to more than one file (duplicate copies), so the
+// lowest file id is the deterministic playback target; a combined file is
+// returned whole, playback never seeks to a guessed episode offset. Ordering on
+// l.file_id (equal to f.id through the join) lets the (episode_id, file_id)
+// primary key supply the order.
 func (q *Queries) GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error) {
 	row := q.queryRow(ctx, q.getShowFileForEpisodeStmt, getShowFileForEpisode, episodeID)
 	var i GetShowFileForEpisodeRow
@@ -1728,22 +1712,6 @@ func (q *Queries) GetShowPendingSeasonIDs(ctx context.Context, showID int64) ([]
 	return items, nil
 }
 
-const getShowRetry = `-- name: GetShowRetry :one
-SELECT attempts, last_attempt_at FROM show_tmdb_retries WHERE show_id = ?
-`
-
-type GetShowRetryRow struct {
-	Attempts      int64         `json:"attempts"`
-	LastAttemptAt sql.NullInt64 `json:"last_attempt_at"`
-}
-
-func (q *Queries) GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error) {
-	row := q.queryRow(ctx, q.getShowRetryStmt, getShowRetry, showID)
-	var i GetShowRetryRow
-	err := row.Scan(&i.Attempts, &i.LastAttemptAt)
-	return i, err
-}
-
 const getShowScanEpisodeLinks = `-- name: GetShowScanEpisodeLinks :many
 SELECT file_id, episode_id FROM show_episode_files ORDER BY file_id, episode_order
 `
@@ -1777,24 +1745,18 @@ func (q *Queries) GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpi
 }
 
 const getShowScanIndex = `-- name: GetShowScanIndex :many
-SELECT f.id, f.season_id, f.file_path, f.file_name, f.size, f.container, f.mime_type, f.duration, f.created_at, f.updated_at, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
+SELECT f.id, f.season_id, f.file_path, f.size, fp.mtime_ns, fp.ctime_ns, fp.device, fp.inode FROM show_files f LEFT JOIN show_file_fingerprints fp ON fp.file_id = f.id
 `
 
 type GetShowScanIndexRow struct {
-	ID        int64           `json:"id"`
-	SeasonID  int64           `json:"season_id"`
-	FilePath  string          `json:"file_path"`
-	FileName  string          `json:"file_name"`
-	Size      int64           `json:"size"`
-	Container string          `json:"container"`
-	MimeType  string          `json:"mime_type"`
-	Duration  sql.NullFloat64 `json:"duration"`
-	CreatedAt string          `json:"created_at"`
-	UpdatedAt string          `json:"updated_at"`
-	MtimeNs   sql.NullInt64   `json:"mtime_ns"`
-	CtimeNs   sql.NullInt64   `json:"ctime_ns"`
-	Device    sql.NullString  `json:"device"`
-	Inode     sql.NullString  `json:"inode"`
+	ID       int64          `json:"id"`
+	SeasonID int64          `json:"season_id"`
+	FilePath string         `json:"file_path"`
+	Size     int64          `json:"size"`
+	MtimeNs  sql.NullInt64  `json:"mtime_ns"`
+	CtimeNs  sql.NullInt64  `json:"ctime_ns"`
+	Device   sql.NullString `json:"device"`
+	Inode    sql.NullString `json:"inode"`
 }
 
 func (q *Queries) GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error) {
@@ -1810,13 +1772,7 @@ func (q *Queries) GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, 
 			&i.ID,
 			&i.SeasonID,
 			&i.FilePath,
-			&i.FileName,
 			&i.Size,
-			&i.Container,
-			&i.MimeType,
-			&i.Duration,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.MtimeNs,
 			&i.CtimeNs,
 			&i.Device,

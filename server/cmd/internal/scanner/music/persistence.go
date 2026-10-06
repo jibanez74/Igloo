@@ -53,13 +53,8 @@ func (s *Scanner) persistResolvedTrack(ctx context.Context, scan *musicScanConte
 }
 
 func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Queries, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
-	oldArtists, err := qtx.MusicTrackAffectedArtists(ctx, resolved.params.FilePath)
+	oldAlbum, oldArtists, _, err := trackContributions(ctx, qtx, resolved.params.FilePath)
 	if err != nil {
-		return 0, err
-	}
-	oldAlbum, err := qtx.MusicTrackAffectedAlbum(ctx, resolved.params.FilePath)
-	notFound := errors.Is(err, sql.ErrNoRows)
-	if err != nil && !notFound {
 		return 0, err
 	}
 	params := resolved.params
@@ -146,6 +141,23 @@ func (s *Scanner) persistResolvedTrackTx(ctx context.Context, qtx *database.Quer
 		}
 	}
 	return trackID, nil
+}
+
+// trackContributions reads the album and artists the track at path currently
+// contributes to, so a rewrite or delete can reconcile both sides. found is
+// false when no track has that path.
+func trackContributions(ctx context.Context, qtx *database.Queries, path string) (sql.NullInt64, []int64, bool, error) {
+	rows, err := qtx.MusicTrackAffected(ctx, path)
+	if err != nil || len(rows) == 0 {
+		return sql.NullInt64{}, nil, false, err
+	}
+	artists := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		if row.MusicianID.Valid {
+			artists = append(artists, row.MusicianID.Int64)
+		}
+	}
+	return rows[0].AlbumID, artists, true, nil
 }
 
 // uniqueIDs concatenates id groups in first-sighting order, dropping repeats.

@@ -9,25 +9,6 @@ import (
 	"context"
 )
 
-const countUnreadNotificationsForUser = `-- name: CountUnreadNotificationsForUser :one
-SELECT
-  COUNT(*) AS unread_count
-FROM notifications AS n
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM notification_reads AS nr
-  WHERE nr.notification_id = n.id
-    AND nr.user_id = ?1
-)
-`
-
-func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error) {
-	row := q.queryRow(ctx, q.countUnreadNotificationsForUserStmt, countUnreadNotificationsForUser, userID)
-	var unread_count int64
-	err := row.Scan(&unread_count)
-	return unread_count, err
-}
-
 const createNotification = `-- name: CreateNotification :exec
 INSERT INTO notifications (
   created_by_user_id,
@@ -63,6 +44,7 @@ func (q *Queries) DeleteNotificationForUser(ctx context.Context, notificationID 
 
 const getNotificationBadgeForUser = `-- name: GetNotificationBadgeForUser :one
 SELECT
+  u.is_admin,
   CASE
     WHEN u.is_admin THEN (
       SELECT COUNT(*)
@@ -80,17 +62,22 @@ FROM users AS u
 WHERE u.id = ?1
 `
 
-// The bell badge in one round trip. The client polls this endpoint, and the
-// database runs on a single shared connection (InitDB), so the admin check and
-// the count are folded into one statement instead of GetUserIsAdmin followed by
-// CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
-// short-circuits to 0 without touching notifications at all. No rows means the
-// session outlived its user, which the handler treats as a stale session.
-func (q *Queries) GetNotificationBadgeForUser(ctx context.Context, userID int64) (int64, error) {
+type GetNotificationBadgeForUserRow struct {
+	IsAdmin     bool  `json:"is_admin"`
+	UnreadCount int64 `json:"unread_count"`
+}
+
+// The viewer's admin flag and unread count in one round trip. The client polls
+// the badge endpoint, the list endpoint needs both values too, and the database
+// runs on a single shared connection (InitDB), so the admin check and the count
+// share one statement. The queue is admin-only, so a non-admin short-circuits
+// to 0 without touching notifications at all. No rows means the session
+// outlived its user, which the handlers treat as a stale session.
+func (q *Queries) GetNotificationBadgeForUser(ctx context.Context, userID int64) (GetNotificationBadgeForUserRow, error) {
 	row := q.queryRow(ctx, q.getNotificationBadgeForUserStmt, getNotificationBadgeForUser, userID)
-	var unread_count int64
-	err := row.Scan(&unread_count)
-	return unread_count, err
+	var i GetNotificationBadgeForUserRow
+	err := row.Scan(&i.IsAdmin, &i.UnreadCount)
+	return i, err
 }
 
 const listNotificationsForUser = `-- name: ListNotificationsForUser :many

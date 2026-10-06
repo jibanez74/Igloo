@@ -529,6 +529,10 @@ func TestEpisodeWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 	fixture := seedPlaybackEpisode(t, app)
 	handler := authenticatedRouter(t, app, user.ID)
 
+	// The read probes existence only when no progress row is found, so an
+	// unknown id must still come back 404 rather than as empty progress.
+	serveOpenAPIExchange(t, handler, "getEpisodeWatchProgress", httptest.NewRequest(http.MethodGet, "/api/shows/episodes/999999/watch-progress", nil), http.StatusNotFound)
+
 	progressPath := fmt.Sprintf("/api/shows/episodes/%d/watch-progress", fixture.Episode1)
 	empty := serveOpenAPIExchange(t, handler, "getEpisodeWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
 	if !strings.Contains(empty.Body.String(), `"progress_sec":null`) {

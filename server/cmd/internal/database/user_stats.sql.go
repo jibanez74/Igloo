@@ -209,12 +209,13 @@ SELECT
   g.tag,
   SUM(uts.play_count) AS total_play_count,
   SUM(uts.total_time_played) AS total_time_listened,
-  COUNT(DISTINCT t.id) AS unique_tracks_played
+  -- COUNT(*): the (user_id, track_id) and (track_id, genre_id) primary keys
+  -- put each track in a genre group at most once. The tracks join is left out
+  -- because the foreign key already guarantees the track exists.
+  COUNT(*) AS unique_tracks_played
 FROM user_track_stats AS uts
-INNER JOIN tracks AS t
-  ON uts.track_id = t.id
 INNER JOIN track_genres AS tg
-  ON t.id = tg.track_id
+  ON uts.track_id = tg.track_id
 INNER JOIN genres AS g
   ON tg.genre_id = g.id
 WHERE uts.user_id = ?

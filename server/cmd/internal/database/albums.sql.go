@@ -11,14 +11,18 @@ import (
 	"strings"
 )
 
-const deleteAlbum = `-- name: DeleteAlbum :exec
+const deleteAlbum = `-- name: DeleteAlbum :one
 DELETE FROM albums
 WHERE id = ?
+RETURNING title
 `
 
-func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
-	_, err := q.exec(ctx, q.deleteAlbumStmt, deleteAlbum, id)
-	return err
+// RETURNING doubles as the existence check: no row means no such album.
+func (q *Queries) DeleteAlbum(ctx context.Context, id int64) (string, error) {
+	row := q.queryRow(ctx, q.deleteAlbumStmt, deleteAlbum, id)
+	var title string
+	err := row.Scan(&title)
+	return title, err
 }
 
 const getAlbumByID = `-- name: GetAlbumByID :one

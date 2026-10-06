@@ -157,22 +157,8 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	roomIDs := make([]int64, 0, len(rooms))
-	movieIDs := make([]int64, 0, len(rooms))
-	seenMovieIDs := make(map[int64]bool)
 	for _, room := range rooms {
 		roomIDs = append(roomIDs, room.ID)
-		if seenMovieIDs[room.MovieID] {
-			continue
-		}
-		seenMovieIDs[room.MovieID] = true
-		movieIDs = append(movieIDs, room.MovieID)
-	}
-
-	movies, err := app.Queries.GetMoviesByIDs(r.Context(), movieIDs)
-	if err != nil {
-		app.Logger.Error("failed to fetch movies for watch rooms", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-		return
 	}
 
 	memberRows, err := app.Queries.GetWatchRoomMembersByRoomIDs(r.Context(), roomIDs)
@@ -180,11 +166,6 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 		app.Logger.Error("failed to fetch members for watch rooms", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
-	}
-
-	movieByID := make(map[int64]database.GetMoviesByIDsRow, len(movies))
-	for _, movie := range movies {
-		movieByID[movie.ID] = movie
 	}
 
 	membersByRoomID := make(map[int64][]watchRoomMemberSummary, len(roomIDs))
@@ -202,25 +183,18 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]watchRoomListItem, 0, len(rooms))
 	for _, room := range rooms {
-		movie, movieOK := movieByID[room.MovieID]
-		if !movieOK {
-			app.Logger.Error("failed to find movie for watch room", "room_id", room.ID, "movie_id", room.MovieID)
-			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
-			return
-		}
-
 		members := membersByRoomID[room.ID]
 		owner, _ := findMemberByID(members, room.OwnerUserID)
 
 		var moviePoster *string
-		if movie.PosterPath.Valid {
-			moviePoster = &movie.PosterPath.String
+		if room.MoviePosterPath.Valid {
+			moviePoster = &room.MoviePosterPath.String
 		}
 
 		items = append(items, watchRoomListItem{
 			ID:           room.ID,
 			MovieID:      room.MovieID,
-			MovieTitle:   movie.Title,
+			MovieTitle:   room.MovieTitle,
 			MoviePoster:  moviePoster,
 			Owner:        owner,
 			Members:      members,

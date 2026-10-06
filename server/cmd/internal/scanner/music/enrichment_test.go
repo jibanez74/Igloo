@@ -177,7 +177,7 @@ func TestMusicRelationshipsAndSpotifyDateFallback(t *testing.T) {
 	if restoredLocalGenres != 1 {
 		t.Fatal("local genre not restored within scan")
 	}
-	err = s.queries.DeleteAlbum(context.Background(), 1)
+	_, err = s.queries.DeleteAlbum(context.Background(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,6 @@ type Querier interface {
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	CountShowRetries(ctx context.Context) (int64, error)
 	CountShowsForGenre(ctx context.Context, genreID int64) (int64, error)
-	CountUnreadNotificationsForUser(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
 	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
@@ -62,7 +61,8 @@ type Querier interface {
 	CreateTrackMusician(ctx context.Context, arg CreateTrackMusicianParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error)
-	DeleteAlbum(ctx context.Context, id int64) error
+	// RETURNING doubles as the existence check: no row means no such album.
+	DeleteAlbum(ctx context.Context, id int64) (string, error)
 	DeleteDevice(ctx context.Context, id int64) error
 	DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUserParams) (int64, error)
 	DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (int64, error)
@@ -229,8 +229,6 @@ type Querier interface {
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (GetMovieWatchProgressRow, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
-	// Card-sized projection: the watch-room listing only renders title and poster.
-	GetMoviesByIDs(ctx context.Context, ids []int64) ([]GetMoviesByIDsRow, error)
 	// Resolves a whole page of TMDB ids for the search results mapper, which
 	// annotates each result with "already in library". One indexed pass over
 	// idx_movies_tmdb_id instead of a point query per result row.
@@ -253,15 +251,20 @@ type Querier interface {
 	// Networks linked to a show, with the logo and country the About section
 	// renders. The only query in the project that reads networks.
 	GetNetworksByShowID(ctx context.Context, showID int64) ([]GetNetworksByShowIDRow, error)
-	// The bell badge in one round trip. The client polls this endpoint, and the
-	// database runs on a single shared connection (InitDB), so the admin check and
-	// the count are folded into one statement instead of GetUserIsAdmin followed by
-	// CountUnreadNotificationsForUser. The queue is admin-only, so a non-admin
-	// short-circuits to 0 without touching notifications at all. No rows means the
-	// session outlived its user, which the handler treats as a stale session.
-	GetNotificationBadgeForUser(ctx context.Context, userID int64) (int64, error)
+	// The viewer's admin flag and unread count in one round trip. The client polls
+	// the badge endpoint, the list endpoint needs both values too, and the database
+	// runs on a single shared connection (InitDB), so the admin check and the count
+	// share one statement. The queue is admin-only, so a non-admin short-circuits
+	// to 0 without touching notifications at all. No rows means the session
+	// outlived its user, which the handlers treat as a stale session.
+	GetNotificationBadgeForUser(ctx context.Context, userID int64) (GetNotificationBadgeForUserRow, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (int64, error)
-	GetPendingShows(ctx context.Context, afterID int64) ([]Show, error)
+	// The show-level retry row is joined in, so its miss backoff needs no second
+	// lookup per show. The season and episode branches are uncorrelated, so each
+	// list is built once per statement from its retry table (CROSS JOIN keeps the
+	// small retry table outermost) instead of walking every season and episode of
+	// every show. The OR only builds them when a show has no show-level retry row.
+	GetPendingShows(ctx context.Context, afterID int64) ([]GetPendingShowsRow, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
@@ -295,6 +298,9 @@ type Querier interface {
 	GetProductionCompaniesByShowID(ctx context.Context, showID int64) ([]GetProductionCompaniesByShowIDRow, error)
 	// One random YouTube trailer per movie, bounded by row_limit, for the pre-roll
 	// library pool. The bare ev.key under GROUP BY picks any of the movie's trailers.
+	// The pick runs on the link table alone, so movies is read only for the chosen
+	// rows; the movie_id foreign key means the join drops none of them. The outer
+	// ORDER BY keeps the random order, which preroll.Select consumes as given.
 	GetRandomLibraryTrailers(ctx context.Context, arg GetRandomLibraryTrailersParams) ([]GetRandomLibraryTrailersRow, error)
 	// The random pick happens over the bare tracks primary key, so the album and
 	// musician joins run only for the chosen rows instead of the whole library.
@@ -326,9 +332,6 @@ type Querier interface {
 	// timestamps).
 	GetShowDetails(ctx context.Context, id int64) (GetShowDetailsRow, error)
 	GetShowEpisode(ctx context.Context, id int64) (ShowEpisode, error)
-	// Direct-stream twin of GetMovieForDirectStream, resolved through the same
-	// lowest-file-id rule as GetShowFileForEpisode.
-	GetShowEpisodeForDirectStream(ctx context.Context, episodeID int64) (GetShowEpisodeForDirectStreamRow, error)
 	// Player header for one episode: the episode row plus the season number and
 	// show identity the page titles itself with and navigates back to.
 	GetShowEpisodePlaybackDetails(ctx context.Context, id int64) (GetShowEpisodePlaybackDetailsRow, error)
@@ -347,10 +350,12 @@ type Querier interface {
 	// Episodes linked to a file, read before a deletion cascades the links away so
 	// the per-episode runtime caches can be evicted after commit.
 	GetShowFileEpisodeIDs(ctx context.Context, fileID int64) ([]int64, error)
-	// The physical file behind an episode. An episode may be linked to more than
-	// one file (duplicate copies), so the lowest file id is the deterministic
-	// playback target; a combined file is returned whole, playback never seeks to
-	// a guessed episode offset.
+	// The physical file behind an episode, for playback and for direct streaming.
+	// An episode may be linked to more than one file (duplicate copies), so the
+	// lowest file id is the deterministic playback target; a combined file is
+	// returned whole, playback never seeks to a guessed episode offset. Ordering on
+	// l.file_id (equal to f.id through the join) lets the (episode_id, file_id)
+	// primary key supply the order.
 	GetShowFileForEpisode(ctx context.Context, episodeID int64) (GetShowFileForEpisodeRow, error)
 	// Show genres with counts per tag (genre_type show only).
 	GetShowGenresWithCounts(ctx context.Context) ([]GetShowGenresWithCountsRow, error)
@@ -372,7 +377,6 @@ type Querier interface {
 	// Persisted remux-safety verdict for one video stream of a show file; the
 	// caller compares the stored fingerprint and treats a mismatch as a miss.
 	GetShowRemuxSafetyVerdict(ctx context.Context, arg GetShowRemuxSafetyVerdictParams) (GetShowRemuxSafetyVerdictRow, error)
-	GetShowRetry(ctx context.Context, showID int64) (GetShowRetryRow, error)
 	GetShowScanEpisodeLinks(ctx context.Context) ([]GetShowScanEpisodeLinksRow, error)
 	GetShowScanIndex(ctx context.Context) ([]GetShowScanIndexRow, error)
 	GetShowSeason(ctx context.Context, id int64) (ShowSeason, error)
@@ -399,15 +403,21 @@ type Querier interface {
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (GetTrackRow, error)
 	GetTrackForDirectStream(ctx context.Context, id int64) (GetTrackForDirectStreamRow, error)
+	// The page is chosen from idx_track_alpha alone, so the rows OFFSET skips cost
+	// an index step each instead of a track row read plus two joins. CROSS JOIN
+	// keeps the page as the outer loop; left to itself the planner walks every
+	// track in index order and probes the page instead. id breaks title ties so
+	// pages stay stable.
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetTracksByAlbumIDRow, error)
 	// Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
-	// the equivalent OR over tracks and track_musicians cannot use an index.
+	// the equivalent OR over tracks and track_musicians cannot use an index. IN
+	// ignores duplicates, so UNION ALL skips the sort that UNION would add.
 	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
-	// Narrow admin check for hot paths (middleware, polled notification counts);
+	// Narrow admin check for hot paths (middleware, notification actions);
 	// avoids shipping the full user row with its password hash.
 	GetUserIsAdmin(ctx context.Context, id int64) (bool, error)
 	// Returns overall listening statistics for a user
@@ -443,6 +453,8 @@ type Querier interface {
 	GetWatchRoomForMemberWithSummary(ctx context.Context, arg GetWatchRoomForMemberWithSummaryParams) (GetWatchRoomForMemberWithSummaryRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
 	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
+	// The movie's card fields ride along, so the listing needs no second lookup;
+	// the movie_id foreign key cascades, so the inner join drops no room.
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]GetWatchRoomsForUserRow, error)
 	HasMovieTmdbRetry(ctx context.Context, movieID int64) (bool, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) error
@@ -502,8 +514,10 @@ type Querier interface {
 	// MusicArtistRetryCandidates. Joining from music_spotify_matches instead forced
 	// a temp b-tree sort of every remaining candidate on each 100-row page.
 	MusicCompoundReconciliationCandidates(ctx context.Context, afterID int64) ([]int64, error)
-	MusicTrackAffectedAlbum(ctx context.Context, filePath string) (sql.NullInt64, error)
-	MusicTrackAffectedArtists(ctx context.Context, filePath string) ([]int64, error)
+	// The album and artists a track contributes to, read before a rewrite or delete
+	// so both sides can be reconciled. One row per artist (album_id repeats); a
+	// single row with a NULL musician_id means no artists; no rows means no track.
+	MusicTrackAffected(ctx context.Context, filePath string) ([]MusicTrackAffectedRow, error)
 	PruneShow(ctx context.Context, id int64) error
 	PruneShowSeason(ctx context.Context, id int64) (int64, error)
 	// Pruning is scoped to the season a file change touched: cascades leave the

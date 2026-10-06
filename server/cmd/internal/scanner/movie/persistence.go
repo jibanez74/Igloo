@@ -92,9 +92,14 @@ func (s *Scanner) persistLocalMovie(ctx context.Context, scan *movieScanContext,
 		if err != nil {
 			return err
 		}
-		pending, err = qtx.HasMovieTmdbRetry(ctx, movieID)
-		if err != nil {
-			return err
+		// An unmatched movie was queued by MarkMovieTmdbRetry above, in this
+		// transaction; only a matched one can go either way.
+		pending = unmatched
+		if !unmatched {
+			pending, err = qtx.HasMovieTmdbRetry(ctx, movieID)
+			if err != nil {
+				return err
+			}
 		}
 		err = ctx.Err()
 		if err != nil {

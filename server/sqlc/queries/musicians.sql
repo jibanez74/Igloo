@@ -134,12 +134,13 @@ FROM tracks AS t
 LEFT JOIN albums AS a
   ON t.album_id = a.id
 -- Same UNION-of-indexed-lookups shape as GetMusiciansAlphabetical's track_count:
--- the equivalent OR over tracks and track_musicians cannot use an index.
+-- the equivalent OR over tracks and track_musicians cannot use an index. IN
+-- ignores duplicates, so UNION ALL skips the sort that UNION would add.
 WHERE t.id IN (
   SELECT primary_t.id
   FROM tracks AS primary_t
   WHERE primary_t.musician_id = sqlc.arg(musician_id)
-  UNION
+  UNION ALL
   SELECT credited_tm.track_id
   FROM track_musicians AS credited_tm
   WHERE credited_tm.musician_id = sqlc.arg(musician_id)

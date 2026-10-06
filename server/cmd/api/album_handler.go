@@ -164,22 +164,14 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-
-	album, err := app.Queries.GetAlbumByID(ctx, id)
+	// The delete returns the title, so no row doubles as the existence check.
+	title, err := app.Queries.DeleteAlbum(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("album not found"), http.StatusNotFound)
 			return
 		}
 
-		app.Logger.Error("failed to get album for deletion", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to verify album exists"))
-		return
-	}
-
-	err = app.Queries.DeleteAlbum(ctx, id)
-	if err != nil {
 		app.Logger.Error("failed to delete album", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to delete album"))
 		return
@@ -190,7 +182,7 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 	// after the delete, so no racing lookup can republish a removed track.
 	app.StreamFileCache.invalidateAll()
 
-	app.Logger.Info("album deleted successfully", "id", id, "title", album.Title)
+	app.Logger.Info("album deleted successfully", "id", id, "title", title)
 
 	res := helpers.JSONResponse{
 		Error:   false,
