@@ -121,6 +121,21 @@ export function isInterruptedPlayError(error: unknown): boolean {
   );
 }
 
+/**
+ * Whether a rejected `play()` reports a source the element could not load.
+ * The element's own `error` event reports that failure (every MediaError code
+ * reaches the player's onError), or the direct-play fallback consumed it and
+ * is already switching streams, so the rejection needs no report of its own.
+ */
+export function isSourceFailurePlayError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "NotSupportedError"
+  );
+}
+
 export function derivePlaybackStatus(args: PlaybackStatusArgs): PlaybackStatus {
   if (args.notFound) return { kind: "notFound" };
   if (args.detailsPending || !args.hasDetails) {

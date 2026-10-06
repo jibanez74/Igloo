@@ -30,6 +30,7 @@ import {
   derivePlaybackStatus,
   displayedMediaDuration,
   isInterruptedPlayError,
+  isSourceFailurePlayError,
   shouldRebaseHlsSession,
   toAbsoluteDuration,
   toAbsolutePlaybackTime,
@@ -453,6 +454,10 @@ export default function VideoPlaybackPage({
       // correction, a rebase, a recovery, a capacity retry) and plays the
       // replacement itself (resumePlayAcrossSourceChanges).
       if (isInterruptedPlayError(error)) return;
+      // The source failed. The element's error event reports that, unless
+      // the direct-play fallback consumed it and is switching to remux, when
+      // a report from here would raise the error screen over the fallback.
+      if (isSourceFailurePlayError(error)) return;
       setPlaybackError(
         "Playback failed — the browser could not play this stream.",
       );

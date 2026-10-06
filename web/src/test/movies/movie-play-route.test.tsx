@@ -530,7 +530,7 @@ describe("movie play route play button", () => {
 
   it("still reports a play the browser refused", async () => {
     await pressPlay(
-      new DOMException("The element has no supported sources.", "NotSupportedError"),
+      new DOMException("play() is not allowed here.", "NotAllowedError"),
     );
 
     expect(await screen.findByText("Playback failed")).toBeInTheDocument();
@@ -538,6 +538,58 @@ describe("movie play route play button", () => {
       screen.getByText(
         "Playback failed — the browser could not play this stream.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  // The browser rejects a pending play with NotSupportedError right after the
+  // element's error event, which the direct-play fallback has just consumed.
+  // Reporting the rejection raised the error screen over the remux stream the
+  // fallback was switching to.
+  it("lets the direct-play fallback take a pending play", async () => {
+    mockMovieApi();
+    hlsSupport.native = true;
+    let rejectPlay: (reason: unknown) => void = () => {};
+    playSpy().mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPlay = reject;
+        }),
+    );
+    const { router } = await renderMovieRoute(
+      "mode=direct&audio_track=0&subtitle_track=off&start=900",
+    );
+    const video = await movieVideo();
+    const controls = await screen.findByRole("group", {
+      name: "Playback controls",
+    });
+    await act(async () => {
+      fireEvent.click(within(controls).getByRole("button", { name: /^Play/ }));
+    });
+
+    vi.stubGlobal("MediaError", {
+      MEDIA_ERR_ABORTED: 1,
+      MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3,
+      MEDIA_ERR_SRC_NOT_SUPPORTED,
+    });
+    Object.defineProperty(video, "error", {
+      configurable: true,
+      value: { code: MEDIA_ERR_SRC_NOT_SUPPORTED },
+    });
+    await act(async () => {
+      video.dispatchEvent(new Event("error"));
+      rejectPlay(
+        new DOMException("The element has no supported sources.", "NotSupportedError"),
+      );
+    });
+
+    await waitFor(() => {
+      const search = router.state.location.search as Record<string, unknown>;
+      expect(search.mode).toBe("remux");
+    });
+    expect(screen.queryByText("Playback failed")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Video player for Signal Fire" }),
     ).toBeInTheDocument();
   });
 });
