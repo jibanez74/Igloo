@@ -24,6 +24,10 @@ func TestWatchProgressHandlers_ConformToOpenAPI(t *testing.T) {
 
 	// The empty and populated shapes differ (nulls versus values), so both are
 	// validated against the contract.
+	// The read probes existence only when no progress row is found, so an
+	// unknown id must still come back 404 rather than as empty progress.
+	serveOpenAPIExchange(t, handler, "getMovieWatchProgress", httptest.NewRequest(http.MethodGet, "/api/movies/999999/watch-progress", nil), http.StatusNotFound)
+
 	progressPath := fmt.Sprintf("/api/movies/%d/watch-progress", movieID)
 	empty := serveOpenAPIExchange(t, handler, "getMovieWatchProgress", httptest.NewRequest(http.MethodGet, progressPath, nil), http.StatusOK)
 	if !strings.Contains(empty.Body.String(), `"progress_sec":null`) {

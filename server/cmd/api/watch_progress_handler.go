@@ -161,9 +161,10 @@ func (app *Application) ensureMediaExists(r *http.Request, store watchProgressSt
 // paths do not pre-check existence -- they pay one query on success and only
 // the failure path probes existence to tell "no such media" (404) from a real
 // error (500). Same shape, and the same reasoning, as the playlist add path in
-// movie_playlist_handler.go. The read and delete paths keep their pre-check:
-// neither can trip a foreign key, so nothing else would produce the documented
-// 404.
+// movie_playlist_handler.go. The read path likewise probes only when no
+// progress row is found (getWatchProgress). The delete path keeps its
+// pre-check: it cannot trip a foreign key, so nothing else would produce the
+// documented 404.
 func (app *Application) rejectWatchProgressWrite(w http.ResponseWriter, r *http.Request, store watchProgressStore, writeErr error, media mediaRef, logMessage, userMessage string) {
 	exists, existsErr := store.exists(r.Context(), media.ID)
 	if existsErr == nil && !exists {
@@ -215,6 +216,23 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 	}
 	store := app.watchProgressStoreFor(kind)
 
+	// The media foreign key cascades, so a progress row never outlives its media
+	// and a found row answers alone. Existence is probed only on a miss, to tell
+	// an unknown id (404) from media the user has not started (empty progress).
+	row, err := store.get(r.Context(), userID, media.ID)
+	if err == nil {
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+			Error: false,
+			Data:  watchProgressToResponse(row),
+		})
+		return
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		app.Logger.Error("failed to get watch progress", "error", err, "media", media.String(), "user_id", userID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch watch progress"))
+		return
+	}
+
 	err = app.ensureMediaExists(r, store, media)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -226,23 +244,9 @@ func (app *Application) getWatchProgress(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	row, err := store.get(r.Context(), userID, media.ID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
-				Error: false,
-				Data:  emptyWatchProgressResponse(),
-			})
-			return
-		}
-		app.Logger.Error("failed to get watch progress", "error", err, "media", media.String(), "user_id", userID)
-		helpers.ErrorJSON(w, errors.New("failed to fetch watch progress"))
-		return
-	}
-
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
-		Data:  watchProgressToResponse(row),
+		Data:  emptyWatchProgressResponse(),
 	})
 }
 
