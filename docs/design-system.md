@@ -301,11 +301,12 @@ and `icon-sm`. The base string carries the focus ring, disabled opacity,
   use `aria-disabled` + guards if needed.
 - **Announcements**: `LiveAnnouncer` (double-buffered dual `role="status"`
   regions so repeated messages re-announce) for async state changes; a section
-  announces its empty state. A *loaded* summary is not announced — it is
-  visible under the heading and tied to the section through
-  `aria-describedby`, so it is there on demand rather than interrupting a
-  reader four times as a page's rows resolve. Errors announce themselves
-  through `role="alert"` (§3.4).
+  announces its empty state. A *loaded* summary is not announced — it is an
+  `sr-only` paragraph tied to the section through `aria-describedby`, so it
+  is there on demand rather than interrupting a reader four times as a page's
+  rows resolve, and it stays out of sight because the count pill, the error
+  alert and the empty state already carry the same words where the eye lands.
+  Errors announce themselves through `role="alert"` (§3.4).
 - **Skip links**: a global "Skip to page content" in `AppShell` targeting
   `#main`, plus per-page section skip navs on long pages. Every detail page —
   movie, show, in-theaters, album, musician — uses the one shared
@@ -574,8 +575,8 @@ the sidebar, the header and a way back instead of the router's bare text.
 **The home page** is the shell's canonical composition: a hero heading, then
 six sections in order — `WatchRooms`, `ContinueWatching`, `LatestMovies`,
 `LatestShows`, `LatestAlbums`, `MoviesInTheaters`. All but `WatchRooms` render
-through the shared `HomeMediaSection` (heading + count pill + announced summary
-+ pending/error/empty/grid states), and the route loader `ensureQueryData`s
+through the shared `HomeMediaSection` (heading + count pill + `sr-only`
+described-by summary + pending/error/empty/grid states), and the route loader `ensureQueryData`s
 every one of their queries, so the page arrives complete rather than popping in
 section by section. A new home row is a `HomeMediaSection` with one of the
 `HOME_*_GRID_CLASS` grids (§3.2) and its query added to the loader.
@@ -820,13 +821,18 @@ is unknown or empty.
   add a block that collapses a frame later. It returns `null` while pending
   and when empty. This applies only to loader-awaited sections — a query that
   can genuinely still be in flight gets a skeleton.
-- **Empty, two variants.** Minimal: centered `text-muted-foreground` with a
-  large faded lucide icon and one sentence (search no-results, empty tabs).
-  Rich CTA: the shared `EmptyState.tsx` — gradient icon orb
+- **Empty, two variants, chosen by what is empty.** Minimal:
+  `LibraryEmptyState` — centered `text-muted-foreground` with a large faded
+  lucide icon and one sentence — for a *tab or filter* that has nothing in it
+  (search no-results, a genre, the Liked and Playlists tabs, the notifications
+  panel). Rich: the shared `EmptyState.tsx` — gradient icon orb
   (`size-20 rounded-full bg-linear-to-br from-muted via-muted to-primary/30`),
-  title, description, optional pill CTA, optional `bordered` wrapper. Empty
-  states announce via `LiveAnnouncer` (`LibraryAllTab` says
-  `No {plural} found` beside its `LibraryEmptyState`).
+  title, description, optional pill CTA, optional `bordered` wrapper — for a
+  *whole library* that is empty (the home sections, a show with no episodes).
+  Adjacent tabs on one page therefore share one style, and an action gets one
+  call to action: a tab whose toolbar already offers "New playlist" does not
+  repeat it inside its empty state. Empty states announce via `LiveAnnouncer`
+  (`LibraryAllTab` says `No {plural} found` beside its `LibraryEmptyState`).
 - **Error, by shape.** Detection is uniform:
   `isError || isApiFailure(data)` (`lib/is-api-failure.ts`, reading the API
   envelope `{ error, message, data }`). Which component renders it depends on
@@ -841,7 +847,8 @@ is unknown or empty.
   - The four ways a detail page fails to show its subject — an invalid id, a
     failed request, one still in flight, an empty response — are
     `MediaDetailGuard`, which every `$id` route wraps its content in. Three of
-    the four are dead ends, so each renders `MediaNotFound`; its destination is
+    the four are dead ends, so each renders `MediaNotFound` (title "Not found"
+    for a 404 or an empty response, "Error" otherwise); its destination is
     a named key (`music`, `moviePlaylists`, …) carrying both the route and the
     words on the link, so the two can never disagree and a destination may
     carry search params.
@@ -849,6 +856,14 @@ is unknown or empty.
     **required** "Back to Movies/TV Shows/Music/Home" outline link, so the
     page never dead-ends.
   - A mutation → **toast** via `toast-helpers.ts`, never inline.
+  - **The UI owns the words for failures it can name.** `apiRequest` stamps the
+    HTTP `status` on every failure envelope it returns, and a surface maps the
+    statuses it understands to a sentence — a 404 on a detail page reads "We
+    couldn't find that movie.", a 400/401 on login "The email or password is
+    incorrect.", a 403/404 on a watch room "This room no longer exists or you
+    were not invited." — keeping the server's message only as the fallback for
+    anything else (`apiErrorMessage`). Never show the client's canned
+    "404 - The resource…" string or a lowercase server constant as the copy.
 
   Because the erroring subtree often unmounts its own live region, error
   surfaces carry `role="alert"` and announce themselves — never repeat one
