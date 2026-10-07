@@ -130,10 +130,10 @@ describe("show details route", () => {
     ).toBeInTheDocument();
   });
 
-  it("falls back to the default season when the URL names one the show lacks", async () => {
+  it("falls back to the default season when the URL names one the show lacks, and rewrites the URL", async () => {
     mockShowDetailsFetch();
 
-    await renderRoute(`/tv-shows/${SHOW_ID}?season=47`);
+    const { router } = await renderRoute(`/tv-shows/${SHOW_ID}?season=47`);
 
     expect(
       await screen.findByRole("heading", { level: 1, name: /Frost Harbor/ }),
@@ -142,6 +142,10 @@ describe("show details route", () => {
       "aria-selected",
       "true",
     );
+    // The address bar follows the tab that is actually selected, and the
+    // rewrite replaces the bad entry so Back does not return to it.
+    expect(router.state.location.search).toEqual({ season: 1 });
+    expect(router.history.length).toBe(1);
   });
 
   it("switches seasons and writes the choice to the URL without stacking history", async () => {

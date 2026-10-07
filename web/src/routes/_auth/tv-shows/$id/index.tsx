@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Tv } from "lucide-react";
 import {
@@ -71,6 +71,17 @@ export const Route = createFileRoute("/_auth/tv-shows/$id/")({
       season != null && seasons.some(s => s.season_number === season)
         ? season
         : seasons[0].season_number;
+
+    // A URL naming a season the show lacks is rewritten to the one shown, so
+    // the address bar, the trailer return link and the tab strip all agree.
+    if (season != null && season !== selected) {
+      throw redirect({
+        to: "/tv-shows/$id",
+        params,
+        search: { season: selected },
+        replace: true,
+      });
+    }
 
     await context.queryClient.ensureQueryData(
       showSeasonEpisodesQueryOpts(showId, selected),
