@@ -150,8 +150,11 @@ async function apiRequest<T extends Record<string, unknown>>(
       return ERROR_NOTFOUND;
     }
 
-    const data: unknown = await res.json();
-    return data as ApiResponseType<T>;
+    const data = (await res.json()) as ApiResponseType<T>;
+    // Stamp the status so a surface can word a failure by what happened
+    // (401 on login, 403 on a room) while keeping the server's message as its
+    // fallback.
+    return data.error ? { ...data, status: res.status } : data;
   } catch (err) {
     if (!(err instanceof DOMException && err.name === "AbortError")) {
       console.warn(`apiRequest failed: ${endpoint}`, err);

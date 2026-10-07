@@ -13,7 +13,7 @@ type MediaDetailGuardProps<TPayload> = {
   back: BackDestination;
   isPending: boolean;
   isError: boolean;
-  data: { error: boolean; message?: string } | undefined;
+  data: { error: boolean; message?: string; status?: number } | undefined;
   /** The narrowed payload, or null when the response carried none. */
   payload: TPayload | null;
   skeleton: ReactNode;
@@ -27,8 +27,10 @@ type MediaDetailGuardProps<TPayload> = {
  * failed, a request still in flight, and a response that came back empty.
  *
  * Three of the four are dead ends, so each renders `MediaNotFound` with a way
- * out (design-system §3.4) rather than a bare heading. Children take the
- * payload as an argument so it stays narrowed past the guard.
+ * out (design-system §3.4) rather than a bare heading. A 404 gets its own
+ * sentence instead of the client's "404 - The resource…" string, since a
+ * missing subject is the one failure the reader can do nothing about. Children
+ * take the payload as an argument so it stays narrowed past the guard.
  */
 export default function MediaDetailGuard<TPayload>({
   id,
@@ -43,6 +45,16 @@ export default function MediaDetailGuard<TPayload>({
 }: MediaDetailGuardProps<TPayload>) {
   if (id == null) {
     return <MediaNotFound message={`That ${noun} link is not valid.`} back={back} />;
+  }
+
+  if (data?.error && data.status === 404) {
+    return (
+      <MediaNotFound
+        title="Not found"
+        message={`We couldn't find that ${noun}.`}
+        back={back}
+      />
+    );
   }
 
   if (isError || data?.error) {
@@ -63,7 +75,11 @@ export default function MediaDetailGuard<TPayload>({
 
   if (payload == null) {
     return (
-      <MediaNotFound message={`${capitalize(noun)} not found.`} back={back} />
+      <MediaNotFound
+        title="Not found"
+        message={`${capitalize(noun)} not found.`}
+        back={back}
+      />
     );
   }
 

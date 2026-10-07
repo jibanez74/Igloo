@@ -281,10 +281,10 @@ describe("show details route", () => {
 
     await renderRoute(`/tv-shows/${SHOW_ID}`);
 
-    // apiRequest turns any 404 into its canned not-found envelope, so the page
-    // shows that message rather than the server's.
+    // apiRequest turns any 404 into its canned not-found envelope; the guard
+    // words it for the reader instead of showing that string.
     expect(
-      await screen.findByText(/The resource you requested was not found/),
+      await screen.findByText("We couldn't find that show."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Back to TV Shows/i }),
