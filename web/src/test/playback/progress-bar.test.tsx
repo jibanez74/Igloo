@@ -266,6 +266,25 @@ describe("ProgressBar", () => {
     expect(screen.getByText("38:49").parentElement).toHaveClass("sm:hidden");
   });
 
+  it("keeps the readout on the playhead while the element cannot seek yet", () => {
+    render(
+      <ProgressBar
+        currentTime={12}
+        duration={0}
+        displayedDuration={2329}
+        onSeek={vi.fn()}
+        variant="video"
+      />,
+    );
+
+    expect(screen.getByText("0:12")).toBeInTheDocument();
+    expect(screen.getByRole("slider")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("slider")).toHaveAttribute(
+      "aria-valuetext",
+      "Seek unavailable",
+    );
+  });
+
   it("drops a pending scrub value when resetKey changes", () => {
     const onSeek = vi.fn();
 
